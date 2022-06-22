@@ -19,8 +19,8 @@ module Development.IDE.Plugin.CodeAction
 
 import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
-                                                                    (>>>),
-                                                                    (&&&))
+                                                                    (&&&),
+                                                                    (>>>))
 import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad                                     (guard, join,
                                                                     msum)
@@ -41,6 +41,7 @@ import qualified Data.Rope.UTF16                                   as Rope
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import           Data.Tuple.Extra                                  (fst3)
+import           Debug.Trace
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -58,6 +59,12 @@ import           Development.IDE.Plugin.TypeLenses                 (suggestSigna
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           GHC                                               (AddEpAnn (AddEpAnn),
+                                                                    Anchor (anchor),
+                                                                    AnnsModule (am_main),
+                                                                    DeltaPos (..),
+                                                                    EpAnn (..),
+                                                                    EpaLocation (..))
 import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
@@ -1386,10 +1393,10 @@ newImportToEdit (unNewImport -> imp) ps fileContents
 -- the import will be inserted at line zero if there are no pragmas,
 -- * otherwise inserted one line after the last file-header pragma
 newImportInsertRange :: ParsedSource -> T.Text -> Maybe (Range, Int)
-newImportInsertRange (L _ HsModule {..}) fileContents
+newImportInsertRange ps@(L _ HsModule {..}) fileContents
   |  Just ((l, c), col) <- case hsmodImports of
-      [] -> findPositionNoImports (fmap reLoc hsmodName) (fmap reLoc hsmodExports) fileContents
-      _  -> findPositionFromImportsOrModuleDecl (map reLoc hsmodImports) last True
+      [] -> (\line -> ((line, 0), 0)) <$> findPositionNoImports ps fileContents
+      _  -> findPositionFromImportsOrModuleDecl (map reLoc hsmodImports) last
   , let insertPos = Position (fromIntegral l) (fromIntegral c)
     = Just (Range insertPos insertPos, col)
   | otherwise = Nothing
@@ -1397,23 +1404,55 @@ newImportInsertRange (L _ HsModule {..}) fileContents
 -- | Insert the import under the Module declaration exports if they exist, otherwise just under the module declaration.
 -- If no module declaration exists, then no exports will exist either, in that case
 -- insert the import after any file-header pragmas or at position zero if there are no pragmas
-findPositionNoImports :: Maybe (Located ModuleName) -> Maybe (Located [LIE name]) -> T.Text -> Maybe ((Int, Int), Int)
-findPositionNoImports Nothing _ fileContents = findNextPragmaPosition fileContents
-findPositionNoImports _ (Just hsmodExports) _ = findPositionFromImportsOrModuleDecl hsmodExports id False
-findPositionNoImports (Just hsmodName) _ _ = findPositionFromImportsOrModuleDecl hsmodName id False
+findPositionNoImports :: ParsedSource -> T.Text -> Maybe Int
+findPositionNoImports (L _ HsModule {..}) fileContents =
+    case hsmodName of
+        Nothing -> Just $ findNextPragmaPosition fileContents
+        Just hsmodName'  -> case hsmodAnn of
+            EpAnn _ annsModule _ ->
+                let prevSrcSpan = maybe (getLoc hsmodName') getLoc hsmodExports
+                 in do
+                    whereLocation <- fmap NE.head .  NE.nonEmpty . mapMaybe filterWhere .  am_main $ annsModule
+                    epaLocationToLine prevSrcSpan whereLocation
+            EpAnnNotUsed -> Nothing
+  where
+    filterWhere (AddEpAnn AnnWhere loc) = Just loc
+    filterWhere _                       = Nothing
 
-findPositionFromImportsOrModuleDecl :: HasSrcSpan a => t -> (t -> a) -> Bool -> Maybe ((Int, Int), Int)
-findPositionFromImportsOrModuleDecl hsField f hasImports = case getLoc (f hsField) of
+    epaLocationToLine :: SrcSpan -> EpaLocation -> Maybe Int
+    epaLocationToLine _ (EpaSpan sp) =
+        let loc = realSrcSpanEnd sp
+         in Just $ srcLocLine loc
+    epaLocationToLine (UnhelpfulSpan _) _ = Nothing
+    epaLocationToLine (RealSrcSpan prevSrcSpan _) (EpaDelta deltaPos _) =
+        case deltaPos of
+            SameLine _           -> Just prevEndLine
+            DifferentLine line _ -> Just $ prevEndLine + line
+      where
+        prevEndLine = srcLocLine (realSrcSpanEnd prevSrcSpan)
+
+showAddEpAnns :: [AddEpAnn] -> String
+showAddEpAnns = unlines . fmap showAddEpAnn
+
+showAddEpAnn :: AddEpAnn -> String
+showAddEpAnn (AddEpAnn keywordId loc) = show keywordId ++ "," ++ showEpaLocation loc
+
+showEpaLocation :: EpaLocation -> String
+showEpaLocation (EpaDelta pos _) = show pos
+showEpaLocation _                = error "should not be EpaSpan"
+
+findPositionFromImportsOrModuleDecl :: HasSrcSpan a => t -> (t -> a) -> Maybe ((Int, Int), Int)
+findPositionFromImportsOrModuleDecl hsField f = case getLoc (f hsField) of
   RealSrcSpan s _ ->
     let col = calcCol s
      in Just ((srcLocLine (realSrcSpanEnd s), col), col)
   _ -> Nothing
-  where calcCol s = if hasImports then srcLocCol (realSrcSpanStart s) - 1 else 0
+  where calcCol s = srcLocCol (realSrcSpanStart s) - 1
 
 -- | Find the position one after the last file-header pragma
 -- Defaults to zero if there are no pragmas in file
-findNextPragmaPosition :: T.Text -> Maybe ((Int, Int), Int)
-findNextPragmaPosition contents = Just ((lineNumber, 0), 0)
+findNextPragmaPosition :: T.Text -> Int
+findNextPragmaPosition contents = lineNumber
   where
     lineNumber = afterLangPragma . afterOptsGhc $ afterShebang
     afterLangPragma = afterPragma "LANGUAGE" contents'

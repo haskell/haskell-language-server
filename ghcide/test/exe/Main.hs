@@ -85,9 +85,9 @@ import           System.Environment.Blank                 (getEnv, setEnv,
                                                            unsetEnv)
 import           System.Exit                              (ExitCode (ExitSuccess))
 import           System.FilePath
-import           System.IO.Extra                          hiding (withTempDir)
-import qualified System.IO.Extra
 import           System.Info.Extra                        (isMac, isWindows)
+import qualified System.IO.Extra
+import           System.IO.Extra                          hiding (withTempDir)
 import           System.Mem                               (performGC)
 import           System.Process.Extra                     (CreateProcess (cwd),
                                                            createPipe, proc,
@@ -95,7 +95,7 @@ import           System.Process.Extra                     (CreateProcess (cwd),
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
 import           Control.Concurrent.Async
-import           Control.Lens                             (to, (^.), (.~))
+import           Control.Lens                             (to, (.~), (^.))
 import           Control.Monad.Extra                      (whenJust)
 import           Data.Function                            ((&))
 import           Data.IORef
@@ -123,8 +123,9 @@ import qualified HieDbRetry
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
 import           Ide.Types
 import qualified Language.LSP.Types                       as LSP
+import           Language.LSP.Types.Lens                  (didChangeWatchedFiles,
+                                                           workspace)
 import qualified Language.LSP.Types.Lens                  as L
-import           Language.LSP.Types.Lens                  (workspace, didChangeWatchedFiles)
 import qualified Progress
 import           System.Time.Extra
 import           Test.Tasty
@@ -901,22 +902,16 @@ watchedFilesTests = testGroup "watched files"
 
 insertImportTests :: TestTree
 insertImportTests = testGroup "insert import"
-  [ expectFailBecause
-      ("'findPositionFromImportsOrModuleDecl' function adds import directly under line with module declaration, "
-      ++ "not accounting for case when 'where' keyword is placed on lower line")
-      (checkImport
-         "module where keyword lower in file no exports"
-         "WhereKeywordLowerInFileNoExports.hs"
-         "WhereKeywordLowerInFileNoExports.expected.hs"
-         "import Data.Int")
-  , expectFailBecause
-      ("'findPositionFromImportsOrModuleDecl' function adds import directly under line with module exports list, "
-      ++ "not accounting for case when 'where' keyword is placed on lower line")
-      (checkImport
-         "module where keyword lower in file with exports"
-         "WhereDeclLowerInFile.hs"
-         "WhereDeclLowerInFile.expected.hs"
-         "import Data.Int")
+  [ checkImport
+        "module where keyword lower in file no exports"
+        "WhereKeywordLowerInFileNoExports.hs"
+        "WhereKeywordLowerInFileNoExports.expected.hs"
+        "import Data.Int"
+  , checkImport
+        "module where keyword lower in file with exports"
+        "WhereDeclLowerInFile.hs"
+        "WhereDeclLowerInFile.expected.hs"
+        "import Data.Int"
   , expectFailBecause
       "'findNextPragmaPosition' function doesn't account for case when shebang is not placed at top of file"
       (checkImport
@@ -5467,7 +5462,7 @@ completionDocTests =
             -- We ignore doc uris since it points to the local path which determined by specific machines
             case mn of
                 Nothing -> txt
-                Just n -> T.take n txt
+                Just n  -> T.take n txt
             | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown txt)), ..} <- compls
             , _label == label
             ]
@@ -5767,13 +5762,13 @@ knownBrokenFor = knownIssueFor Broken
 knownIssueFor :: IssueSolution -> BrokenTarget -> String -> TestTree -> TestTree
 knownIssueFor solution = go . \case
     BrokenSpecific bos vers -> isTargetOS bos && isTargetGhc vers
-    BrokenForOS bos -> isTargetOS bos
-    BrokenForGHC vers -> isTargetGhc vers
+    BrokenForOS bos         -> isTargetOS bos
+    BrokenForGHC vers       -> isTargetGhc vers
     where
         isTargetOS = \case
             Windows -> isWindows
-            MacOS -> isMac
-            Linux -> not isWindows && not isMac
+            MacOS   -> isMac
+            Linux   -> not isWindows && not isMac
 
         isTargetGhc = elem ghcVersion
 
