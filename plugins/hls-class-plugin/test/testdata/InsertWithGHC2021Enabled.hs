@@ -1,5 +1,5 @@
 {-# LANGUAGE GHC2021#-}
-module T16 where
+module InsertWithGHC2021Enabled where
 
 data A
 instance Eq A

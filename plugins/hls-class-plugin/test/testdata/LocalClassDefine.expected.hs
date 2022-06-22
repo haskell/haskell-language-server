@@ -1,5 +1,5 @@
 {-# LANGUAGE InstanceSigs #-}
-module T11 where
+module LocalClassDefine where
 
 data A
 class F a where

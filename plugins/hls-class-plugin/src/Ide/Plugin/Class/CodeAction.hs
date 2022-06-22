@@ -111,7 +111,11 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                 $ use GetInstanceBindTypeSigs docPath
             implemented <- findImplementedMethods ast instancePosition
             logWith recorder Info (LogImplementedMethods cls implemented)
-            pure $ concatMap mkAction $ fmap (filter (\(a, _) -> a `notElem` implemented)) $ minDefToMethodGroups range sigs . classMinimalDef $ cls
+            pure
+                $ concatMap mkAction
+                $ fmap (filter (\(bind, _) -> bind `notElem` implemented))
+                $ minDefToMethodGroups range sigs
+                $ classMinimalDef cls
             where
                 range = diag ^. J.range
 

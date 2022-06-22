@@ -1,5 +1,5 @@
 {-# LANGUAGE InstanceSigs #-}
-module T8 where
+module InsertWithPragma where
 
 data A
 instance Eq A

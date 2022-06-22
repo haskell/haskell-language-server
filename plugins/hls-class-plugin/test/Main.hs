@@ -36,7 +36,7 @@ tests recorder = testGroup
   "class"
   [codeActionTests recorder , codeLensTests recorder]
 
--- codeActionTests :: TestTree
+codeActionTests :: Recorder (WithPriority Class.Log) -> TestTree
 codeActionTests recorder = testGroup
   "code actions"
   [ testCase "Produces addMinimalMethodPlaceholders code actions for one instance" $ do
@@ -70,22 +70,22 @@ codeActionTests recorder = testGroup
   , goldenWithClass recorder "Creates a placeholder for other two methods" "T6" "2" $ \(_:_:ghAction:_) -> do
       executeCodeAction ghAction
   , onlyRunForGhcVersions [GHC92] "Only ghc-9.2 enabled GHC2021 implicitly" $
-      goldenWithClass recorder "Don't insert pragma with GHC2021" "T16" "" $ \(_:eqWithSig:_) -> do
+      goldenWithClass recorder "Don't insert pragma with GHC2021" "InsertWithGHC2021Enabled" "" $ \(_:eqWithSig:_) -> do
         executeCodeAction eqWithSig
-  , goldenWithClass recorder "Insert pragma if not exist" "T7" "" $ \(_:eqWithSig:_) -> do
+  , goldenWithClass recorder "Insert pragma if not exist" "InsertWithoutPragma" "" $ \(_:eqWithSig:_) -> do
       executeCodeAction eqWithSig
-  , goldenWithClass recorder "Don't insert pragma if exist" "T8" "" $ \(_:eqWithSig:_) -> do
+  , goldenWithClass recorder "Don't insert pragma if exist" "InsertWithPragma" "" $ \(_:eqWithSig:_) -> do
       executeCodeAction eqWithSig
-  , goldenWithClass recorder "Only insert pragma once" "T9" "" $ \(_:multi:_) -> do
+  , goldenWithClass recorder "Only insert pragma once" "InsertPragmaOnce" "" $ \(_:multi:_) -> do
       executeCodeAction multi
   ]
 
--- codeLensTests :: TestTree
+codeLensTests :: Recorder (WithPriority Class.Log) -> TestTree
 codeLensTests recorder = testGroup
     "code lens"
     [ testCase "Has code lens" $ do
         runSessionWithServer (classPlugin recorder) testDataDir $ do
-            doc <- openDoc "T10.hs" "haskell"
+            doc <- openDoc "CodeLensSimple.hs" "haskell"
             lens <- getCodeLenses doc
             let titles = map (^. J.title) $ mapMaybe (^. J.command) lens
             liftIO $ titles @?=
@@ -97,17 +97,18 @@ codeLensTests recorder = testGroup
             sendConfigurationChanged
                 $ toJSON
                 $ def { Plugin.plugins = [("class", def { plcConfig = "typelensOn" .= False })] }
-            doc <- openDoc "T10.hs" "haskell"
+            doc <- openDoc "CodeLensSimple.hs" "haskell"
             lens <- getCodeLenses doc
             let titles = map (^. J.title) $ mapMaybe (^. J.command) lens
             liftIO $ titles @?= []
-    , goldenCodeLens recorder "Apply code lens" "T10" 1
-    , goldenCodeLens recorder "Apply code lens for local class" "T11" 0
-    , goldenCodeLens recorder "Apply code lens on the same line" "T12" 0
-    , goldenCodeLens recorder "Don't insert pragma while existing" "T13" 0
+    , goldenCodeLens recorder "Apply code lens" "CodeLensSimple" 1
+    , goldenCodeLens recorder "Apply code lens for local class" "LocalClassDefine" 0
+    , goldenCodeLens recorder "Apply code lens on the same line" "Inline" 0
+    , goldenCodeLens recorder "Don't insert pragma while existing" "CodeLensWithPragma" 0
     , onlyRunForGhcVersions [GHC92] "Only ghc-9.2 enabled GHC2021 implicitly" $
-        goldenCodeLens recorder "Don't insert pragma while GHC2021 enabled" "T14" 0
-    , goldenCodeLens recorder "Qualified name" "T15" 0
+        goldenCodeLens recorder "Don't insert pragma while GHC2021 enabled" "CodeLensWithGHC2021" 0
+    , goldenCodeLens recorder "Qualified name" "Qualified" 0
+    , goldenCodeLens recorder "Type family" "TypeFamily" 0
     ]
 
 _CACodeAction :: Prism' (Command |? CodeAction) CodeAction
@@ -115,7 +116,8 @@ _CACodeAction = prism' InR $ \case
   InR action -> Just action
   _          -> Nothing
 
--- goldenCodeLens :: TestName -> FilePath -> Int -> TestTree
+
+goldenCodeLens :: Recorder (WithPriority Class.Log) -> TestName -> FilePath -> Int -> TestTree
 goldenCodeLens recorder title path idx =
     goldenWithHaskellDoc (classPlugin recorder) title testDataDir path "expected" "hs" $ \doc -> do
         lens <- getCodeLenses doc

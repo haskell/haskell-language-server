@@ -1,5 +1,5 @@
-{-# LANGUAGE InstanceSigs #-}
-module T12 where
+{-# LANGUAGE GHC2021#-}
+module InsertWithGHC2021Enabled where
 
 data A
 instance Eq A where

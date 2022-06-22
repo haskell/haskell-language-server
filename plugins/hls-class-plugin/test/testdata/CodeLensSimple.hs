@@ -1,4 +1,4 @@
-module T10 where
+module CodeLensSimple where
 
 data A
 instance Eq A where

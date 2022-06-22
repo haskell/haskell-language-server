@@ -1,4 +1,4 @@
-module T9 where
+module InsertPragmaOnce where
 
 data A aaa
 instance Applicative A

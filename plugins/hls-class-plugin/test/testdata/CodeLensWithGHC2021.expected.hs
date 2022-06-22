@@ -1,5 +1,5 @@
 {-# LANGUAGE GHC2021 #-}
-module T14 where
+module CodeLensWithGHC2021 where
 
 data A
 instance Eq A where
