@@ -226,7 +226,8 @@ flag dynamic
 common example-plugins
   hs-source-dirs: plugins/default/src
   other-modules: Ide.Plugin.Example,
-                 Ide.Plugin.Example2
+                 Ide.Plugin.Example2,
+                 Ide.Plugin.ExampleCabal
 
 common class
   if flag(class)
