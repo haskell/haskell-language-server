@@ -912,6 +912,11 @@ insertImportTests = testGroup "insert import"
         "WhereDeclLowerInFile.hs"
         "WhereDeclLowerInFile.expected.hs"
         "import Data.Int"
+  , checkImport
+        "module where keyword lower in file with comments before it"
+        "WhereDeclLowerInFileWithCommentsBeforeIt.hs"
+        "WhereDeclLowerInFileWithCommentsBeforeIt.expected.hs"
+        "import Data.Int"
   , expectFailBecause
       "'findNextPragmaPosition' function doesn't account for case when shebang is not placed at top of file"
       (checkImport

@@ -80,10 +80,13 @@ import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC                                               (AddEpAnn (AddEpAnn),
+                                                                    Anchor (anchor_op),
+                                                                    AnchorOperation (..),
                                                                     AnnsModule (am_main),
                                                                     DeltaPos (..),
                                                                     EpAnn (..),
                                                                     EpaLocation (..),
+                                                                    LEpaComment,
                                                                     LocatedA)
 
 import           Control.Monad                                     (msum)
@@ -1453,8 +1456,16 @@ findPositionAfterModuleName ps hsmodName' = do
 
     epaLocationToLine :: EpaLocation -> Maybe Int
     epaLocationToLine (EpaSpan sp) = Just . srcLocLine . realSrcSpanEnd $ sp
-    epaLocationToLine (EpaDelta (SameLine _) _) = Just 0
-    epaLocationToLine (EpaDelta (DifferentLine line _) _) = Just line
+    epaLocationToLine (EpaDelta (SameLine _) priorComments) = Just $ sumCommentsOffset priorComments
+    epaLocationToLine (EpaDelta (DifferentLine line _) priorComments) = Just (line + sumCommentsOffset priorComments)
+
+    sumCommentsOffset :: [LEpaComment] -> Int
+    sumCommentsOffset = sum . fmap (\(L anchor _) -> anchorOpLine (anchor_op anchor))
+
+    anchorOpLine :: AnchorOperation -> Int
+    anchorOpLine UnchangedAnchor                      = 0
+    anchorOpLine (MovedAnchor (SameLine _))           = 0
+    anchorOpLine (MovedAnchor (DifferentLine line _)) = line
 #else
     whereKeywordLineOffset = do
         ann <- annsA ps M.!? mkAnnKey (astA ps)
