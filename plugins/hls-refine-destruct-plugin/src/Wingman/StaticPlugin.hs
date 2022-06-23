@@ -5,20 +5,9 @@ module Wingman.StaticPlugin
   ) where
 
 import Development.IDE.GHC.Compat
-import Development.IDE.GHC.Compat.Util
-import GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
+import GHC.LanguageExtensions.Type (Extension(EmptyCase))
 
 import Ide.Types
-
-#if __GLASGOW_HASKELL__ >= 808
-import Data.Data
-import Generics.SYB
-#if __GLASGOW_HASKELL__ >= 900
-import GHC.Driver.Plugins (purePlugin)
-#else
-import Plugins (purePlugin)
-#endif
-#endif
 
 staticPlugin :: DynFlagsModifications
 staticPlugin = mempty

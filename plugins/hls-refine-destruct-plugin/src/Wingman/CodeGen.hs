@@ -10,10 +10,7 @@ module Wingman.CodeGen
   ) where
 
 
-import           Control.Lens ((%~), (<>~), (&))
-import           Control.Monad.Except
-import           Control.Monad.Reader (ask)
-import           Control.Monad.State
+import           Control.Lens ((%~), (&))
 import           Data.Bifunctor (second)
 import           Data.Bool (bool)
 import           Data.Functor ((<&>))

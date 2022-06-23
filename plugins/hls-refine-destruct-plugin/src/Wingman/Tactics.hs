@@ -6,12 +6,9 @@ module Wingman.Tactics
   , runTactic
   ) where
 
-import           Control.Applicative (Alternative(empty), (<|>))
-import           Control.Lens ((&), (%~), (<>~))
-import           Control.Monad (filterM, unless)
-import           Control.Monad (when)
-import           Control.Monad.Extra (anyM)
-import           Control.Monad.Reader.Class (MonadReader (ask))
+import           Control.Applicative (empty)
+import           Control.Lens ((&), (%~))
+import           Control.Monad (unless)
 import           Control.Monad.State.Strict (StateT(..), runStateT, execStateT)
 import           Data.Bool (bool)
 import           Data.Foldable
@@ -23,10 +20,8 @@ import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
-import           Data.Traversable (for)
 import           Development.IDE.GHC.Compat hiding (empty)
 import           GHC.Exts
-import           GHC.SourceGen ((@@))
 import           GHC.SourceGen.Expr
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal

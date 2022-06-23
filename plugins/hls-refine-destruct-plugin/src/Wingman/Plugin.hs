@@ -5,7 +5,6 @@ import           Control.Monad
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Types.Logger (Recorder, cmapWithPrio, WithPriority, Pretty (pretty))
 import           Ide.Types
-import           Language.LSP.Types
 import           Prelude hiding (span)
 import           Wingman.AbstractLSP
 import           Wingman.AbstractLSP.TacticActions (makeTacticInteraction)

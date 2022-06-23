@@ -4,14 +4,12 @@
 -- | Custom SYB traversals
 module Wingman.Judgements.SYB where
 
-import           Data.Foldable (foldl')
-import           Data.Generics hiding (typeRep)
-import qualified Data.Text as T
-import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.Util (unpackFS)
-import           GHC.Exts (Any)
-import           Type.Reflection
-import           Unsafe.Coerce (unsafeCoerce)
+import Data.Foldable (foldl')
+import Data.Generics hiding (typeRep)
+import Development.IDE.GHC.Compat
+import GHC.Exts (Any)
+import Type.Reflection
+import Unsafe.Coerce (unsafeCoerce)
 
 
 ------------------------------------------------------------------------------

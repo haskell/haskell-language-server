@@ -4,44 +4,28 @@
 
 module Wingman.Machinery where
 
-import           Control.Applicative (empty)
 import           Control.Concurrent.Chan.Unagi.NoBlocking (newChan, writeChan, OutChan, tryRead, tryReadChan)
-import           Control.Lens ((<>~))
 import           Control.Monad.Reader
 import           Control.Monad.State.Class (gets, modify, MonadState)
 import           Control.Monad.State.Strict (StateT (..), execStateT)
-import           Control.Monad.Trans.Maybe
 import           Data.Coerce
 import           Data.Foldable
-import           Data.Functor ((<&>))
 import           Data.Generics (everything, gcount, mkQ)
-import           Data.Generics.Product (field')
 import           Data.List (sortBy)
 import qualified Data.Map as M
-import           Data.Maybe (mapMaybe, isNothing)
-import           Data.Monoid (getSum)
+import           Data.Maybe (isNothing)
 import           Data.Ord (Down (..), comparing)
 import qualified Data.Set as S
-import           Data.Traversable (for)
-import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat hiding (isTopLevel, empty)
 import           Refinery.Future
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           System.Timeout (timeout)
-import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, freshTyvars, tryUnifyUnivarsButNotSkolemsMany)
+import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, freshTyvars)
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
-
-#if __GLASGOW_HASKELL__ < 900
-import FunDeps (fd_eqs, improveFromInstEnv)
-import Pair (unPair)
-#else
-import GHC.Tc.Instance.FunDeps (fd_eqs, improveFromInstEnv)
-import GHC.Data.Pair (unPair)
-#endif
 
 
 substCTy :: TCvSubst -> CType -> CType

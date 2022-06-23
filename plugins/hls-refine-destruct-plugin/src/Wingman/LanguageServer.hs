@@ -7,30 +7,24 @@
 
 module Wingman.LanguageServer where
 
-import           Control.Arrow ((***))
 import           Control.Monad
-import           Control.Monad.IO.Class
 import           Control.Monad.RWS
 import           Control.Monad.State (State, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor (first)
-import           Data.Coerce
 import           Data.Functor ((<&>))
-import           Data.Functor.Identity (runIdentity)
 import qualified Data.HashMap.Strict as Map
-import           Data.IORef (readIORef)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE (hscEnv, getFilesOfInterestUntracked, ShowDiagnostic (ShowDiag), srcSpanToRange, defineNoDiagnostics, IdeAction)
-import           Development.IDE.Core.PositionMapping (idDelta)
+import           Development.IDE (getFilesOfInterestUntracked, ShowDiagnostic (ShowDiag), srcSpanToRange, IdeAction)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (IdeState (..), uses, define, use, addPersistentRule)
+import           Development.IDE.Core.Shake (IdeState (..), uses, define, use)
 import qualified Development.IDE.Core.Shake as IDE
 import qualified Development.IDE.Core.Shake as Shake
 import           Development.IDE.Core.UseStale
@@ -40,7 +34,7 @@ import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint hiding (LogShake, Log)
 import           Development.IDE.Graph (Action, RuleResult, Rules, action)
 import           Development.IDE.Graph.Classes (Hashable, NFData)
-import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
+import           Development.IDE.Spans.LocalBindings (Bindings)
 import           Development.IDE.Types.Logger (Recorder, cmapWithPrio, WithPriority, Pretty (pretty))
 import           GHC.Generics (Generic)
 import           Generics.SYB hiding (Generic)
@@ -48,12 +42,10 @@ import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
-import           Language.Haskell.GHC.ExactPrint (Transform, modifyAnnsT, addAnnotationsForPretty)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types hiding (SemanticTokenAbsolute (length, line), SemanticTokenRelative (length), SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities
 import           Prelude hiding (span)
-import           Retrie (transformA)
 import           Wingman.Context
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -214,23 +206,13 @@ judgementForHole state nfp range cfg = do
     HAR _ (unsafeCopyAge asts -> hf) _ _ HieFresh -> do
       range' <- liftMaybe $ mapAgeFrom amapping range
       binds <- stale GetBindings
-      tcg@(TrackedStale tcg_t tcg_map)
-          <- fmap (fmap tmrTypechecked)
-           $ stale TypeCheck
-
-      hscenv <- stale GhcSessionDeps
+      tcg <- fmap (fmap tmrTypechecked) $ stale TypeCheck
 
       (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
 
       new_rss <- liftMaybe $ mapAgeTo amapping rss
-      tcg_rss <- liftMaybe $ mapAgeFrom tcg_map new_rss
 
-      -- KnownThings is just the instances in scope. There are no ranges
-      -- involved, so it's not crucial to track ages.
-      let henv = untrackedStaleValue hscenv
-      eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
-
-      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg (hscEnv henv) eps
+      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg
 
       dflags <- getIdeDynflags state nfp
       pure $ HoleJudgment
@@ -247,10 +229,8 @@ mkJudgementAndContext
     -> TrackedStale Bindings
     -> Tracked 'Current RealSrcSpan
     -> TrackedStale TcGblEnv
-    -> HscEnv
-    -> ExternalPackageState
     -> Maybe (Judgement, Context)
-mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) hscenv eps = do
+mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) = do
   binds_rss <- mapAgeFrom bmap rss
   tcg_rss <- mapAgeFrom tcgmap rss
 
