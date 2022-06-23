@@ -1403,13 +1403,8 @@ newImportToEdit (unNewImport -> imp) ps fileContents
 -- * If the file has neither existing imports nor a module declaration,
 -- the import will be inserted at line zero if there are no pragmas,
 -- * otherwise inserted one line after the last file-header pragma
-#if MIN_VERSION_ghc(9,2,0)
-newImportInsertRange :: ParsedSource -> T.Text -> Maybe (Range, Int)
-newImportInsertRange ps@(L _ HsModule {..}) fileContents
-#else
 newImportInsertRange :: Annotated ParsedSource -> T.Text -> Maybe (Range, Int)
 newImportInsertRange ps fileContents
-#endif
   |  Just ((l, c), col) <- case hsmodImports of
       [] -> (\line -> ((line, 0), 0)) <$> findPositionNoImports ps fileContents
       _  -> findPositionFromImportsOrModuleDecl (map reLoc hsmodImports) last
@@ -1428,11 +1423,13 @@ findPositionNoImports ps fileContents =
   where
     L _ HsModule {..} = astA ps
 
+findPositionAfterModuleName :: Annotated ParsedSource
 #if MIN_VERSION_ghc(9,2,0)
-findPositionAfterModuleName :: ParsedSource -> LocatedA ModuleName -> Maybe Int
+                            -> LocatedA ModuleName
 #else
-findPositionAfterModuleName :: Annotated ParsedSource -> Located ModuleName -> Maybe Int
+                            -> Located ModuleName
 #endif
+                            -> Maybe Int
 findPositionAfterModuleName ps hsmodName' = do
     lineOffset <- whereKeywordLineOffset
     case prevSrcSpan of
