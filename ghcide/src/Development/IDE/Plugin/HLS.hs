@@ -77,7 +77,7 @@ failedToParseArgs :: CommandId  -- ^ command that failed to parse
 failedToParseArgs (CommandId com) (PluginId pid) err arg = "Error while parsing args for " <> com <> " in plugin " <> pid <> ": " <> T.pack err <> "\narg = " <> T.pack (show arg)
 
 -- | Build a ResponseError and log it before returning to the caller
-logAndReturnError :: Recorder (WithPriority Log) -> ErrorCode -> Text -> LSP.LspT Config IO (Either ResponseError J.Value)
+logAndReturnError :: Recorder (WithPriority Log) -> ErrorCode -> Text -> LSP.LspT Config IO (Either ResponseError a)
 logAndReturnError recorder errCode msg = do
     let err = ResponseError errCode msg Nothing
     logWith recorder Warning $ LogPluginError err
@@ -192,10 +192,7 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
         let fs = filter (\(pid,_) -> pluginEnabled m pid config) fs'
         -- Clients generally don't display ResponseErrors so instead we log any that we come across
         case nonEmpty fs of
-          Nothing -> do
-              let err = ResponseError InvalidRequest (pluginNotEnabled m) Nothing
-              logWith recorder Info $ LogPluginError err
-              pure $ Left err
+          Nothing -> logAndReturnError recorder InvalidRequest (pluginNotEnabled m)
           Just fs -> do
             let msg e pid = "Exception in plugin " <> T.pack (show pid) <> "while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
             es <- runConcurrently msg (show m) fs ide params
