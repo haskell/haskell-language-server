@@ -47,23 +47,47 @@ import           UnliftIO.Exception           (catchAny)
 -- ---------------------------------------------------------------------
 --
 
-data Log
-  = LogNoEnabledPlugins
-  | LogPluginError PluginId ResponseError
-  deriving Show
+data Log = LogPluginError ResponseError
+    deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogNoEnabledPlugins ->
-      "extensibleNotificationPlugins no enabled plugins"
-    LogPluginError plid err -> pretty (err ^. LSP.message)
+    LogPluginError err -> responseErrorToLogMessage err
 
+responseErrorToLogMessage :: ResponseError -> Doc a
+responseErrorToLogMessage err =  errorCode <> ":" <+> errorBody
+    where
+        errorCode = pretty $ show $ err ^. LSP.code
+        errorBody = pretty $ err ^. LSP.message
+
+pluginNotEnabled :: SMethod m -> Text
+pluginNotEnabled method = "No plugin enabled for " <> T.pack (show method)
+
+pluginDoesntExist :: PluginId -> Text
+pluginDoesntExist (PluginId pid) = "Plugin " <> pid <> " doesn't exist"
+
+commandDoesntExist :: CommandId -> PluginId -> [PluginCommand ideState] -> Text
+commandDoesntExist (CommandId com) (PluginId pid) legalCmds = "Command " <> com <> " isn't defined for plugin " <> pid <> ". Legal commands are: " <> T.pack (show $ map commandId legalCmds)
+
+failedToParseArgs :: CommandId  -- ^ command that failed to parse
+                    -> PluginId -- ^ Plugin that created the command
+                    -> String   -- ^ The JSON Error message
+                    -> J.Value  -- ^ The Argument Values
+                    -> Text
+failedToParseArgs (CommandId com) (PluginId pid) err arg = "Error while parsing args for " <> com <> " in plugin " <> pid <> ": " <> T.pack err <> "\narg = " <> T.pack (show arg)
+
+-- | Build a ResponseError and log it before returning to the caller
+logAndReturnError :: Recorder (WithPriority Log) -> ErrorCode -> Text -> LSP.LspT Config IO (Either ResponseError J.Value)
+logAndReturnError recorder errCode msg = do
+    let err = ResponseError errCode msg Nothing
+    logWith recorder Warning $ LogPluginError err
+    pure $ Left err
 
 -- | Map a set of plugins to the underlying ghcide engine.
 asGhcIdePlugin :: Recorder (WithPriority Log) -> IdePlugins IdeState -> Plugin Config
 asGhcIdePlugin recorder (IdePlugins ls) =
     mkPlugin rulesPlugins HLS.pluginRules <>
-    mkPlugin executeCommandPlugins HLS.pluginCommands <>
+    mkPlugin (executeCommandPlugins recorder) HLS.pluginCommands <>
     mkPlugin (extensiblePlugins recorder) HLS.pluginHandlers <>
     mkPlugin (extensibleNotificationPlugins recorder) HLS.pluginNotificationHandlers <>
     mkPlugin dynFlagsPlugins HLS.pluginModifyDynflags
@@ -97,11 +121,11 @@ dynFlagsPlugins rs = mempty
 
 -- ---------------------------------------------------------------------
 
-executeCommandPlugins :: [(PluginId, [PluginCommand IdeState])] -> Plugin Config
-executeCommandPlugins ecs = mempty { P.pluginHandlers = executeCommandHandlers ecs }
+executeCommandPlugins :: Recorder (WithPriority Log) -> [(PluginId, [PluginCommand IdeState])] -> Plugin Config
+executeCommandPlugins recorder ecs = mempty { P.pluginHandlers = executeCommandHandlers recorder ecs }
 
-executeCommandHandlers :: [(PluginId, [PluginCommand IdeState])] -> LSP.Handlers (ServerM Config)
-executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
+executeCommandHandlers :: Recorder (WithPriority Log) -> [(PluginId, [PluginCommand IdeState])] -> LSP.Handlers (ServerM Config)
+executeCommandHandlers recorder ecs = requestHandler SWorkspaceExecuteCommand execCmd
   where
     pluginMap = Map.fromList ecs
 
@@ -140,21 +164,15 @@ executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
         Just (plugin, cmd) -> runPluginCommand ide plugin cmd cmdParams
 
         -- Couldn't parse the command identifier
-        _ -> return $ Left $ ResponseError InvalidParams "Invalid command identifier" Nothing
+        _ -> logAndReturnError recorder InvalidParams "Invalid command Identifier"
 
-    runPluginCommand ide p@(PluginId p') com@(CommandId com') arg =
+    runPluginCommand ide p com arg =
       case Map.lookup p pluginMap  of
-        Nothing -> return
-          (Left $ ResponseError InvalidRequest ("Plugin " <> p' <> " doesn't exist") Nothing)
+        Nothing -> logAndReturnError recorder InvalidRequest (pluginDoesntExist p)
         Just xs -> case List.find ((com ==) . commandId) xs of
-          Nothing -> return $ Left $
-            ResponseError InvalidRequest ("Command " <> com' <> " isn't defined for plugin " <> p'
-                                          <> ". Legal commands are: " <> T.pack(show $ map commandId xs)) Nothing
+          Nothing -> logAndReturnError recorder InvalidRequest (commandDoesntExist com p xs)
           Just (PluginCommand _ _ f) -> case J.fromJSON arg of
-            J.Error err -> return $ Left $
-              ResponseError InvalidParams ("error while parsing args for " <> com' <> " in plugin " <> p'
-                                           <> ": " <> T.pack err
-                                           <> "\narg = " <> T.pack (show arg)) Nothing
+            J.Error err -> logAndReturnError recorder InvalidParams (failedToParseArgs com p err arg)
             J.Success a -> f ide a
 
 -- ---------------------------------------------------------------------
@@ -172,17 +190,19 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
       pure $ requestHandler m $ \ide params -> do
         config <- Ide.PluginUtils.getClientConfig
         let fs = filter (\(pid,_) -> pluginEnabled m pid config) fs'
+        -- Clients generally don't display ResponseErrors so instead we log any that we come across
         case nonEmpty fs of
-          Nothing -> pure $ Left $ ResponseError InvalidRequest
-            ("No plugin enabled for " <> T.pack (show m) <> ", available: " <> T.pack (show $ map fst fs))
-            Nothing
+          Nothing -> do
+              let err = ResponseError InvalidRequest (pluginNotEnabled m) Nothing
+              logWith recorder Info $ LogPluginError err
+              pure $ Left err
           Just fs -> do
             let msg e pid = "Exception in plugin " <> T.pack (show pid) <> "while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
             es <- runConcurrently msg (show m) fs ide params
             let (errs,succs) = partitionEithers $ toList es
-            unless (null errs) $ forM_ errs $ \err -> logWith recorder Warning $ uncurry LogPluginError err
+            unless (null errs) $ forM_ errs $ \err -> logWith recorder Warning $ LogPluginError err
             case nonEmpty succs of
-              Nothing -> pure $ Left $ combineErrors (map snd errs)
+              Nothing -> pure $ Left $ combineErrors errs
               Just xs -> do
                 caps <- LSP.getClientCapabilities
                 pure $ Right $ combineResponses m config caps params xs
@@ -203,9 +223,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
         config <- Ide.PluginUtils.getClientConfig
         let fs = filter (\(pid,_) -> plcGlobalOn $ configForPlugin config pid) fs'
         case nonEmpty fs of
-          Nothing -> do
-              logWith recorder Info LogNoEnabledPlugins
-              pure ()
+          Nothing -> void $ logAndReturnError recorder InvalidRequest (pluginNotEnabled m)
           Just fs -> do
             -- We run the notifications in order, so the core ghcide provider
             -- (which restarts the shake process) hopefully comes last
@@ -220,11 +238,10 @@ runConcurrently
   -> NonEmpty (PluginId, a -> b -> m (NonEmpty (Either ResponseError d)))
   -> a
   -> b
-  -> m (NonEmpty (Either (PluginId, ResponseError) d))
+  -> m (NonEmpty (Either ResponseError d))
 runConcurrently msg method fs a b = fmap join $ forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString method) $ do
-  -- attach the PluginId on ResponseError for logging purposes
-  fmap (first (pid,)) <$> (f a b
-     `catchAny` (\e -> pure $ pure $ Left $ ResponseError InternalError (msg e pid) Nothing))
+  f a b
+     `catchAny` (\e -> pure $ pure $ Left $ ResponseError InternalError (msg e pid) Nothing)
 
 combineErrors :: [ResponseError] -> ResponseError
 combineErrors [x] = x
