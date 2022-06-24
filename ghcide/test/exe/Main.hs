@@ -4678,6 +4678,7 @@ thTests =
         return ()
     , thReloadingTest False
     , thLoadingTest
+    , thCoreTest
     , ignoreInWindowsBecause "Broken in windows" $ thReloadingTest True
     -- Regression test for https://github.com/haskell/haskell-language-server/issues/891
     , thLinkingTest False
@@ -4732,6 +4733,12 @@ thLoadingTest :: TestTree
 thLoadingTest = testCase "Loading linkables" $ runWithExtraFiles "THLoading" $ \dir -> do
     let thb = dir </> "THB.hs"
     _ <- openDoc thb "haskell"
+    expectNoMoreDiagnostics 1
+
+thCoreTest :: TestTree
+thCoreTest = testCase "Verifying TH core files" $ runWithExtraFiles "THCoreFile" $ \dir -> do
+    let thc = dir </> "THC.hs"
+    _ <- openDoc thc "haskell"
     expectNoMoreDiagnostics 1
 
 -- | test that TH is reevaluated on typecheck
@@ -6660,7 +6667,7 @@ runInDir'' lspCaps dir startExeIn startSessionIn extraOptions s = do
 
   shakeProfiling <- getEnv "SHAKE_PROFILING"
   let cmd = unwords $
-       [ghcideExe, "--lsp", "--test", "--verbose", "-j2", "--cwd", startDir
+       [ghcideExe, "--lsp", "--test", "--verify-core-file", "--verbose", "-j2", "--cwd", startDir
        ] ++ ["--shake-profiling=" <> dir | Just dir <- [shakeProfiling]
        ] ++ extraOptions
   -- HIE calls getXgdDirectory which assumes that HOME is set.
@@ -6770,7 +6777,7 @@ unitTests recorder logger = do
                 ] ++ Ghcide.descriptors (cmapWithPrio LogGhcIde recorder)
 
         testIde recorder (IDE.testing (cmapWithPrio LogIDEMain recorder) logger){IDE.argsHlsPlugins = plugins} $ do
-            _ <- createDoc "haskell" "A.hs" "module A where"
+            _ <- createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
             actualOrder <- liftIO $ readIORef orderRef
 

@@ -180,6 +180,7 @@ library
         Development.IDE.GHC.Compat.Units
         Development.IDE.GHC.Compat.Util
         Development.IDE.Core.Compile
+        Development.IDE.GHC.CoreFile
         Development.IDE.GHC.Dump
         Development.IDE.GHC.Error
         Development.IDE.GHC.ExactPrint
