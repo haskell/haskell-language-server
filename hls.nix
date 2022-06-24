@@ -9,13 +9,31 @@ let
 
   inputs = with pkgs.haskell.packages.mwb.ghc922; {
     ptr-poker = ptr-poker;
-    ghc-exactprint-150 = builtins.fetchTarball "https://hackage.haskell.org/package/ghc-exactprint-1.5.0/ghc-exactprint-1.5.0.tar.gz";
+    ghc-exactprint-150 = builtins.fetchTarball {
+      url = "https://hackage.haskell.org/package/ghc-exactprint-1.5.0/ghc-exactprint-1.5.0.tar.gz";
+      sha256 = "1k2h548h8l4x95m6fmfiqvmb7blv1h901334qwfivv4wrr5sdrbz";
+    };
     hlint = hlint;
-    hie-bios = builtins.fetchTarball "https://hackage.haskell.org/package/hie-bios-0.9.1/hie-bios-0.9.1.tar.gz";
-    lsp = builtins.fetchTarball "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz";
-    lsp-types = builtins.fetchTarball "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz";
-    lsp-test = builtins.fetchTarball "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz";
-    implicit-hie-cradle = builtins.fetchTarball "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
+    hie-bios = builtins.fetchTarball {
+      url = "https://hackage.haskell.org/package/hie-bios-0.9.1/hie-bios-0.9.1.tar.gz";
+      sha256 = "0j9aykllx9d2p46v7l4w9ymrn93x2nz2laqw63nvzbdv7njsq6p5";
+    };
+    lsp = builtins.fetchTarball {
+      url = "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz";
+      sha256 = "0rvk6ib9iqplz8xm09j05jx0m0aq82iqs4lzdikkxxk1shf8vk1r";
+    };
+    lsp-types = builtins.fetchTarball {
+      url = "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz";
+      sha256 = "1madyfv9jz87v1vrj3h803v3nijb75b7xbqzlyzwxb12k2x3hs0w";
+    };
+    lsp-test = builtins.fetchTarball {
+      url = "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz";
+      sha256 = "1nnwlv8rix4rplxbpddzvzc544gby7rax8hcj2yxnaddgr09ps90";
+    };
+    implicit-hie-cradle = builtins.fetchTarball {
+      url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
+      sha256 = "15a7g9x6cjk2b92hb2wilxx4550msxp1pmk5a2shiva821qaxnfq";
+    };
   };
 
   haskellOverrides = hself: hsuper: {
