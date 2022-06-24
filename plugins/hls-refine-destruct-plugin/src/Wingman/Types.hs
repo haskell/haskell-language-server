@@ -293,8 +293,8 @@ data Judgement' a = Judgement
 type Judgement = Judgement' CType
 
 
-newtype ExtractM a = ExtractM { unExtractM :: ReaderT Context IO a }
-    deriving newtype (Functor, Applicative, Monad, MonadReader Context)
+newtype ExtractM a = ExtractM { unExtractM :: ReaderT Config IO a }
+    deriving newtype (Functor, Applicative, Monad, MonadReader Config)
 
 ------------------------------------------------------------------------------
 -- | Used to ensure hole names are unique across invocations of runTactic
@@ -410,58 +410,11 @@ instance Applicative Synthesized where
 
 
 ------------------------------------------------------------------------------
--- | The Reader context of tactics and rules
-data Context = Context
-  { ctxConfig        :: Config
-  }
-
-instance Show Context where
-  show Context{..} = mconcat
-    [ "Context "
-    , showsPrec 10 ctxConfig ""
-    ]
-
-
-------------------------------------------------------------------------------
--- | An empty context
-emptyContext :: Context
-emptyContext
-  = Context
-      { ctxConfig = emptyConfig
-      }
-
-
-newtype Rose a = Rose (Tree a)
-  deriving stock (Eq, Functor, Generic, Data, Typeable)
-
-instance Show (Rose String) where
-  show = unlines . dropEveryOther . lines . drawTree . coerce
-
-dropEveryOther :: [a] -> [a]
-dropEveryOther []           = []
-dropEveryOther [a]          = [a]
-dropEveryOther (a : _ : as) = a : dropEveryOther as
-
-------------------------------------------------------------------------------
--- | This might not be lawful! I didn't check, and it feels sketchy.
-instance (Eq a, Monoid a) => Semigroup (Rose a) where
-  Rose (Node a as) <> Rose (Node b bs) = Rose $ Node (a <> b) (as <> bs)
-  sconcat (a :| as) = rose mempty $ a : as
-
-instance (Eq a, Monoid a) => Monoid (Rose a) where
-  mempty = Rose $ Node mempty mempty
-
-rose :: (Eq a, Monoid a) => a -> [Rose a] -> Rose a
-rose a [Rose (Node a' rs)] | a' == mempty = Rose $ Node a rs
-rose a rs = Rose $ Node a $ coerce rs
-
-
-------------------------------------------------------------------------------
 -- | The results of 'Wingman.Machinery.runTactic'
 data RunTacticResults = RunTacticResults
   { rtr_extract     :: LHsExpr GhcPs
   , rtr_jdg         :: Judgement
-  , rtr_ctx         :: Context
+  , rtr_ctx         :: Config
   , rtr_timed_out   :: Bool
   } deriving Show
 
@@ -492,7 +445,7 @@ instance Show UserFacingMessage where
 data HoleJudgment = HoleJudgment
   { hj_range     :: Tracked 'Current Range
   , hj_jdg       :: Judgement
-  , hj_ctx       :: Context
+  , hj_ctx       :: Config
   , hj_dflags    :: DynFlags
   }
 

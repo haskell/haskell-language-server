@@ -35,7 +35,6 @@ library
     Wingman.CaseSplit
     Wingman.CodeGen
     Wingman.CodeGen.Utils
-    Wingman.Context
     Wingman.Debug
     Wingman.EmptyCase
     Wingman.GHC

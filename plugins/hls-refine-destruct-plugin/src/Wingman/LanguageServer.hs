@@ -7,6 +7,7 @@
 
 module Wingman.LanguageServer where
 
+import           Control.Arrow ((&&&))
 import           Control.Monad
 import           Control.Monad.RWS
 import           Control.Monad.State (State, evalState)
@@ -46,7 +47,6 @@ import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types hiding (SemanticTokenAbsolute (length, line), SemanticTokenRelative (length), SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities
 import           Prelude hiding (span)
-import           Wingman.Context
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining)
@@ -229,13 +229,12 @@ mkJudgementAndContext
     -> TrackedStale Bindings
     -> Tracked 'Current RealSrcSpan
     -> TrackedStale TcGblEnv
-    -> Maybe (Judgement, Context)
+    -> Maybe (Judgement, Config)
 mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) = do
   binds_rss <- mapAgeFrom bmap rss
   tcg_rss <- mapAgeFrom tcgmap rss
 
   let tcs = fmap tcg_binds tcg
-      ctx = mkContext cfg
       top_provs = getRhsPosVals tcg_rss tcs
       already_destructed = getAlreadyDestructed (fmap (`RealSrcSpan` Nothing) tcg_rss) tcs
       local_hy = spliceProvenance top_provs
@@ -248,7 +247,7 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
           (local_hy)
           (isRhsHoleWithoutWhere tcg_rss tcs)
           g
-    , ctx
+    , cfg
     )
 
 
@@ -568,4 +567,7 @@ mkWorkspaceEdits dflags ccs uri pm g = do
   let response = transform dflags ccs uri g pm
    in first (InfrastructureError . T.pack) response
 
+
+splitId :: Id -> (OccName, CType)
+splitId = occName &&& CType . idType
 

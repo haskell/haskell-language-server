@@ -73,7 +73,7 @@ consumeChan chan = do
 -- a given tactic.
 runTactic
     :: Int          -- ^ Timeout
-    -> Context
+    -> Config
     -> Judgement
     -> TacticsM ()  -- ^ Tactic to use
     -> IO (Either [TacticError] RunTacticResults)
