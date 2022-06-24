@@ -37,7 +37,6 @@ import           UnliftIO.Exception
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
-import           Development.IDE.LSP.HoverDefinition
 import           Development.IDE.Types.Logger
 
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
@@ -151,25 +150,20 @@ setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
   let clearReqId reqId = atomically $ do
           modifyTVar pendingRequests (Set.delete reqId)
           modifyTVar cancelledRequests (Set.delete reqId)
-
       -- We implement request cancellation by racing waitForCancel against
       -- the actual request handler.
   let waitForCancel reqId = atomically $ do
           cancelled <- readTVar cancelledRequests
           unless (reqId `Set.member` cancelled) retry
 
-  let ideHandlers = mconcat
-        [ setIdeHandlers
-        , userHandlers
-        ]
   let asyncHandlers = mconcat
-        [ ideHandlers
+        [ userHandlers
         , cancelHandler cancelRequest
         , exitHandler exit
         , shutdownHandler stopReactorLoop
         ]
-     -- Cancel requests are special since they need to be handled
-     -- out of order to be useful. Existing handlers are run afterwards.
+        -- Cancel requests are special since they need to be handled
+        -- out of order to be useful. Existing handlers are run afterwards.
 
   let doInitialize = handleInit recorder getHieDbLoc getIdeState reactorLifetime exit clearReqId waitForCancel clientMsgChan
 
