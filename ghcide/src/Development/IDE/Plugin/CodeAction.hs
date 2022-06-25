@@ -1409,8 +1409,9 @@ newImportToEdit (unNewImport -> imp) ps fileContents
 newImportInsertRange :: Annotated ParsedSource -> T.Text -> Maybe (Range, Int)
 newImportInsertRange ps fileContents
   |  Just ((l, c), col) <- case hsmodImports of
+      -- When there is no existing imports, we only cares about the line number, setting column and indent to zero.
       [] -> (\line -> ((line, 0), 0)) <$> findPositionNoImports ps fileContents
-      _  -> findPositionFromImportsOrModuleDecl (map reLoc hsmodImports) last
+      _  -> findPositionFromImports (map reLoc hsmodImports) last
   , let insertPos = Position (fromIntegral l) (fromIntegral c)
     = Just (Range insertPos insertPos, col)
   | otherwise = Nothing
@@ -1426,6 +1427,7 @@ findPositionNoImports ps fileContents =
   where
     L _ HsModule {..} = astA ps
 
+-- | find line number right after module ... where
 findPositionAfterModuleName :: Annotated ParsedSource
 #if MIN_VERSION_ghc(9,2,0)
                             -> LocatedA ModuleName
@@ -1434,20 +1436,30 @@ findPositionAfterModuleName :: Annotated ParsedSource
 #endif
                             -> Maybe Int
 findPositionAfterModuleName ps hsmodName' = do
-    lineOffset <- whereKeywordLineOffset
+    -- Note that 'where' keyword and comments are not part of the AST. They belongs to
+    -- the exact-print information. To locate it, we need to find the previous AST node,
+    -- calculate the gap between it and 'where', then add them up to produce the absolute
+    -- position of 'where'.
+
+    lineOffset <- whereKeywordLineOffset -- Calculate the gap before 'where' keyword.
     case prevSrcSpan of
         UnhelpfulSpan _ -> Nothing
         (RealSrcSpan prevSrcSpan' _) ->
+            -- add them up produce the absolute location of 'where' keyword
             Just $ srcLocLine (realSrcSpanEnd prevSrcSpan') + lineOffset
   where
     L _ HsModule {..} = astA ps
 
+    -- The last AST node before 'where' keyword. Might be module name or export list.
     prevSrcSpan = maybe (getLoc hsmodName') getLoc hsmodExports
 
+    -- The relative position of 'where' keyword (in lines, relative to the previous AST node).
+    -- The exact-print API changed a lot in ghc-9.2, so we need to handle it seperately for different compiler versions.
     whereKeywordLineOffset :: Maybe Int
 #if MIN_VERSION_ghc(9,2,0)
     whereKeywordLineOffset = case hsmodAnn of
         EpAnn _ annsModule _ -> do
+            -- Find the first 'where'
             whereLocation <- fmap NE.head .  NE.nonEmpty . mapMaybe filterWhere .  am_main $ annsModule
             epaLocationToLine whereLocation
         EpAnnNotUsed -> Nothing
@@ -1457,6 +1469,9 @@ findPositionAfterModuleName ps hsmodName' = do
     epaLocationToLine :: EpaLocation -> Maybe Int
     epaLocationToLine (EpaSpan sp) = Just . srcLocLine . realSrcSpanEnd $ sp
     epaLocationToLine (EpaDelta (SameLine _) priorComments) = Just $ sumCommentsOffset priorComments
+    -- 'priorComments' contains the comments right before the current EpaLocation
+    -- Summing line offset of priorComments is necessary, as 'line' is the gap between the last comment and
+    -- the current AST node
     epaLocationToLine (EpaDelta (DifferentLine line _) priorComments) = Just (line + sumCommentsOffset priorComments)
 
     sumCommentsOffset :: [LEpaComment] -> Int
@@ -1472,13 +1487,14 @@ findPositionAfterModuleName ps hsmodName' = do
         deltaPos <- fmap NE.head . NE.nonEmpty .mapMaybe filterWhere $ annsDP ann
         pure $ deltaRow deltaPos
 
+    -- Before ghc 9.2, DeltaPos doesn't take comment into acccount, so we don't need to sum line offset of comments.
     filterWhere :: (KeywordId, DeltaPos) -> Maybe DeltaPos
     filterWhere (keywordId, deltaPos) =
         if keywordId == G AnnWhere then Just deltaPos else Nothing
 #endif
 
-findPositionFromImportsOrModuleDecl :: HasSrcSpan a => t -> (t -> a) -> Maybe ((Int, Int), Int)
-findPositionFromImportsOrModuleDecl hsField f = case getLoc (f hsField) of
+findPositionFromImports :: HasSrcSpan a => t -> (t -> a) -> Maybe ((Int, Int), Int)
+findPositionFromImports hsField f = case getLoc (f hsField) of
   RealSrcSpan s _ ->
     let col = calcCol s
      in Just ((srcLocLine (realSrcSpanEnd s), col), col)
