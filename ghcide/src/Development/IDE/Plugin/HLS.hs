@@ -61,8 +61,8 @@ responseErrorToLogMessage err =  errorCode <> ":" <+> errorBody
         errorBody = pretty $ err ^. LSP.message
 
 -- various error message specific builders
-pluginNotEnabled :: SMethod m -> Text
-pluginNotEnabled method = "No plugin enabled for " <> T.pack (show method)
+pluginNotEnabled :: SMethod m -> [(PluginId, b, a)] -> Text
+pluginNotEnabled method availPlugins = "No plugin enabled for " <> T.pack (show method) <> ", available: " <> T.pack (show $ map (\(plid,_,_) -> plid) availPlugins)
 
 pluginDoesntExist :: PluginId -> Text
 pluginDoesntExist (PluginId pid) = "Plugin " <> pid <> " doesn't exist"
@@ -89,8 +89,8 @@ asGhcIdePlugin :: Recorder (WithPriority Log) -> IdePlugins IdeState -> Plugin C
 asGhcIdePlugin recorder (IdePlugins ls) =
     mkPlugin rulesPlugins HLS.pluginRules <>
     mkPlugin (executeCommandPlugins recorder) HLS.pluginCommands <>
-    mkPlugin (extensiblePlugins recorder) HLS.pluginHandlers <>
-    mkPlugin (extensibleNotificationPlugins recorder) HLS.pluginNotificationHandlers <>
+    mkPlugin (extensiblePlugins recorder) id <>
+    mkPlugin (extensibleNotificationPlugins recorder) id <>
     mkPlugin dynFlagsPlugins HLS.pluginModifyDynflags
     where
 
@@ -178,25 +178,29 @@ executeCommandHandlers recorder ecs = requestHandler SWorkspaceExecuteCommand ex
 
 -- ---------------------------------------------------------------------
 
-extensiblePlugins :: Recorder (WithPriority Log) -> [(PluginId, PluginHandlers IdeState)] -> Plugin Config
+extensiblePlugins ::  Recorder (WithPriority Log) -> [(PluginId, PluginDescriptor IdeState)] -> Plugin Config
 extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
   where
     IdeHandlers handlers' = foldMap bakePluginId xs
-    bakePluginId :: (PluginId, PluginHandlers IdeState) -> IdeHandlers
-    bakePluginId (pid,PluginHandlers hs) = IdeHandlers $ DMap.map
-      (\(PluginHandler f) -> IdeHandler [(pid,f pid)])
+    bakePluginId :: (PluginId, PluginDescriptor IdeState) -> IdeHandlers
+    bakePluginId (pid,pluginDesc) = IdeHandlers $ DMap.map
+      (\(PluginHandler f) -> IdeHandler [(pid,pluginDesc,f pid)])
       hs
+      where
+        PluginHandlers hs = HLS.pluginHandlers pluginDesc
     handlers = mconcat $ do
       (IdeMethod m :=> IdeHandler fs') <- DMap.assocs handlers'
       pure $ requestHandler m $ \ide params -> do
         config <- Ide.PluginUtils.getClientConfig
-        let fs = filter (\(pid,_) -> pluginEnabled m pid config) fs'
+        -- Only run plugins that are allowed to run on this request
+        let fs = filter (\(_, desc, _) -> pluginEnabled m params desc config) fs'
         -- Clients generally don't display ResponseErrors so instead we log any that we come across
         case nonEmpty fs of
-          Nothing -> logAndReturnError recorder InvalidRequest (pluginNotEnabled m)
+          Nothing -> logAndReturnError recorder InvalidRequest (pluginNotEnabled m fs')
           Just fs -> do
             let msg e pid = "Exception in plugin " <> T.pack (show pid) <> "while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
-            es <- runConcurrently msg (show m) fs ide params
+                handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
+            es <- runConcurrently msg (show m) handlers ide params
             let (errs,succs) = partitionEithers $ toList es
             unless (null errs) $ forM_ errs $ \err -> logWith recorder Warning $ LogPluginError err
             case nonEmpty succs of
@@ -207,25 +211,27 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
 
 -- ---------------------------------------------------------------------
 
-extensibleNotificationPlugins :: Recorder (WithPriority Log) -> [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
+extensibleNotificationPlugins :: Recorder (WithPriority Log) -> [(PluginId, PluginDescriptor IdeState)] -> Plugin Config
 extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers }
   where
     IdeNotificationHandlers handlers' = foldMap bakePluginId xs
-    bakePluginId :: (PluginId, PluginNotificationHandlers IdeState) -> IdeNotificationHandlers
-    bakePluginId (pid,PluginNotificationHandlers hs) = IdeNotificationHandlers $ DMap.map
-      (\(PluginNotificationHandler f) -> IdeNotificationHandler [(pid,f pid)])
+    bakePluginId :: (PluginId, PluginDescriptor IdeState) -> IdeNotificationHandlers
+    bakePluginId (pid,pluginDesc) = IdeNotificationHandlers $ DMap.map
+      (\(PluginNotificationHandler f) -> IdeNotificationHandler [(pid,pluginDesc,f pid)])
       hs
+      where PluginNotificationHandlers hs = HLS.pluginNotificationHandlers pluginDesc
     handlers = mconcat $ do
       (IdeNotification m :=> IdeNotificationHandler fs') <- DMap.assocs handlers'
       pure $ notificationHandler m $ \ide vfs params -> do
         config <- Ide.PluginUtils.getClientConfig
-        let fs = filter (\(pid,_) -> plcGlobalOn $ configForPlugin config pid) fs'
+        -- Only run plugins that are allowed to run on this request
+        let fs = filter (\(_, desc, _) -> pluginEnabled m params desc config) fs'
         case nonEmpty fs of
-          Nothing -> void $ logAndReturnError recorder InvalidRequest (pluginNotEnabled m)
+          Nothing -> void $ logAndReturnError recorder InvalidRequest (pluginNotEnabled m fs')
           Just fs -> do
             -- We run the notifications in order, so the core ghcide provider
             -- (which restarts the shake process) hopefully comes last
-              mapM_ (\(pid,f) -> otTracedProvider pid (fromString $ show m) $ f ide vfs params) fs
+            mapM_ (\(pid,_,f) -> otTracedProvider pid (fromString $ show m) $ f ide vfs params) fs
 
 -- ---------------------------------------------------------------------
 
@@ -234,6 +240,7 @@ runConcurrently
   => (SomeException -> PluginId -> T.Text)
   -> String -- ^ label
   -> NonEmpty (PluginId, a -> b -> m (NonEmpty (Either ResponseError d)))
+  -- ^ Enabled plugin actions that we are allowed to run
   -> a
   -> b
   -> m (NonEmpty (Either ResponseError d))
@@ -247,11 +254,11 @@ combineErrors xs  = ResponseError InternalError (T.pack (show xs)) Nothing
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeHandler (m :: J.Method FromClient Request)
-  = IdeHandler [(PluginId,IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))]
+  = IdeHandler [(PluginId, PluginDescriptor IdeState, IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))]
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeNotificationHandler (m :: J.Method FromClient Notification)
-  = IdeNotificationHandler [(PluginId, IdeState -> VFS -> MessageParams m -> LSP.LspM Config ())]
+  = IdeNotificationHandler [(PluginId, PluginDescriptor IdeState, IdeState -> VFS -> MessageParams m -> LSP.LspM Config ())]
 -- type NotificationHandler (m :: Method FromClient Notification) = MessageParams m -> IO ()`
 
 -- | Combine the 'PluginHandlers' for all plugins
