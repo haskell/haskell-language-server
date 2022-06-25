@@ -1418,9 +1418,9 @@ newImportInsertRange ps fileContents
   where
     L _ HsModule {..} = astA ps
 
--- | Insert the import under the Module declaration exports if they exist, otherwise just under the module declaration.
--- If no module declaration exists, then no exports will exist either, in that case
--- insert the import after any file-header pragmas or at position zero if there are no pragmas
+-- | Find the position for a new import when there isn't an existing one.
+-- * If there is a module declaration, a new import should be inserted under the module declaration (including exports list)
+-- * Otherwise, a new import should be inserted after any file-header pragma.
 findPositionNoImports :: Annotated ParsedSource -> T.Text -> Maybe Int
 findPositionNoImports ps fileContents =
     maybe (Just (findNextPragmaPosition fileContents)) (findPositionAfterModuleName ps) hsmodName
