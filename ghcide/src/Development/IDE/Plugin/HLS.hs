@@ -60,6 +60,7 @@ responseErrorToLogMessage err =  errorCode <> ":" <+> errorBody
         errorCode = pretty $ show $ err ^. LSP.code
         errorBody = pretty $ err ^. LSP.message
 
+-- various error message specific builders
 pluginNotEnabled :: SMethod m -> Text
 pluginNotEnabled method = "No plugin enabled for " <> T.pack (show method)
 
@@ -80,7 +81,7 @@ failedToParseArgs (CommandId com) (PluginId pid) err arg = "Error while parsing 
 logAndReturnError :: Recorder (WithPriority Log) -> ErrorCode -> Text -> LSP.LspT Config IO (Either ResponseError a)
 logAndReturnError recorder errCode msg = do
     let err = ResponseError errCode msg Nothing
-    logWith recorder Warning $ LogPluginError err
+    logWith recorder Error $ LogPluginError err
     pure $ Left err
 
 -- | Map a set of plugins to the underlying ghcide engine.
