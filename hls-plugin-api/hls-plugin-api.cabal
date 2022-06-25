@@ -43,6 +43,7 @@ library
     , Diff                  ^>=0.4.0
     , dlist
     , extra
+    , filepath
     , ghc
     , hashable
     , hls-graph             ^>= 1.7

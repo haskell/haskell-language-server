@@ -6721,7 +6721,7 @@ unitTests recorder logger = do
                 ] ++ Ghcide.descriptors (cmapWithPrio LogGhcIde recorder)
 
         testIde recorder (IDE.testing (cmapWithPrio LogIDEMain recorder) logger){IDE.argsHlsPlugins = plugins} $ do
-            _ <- createDoc "haskell" "A.hs" "module A where"
+            _ <- createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
             actualOrder <- liftIO $ readIORef orderRef
 

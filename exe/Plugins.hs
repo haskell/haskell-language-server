@@ -13,6 +13,7 @@ import           Development.IDE                   (IdeState)
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import qualified Ide.Plugin.Example                as Example
 import qualified Ide.Plugin.Example2               as Example2
+import qualified Ide.Plugin.ExampleCabal           as ExampleCabal
 
 -- haskell-language-server optional plugins
 #if qualifyImportedNames
@@ -204,4 +205,5 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
     examplePlugins =
       [Example.descriptor  pluginRecorder "eg"
       ,Example2.descriptor pluginRecorder "eg2"
+      ,ExampleCabal.descriptor pluginRecorder "ec"
       ]
