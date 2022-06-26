@@ -38,6 +38,10 @@ data Log
   = LogModificationTime NormalizedFilePath (Maybe FileVersion)
   | LogDiagnostics NormalizedFilePath [FileDiagnostic]
   | LogShake Shake.Log
+  | LogDocOpened Uri
+  | LogDocModified Uri
+  | LogDocSaved Uri
+  | LogDocClosed Uri
   deriving Show
 
 instance Pretty Log where
@@ -47,6 +51,14 @@ instance Pretty Log where
       "Modified:" <+> pretty (fromNormalizedFilePath nfp) <+> pretty (show modTime)
     LogDiagnostics nfp diags ->
       "Diagnostics for " <+> pretty (fromNormalizedFilePath nfp) <> ":" <+> pretty (show diags)
+    LogDocOpened uri ->
+      "Opened text document:" <+> pretty (getUri uri)
+    LogDocModified uri ->
+      "Modified text document:" <+> pretty (getUri uri)
+    LogDocSaved uri ->
+      "Saved text document:" <+> pretty (getUri uri)
+    LogDocClosed uri ->
+      "Closed text document:" <+> pretty (getUri uri)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultCabalPluginDescriptor plId)
@@ -56,7 +68,7 @@ descriptor recorder plId = (defaultCabalPluginDescriptor plId)
   [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       whenUriFile _uri $ \file -> do
-          logDebug (ideLogger ide) $ "Opened text document: " <> getUri _uri
+          log' Debug $ LogDocOpened _uri
           join $ atomically $ Shake.recordDirtyKeys (shakeExtras ide) GetModificationTime [file]
           restartShakeSession (shakeExtras ide) (VFSModified vfs) (fromNormalizedFilePath file ++ " (opened)") []
           join $ Shake.shakeEnqueue (shakeExtras ide) $ Shake.mkDelayedAction "cabal parse modified" Info $ void $ use ParseCabal file
@@ -64,8 +76,7 @@ descriptor recorder plId = (defaultCabalPluginDescriptor plId)
   , mkPluginNotificationHandler LSP.STextDocumentDidChange $
       \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
       whenUriFile _uri $ \file -> do
-        logDebug (ideLogger ide) $ "Modified text document: " <> getUri _uri
-        logDebug (ideLogger ide) $ "VFS State: " <> T.pack (show vfs)
+        log' Debug $ LogDocModified _uri
         join $ atomically $ Shake.recordDirtyKeys (shakeExtras ide) GetModificationTime [file]
         restartShakeSession (shakeExtras ide) (VFSModified vfs) (fromNormalizedFilePath file ++ " (modified)") []
         join $ Shake.shakeEnqueue (shakeExtras ide) $ Shake.mkDelayedAction "cabal parse modified" Info $ void $ use ParseCabal file
@@ -73,7 +84,7 @@ descriptor recorder plId = (defaultCabalPluginDescriptor plId)
   , mkPluginNotificationHandler LSP.STextDocumentDidSave $
       \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
-          logDebug (ideLogger ide) $ "Saved text document: " <> getUri _uri
+          log' Debug $ LogDocSaved _uri
           join $ atomically $ Shake.recordDirtyKeys (shakeExtras ide) GetModificationTime [file]
           restartShakeSession (shakeExtras ide) (VFSModified vfs) (fromNormalizedFilePath file ++ " (saved)") []
           join $ Shake.shakeEnqueue (shakeExtras ide) $ Shake.mkDelayedAction "cabal parse modified" Info $ void $ use ParseCabal file
@@ -81,14 +92,15 @@ descriptor recorder plId = (defaultCabalPluginDescriptor plId)
   , mkPluginNotificationHandler LSP.STextDocumentDidClose $
         \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
           whenUriFile _uri $ \file -> do
-              let msg = "Closed text document: " <> getUri _uri
-              logDebug (ideLogger ide) msg
+              log' Debug $ LogDocClosed _uri
               join $ atomically $ Shake.recordDirtyKeys (shakeExtras ide) GetModificationTime [file]
               restartShakeSession (shakeExtras ide) (VFSModified vfs) (fromNormalizedFilePath file ++ " (closed)") []
               join $ Shake.shakeEnqueue (shakeExtras ide) $ Shake.mkDelayedAction "cabal parse modified" Info $ void $ use ParseCabal file
   ]
   }
   where
+    log' = logWith recorder
+
     whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
     whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
 
