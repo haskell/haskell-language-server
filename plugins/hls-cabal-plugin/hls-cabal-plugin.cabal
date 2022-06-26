@@ -14,7 +14,6 @@ category:           Development
 extra-source-files:
   CHANGELOG.md
   test/testdata/simple.cabal
-  test/testdata/simple.cabal.golden.txt
 
 common warnings
   ghc-options: -Wall
@@ -64,7 +63,9 @@ test-suite tests
     , filepath
     , hls-cabal-plugin
     , hls-test-utils    ^>=1.4
+    , lens
     , lsp
+    , ghcide
     , lsp-types
     , tasty-hunit
     , text
