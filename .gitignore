@@ -30,9 +30,6 @@ test/testdata/**/hie.yaml
 # shake build folder (used in benchmark suite)
 .shake/
 
-# pre-commit-hook.nix
-.pre-commit-config.yaml
-
 # direnv
 /.direnv/
 /.envrc
