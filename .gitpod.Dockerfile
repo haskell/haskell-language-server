@@ -14,4 +14,5 @@ RUN sudo install-packages build-essential curl libffi-dev libffi7 libgmp-dev lib
     ghcup install stack --set && \
     cabal update && \
     cabal install stylish-haskell hoogle implicit-hie && \
-    pip install pre-commit
+    pip install pre-commit && \
+    npm install -g http-server

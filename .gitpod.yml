@@ -37,6 +37,10 @@ tasks:
         # Only write to .vscode/settings.json if it doesn't exist.
         echo '{ "haskell.serverExecutablePath": "/home/gitpod/.cabal/bin/haskell-language-server" }' > .vscode/settings.json
       fi
+
+      pushd docs
+        pip install -r requirements.txt
+      popd
     init: |
       cabal update
       cabal configure --enable-executable-dynamic
