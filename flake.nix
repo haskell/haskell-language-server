@@ -301,7 +301,7 @@
             export PATH=$PATH:$HOME/.local/bin
 
             # Install pre-commit hook
-            pre-commit
+            pre-commit install
 
             # If the cabal project file is not the default one.
             # Print a warning and generate an alias.

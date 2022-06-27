@@ -172,12 +172,12 @@ Please, try to follow those basic settings to keep the codebase as uniform as po
 
 We are using [pre-commit](https://pre-commit.com/) to configure git pre-commit hook for formatting. Although it is possible to run formatting manually, we recommend you to use it to set pre-commit hook as our CI checks pre-commit hook is applied or not.
 
-Having installed [pre-commit](https://pre-commit.com/), you can install pre-commit hook by running:
-```sh
-pre-commit
-```
+If you are using Nix or Gitpod, pre-commit hook is automatically installed. Otherwise, follow instructions on
+[https://pre-commit.com/](https://pre-commit.com/) to install the `pre-commit` tool, then run the following command:
 
-If you are using Nix or Gitpod, pre-commit hook is automatically installed.
+```sh
+pre-commit install
+```
 
 #### Why some components are excluded from automatic formatting?
 
