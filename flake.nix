@@ -14,9 +14,6 @@
       flake = false;
     };
     flake-utils.url = "github:numtide/flake-utils";
-    pre-commit-hooks = {
-      url = "github:cachix/pre-commit-hooks.nix";
-    };
     gitignore = {
       url = "github:hercules-ci/gitignore.nix";
       flake = false;
@@ -92,7 +89,7 @@
       flake = false;
     };
     myst-parser = {
-      url = "github:smunix/MyST-Parser?ref=fix.hls-docutils"; 
+      url = "github:smunix/MyST-Parser?ref=fix.hls-docutils";
       flake = false;
     };
     # For https://github.com/readthedocs/sphinx_rtd_theme/pull/1185, otherwise lists are broken locally
@@ -103,7 +100,7 @@
     poetry2nix.url = "github:nix-community/poetry2nix/master";
   };
   outputs =
-    inputs@{ self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, ... }:
+    inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, ... }:
     {
       overlays.default = final: prev:
         with prev;
@@ -123,7 +120,7 @@
               in hsuper.mkDerivation (args // {
                 jailbreak = if broken then true else jailbreak;
                 doCheck = if broken then false else check;
-                # Library profiling is disabled as it causes long compilation time 
+                # Library profiling is disabled as it causes long compilation time
                 # on our CI jobs. Nix users are free tor revert this anytime.
                 enableLibraryProfiling = false;
                 doHaddock = false;
@@ -215,42 +212,11 @@
           config = { allowBroken = true; };
         };
 
-        # Pre-commit hooks to run stylish-haskell
-        pre-commit-check = hpkgs: pre-commit-hooks.lib.${system}.run {
-          src = ./.;
-          hooks = {
-            stylish-haskell.enable = true;
-            # use stylish-haskell with our target ghc
-            stylish-haskell.entry = pkgs.lib.mkForce "${hpkgs.stylish-haskell}/bin/stylish-haskell --inplace";
-            stylish-haskell.excludes = [
-              # Ignored files
-              "^Setup.hs$"
-              "test/testdata/.*$"
-              "test/data/.*$"
-              "test/manual/lhs/.*$"
-              "^hie-compat/.*$"
-              "^plugins/hls-tactics-plugin/.*$"
-
-              # Temporarily ignored files
-              # Stylish-haskell (and other formatters) does not work well with some CPP usages in these files
-              "^ghcide/src/Development/IDE/GHC/Compat.hs$"
-              "^ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs$"
-              "^ghcide/src/Development/IDE/GHC/Compat/Core.hs$"
-              "^ghcide/src/Development/IDE/Spans/Pragmas.hs$"
-              "^ghcide/src/Development/IDE/LSP/Outline.hs$"
-              "^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$"
-              "^ghcide/test/exe/Main.hs$"
-              "ghcide/src/Development/IDE/Core/Rules.hs"
-              "^hls-test-utils/src/Test/Hls/Util.hs$"
-            ];
-          };
-        };
-
         ghc902Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
         ghc922Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
 
         # GHC versions
-        # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached 
+        # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached
         # by upstream nixpkgs, which now only includes GHC version 9+
         supportedGHCs = let
           ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
@@ -268,14 +234,14 @@
         myst-parser = pkgs.poetry2nix.mkPoetryEnv {
           projectDir = inputs.myst-parser;
           python = pkgs.python39;
-          overrides = [ 
+          overrides = [
             pkgs.poetry2nix.defaultPoetryOverrides
           ];
         };
         sphinx_rtd_theme = pkgs.poetry2nix.mkPoetryEnv {
           projectDir = inputs.sphinx_rtd_theme;
           python = pkgs.python39;
-          overrides = [ 
+          overrides = [
             pkgs.poetry2nix.defaultPoetryOverrides
             (self: super: {
               # The RTD theme doesn't work with newer docutils
@@ -334,8 +300,8 @@
             export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
             export PATH=$PATH:$HOME/.local/bin
 
-            # Enable the shell hooks
-            ${self.checks.${system}.pre-commit-check.shellHook}
+            # Install pre-commit hook
+            pre-commit
 
             # If the cabal project file is not the default one.
             # Print a warning and generate an alias.
