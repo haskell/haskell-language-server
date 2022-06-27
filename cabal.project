@@ -67,6 +67,16 @@ source-repository-package
   tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
   -- https://github.com/tibbe/ekg-json/pull/12
 
+source-repository-package
+  type:git
+  location: https://github.com/wz1000/hiedb
+  tag: 67b92df2359558091df9102db5b701327308b930
+
+source-repository-package
+  type:git
+  location: https://github.com/wz1000/hie-bios
+  tag: aa73d3d2eb89df0003d2468a105e326d71b62cc7
+
 -- Needed for ghcide-bench until a new release of lsp-test is out
 source-repository-package
   type:git
@@ -76,6 +86,9 @@ source-repository-package
   -- https://github.com/haskell/lsp/pull/450
 
 allow-newer:
+  base, ghc-prim, ghc-bignum, ghc, Cabal, binary, bytestring, unix, time, template-haskell,
+  ghc-paths:Cabal,
+
   -- ghc-9.2
   ----------
   hiedb:base,

@@ -24,7 +24,9 @@ module Development.IDE.GHC.Compat.Util (
     LBooleanFormula,
     BooleanFormula(..),
     -- * OverridingBool
+#if !MIN_VERSION_ghc(9,3,0)
     OverridingBool(..),
+#endif
     -- * Maybes
     MaybeErr(..),
     orElse,

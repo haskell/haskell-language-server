@@ -9,7 +9,7 @@ variables:
   # Commit of ghc/ci-images repository from which to pull Docker images
   DOCKER_REV: "4ed1a4f27828ba96a34662dc954335e29b470cd2"
 
-  CABAL_INSTALL_VERSION: 3.6.2.0
+  CABAL_INSTALL_VERSION: 3.8.1.0
 
 .windows_matrix: &windows_matrix
   matrix:
@@ -20,6 +20,10 @@ variables:
     - GHC_VERSION: 9.2.3
       CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.2.4
+      CABAL_PROJECT: cabal.project
+    - GHC_VERSION: 9.4.1
+      CABAL_PROJECT: cabal.project
+    - GHC_VERSION: 9.4.2
       CABAL_PROJECT: cabal.project
 
 workflow:
