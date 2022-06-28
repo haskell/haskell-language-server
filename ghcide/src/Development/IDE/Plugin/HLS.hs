@@ -52,23 +52,17 @@ data Log = LogPluginError ResponseError
 
 instance Pretty Log where
   pretty = \case
-    LogPluginError err -> responseErrorToLogMessage err
-
-responseErrorToLogMessage :: ResponseError -> Doc a
-responseErrorToLogMessage err =  errorCode <> ":" <+> errorBody
-    where
-        errorCode = pretty $ show $ err ^. LSP.code
-        errorBody = pretty $ err ^. LSP.message
+    LogPluginError err -> pretty err
 
 -- various error message specific builders
 pluginNotEnabled :: SMethod m -> [(PluginId, b, a)] -> Text
-pluginNotEnabled method availPlugins = "No plugin enabled for " <> T.pack (show method) <> ", available: " <> T.pack (show $ map (\(plid,_,_) -> plid) availPlugins)
+pluginNotEnabled method availPlugins = "No plugin enabled for " <> T.pack (show method) <> ", available:\n" <> T.pack (unlines $ map (\(plid,_,_) -> show plid) availPlugins)
 
 pluginDoesntExist :: PluginId -> Text
 pluginDoesntExist (PluginId pid) = "Plugin " <> pid <> " doesn't exist"
 
 commandDoesntExist :: CommandId -> PluginId -> [PluginCommand ideState] -> Text
-commandDoesntExist (CommandId com) (PluginId pid) legalCmds = "Command " <> com <> " isn't defined for plugin " <> pid <> ". Legal commands are: " <> T.pack (show $ map commandId legalCmds)
+commandDoesntExist (CommandId com) (PluginId pid) legalCmds = "Command " <> com <> " isn't defined for plugin " <> pid <> ". Legal commands are:\n" <> T.pack (unlines $ map (show . commandId) legalCmds)
 
 failedToParseArgs :: CommandId  -- ^ command that failed to parse
                     -> PluginId -- ^ Plugin that created the command
@@ -202,7 +196,7 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
                 handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
             es <- runConcurrently msg (show m) handlers ide params
             let (errs,succs) = partitionEithers $ toList es
-            unless (null errs) $ forM_ errs $ \err -> logWith recorder Warning $ LogPluginError err
+            unless (null errs) $ forM_ errs $ \err -> logWith recorder Error $ LogPluginError err
             case nonEmpty succs of
               Nothing -> pure $ Left $ combineErrors errs
               Just xs -> do

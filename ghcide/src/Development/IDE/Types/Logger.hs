@@ -29,48 +29,63 @@ module Development.IDE.Types.Logger
   , renderStrict
   ) where
 
-import           Control.Concurrent            (myThreadId)
-import           Control.Concurrent.Extra      (Lock, newLock, withLock)
-import           Control.Concurrent.STM        (atomically,
-                                                newTVarIO, writeTVar, readTVarIO, newTBQueueIO, flushTBQueue, writeTBQueue, isFullTBQueue)
-import           Control.Exception             (IOException)
-import           Control.Monad                 (forM_, when, (>=>), unless)
-import           Control.Monad.IO.Class        (MonadIO (liftIO))
-import           Data.Foldable                 (for_)
-import           Data.Functor.Contravariant    (Contravariant (contramap))
-import           Data.Maybe                    (fromMaybe)
-import           Data.Text                     (Text)
-import qualified Data.Text                     as T
-import qualified Data.Text                     as Text
-import qualified Data.Text.IO                  as Text
-import           Data.Time                     (defaultTimeLocale, formatTime,
-                                                getCurrentTime)
-import           GHC.Stack                     (CallStack, HasCallStack,
-                                                SrcLoc (SrcLoc, srcLocModule, srcLocStartCol, srcLocStartLine),
-                                                callStack, getCallStack,
-                                                withFrozenCallStack)
+import           Control.Concurrent                    (myThreadId)
+import           Control.Concurrent.Extra              (Lock, newLock, withLock)
+import           Control.Concurrent.STM                (atomically,
+                                                        flushTBQueue,
+                                                        isFullTBQueue,
+                                                        newTBQueueIO, newTVarIO,
+                                                        readTVarIO,
+                                                        writeTBQueue, writeTVar)
+import           Control.Exception                     (IOException)
+import           Control.Monad                         (forM_, unless, when,
+                                                        (>=>))
+import           Control.Monad.IO.Class                (MonadIO (liftIO))
+import           Data.Foldable                         (for_)
+import           Data.Functor.Contravariant            (Contravariant (contramap))
+import           Data.Maybe                            (fromMaybe)
+import           Data.Text                             (Text)
+import qualified Data.Text                             as T
+import qualified Data.Text                             as Text
+import qualified Data.Text.IO                          as Text
+import           Data.Time                             (defaultTimeLocale,
+                                                        formatTime,
+                                                        getCurrentTime)
+import           GHC.Stack                             (CallStack, HasCallStack,
+                                                        SrcLoc (SrcLoc, srcLocModule, srcLocStartCol, srcLocStartLine),
+                                                        callStack, getCallStack,
+                                                        withFrozenCallStack)
 import           Language.LSP.Server
-import qualified Language.LSP.Server           as LSP
-import           Language.LSP.Types            (LogMessageParams (..),
-                                                MessageType (..),
-                                                SMethod (SWindowLogMessage, SWindowShowMessage),
-                                                ShowMessageParams (..))
+import qualified Language.LSP.Server                   as LSP
+import           Language.LSP.Types                    (LogMessageParams (..),
+                                                        MessageType (..),
+                                                        ResponseError,
+                                                        SMethod (SWindowLogMessage, SWindowShowMessage),
+                                                        ShowMessageParams (..))
 #if MIN_VERSION_prettyprinter(1,7,0)
-import           Prettyprinter                 as PrettyPrinterModule
-import           Prettyprinter.Render.Text     (renderStrict)
+import           Prettyprinter                         as PrettyPrinterModule
+import           Prettyprinter.Render.Text             (renderStrict)
 #else
-import           Data.Text.Prettyprint.Doc     as PrettyPrinterModule
+import           Data.Text.Prettyprint.Doc             as PrettyPrinterModule
 import           Data.Text.Prettyprint.Doc.Render.Text (renderStrict)
 #endif
-import           System.IO                     (Handle, IOMode (AppendMode),
-                                                hClose, hFlush, hSetEncoding,
-                                                openFile, stderr, utf8)
-import qualified System.Log.Formatter          as HSL
-import qualified System.Log.Handler            as HSL
-import qualified System.Log.Handler.Simple     as HSL
-import qualified System.Log.Logger             as HsLogger
-import           UnliftIO                      (MonadUnliftIO, displayException,
-                                                finally, try)
+import           Control.Lens                          ((^.))
+import           Ide.Types                             (CommandId (CommandId),
+                                                        PluginId (PluginId))
+import           Language.LSP.Types.Lens               (HasCode (code),
+                                                        HasMessage (message))
+import           System.IO                             (Handle,
+                                                        IOMode (AppendMode),
+                                                        hClose, hFlush,
+                                                        hSetEncoding, openFile,
+                                                        stderr, utf8)
+import qualified System.Log.Formatter                  as HSL
+import qualified System.Log.Handler                    as HSL
+import qualified System.Log.Handler.Simple             as HSL
+import qualified System.Log.Logger                     as HsLogger
+import           UnliftIO                              (MonadUnliftIO,
+                                                        displayException,
+                                                        finally, try)
 
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
@@ -366,3 +381,16 @@ priorityToLsp =
     Info    -> MtInfo
     Warning -> MtWarning
     Error   -> MtError
+
+-- ORPHAN Pretty instances --------------------------------------------------------------
+instance Pretty ResponseError where
+  pretty err =  errorCode <> ":" <+> errorBody
+    where
+        errorCode = pretty $ show $ err ^. code
+        errorBody = pretty $ err ^. message
+
+instance Pretty PluginId where
+    pretty (PluginId pid) = pretty pid
+
+instance Pretty CommandId where
+    pretty (CommandId cid) = pretty cid
