@@ -28,7 +28,7 @@ import           Development.IDE.GHC.Compat                   hiding
                                                               (HieFileResult)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.CoreFile
-import           Development.IDE.GHC.Util
+import           Development.IDE.GHC.Util                     (fingerprintToBS)
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
@@ -173,17 +173,17 @@ tmrModSummary :: TcModuleResult -> ModSummary
 tmrModSummary = pm_mod_summary . tmrParsed
 
 data HiFileResult = HiFileResult
-    { hirModSummary :: !ModSummary
+    { hirModSummary     :: !ModSummary
     -- Bang patterns here are important to stop the result retaining
     -- a reference to a typechecked module
-    , hirModIface   :: !ModIface
-    , hirModDetails :: ModDetails
+    , hirModIface       :: !ModIface
+    , hirModDetails     :: ModDetails
     -- ^ Populated lazily
-    , hirIfaceFp    :: !ByteString
+    , hirIfaceFp        :: !ByteString
     -- ^ Fingerprint for the ModIface
     , hirRuntimeModules :: !(ModuleEnv ByteString)
     -- ^ same as tmrRuntimeModules
-    , hirCoreFp     :: !(Maybe (CoreFile, ByteString))
+    , hirCoreFp         :: !(Maybe (CoreFile, ByteString))
     -- ^ If we wrote a core file for this module, then its contents (lazily deserialised)
     -- along with its hash
     }
@@ -445,7 +445,7 @@ newtype GhcSessionDeps = GhcSessionDeps_
 
 instance Show GhcSessionDeps where
     show (GhcSessionDeps_ False) = "GhcSessionDeps"
-    show (GhcSessionDeps_ True) = "GhcSessionDepsFull"
+    show (GhcSessionDeps_ True)  = "GhcSessionDepsFull"
 
 pattern GhcSessionDeps :: GhcSessionDeps
 pattern GhcSessionDeps = GhcSessionDeps_ False

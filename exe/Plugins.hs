@@ -77,7 +77,7 @@ import qualified Ide.Plugin.AlternateNumberFormat  as AlternateNumberFormat
 #endif
 
 #if selectionRange
-import           Ide.Plugin.SelectionRange         as SelectionRange
+import qualified Ide.Plugin.SelectionRange         as SelectionRange
 #endif
 
 #if changeTypeSignature
@@ -191,7 +191,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       AlternateNumberFormat.descriptor pluginRecorder :
 #endif
 #if selectionRange
-      SelectionRange.descriptor "selectionRange" :
+      SelectionRange.descriptor pluginRecorder "selectionRange" :
 #endif
 #if changeTypeSignature
       ChangeTypeSignature.descriptor :

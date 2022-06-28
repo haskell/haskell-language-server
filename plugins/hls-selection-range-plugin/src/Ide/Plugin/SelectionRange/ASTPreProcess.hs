@@ -31,7 +31,7 @@ import           Development.IDE.GHC.Compat.Util (FastString)
 import           Prelude                         hiding (span)
 
 {-|
-Extra arguments for 'preaProcessAST', meant to be used in a 'Reader' context. We use 'Reader' to combine
+Extra arguments for 'preProcessAST'. It's expected to be used in a 'Reader' context
 -}
 newtype PreProcessEnv a = PreProcessEnv
     { preProcessEnvRefMap :: RefMap a
