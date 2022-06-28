@@ -1,5 +1,6 @@
 {-# LANGUAGE PackageImports #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE RankNTypes     #-}
 module Development.IDE.Main
 (Arguments(..)
 ,defaultArguments
@@ -57,13 +58,15 @@ import           Development.IDE.Core.Service             (initialise,
                                                            runAction)
 import qualified Development.IDE.Core.Service             as Service
 import           Development.IDE.Core.Shake               (IdeState (shakeExtras),
+                                                           IndexQueue,
                                                            ShakeExtras (state),
                                                            shakeSessionInit,
                                                            uses)
 import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.Core.Tracing             (measureMemory)
 import           Development.IDE.Graph                    (action)
-import           Development.IDE.LSP.LanguageServer       (runLanguageServer)
+import           Development.IDE.LSP.LanguageServer       (runLanguageServer,
+                                                           setupLSP)
 import qualified Development.IDE.LSP.LanguageServer       as LanguageServer
 import           Development.IDE.Main.HeapStats           (withHeapStats)
 import qualified Development.IDE.Main.HeapStats           as HeapStats
@@ -98,7 +101,8 @@ import           Development.IDE.Types.Options            (IdeGhcSession,
                                                            defaultIdeOptions,
                                                            optModifyDynFlags,
                                                            optTesting)
-import           Development.IDE.Types.Shake              (fromKeyType)
+import           Development.IDE.Types.Shake              (WithHieDb,
+                                                           fromKeyType)
 import           GHC.Conc                                 (getNumProcessors)
 import           GHC.IO.Encoding                          (setLocaleEncoding)
 import           GHC.IO.Handle                            (hDuplicate)
@@ -300,7 +304,6 @@ testing recorder logger =
       , argsIdeOptions = ideOptions
       }
 
-
 defaultMain :: Recorder (WithPriority Log) -> Arguments -> IO ()
 defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats recorder) fun
  where
@@ -335,49 +338,54 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             t <- offsetTime
             log Info LogLspStart
 
-            runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env rootPath withHieDb hieChan -> do
-                traverse_ IO.setCurrentDirectory rootPath
-                t <- t
-                log Info $ LogLspStartDuration t
+            let getIdeState :: LSP.LanguageContextEnv Config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState
+                getIdeState env rootPath withHieDb hieChan = do
+                  traverse_ IO.setCurrentDirectory rootPath
+                  t <- t
+                  log Info $ LogLspStartDuration t
 
-                dir <- maybe IO.getCurrentDirectory return rootPath
+                  dir <- maybe IO.getCurrentDirectory return rootPath
 
-                -- We want to set the global DynFlags right now, so that we can use
-                -- `unsafeGlobalDynFlags` even before the project is configured
-                _mlibdir <-
-                    setInitialDynFlags (cmapWithPrio LogSession recorder) dir argsSessionLoadingOptions
-                        -- TODO: should probably catch/log/rethrow at top level instead
-                        `catchAny` (\e -> log Error (LogSetInitialDynFlagsException e) >> pure Nothing)
+                  -- We want to set the global DynFlags right now, so that we can use
+                  -- `unsafeGlobalDynFlags` even before the project is configured
+                  _mlibdir <-
+                      setInitialDynFlags (cmapWithPrio LogSession recorder) dir argsSessionLoadingOptions
+                          -- TODO: should probably catch/log/rethrow at top level instead
+                          `catchAny` (\e -> log Error (LogSetInitialDynFlagsException e) >> pure Nothing)
 
-                sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions dir
-                config <- LSP.runLspT env LSP.getConfig
-                let def_options = argsIdeOptions config sessionLoader
+                  sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions dir
+                  config <- LSP.runLspT env LSP.getConfig
+                  let def_options = argsIdeOptions config sessionLoader
 
-                -- disable runSubset if the client doesn't support watched files
-                runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
-                log Debug $ LogShouldRunSubset runSubset
+                  -- disable runSubset if the client doesn't support watched files
+                  runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
+                  log Debug $ LogShouldRunSubset runSubset
 
-                let options = def_options
-                            { optReportProgress = clientSupportsProgress caps
-                            , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
-                            , optRunSubset = runSubset
-                            }
-                    caps = LSP.resClientCapabilities env
-                -- FIXME: Remove this after GHC 9.2 gets fully supported
-                when (ghcVersion == GHC92) $
-                    log Warning LogOnlyPartialGhc92Support
-                monitoring <- argsMonitoring
-                initialise
-                    (cmapWithPrio LogService recorder)
-                    argsDefaultHlsConfig
-                    rules
-                    (Just env)
-                    logger
-                    debouncer
-                    options
-                    withHieDb
-                    hieChan
-                    monitoring
+                  let options = def_options
+                              { optReportProgress = clientSupportsProgress caps
+                              , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
+                              , optRunSubset = runSubset
+                              }
+                      caps = LSP.resClientCapabilities env
+                  -- FIXME: Remove this after GHC 9.2 gets fully supported
+                  when (ghcVersion == GHC92) $
+                      log Warning LogOnlyPartialGhc92Support
+                  monitoring <- argsMonitoring
+                  initialise
+                      (cmapWithPrio LogService recorder)
+                      argsDefaultHlsConfig
+                      rules
+                      (Just env)
+                      logger
+                      debouncer
+                      options
+                      withHieDb
+                      hieChan
+                      monitoring
+
+            let setup = setupLSP (cmapWithPrio LogLanguageServer recorder) argsGetHieDbLoc (pluginHandlers plugins) getIdeState
+
+            runLanguageServer options inH outH argsDefaultHlsConfig argsOnConfigChange setup
             dumpSTMStats
         Check argFiles -> do
           dir <- maybe IO.getCurrentDirectory return argsProjectRoot

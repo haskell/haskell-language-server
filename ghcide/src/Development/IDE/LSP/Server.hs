@@ -10,11 +10,12 @@
 module Development.IDE.LSP.Server
   ( ReactorMessage(..)
   , ReactorChan
-  , ServerM
+  , ServerM(..)
   , requestHandler
   , notificationHandler
   ) where
 
+import           Control.Monad.IO.Unlift      (MonadUnliftIO)
 import           Control.Monad.Reader
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing
@@ -30,7 +31,8 @@ data ReactorMessage
   | ReactorRequest SomeLspId (IO ()) (ResponseError -> IO ())
 
 type ReactorChan = Chan ReactorMessage
-type ServerM c = ReaderT (ReactorChan, IdeState) (LspM c)
+newtype ServerM c a = ServerM { unServerM :: ReaderT (ReactorChan, IdeState) (LspM c) a }
+  deriving (Functor, Applicative, Monad, MonadReader (ReactorChan, IdeState), MonadIO, MonadUnliftIO, LSP.MonadLsp c)
 
 requestHandler
   :: forall (m :: Method FromClient Request) c. (HasTracing (MessageParams m)) =>
@@ -40,7 +42,7 @@ requestHandler
 requestHandler m k = LSP.requestHandler m $ \RequestMessage{_method,_id,_params} resp -> do
   st@(chan,ide) <- ask
   env <- LSP.getLspEnv
-  let resp' = flip runReaderT st . resp
+  let resp' = flip (runReaderT . unServerM) st . resp
       trace x = otTracedHandler "Request" (show _method) $ \sp -> do
         traceWithSpan sp _params
         x

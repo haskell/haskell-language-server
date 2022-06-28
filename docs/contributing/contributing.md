@@ -170,49 +170,13 @@ Please, try to follow those basic settings to keep the codebase as uniform as po
 
 ### Formatter pre-commit hook
 
-We are using [pre-commit-hook.nix](https://github.com/cachix/pre-commit-hooks.nix) to configure git pre-commit hook for formatting. Although it is possible to run formatting manually, we recommend you to use it to set pre-commit hook as our CI checks pre-commit hook is applied or not.
+We are using [pre-commit](https://pre-commit.com/) to configure git pre-commit hook for formatting. Although it is possible to run formatting manually, we recommend you to use it to set pre-commit hook as our CI checks pre-commit hook is applied or not.
 
-You can configure the pre-commit-hook by running
+If you are using Nix or Gitpod, pre-commit hook is automatically installed. Otherwise, follow instructions on
+[https://pre-commit.com/](https://pre-commit.com/) to install the `pre-commit` tool, then run the following command:
 
-``` bash
-nix-shell
-```
-
-If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you can instead use [pre-commit](https://pre-commit.com) with the following config.
-
-```json
-{
-  "repos": [
-    {
-      "hooks": [
-        {
-          "entry": "stylish-haskell --inplace",
-          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|test/manual/lhs/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$|^ghcide/src/Development/IDE/GHC/Compat.hs$|^ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs$|^ghcide/src/Development/IDE/GHC/Compat/Core.hs$|^ghcide/src/Development/IDE/Spans/Pragmas.hs$|^ghcide/src/Development/IDE/LSP/Outline.hs$|^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$|^ghcide/test/exe/Main.hs$|ghcide/src/Development/IDE/Core/Rules.hs|^hls-test-utils/src/Test/Hls/Util.hs$)",
-          "files": "\\.l?hs$",
-          "id": "stylish-haskell",
-          "language": "system",
-          "name": "stylish-haskell",
-          "pass_filenames": true,
-          "types": [
-            "file"
-          ]
-        }
-      ],
-      "repo": "local"
-    },
-    {
-       "repo": "https://github.com/pre-commit/pre-commit-hooks",
-       "rev": "v4.1.0",
-       "hooks": [
-          {
-            "id": "mixed-line-ending",
-            "args": ["--fix", "lf"],
-            "exclude": "test/testdata/.*CRLF*.hs$"
-          }
-       ]
-    }
-  ]
-}
+```sh
+pre-commit install
 ```
 
 #### Why some components are excluded from automatic formatting?

@@ -250,10 +250,7 @@ extendImportHandler' ideState ExtendImport {..}
                 it = case thingParent of
                   Nothing -> newThing
                   Just p  -> p <> "(" <> newThing <> ")"
-            t <- liftMaybe $ snd <$> newImportToEdit
-                n
-                (astA ps)
-                (fromMaybe "" contents)
+            t <- liftMaybe $ snd <$> newImportToEdit n ps (fromMaybe "" contents)
             return (nfp, WorkspaceEdit {_changes=Just (fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
