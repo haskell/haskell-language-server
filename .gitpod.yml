@@ -35,7 +35,10 @@ tasks:
       mkdir -p .vscode
       if [ ! -f .vscode/settings.json ]; then
         # Only write to .vscode/settings.json if it doesn't exist.
-        echo '{ "haskell.serverExecutablePath": "/home/gitpod/.cabal/bin/haskell-language-server" }' > .vscode/settings.json
+        echo '{' > .vscode/settings.json
+        echo '  "haskell.serverExecutablePath": "/home/gitpod/.cabal/bin/haskell-language-server",' >> .vscode/settings.json
+        echo '  "haskell.formattingProvider": "stylish-haskell"' >> .vscode/settings.json
+        echo '}' >> .vscode/settings.json
       fi
 
       pushd docs
