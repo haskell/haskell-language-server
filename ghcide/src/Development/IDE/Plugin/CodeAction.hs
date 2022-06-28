@@ -19,11 +19,10 @@ module Development.IDE.Plugin.CodeAction
 
 import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
-                                                                    (>>>),
-                                                                    (&&&))
+                                                                    (&&&),
+                                                                    (>>>))
 import           Control.Concurrent.STM.Stats                      (atomically)
-import           Control.Monad                                     (guard, join,
-                                                                    msum)
+import           Control.Monad                                     (guard, join)
 import           Control.Monad.IO.Class
 import           Data.Char
 import qualified Data.DList                                        as DL
@@ -34,7 +33,7 @@ import qualified Data.HashSet                                      as Set
 import           Data.List.Extra
 import           Data.List.NonEmpty                                (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty                                as NE
-import qualified Data.Map                                          as M
+import qualified Data.Map.Strict                                   as M
 import           Data.Maybe
 import           Data.Ord                                          (comparing)
 import qualified Data.Rope.UTF16                                   as Rope
@@ -47,7 +46,6 @@ import           Development.IDE.Core.Service
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util                          (printOutputable,
                                                                     printRdrName,
                                                                     traceAst)
@@ -80,6 +78,25 @@ import           Language.LSP.Types                                (CodeAction (
 import           Language.LSP.VFS
 import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC                                               (AddEpAnn (AddEpAnn),
+                                                                    Anchor (anchor_op),
+                                                                    AnchorOperation (..),
+                                                                    AnnsModule (am_main),
+                                                                    DeltaPos (..),
+                                                                    EpAnn (..),
+                                                                    EpaLocation (..),
+                                                                    LEpaComment,
+                                                                    LocatedA)
+
+import           Control.Monad                                     (msum)
+#else
+import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
+                                                                    DeltaPos,
+                                                                    KeywordId (G),
+                                                                    deltaRow,
+                                                                    mkAnnKey)
+#endif
 
 -------------------------------------------------------------------------------------------------
 
@@ -227,10 +244,8 @@ findInstanceHead df instanceHead decls =
 
 #if MIN_VERSION_ghc(9,2,0)
 findDeclContainingLoc :: Foldable t => Position -> t (GenLocated (SrcSpanAnn' a) e) -> Maybe (GenLocated (SrcSpanAnn' a) e)
-#elif MIN_VERSION_ghc(8,10,0)
-findDeclContainingLoc :: Foldable t => Position -> t (GenLocated SrcSpan e) -> Maybe (GenLocated SrcSpan e)
 #else
--- TODO populate this type signature for GHC versions <8.10
+findDeclContainingLoc :: Foldable t => Position -> t (GenLocated SrcSpan e) -> Maybe (GenLocated SrcSpan e)
 #endif
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 
@@ -243,8 +258,8 @@ findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 --  imported from ‘Data.ByteString’ at B.hs:6:1-22
 --  imported from ‘Data.ByteString.Lazy’ at B.hs:8:1-27
 --  imported from ‘Data.Text’ at B.hs:7:1-16
-suggestHideShadow :: ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
-suggestHideShadow ps@(L _ HsModule {hsmodImports}) fileContents mTcM mHar Diagnostic {_message, _range}
+suggestHideShadow :: Annotated ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
+suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
   | Just [identifier, modName, s] <-
       matchRegexUnifySpaces
         _message
@@ -261,6 +276,8 @@ suggestHideShadow ps@(L _ HsModule {hsmodImports}) fileContents mTcM mHar Diagno
     result <> [hideAll]
   | otherwise = []
   where
+    L _ HsModule {hsmodImports} = astA ps
+
     suggests identifier modName s
       | Just tcM <- mTcM,
         Just har <- mHar,
@@ -940,11 +957,11 @@ isPreludeImplicit = xopt Lang.ImplicitPrelude
 suggestImportDisambiguation ::
     DynFlags ->
     Maybe T.Text ->
-    ParsedSource ->
+    Annotated ParsedSource ->
     T.Text ->
     Diagnostic ->
     [(T.Text, [Either TextEdit Rewrite])]
-suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) fileContents diag@Diagnostic {..}
+suggestImportDisambiguation df (Just txt) ps fileContents diag@Diagnostic {..}
     | Just [ambiguous] <-
         matchRegexUnifySpaces
             _message
@@ -956,6 +973,8 @@ suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) fileC
         suggestions ambiguous modules (isJust local)
     | otherwise = []
     where
+        L _ HsModule {hsmodImports} = astA ps
+
         locDic =
             fmap (NE.fromList . DL.toList) $
             Map.fromListWith (<>) $
@@ -1048,13 +1067,13 @@ targetModuleName (ExistingImp _) =
     error "Cannot happen!"
 
 disambiguateSymbol ::
-    ParsedSource ->
+    Annotated ParsedSource ->
     T.Text ->
     Diagnostic ->
     T.Text ->
     HidingMode ->
     [Either TextEdit Rewrite]
-disambiguateSymbol pm fileContents Diagnostic {..} (T.unpack -> symbol) = \case
+disambiguateSymbol ps fileContents Diagnostic {..} (T.unpack -> symbol) = \case
     (HideOthers hiddens0) ->
         [ Right $ hideSymbol symbol idecl
         | ExistingImp idecls <- hiddens0
@@ -1062,7 +1081,7 @@ disambiguateSymbol pm fileContents Diagnostic {..} (T.unpack -> symbol) = \case
         ]
             ++ mconcat
                 [ if null imps
-                    then maybeToList $ Left . snd <$> newImportToEdit (hideImplicitPreludeSymbol $ T.pack symbol) pm fileContents
+                    then maybeToList $ Left . snd <$> newImportToEdit (hideImplicitPreludeSymbol $ T.pack symbol) ps fileContents
                     else Right . hideSymbol symbol <$> imps
                 | ImplicitPrelude imps <- hiddens0
                 ]
@@ -1292,7 +1311,7 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
 
 -------------------------------------------------------------------------------------------------
 
-suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
+suggestNewOrExtendImportForClassMethod :: ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
 suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnostic {_message}
   | Just [methodName, className] <-
       matchRegexUnifySpaces
@@ -1306,7 +1325,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
   where
     suggest identInfo@IdentInfo {moduleNameText}
       | importStyle <- NE.toList $ importStyles identInfo,
-        mImportDecl <- findImportDeclByModuleName (hsmodImports $ unLoc ps) (T.unpack moduleNameText) =
+        mImportDecl <- findImportDeclByModuleName (hsmodImports . unLoc . astA $ ps) (T.unpack moduleNameText) =
         case mImportDecl of
           -- extend
           Just decl ->
@@ -1328,8 +1347,8 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
               <> [(quickFixImportKind "new.all", newImportAll moduleNameText)]
             | otherwise -> []
 
-suggestNewImport :: ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
-suggestNewImport packageExportsMap ps@(L _ HsModule {..}) fileContents Diagnostic{_message}
+suggestNewImport :: ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
+suggestNewImport packageExportsMap ps fileContents Diagnostic{_message}
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
   , qual <- extractQualifiedModuleName msg
@@ -1344,6 +1363,8 @@ suggestNewImport packageExportsMap ps@(L _ HsModule {..}) fileContents Diagnosti
   = sortOn fst3 [(imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))
     | (kind, unNewImport -> imp) <- constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions
     ]
+  where
+    L _ HsModule {..} = astA ps
 suggestNewImport _ _ _ _ = []
 
 constructNewImportSuggestions
@@ -1371,7 +1392,7 @@ constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = 
 newtype NewImport = NewImport {unNewImport :: T.Text}
   deriving (Show, Eq, Ord)
 
-newImportToEdit :: NewImport -> ParsedSource -> T.Text -> Maybe (T.Text, TextEdit)
+newImportToEdit :: NewImport -> Annotated ParsedSource -> T.Text -> Maybe (T.Text, TextEdit)
 newImportToEdit (unNewImport -> imp) ps fileContents
   | Just (range, indent) <- newImportInsertRange ps fileContents
   = Just (imp, TextEdit range (imp <> "\n" <> T.replicate indent " "))
@@ -1385,35 +1406,105 @@ newImportToEdit (unNewImport -> imp) ps fileContents
 -- * If the file has neither existing imports nor a module declaration,
 -- the import will be inserted at line zero if there are no pragmas,
 -- * otherwise inserted one line after the last file-header pragma
-newImportInsertRange :: ParsedSource -> T.Text -> Maybe (Range, Int)
-newImportInsertRange (L _ HsModule {..}) fileContents
+newImportInsertRange :: Annotated ParsedSource -> T.Text -> Maybe (Range, Int)
+newImportInsertRange ps fileContents
   |  Just ((l, c), col) <- case hsmodImports of
-      [] -> findPositionNoImports (fmap reLoc hsmodName) (fmap reLoc hsmodExports) fileContents
-      _  -> findPositionFromImportsOrModuleDecl (map reLoc hsmodImports) last True
+      -- When there is no existing imports, we only cares about the line number, setting column and indent to zero.
+      [] -> (\line -> ((line, 0), 0)) <$> findPositionNoImports ps fileContents
+      _  -> findPositionFromImports (map reLoc hsmodImports) last
   , let insertPos = Position (fromIntegral l) (fromIntegral c)
     = Just (Range insertPos insertPos, col)
   | otherwise = Nothing
+  where
+    L _ HsModule {..} = astA ps
 
--- | Insert the import under the Module declaration exports if they exist, otherwise just under the module declaration.
--- If no module declaration exists, then no exports will exist either, in that case
--- insert the import after any file-header pragmas or at position zero if there are no pragmas
-findPositionNoImports :: Maybe (Located ModuleName) -> Maybe (Located [LIE name]) -> T.Text -> Maybe ((Int, Int), Int)
-findPositionNoImports Nothing _ fileContents = findNextPragmaPosition fileContents
-findPositionNoImports _ (Just hsmodExports) _ = findPositionFromImportsOrModuleDecl hsmodExports id False
-findPositionNoImports (Just hsmodName) _ _ = findPositionFromImportsOrModuleDecl hsmodName id False
+-- | Find the position for a new import when there isn't an existing one.
+-- * If there is a module declaration, a new import should be inserted under the module declaration (including exports list)
+-- * Otherwise, a new import should be inserted after any file-header pragma.
+findPositionNoImports :: Annotated ParsedSource -> T.Text -> Maybe Int
+findPositionNoImports ps fileContents =
+    maybe (Just (findNextPragmaPosition fileContents)) (findPositionAfterModuleName ps) hsmodName
+  where
+    L _ HsModule {..} = astA ps
 
-findPositionFromImportsOrModuleDecl :: HasSrcSpan a => t -> (t -> a) -> Bool -> Maybe ((Int, Int), Int)
-findPositionFromImportsOrModuleDecl hsField f hasImports = case getLoc (f hsField) of
+-- | find line number right after module ... where
+findPositionAfterModuleName :: Annotated ParsedSource
+#if MIN_VERSION_ghc(9,2,0)
+                            -> LocatedA ModuleName
+#else
+                            -> Located ModuleName
+#endif
+                            -> Maybe Int
+findPositionAfterModuleName ps hsmodName' = do
+    -- Note that 'where' keyword and comments are not part of the AST. They belongs to
+    -- the exact-print information. To locate it, we need to find the previous AST node,
+    -- calculate the gap between it and 'where', then add them up to produce the absolute
+    -- position of 'where'.
+
+    lineOffset <- whereKeywordLineOffset -- Calculate the gap before 'where' keyword.
+    case prevSrcSpan of
+        UnhelpfulSpan _ -> Nothing
+        (RealSrcSpan prevSrcSpan' _) ->
+            -- add them up produce the absolute location of 'where' keyword
+            Just $ srcLocLine (realSrcSpanEnd prevSrcSpan') + lineOffset
+  where
+    L _ HsModule {..} = astA ps
+
+    -- The last AST node before 'where' keyword. Might be module name or export list.
+    prevSrcSpan = maybe (getLoc hsmodName') getLoc hsmodExports
+
+    -- The relative position of 'where' keyword (in lines, relative to the previous AST node).
+    -- The exact-print API changed a lot in ghc-9.2, so we need to handle it seperately for different compiler versions.
+    whereKeywordLineOffset :: Maybe Int
+#if MIN_VERSION_ghc(9,2,0)
+    whereKeywordLineOffset = case hsmodAnn of
+        EpAnn _ annsModule _ -> do
+            -- Find the first 'where'
+            whereLocation <- fmap NE.head .  NE.nonEmpty . mapMaybe filterWhere .  am_main $ annsModule
+            epaLocationToLine whereLocation
+        EpAnnNotUsed -> Nothing
+    filterWhere (AddEpAnn AnnWhere loc) = Just loc
+    filterWhere _                       = Nothing
+
+    epaLocationToLine :: EpaLocation -> Maybe Int
+    epaLocationToLine (EpaSpan sp) = Just . srcLocLine . realSrcSpanEnd $ sp
+    epaLocationToLine (EpaDelta (SameLine _) priorComments) = Just $ sumCommentsOffset priorComments
+    -- 'priorComments' contains the comments right before the current EpaLocation
+    -- Summing line offset of priorComments is necessary, as 'line' is the gap between the last comment and
+    -- the current AST node
+    epaLocationToLine (EpaDelta (DifferentLine line _) priorComments) = Just (line + sumCommentsOffset priorComments)
+
+    sumCommentsOffset :: [LEpaComment] -> Int
+    sumCommentsOffset = sum . fmap (\(L anchor _) -> anchorOpLine (anchor_op anchor))
+
+    anchorOpLine :: AnchorOperation -> Int
+    anchorOpLine UnchangedAnchor                      = 0
+    anchorOpLine (MovedAnchor (SameLine _))           = 0
+    anchorOpLine (MovedAnchor (DifferentLine line _)) = line
+#else
+    whereKeywordLineOffset = do
+        ann <- annsA ps M.!? mkAnnKey (astA ps)
+        deltaPos <- fmap NE.head . NE.nonEmpty .mapMaybe filterWhere $ annsDP ann
+        pure $ deltaRow deltaPos
+
+    -- Before ghc 9.2, DeltaPos doesn't take comment into acccount, so we don't need to sum line offset of comments.
+    filterWhere :: (KeywordId, DeltaPos) -> Maybe DeltaPos
+    filterWhere (keywordId, deltaPos) =
+        if keywordId == G AnnWhere then Just deltaPos else Nothing
+#endif
+
+findPositionFromImports :: HasSrcSpan a => t -> (t -> a) -> Maybe ((Int, Int), Int)
+findPositionFromImports hsField f = case getLoc (f hsField) of
   RealSrcSpan s _ ->
     let col = calcCol s
      in Just ((srcLocLine (realSrcSpanEnd s), col), col)
   _ -> Nothing
-  where calcCol s = if hasImports then srcLocCol (realSrcSpanStart s) - 1 else 0
+  where calcCol s = srcLocCol (realSrcSpanStart s) - 1
 
 -- | Find the position one after the last file-header pragma
 -- Defaults to zero if there are no pragmas in file
-findNextPragmaPosition :: T.Text -> Maybe ((Int, Int), Int)
-findNextPragmaPosition contents = Just ((lineNumber, 0), 0)
+findNextPragmaPosition :: T.Text -> Int
+findNextPragmaPosition contents = lineNumber
   where
     lineNumber = afterLangPragma . afterOptsGhc $ afterShebang
     afterLangPragma = afterPragma "LANGUAGE" contents'

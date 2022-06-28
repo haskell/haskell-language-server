@@ -44,3 +44,4 @@
 # Build
 *.nix @berberman @michaelpj @guibou
 *.project @jneira
+.gitpod.* @kokobd
