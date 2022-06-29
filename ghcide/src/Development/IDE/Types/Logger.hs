@@ -381,16 +381,3 @@ priorityToLsp =
     Info    -> MtInfo
     Warning -> MtWarning
     Error   -> MtError
-
--- ORPHAN Pretty instances --------------------------------------------------------------
-instance Pretty ResponseError where
-  pretty err =  errorCode <> ":" <+> errorBody
-    where
-        errorCode = pretty $ show $ err ^. code
-        errorBody = pretty $ err ^. message
-
-instance Pretty PluginId where
-    pretty (PluginId pid) = pretty pid
-
-instance Pretty CommandId where
-    pretty (CommandId cid) = pretty cid

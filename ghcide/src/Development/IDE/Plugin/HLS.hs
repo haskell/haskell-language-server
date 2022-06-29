@@ -52,9 +52,15 @@ data Log = LogPluginError ResponseError
 
 instance Pretty Log where
   pretty = \case
-    LogPluginError err -> pretty err
+    LogPluginError err -> prettyResponseError err
 
 -- various error message specific builders
+prettyResponseError :: ResponseError -> Doc a
+prettyResponseError err = errorCode <> ":" <+> errorBody
+    where
+        errorCode = pretty $ show $ err ^. LSP.code
+        errorBody = pretty $ err ^. LSP.message
+
 pluginNotEnabled :: SMethod m -> [(PluginId, b, a)] -> Text
 pluginNotEnabled method availPlugins = "No plugin enabled for " <> T.pack (show method) <> ", available:\n" <> T.pack (unlines $ map (\(plid,_,_) -> show plid) availPlugins)
 
@@ -75,7 +81,7 @@ failedToParseArgs (CommandId com) (PluginId pid) err arg = "Error while parsing 
 logAndReturnError :: Recorder (WithPriority Log) -> ErrorCode -> Text -> LSP.LspT Config IO (Either ResponseError a)
 logAndReturnError recorder errCode msg = do
     let err = ResponseError errCode msg Nothing
-    logWith recorder Error $ LogPluginError err
+    logWith recorder Warning $ LogPluginError err
     pure $ Left err
 
 -- | Map a set of plugins to the underlying ghcide engine.
