@@ -241,6 +241,27 @@
   - name: "GHC.Arr.!"
     within: []
 
+  # Tracing functions
+  # We ban an explicit list rather than the
+  # Debug.Trace, because that module also
+  # includes the eventlog tracing functions,
+  # which are legitimate to use.
+  - name: 
+    - Debug.Trace.trace
+    - Debug.Trace.traceId
+    - Debug.Trace.traceShow
+    - Debug.Trace.traceShowId
+    - Debug.Trace.traceStack
+    - Debug.Trace.traceIO
+    - Debug.Trace.traceM
+    - Debug.Trace.traceShowM
+    - Debug.Trace.putTraceMsg
+    within: 
+    - Development.IDE.Core.Compile
+    - Development.IDE.Graph.Internal.Database
+    - Development.IDE.GHC.Util
+    - Wingman.Debug
+
 # We really do not want novel usages of restricted functions, and mere
 # Warning is not enough to prevent those consistently; you need a build failure.
 - error: {name: Avoid restricted function}

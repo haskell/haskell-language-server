@@ -7,7 +7,6 @@ import           Data.Either                      (rights)
 import           Data.List                        (find)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
-import           Debug.Trace
 import qualified Ide.Plugin.AlternateNumberFormat as AlternateNumberFormat
 import qualified Ide.Plugin.Conversion            as Conversion
 import           Language.LSP.Types               (toEither)
