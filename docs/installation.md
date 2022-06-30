@@ -26,17 +26,29 @@ You can check if HLS is available for your platorm via ghcup here: <https://hask
 You can also install HLS from source without checking out the code manually:
 
 ```bash
+ghcup compile hls -v $HLS_VERSION --ghc $GHC_VERSION
+```
+
+For example:
+
+Install HLS 1.6.1.0 for GHC 8.10.7:
+```bash
 ghcup compile hls -v 1.6.1.0 --ghc 8.10.7
 ```
 
-Install HLS for multiple GHC versions:
+Install HLS 1.7.0.0 for multiple GHC versions:
 ```
-ghcup compile hls -v 1.6.1.0 --ghc 8.10.7 --ghc 8.8.4
+ghcup compile hls -v 1.7.0.0 --ghc 8.10.7 --ghc 8.8.4
+```
+
+Install HLS from master:
+```
+ghcup compile hls -g master --ghc 9.2.1
 ```
 
 Use a different `cabal.project` for a GHC version:
 ```
-ghcup compile hls -v 1.6.1.0 --ghc 9.2.1 --cabal-project cabal.project
+ghcup compile hls -v 1.7.0.0 --ghc 9.2.1 --cabal-project cabal.project
 ```
 
 Check `ghcup compile hls --help` for a full list of compilation options.
