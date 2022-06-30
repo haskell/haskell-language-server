@@ -21,11 +21,13 @@ If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your instal
 ghcup install hls
 ```
 
-You can check if HLS is available for your platorm via ghcup here: <https://haskell.org/ghcup/install/#supported-platforms>.
+You can check if HLS is available for your platform via ghcup here: <https://haskell.org/ghcup/install/#supported-platforms>.
 
 You can also install HLS from source without checking out the code manually:
 
 ```bash
+# `ghcup compile` uses cabal under the hood to build, so you may want to run `cabal update` beforehand
+cabal update
 ghcup compile hls -v $HLS_VERSION --ghc $GHC_VERSION
 ```
 
@@ -132,7 +134,7 @@ If you are using [`chocolatey`](https://chocolatey.org/) to manage your installa
 
 ```bash
 choco install haskell-language-server
-````
+```
 
 ## Visual Studio Code
 
