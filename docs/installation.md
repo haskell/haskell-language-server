@@ -26,24 +26,16 @@ ghcup compile hls -v $HLS_VERSION --ghc $GHC_VERSION
 
 For example:
 
-Install HLS 1.6.1.0 for GHC 8.10.7:
+Install HLS 1.7.0.0 for GHC 8.10.7, or for multiple GHC versions:
 ```bash
-ghcup compile hls -v 1.6.1.0 --ghc 8.10.7
+ghcup compile hls -v 1.7.0.0 --ghc 8.10.7
+ghcup compile hls -v 1.7.0.0 --ghc 8.10.7 --ghc 9.2.1
 ```
 
-Install HLS 1.7.0.0 for multiple GHC versions:
-```
-ghcup compile hls -v 1.7.0.0 --ghc 8.10.7 --ghc 8.8.4
-```
-
-Install HLS from master:
+Install HLS from master, or a specific commit:
 ```
 ghcup compile hls -g master --ghc 9.2.1
-```
-
-Use a different `cabal.project` for a GHC version:
-```
-ghcup compile hls -v 1.7.0.0 --ghc 9.2.1 --cabal-project cabal.project
+ghcup compile hls -g 510bd51e46fea8fb51ddfaa60bba505f0663497d --ghc 9.2.1
 ```
 
 Check `ghcup compile hls --help` for a full list of compilation options.
