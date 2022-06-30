@@ -117,6 +117,13 @@ One strategy for diagnosing this is simply disable all plugins, check if the iss
 
 There is a configuration JSON snippet which disables all plugins [here](https://github.com/haskell/haskell-language-server/issues/2151#issuecomment-911397030).
 
+### Clearing HLS's build cache
+
+HLS builds the dependencies of your project in a separate directory to avoid clashing with your normal build tools.
+Sometimes clearing this out can help if you have persistent build problems.
+The cache directory is at `$HOME/.cache/hie-bios`.
+You may be able to identify a specific subdirectory that relates to your project, but it should always be safe to delete the whole thing, at worst it will cause HLS to redo build work next time it opens a project.
+
 ## Diagnosing problems with the client
 
 The most important thing to do is to consult the client's documentation.
