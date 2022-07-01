@@ -1,27 +1,39 @@
 {-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE InstanceSigs              #-}
 {-# LANGUAGE NamedFieldPuns            #-}
 {-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TemplateHaskell           #-}
 {-# LANGUAGE TypeFamilies              #-}
 
 module Ide.Plugin.SelectionRange.CodeRange
     ( CodeRange (..)
+    , codeRange_range
+    , codeRange_children
     , GetCodeRange(..)
     , codeRangeRule
     , Log
-    , useExcept
     ) where
 
 import           Control.DeepSeq                         (NFData)
+import qualified Control.Lens                            as Lens
 import           Control.Monad.Except                    (ExceptT (..),
                                                           runExceptT)
 import           Control.Monad.Reader                    (runReader)
+import           Control.Monad.Trans.Class               (lift)
 import           Control.Monad.Trans.Maybe               (MaybeT (MaybeT),
                                                           maybeToExceptT)
+import           Control.Monad.Trans.Writer.CPS
 import           Data.Coerce                             (coerce)
 import           Data.Data                               (Typeable)
+import           Data.Foldable                           (traverse_)
+import           Data.Function                           (on, (&))
 import           Data.Hashable
+import           Data.List                               (sort)
 import qualified Data.Map.Strict                         as Map
+import           Data.Vector                             (Vector)
+import qualified Data.Vector                             as V
 import           Development.IDE
 import           Development.IDE.Core.Rules              (toIdeResult)
 import qualified Development.IDE.Core.Shake              as Shake
@@ -34,46 +46,100 @@ import           Development.IDE.GHC.ExactPrint          (GetAnnotatedParsedSour
 import           GHC.Generics                            (Generic)
 import           Ide.Plugin.SelectionRange.ASTPreProcess (PreProcessEnv (..),
                                                           preProcessAST)
+import           Language.LSP.Types.Lens                 (HasEnd (end),
+                                                          HasStart (start))
 import           Prelude                                 hiding (log)
 
 data Log = LogShake Shake.Log
-    | LogBadDependency BadDependencyLog
     | LogNoAST
+    | LogFoundInterleaving CodeRange CodeRange
 
 instance Pretty Log where
     pretty log = case log of
-        LogShake shakeLog                 -> pretty shakeLog
-        LogBadDependency badDependencyLog -> pretty badDependencyLog
-        LogNoAST                          -> "no HieAst exist for file"
+        LogShake shakeLog -> pretty shakeLog
+        LogNoAST          -> "no HieAst exist for file"
+        LogFoundInterleaving r1 r2 ->
+            let prettyRange = pretty . show . _codeRange_range
+             in "CodeRange interleave: " <> prettyRange r1 <> " & " <> prettyRange r2
 
-data BadDependencyLog = forall rule. Show rule => BadDependencyLog rule
-
-instance Pretty BadDependencyLog where
-    pretty (BadDependencyLog rule) = "can not get result from rule " <> pretty (show rule)
-
-data CodeRange = CodeRange Range [CodeRange]
+-- | A tree representing code ranges in a file. This can be useful for features like selection range and folding range
+data CodeRange = CodeRange {
+    -- | Range for current level
+        _codeRange_range    :: !Range,
+    -- | A vector of children, sorted by their ranges in ascending order.
+    -- Children are guaranteed not to interleave, but some gaps may exist among them.
+        _codeRange_children :: !(Vector CodeRange)
+    }
     deriving (Show, Generic)
 
 instance NFData CodeRange
 
-buildCodeRange :: HieAST a -> RefMap a -> Annotated ParsedSource -> CodeRange
-buildCodeRange ast refMap _ =
+Lens.makeLenses ''CodeRange
+
+instance Eq CodeRange where
+    (==) = (==) `on` _codeRange_range
+
+instance Ord CodeRange where
+    compare :: CodeRange -> CodeRange -> Ordering
+    compare = compare `on` _codeRange_range
+
+-- | Construct a 'CodeRange'. A valid CodeRange will be returned in any case. If anything go wrong,
+-- a list of warnings will be returned as 'Log'
+buildCodeRange :: HieAST a -> RefMap a -> Annotated ParsedSource -> Writer [Log] CodeRange
+buildCodeRange ast refMap _ = do
     -- We work on 'HieAST', then convert it to 'CodeRange', so that applications such as selection range and folding
     -- range don't need to care about 'HieAST'
     -- TODO @sloorush actually use 'Annotated ParsedSource' to handle structures not in 'HieAST' properly (for example comments)
     let ast' = runReader (preProcessAST ast) (PreProcessEnv refMap)
-    in simplify . astToCodeRange $ ast'
+    codeRange <- astToCodeRange ast'
+    pure $ simplify codeRange
 
-astToCodeRange :: HieAST a -> CodeRange
-astToCodeRange (Node _ sp []) = CodeRange (realSrcSpanToRange sp) []
-astToCodeRange (Node _ sp children) = CodeRange (realSrcSpanToRange sp) (fmap astToCodeRange children)
+astToCodeRange :: HieAST a -> Writer [Log] CodeRange
+astToCodeRange (Node _ sp []) = pure $ CodeRange (realSrcSpanToRange sp) mempty
+astToCodeRange (Node _ sp children) = do
+    children' <- removeInterleaving . sort =<< traverse astToCodeRange children
+    pure $ CodeRange (realSrcSpanToRange sp) (V.fromList children')
 
--- Remove redundant nodes in 'CodeRange' tree
+-- | Remove interleaving of the list of 'CodeRange's.
+removeInterleaving :: [CodeRange] -> Writer [Log] [CodeRange]
+removeInterleaving [] = pure []
+removeInterleaving (x1:xs) = do
+    remaining <- removeInterleaving xs
+    (:remaining) <$> case remaining of
+        [] -> pure x1
+        -- Given that the CodeRange is already sorted on it's Range, and the Ord instance of Range
+        -- compares it's start position first, the start position must be already in an ascending order.
+        -- Then, if the end position of a node is larger than it's next neighbour's start position, an interleaving
+        -- must exist.
+        -- (Note: LSP Range's end position is exclusive)
+        x2:_ -> if x1 Lens.^. codeRange_range . end > x2 Lens.^. codeRange_range . start
+            then do
+                let codeRangeEnd :: Lens.Lens' CodeRange Position
+                    codeRangeEnd = codeRange_range . end
+                    x1' :: CodeRange
+                    x1' = x1 & codeRangeEnd Lens..~ (x2 Lens.^. codeRangeEnd)
+                tell [LogFoundInterleaving x1 x2]
+                pure x1'
+            else pure x1
+
+-- | Remove redundant nodes in 'CodeRange' tree
 simplify :: CodeRange -> CodeRange
-simplify r@(CodeRange range1 [CodeRange range2 children])
-    | range1 == range2 = CodeRange range1 children
-    | otherwise = r
-simplify r = r
+simplify r =
+    case onlyChild of
+        -- If a node has the exact same range as it's parent, and it has no sibling, then it can be removed.
+        Just onlyChild' ->
+            if _codeRange_range onlyChild' == curRange
+            then simplify (r { _codeRange_children = _codeRange_children onlyChild' })
+            else withChildrenSimplified
+        Nothing -> withChildrenSimplified
+  where
+    curRange = _codeRange_range r
+
+    onlyChild :: Maybe CodeRange =
+        let children = _codeRange_children r
+         in if V.length children == 1 then V.headM children else Nothing
+
+    withChildrenSimplified = r { _codeRange_children = simplify <$> _codeRange_children r }
 
 data GetCodeRange = GetCodeRange
     deriving (Eq, Show, Typeable, Generic)
@@ -83,20 +149,20 @@ instance NFData   GetCodeRange
 
 type instance RuleResult GetCodeRange = CodeRange
 
--- | Like use, but report absense in 'ExceptT'
-useExcept :: IdeRule k v => (BadDependencyLog -> msg) -> k -> NormalizedFilePath -> ExceptT msg Action v
-useExcept f rule = maybeToExceptT (f (BadDependencyLog rule)) . MaybeT . use rule
-
 codeRangeRule :: Recorder (WithPriority Log) -> Rules ()
 codeRangeRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetCodeRange file -> handleError recorder $ do
         -- We need both 'HieAST' (for basic AST) and api annotations (for comments and some keywords).
         -- See https://gitlab.haskell.org/ghc/ghc/-/wikis/api-annotations
-        HAR{hieAst, refMap} <- useExcept LogBadDependency GetHieAst file
+        HAR{hieAst, refMap} <- lift $ use_ GetHieAst file
         ast <- maybeToExceptT LogNoAST . MaybeT . pure $
             getAsts hieAst Map.!? (coerce . mkFastString . fromNormalizedFilePath) file
-        annPS <- useExcept LogBadDependency GetAnnotatedParsedSource file
-        pure $ buildCodeRange ast refMap annPS
+        annPS <- lift $ use_ GetAnnotatedParsedSource file
+
+        let (codeRange, warnings) = runWriter (buildCodeRange ast refMap annPS)
+        traverse_ (logWith recorder Warning) warnings
+
+        pure codeRange
 
 -- | Handle error in 'Action'. Returns an 'IdeResult' with no value and no diagnostics on error. (but writes log)
 handleError :: Recorder (WithPriority msg) -> ExceptT msg Action a -> Action (IdeResult a)

@@ -43,6 +43,8 @@ library
     , semigroupoids
     , hashable
     , deepseq
+    , vector
+    , lens
 
 test-suite tests
   type:             exitcode-stdio-1.0

@@ -223,7 +223,7 @@ subRange smallRange range =
   && positionInRange (_end smallRange) range
 
 positionInRange :: Position -> Range -> Bool
-positionInRange p (Range sp ep) = sp <= p && p <= ep
+positionInRange p (Range sp ep) = sp <= p && p < ep -- Range's end position is exclusive, see https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#range
 
 -- ---------------------------------------------------------------------
 

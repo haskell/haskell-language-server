@@ -9,7 +9,11 @@ import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        maybeToExceptT)
 import           Data.Either.Extra                    (maybeToEither)
-import           Data.Maybe                           (fromMaybe, mapMaybe)
+import           Data.List.NonEmpty                   (NonEmpty)
+import qualified Data.List.NonEmpty                   as NonEmpty
+import           Data.Maybe                           (fromMaybe)
+import           Data.Vector                          (Vector)
+import qualified Data.Vector                          as V
 import           Development.IDE                      (IdeAction,
                                                        IdeState (shakeExtras),
                                                        Range (Range), Recorder,
@@ -37,6 +41,7 @@ import           Language.LSP.Server                  (LspM)
 import           Language.LSP.Types                   (List (List),
                                                        NormalizedFilePath,
                                                        Position (..),
+                                                       Range (_start),
                                                        ResponseError,
                                                        SMethod (STextDocumentSelectionRange),
                                                        SelectionRange (..),
@@ -82,36 +87,48 @@ getSelectionRanges file positions = do
         traverse (fromCurrentPosition positionMapping) positions
 
     let selectionRanges = flip fmap positions' $ \pos ->
-            -- codeRange doesn't cover all portions of text in the file, so we need a default value
+            -- 'codeRange' may not cover all portions of text in the file, we need a default value to make sure
+            -- other positions can still work.
             let defaultSelectionRange = SelectionRange (Range pos pos) Nothing
-             in reverseSelectionRange . fromMaybe defaultSelectionRange . findPosition' pos $ codeRange
+             in fromMaybe defaultSelectionRange . findPosition pos $ codeRange
 
     -- 'positionMapping' should be applied to the output ranges before returning them
     maybeToExceptT "fail to apply position mapping to output positions" . MaybeT . pure $
          traverse (toCurrentSelectionRange positionMapping) selectionRanges
 
--- Find 'Position' in 'CodeRange'. Producing an inverse 'SelectionRange'
-findPosition' :: Position -> CodeRange -> Maybe SelectionRange
-findPosition' pos (CodeRange range children) =
-    if positionInRange pos range
-    then Just $ case mapMaybe (findPosition' pos) children of
-            [childSelectionRange] -> SelectionRange range (Just childSelectionRange)
-            _                     -> SelectionRange range Nothing
-    else Nothing
-
--- Reverse 'SelectionRange'. Just like 'reverse' for list.
-reverseSelectionRange :: SelectionRange -> SelectionRange
-reverseSelectionRange = go (SelectionRange invalidRange Nothing)
+-- | Find 'Position' in 'CodeRange'.
+findPosition :: Position -> CodeRange -> Maybe SelectionRange
+findPosition pos root =
+    selectionRangeFromNonEmpty . NonEmpty.reverse -- SelectionRange requires a bottom-up order, so we need to reverse
+    <$> go root
   where
-    go :: SelectionRange -> SelectionRange -> SelectionRange
-    go acc (SelectionRange r Nothing) = SelectionRange r (checkRange acc)
-    go acc (SelectionRange r (Just parent)) = go (SelectionRange r (checkRange acc)) parent
+    -- Helper function for recursion. The range list is built top-down
+    go :: CodeRange -> Maybe (NonEmpty Range)
+    go node =
+        if positionInRange pos range
+        then case binarySearchPos children of
+            Just childContainingPos -> fmap (range NonEmpty.<|) (go childContainingPos)
+            Nothing -> Just $ range NonEmpty.:| [] -- NonEmpty.singleton doesn't exist in GHC 8.8.4
+        else Nothing
+      where
+        range = _codeRange_range node
+        children = _codeRange_children node
 
-    checkRange :: SelectionRange -> Maybe SelectionRange
-    checkRange r@(SelectionRange range _) = if range == invalidRange then Nothing else Just r
+    binarySearchPos :: Vector CodeRange -> Maybe CodeRange
+    binarySearchPos v
+        | V.null v = Nothing
+        | V.length v == 1,
+            Just r <- V.headM v = if positionInRange pos (_codeRange_range r) then Just r else Nothing
+        | otherwise = do
+            let (left, right) = V.splitAt (V.length v `div` 2) v
+            startOfRight <- _start . _codeRange_range <$> V.headM right
+            if pos < startOfRight then binarySearchPos left else binarySearchPos right
 
-    invalidRange :: Range
-    invalidRange = Range (Position (-1) (-1)) (Position (-1) (-1))
+-- | Construct 'SelectionRange' from 'NonEmpty' 'Range'
+selectionRangeFromNonEmpty :: NonEmpty Range -> SelectionRange
+selectionRangeFromNonEmpty ranges
+    | (r, remaining) <- NonEmpty.uncons ranges =
+        SelectionRange r (fmap selectionRangeFromNonEmpty remaining)
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange
