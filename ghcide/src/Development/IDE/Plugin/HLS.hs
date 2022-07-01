@@ -10,6 +10,7 @@ module Development.IDE.Plugin.HLS
     ) where
 
 import           Control.Exception            (SomeException)
+import           Control.Lens                 ((^.))
 import           Control.Monad
 import qualified Data.Aeson                   as J
 import           Data.Bifunctor
@@ -21,6 +22,7 @@ import qualified Data.List                    as List
 import           Data.List.NonEmpty           (NonEmpty, nonEmpty, toList)
 import qualified Data.Map                     as Map
 import           Data.String
+import           Data.Text                    (Text)
 import qualified Data.Text                    as T
 import           Development.IDE.Core.Shake   hiding (Log)
 import           Development.IDE.Core.Tracing
@@ -33,9 +35,10 @@ import           Ide.Plugin.Config
 import           Ide.PluginUtils              (getClientConfig)
 import           Ide.Types                    as HLS
 import qualified Language.LSP.Server          as LSP
-import           Language.LSP.VFS
 import           Language.LSP.Types
 import qualified Language.LSP.Types           as J
+import qualified Language.LSP.Types.Lens      as LSP
+import           Language.LSP.VFS
 import           Text.Regex.TDFA.Text         ()
 import           UnliftIO                     (MonadUnliftIO)
 import           UnliftIO.Async               (forConcurrently)
@@ -44,20 +47,48 @@ import           UnliftIO.Exception           (catchAny)
 -- ---------------------------------------------------------------------
 --
 
-data Log
-  = LogNoEnabledPlugins
-  deriving Show
+data Log = LogPluginError ResponseError
+    deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogNoEnabledPlugins ->
-      "extensibleNotificationPlugins no enabled plugins"
+    LogPluginError err -> prettyResponseError err
+
+-- various error message specific builders
+prettyResponseError :: ResponseError -> Doc a
+prettyResponseError err = errorCode <> ":" <+> errorBody
+    where
+        errorCode = pretty $ show $ err ^. LSP.code
+        errorBody = pretty $ err ^. LSP.message
+
+pluginNotEnabled :: SMethod m -> [(PluginId, b, a)] -> Text
+pluginNotEnabled method availPlugins = "No plugin enabled for " <> T.pack (show method) <> ", available:\n" <> T.pack (unlines $ map (\(plid,_,_) -> show plid) availPlugins)
+
+pluginDoesntExist :: PluginId -> Text
+pluginDoesntExist (PluginId pid) = "Plugin " <> pid <> " doesn't exist"
+
+commandDoesntExist :: CommandId -> PluginId -> [PluginCommand ideState] -> Text
+commandDoesntExist (CommandId com) (PluginId pid) legalCmds = "Command " <> com <> " isn't defined for plugin " <> pid <> ". Legal commands are:\n" <> T.pack (unlines $ map (show . commandId) legalCmds)
+
+failedToParseArgs :: CommandId  -- ^ command that failed to parse
+                    -> PluginId -- ^ Plugin that created the command
+                    -> String   -- ^ The JSON Error message
+                    -> J.Value  -- ^ The Argument Values
+                    -> Text
+failedToParseArgs (CommandId com) (PluginId pid) err arg = "Error while parsing args for " <> com <> " in plugin " <> pid <> ": " <> T.pack err <> "\narg = " <> T.pack (show arg)
+
+-- | Build a ResponseError and log it before returning to the caller
+logAndReturnError :: Recorder (WithPriority Log) -> ErrorCode -> Text -> LSP.LspT Config IO (Either ResponseError a)
+logAndReturnError recorder errCode msg = do
+    let err = ResponseError errCode msg Nothing
+    logWith recorder Warning $ LogPluginError err
+    pure $ Left err
 
 -- | Map a set of plugins to the underlying ghcide engine.
 asGhcIdePlugin :: Recorder (WithPriority Log) -> IdePlugins IdeState -> Plugin Config
 asGhcIdePlugin recorder (IdePlugins ls) =
     mkPlugin rulesPlugins HLS.pluginRules <>
-    mkPlugin executeCommandPlugins HLS.pluginCommands <>
+    mkPlugin (executeCommandPlugins recorder) HLS.pluginCommands <>
     mkPlugin (extensiblePlugins recorder) id <>
     mkPlugin (extensibleNotificationPlugins recorder) id <>
     mkPlugin dynFlagsPlugins HLS.pluginModifyDynflags
@@ -91,11 +122,11 @@ dynFlagsPlugins rs = mempty
 
 -- ---------------------------------------------------------------------
 
-executeCommandPlugins :: [(PluginId, [PluginCommand IdeState])] -> Plugin Config
-executeCommandPlugins ecs = mempty { P.pluginHandlers = executeCommandHandlers ecs }
+executeCommandPlugins :: Recorder (WithPriority Log) -> [(PluginId, [PluginCommand IdeState])] -> Plugin Config
+executeCommandPlugins recorder ecs = mempty { P.pluginHandlers = executeCommandHandlers recorder ecs }
 
-executeCommandHandlers :: [(PluginId, [PluginCommand IdeState])] -> LSP.Handlers (ServerM Config)
-executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
+executeCommandHandlers :: Recorder (WithPriority Log) -> [(PluginId, [PluginCommand IdeState])] -> LSP.Handlers (ServerM Config)
+executeCommandHandlers recorder ecs = requestHandler SWorkspaceExecuteCommand execCmd
   where
     pluginMap = Map.fromList ecs
 
@@ -134,21 +165,15 @@ executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
         Just (plugin, cmd) -> runPluginCommand ide plugin cmd cmdParams
 
         -- Couldn't parse the command identifier
-        _ -> return $ Left $ ResponseError InvalidParams "Invalid command identifier" Nothing
+        _ -> logAndReturnError recorder InvalidParams "Invalid command Identifier"
 
-    runPluginCommand ide p@(PluginId p') com@(CommandId com') arg =
+    runPluginCommand ide p com arg =
       case Map.lookup p pluginMap  of
-        Nothing -> return
-          (Left $ ResponseError InvalidRequest ("Plugin " <> p' <> " doesn't exist") Nothing)
+        Nothing -> logAndReturnError recorder InvalidRequest (pluginDoesntExist p)
         Just xs -> case List.find ((com ==) . commandId) xs of
-          Nothing -> return $ Left $
-            ResponseError InvalidRequest ("Command " <> com' <> " isn't defined for plugin " <> p'
-                                          <> ". Legal commands are: " <> T.pack(show $ map commandId xs)) Nothing
+          Nothing -> logAndReturnError recorder InvalidRequest (commandDoesntExist com p xs)
           Just (PluginCommand _ _ f) -> case J.fromJSON arg of
-            J.Error err -> return $ Left $
-              ResponseError InvalidParams ("error while parsing args for " <> com' <> " in plugin " <> p'
-                                           <> ": " <> T.pack err
-                                           <> "\narg = " <> T.pack (show arg)) Nothing
+            J.Error err -> logAndReturnError recorder InvalidParams (failedToParseArgs com p err arg)
             J.Success a -> f ide a
 
 -- ---------------------------------------------------------------------
@@ -169,19 +194,15 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
         config <- Ide.PluginUtils.getClientConfig
         -- Only run plugins that are allowed to run on this request
         let fs = filter (\(_, desc, _) -> pluginEnabled m params desc config) fs'
+        -- Clients generally don't display ResponseErrors so instead we log any that we come across
         case nonEmpty fs of
-          Nothing -> do
-            logWith recorder Info LogNoEnabledPlugins
-            pure $ Left $ ResponseError InvalidRequest
-              (  "No plugin enabled for " <> T.pack (show m) 
-              <> ", available: " <> T.pack (show $ map (\(plid,_,_) -> plid) fs)
-              )
-              Nothing
+          Nothing -> logAndReturnError recorder InvalidRequest (pluginNotEnabled m fs')
           Just fs -> do
             let msg e pid = "Exception in plugin " <> T.pack (show pid) <> "while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
                 handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
             es <- runConcurrently msg (show m) handlers ide params
             let (errs,succs) = partitionEithers $ toList es
+            unless (null errs) $ forM_ errs $ \err -> logWith recorder Error $ LogPluginError err
             case nonEmpty succs of
               Nothing -> pure $ Left $ combineErrors errs
               Just xs -> do
@@ -206,9 +227,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
         -- Only run plugins that are allowed to run on this request
         let fs = filter (\(_, desc, _) -> pluginEnabled m params desc config) fs'
         case nonEmpty fs of
-          Nothing -> do
-            logWith recorder Info LogNoEnabledPlugins
-            pure ()
+          Nothing -> void $ logAndReturnError recorder InvalidRequest (pluginNotEnabled m fs')
           Just fs -> do
             -- We run the notifications in order, so the core ghcide provider
             -- (which restarts the shake process) hopefully comes last
@@ -227,7 +246,7 @@ runConcurrently
   -> m (NonEmpty (Either ResponseError d))
 runConcurrently msg method fs a b = fmap join $ forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString method) $ do
   f a b
-    `catchAny` (\e -> pure $ pure $ Left $ ResponseError InternalError (msg e pid) Nothing)
+     `catchAny` (\e -> pure $ pure $ Left $ ResponseError InternalError (msg e pid) Nothing)
 
 combineErrors :: [ResponseError] -> ResponseError
 combineErrors [x] = x
