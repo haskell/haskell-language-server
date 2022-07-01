@@ -88,7 +88,6 @@
     within:
     - Main
     - Experiments
-    - Development.IDE.Core.Shake
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.CodeAction.ExactPrint
@@ -136,7 +135,6 @@
     - Development.IDE.Spans.Documentation
     - Wingman.CaseSplit
     - Wingman.Simplify
-
 
   - name: Data.Text.head
     within:
