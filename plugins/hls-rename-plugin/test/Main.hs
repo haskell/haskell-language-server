@@ -35,7 +35,7 @@ tests = testGroup "Rename"
         rename doc (Position 3 8) "baz"
     , goldenWithRename "Import hiding" "ImportHiding" $ \doc ->
         rename doc (Position 0 22) "hiddenFoo"
-    , ignoreForGhcVersions [GHC92] "Record field refs broken in ghc92" $
+    , ignoreForGhcVersions [GHC90, GHC92] "Record field refs broken in ghc92" $
       goldenWithRename "Indirect Puns" "IndirectPuns" $ \doc ->
         rename doc (Position 4 23) "blah"
     , goldenWithRename "Let expression" "LetExpression" $ \doc ->
@@ -48,7 +48,7 @@ tests = testGroup "Rename"
         rename doc (Position 3 12) "baz"
     , goldenWithRename "Realigns do block indentation" "RealignDo" $ \doc ->
         rename doc (Position 0 2) "fooBarQuux"
-    , ignoreForGhcVersions [GHC92] "Record field refs broken in ghc92" $
+    , ignoreForGhcVersions [GHC90, GHC92] "Record field refs broken in ghc92" $
       goldenWithRename "Record field" "RecordField" $ \doc ->
         rename doc (Position 6 9) "number"
     , goldenWithRename "Shadowed name" "ShadowedName" $ \doc ->
