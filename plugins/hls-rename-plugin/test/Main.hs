@@ -21,6 +21,8 @@ tests = testGroup "Rename"
         rename doc (Position 0 15) "Op"
     , goldenWithRename "Exported function" "ExportedFunction" $ \doc ->
         rename doc (Position 2 1) "quux"
+    , goldenWithRename "Field Puns" "FieldPuns" $ \doc ->
+        rename doc (Position 7 13) "bleh"
     , goldenWithRename "Function argument" "FunctionArgument" $ \doc ->
         rename doc (Position 3 4) "y"
     , goldenWithRename "Function name" "FunctionName" $ \doc ->
@@ -33,6 +35,8 @@ tests = testGroup "Rename"
         rename doc (Position 3 8) "baz"
     , goldenWithRename "Import hiding" "ImportHiding" $ \doc ->
         rename doc (Position 0 22) "hiddenFoo"
+    , goldenWithRename "Indirect Puns" "IndirectPuns" $ \doc ->
+        rename doc (Position 4 23) "blah"
     , goldenWithRename "Let expression" "LetExpression" $ \doc ->
         rename doc (Position 5 11) "foobar"
     , goldenWithRename "Qualified as" "QualifiedAs" $ \doc ->
