@@ -25,11 +25,6 @@ flag pedantic
   default:     False
   manual:      True
 
-flag ghc-lib
-   default:     True
-   manual:      True
-   description: Use ghc-lib types (requires hlint to be built with ghc-lib)
-
 library
   exposed-modules:    Ide.Plugin.Hlint
   hs-source-dirs:     src
@@ -61,7 +56,6 @@ library
     , transformers
     , unordered-containers
     , apply-refact          >=0.9.0.0
-    , ghc-lib
     , ghc-lib-parser
     , ghc-lib-parser-ex
 
