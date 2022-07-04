@@ -76,8 +76,8 @@ import qualified Ide.Plugin.Splice                 as Splice
 import qualified Ide.Plugin.AlternateNumberFormat  as AlternateNumberFormat
 #endif
 
-#if selectionRange
-import qualified Ide.Plugin.SelectionRange         as SelectionRange
+#if codeRange
+import qualified Ide.Plugin.CodeRange              as CodeRange
 #endif
 
 #if changeTypeSignature
@@ -190,8 +190,8 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
 #if alternateNumberFormat
       AlternateNumberFormat.descriptor pluginRecorder :
 #endif
-#if selectionRange
-      SelectionRange.descriptor pluginRecorder "selectionRange" :
+#if codeRange
+      CodeRange.descriptor pluginRecorder "codeRange" :
 #endif
 #if changeTypeSignature
       ChangeTypeSignature.descriptor :

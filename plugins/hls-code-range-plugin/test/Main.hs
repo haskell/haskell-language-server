@@ -11,7 +11,7 @@ import           Development.IDE.Types.Logger (Priority (Debug),
                                                WithPriority (WithPriority),
                                                makeDefaultStderrRecorder,
                                                pretty)
-import           Ide.Plugin.SelectionRange    (Log, descriptor)
+import           Ide.Plugin.CodeRange         (Log, descriptor)
 import           Language.LSP.Types.Lens
 import           System.FilePath              ((<.>), (</>))
 import           Test.Hls

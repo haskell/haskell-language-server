@@ -1,5 +1,5 @@
 cabal-version:      2.4
-name:               hls-selection-range-plugin
+name:               hls-code-range-plugin
 version:            1.0.0.0
 synopsis:
   HLS Plugin to support smart selection range
@@ -22,10 +22,10 @@ extra-source-files:
 
 library
   exposed-modules:
-    Ide.Plugin.SelectionRange
-    Ide.Plugin.SelectionRange.CodeRange
+    Ide.Plugin.CodeRange
+    Ide.Plugin.CodeRange.Rules
   other-modules:
-    Ide.Plugin.SelectionRange.ASTPreProcess
+    Ide.Plugin.CodeRange.ASTPreProcess
   ghc-options: -Wall
   hs-source-dirs: src
   default-language:   Haskell2010
@@ -56,7 +56,7 @@ test-suite tests
     , base
     , containers
     , filepath
-    , hls-selection-range-plugin
+    , hls-code-range-plugin
     , hls-test-utils             ^>=1.2 || ^>=1.3
     , ghcide                     ^>=1.6 || ^>=1.7
     , lsp

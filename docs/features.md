@@ -317,7 +317,7 @@ Shows module name matching file path, and applies it with a click.
 
 ## Selection range
 
-Provided by: `hls-selection-range-plugin`
+Provided by: `hls-code-range-plugin`
 
 Provides haskell specific
 [shrink/expand selection](https://code.visualstudio.com/docs/editor/codebasics#shrinkexpand-selection)

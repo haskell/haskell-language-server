@@ -176,8 +176,8 @@ flag qualifyImportedNames
   default:     True
   manual:      True
 
-flag selectionRange
-  description: Enable selectionRange plugin
+flag codeRange
+  description: Enable Code Range plugin
   default:     True
   manual:      True
 
@@ -304,10 +304,10 @@ common qualifyImportedNames
     build-depends: hls-qualify-imported-names-plugin ^>=1.0
     cpp-options: -DqualifyImportedNames
 
-common selectionRange
-  if flag(selectionRange)
-    build-depends: hls-selection-range-plugin ^>= 1.0
-    cpp-options: -DselectionRange
+common codeRange
+  if flag(codeRange)
+    build-depends: hls-code-range-plugin ^>= 1.0
+    cpp-options: -DcodeRange
 
 common changeTypeSignature
   if flag(changeTypeSignature)
@@ -369,7 +369,7 @@ executable haskell-language-server
                     , splice
                     , alternateNumberFormat
                     , qualifyImportedNames
-                    , selectionRange
+                    , codeRange
                     , gadt
                     , floskell
                     , fourmolu

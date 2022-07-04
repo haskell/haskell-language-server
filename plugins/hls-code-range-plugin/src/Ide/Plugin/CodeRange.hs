@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Ide.Plugin.SelectionRange (descriptor, Log) where
+module Ide.Plugin.CodeRange (descriptor, Log) where
 
 import           Control.Monad.Except                 (ExceptT (ExceptT),
                                                        runExceptT)
@@ -27,10 +27,10 @@ import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentPosition,
                                                        toCurrentRange)
 import           Development.IDE.Types.Logger         (Pretty (..))
-import           Ide.Plugin.SelectionRange.CodeRange  (CodeRange (..),
+import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
                                                        codeRangeRule)
-import qualified Ide.Plugin.SelectionRange.CodeRange  as CodeRange
+import qualified Ide.Plugin.CodeRange.Rules           as Rules (Log)
 import           Ide.PluginUtils                      (pluginResponse,
                                                        positionInRange)
 import           Ide.Types                            (PluginDescriptor (pluginHandlers, pluginRules),
@@ -55,14 +55,14 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentSelectionRange selectionRangeHandler
     -- TODO @sloorush add folding range
     -- <> mkPluginHandler STextDocumentFoldingRange foldingRangeHandler
-    , pluginRules = codeRangeRule (cmapWithPrio LogCodeRange recorder)
+    , pluginRules = codeRangeRule (cmapWithPrio LogRules recorder)
     }
 
-data Log = LogCodeRange CodeRange.Log
+data Log = LogRules Rules.Log
 
 instance Pretty Log where
     pretty log = case log of
-        LogCodeRange codeRangeLog -> pretty codeRangeLog
+        LogRules codeRangeLog -> pretty codeRangeLog
 
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do
