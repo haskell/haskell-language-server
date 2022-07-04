@@ -67,8 +67,16 @@ import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      topDir,
                                                                      wopt)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
-import           "ghc-lib-parser" GHC.Types.SrcLoc                  hiding (RealSrcSpan)
+
+#if MIN_GHC_API_VERSION(9,0,0)
+import           "ghc-lib-parser" GHC.Types.SrcLoc                  hiding
+                                                                    (RealSrcSpan)
 import qualified "ghc-lib-parser" GHC.Types.SrcLoc                  as GHC
+#else
+import           "ghc-lib-parser" SrcLoc                            hiding
+                                                                    (RealSrcSpan)
+import qualified "ghc-lib-parser" SrcLoc                            as GHC
+#endif
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 import           System.FilePath                                    (takeFileName)
