@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass            #-}
 {-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE InstanceSigs              #-}
@@ -11,6 +12,7 @@ module Ide.Plugin.SelectionRange.CodeRange
     ( CodeRange (..)
     , codeRange_range
     , codeRange_children
+    , codeRange_kind
     , GetCodeRange(..)
     , codeRangeRule
     , Log
@@ -44,7 +46,9 @@ import           Development.IDE.GHC.Compat              (Annotated,
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.ExactPrint          (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import           GHC.Generics                            (Generic)
-import           Ide.Plugin.SelectionRange.ASTPreProcess (PreProcessEnv (..),
+import           Ide.Plugin.SelectionRange.ASTPreProcess (CustomNodeType (..),
+                                                          PreProcessEnv (..),
+                                                          isCustomNode,
                                                           preProcessAST)
 import           Language.LSP.Types.Lens                 (HasEnd (end),
                                                           HasStart (start))
@@ -68,11 +72,21 @@ data CodeRange = CodeRange {
         _codeRange_range    :: !Range,
     -- | A vector of children, sorted by their ranges in ascending order.
     -- Children are guaranteed not to interleave, but some gaps may exist among them.
-        _codeRange_children :: !(Vector CodeRange)
+        _codeRange_children :: !(Vector CodeRange),
+    -- The kind of current code range
+        _codeRange_kind     :: CodeRangeKind
     }
-    deriving (Show, Generic)
+    deriving (Show, Generic, NFData)
 
-instance NFData CodeRange
+-- | 'CodeKind' represents the kind of a code range
+data CodeRangeKind =
+    -- | ordinary code
+    CodeKindRegion
+    -- | the group of imports
+  | CodeKindImports
+  -- | a comment
+  | CodeKindComment
+    deriving (Show, Generic, NFData)
 
 Lens.makeLenses ''CodeRange
 
@@ -95,10 +109,11 @@ buildCodeRange ast refMap _ = do
     pure $ simplify codeRange
 
 astToCodeRange :: HieAST a -> Writer [Log] CodeRange
-astToCodeRange (Node _ sp []) = pure $ CodeRange (realSrcSpanToRange sp) mempty
-astToCodeRange (Node _ sp children) = do
+astToCodeRange (Node _ sp []) = pure $ CodeRange (realSrcSpanToRange sp) mempty CodeKindRegion
+astToCodeRange node@(Node _ sp children) = do
     children' <- removeInterleaving . sort =<< traverse astToCodeRange children
-    pure $ CodeRange (realSrcSpanToRange sp) (V.fromList children')
+    let codeKind = if Just CustomNodeImportsGroup == isCustomNode node then CodeKindImports else CodeKindRegion
+    pure $ CodeRange (realSrcSpanToRange sp) (V.fromList children') codeKind
 
 -- | Remove interleaving of the list of 'CodeRange's.
 removeInterleaving :: [CodeRange] -> Writer [Log] [CodeRange]
@@ -114,10 +129,8 @@ removeInterleaving (x1:xs) = do
         -- (Note: LSP Range's end position is exclusive)
         x2:_ -> if x1 Lens.^. codeRange_range . end > x2 Lens.^. codeRange_range . start
             then do
-                let codeRangeEnd :: Lens.Lens' CodeRange Position
-                    codeRangeEnd = codeRange_range . end
-                    x1' :: CodeRange
-                    x1' = x1 & codeRangeEnd Lens..~ (x2 Lens.^. codeRangeEnd)
+                -- set x1.end to x2.start
+                let x1' :: CodeRange = x1 & codeRange_range . end Lens..~ (x2 Lens.^. codeRange_range . start)
                 tell [LogFoundInterleaving x1 x2]
                 pure x1'
             else pure x1

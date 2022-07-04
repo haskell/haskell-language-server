@@ -87,8 +87,7 @@ getSelectionRanges file positions = do
         traverse (fromCurrentPosition positionMapping) positions
 
     let selectionRanges = flip fmap positions' $ \pos ->
-            -- 'codeRange' may not cover all portions of text in the file, we need a default value to make sure
-            -- other positions can still work.
+            -- We need a default selection range if the lookup fails, so that other positions can still have valid results.
             let defaultSelectionRange = SelectionRange (Range pos pos) Nothing
              in fromMaybe defaultSelectionRange . findPosition pos $ codeRange
 
@@ -96,7 +95,7 @@ getSelectionRanges file positions = do
     maybeToExceptT "fail to apply position mapping to output positions" . MaybeT . pure $
          traverse (toCurrentSelectionRange positionMapping) selectionRanges
 
--- | Find 'Position' in 'CodeRange'.
+-- | Find 'Position' in 'CodeRange'. This can fail, if the given position is not covered by the 'CodeRange'.
 findPosition :: Position -> CodeRange -> Maybe SelectionRange
 findPosition pos root =
     selectionRangeFromNonEmpty . NonEmpty.reverse -- SelectionRange requires a bottom-up order, so we need to reverse
