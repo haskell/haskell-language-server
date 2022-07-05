@@ -28,14 +28,13 @@ import           Development.IDE.GHC.Compat                   hiding
                                                               (HieFileResult)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.CoreFile
-import           Development.IDE.GHC.Util                     (fingerprintToBS)
+import           Development.IDE.GHC.Util
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
 import           Development.IDE.Types.KnownTargets
 import           GHC.Generics                                 (Generic)
 
-import qualified Data.Binary                                  as B
 import           Data.ByteString                              (ByteString)
 import           Data.Text                                    (Text)
 import           Development.IDE.Import.FindImports           (ArtifactsLocation)
