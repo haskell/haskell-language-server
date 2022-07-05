@@ -72,7 +72,7 @@ data CodeRange = CodeRange {
     -- Children are guaranteed not to interleave, but some gaps may exist among them.
         _codeRange_children :: !(Vector CodeRange),
     -- The kind of current code range
-        _codeRange_kind     :: CodeRangeKind
+        _codeRange_kind     :: !CodeRangeKind
     }
     deriving (Show, Generic, NFData)
 
