@@ -4,24 +4,24 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE StrictData            #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE StrictData            #-}
 
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
 #ifdef HLINT_ON_GHC_LIB
-#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib(x,y,z)
+#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib_parser(x,y,z)
 #else
 #define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc(x,y,z)
 #endif
@@ -44,8 +44,8 @@ import           Data.Aeson.Types                                   (FromJSON (.
                                                                      Value (..))
 import qualified Data.ByteString                                    as BS
 import           Data.Default
-import qualified Data.HashMap.Strict                                as Map
 import           Data.Hashable
+import qualified Data.HashMap.Strict                                as Map
 import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.Encoding                                 as T
@@ -67,13 +67,15 @@ import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      topDir,
                                                                      wopt)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
-import           "ghc-lib" GHC                                      hiding
-                                                                    (DynFlags (..),
-                                                                     RealSrcSpan,
-                                                                     ms_hspp_opts)
-import qualified "ghc-lib" GHC
+
 #if MIN_GHC_API_VERSION(9,0,0)
-import           "ghc-lib-parser" GHC.Types.SrcLoc                  (BufSpan)
+import           "ghc-lib-parser" GHC.Types.SrcLoc                  hiding
+                                                                    (RealSrcSpan)
+import qualified "ghc-lib-parser" GHC.Types.SrcLoc                  as GHC
+#else
+import           "ghc-lib-parser" SrcLoc                            hiding
+                                                                    (RealSrcSpan)
+import qualified "ghc-lib-parser" SrcLoc                            as GHC
 #endif
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
@@ -89,7 +91,8 @@ import           System.IO                                          (IOMode (Wri
 import           System.IO.Temp
 #else
 import           Development.IDE.GHC.Compat                         hiding
-                                                                    (setEnv, (<+>))
+                                                                    (setEnv,
+                                                                     (<+>))
 import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
 #if MIN_GHC_API_VERSION(9,2,0)
 import           Language.Haskell.GHC.ExactPrint.ExactPrint         (deltaOptions)

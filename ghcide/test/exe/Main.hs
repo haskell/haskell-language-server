@@ -4439,7 +4439,11 @@ findDefinitionAndHoverTests = let
   , test  no     yes    holeL65    hleInfo2      "hole with variable"
   , test  no     yes    cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
-  , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
+  , if | isWindows ->
+        -- Flaky on Windows: https://github.com/haskell/haskell-language-server/issues/2997
+        testM no     yes    reexported reexportedSig "Imported symbol (reexported)"
+       | otherwise ->
+        testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
   , if | ghcVersion == GHC90 && isWindows ->
         test  no     broken    thLocL57   thLoc         "TH Splice Hover"
        | ghcVersion == GHC92 && (isWindows || isMac) ->
