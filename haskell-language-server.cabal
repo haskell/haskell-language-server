@@ -226,7 +226,8 @@ flag dynamic
 common example-plugins
   hs-source-dirs: plugins/default/src
   other-modules: Ide.Plugin.Example,
-                 Ide.Plugin.Example2
+                 Ide.Plugin.Example2,
+                 Ide.Plugin.ExampleCabal
 
 common class
   if flag(class)
@@ -459,10 +460,17 @@ executable haskell-language-server-wrapper
     , ghcide
     , gitrev
     , haskell-language-server
+    , hslogger
     , hie-bios
+    , hls-plugin-api
+    , lsp
+    , lsp-types
+    , mtl
     , optparse-applicative
     , optparse-simple
     , process
+    , transformers
+    , unliftio-core
   if !os(windows)
       build-depends:
           unix

@@ -1,0 +1,183 @@
+# HLint configuration file
+# https://github.com/ndmitchell/hlint
+##########################
+
+# To run HLint do:
+# $ hlint --git -j4
+
+# Warnings currently triggered by our code
+- ignore: {name: "Use <$>"}
+- ignore: {name: "Use :"}
+- ignore: {name: "Redundant do"}
+- ignore: {name: "Avoid lambda"}
+- ignore: {name: "Use newtype instead of data"}
+- ignore: {name: "Use unless"}
+- ignore: {name: "Move brackets to avoid $"}
+- ignore: {name: "Eta reduce"}
+- ignore: {name: "Parse error"}
+- ignore: {name: "Reduce duplication"}
+- ignore: {name: "Use ++"}
+- ignore: {name: "Use $>"}
+- ignore: {name: "Use section"}
+- ignore: {name: "Use record patterns"}
+- ignore: {name: "Use camelCase"}
+- ignore: {name: "Use uncurry"}
+- ignore: {name: "Avoid lambda using `infix`"}
+
+# Gives at least one suggestion we don't like.
+- ignore: {name: "Use <=<"}
+- ignore: {name: "Use zipFrom"}
+- ignore: {name: "Use zipWithFrom"}
+
+# We are using the "redundant" return/pure to assign a name. We do not want to
+# delete it. In particular, this is not an improvement:
+# Found:
+#   do options <- somethingComplicated
+#      pure options
+# Perhaps:
+#   do somethingComplicated
+- ignore: {name: "Redundant return"}
+- ignore: {name: "Redundant pure"}
+
+# Off by default hints we like
+- warn: {name: Use module export list}
+
+# Condemn nub and friends
+- warn: {lhs: nub (sort x), rhs: Data.List.Extra.nubSort x}
+- warn: {lhs: nub, rhs: Data.List.Extra.nubOrd}
+- warn: {lhs: nubBy, rhs: Data.List.Extra.nubOrdBy}
+- warn: {lhs: Data.List.Extra.nubOn, rhs: Data.List.Extra.nubOrdOn}
+
+- functions:
+  # Things that are unsafe in Haskell base library
+  - name: unsafePerformIO
+    within:
+    - Development.IDE.Core.Shake
+    - Development.IDE.GHC.Util
+    - Development.IDE.Graph.Internal.Database
+    - Development.IDE.Graph.Internal.Paths
+    - Development.IDE.Graph.Internal.Profile
+    - Ide.Types
+    - Test.Hls
+    - Test.Hls.Command
+    - Wingman.Debug
+    - Wingman.Types
+    - AutoTupleSpec
+  - name: unsafeInterleaveIO
+    within: 
+    - Development.IDE.LSP.LanguageServer
+  - {name: unsafeDupablePerformIO, within: []}
+  - name: unsafeCoerce
+    within: 
+    - Ide.Plugin.Eval.Code
+    - Development.IDE.Core.Compile
+    - Development.IDE.Types.Shake
+    - Wingman.Judgements.SYB
+    - Ide.Plugin.Properties
+
+  # Things that are a bit dangerous in the GHC API
+  - name: nameModule
+    within:
+    - Development.IDE.GHC.CoreFile
+    - Ide.Plugin.CallHierarchy.Internal
+    - Ide.Plugin.Rename
+    - Compat.HieBin
+
+  # Partial functions
+  - name: Data.List.head
+    within:
+    - Main
+    - Experiments
+    - Development.IDE.Plugin.CodeAction
+    - Development.IDE.Plugin.Completions
+    - Development.IDE.Plugin.CodeAction.ExactPrint
+    - Development.IDE.Session
+    - Development.IDE.Spans.Documentation
+    - Ide.Plugin.CallHierarchy.Internal
+    - TExpectedActual
+    - TRigidType
+    - TRigidType
+    - Ide.Plugin.Class
+    - Wingman.Tactics
+
+  - name: Data.List.tail
+    within:
+    - Main
+    - Development.Benchmark.Rules
+    - Development.IDE.Plugin.CodeAction
+    - Development.IDE.Plugin.CodeAction.ExactPrint
+    - Development.IDE.Session
+    - IDE.Plugin.Eval.Code
+    - IDE.Plugin.Eval.Util
+    - UnificationSpec
+
+  - name: Data.List.last
+    within: 
+    - GenChangelogs
+    - Main
+
+  - name: Data.List.init
+    within: []
+
+  - name: Data.List.foldl1'
+    within: []
+
+  - name: Data.List.foldr1'
+    within: []
+
+  - name: "Data.List.!!"
+    within:
+    - Main
+    - Experiments
+    - FunctionalCodeAction
+    - Development.IDE.Plugin.CodeAction
+    - Development.IDE.Plugin.Completions.Logic
+    - Development.IDE.Spans.Documentation
+    - Wingman.CaseSplit
+    - Wingman.Simplify
+
+  - name: Data.Text.head
+    within:
+    - Development.IDE.Plugin.CodeAction
+    - Development.IDE.Plugin.Completions.Logic
+
+  - name: Data.Foldable.foldl1
+    within: []
+
+  - name: Data.Foldable.foldr1
+    within: 
+    - Wingman.Tactics
+
+  - name: Data.Maybe.fromJust 
+    within: 
+    - Experiments
+    - Main
+    - MultipleImports
+    - Progress
+    - Utils
+    - Development.IDE.Core.Compile
+    - Development.IDE.Core.Rules
+    - Development.IDE.Core.Shake
+    - Development.IDE.Plugin.Completions
+    - Development.IDE.Plugin.CodeAction.ExactPrint
+    - Development.IDE.Test
+    - Development.IDE.Graph.Internal.Profile
+    - Development.IDE.Graph.Internal.Rules
+    - Ide.Plugin.Class
+
+  - name: "Data.Map.!"
+    within: 
+    - Wingman.LanguageServer
+
+  - name: "Data.IntMap.!"
+    within: []
+
+  - name: "Data.Vector.!"
+    within: []
+
+  - name: "GHC.Arr.!"
+    within: []
+
+# We really do not want novel usages of restricted functions, and mere
+# Warning is not enough to prevent those consistently; you need a build failure.
+- error: {name: Avoid restricted function}

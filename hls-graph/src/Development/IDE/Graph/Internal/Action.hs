@@ -25,6 +25,8 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Reader
 import           Data.IORef
+import           Data.Functor.Identity
+import           Data.Foldable (toList)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Database
 import           Development.IDE.Graph.Internal.Rules    (RuleResult)
@@ -111,19 +113,19 @@ actionFinally a b = do
     Action $ lift $ finally (runReaderT (fromAction a) v) b
 
 apply1 :: (RuleResult key ~ value, ShakeValue key, Typeable value) => key -> Action value
-apply1 k = head <$> apply [k]
+apply1 k = runIdentity <$> apply (Identity k)
 
-apply :: (RuleResult key ~ value, ShakeValue key, Typeable value) => [key] -> Action [value]
+apply :: (Traversable f, RuleResult key ~ value, ShakeValue key, Typeable value) => f key -> Action (f value)
 apply ks = do
     db <- Action $ asks actionDatabase
     stack <- Action $ asks actionStack
     (is, vs) <- liftIO $ build db stack ks
     ref <- Action $ asks actionDeps
-    liftIO $ modifyIORef ref (ResultDeps is <>)
+    liftIO $ modifyIORef ref (ResultDeps (toList is) <>)
     pure vs
 
 -- | Evaluate a list of keys without recording any dependencies.
-applyWithoutDependency :: (RuleResult key ~ value, ShakeValue key, Typeable value) => [key] -> Action [value]
+applyWithoutDependency :: (Traversable f, RuleResult key ~ value, ShakeValue key, Typeable value) => f key -> Action (f value)
 applyWithoutDependency ks = do
     db <- Action $ asks actionDatabase
     stack <- Action $ asks actionStack

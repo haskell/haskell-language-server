@@ -17,6 +17,7 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Ide.Types
     where
@@ -69,6 +70,7 @@ import           Language.LSP.Types.Lens         as J (HasChildren (children),
 import           Language.LSP.VFS
 import           OpenTelemetry.Eventlog
 import           Options.Applicative             (ParserInfo)
+import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text            ()
 
@@ -108,8 +110,9 @@ instance Show (IdeCommand st) where show _ = "<ide command>"
 
 -- ---------------------------------------------------------------------
 
-data PluginDescriptor ideState =
+data PluginDescriptor (ideState :: *) =
   PluginDescriptor { pluginId           :: !PluginId
+                   -- ^ Unique identifier of the plugin.
                    , pluginRules        :: !(Rules ())
                    , pluginCommands     :: ![PluginCommand ideState]
                    , pluginHandlers     :: PluginHandlers ideState
@@ -117,13 +120,30 @@ data PluginDescriptor ideState =
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
                    , pluginModifyDynflags :: DynFlagsModifications
                    , pluginCli            :: Maybe (ParserInfo (IdeCommand ideState))
+                   , pluginFileType       :: [T.Text]
+                   -- ^ File extension of the files the plugin is responsible for.
+                   --   The plugin is only allowed to handle files with these extensions
+                   --   When writing handlers, etc. for this plugin it can be assumed that all handled files are of this type.
+                   --   The file extension must have a leading '.'.
                    }
+
+-- | Check whether the given plugin descriptor is responsible for the file with the given path.
+--   Compares the file extension of the file at the given path with the file extension
+--   the plugin is responsible for.
+pluginResponsible :: Uri -> PluginDescriptor c -> Bool
+pluginResponsible uri pluginDesc
+    | Just fp <- mfp
+    , T.pack (takeExtension fp) `elem` pluginFileType pluginDesc = True
+    | otherwise = False
+    where
+      mfp = uriToFilePath uri
 
 -- | An existential wrapper of 'Properties'
 data CustomConfig = forall r. CustomConfig (Properties r)
 
 -- | Describes the configuration a plugin.
 -- A plugin may be configurable in such form:
+--
 -- @
 -- {
 --  "plugin-id": {
@@ -136,6 +156,7 @@ data CustomConfig = forall r. CustomConfig (Properties r)
 --   }
 -- }
 -- @
+--
 -- @globalOn@, @codeActionsOn@, and @codeLensOn@ etc. are called generic configs,
 -- which can be inferred from handlers registered by the plugin.
 -- @config@ is called custom config, which is defined using 'Properties'.
@@ -159,12 +180,67 @@ defaultConfigDescriptor = ConfigDescriptor True False (mkCustomConfig emptyPrope
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
 -- Only methods for which we know how to combine responses can be instances of 'PluginMethod'
-class HasTracing (MessageParams m) => PluginMethod m where
+class HasTracing (MessageParams m) => PluginMethod (k :: MethodType) (m :: Method FromClient k) where
 
-  -- | Parse the configuration to check if this plugin is enabled
-  pluginEnabled :: SMethod m -> PluginId -> Config -> Bool
+  -- | Parse the configuration to check if this plugin is enabled.
+  -- Perform sanity checks on the message to see whether plugin is enabled
+  -- for this message in particular.
+  -- If a plugin is not enabled, its handlers, commands, etc... will not be
+  -- run for the given message.
+  --
+  -- Semantically, this method described whether a Plugin is enabled configuration wise
+  -- and is allowed to respond to the message. This might depend on the URI that is
+  -- associated to the Message Parameters, but doesn't have to. There are requests
+  -- with no associated URI that, consequentially, can't inspect the URI.
+  --
+  -- Common reason why a plugin might not be allowed to respond although it is enabled:
+  --   * Plugin can not handle requests associated to the specific URI
+  --     * Since the implementation of [cabal plugins](https://github.com/haskell/haskell-language-server/issues/2940)
+  --       HLS knows plugins specific for Haskell and specific for [Cabal file descriptions](https://cabal.readthedocs.io/en/3.6/cabal-package.html)
+  --
+  -- Strictly speaking, we are conflating two concepts here:
+  --   * Dynamically enabled (e.g. enabled on a per-message basis)
+  --   * Statically enabled (e.g. by configuration in the lsp-client)
+  --     * Strictly speaking, this might also change dynamically
+  --
+  -- But there is no use to split it up currently into two different methods for now.
+  pluginEnabled
+    :: SMethod m
+    -- ^ Method type.
+    -> MessageParams m
+    -- ^ Whether a plugin is enabled might depend on the message parameters
+    --   eg 'pluginFileType' specifies what file extension a plugin is allowed to handle
+    -> PluginDescriptor c
+    -- ^ Contains meta information such as PluginId and what file types this
+    -- plugin is able to handle.
+    -> Config
+    -- ^ Generic config description, expected to hold 'PluginConfig' configuration
+    -- for this plugin
+    -> Bool
+    -- ^ Is this plugin enabled and allowed to respond to the given request
+    -- with the given parameters?
 
-  -- | How to combine responses from different plugins
+  default pluginEnabled :: (HasTextDocument (MessageParams m) doc, HasUri doc Uri)
+                              => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> Bool
+  pluginEnabled _ params desc conf = pluginResponsible uri desc && plcGlobalOn (configForPlugin conf (pluginId desc))
+    where
+        uri = params ^. J.textDocument . J.uri
+
+-- ---------------------------------------------------------------------
+-- Plugin Requests
+-- ---------------------------------------------------------------------
+
+class PluginMethod Request m => PluginRequestMethod (m :: Method FromClient Request) where
+  -- | How to combine responses from different plugins.
+  --
+  -- For example, for Hover requests, we might have multiple producers of
+  -- Hover information, we do not want to decide which one to display to the user
+  -- but allow here to define how to merge two hover request responses into one
+  -- glorious hover box.
+  --
+  -- However, sometimes only one handler of a request can realistically exist,
+  -- such as TextDocumentFormatting, it is safe to just unconditionally report
+  -- back one arbitrary result (arbitrary since it should only be one anyway).
   combineResponses
     :: SMethod m
     -> Config -- ^ IDE Configuration
@@ -176,12 +252,16 @@ class HasTracing (MessageParams m) => PluginMethod m where
     => SMethod m -> Config -> ClientCapabilities -> MessageParams m -> NonEmpty (ResponseResult m) -> ResponseResult m
   combineResponses _method _config _caps _params = sconcat
 
-instance PluginMethod TextDocumentCodeAction where
-  pluginEnabled _ = pluginEnabledConfig plcCodeActionsOn
+instance PluginMethod Request TextDocumentCodeAction where
+  pluginEnabled _ msgParams pluginDesc config =
+    pluginResponsible uri pluginDesc && pluginEnabledConfig plcCodeActionsOn (pluginId pluginDesc) config
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginRequestMethod TextDocumentCodeAction where
   combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _) (CodeActionParams _ _ _ _ context) resps =
       fmap compat $ List $ filter wasRequested $ (\(List x) -> x) $ sconcat resps
     where
-
       compat :: (Command |? CodeAction) -> (Command |? CodeAction)
       compat x@(InL _) = x
       compat x@(InR action)
@@ -205,12 +285,124 @@ instance PluginMethod TextDocumentCodeAction where
         , Just caKind <- ca ^. kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
         | otherwise = False
 
-instance PluginMethod TextDocumentCodeLens where
-  pluginEnabled _ = pluginEnabledConfig plcCodeLensOn
-instance PluginMethod TextDocumentRename where
-  pluginEnabled _ = pluginEnabledConfig plcRenameOn
-instance PluginMethod TextDocumentHover where
-  pluginEnabled _ = pluginEnabledConfig plcHoverOn
+instance PluginMethod Request TextDocumentDefinition where
+  pluginEnabled _ msgParams pluginDesc _ =
+    pluginResponsible uri pluginDesc
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request TextDocumentTypeDefinition where
+  pluginEnabled _ msgParams pluginDesc _ =
+    pluginResponsible uri pluginDesc
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request TextDocumentDocumentHighlight where
+  pluginEnabled _ msgParams pluginDesc _ =
+    pluginResponsible uri pluginDesc
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request TextDocumentReferences where
+  pluginEnabled _ msgParams pluginDesc _ =
+    pluginResponsible uri pluginDesc
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request WorkspaceSymbol where
+  -- Unconditionally enabled, but should it really be?
+  pluginEnabled _ _ _ _ = True
+
+instance PluginMethod Request TextDocumentCodeLens where
+  pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcCodeLensOn (pluginId pluginDesc) config
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request TextDocumentRename where
+  pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcRenameOn (pluginId pluginDesc) config
+   where
+      uri = msgParams ^. J.textDocument . J.uri
+instance PluginMethod Request TextDocumentHover where
+  pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcHoverOn (pluginId pluginDesc) config
+   where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request TextDocumentDocumentSymbol where
+  pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcSymbolsOn (pluginId pluginDesc) config
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request TextDocumentCompletion where
+  pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcCompletionOn (pluginId pluginDesc) config
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request TextDocumentFormatting where
+  pluginEnabled STextDocumentFormatting msgParams pluginDesc conf =
+    pluginResponsible uri pluginDesc && PluginId (formattingProvider conf) == pid
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request TextDocumentRangeFormatting where
+  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
+      && PluginId (formattingProvider conf) == pid
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request TextDocumentPrepareCallHierarchy where
+  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcCallHierarchyOn pid conf
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request TextDocumentSelectionRange where
+  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcSelectionRangeOn pid conf
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request CallHierarchyIncomingCalls where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'
+  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn pid conf
+    where
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request CallHierarchyOutgoingCalls where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'
+  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn pid conf
+    where
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request CustomMethod where
+  pluginEnabled _ _ _ _ = True
+
+---
+instance PluginRequestMethod TextDocumentDefinition where
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod TextDocumentTypeDefinition where
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod TextDocumentDocumentHighlight where
+
+instance PluginRequestMethod TextDocumentReferences where
+
+instance PluginRequestMethod WorkspaceSymbol where
+
+instance PluginRequestMethod TextDocumentCodeLens where
+
+instance PluginRequestMethod TextDocumentRename where
+
+instance PluginRequestMethod TextDocumentHover where
   combineResponses _ _ _ _ (catMaybes . toList -> hs) = h
     where
       r = listToMaybe $ mapMaybe (^. range) hs
@@ -218,8 +410,7 @@ instance PluginMethod TextDocumentHover where
             HoverContentsMS (List []) -> Nothing
             hh                        -> Just $ Hover hh r
 
-instance PluginMethod TextDocumentDocumentSymbol where
-  pluginEnabled _ = pluginEnabledConfig plcSymbolsOn
+instance PluginRequestMethod TextDocumentDocumentSymbol where
   combineResponses _ _ (ClientCapabilities _ tdc _ _ _) params xs = res
     where
       uri' = params ^. textDocument . uri
@@ -240,8 +431,7 @@ instance PluginMethod TextDocumentDocumentSymbol where
             si = SymbolInformation name' (ds ^. kind) Nothing (ds ^. deprecated) loc parent
         in [si] <> children'
 
-instance PluginMethod TextDocumentCompletion where
-  pluginEnabled _ = pluginEnabledConfig plcCompletionOn
+instance PluginRequestMethod TextDocumentCompletion where
   combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
       where
         limit = maxCompletions conf
@@ -269,42 +459,85 @@ instance PluginMethod TextDocumentCompletion where
         consumeCompletionResponse n (InL (List xx)) =
           consumeCompletionResponse n (InR (CompletionList isCompleteResponse (List xx)))
 
-instance PluginMethod TextDocumentFormatting where
-  pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
+instance PluginRequestMethod TextDocumentFormatting where
   combineResponses _ _ _ _ (x :| _) = x
 
-instance PluginMethod TextDocumentRangeFormatting where
-  pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
+instance PluginRequestMethod TextDocumentRangeFormatting where
   combineResponses _ _ _ _ (x :| _) = x
 
-instance PluginMethod TextDocumentPrepareCallHierarchy where
-  pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
+instance PluginRequestMethod TextDocumentPrepareCallHierarchy where
 
-instance PluginMethod TextDocumentSelectionRange where
-  pluginEnabled _ = pluginEnabledConfig plcSelectionRangeOn
+instance PluginRequestMethod TextDocumentSelectionRange where
   combineResponses _ _ _ _ (x :| _) = x
 
-instance PluginMethod CallHierarchyIncomingCalls where
-  pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
+instance PluginRequestMethod CallHierarchyIncomingCalls where
 
-instance PluginMethod CallHierarchyOutgoingCalls where
-  pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
+instance PluginRequestMethod CallHierarchyOutgoingCalls where
 
-instance PluginMethod CustomMethod where
-  pluginEnabled _ _ _ = True
+instance PluginRequestMethod CustomMethod where
   combineResponses _ _ _ _ (x :| _) = x
+
+-- ---------------------------------------------------------------------
+-- Plugin Notifications
+-- ---------------------------------------------------------------------
+
+-- | Plugin Notification methods. No specific methods at the moment, but
+-- might contain more in the future.
+class PluginMethod Notification m => PluginNotificationMethod (m :: Method FromClient Notification)  where
+
+
+instance PluginMethod Notification TextDocumentDidOpen where
+
+instance PluginMethod Notification TextDocumentDidChange where
+
+instance PluginMethod Notification TextDocumentDidSave where
+
+instance PluginMethod Notification TextDocumentDidClose where
+
+instance PluginMethod Notification WorkspaceDidChangeWatchedFiles where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+
+instance PluginMethod Notification WorkspaceDidChangeWorkspaceFolders where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+
+instance PluginMethod Notification WorkspaceDidChangeConfiguration where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+
+instance PluginMethod Notification Initialized where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+
+
+instance PluginNotificationMethod TextDocumentDidOpen where
+
+instance PluginNotificationMethod TextDocumentDidChange where
+
+instance PluginNotificationMethod TextDocumentDidSave where
+
+instance PluginNotificationMethod TextDocumentDidClose where
+
+instance PluginNotificationMethod WorkspaceDidChangeWatchedFiles where
+
+instance PluginNotificationMethod WorkspaceDidChangeWorkspaceFolders where
+
+instance PluginNotificationMethod WorkspaceDidChangeConfiguration where
+
+instance PluginNotificationMethod Initialized where
 
 -- ---------------------------------------------------------------------
 
 -- | Methods which have a PluginMethod instance
-data IdeMethod (m :: Method FromClient Request) = PluginMethod m => IdeMethod (SMethod m)
+data IdeMethod (m :: Method FromClient Request) = PluginRequestMethod m => IdeMethod (SMethod m)
 instance GEq IdeMethod where
   geq (IdeMethod a) (IdeMethod b) = geq a b
 instance GCompare IdeMethod where
   gcompare (IdeMethod a) (IdeMethod b) = gcompare a b
 
 -- | Methods which have a PluginMethod instance
-data IdeNotification (m :: Method FromClient Notification) = HasTracing (MessageParams m) => IdeNotification (SMethod m)
+data IdeNotification (m :: Method FromClient Notification) = PluginNotificationMethod m => IdeNotification (SMethod m)
 instance GEq IdeNotification where
   geq (IdeNotification a) (IdeNotification b) = geq a b
 instance GCompare IdeNotification where
@@ -343,7 +576,7 @@ type PluginNotificationMethodHandler a m = a -> VFS -> PluginId -> MessageParams
 
 -- | Make a handler for plugins with no extra data
 mkPluginHandler
-  :: PluginMethod m
+  :: PluginRequestMethod m
   => SClientMethod m
   -> PluginMethodHandler ideState m
   -> PluginHandlers ideState
@@ -353,7 +586,7 @@ mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandl
 
 -- | Make a handler for plugins with no extra data
 mkPluginNotificationHandler
-  :: HasTracing (MessageParams m)
+  :: PluginNotificationMethod m
   => SClientMethod (m :: Method FromClient Notification)
   -> PluginNotificationMethodHandler ideState m
   -> PluginNotificationHandlers ideState
@@ -362,6 +595,15 @@ mkPluginNotificationHandler m f
   where
     f' pid ide vfs = f ide vfs pid
 
+-- | Set up a plugin descriptor, initialized with default values.
+-- This is plugin descriptor is prepared for @haskell@ files, such as
+--
+--   * @.hs@
+--   * @.lhs@
+--   * @.hs-boot@
+--
+-- and handlers will be enabled for files with the appropriate file
+-- extensions.
 defaultPluginDescriptor :: PluginId -> PluginDescriptor ideState
 defaultPluginDescriptor plId =
   PluginDescriptor
@@ -373,6 +615,26 @@ defaultPluginDescriptor plId =
     mempty
     mempty
     Nothing
+    [".hs", ".lhs", ".hs-boot"]
+
+-- | Set up a plugin descriptor, initialized with default values.
+-- This is plugin descriptor is prepared for @.cabal@ files and as such,
+-- will only respond / run when @.cabal@ files are currently in scope.
+--
+-- Handles files with the following extensions:
+--   * @.cabal@
+defaultCabalPluginDescriptor :: PluginId -> PluginDescriptor ideState
+defaultCabalPluginDescriptor plId =
+  PluginDescriptor
+    plId
+    mempty
+    mempty
+    mempty
+    defaultConfigDescriptor
+    mempty
+    mempty
+    Nothing
+    [".cabal"]
 
 newtype CommandId = CommandId T.Text
   deriving (Show, Read, Eq, Ord)
