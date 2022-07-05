@@ -202,7 +202,7 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
                 handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
             es <- runConcurrently msg (show m) handlers ide params
             let (errs,succs) = partitionEithers $ toList es
-            unless (null errs) $ forM_ errs $ \err -> logWith recorder Error $ LogPluginError err
+            unless (null errs) $ forM_ errs $ \err -> logWith recorder Warning $ LogPluginError err
             case nonEmpty succs of
               Nothing -> pure $ Left $ combineErrors errs
               Just xs -> do
