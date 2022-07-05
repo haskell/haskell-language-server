@@ -37,7 +37,7 @@ Sometimes a plugin will be supported in the prebuilt binaries but not in a HLS b
 | Plugin                              | Unsupported GHC versions |
 |-------------------------------------|--------------------------|
 | `hls-alternate-number-plugin`       |                          |
-| `hls-brittany-plugin`               | 9.2      |
+| `hls-brittany-plugin`               | 9.2                      |
 | `hls-call-hierarchy-plugin`         |                          |
 | `hls-class-plugin`                  |                          |
 | `hls-eval-plugin`                   |                          |
@@ -56,7 +56,7 @@ Sometimes a plugin will be supported in the prebuilt binaries but not in a HLS b
 | `hls-splice-plugin`                 | 9.2                      |
 | `hls-stylish-haskell-plugin`        |                          |
 | `hls-tactics-plugin`                | 9.2                      |
-| `hls-code-range-plugin`        |                          |
+| `hls-code-range-plugin`             |                          |
 | `hls-gadt-plugin`                   |                          |
 
 ### Using deprecated GHC versions
