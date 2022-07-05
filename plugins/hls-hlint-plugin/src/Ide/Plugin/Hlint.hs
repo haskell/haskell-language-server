@@ -446,6 +446,8 @@ diagnosticToCodeActions dynFlags fileContents pluginId documentId diagnostic
             Nothing
             Nothing
   = catMaybes
+      -- Applying the hint is marked preferred because it addresses the underlying error.
+      -- Disabling the rule isn't, because less often used and configuration can be adapted.
       [ if | isHintApplicable
            , let applyHintTitle = "Apply hint \"" <> hint <> "\""
                  applyHintArguments = [toJSON (AOP (documentId ^. LSP.uri) start hint)]
