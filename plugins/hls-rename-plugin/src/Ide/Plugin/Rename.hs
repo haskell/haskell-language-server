@@ -70,7 +70,8 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
 
         {- References in HieDB are not necessarily transitive. With `NamedFieldPuns`, we can have
            indirect references through punned names. To find the transitive closure, we do a pass of
-           the direct references to find the references for any punned names. -}
+           the direct references to find the references for any punned names.
+           See the `IndirectPuns` test for an example. -}
         indirectOldNames <- concat . filter ((>1) . Prelude.length) <$>
             mapM (uncurry (getNamesAtPos state) . locToFilePos) directRefs
         let oldNames = indirectOldNames ++ directOldNames
