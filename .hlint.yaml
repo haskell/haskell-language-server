@@ -84,6 +84,32 @@
     - Compat.HieBin
 
   # Partial functions
+  
+  # For some reason we need to check fucntions which
+  # are typically exported multiple ways under both names,
+  # see https://github.com/ndmitchell/hlint/issues/1389
+  - name: Prelude.head
+    within: 
+    - Main
+    - Development.Benchmark.Rules
+    - Development.IDE.Plugin.CodeAction
+    - Development.IDE.Plugin.Completions
+    - Development.IDE.Plugin.CodeAction.ExactPrint
+    - Development.IDE.Spans.Documentation
+    - Ide.Plugin.CallHierarchy.Internal
+    - Ide.Plugin.Eval.Code
+    - Ide.Plugin.Eval.Util
+    - Ide.Plugin.Floskell
+    - Ide.Plugin.ModuleName
+    - Ide.Plugin.Rename
+    - Ide.Plugin.Class.ExactPrint
+    - TExpectedActual
+    - TRigidType
+    - RightToLeftFixities
+    - Typeclass
+    - Wingman.Judgements
+    - Wingman.Machinery
+
   - name: Data.List.head
     within:
     - Main
@@ -94,11 +120,18 @@
     - Development.IDE.Session
     - Development.IDE.Spans.Documentation
     - Ide.Plugin.CallHierarchy.Internal
-    - TExpectedActual
-    - TRigidType
-    - TRigidType
     - Ide.Plugin.Class
     - Wingman.Tactics
+    - TExpectedActual
+    - TRigidType
+
+  - name: Prelude.tail
+    within: 
+    - Main
+    - Development.Benchmark.Rules
+    - Development.IDE.Plugin.CodeAction
+    - Development.IDE.Plugin.CodeAction.ExactPrint
+    - UnificationSpec
 
   - name: Data.List.tail
     within:
@@ -111,10 +144,30 @@
     - IDE.Plugin.Eval.Util
     - UnificationSpec
 
+  - name: Prelude.last
+    within: 
+    - Main
+    - Development.IDE.Plugin.CodeAction
+    - Development.IDE.Plugin.CodeAction.ExactPrint
+    - Development.IDE.Spans.Common
+    - Development.IDE.Graph.Internal.Types
+    - Ide.PluginUtils
+    - Ide.Plugin.Eval.Parse.Comments
+    - Ide.Plugin.Eval.CodeLens
+
   - name: Data.List.last
     within: 
     - GenChangelogs
     - Main
+
+  - name: Prelude.init
+    within: 
+    - Main
+    - Development.IDE.Spans.Common
+    - Ide.PluginUtils
+    - Wingman.Metaprogramming.Parser
+    - Development.Benchmark.Rules
+    - ErrorGivenPartialSignature
 
   - name: Data.List.init
     within: []
@@ -124,6 +177,16 @@
 
   - name: Data.List.foldr1'
     within: []
+
+  - name: "Prelude.!!"
+    within: 
+    - Main
+    - Development.IDE.Plugin.CodeAction
+    - Development.IDE.Plugin.Completions.Logic
+    - Development.IDE.Spans.Documentation
+    - TErrorGivenPartialSignature
+    - Wingman.CaseSplit
+    - Wingman.Simplify
 
   - name: "Data.List.!!"
     within:
@@ -177,6 +240,27 @@
 
   - name: "GHC.Arr.!"
     within: []
+
+  # Tracing functions
+  # We ban an explicit list rather than the
+  # Debug.Trace, because that module also
+  # includes the eventlog tracing functions,
+  # which are legitimate to use.
+  - name: 
+    - Debug.Trace.trace
+    - Debug.Trace.traceId
+    - Debug.Trace.traceShow
+    - Debug.Trace.traceShowId
+    - Debug.Trace.traceStack
+    - Debug.Trace.traceIO
+    - Debug.Trace.traceM
+    - Debug.Trace.traceShowM
+    - Debug.Trace.putTraceMsg
+    within: 
+    - Development.IDE.Core.Compile
+    - Development.IDE.Graph.Internal.Database
+    - Development.IDE.GHC.Util
+    - Wingman.Debug
 
 # We really do not want novel usages of restricted functions, and mere
 # Warning is not enough to prevent those consistently; you need a build failure.
