@@ -4,40 +4,52 @@
 
 The current support for different GHC versions is given in the following table.
 
-| GHC version | Last supporting HLS version                                                                                                                              | Deprecation status                       |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 9.2.3       | [current](https://github.com/haskell/haskell-language-server/releases/latest) ([partial](https://github.com/haskell/haskell-language-server/issues/2982))
-| 9.2.2       | [current](https://github.com/haskell/haskell-language-server/releases/latest) ([partial](https://github.com/haskell/haskell-language-server/issues/2982))
-| 9.2.1       | [1.7.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.7.0.0)          | deprecated                                         |
-| 9.0.2       | [current](https://github.com/haskell/haskell-language-server/releases/latest)                                            |  |
-| 9.0.1       | [1.6.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.6.1.0) | deprecated                                         |
-| 8.10.7      | [current](https://github.com/haskell/haskell-language-server/releases/latest)                                                                            |                                          |
-| 8.10.6      | [1.6.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.6.1.0)                                                                            | deprecated |
-| 8.10.5      | [1.5.1](https://github.com/haskell/haskell-language-server/releases/tag/1.5.1)                                                                           | deprecated                               |
-| 8.10.4      | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)                                                                           | deprecated                               |
-| 8.10.3      | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)                                                                           | deprecated                               |
-| 8.10.2      | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)                                                                           | deprecated                               |
-| 8.10.1      | [0.9.0](https://github.com/haskell/haskell-language-server/releases/tag/0.9.0)                                                                           | deprecated                               |
-| 8.8.4       | [current](https://github.com/haskell/haskell-language-server/releases/latest)                                                                            | will be deprecated after LTS and HLS full support for ghc-9.2 |
-| 8.8.3       | [1.5.1](https://github.com/haskell/haskell-language-server/releases/1.5.1)                                                                               | deprecated                               |
-| 8.8.2       | [1.2.0](https://github.com/haskell/haskell-language-server/releases/tag/1.2.0)                                                                           | deprecated                               |
-| 8.6.5       | [current](https://github.com/haskell/haskell-language-server/releases/latest)                                                                            | will be deprecated after LTS and HLS full suppot for ghc-9.2 |
-| 8.6.4       | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)                                                                           | deprecated                               |
+Last supporting HLS version:
+- "next": this GHC version is supported in master, and will be in the next released version of HLS.
+- "latest": this GHC version is one of the actively supported versions (see below) and is supported in the latest released version of HLS.
+- specific version number: this GHC version is no longer one of the actively supported versions, and the last version of HLS which supports it is listed.
 
-GHC versions not in the list have never been supported by HLS, or are not planned. LTS stands for [Stackage](https://www.stackage.org/) Long Term Support.
+Support status (see the support policy below for more details):
+- "supported": this version of GHC is currently actively supported 
+- "deprecated": this version of GHC was supported in the past, but is now deprecated
+- "will be deprecated ...": this version of GHC has special deprecation conditions that deviate from the support policy
+- "partial": not all features and plugins work, see the plugin support table and any linked issues for more details
+
+| GHC version | Last supporting HLS version                                                                                                                              | Support status                                                                         |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 9.2.3       | next                                                                                                                                                     | supported, ([partial](https://github.com/haskell/haskell-language-server/issues/2982)) |
+| 9.2.2       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)                                                                             | supported, ([partial](https://github.com/haskell/haskell-language-server/issues/2982)) |
+| 9.2.1       | [1.7.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.7.0.0)                                                                       | deprecated                                                                             |
+| 9.0.2       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)                                                                             | supported                                                                              |
+| 9.0.1       | [1.6.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.6.1.0)                                                                       | deprecated                                                                             |
+| 8.10.7      | [latest](https://github.com/haskell/haskell-language-server/releases/latest)                                                                             | supported                                                                              |
+| 8.10.6      | [1.6.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.6.1.0)                                                                       | deprecated                                                                             |
+| 8.10.5      | [1.5.1](https://github.com/haskell/haskell-language-server/releases/tag/1.5.1)                                                                           | deprecated                                                                             |
+| 8.10.4      | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)                                                                           | deprecated                                                                             |
+| 8.10.3      | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)                                                                           | deprecated                                                                             |
+| 8.10.2      | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)                                                                           | deprecated                                                                             |
+| 8.10.1      | [0.9.0](https://github.com/haskell/haskell-language-server/releases/tag/0.9.0)                                                                           | deprecated                                                                             |
+| 8.8.4       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)                                                                             | will be deprecated after LTS and HLS full support for ghc-9.2                          |
+| 8.8.3       | [1.5.1](https://github.com/haskell/haskell-language-server/releases/1.5.1)                                                                               | deprecated                                                                             |
+| 8.8.2       | [1.2.0](https://github.com/haskell/haskell-language-server/releases/tag/1.2.0)                                                                           | deprecated                                                                             |
+| 8.6.5       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)                                                                             | will be deprecated after LTS and HLS full suppot for ghc-9.2                           |
+| 8.6.4       | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)                                                                           | deprecated                                                                             |
+
+
+GHC versions not in the list have never been supported by HLS. LTS stands for [Stackage](https://www.stackage.org/) Long Term Support.
 
 The policy for when we deprecate support for versions of GHC is given below. The table reflects that, but we may decide to deviate from it for good reasons.
 
 Additionally, some plugins do not have support for some GHC versions, as shown in the following table.
 As such, the functionality provided by those plugins is not available in HLS when using a GHC version which they do not support.
-Sometimes a plugin will be supported in the prebuilt binaries but not in a HLS binary installed from Hackage.
+Sometimes a plugin will be supported in the pre-built binaries but not in a HLS binary installed from Hackage.
 
 ### Plugins support by GHC version
 
 | Plugin                              | Unsupported GHC versions |
 |-------------------------------------|--------------------------|
 | `hls-alternate-number-plugin`       |                          |
-| `hls-brittany-plugin`               | 9.2      |
+| `hls-brittany-plugin`               | 9.2                      |
 | `hls-call-hierarchy-plugin`         |                          |
 | `hls-class-plugin`                  |                          |
 | `hls-eval-plugin`                   |                          |
@@ -66,11 +78,27 @@ In the future, we may extend the existing discovery mechanisms (`haskell-languag
 
 Users of a deprecated minor version (where the major version is still supported) can try building the latest HLS from source, which will likely still work, since the GHC API tends to remain compatible across minor versions.
 
+### Using GHC versions not yet supported in a HLS release
+
+Some users may wish to use a version of GHC that is not yet supported by a released version of HLS.
+In particular, this means that pre-built binaries will not be available for that GHC version.
+
+The easiest thing to do in this case is to build HLS from source yourself.
+This can be done easily with `ghcup`, see the examples for `ghcup compile` on the [installation page](./installation.md).
+
+Generally, if a version of GHC is supported by HLS on master _or_ is a new minor version of a GHC version that is supported by HLS on master, then compiling from source is likely to work.
+Major versions of GHC which are not supported by HLS on master are extremely unlikely to work.
+
 ## GHC version deprecation policy
 
 ### Major versions
 
-A major GHC version is a "legacy" version if it is 3 or more major versions behind the GHC version used in the newest Stackage LTS.
+A major GHC version is a "legacy" version if it is 3 or more major versions behind the latest GHC version that is
+
+1. Fully supported by HLS
+2. Used in the a Stackage LTS
+
+For example, if 9.2 is the latest major version fully supported by HLS and used in a Stackage LTS, then the 8.8 major version and older will be legacy.
 
 HLS will support all non-legacy major versions of GHC.
 
@@ -86,15 +114,15 @@ We will warn users about the upcoming deprecation of a GHC version in the notes 
 
 ### Why deprecate older versions of GHC?
 
-`haskell-language-server`(HLS) is highly tied to the ghc api. This imposes a high maintenance cost:
+`haskell-language-server`(HLS) is highly tied to the GHC API. This imposes a high maintenance cost:
 
 - The codebase is littered with conditional logic,
-- We own auxiliary packages to support older versions of ghc.
+- We own auxiliary packages to support older versions of GHC.
 - CI has to cover all the supported versions.
 
-So we need to limit the ghc support to save maintainers and contributors time and reduce CI resources.
+So we need to limit the GHC support to save maintainers and contributors time and reduce CI resources.
 
-At same time we aim to support the right balance of ghc versions to minimize impact to final users.
+At same time we aim to support the right balance of GHC versions to minimize impact to final users.
 
 ### What factors do we take into account when deprecating a version?
 
