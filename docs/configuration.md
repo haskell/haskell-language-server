@@ -414,3 +414,8 @@ roots = ["Setup.hs", "stack.yaml", "*.cabal"]
 command = "haskell-language-server-wrapper"
 args = ["--lsp"]
 ```
+
+### [Helix](https://github.com/helix-editor/helix)
+
+Once `haskell-language-server-wrapper` is installed in your system, it will be used automatically by the editor.
+For more details please refer to the [helix guide on installing language servers](https://github.com/helix-editor/helix/wiki/How-to-install-the-default-language-servers)
