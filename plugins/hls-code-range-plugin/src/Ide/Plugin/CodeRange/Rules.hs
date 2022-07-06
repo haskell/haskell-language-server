@@ -9,13 +9,19 @@
 {-# LANGUAGE TypeFamilies              #-}
 
 module Ide.Plugin.CodeRange.Rules
-    ( CodeRange (..)
+    (
+    -- * Public Functions
+    CodeRange (..)
     , codeRange_range
     , codeRange_children
     , codeRange_kind
+    , CodeRangeKind(..)
     , GetCodeRange(..)
     , codeRangeRule
     , Log
+
+    -- * Internal Functions
+    , simplify
     ) where
 
 import           Control.DeepSeq                    (NFData)
