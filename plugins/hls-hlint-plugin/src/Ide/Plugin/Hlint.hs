@@ -446,23 +446,25 @@ diagnosticToCodeActions dynFlags fileContents pluginId documentId diagnostic
             Nothing
             Nothing
   = catMaybes
+      -- Applying the hint is marked preferred because it addresses the underlying error.
+      -- Disabling the rule isn't, because less often used and configuration can be adapted.
       [ if | isHintApplicable
            , let applyHintTitle = "Apply hint \"" <> hint <> "\""
                  applyHintArguments = [toJSON (AOP (documentId ^. LSP.uri) start hint)]
                  applyHintCommand = mkLspCommand pluginId "applyOne" applyHintTitle (Just applyHintArguments) ->
-               Just (mkCodeAction applyHintTitle diagnostic Nothing (Just applyHintCommand))
+               Just (mkCodeAction applyHintTitle diagnostic Nothing (Just applyHintCommand) True)
            | otherwise -> Nothing
-      , Just (mkCodeAction suppressHintTitle diagnostic (Just suppressHintWorkspaceEdit) Nothing)
+      , Just (mkCodeAction suppressHintTitle diagnostic (Just suppressHintWorkspaceEdit) Nothing False)
       ]
   | otherwise = []
 
-mkCodeAction :: T.Text -> LSP.Diagnostic -> Maybe LSP.WorkspaceEdit -> Maybe LSP.Command -> LSP.CodeAction
-mkCodeAction title diagnostic workspaceEdit command =
+mkCodeAction :: T.Text -> LSP.Diagnostic -> Maybe LSP.WorkspaceEdit -> Maybe LSP.Command -> Bool -> LSP.CodeAction
+mkCodeAction title diagnostic workspaceEdit command isPreferred =
   LSP.CodeAction
     { _title = title
     , _kind = Just LSP.CodeActionQuickFix
     , _diagnostics = Just (LSP.List [diagnostic])
-    , _isPreferred = Nothing
+    , _isPreferred = Just isPreferred
     , _disabled = Nothing
     , _edit = workspaceEdit
     , _command = command
