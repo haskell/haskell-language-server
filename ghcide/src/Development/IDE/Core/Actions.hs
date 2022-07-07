@@ -62,7 +62,7 @@ getAtPoint file pos = runMaybeT $ do
   env <- hscEnv . fst <$> useE GhcSession file
   dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> runMaybeT (useE GetDocMap file)
   void $ useE TypeCheck file
-  (hi, _) <- useE GetModIface file
+  hi <- fst <$> useE GetModIface file
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
 

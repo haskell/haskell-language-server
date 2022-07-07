@@ -221,6 +221,7 @@ fixityAtPoint (HAR _ hf _ _ _) hi env pos = fmap listToMaybe $ sequence $ pointC
         then fmap (\fixities -> (Just range, [toHoverContent fixities])) (getFixityFromEnv names)
         else pure (Just range, [toHoverContent fixities])
 
+    -- For local defined fixities
     getFixityFromModIface :: [Name] -> [(Name, Fixity)]
     getFixityFromModIface names =
       let iface = hirModIface hi
@@ -228,16 +229,20 @@ fixityAtPoint (HAR _ hf _ _ _) hi env pos = fmap listToMaybe $ sequence $ pointC
             $ map (\name -> (name, mi_fix iface (nameOccName name))) names
       in fixities
 
+    -- For extern defined fixities
     getFixityFromEnv :: [Name] -> IO [(Name, Fixity)]
     getFixityFromEnv names = do
       liftIO
-        $ fmap (filter ((/= defaultFixity) . snd) . mapMaybe cond)
+        $ fmap (filter ((/= defaultFixity) . snd) . mapMaybe pickFixity)
         $ forM names $ \name ->
-          (\(_, fixity) -> (name, fixity)) <$> runTcInteractive env (lookupFixityRn name)
+          (\(_, fixity) -> (name, fixity))
+            <$> Util.handleGhcException
+                (const $ pure (emptyMessages, Nothing))
+                (runTcInteractive env (lookupFixityRn name))
       where
-        cond :: (Name, Maybe Fixity) -> Maybe (Name, Fixity)
-        cond (_, Nothing)   = Nothing
-        cond (name, Just f) = Just (name, f)
+        pickFixity :: (Name, Maybe Fixity) -> Maybe (Name, Fixity)
+        pickFixity (_, Nothing)   = Nothing
+        pickFixity (name, Just f) = Just (name, f)
 
     toHoverContent [] = ""
     toHoverContent fixities =
