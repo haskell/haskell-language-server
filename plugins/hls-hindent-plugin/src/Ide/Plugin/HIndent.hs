@@ -46,7 +46,7 @@ provider ide typ contents fp _opts = do
     where
       builderToText = TE.decodeUtf8 . B.concat . BL.toChunks . toLazyByteString
       convertToTextEdit result range = case result of
-        Left  err -> return $ Left $ responseError $ T.pack $ "hident: " ++ err
+        Left  err -> return $ Left $ responseError $ T.pack $ "hindent: " ++ err
         Right new -> return $ Right $ J.List [TextEdit range (builderToText new)]
 
 -- Copied from
