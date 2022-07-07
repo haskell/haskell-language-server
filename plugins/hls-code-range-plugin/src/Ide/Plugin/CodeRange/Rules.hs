@@ -9,9 +9,7 @@
 {-# LANGUAGE TypeFamilies              #-}
 
 module Ide.Plugin.CodeRange.Rules
-    (
-    -- * Public Functions
-    CodeRange (..)
+    ( CodeRange (..)
     , codeRange_range
     , codeRange_children
     , codeRange_kind
@@ -20,7 +18,7 @@ module Ide.Plugin.CodeRange.Rules
     , codeRangeRule
     , Log(..)
 
-    -- * Internal Functions
+    -- * Internal
     , removeInterleaving
     , simplify
     ) where

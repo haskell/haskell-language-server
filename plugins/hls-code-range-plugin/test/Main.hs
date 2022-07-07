@@ -31,7 +31,7 @@ main = do
                 makeSelectionRangeGoldenTest recorder "Function" [(5, 19), (5, 12), (4, 4), (3, 5)]
             ],
             testGroup "Unit Tests" [
-                -- Ide.Plugin.CodeRangeTest.testTree,
+                Ide.Plugin.CodeRangeTest.testTree,
                 Ide.Plugin.CodeRange.RulesTest.testTree
             ]
         ]

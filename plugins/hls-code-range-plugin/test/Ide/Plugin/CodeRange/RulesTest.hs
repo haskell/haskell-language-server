@@ -11,7 +11,7 @@ import           Test.Tasty.HUnit
 
 testTree :: TestTree
 testTree =
-    testGroup "Rules" [
+    testGroup "CodeRange.Rules" [
         testGroup "removeInterleaving" $
             let check :: [CodeRange] -> ([CodeRange], [Log]) -> Assertion
                 check input want =

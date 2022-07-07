@@ -1,7 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module Ide.Plugin.CodeRange (descriptor, Log) where
+module Ide.Plugin.CodeRange (
+    descriptor
+    , Log
+
+    -- * Internal
+    , findPosition
+    ) where
 
 import           Control.Monad.Except                 (ExceptT (ExceptT),
                                                        runExceptT)
@@ -9,8 +15,6 @@ import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        maybeToExceptT)
 import           Data.Either.Extra                    (maybeToEither)
-import           Data.List.NonEmpty                   (NonEmpty)
-import qualified Data.List.NonEmpty                   as NonEmpty
 import           Data.Maybe                           (fromMaybe)
 import           Data.Vector                          (Vector)
 import qualified Data.Vector                          as V
@@ -97,21 +101,20 @@ getSelectionRanges file positions = do
 
 -- | Find 'Position' in 'CodeRange'. This can fail, if the given position is not covered by the 'CodeRange'.
 findPosition :: Position -> CodeRange -> Maybe SelectionRange
-findPosition pos root =
-    selectionRangeFromNonEmpty . NonEmpty.reverse -- SelectionRange requires a bottom-up order, so we need to reverse
-    <$> go root
+findPosition pos root = go Nothing root
   where
     -- Helper function for recursion. The range list is built top-down
-    go :: CodeRange -> Maybe (NonEmpty Range)
-    go node =
+    go :: Maybe SelectionRange -> CodeRange -> Maybe SelectionRange
+    go acc node =
         if positionInRange pos range
-        then case binarySearchPos children of
-            Just childContainingPos -> fmap (range NonEmpty.<|) (go childContainingPos)
-            Nothing -> Just $ range NonEmpty.:| [] -- NonEmpty.singleton doesn't exist in GHC 8.8.4
+        then maybe acc' (go acc') (binarySearchPos children)
+        -- If all children doesn't contain pos, acc' will be returned.
+        -- acc' will be Nothing only if we are in the root level.
         else Nothing
       where
         range = _codeRange_range node
         children = _codeRange_children node
+        acc' = Just $ maybe (SelectionRange range Nothing) (SelectionRange range . Just) acc
 
     binarySearchPos :: Vector CodeRange -> Maybe CodeRange
     binarySearchPos v
@@ -122,12 +125,6 @@ findPosition pos root =
             let (left, right) = V.splitAt (V.length v `div` 2) v
             startOfRight <- _start . _codeRange_range <$> V.headM right
             if pos < startOfRight then binarySearchPos left else binarySearchPos right
-
--- | Construct 'SelectionRange' from 'NonEmpty' 'Range'
-selectionRangeFromNonEmpty :: NonEmpty Range -> SelectionRange
-selectionRangeFromNonEmpty ranges
-    | (r, remaining) <- NonEmpty.uncons ranges =
-        SelectionRange r (fmap selectionRangeFromNonEmpty remaining)
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange
