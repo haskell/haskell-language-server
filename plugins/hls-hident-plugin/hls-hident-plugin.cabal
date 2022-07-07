@@ -29,7 +29,7 @@ library
     , exceptions
     , filepath
     , ghcide           ^>=1.7
-    , hindent  ^>=5.3.2
+    , hindent  ^>=5.3.3
     , hls-plugin-api   ^>=1.4
     , lsp-types
     , path
