@@ -68,3 +68,5 @@ test-suite tests
     , bytestring
     , lens
     , tasty-hunit
+    , transformers
+    , vector

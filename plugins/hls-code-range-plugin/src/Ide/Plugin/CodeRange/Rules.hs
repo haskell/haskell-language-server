@@ -18,14 +18,16 @@ module Ide.Plugin.CodeRange.Rules
     , CodeRangeKind(..)
     , GetCodeRange(..)
     , codeRangeRule
-    , Log
+    , Log(..)
 
     -- * Internal Functions
+    , removeInterleaving
     , simplify
     ) where
 
 import           Control.DeepSeq                    (NFData)
 import qualified Control.Lens                       as Lens
+import           Control.Monad                      (foldM)
 import           Control.Monad.Except               (ExceptT (..), runExceptT)
 import           Control.Monad.Reader               (runReader)
 import           Control.Monad.Trans.Class          (lift)
@@ -61,6 +63,7 @@ import           Prelude                            hiding (log)
 data Log = LogShake Shake.Log
     | LogNoAST
     | LogFoundInterleaving CodeRange CodeRange
+      deriving Show
 
 instance Pretty Log where
     pretty log = case log of
@@ -121,23 +124,25 @@ astToCodeRange node@(Node _ sp children) = do
 
 -- | Remove interleaving of the list of 'CodeRange's.
 removeInterleaving :: [CodeRange] -> Writer [Log] [CodeRange]
-removeInterleaving [] = pure []
-removeInterleaving (x1:xs) = do
-    remaining <- removeInterleaving xs
-    (:remaining) <$> case remaining of
-        [] -> pure x1
+removeInterleaving = fmap reverse . foldM go []
+  where
+    -- we want to traverse from left to right (to make the logs easier to read)
+    go :: [CodeRange] -> CodeRange -> Writer [Log] [CodeRange]
+    go [] x = pure [x]
+    go (x1:acc) x2 = do
         -- Given that the CodeRange is already sorted on it's Range, and the Ord instance of Range
         -- compares it's start position first, the start position must be already in an ascending order.
         -- Then, if the end position of a node is larger than it's next neighbour's start position, an interleaving
         -- must exist.
         -- (Note: LSP Range's end position is exclusive)
-        x2:_ -> if x1 Lens.^. codeRange_range . end > x2 Lens.^. codeRange_range . start
+        x1' <- if x1 Lens.^. codeRange_range . end > x2 Lens.^. codeRange_range . start
             then do
                 -- set x1.end to x2.start
                 let x1' :: CodeRange = x1 & codeRange_range . end Lens..~ (x2 Lens.^. codeRange_range . start)
                 tell [LogFoundInterleaving x1 x2]
                 pure x1'
             else pure x1
+        pure $ x2:x1':acc
 
 -- | Remove redundant nodes in 'CodeRange' tree
 simplify :: CodeRange -> CodeRange
