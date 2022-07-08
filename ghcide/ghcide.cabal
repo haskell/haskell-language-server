@@ -59,7 +59,7 @@ library
         filepath,
         fingertree,
         focus,
-        ghc-exactprint,
+        ghc-exactprint >= 1.4,
         ghc-trace-events,
         Glob,
         haddock-library >= 1.8 && < 1.11,
@@ -102,7 +102,7 @@ library
         vector,
         opentelemetry >=0.6.1,
         heapsize ==0.3.*,
-        unliftio,
+        unliftio >= 0.2.6,
         unliftio-core,
         ghc-boot-th,
         ghc-boot,
@@ -432,7 +432,7 @@ test-suite ghcide-tests
         hls-graph,
         tasty,
         tasty-expected-failure,
-        tasty-hunit,
+        tasty-hunit >= 0.10,
         tasty-quickcheck,
         tasty-rerun,
         text,
@@ -497,7 +497,7 @@ executable ghcide-bench
         safe-exceptions,
         hls-graph,
         shake,
-        tasty-hunit,
+        tasty-hunit >= 0.10,
         text
     hs-source-dirs: bench/lib bench/exe test/src
     ghc-options: -threaded -Wall -Wno-name-shadowing -rtsopts
