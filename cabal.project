@@ -67,4 +67,5 @@ allow-newer:
   ----------
   hiedb:base,
 
+  ekg-core,
   ekg-wai:time
