@@ -374,7 +374,6 @@
 
         devShells = simpleDevShells // nixDevShells // {
           default = simpleDevShells.haskell-language-server-dev;
-          inherit (self.checks.${system}.pre-commit-check) shellHook;
         };
 
         packages = allPackages // {
@@ -396,8 +395,6 @@
           all-simple-dev-shells = linkFarmFromDrvs "all-dev-shells" (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues simpleDevShells)));
           docs = docs;
         };
-
-        checks = { pre-commit-check = pre-commit-check ghcDefault; };
 
         # The attributes for the default shell and package changed in recent versions of Nix,
         # these are here for backwards compatibility with the old versions.
