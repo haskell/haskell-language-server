@@ -16,9 +16,9 @@ category:           Development
 build-type:         Simple
 extra-source-files:
   LICENSE
-  test/testdata/*.hs
-  test/testdata/*.yaml
-  test/testdata/*.txt
+  test/testdata/selection-range/*.hs
+  test/testdata/selection-range/*.yaml
+  test/testdata/selection-range/*.txt
 
 library
   exposed-modules:
