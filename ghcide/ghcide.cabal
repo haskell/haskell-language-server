@@ -59,7 +59,7 @@ library
         filepath,
         fingertree,
         focus,
-        ghc-exactprint >= 1.4,
+        ghc-exactprint < 1 || >= 1.4,
         ghc-trace-events,
         Glob,
         haddock-library >= 1.8 && < 1.11,
