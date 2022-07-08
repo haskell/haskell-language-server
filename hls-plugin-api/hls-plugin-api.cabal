@@ -39,7 +39,7 @@ library
     , containers
     , data-default
     , dependent-map
-    , dependent-sum
+    , dependent-sum         >=0.7
     , Diff                  ^>=0.4.0
     , dlist
     , extra
@@ -50,7 +50,7 @@ library
     , lens
     , lens-aeson
     , lsp                   >=1.4.0.0 && < 1.6
-    , opentelemetry
+    , opentelemetry         >=0.4
     , optparse-applicative
     , process
     , regex-tdfa            >=1.3.1.0
