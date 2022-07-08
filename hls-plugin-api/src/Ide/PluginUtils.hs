@@ -251,10 +251,8 @@ getNormalizedFilePath (PluginId plId) uri = handleMaybe errMsg
         errMsg = T.unpack $ "Error(" <> plId <> "): converting " <> getUri uri <> " to NormalizedFilePath"
 
 -- ---------------------------------------------------------------------
-throwPluginError :: Monad m => PluginId -> String -> String -> ExceptT String m b
-throwPluginError (PluginId who) what where' = throwE msg
-    where
-        msg = (T.unpack who) <> " failed with " <> what <> " at " <> where'
+throwPluginError :: Monad m => String -> ExceptT String m b
+throwPluginError = throwE
 
 handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
 handleMaybe msg = maybe (throwE msg) return
