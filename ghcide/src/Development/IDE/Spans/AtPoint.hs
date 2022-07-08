@@ -217,7 +217,8 @@ fixityAtPoint (HAR _ hf _ _ _) env tcGblEnv pos = fmap listToMaybe $ sequence $ 
     fixityInfo ast = do
       let range = realSrcSpanToRange $ nodeSpan ast
           names = mapMaybe eitherToMaybe $ M.keys $ getNodeIds ast
-      getFixity names >>= (\fixities -> pure (Just range, [toHoverContent fixities]))
+      fixities <- getFixity names
+      pure (Just range, [toHoverContent fixities])
 
     -- We use `handleGhcException` here to prevent hover crashed.
     -- Because `runTcInteractive` may throw an exception if something

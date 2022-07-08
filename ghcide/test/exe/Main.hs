@@ -6550,10 +6550,11 @@ hoverFixityTests = testGroup "Explicit fixity"
     , hoverTest "signature" (Position 35 2) "infixr 9 `>>>:`"
     , hoverTest "operator" (Position 36 2) "infixr 9 `>>>:`"
     , hoverTest "escape" (Position 39 2) "infixl 3 `~\\:`"
+    , expectFail $ hoverTest "import" (Position 2 18) "Control.Monad***"
     -- It will cause error like: "Failed to load interface for \8216Fixity\8217\nIt is not a module in the current program, or in any known package."
     -- while we look up fixities from imported local defined module, see test below.
     , expectFailBecause "Not support yet"
-        $ hoverTestImport "import" (Position 4 7) "infixr 9 `>>>:`"
+        $ hoverTestImport "imported" (Position 4 7) "infixr 9 `>>>:`"
     ]
     where
         hoverTest = hoverTest' "Fixity.hs"

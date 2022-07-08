@@ -77,7 +77,7 @@ getAtPoint file pos = runMaybeT $ do
     mergeContent Nothing x@Just{} = x
     mergeContent (Just (r1, txt1)) (Just (r2, txt2)) =
       if r1 == r2
-        then Just (r1, txt1 <> txt2)
+        then Just (r1, txt1 <> filter (not . T.null) txt2)
         else Just (r1, txt1)
 
 toCurrentLocations :: PositionMapping -> [Location] -> [Location]
