@@ -61,13 +61,12 @@ getAtPoint file pos = runMaybeT $ do
   (hf, mapping) <- useE GetHieAst file
   env <- hscEnv . fst <$> useE GhcSession file
   dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> runMaybeT (useE GetDocMap file)
-  void $ useE TypeCheck file
-  hi <- fst <$> useE GetModIface file
+  tcGblEnv <- tmrTypechecked . fst <$> useE TypeCheck file
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
 
   let pointContent = AtPoint.atPoint opts hf dkMap env pos'
-  fixityContent <- liftIO $ AtPoint.fixityAtPoint hf hi env pos'
+  fixityContent <- liftIO $ AtPoint.fixityAtPoint hf env tcGblEnv pos'
 
   MaybeT $ pure $ first (toCurrentRange mapping =<<) <$> mergeContent pointContent fixityContent
   where

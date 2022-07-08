@@ -205,40 +205,32 @@ gotoDefinition
 gotoDefinition withHieDb getHieFile ideOpts imports srcSpans pos
   = lift $ locationsAtPoint withHieDb getHieFile ideOpts imports pos srcSpans
 
-fixityAtPoint :: HieAstResult -> HiFileResult -> HscEnv -> Position -> IO (Maybe (Maybe Range, [T.Text]))
-fixityAtPoint (HAR _ hf _ _ _) hi env pos = fmap listToMaybe $ sequence $ pointCommand hf pos fixityInfo
+fixityAtPoint
+  :: HieAstResult
+  -> HscEnv
+  -> TcGblEnv
+  -> Position
+  -> IO (Maybe (Maybe Range, [T.Text]))
+fixityAtPoint (HAR _ hf _ _ _) env tcGblEnv pos = fmap listToMaybe $ sequence $ pointCommand hf pos fixityInfo
   where
     fixityInfo :: HieAST a -> IO (Maybe Range, [T.Text])
     fixityInfo ast = do
       let range = realSrcSpanToRange $ nodeSpan ast
           names = mapMaybe eitherToMaybe $ M.keys $ getNodeIds ast
-          fixities = getFixityFromModIface names
+      getFixity names >>= (\fixities -> pure (Just range, [toHoverContent fixities]))
 
-      -- Get fixity from HscEnv for local defined operator will crash,
-      -- we first try to use ModIface to get fixities, and then use
-      -- HscEnv if ModIface doesn't available.
-      if null fixities
-        then fmap (\fixities -> (Just range, [toHoverContent fixities])) (getFixityFromEnv names)
-        else pure (Just range, [toHoverContent fixities])
-
-    -- For local defined fixities
-    getFixityFromModIface :: [Name] -> [(Name, Fixity)]
-    getFixityFromModIface names =
-      let iface = hirModIface hi
-          fixities = filter (\(_, fixity) -> fixity /= defaultFixity)
-            $ map (\name -> (name, mi_fix iface (nameOccName name))) names
-      in fixities
-
-    -- For extern defined fixities
-    getFixityFromEnv :: [Name] -> IO [(Name, Fixity)]
-    getFixityFromEnv names = do
+    -- We use `handleGhcException` here to prevent hover crashed.
+    -- Because `runTcInteractive` may throw an exception if something
+    -- is wrong in it.
+    getFixity :: [Name] -> IO [(Name, Fixity)]
+    getFixity names =
       liftIO
         $ fmap (filter ((/= defaultFixity) . snd) . mapMaybe pickFixity)
         $ forM names $ \name ->
           (\(_, fixity) -> (name, fixity))
             <$> Util.handleGhcException
                 (const $ pure (emptyMessages, Nothing))
-                (runTcInteractive env (lookupFixityRn name))
+                (initTcWithGbl env tcGblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1) (lookupFixityRn name))
       where
         pickFixity :: (Name, Maybe Fixity) -> Maybe (Name, Fixity)
         pickFixity (_, Nothing)   = Nothing
@@ -254,6 +246,7 @@ fixityAtPoint (HAR _ hf _ _ _) hi env pos = fmap listToMaybe $ sequence $ pointC
 
     fixityText (name, Fixity _ precedence direction) =
       printOutputable direction <> " " <> printOutputable precedence <> " `" <> printOutputable name <> "`"
+
 
 -- | Synopsis for the name at a given position.
 atPoint

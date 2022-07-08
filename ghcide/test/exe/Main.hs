@@ -6550,11 +6550,18 @@ hoverFixityTests = testGroup "Explicit fixity"
     , hoverTest "signature" (Position 35 2) "infixr 9 `>>>:`"
     , hoverTest "operator" (Position 36 2) "infixr 9 `>>>:`"
     , hoverTest "escape" (Position 39 2) "infixl 3 `~\\:`"
+    -- It will cause error like: "Failed to load interface for \8216Fixity\8217\nIt is not a module in the current program, or in any known package."
+    -- while we look up fixities from imported local defined module, see test below.
+    , expectFailBecause "Not support yet"
+        $ hoverTestImport "import" (Position 4 7) "infixr 9 `>>>:`"
     ]
     where
-        hoverTest :: TestName -> Position -> T.Text -> TestTree
-        hoverTest title pos expected = testSessionWithExtraFiles "fixity" title $ \dir -> do
-            doc <- openDoc (dir </> "Fixity.hs") "haskell"
+        hoverTest = hoverTest' "Fixity.hs"
+        hoverTestImport = hoverTest' "FixityImport.hs"
+
+        hoverTest' :: String -> TestName -> Position -> T.Text -> TestTree
+        hoverTest' docName title pos expected = testSessionWithExtraFiles "fixity" title $ \dir -> do
+            doc <- openDoc (dir </> docName) "haskell"
             void $ waitForTypecheck doc
             h <- getHover doc pos
             let expected' = "\n" <> sectionSeparator <> expected
@@ -6564,7 +6571,7 @@ hoverFixityTests = testGroup "Explicit fixity"
                     HoverContentsMS _ -> liftIO $ assertFailure "Unexpected content type"
                     HoverContents (MarkupContent _ txt) ->
                         liftIO
-                            $ assertBool ("Failed to find " <> T.unpack expected <> " in hover message")
+                            $ assertBool ("Failed to find " <> T.unpack expected <> " in " <> T.unpack txt)
                             $ expected' `T.isInfixOf` txt
             closeDoc doc
 
