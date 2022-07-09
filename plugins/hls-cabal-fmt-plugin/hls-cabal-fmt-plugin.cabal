@@ -14,6 +14,12 @@ category:           Development
 build-type:         Simple
 extra-source-files: LICENSE
 
+flag isolateTests
+  description: Should tests search for 'cabal-fmt' on the $PATH or shall we install it via build-tool-depends?
+  -- By default, search on the PATH
+  default:     False
+  manual:      True
+
 common warnings
   ghc-options: -Wall
 
@@ -44,8 +50,10 @@ test-suite tests
   ghc-options:        -threaded -rtsopts -with-rtsopts=-N
   build-depends:
     , base
+    , directory
     , filepath
     , hls-cabal-fmt-plugin
     , hls-test-utils        ^>=1.4
 
-  build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6
+  if flag(isolateTests)
+    build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6
