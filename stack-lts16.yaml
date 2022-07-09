@@ -90,6 +90,7 @@ extra-deps:
   - stm-hamt-1.2.0.6@sha256:fba86ccb4b45c5706c19b0e1315ba63dcac3b5d71de945ec001ba921fae80061,3972
   - primitive-extras-0.10.1
   - primitive-unlifted-0.1.3.1
+  - githash-0.1.6.2
 
 configure-options:
   ghcide:
