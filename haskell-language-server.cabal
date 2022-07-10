@@ -63,6 +63,12 @@ flag ignore-plugins-ghc-bounds
   default:     False
   manual:      True
 
+
+flag cabal
+  description: Enable cabal plugin
+  default:     True
+  manual:      True
+
 flag class
   description: Enable class plugin
   default:     True
@@ -200,6 +206,11 @@ flag dynamic
   default:     True
   manual:      True
 
+common cabal
+  if flag(cabal)
+    build-depends: hls-cabal-plugin ^>= 0.1
+    cpp-options: -Dhls_cabal
+  
 common class
   if flag(class) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-class-plugin ^>= 1.1
@@ -271,7 +282,7 @@ common splice
     cpp-options: -Dhls_splice
 
 common alternateNumberFormat
-  if flag(alternateNumberFormat) 
+  if flag(alternateNumberFormat)
     build-depends: hls-alternate-number-format-plugin ^>= 1.2
     cpp-options: -Dhls_alternateNumberFormat
 
@@ -338,6 +349,7 @@ library
                   , warnings
                   , pedantic
                   -- plugins
+                  , cabal
                   , callHierarchy
                   , changeTypeSignature
                   , class

@@ -1,0 +1,46 @@
+cabal-version:      3.0
+name:               hls-cabal-plugin
+version:            0.1.0.0
+synopsis:
+homepage:
+license:            MIT
+license-file:       LICENSE
+author:             Fendor
+maintainer:         fendor@posteo.de
+category:           Development
+extra-source-files: CHANGELOG.md
+
+library
+  exposed-modules:  Ide.Plugin.Cabal
+  build-depends:
+    , aeson
+    , base            >=4.12 && <5
+    , czipwith
+    , extra
+    , filepath
+    , ghc-exactprint
+    , ghcide          >=1.6  && <1.9
+    , hls-plugin-api  >=1.5  && <1.6
+    , lens
+    , lsp-types
+    , text
+    , transformers
+
+  -- see https://github.com/lspitzner/brittany/issues/364
+  -- TODO: remove these when GH issue #2005 is resolved
+  hs-source-dirs:   src
+  default-language: Haskell2010
+
+test-suite hls-cabal-plugin-test
+  default-language: Haskell2010
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  build-depends:
+    , base
+    , filepath
+    , hls-cabal-plugin
+    , hls-test-utils    ^>=1.4
+    , lsp
+    , lsp-types
+    , text
