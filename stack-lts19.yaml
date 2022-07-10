@@ -9,6 +9,7 @@ packages:
   - ./hls-plugin-api
   - ./hls-test-utils
   # - ./shake-bench
+  - ./plugins/hls-cabal-plugin
   - ./plugins/hls-cabal-fmt-plugin
   - ./plugins/hls-call-hierarchy-plugin
   - ./plugins/hls-class-plugin
