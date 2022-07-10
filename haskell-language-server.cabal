@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.6 || == 8.10.7 || == 9.0.2 || == 9.2.2
+tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.7 || == 9.0.2 || == 9.2.2 || == 9.2.3
 extra-source-files:
   README.md
   ChangeLog.md
@@ -72,7 +72,7 @@ library
     , data-default
     , ghc
     , ghcide                ^>=1.7
-    , githash
+    , githash               >=0.1.6.1
     , lsp
     , hie-bios
     , hiedb
@@ -191,6 +191,11 @@ flag changeTypeSignature
   default:     True
   manual:      True
 
+flag gadt
+  description: Enable gadt plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -226,7 +231,8 @@ flag dynamic
 common example-plugins
   hs-source-dirs: plugins/default/src
   other-modules: Ide.Plugin.Example,
-                 Ide.Plugin.Example2
+                 Ide.Plugin.Example2,
+                 Ide.Plugin.ExampleCabal
 
 common class
   if flag(class)
@@ -318,6 +324,11 @@ common changeTypeSignature
     build-depends: hls-change-type-signature-plugin ^>= 1.0
     cpp-options: -DchangeTypeSignature
 
+common gadt
+  if flag(gadt)
+    build-depends: hls-gadt-plugin ^>= 1.0
+    cpp-options: -Dgadt
+
 -- formatters
 
 common floskell
@@ -370,6 +381,7 @@ executable haskell-language-server
                     , alternateNumberFormat
                     , qualifyImportedNames
                     , selectionRange
+                    , gadt
                     , floskell
                     , fourmolu
                     , ormolu
@@ -459,10 +471,17 @@ executable haskell-language-server-wrapper
     , ghcide
     , gitrev
     , haskell-language-server
+    , hslogger
     , hie-bios
+    , hls-plugin-api
+    , lsp
+    , lsp-types
+    , mtl
     , optparse-applicative
     , optparse-simple
     , process
+    , transformers
+    , unliftio-core
   if !os(windows)
       build-depends:
           unix

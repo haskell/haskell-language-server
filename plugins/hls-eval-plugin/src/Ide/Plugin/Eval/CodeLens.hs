@@ -45,19 +45,22 @@ import qualified Data.Text                       as T
 import           Data.Time                       (getCurrentTime)
 import           Data.Typeable                   (Typeable)
 import           Development.IDE                 (GetModSummary (..),
+                                                  GetDependencyInformation (..),
+                                                  GetLinkable (..),
                                                   GhcSessionIO (..), IdeState,
                                                   ModSummaryResult (..),
                                                   NeedsCompilation (NeedsCompilation),
-                                                  evalGhcEnv,
+                                                  VFSModified (..), evalGhcEnv,
                                                   hscEnvWithImportPaths,
                                                   printOutputable, runAction,
+                                                  linkableHomeMod,
                                                   textToStringBuffer,
                                                   toNormalizedFilePath',
                                                   uriToFilePath', useNoFile_,
-                                                  useWithStale_, use_,
-                                                  VFSModified(..))
+                                                  useWithStale_, use_, uses_)
 import           Development.IDE.Core.Rules      (GhcSessionDepsConfig (..),
                                                   ghcSessionDepsDefinition)
+import           Development.IDE.Import.DependencyInformation ( reachableModules )
 import           Development.IDE.GHC.Compat      hiding (typeKind, unitState)
 import qualified Development.IDE.GHC.Compat      as Compat
 import qualified Development.IDE.GHC.Compat      as SrcLoc
@@ -91,7 +94,8 @@ import           Ide.Plugin.Eval.Code            (Statement, asStatements,
                                                   evalSetup, myExecStmt,
                                                   propSetup, resultRange,
                                                   testCheck, testRanges)
-import           Ide.Plugin.Eval.Config          (getEvalConfig, EvalConfig(..))
+import           Ide.Plugin.Eval.Config          (EvalConfig (..),
+                                                  getEvalConfig)
 import           Ide.Plugin.Eval.GHC             (addImport, addPackages,
                                                   hasPackage, showDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
@@ -101,7 +105,7 @@ import           Ide.Plugin.Eval.Types
 import           Ide.Plugin.Eval.Util            (gStrictTry, isLiterate,
                                                   logWith, response', timed)
 import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
-                                                  response)
+                                                  pluginResponse)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types              hiding
@@ -127,7 +131,7 @@ codeLens st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
      in perf "codeLens" $
-            response $ do
+            pluginResponse $ do
                 let TextDocumentIdentifier uri = _textDocument
                 fp <- handleMaybe "uri" $ uriToFilePath' uri
                 let nfp = toNormalizedFilePath' fp
@@ -294,10 +298,19 @@ runEvalCmd plId st EvalParams{..} =
                         setContext [Compat.IIModule modName]
                         Right <$> getSession
             evalCfg <- lift $ getEvalConfig plId
+
+            -- Get linkables for all modules below us
+            -- This can be optimised to only get the linkables for the symbols depended on by
+            -- the statement we are parsing
+            lbs <- liftIO $ runAction "eval: GetLinkables" st $ do
+              linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
+              uses_ GetLinkable (filter (/= nfp) linkables_needed) -- We don't need the linkable for the current module
+            let hscEnv'' = hscEnv' { hsc_HPT  = addListToHpt (hsc_HPT hscEnv') [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] }
+
             edits <-
                 perf "edits" $
                     liftIO $
-                        evalGhcEnv hscEnv' $
+                        evalGhcEnv hscEnv'' $
                             runTests
                                 evalCfg
                                 (st, fp)
@@ -358,8 +371,9 @@ runTests EvalConfig{..} e@(_st, _) tests = do
         dbg "TEST RESULTS" rs
 
         let checkedResult = testCheck eval_cfg_diff (section, test) rs
+        let resultLines = concatMap T.lines checkedResult
 
-        let edit = asEdit (sectionFormat section) test (map pad checkedResult)
+        let edit = asEdit (sectionFormat section) test (map pad resultLines)
         dbg "TEST EDIT" edit
         return edit
 

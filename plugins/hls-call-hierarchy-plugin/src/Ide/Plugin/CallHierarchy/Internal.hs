@@ -11,6 +11,7 @@ module Ide.Plugin.CallHierarchy.Internal (
   prepareCallHierarchy
 , incomingCalls
 , outgoingCalls
+, callHierarchyId
 ) where
 
 import           Control.Lens                   ((^.))
@@ -35,23 +36,23 @@ import           GHC.Conc.Sync
 import           HieDb                          (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query as Q
 import           Ide.Plugin.CallHierarchy.Types
+import           Ide.PluginUtils                (getNormalizedFilePath,
+                                                 handleMaybe, pluginResponse,
+                                                 throwPluginError)
 import           Ide.Types
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens        as L
 import           Text.Read                      (readMaybe)
 
+callHierarchyId :: PluginId
+callHierarchyId = PluginId "callHierarchy"
+
 -- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHierarchy
-prepareCallHierarchy state pluginId param
-  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
-    liftIO (runAction "CallHierarchy.prepareHierarchy" state (prepareCallHierarchyItem nfp pos)) >>=
-      \case
-        Just items -> pure $ Right $ Just $ List items
-        Nothing    -> pure $ Right Nothing
-  | otherwise = pure $ Left $ responseError $ T.pack $ "Call Hierarchy: uriToNormalizedFilePath failed for: " <> show uri
-  where
-    uri = param ^. (L.textDocument . L.uri)
-    pos = param ^. L.position
+prepareCallHierarchy state pluginId param = pluginResponse $ do
+    nfp <- getNormalizedFilePath pluginId (param ^. L.textDocument ^. L.uri)
+    items <- liftIO (runAction "CallHierarchy.prepareHierarchy" state (prepareCallHierarchyItem nfp (param ^. L.position)))
+    pure (List <$> items)
 
 prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action (Maybe [CallHierarchyItem])
 prepareCallHierarchyItem = constructFromAst
@@ -196,13 +197,13 @@ deriving instance Ord Value
 
 -- | Render incoming calls request.
 incomingCalls :: PluginMethodHandler IdeState CallHierarchyIncomingCalls
-incomingCalls state pluginId param = do
-  liftIO $ runAction "CallHierarchy.incomingCalls" state $
+incomingCalls state pluginId param = pluginResponse $ do
+  calls <- liftIO $ runAction "CallHierarchy.incomingCalls" state $
       queryCalls (param ^. L.item) Q.incomingCalls mkCallHierarchyIncomingCall
-        mergeIncomingCalls >>=
-    \case
-      Just x  -> pure $ Right $ Just $ List x
-      Nothing -> pure $ Left $ responseError "CallHierarchy: IncomingCalls internal error"
+        mergeIncomingCalls
+  case calls of
+    Just x  -> pure $ Just $ List x
+    Nothing -> throwPluginError "incomingCalls - Internal Error"
   where
     mkCallHierarchyIncomingCall :: Vertex -> Action (Maybe CallHierarchyIncomingCall)
     mkCallHierarchyIncomingCall = mkCallHierarchyCall CallHierarchyIncomingCall
@@ -217,13 +218,13 @@ incomingCalls state pluginId param = do
 
 -- Render outgoing calls request.
 outgoingCalls :: PluginMethodHandler IdeState CallHierarchyOutgoingCalls
-outgoingCalls state pluginId param = do
-  liftIO $ runAction "CallHierarchy.outgoingCalls" state $
+outgoingCalls state pluginId param = pluginResponse $ do
+  calls <- liftIO $ runAction "CallHierarchy.outgoingCalls" state $
       queryCalls (param ^. L.item) Q.outgoingCalls mkCallHierarchyOutgoingCall
-        mergeOutgoingCalls >>=
-    \case
-      Just x  -> pure $ Right $ Just $ List x
-      Nothing -> pure $ Left $ responseError "CallHierarchy: OutgoingCalls internal error"
+        mergeOutgoingCalls
+  case calls of
+      Just x  -> pure $ Just $ List x
+      Nothing -> throwPluginError "outgoingCalls - Internal Error"
   where
     mkCallHierarchyOutgoingCall :: Vertex -> Action (Maybe CallHierarchyOutgoingCall)
     mkCallHierarchyOutgoingCall = mkCallHierarchyCall CallHierarchyOutgoingCall

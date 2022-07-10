@@ -13,6 +13,7 @@ import           Development.IDE                   (IdeState)
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import qualified Ide.Plugin.Example                as Example
 import qualified Ide.Plugin.Example2               as Example2
+import qualified Ide.Plugin.ExampleCabal           as ExampleCabal
 
 -- haskell-language-server optional plugins
 #if qualifyImportedNames
@@ -87,6 +88,10 @@ import           Ide.Plugin.SelectionRange         as SelectionRange
 #if changeTypeSignature
 import           Ide.Plugin.ChangeTypeSignature    as ChangeTypeSignature
 #endif
+
+#if gadt
+import           Ide.Plugin.GADT                   as GADT
+#endif
 -- formatters
 
 #if floskell
@@ -137,7 +142,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       Floskell.descriptor "floskell" :
 #endif
 #if fourmolu
-      Fourmolu.descriptor "fourmolu" :
+      Fourmolu.descriptor pluginRecorder "fourmolu" :
 #endif
 #if tactic
       Tactic.descriptor pluginRecorder "tactics" :
@@ -158,10 +163,10 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       Brittany.descriptor "brittany" :
 #endif
 #if callHierarchy
-      CallHierarchy.descriptor "callHierarchy":
+      CallHierarchy.descriptor :
 #endif
 #if class
-      Class.descriptor "class" :
+      Class.descriptor pluginRecorder "class" :
 #endif
 #if haddockComments
       HaddockComments.descriptor "haddockComments" :
@@ -191,13 +196,16 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       Splice.descriptor "splice" :
 #endif
 #if alternateNumberFormat
-      AlternateNumberFormat.descriptor pluginRecorder "alternateNumberFormat" :
+      AlternateNumberFormat.descriptor pluginRecorder :
 #endif
 #if selectionRange
       SelectionRange.descriptor "selectionRange" :
 #endif
 #if changeTypeSignature
-      ChangeTypeSignature.descriptor "changeTypeSignature" :
+      ChangeTypeSignature.descriptor :
+#endif
+#if gadt
+      GADT.descriptor "gadt" :
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else
@@ -205,4 +213,5 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
     examplePlugins =
       [Example.descriptor  pluginRecorder "eg"
       ,Example2.descriptor pluginRecorder "eg2"
+      ,ExampleCabal.descriptor pluginRecorder "ec"
       ]

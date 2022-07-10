@@ -5,18 +5,20 @@
 
 -- | Display information on hover.
 module Development.IDE.LSP.HoverDefinition
-    ( setIdeHandlers
+    (
     -- * For haskell-language-server
-    , hover
+    hover
     , gotoDefinition
     , gotoTypeDefinition
+    , documentHighlight
+    , references
+    , wsSymbols
     ) where
 
 import           Control.Monad.IO.Class
 import           Development.IDE.Core.Actions
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
-import           Development.IDE.LSP.Server
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import qualified Language.LSP.Server            as LSP
@@ -52,18 +54,6 @@ wsSymbols ide (WorkspaceSymbolParams _ _ query) = liftIO $ do
 foundHover :: (Maybe Range, [T.Text]) -> Maybe Hover
 foundHover (mbRange, contents) =
   Just $ Hover (HoverContents $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator contents) mbRange
-
-setIdeHandlers :: LSP.Handlers (ServerM c)
-setIdeHandlers = mconcat
-  [ requestHandler STextDocumentDefinition $ \ide DefinitionParams{..} ->
-      gotoDefinition ide TextDocumentPositionParams{..}
-  , requestHandler STextDocumentTypeDefinition $ \ide TypeDefinitionParams{..} ->
-      gotoTypeDefinition ide TextDocumentPositionParams{..}
-  , requestHandler STextDocumentDocumentHighlight $ \ide DocumentHighlightParams{..} ->
-      documentHighlight ide TextDocumentPositionParams{..}
-  , requestHandler STextDocumentReferences references
-  , requestHandler SWorkspaceSymbol wsSymbols
-  ]
 
 -- | Respond to and log a hover or go-to-definition request
 request

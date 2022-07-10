@@ -262,7 +262,19 @@ Known Limitations:
 
 ![Change Type Signature Demo](../plugins/hls-change-type-signature-plugin/change2.gif)
 
-[Link to Docs](../plugins/hls-change-type-signature/README.md)
+![Link to Docs](../plugins/hls-change-type-signature-plugin/README.md)
+
+### Convert to GADT syntax
+
+Provided by: `hls-gadt-plugin`
+
+Code action kind: `refactor.rewrite`
+
+Convert a datatype to GADT syntax.
+
+![GADT Demo](../plugins/hls-gadt-plugin/gadt.gif)
+
+![Link to Docs](../plugins/hls-gadt-plugin/README.md)
 
 ## Code lenses
 
@@ -279,6 +291,13 @@ Provided by: `hls-eval-plugin`
 Evaluates code blocks in comments with a click. [Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md).
 
 ![Eval Demo](https://raw.githubusercontent.com/haskell/haskell-language-server/master/plugins/hls-eval-plugin/demo.gif)
+
+Known limitations:
+
+- Standard input is shared with HLS, so e.g. [`getLine` breaks the connection to server](https://github.com/haskell/haskell-language-server/issues/2913).
+- Standard (error) output [is not captured](https://github.com/haskell/haskell-language-server/issues/1977).
+- While similar to [doctest](https://hackage.haskell.org/package/doctest), some of its features are unsupported,
+  see [Differences with doctest](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md#differences-with-doctest).
 
 ### Make import lists fully explicit code lens
 

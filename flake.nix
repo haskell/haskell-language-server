@@ -14,9 +14,6 @@
       flake = false;
     };
     flake-utils.url = "github:numtide/flake-utils";
-    pre-commit-hooks = {
-      url = "github:cachix/pre-commit-hooks.nix";
-    };
     gitignore = {
       url = "github:hercules-ci/gitignore.nix";
       flake = false;
@@ -35,6 +32,10 @@
       url = "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz";
       flake = false;
     };
+    ghc-exactprint-150 = {
+      url = "https://hackage.haskell.org/package/ghc-exactprint-1.5.0/ghc-exactprint-1.5.0.tar.gz";
+      flake = false;
+    };
     ghc-exactprint = {
       url = "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz";
       flake = false;
@@ -51,8 +52,32 @@
       url = "https://hackage.haskell.org/package/fourmolu-0.5.0.1/fourmolu-0.5.0.1.tar.gz";
       flake = false;
     };
+    fourmolu-0300 = {
+      url = "https://hackage.haskell.org/package/fourmolu-0.3.0.0/fourmolu-0.3.0.0.tar.gz";
+      flake = false;
+    };
+    aeson-1520= {
+      url = "https://hackage.haskell.org/package/aeson-1.5.2.0/aeson-1.5.2.0.tar.gz";
+      flake = false;
+    };
+    brittany-01312 = {
+      url = "https://hackage.haskell.org/package/brittany-0.13.1.2/brittany-0.13.1.2.tar.gz";
+      flake = false;
+    };
     hlint = {
       url = "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz";
+      flake = false;
+    };
+    hlint-34 = {
+      url = "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz";
+      flake = false;
+    };
+    ptr-poker = {
+      url = "https://hackage.haskell.org/package/ptr-poker-0.1.2.8/ptr-poker-0.1.2.8.tar.gz";
+      flake = false;
+    };
+    stylish-haskell-01220 = {
+      url = "https://hackage.haskell.org/package/stylish-haskell-0.12.2.0/stylish-haskell-0.12.2.0.tar.gz";
       flake = false;
     };
     implicit-hie-cradle = {
@@ -63,11 +88,21 @@
       url = "https://hackage.haskell.org/package/hie-bios-0.9.1/hie-bios-0.9.1.tar.gz";
       flake = false;
     };
+    myst-parser = {
+      url = "github:smunix/MyST-Parser?ref=fix.hls-docutils";
+      flake = false;
+    };
+    # For https://github.com/readthedocs/sphinx_rtd_theme/pull/1185, otherwise lists are broken locally
+    sphinx_rtd_theme = {
+      url = "github:readthedocs/sphinx_rtd_theme?rev=34f81daaf52466366c80003db293d50075c1b896";
+      flake = false;
+    };
+    poetry2nix.url = "github:nix-community/poetry2nix/master";
   };
   outputs =
-    inputs@{ self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, ... }:
+    inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, ... }:
     {
-      overlay = final: prev:
+      overlays.default = final: prev:
         with prev;
         let
           haskellOverrides = hself: hsuper: {
@@ -85,6 +120,10 @@
               in hsuper.mkDerivation (args // {
                 jailbreak = if broken then true else jailbreak;
                 doCheck = if broken then false else check;
+                # Library profiling is disabled as it causes long compilation time
+                # on our CI jobs. Nix users are free tor revert this anytime.
+                enableLibraryProfiling = false;
+                doHaddock = false;
               });
           };
           gitignoreSource = (import gitignore { inherit lib; }).gitignoreSource;
@@ -114,8 +153,6 @@
               github = overrideCabal hsuper.github (drv: { patches = []; });
               # GHCIDE requires hie-bios ^>=0.9.1
               hie-bios = hself.callCabal2nix "hie-bios" inputs.hie-bios {};
-              # We need an older version
-              hiedb = hself.hiedb_0_4_1_0;
 
               lsp = hsuper.callCabal2nix "lsp" inputs.lsp {};
               lsp-types = hsuper.callCabal2nix "lsp-types" inputs.lsp-types {};
@@ -171,64 +208,47 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ self.overlay ];
+          overlays = [ self.overlays.default inputs.poetry2nix.overlay ];
           config = { allowBroken = true; };
         };
 
-        # Pre-commit hooks to run stylish-haskell
-        pre-commit-check = hpkgs: pre-commit-hooks.lib.${system}.run {
-          src = ./.;
-          hooks = {
-            stylish-haskell.enable = true;
-            # use stylish-haskell with our target ghc
-            stylish-haskell.entry = pkgs.lib.mkForce "${hpkgs.stylish-haskell}/bin/stylish-haskell --inplace";
-            stylish-haskell.excludes = [
-              # Ignored files
-              "^Setup.hs$"
-              "test/testdata/.*$"
-              "test/data/.*$"
-              "test/manual/lhs/.*$"
-              "^hie-compat/.*$"
-              "^plugins/hls-tactics-plugin/.*$"
-
-              # Temporarily ignored files
-              # Stylish-haskell (and other formatters) does not work well with some CPP usages in these files
-              "^ghcide/src/Development/IDE/GHC/Compat.hs$"
-              "^ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs$"
-              "^ghcide/src/Development/IDE/GHC/Compat/Core.hs$"
-              "^ghcide/src/Development/IDE/Spans/Pragmas.hs$"
-              "^ghcide/src/Development/IDE/LSP/Outline.hs$"
-              "^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$"
-              "^ghcide/test/exe/Main.hs$"
-              "ghcide/src/Development/IDE/Core/Rules.hs"
-              "^hls-test-utils/src/Test/Hls/Util.hs$"
-            ];
-          };
-        };
-
-        ghc901Config = (import ./configuration-ghc-901.nix) { inherit pkgs; };
-        ghc921Config = (import ./configuration-ghc-921.nix) { inherit pkgs inputs; };
+        ghc902Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
+        ghc922Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
 
         # GHC versions
-        ghcDefault = pkgs.hlsHpkgs ("ghc"
-          + pkgs.lib.replaceStrings [ "." ] [ "" ]
-          pkgs.haskellPackages.ghc.version);
-        ghc884 = pkgs.hlsHpkgs "ghc884";
-        ghc8107 = pkgs.hlsHpkgs "ghc8107";
-        ghc901 = ghc901Config.tweakHpkgs (pkgs.hlsHpkgs "ghc901");
-        ghc921 = ghc921Config.tweakHpkgs (pkgs.hlsHpkgs "ghc921");
+        # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached
+        # by upstream nixpkgs, which now only includes GHC version 9+
+        supportedGHCs = let
+          ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
+          cases = {
+            ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
+            ghc922 = ghc922Config.tweakHpkgs (pkgs.hlsHpkgs "ghc922");
+          };
+          in { default = cases."${ghcVersion}"; } // cases;
+
+        ghc902 = supportedGHCs.ghc902;
+        ghc922 = supportedGHCs.ghc922;
+        ghcDefault = supportedGHCs.default;
 
         # For markdown support
-        myst-parser = pkgs.python3Packages.callPackage ./myst-parser.nix {};
-        sphinx_rtd_theme = pkgs.python3Packages.sphinx_rtd_theme.overrideAttrs (oldAttrs: {
-          # For https://github.com/readthedocs/sphinx_rtd_theme/pull/1185, otherwise lists are broken locally
-          src = pkgs.fetchFromGitHub {
-            owner = "readthedocs";
-            repo = "sphinx_rtd_theme";
-            rev = "34f81daaf52466366c80003db293d50075c1b896";
-            sha256 = "0rkrsvvqr6g2p3v5vq88jhfp5sd0r1jqjh3vc5y26jn30z8s4fkz";
-          };
-        });
+        myst-parser = pkgs.poetry2nix.mkPoetryEnv {
+          projectDir = inputs.myst-parser;
+          python = pkgs.python39;
+          overrides = [
+            pkgs.poetry2nix.defaultPoetryOverrides
+          ];
+        };
+        sphinx_rtd_theme = pkgs.poetry2nix.mkPoetryEnv {
+          projectDir = inputs.sphinx_rtd_theme;
+          python = pkgs.python39;
+          overrides = [
+            pkgs.poetry2nix.defaultPoetryOverrides
+            (self: super: {
+              # The RTD theme doesn't work with newer docutils
+              docutils = pkgs.python3Packages.callPackage ./docutils.nix {};
+            })
+          ];
+        };
         pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx myst-parser sphinx_rtd_theme ps.pip]);
 
         docs = pkgs.stdenv.mkDerivation {
@@ -270,6 +290,7 @@
             capstone tracy
             # ormolu
             # stylish-haskell
+            pre-commit
             ];
 
 
@@ -279,8 +300,8 @@
             export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
             export PATH=$PATH:$HOME/.local/bin
 
-            # Enable the shell hooks
-            ${(pre-commit-check ghcDefault).shellHook}
+            # Install pre-commit hook
+            pre-commit install
 
             # If the cabal project file is not the default one.
             # Print a warning and generate an alias.
@@ -334,32 +355,30 @@
         # Developement shell with only compiler
         simpleDevShells = {
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
-          haskell-language-server-884-dev = mkDevShell ghc884 "cabal.project";
-          haskell-language-server-8107-dev = mkDevShell ghc8107 "cabal.project";
-          haskell-language-server-901-dev = mkDevShell ghc901 "cabal.project";
-          haskell-language-server-921-dev = mkDevShell ghc921 "cabal.project";
+          haskell-language-server-902-dev = mkDevShell ghc902 "cabal.project";
+          haskell-language-server-922-dev = mkDevShell ghc922 "cabal.project";
         };
 
         # Developement shell, haskell packages are also provided by nix
         nixDevShells = {
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
-          haskell-language-server-884-dev-nix = mkDevShellWithNixDeps ghc884 "cabal.project";
-          haskell-language-server-8107-dev-nix = mkDevShellWithNixDeps ghc8107 "cabal.project";
-          haskell-language-server-901-dev-nix = mkDevShellWithNixDeps ghc901 "cabal.project";
-          haskell-language-server-921-dev-nix = mkDevShellWithNixDeps ghc921 "cabal.project";
+          haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
+          haskell-language-server-922-dev-nix = mkDevShellWithNixDeps ghc922 "cabal.project";
         };
 
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
-          haskell-language-server-884 = mkExe ghc884;
-          haskell-language-server-8107 = mkExe ghc8107;
-          haskell-language-server-901 = mkExe ghc901;
-          haskell-language-server-921 = mkExe ghc921;
+          haskell-language-server-902 = mkExe ghc902;
+          haskell-language-server-922 = mkExe ghc922;
         };
 
-        devShells = simpleDevShells // nixDevShells;
+        devShells = simpleDevShells // nixDevShells // {
+          default = simpleDevShells.haskell-language-server-dev;
+        };
 
         packages = allPackages // {
+          default = allPackages.haskell-language-server;
+
           # See https://github.com/NixOS/nix/issues/5591
           # nix flake cannot build a list/set of derivation in one command.
           # Using a linkFarmFromDrvs, I'm creating a unique entry point to
@@ -377,9 +396,10 @@
           docs = docs;
         };
 
-        defaultPackage = packages.haskell-language-server;
-
-        devShell = devShells.haskell-language-server-dev;
+        # The attributes for the default shell and package changed in recent versions of Nix,
+        # these are here for backwards compatibility with the old versions.
+        devShell = devShells.default;
+        defaultPackage = packages.default;
       });
 
   nixConfig = {

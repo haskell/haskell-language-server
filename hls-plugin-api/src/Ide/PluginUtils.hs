@@ -28,14 +28,14 @@ module Ide.PluginUtils
     positionInRange,
     usePropertyLsp,
     getNormalizedFilePath,
-    response,
+    pluginResponse,
     handleMaybe,
     handleMaybeM,
+    throwPluginError
     )
 where
 
 
-import           Control.Lens                    ((^.))
 import           Control.Monad.Extra             (maybeM)
 import           Control.Monad.Trans.Class       (lift)
 import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
@@ -56,7 +56,6 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
-import           Language.LSP.Types.Lens         (uri)
 
 -- ---------------------------------------------------------------------
 
@@ -246,22 +245,24 @@ allLspCmdIds pid commands = concatMap go commands
 
 -- ---------------------------------------------------------------------
 
-getNormalizedFilePath :: Monad m => PluginId -> TextDocumentIdentifier -> ExceptT String m NormalizedFilePath
-getNormalizedFilePath (PluginId plId) docId = handleMaybe errMsg
+getNormalizedFilePath :: Monad m => PluginId -> Uri -> ExceptT String m NormalizedFilePath
+getNormalizedFilePath (PluginId plId) uri = handleMaybe errMsg
         $ uriToNormalizedFilePath
-        $ toNormalizedUri uri'
+        $ toNormalizedUri uri
     where
-        errMsg = T.unpack $ "Error(" <> plId <> "): converting " <> getUri uri' <> " to NormalizedFilePath"
-        uri' = docId ^. uri
+        errMsg = T.unpack $ "Error(" <> plId <> "): converting " <> getUri uri <> " to NormalizedFilePath"
 
 -- ---------------------------------------------------------------------
+throwPluginError :: Monad m => String -> ExceptT String m b
+throwPluginError = throwE
+
 handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
 handleMaybe msg = maybe (throwE msg) return
 
 handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
 handleMaybeM msg act = maybeM (throwE msg) return $ lift act
 
-response :: Monad m => ExceptT String m a -> m (Either ResponseError a)
-response =
+pluginResponse :: Monad m => ExceptT String m a -> m (Either ResponseError a)
+pluginResponse =
   fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
     . runExceptT

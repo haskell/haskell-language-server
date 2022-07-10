@@ -89,7 +89,7 @@ instance Pretty Log where
     LogCouldNotIdentifyReverseDeps path ->
       "Could not identify reverse dependencies for" <+> viaShow path
     (LogTypeCheckingReverseDeps path reverseDepPaths) ->
-      "Typechecking reverse dependecies for"
+      "Typechecking reverse dependencies for"
       <+> viaShow path
       <> ":"
       <+> pretty (fmap (fmap show) reverseDepPaths)
@@ -150,7 +150,7 @@ getModificationTimeImpl missingFileDiags file = do
 --   But interface files are private, in that only HLS writes them.
 --   So we implement watching ourselves, and bypass the need for alwaysRerun.
 isInterface :: NormalizedFilePath -> Bool
-isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot"]
+isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
 
 -- | Reset the GetModificationTime state of interface files
 resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM ()
