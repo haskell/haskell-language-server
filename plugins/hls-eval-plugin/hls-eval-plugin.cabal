@@ -75,7 +75,7 @@ library
     , lsp-types
     , megaparsec            >=9.0
     , mtl
-    , parser-combinators
+    , parser-combinators    >=1.2
     , pretty-simple
     , QuickCheck
     , safe-exceptions
