@@ -32,10 +32,14 @@ module Development.IDE.GHC.Compat(
     myCoreToStgExpr,
 #endif
 
+    FastStringCompat,
     nodeInfo',
     getNodeIds,
-    nodeInfoFromSource,
+    sourceNodeInfo,
+    generatedNodeInfo,
+    simpleNodeInfoCompat,
     isAnnotationInNodeInfo,
+    nodeAnnotations,
     mkAstNode,
     combineRealSrcSpans,
 
@@ -94,7 +98,6 @@ module Development.IDE.GHC.Compat(
     module UniqSet,
     module UniqDFM,
     getDependentMods,
-    diffBinds,
     flattenBinds,
     mkRnEnv2,
     emptyInScopeSet,
@@ -113,6 +116,7 @@ module Development.IDE.GHC.Compat(
 #endif
     ) where
 
+import           Data.Bifunctor
 import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.ExactPrint
@@ -125,58 +129,74 @@ import           Development.IDE.GHC.Compat.Units
 import           Development.IDE.GHC.Compat.Util
 import           GHC                                   hiding (HasSrcSpan,
                                                         ModLocation,
-                                                        RealSrcSpan, getLoc,
-                                                        lookupName, exprType)
+                                                        RealSrcSpan, exprType,
+                                                        getLoc, lookupName)
+
+import           Data.Coerce                           (coerce)
+import           Data.String                           (IsString (fromString))
+
+
 #if MIN_VERSION_ghc(9,0,0)
-import GHC.Driver.Hooks (hscCompileCoreExprHook)
-import GHC.Core (CoreExpr, CoreProgram, Unfolding(..), noUnfolding, flattenBinds)
-import qualified GHC.Core.Opt.Pipeline as GHC
-import GHC.Core.Tidy (tidyExpr)
-import GHC.Types.Var.Env (emptyTidyEnv, mkRnEnv2, emptyInScopeSet)
-import qualified GHC.CoreToStg.Prep as GHC
-import GHC.CoreToStg.Prep (corePrepPgm)
-import GHC.Core.Lint (lintInteractiveExpr)
+import           GHC.Core.Lint                         (lintInteractiveExpr)
+import qualified GHC.Core.Opt.Pipeline                 as GHC
+import           GHC.Core.Tidy                         (tidyExpr)
+import           GHC.CoreToStg.Prep                    (corePrepPgm)
+import qualified GHC.CoreToStg.Prep                    as GHC
+import           GHC.Driver.Hooks                      (hscCompileCoreExprHook)
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Unit.Home.ModInfo (lookupHpt, HomePackageTable)
-import GHC.Runtime.Context (icInteractiveModule)
-import GHC.Unit.Module.Deps (Dependencies(dep_mods))
-import GHC.Linker.Types (isObjectLinkable)
-import GHC.Linker.Loader (loadExpr)
+import           GHC.Linker.Loader                     (loadExpr)
+import           GHC.Linker.Types                      (isObjectLinkable)
+import           GHC.Runtime.Context                   (icInteractiveModule)
+import           GHC.Unit.Home.ModInfo                 (HomePackageTable,
+                                                        lookupHpt)
+import           GHC.Unit.Module.Deps                  (Dependencies (dep_mods))
 #else
-import GHC.CoreToByteCode (coreExprToBCOs)
-import GHC.Driver.Types (Dependencies(dep_mods), icInteractiveModule, lookupHpt, HomePackageTable)
-import GHC.Runtime.Linker (linkExpr)
+import           GHC.CoreToByteCode                    (coreExprToBCOs)
+import           GHC.Driver.Types                      (Dependencies (dep_mods),
+                                                        HomePackageTable,
+                                                        icInteractiveModule,
+                                                        lookupHpt)
+import           GHC.Runtime.Linker                    (linkExpr)
 #endif
-import GHC.ByteCode.Asm (bcoFreeNames)
-import GHC.Types.Annotations (Annotation(..), AnnTarget(ModuleTarget), extendAnnEnvList)
-import GHC.Types.Unique.DSet as UniqDSet
-import GHC.Types.Unique.Set as UniqSet
-import GHC.Types.Unique.DFM  as UniqDFM
+import           GHC.ByteCode.Asm                      (bcoFreeNames)
+import           GHC.Types.Annotations                 (AnnTarget (ModuleTarget),
+                                                        Annotation (..),
+                                                        extendAnnEnvList)
+import           GHC.Types.Unique.DFM                  as UniqDFM
+import           GHC.Types.Unique.DSet                 as UniqDSet
+import           GHC.Types.Unique.Set                  as UniqSet
 #else
-import Hooks (hscCompileCoreExprHook)
-import CoreSyn (CoreExpr, flattenBinds, Unfolding(..), noUnfolding)
-import qualified SimplCore as GHC
-import CoreTidy (tidyExpr)
-import VarEnv (emptyTidyEnv, mkRnEnv2, emptyInScopeSet)
-import CorePrep (corePrepExpr, corePrepPgm)
-import CoreLint (lintInteractiveExpr)
-import ByteCodeGen (coreExprToBCOs)
-import HscTypes (icInteractiveModule, HomePackageTable, lookupHpt, Dependencies(dep_mods))
-import Linker (linkExpr)
-import ByteCodeAsm (bcoFreeNames)
-import Annotations (Annotation(..), AnnTarget(ModuleTarget), extendAnnEnvList)
-import UniqDSet
-import UniqSet
-import UniqDFM
+import           Annotations                           (AnnTarget (ModuleTarget),
+                                                        Annotation (..),
+                                                        extendAnnEnvList)
+import           ByteCodeAsm                           (bcoFreeNames)
+import           ByteCodeGen                           (coreExprToBCOs)
+import           CoreLint                              (lintInteractiveExpr)
+import           CorePrep                              (corePrepExpr,
+                                                        corePrepPgm)
+import           CoreSyn                               (CoreExpr,
+                                                        Unfolding (..),
+                                                        flattenBinds,
+                                                        noUnfolding)
+import           CoreTidy                              (tidyExpr)
+import           Hooks                                 (hscCompileCoreExprHook)
+import           Linker                                (linkExpr)
+import qualified SimplCore                             as GHC
+import           UniqDFM
+import           UniqDSet
+import           UniqSet
+import           VarEnv                                (emptyInScopeSet,
+                                                        emptyTidyEnv, mkRnEnv2)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
+import           GHC.Core
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                    hiding (ExposePackage)
 import qualified GHC.Types.SrcLoc                      as SrcLoc
+import           GHC.Types.Var.Env
 import           GHC.Utils.Error
 #if MIN_VERSION_ghc(9,2,0)
-import           Data.Bifunctor
 import           GHC.Driver.Env                        as Env
 import           GHC.Unit.Module.ModIface
 import           GHC.Unit.Module.ModSummary
@@ -209,41 +229,32 @@ import           System.IO
 
 import           Compat.HieAst                         (enrichHie)
 import           Compat.HieBin
-import           Compat.HieTypes
+import           Compat.HieTypes                       hiding (nodeAnnotations)
+import qualified Compat.HieTypes                       as GHC (nodeAnnotations)
 import           Compat.HieUtils
 import qualified Data.ByteString                       as BS
 import           Data.IORef
 
 import           Data.List                             (foldl')
 import qualified Data.Map                              as Map
-import qualified Data.Set                              as Set
-
-#if MIN_VERSION_ghc(9,0,0)
 import qualified Data.Set                              as S
-#endif
 
 #if !MIN_VERSION_ghc(8,10,0)
 import           Bag                                   (unitBag)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Types.CostCentre
-import GHC.Stg.Syntax
-import GHC.Types.IPE
-import GHC.Stg.Syntax
-import GHC.Types.IPE
-import GHC.Types.CostCentre
-import GHC.Core
-import GHC.Builtin.Uniques
-import GHC.Runtime.Interpreter
-import GHC.StgToByteCode
-import GHC.Stg.Pipeline
-import GHC.ByteCode.Types
-import GHC.Linker.Loader (loadDecls)
-import GHC.Data.Maybe
-import GHC.CoreToStg
-import GHC.Core.Utils
-import GHC.Types.Var.Env
+import           GHC.Builtin.Uniques
+import           GHC.ByteCode.Types
+import           GHC.CoreToStg
+import           GHC.Data.Maybe
+import           GHC.Linker.Loader                     (loadDecls)
+import           GHC.Runtime.Interpreter
+import           GHC.Stg.Pipeline
+import           GHC.Stg.Syntax
+import           GHC.StgToByteCode
+import           GHC.Types.CostCentre
+import           GHC.Types.IPE
 #endif
 
 type ModIfaceAnnotation = Annotation
@@ -506,11 +517,18 @@ nodeInfo' = nodeInfo
 -- unhelpfulSpanFS = id
 #endif
 
-nodeInfoFromSource :: HieAST a -> Maybe (NodeInfo a)
+sourceNodeInfo :: HieAST a -> Maybe (NodeInfo a)
 #if MIN_VERSION_ghc(9,0,0)
-nodeInfoFromSource = Map.lookup SourceInfo . getSourcedNodeInfo . sourcedNodeInfo
+sourceNodeInfo = Map.lookup SourceInfo . getSourcedNodeInfo . sourcedNodeInfo
 #else
-nodeInfoFromSource = Just . nodeInfo
+sourceNodeInfo = Just . nodeInfo
+#endif
+
+generatedNodeInfo :: HieAST a -> Maybe (NodeInfo a)
+#if MIN_VERSION_ghc(9,0,0)
+generatedNodeInfo = Map.lookup GeneratedInfo . getSourcedNodeInfo . sourcedNodeInfo
+#else
+generatedNodeInfo = sourceNodeInfo -- before ghc 9.0, we don't distinguish the source
 #endif
 
 data GhcVersion
@@ -553,11 +571,31 @@ runPp =
     const SysTools.runPp
 #endif
 
-isAnnotationInNodeInfo :: (FastString, FastString) -> NodeInfo a -> Bool
+simpleNodeInfoCompat :: FastStringCompat -> FastStringCompat -> NodeInfo a
+simpleNodeInfoCompat ctor typ = simpleNodeInfo (coerce ctor) (coerce typ)
+
+isAnnotationInNodeInfo :: (FastStringCompat, FastStringCompat) -> NodeInfo a -> Bool
+isAnnotationInNodeInfo p = S.member p . nodeAnnotations
+
+nodeAnnotations :: NodeInfo a -> S.Set (FastStringCompat, FastStringCompat)
 #if MIN_VERSION_ghc(9,2,0)
-isAnnotationInNodeInfo (ctor, typ) = Set.member (NodeAnnotation ctor typ) . nodeAnnotations
+nodeAnnotations = S.map (\(NodeAnnotation ctor typ) -> (coerce ctor, coerce typ)) . GHC.nodeAnnotations
 #else
-isAnnotationInNodeInfo p = Set.member p . nodeAnnotations
+nodeAnnotations = S.map (bimap coerce coerce) . GHC.nodeAnnotations
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+newtype FastStringCompat = FastStringCompat LexicalFastString
+#else
+newtype FastStringCompat = FastStringCompat FastString
+#endif
+    deriving (Show, Eq, Ord)
+
+instance IsString FastStringCompat where
+#if MIN_VERSION_ghc(9,2,0)
+    fromString = FastStringCompat . LexicalFastString . fromString
+#else
+    fromString = FastStringCompat . fromString
 #endif
 
 mkAstNode :: NodeInfo a -> Span -> [HieAST a] -> HieAST a

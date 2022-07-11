@@ -1,37 +1,30 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Ide.Plugin.SelectionRange.ASTPreProcess
+module Ide.Plugin.CodeRange.ASTPreProcess
     ( preProcessAST
     , PreProcessEnv(..)
+    , isCustomNode
+    , CustomNodeType(..)
     ) where
 
-import           Control.Monad.Reader            (Reader, asks)
-import           Data.Foldable                   (find, foldl')
-import           Data.Functor.Identity           (Identity (Identity, runIdentity))
-import           Data.List                       (groupBy)
-import           Data.List.NonEmpty              (NonEmpty)
-import qualified Data.List.NonEmpty              as NonEmpty
-import qualified Data.Map.Strict                 as Map
-import           Data.Maybe                      (mapMaybe)
-import           Data.Semigroup.Foldable         (foldlM1)
-import qualified Data.Set                        as Set
-import           Development.IDE.GHC.Compat      (ContextInfo (MatchBind, TyDecl, ValBind),
-                                                  HieAST (..), Identifier,
-                                                  IdentifierDetails (identInfo),
-                                                  NodeInfo (NodeInfo, nodeIdentifiers),
-                                                  RealSrcSpan, RefMap, Span,
-                                                  combineRealSrcSpans,
-                                                  flattenAst,
-                                                  isAnnotationInNodeInfo,
-                                                  mkAstNode, nodeInfoFromSource,
-                                                  realSrcSpanEnd,
-                                                  realSrcSpanStart)
-import           Development.IDE.GHC.Compat.Util (FastString)
-import           Prelude                         hiding (span)
+import           Control.Monad.Reader       (Reader, asks)
+import           Data.Foldable
+import           Data.Functor.Identity      (Identity (Identity, runIdentity))
+import           Data.List                  (groupBy)
+import           Data.List.NonEmpty         (NonEmpty)
+import qualified Data.List.NonEmpty         as NonEmpty
+import           Data.Map.Strict            (Map)
+import qualified Data.Map.Strict            as Map
+import           Data.Maybe                 (fromMaybe, mapMaybe)
+import           Data.Semigroup             (First (First, getFirst))
+import           Data.Semigroup.Foldable    (foldlM1)
+import qualified Data.Set                   as Set
+import           Development.IDE.GHC.Compat hiding (nodeInfo)
+import           Prelude                    hiding (span)
 
 {-|
-Extra arguments for 'preaProcessAST', meant to be used in a 'Reader' context. We use 'Reader' to combine
+Extra arguments for 'preProcessAST'. It's expected to be used in a 'Reader' context
 -}
 newtype PreProcessEnv a = PreProcessEnv
     { preProcessEnvRefMap :: RefMap a
@@ -53,6 +46,47 @@ preProcessAST :: HieAST a -> Reader (PreProcessEnv a) (HieAST a)
 preProcessAST node = mergeImports node >>= mergeSignatureWithDefinition
 
 {-|
+Create a custom node in 'HieAST'. By "custom", we mean this node doesn't actually exist in the original 'HieAST'
+provided by GHC, but created to suite the needs of hls-code-range-plugin.
+-}
+createCustomNode :: CustomNodeType -> NonEmpty (HieAST a) -> HieAST a
+createCustomNode customNodeType children = mkAstNode customNodeInfo span' (NonEmpty.toList children)
+  where
+    span' :: RealSrcSpan
+    span' = runIdentity . foldlM1 (\x y -> Identity (combineRealSrcSpans x y)) . fmap nodeSpan $ children
+
+    customNodeInfo = simpleNodeInfoCompat "HlsCustom" (customNodeTypeToFastString customNodeType)
+
+isCustomNode :: HieAST a -> Maybe CustomNodeType
+isCustomNode node = do
+    nodeInfo <- generatedNodeInfo node
+    getFirst <$> foldMap go (nodeAnnotations nodeInfo)
+  where
+    go :: (FastStringCompat, FastStringCompat) -> Maybe (First CustomNodeType)
+    go (k, v)
+        | k == "HlsCustom", Just v' <- revCustomNodeTypeMapping Map.!? v = Just (First v')
+        | otherwise = Nothing
+
+data CustomNodeType =
+    -- | a group of imports
+    CustomNodeImportsGroup
+    -- | adjacent type signature and value definition are paired under a custom parent node
+  | CustomNodeAdjacentSignatureDefinition
+    deriving (Show, Eq, Ord)
+
+customNodeTypeMapping :: Map CustomNodeType FastStringCompat
+customNodeTypeMapping = Map.fromList
+    [ (CustomNodeImportsGroup, "Imports")
+    , (CustomNodeAdjacentSignatureDefinition, "AdjacentSignatureDefinition")
+    ]
+
+revCustomNodeTypeMapping :: Map FastStringCompat CustomNodeType
+revCustomNodeTypeMapping = Map.fromList . fmap (\(k, v) -> (v, k)) . Map.toList $ customNodeTypeMapping
+
+customNodeTypeToFastString :: CustomNodeType -> FastStringCompat
+customNodeTypeToFastString k = fromMaybe "" (customNodeTypeMapping Map.!? k)
+
+{-|
 Combines adjacent import declarations under a new parent node, so that the user will have an extra step selecting
 the whole import area while expanding/shrinking the selection range.
 -}
@@ -67,16 +101,10 @@ mergeImports node = pure $ node { nodeChildren = children }
     merge :: [HieAST a] -> Maybe (HieAST a)
     merge []     = Nothing
     merge [x]    = Just x
-    merge (x:xs) = Just $ createVirtualNode (x NonEmpty.:| xs)
+    merge (x:xs) = Just $ createCustomNode CustomNodeImportsGroup (x NonEmpty.:| xs)
 
 nodeIsImport :: HieAST a -> Bool
 nodeIsImport = isAnnotationInAstNode ("ImportDecl", "ImportDecl")
-
-createVirtualNode :: NonEmpty (HieAST a) -> HieAST a
-createVirtualNode children = mkAstNode (NodeInfo mempty mempty mempty) span' (NonEmpty.toList children)
-  where
-    span' :: RealSrcSpan
-    span' = runIdentity . foldlM1 (\x y -> Identity (combineRealSrcSpans x y)) . fmap nodeSpan $ children
 
 {-|
 Combine type signature with variable definition under a new parent node, if the signature is placed right before the
@@ -110,7 +138,7 @@ mergeAdjacentSigDef refMap (n1, n2) = do
     -- Does that identifier appear in the second AST node as a definition? If so, we combines the two nodes.
     refs <- Map.lookup typeSigId refMap
     if any (isIdentADef (nodeSpan n2)) refs
-    then pure . createVirtualNode $ n1 NonEmpty.:| [n2]
+    then pure . createCustomNode CustomNodeAdjacentSignatureDefinition $ n1 NonEmpty.:| [n2]
     else Nothing
   where
     checkAnnotation :: Maybe ()
@@ -136,7 +164,7 @@ identifierForTypeSig node =
     nodes = flattenAst node
 
     extractIdentifier :: HieAST a -> Maybe Identifier
-    extractIdentifier node' = nodeInfoFromSource node' >>=
+    extractIdentifier node' = sourceNodeInfo node' >>=
         (fmap fst . find (\(_, detail) -> TyDecl `Set.member` identInfo detail)
         . Map.toList . nodeIdentifiers)
 
@@ -147,13 +175,13 @@ isIdentADef outerSpan (span, detail) =
     && isDef
   where
     isDef :: Bool
-    isDef = any isContextInfoDef . Set.toList . identInfo $ detail
+    isDef = any isContextInfoDef . toList . identInfo $ detail
 
-    -- Does the 'ContextInfo' represents a variable/function definition?
+    -- Determines if the 'ContextInfo' represents a variable/function definition
     isContextInfoDef :: ContextInfo -> Bool
     isContextInfoDef ValBind{} = True
     isContextInfoDef MatchBind = True
     isContextInfoDef _         = False
 
-isAnnotationInAstNode :: (FastString, FastString) -> HieAST a -> Bool
-isAnnotationInAstNode p = maybe False (isAnnotationInNodeInfo p) . nodeInfoFromSource
+isAnnotationInAstNode :: (FastStringCompat, FastStringCompat) -> HieAST a -> Bool
+isAnnotationInAstNode p = maybe False (isAnnotationInNodeInfo p) . sourceNodeInfo
