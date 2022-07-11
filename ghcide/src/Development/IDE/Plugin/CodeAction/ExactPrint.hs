@@ -32,8 +32,7 @@ import           Data.Data                             (Data)
 import           Data.Functor
 import           Data.Generics                         (listify)
 import qualified Data.Map.Strict                       as Map
-import           Data.Maybe                            (fromJust, isNothing,
-                                                        mapMaybe)
+import           Data.Maybe                            (fromJust, isNothing, mapMaybe, fromMaybe )
 import qualified Data.Text                             as T
 import           Development.IDE.GHC.Compat hiding (Annotation)
 import           Development.IDE.GHC.Error
@@ -50,8 +49,8 @@ import Data.Default
 import           GHC (AddEpAnn (..), AnnContext (..), AnnParen (..),
                       DeltaPos (SameLine), EpAnn (..), EpaLocation (EpaDelta),
                       IsUnicodeSyntax (NormalSyntax),
-                      NameAdornment (NameParens), NameAnn (..), addAnns, ann, emptyComments,
-                      reAnnL, AnnList (..), TrailingAnn (AddCommaAnn), addTrailingAnnToA)
+                      NameAdornment (NameParens), addAnns, ann, emptyComments,
+                      reAnnL, AnnList (..), TrailingAnn (AddCommaAnn))
 #endif
 import           Language.LSP.Types
 import Development.IDE.GHC.Util
@@ -377,7 +376,7 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
           transferAnn (L l' lies) (L l' [x]) id
         return $ L l it{ideclHiding = Just (hide, L l' $ lies ++ [x])}
 #else
-        lies' <- addCommaInImportList lies x
+        let lies' = addCommaInImportList lies x
         return $ L l it{ideclHiding = Just (hide, L l' lies')}
 #endif
 extendImportTopLevel _ _ = lift $ Left "Unable to extend the import list"
@@ -514,30 +513,44 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
           listAnn = epAnn srcParent [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)]
           x :: LIE GhcPs = reLocA $ L l'' $ IEThingWith listAnn parentLIE NoIEWildcard [childLIE]
 
-      lies' <- addCommaInImportList (reverse pre) x
+          lies' = addCommaInImportList (reverse pre) x
 #endif
       return $ L l it{ideclHiding = Just (hide, L l' lies')}
 extendImportViaParent _ _ _ _ = lift $ Left "Unable to extend the import list via parent"
 
 #if MIN_VERSION_ghc(9,2,0)
 -- Add an item in an import list, taking care of adding comma if needed.
-addCommaInImportList :: Monad m =>
+addCommaInImportList ::
   -- | Initial list
   [LocatedAn AnnListItem a]
   -- | Additionnal item
   -> LocatedAn AnnListItem a
-  -> m [LocatedAn AnnListItem a]
-addCommaInImportList lies x = do
-  let hasSibling = not (null lies)
-  -- Add the space before the comma
-  x <- pure $ setEntryDP x (SameLine $ if hasSibling then 1 else 0)
+  -> [LocatedAn AnnListItem a]
+addCommaInImportList lies x =
+    fixLast lies ++ [newItem]
+  where
+    isTrailingAnnComma :: TrailingAnn -> Bool
+    isTrailingAnnComma (AddCommaAnn _) = True
+    isTrailingAnnComma _ = False
 
-  -- Add the comma (if needed)
-  let
-    fixLast = if hasSibling then first addComma else id
-    lies' = over _last fixLast lies ++ [x]
+    -- check if there is an existing trailing comma
+    existingTrailingComma = fromMaybe False $ do
+        L lastItemSrcAnn _ <- lastMaybe lies
+        lastItemAnn <- case ann lastItemSrcAnn of
+            EpAnn _ lastItemAnn _ -> pure lastItemAnn
+            _ -> Nothing
+        pure $ any isTrailingAnnComma (lann_trailing lastItemAnn)
 
-  pure lies'
+    hasSibling = not . null $ lies
+
+    -- Setup the new item. It should have a preceding whitespace if it has siblings, and a trailing comma if the
+    -- preceding item already has one.
+    newItem = first (if existingTrailingComma then addComma else id) $
+        setEntryDP x (SameLine $ if hasSibling then 1 else 0)
+
+    -- Add the comma (if needed)
+    fixLast :: [LocatedAn AnnListItem a] -> [LocatedAn AnnListItem a]
+    fixLast = over _last (first (if existingTrailingComma then id else addComma))
 #endif
 
 unIEWrappedName :: IEWrappedName (IdP GhcPs) -> String

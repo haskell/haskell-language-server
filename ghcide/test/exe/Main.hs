@@ -1882,6 +1882,28 @@ extendImportTests = testGroup "extend import actions"
                     , "               )"
                     , "main = print (stuffA, stuffB)"
                     ])
+        , testSession "extend multi line import with trailing comma" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "stuffA :: Double"
+                    , "stuffA = 0.00750"
+                    , "stuffB :: Integer"
+                    , "stuffB = 123"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (stuffB,"
+                    , "               )"
+                    , "main = print (stuffA, stuffB)"
+                    ])
+            (Range (Position 3 17) (Position 3 18))
+            ["Add stuffA to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (stuffB, stuffA,"
+                    , "               )"
+                    , "main = print (stuffA, stuffB)"
+                    ])
         , testSession "extend single line import with method within class" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
