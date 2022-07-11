@@ -72,7 +72,7 @@ library
     , data-default
     , ghc
     , ghcide                ^>=1.7
-    , githash
+    , githash               >=0.1.6.1
     , lsp
     , hie-bios
     , hiedb

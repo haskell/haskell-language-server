@@ -36,7 +36,7 @@ library
     , hls-plugin-api  ^>=1.4
     , lens
     , lsp
-    , process-extras
+    , process-extras  >= 0.7.1
     , text
 
   default-language: Haskell2010
