@@ -367,12 +367,12 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
       then lift (Left $ thing <> " already imported")
       else do
 #if !MIN_VERSION_ghc(9,2,0)
+        anns <- getAnnsT
         maybe (pure ()) addTrailingCommaT (lastMaybe lies)
         addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
         addSimpleAnnT rdr dp00 [(G AnnVal, dp00)]
 
         -- When the last item already has a trailing comma, we append a trailing comma to the new item.
-        anns <- getAnnsT
         let isAnnComma (G AnnComma, _) = True
             isAnnComma _                  = False
             shouldAddTrailingComma = maybe False nodeHasComma (lastMaybe lies)
