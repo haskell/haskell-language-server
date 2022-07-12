@@ -32,7 +32,7 @@ import           Data.Data                             (Data)
 import           Data.Functor
 import           Data.Generics                         (listify)
 import qualified Data.Map.Strict                       as Map
-import           Data.Maybe                            (fromJust, isNothing, mapMaybe, fromMaybe )
+import           Data.Maybe                            (fromJust, isNothing, mapMaybe, fromMaybe, isJust )
 import qualified Data.Text                             as T
 import           Development.IDE.GHC.Compat hiding (Annotation)
 import           Development.IDE.GHC.Error
@@ -57,6 +57,7 @@ import Development.IDE.GHC.Util
 import Data.Bifunctor (first)
 import Control.Lens (_head, _last, over)
 import GHC.Stack (HasCallStack)
+import Data.Foldable (find)
 
 ------------------------------------------------------------------------------
 
@@ -366,10 +367,21 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
       then lift (Left $ thing <> " already imported")
       else do
 #if !MIN_VERSION_ghc(9,2,0)
-        when hasSibling $
-          addTrailingCommaT (last lies)
+        maybe (pure ()) addTrailingCommaT (lastMaybe lies)
         addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
         addSimpleAnnT rdr dp00 [(G AnnVal, dp00)]
+
+#if !MIN_VERSION_ghc(9,0,0)
+        -- when the last item already has a trailing comma, we append a trailing comma to the new item
+        -- GHC 9.0 automatically has this behavior, I don't know why.
+        anns <- getAnnsT
+        let isAnnComma (G AnnComma, _) = True
+            isAnnComma _                  = False
+            existsTrailingComma = isJust $ lastMaybe lies >>= findAnnComma
+            findAnnComma x = Map.lookup (mkAnnKey x) anns >>= find isAnnComma . annsDP
+        when (existsTrailingComma && isNothing (findAnnComma x)) (addTrailingCommaT x)
+#endif
+
         -- Parens are attachted to `lies`, so if `lies` was empty previously,
         -- we need change the ann key from `[]` to `:` to keep parens and other anns.
         unless hasSibling $
