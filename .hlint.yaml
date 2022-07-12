@@ -85,17 +85,19 @@
 
   # Partial functions
   
-  # For some reason we need to check fucntions which
+  # We need to check fucntions which
   # are typically exported multiple ways under both names,
   # see https://github.com/ndmitchell/hlint/issues/1389
-  - name: Prelude.head
+  - name: [Prelude.head, Data.List.head]
     within: 
     - Main
+    - Experiments
     - Development.Benchmark.Rules
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.CodeAction.ExactPrint
     - Development.IDE.Spans.Documentation
+    - Development.IDE.Session
     - Ide.Plugin.CallHierarchy.Internal
     - Ide.Plugin.Eval.Code
     - Ide.Plugin.Eval.Util
@@ -109,42 +111,18 @@
     - Typeclass
     - Wingman.Judgements
     - Wingman.Machinery
-
-  - name: Data.List.head
-    within:
-    - Main
-    - Experiments
-    - Development.IDE.Plugin.CodeAction
-    - Development.IDE.Plugin.Completions
-    - Development.IDE.Plugin.CodeAction.ExactPrint
-    - Development.IDE.Session
-    - Development.IDE.Spans.Documentation
-    - Ide.Plugin.CallHierarchy.Internal
-    - Ide.Plugin.Class
     - Wingman.Tactics
-    - TExpectedActual
-    - TRigidType
 
-  - name: Prelude.tail
+  - name: [Prelude.tail, Data.List.tail]
     within: 
     - Main
     - Development.Benchmark.Rules
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.CodeAction.ExactPrint
-    - UnificationSpec
-
-  - name: Data.List.tail
-    within:
-    - Main
-    - Development.Benchmark.Rules
-    - Development.IDE.Plugin.CodeAction
-    - Development.IDE.Plugin.CodeAction.ExactPrint
     - Development.IDE.Session
-    - IDE.Plugin.Eval.Code
-    - IDE.Plugin.Eval.Util
     - UnificationSpec
 
-  - name: Prelude.last
+  - name: [Prelude.last, Data.List.last]
     within: 
     - Main
     - Development.IDE.Plugin.CodeAction
@@ -155,12 +133,7 @@
     - Ide.Plugin.Eval.Parse.Comments
     - Ide.Plugin.Eval.CodeLens
 
-  - name: Data.List.last
-    within: 
-    - GenChangelogs
-    - Main
-
-  - name: Prelude.init
+  - name: [Prelude.init, Data.List.init]
     within: 
     - Main
     - Development.IDE.Spans.Common
@@ -169,33 +142,21 @@
     - Development.Benchmark.Rules
     - ErrorGivenPartialSignature
 
-  - name: Data.List.init
-    within: []
-
   - name: Data.List.foldl1'
     within: []
 
   - name: Data.List.foldr1'
     within: []
 
-  - name: "Prelude.!!"
+  - name: ["Prelude.!!", "Data.List.!!"]
     within: 
-    - Main
-    - Development.IDE.Plugin.CodeAction
-    - Development.IDE.Plugin.Completions.Logic
-    - Development.IDE.Spans.Documentation
-    - TErrorGivenPartialSignature
-    - Wingman.CaseSplit
-    - Wingman.Simplify
-
-  - name: "Data.List.!!"
-    within:
     - Main
     - Experiments
     - FunctionalCodeAction
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.Completions.Logic
     - Development.IDE.Spans.Documentation
+    - TErrorGivenPartialSignature
     - Wingman.CaseSplit
     - Wingman.Simplify
 
