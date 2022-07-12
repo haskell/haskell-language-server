@@ -32,7 +32,7 @@ import           Data.Data                             (Data)
 import           Data.Functor
 import           Data.Generics                         (listify)
 import qualified Data.Map.Strict                       as Map
-import           Data.Maybe                            (fromJust, isNothing, mapMaybe, fromMaybe, isJust )
+import           Data.Maybe                            (fromJust, isNothing, mapMaybe, fromMaybe, isJust)
 import qualified Data.Text                             as T
 import           Development.IDE.GHC.Compat hiding (Annotation)
 import           Development.IDE.GHC.Error
@@ -371,16 +371,16 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
         addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
         addSimpleAnnT rdr dp00 [(G AnnVal, dp00)]
 
-#if !MIN_VERSION_ghc(9,0,0)
-        -- when the last item already has a trailing comma, we append a trailing comma to the new item
-        -- GHC 9.0 automatically has this behavior, I don't know why.
+        -- When the last item already has a trailing comma, we append a trailing comma to the new item.
         anns <- getAnnsT
         let isAnnComma (G AnnComma, _) = True
             isAnnComma _                  = False
-            existsTrailingComma = isJust $ lastMaybe lies >>= findAnnComma
-            findAnnComma x = Map.lookup (mkAnnKey x) anns >>= find isAnnComma . annsDP
-        when (existsTrailingComma && isNothing (findAnnComma x)) (addTrailingCommaT x)
-#endif
+            shouldAddTrailingComma = maybe False nodeHasComma (lastMaybe lies)
+                && not (nodeHasComma (L l' lies))
+
+            nodeHasComma :: Data a => Located a -> Bool
+            nodeHasComma x = isJust $ Map.lookup (mkAnnKey x) anns >>= find isAnnComma . annsDP
+        when shouldAddTrailingComma (addTrailingCommaT x)
 
         -- Parens are attachted to `lies`, so if `lies` was empty previously,
         -- we need change the ann key from `[]` to `:` to keep parens and other anns.
