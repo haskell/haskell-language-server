@@ -10,7 +10,6 @@ tasks:
         $HOME/.local
         $HOME/.cabal
         $HOME/.stack
-        $HOME/.ghcup
         /nix
       )
       for DIR in "${CACHE_DIRS[@]}"; do
