@@ -40,9 +40,7 @@ tasks:
         echo '}' >> .vscode/settings.json
       fi
 
-      pushd docs
-        pip install -r requirements.txt
-      popd
+      pip install -r docs/requirements.txt
     init: |
       cabal update
       cabal configure --enable-executable-dynamic
