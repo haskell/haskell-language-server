@@ -10,6 +10,8 @@ tasks:
         $HOME/.local
         $HOME/.cabal
         $HOME/.stack
+        $HOME/.cache/ghcide
+        $HOME/.cache/hie-bios
         /nix
       )
       for DIR in "${CACHE_DIRS[@]}"; do
