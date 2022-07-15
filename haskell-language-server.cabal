@@ -72,7 +72,7 @@ library
     , data-default
     , ghc
     , ghcide                ^>=1.7
-    , githash
+    , githash               >=0.1.6.1
     , lsp
     , hie-bios
     , hiedb
@@ -176,8 +176,8 @@ flag qualifyImportedNames
   default:     True
   manual:      True
 
-flag selectionRange
-  description: Enable selectionRange plugin
+flag codeRange
+  description: Enable Code Range plugin
   default:     True
   manual:      True
 
@@ -232,7 +232,8 @@ flag dynamic
 common example-plugins
   hs-source-dirs: plugins/default/src
   other-modules: Ide.Plugin.Example,
-                 Ide.Plugin.Example2
+                 Ide.Plugin.Example2,
+                 Ide.Plugin.ExampleCabal
 
 common class
   if flag(class)
@@ -309,10 +310,10 @@ common qualifyImportedNames
     build-depends: hls-qualify-imported-names-plugin ^>=1.0
     cpp-options: -DqualifyImportedNames
 
-common selectionRange
-  if flag(selectionRange)
-    build-depends: hls-selection-range-plugin ^>= 1.0
-    cpp-options: -DselectionRange
+common codeRange
+  if flag(codeRange)
+    build-depends: hls-code-range-plugin ^>= 1.0
+    cpp-options: -DcodeRange
 
 common changeTypeSignature
   if flag(changeTypeSignature)
@@ -379,7 +380,7 @@ executable haskell-language-server
                     , splice
                     , alternateNumberFormat
                     , qualifyImportedNames
-                    , selectionRange
+                    , codeRange
                     , gadt
                     , floskell
                     , fourmolu
@@ -471,10 +472,17 @@ executable haskell-language-server-wrapper
     , ghcide
     , gitrev
     , haskell-language-server
+    , hslogger
     , hie-bios
+    , hls-plugin-api
+    , lsp
+    , lsp-types
+    , mtl
     , optparse-applicative
     , optparse-simple
     , process
+    , transformers
+    , unliftio-core
   if !os(windows)
       build-depends:
           unix

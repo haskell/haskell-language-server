@@ -26,7 +26,7 @@ packages:
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
          ./plugins/hls-qualify-imported-names-plugin
-         ./plugins/hls-selection-range-plugin
+         ./plugins/hls-code-range-plugin
          ./plugins/hls-change-type-signature-plugin
          ./plugins/hls-gadt-plugin
          ./plugins/hls-hindent-plugin
@@ -39,8 +39,7 @@ optional-packages: vendored/*/*.cabal
 tests: true
 
 package *
-  -- ghc 8.10 cannot build ghc-lib 9.2 with --haddock
-  -- ghc-options: -haddock
+  ghc-options: -haddock
   test-show-details: direct
 
 write-ghc-environment-files: never

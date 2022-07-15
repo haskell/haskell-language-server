@@ -318,13 +318,13 @@ Shows module name matching file path, and applies it with a click.
 
 ## Selection range
 
-Provided by: `hls-selection-range-plugin`
+Provided by: `hls-code-range-plugin`
 
 Provides haskell specific
-[shrink/expand selection](https://code.visualstudio.com/docs/editor/codebasics#shrinkexpand-selection)
+[shrink/expand selection](https://code.visualstudio.com/docs/editor/codebasics#_shrinkexpand-selection)
 support.
 
-![Selection range demo](https://user-images.githubusercontent.com/16440269/150301502-4c002605-9f8d-43f5-86d3-28846942c4ff.mov)
+![Selection range demo](https://user-images.githubusercontent.com/16440269/177240833-7dc8fe39-b446-477e-b5b1-7fc303608d4f.gif)
 
 ## Rename
 

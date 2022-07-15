@@ -45,18 +45,22 @@ import qualified Data.Text                       as T
 import           Data.Time                       (getCurrentTime)
 import           Data.Typeable                   (Typeable)
 import           Development.IDE                 (GetModSummary (..),
+                                                  GetDependencyInformation (..),
+                                                  GetLinkable (..),
                                                   GhcSessionIO (..), IdeState,
                                                   ModSummaryResult (..),
                                                   NeedsCompilation (NeedsCompilation),
                                                   VFSModified (..), evalGhcEnv,
                                                   hscEnvWithImportPaths,
                                                   printOutputable, runAction,
+                                                  linkableHomeMod,
                                                   textToStringBuffer,
                                                   toNormalizedFilePath',
                                                   uriToFilePath', useNoFile_,
-                                                  useWithStale_, use_)
+                                                  useWithStale_, use_, uses_)
 import           Development.IDE.Core.Rules      (GhcSessionDepsConfig (..),
                                                   ghcSessionDepsDefinition)
+import           Development.IDE.Import.DependencyInformation ( reachableModules )
 import           Development.IDE.GHC.Compat      hiding (typeKind, unitState)
 import qualified Development.IDE.GHC.Compat      as Compat
 import qualified Development.IDE.GHC.Compat      as SrcLoc
@@ -294,10 +298,19 @@ runEvalCmd plId st EvalParams{..} =
                         setContext [Compat.IIModule modName]
                         Right <$> getSession
             evalCfg <- lift $ getEvalConfig plId
+
+            -- Get linkables for all modules below us
+            -- This can be optimised to only get the linkables for the symbols depended on by
+            -- the statement we are parsing
+            lbs <- liftIO $ runAction "eval: GetLinkables" st $ do
+              linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
+              uses_ GetLinkable (filter (/= nfp) linkables_needed) -- We don't need the linkable for the current module
+            let hscEnv'' = hscEnv' { hsc_HPT  = addListToHpt (hsc_HPT hscEnv') [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] }
+
             edits <-
                 perf "edits" $
                     liftIO $
-                        evalGhcEnv hscEnv' $
+                        evalGhcEnv hscEnv'' $
                             runTests
                                 evalCfg
                                 (st, fp)

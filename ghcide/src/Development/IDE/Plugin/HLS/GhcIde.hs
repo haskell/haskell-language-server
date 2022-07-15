@@ -49,7 +49,16 @@ descriptors recorder =
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginHandlers = mkPluginHandler STextDocumentHover hover'
-                  <> mkPluginHandler STextDocumentDocumentSymbol symbolsProvider,
+                  <> mkPluginHandler STextDocumentDocumentSymbol symbolsProvider
+                  <> mkPluginHandler STextDocumentDefinition (\ide _ DefinitionParams{..} ->
+                      gotoDefinition ide TextDocumentPositionParams{..})
+                  <> mkPluginHandler STextDocumentTypeDefinition (\ide _ TypeDefinitionParams{..} ->
+                      gotoTypeDefinition ide TextDocumentPositionParams{..})
+                  <> mkPluginHandler STextDocumentDocumentHighlight (\ide _ DocumentHighlightParams{..} ->
+                      documentHighlight ide TextDocumentPositionParams{..})
+                  <> mkPluginHandler STextDocumentReferences (\ide _ params -> references ide params)
+                  <> mkPluginHandler SWorkspaceSymbol (\ide _ params -> wsSymbols ide params),
+
     pluginConfigDescriptor = defaultConfigDescriptor {configEnableGenericConfig = False}
   }
 

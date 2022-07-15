@@ -20,6 +20,8 @@ positionInRangeTest = testGroup "positionInRange"
         positionInRange (Position 1 0) (Range (Position 1 1) (Position 1 6)) @?= False
     , testCase "single line, in range" $
         positionInRange (Position 1 5) (Range (Position 1 1) (Position 1 6)) @?= True
+    , testCase "single line, at the end" $
+        positionInRange (Position 1 5) (Range (Position 1 1) (Position 1 5)) @?= False
     , testCase "multiline, in range" $
         positionInRange (Position 3 5) (Range (Position 1 1) (Position 5 6)) @?= True
     , testCase "multiline, out of range" $

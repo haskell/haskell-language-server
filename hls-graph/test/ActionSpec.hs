@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
@@ -12,6 +11,7 @@ import Development.IDE.Graph.Database (shakeNewDatabase, shakeRunDatabase)
 import Development.IDE.Graph.Internal.Action (apply1)
 import Development.IDE.Graph.Internal.Types
 import Development.IDE.Graph.Rule
+import qualified Data.HashSet as HashSet
 import Example
 import qualified StmContainers.Map as STM
 import Test.Hspec
@@ -54,7 +54,7 @@ spec = do
           apply1 theKey
       res `shouldBe` [True]
       Just KeyDetails {..} <- atomically $ STM.lookup (Key (Rule @())) databaseValues
-      keyReverseDeps `shouldBe` [Key theKey]
+      keyReverseDeps `shouldBe` HashSet.fromList [Key theKey]
     it "rethrows exceptions" $ do
       db <- shakeNewDatabase shakeOptions $ do
         addRule $ \(Rule :: Rule ()) old mode -> error "boom"

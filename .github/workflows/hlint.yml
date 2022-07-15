@@ -6,7 +6,7 @@ on:
       - '**'
 
 jobs:
-  build10:
+  hlint:
     name: "Hlint check run"
     runs-on: ubuntu-latest
     steps:
@@ -15,11 +15,12 @@ jobs:
     - name: 'Installing'
       uses: rwe/actions-hlint-setup@v1
       with:
-        version: '3.3.4'
+        version: '3.4'
 
     - name: 'Checking code'
       uses: rwe/actions-hlint-run@v1
       with:
-        hlint-bin: "hlint --with-group=extra --hint=ghcide/.hlint.yaml"
-        path: '[ "ghcide/src", "ghcide/exe", "ghcide/bench/lib", "ghcide/bench/exe", "ghcide/bench/hist", "shake-bench/src", "ghcide/test/exe"]'
+        hlint-bin: "hlint --with-group=extra"
+        fail-on: error
+        path: .
 

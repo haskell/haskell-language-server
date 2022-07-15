@@ -462,11 +462,13 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
             ValD _ PatBind{pat_lhs} ->
                 [mkComp id CiVariable Nothing
                 | VarPat _ id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
-            TyClD _ ClassDecl{tcdLName, tcdSigs} ->
+            TyClD _ ClassDecl{tcdLName, tcdSigs, tcdATs} ->
                 mkComp tcdLName CiInterface (Just $ showForSnippet tcdLName) :
                 [ mkComp id CiFunction (Just $ showForSnippet typ)
                 | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
-                , id <- ids]
+                , id <- ids] ++
+                [ mkComp fdLName CiStruct (Just $ showForSnippet fdLName)
+                | L _ (FamilyDecl{fdLName}) <- tcdATs]
             TyClD _ x ->
                 let generalCompls = [mkComp id cl (Just $ showForSnippet $ tyClDeclLName x)
                         | id <- listify (\(_ :: LIdP GhcPs) -> True) x
