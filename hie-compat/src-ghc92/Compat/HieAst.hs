@@ -12,7 +12,7 @@
 {-# LANGUAGE TypeFamilies            #-}
 {-# LANGUAGE UndecidableInstances    #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
-
+{- HLINT ignore -}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 {-
