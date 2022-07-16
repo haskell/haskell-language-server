@@ -291,8 +291,11 @@
             # ormolu
             # stylish-haskell
             pre-commit
-            ];
-
+            ] ++ lib.optionals stdenv.isDarwin
+              (with darwin.apple_sdk.frameworks; [
+                Cocoa
+                CoreServices
+              ]);
 
           shellHook = ''
             # @guibou: I'm not sure theses lines are needed
