@@ -15,19 +15,20 @@
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
-module Compat.HieAst ( enrichHie ) where
-
--- import           GHC.Iface.Ext.Ast   (enrichHie)
-
-
-
 {-
+Forked from GHC v9.2.3 to include record-dot-syntax type information in .hie files.
+
+Changes are marked with "CHANGED:"
+
 Main functions for .hie file generation
 -}
 
+-- CHANGED: removed this include and updated the module declaration
 -- #include "HsVersions.h"
-
+--
 -- module GHC.Iface.Ext.Ast ( mkHieFile, mkHieFileWithSource, getCompressedAsts, enrichHie) where
+
+module Compat.HieAst ( enrichHie ) where
 
 import GHC.Utils.Outputable(ppr)
 
@@ -786,6 +787,7 @@ instance HiePass p => HasType (LocatedA (HsExpr (GhcPass p))) where
             HsOverLabel{}       -> False
             HsIPVar{}           -> False
             XExpr (WrapExpr {}) -> False
+            -- CHANGED: the line below makes record-dot-syntax types work
             XExpr (ExpansionExpr {}) -> False
             _                   -> True
 
@@ -918,6 +920,8 @@ instance HiePass p => ToHie (Located (PatSynBind (GhcPass p) (GhcPass p))) where
           detSpan = case detScope of
             LocalScope a -> Just a
             _ -> Nothing
+          -- CHANGED: removed ASSERT
+          -- toBind (PrefixCon ts args) = ASSERT(null ts) PrefixCon ts $ map (C Use) args
           toBind (PrefixCon ts args) = PrefixCon ts $ map (C Use) args
           toBind (InfixCon a b) = InfixCon (C Use a) (C Use b)
           toBind (RecCon r) = RecCon $ map (PSC detSpan) r
@@ -1037,8 +1041,10 @@ instance HiePass p => ToHie (PScoped (LocatedA (Pat (GhcPass p)))) where
               in [ toHie $ L ospan wrap
                  , toHie $ PS rsp scope pscope $ (L ospan pat)
                  ]
-
-
+-- CHANGED: removed preprocessor stuff
+-- #if __GLASGOW_HASKELL__ < 811
+--           HieRn -> []
+-- #endif
     where
       contextify :: a ~ LPat (GhcPass p) => HsConDetails (HsPatSigType (NoGhcTc (GhcPass p))) a (HsRecFields (GhcPass p) a)
                  -> HsConDetails (TScoped (HsPatSigType (NoGhcTc (GhcPass p)))) (PScoped a) (RContext (HsRecFields (GhcPass p) (PScoped a)))
@@ -1923,7 +1929,11 @@ instance HiePass p => ToHie (LocatedA (HsSplice (GhcPass p))) where
       HsSpliced _ _ _ ->
         []
       XSplice x -> case ghcPass @p of
-
+-- CHANGED: removed preprocessor stuff
+-- #if __GLASGOW_HASKELL__ < 811
+--                      GhcPs -> noExtCon x
+--                      GhcRn -> noExtCon x
+-- #endif
                      GhcTc -> case x of
                                 HsSplicedT _ -> []
 
