@@ -381,7 +381,7 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
 
         -- When the last item already has a trailing comma, we append a trailing comma to the new item.
         let isAnnComma (G AnnComma, _) = True
-            isAnnComma _                  = False
+            isAnnComma _               = False
             shouldAddTrailingComma = maybe False nodeHasComma (lastMaybe lies)
                 && not (nodeHasComma (L l' lies))
 
