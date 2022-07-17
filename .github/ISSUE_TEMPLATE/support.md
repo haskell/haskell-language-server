@@ -1,18 +1,18 @@
 ---
-name: Bug report
-about: I've spotted something specific thats' going wrong
+name: Support request
+about: Help, something isn't working and I'm stuck!
 title: ''
-labels: 'status: needs triage, type: bug'
+labels: 'status: needs triage, type: support'
 assignees: ''
 
 ---
 
 <!--
-Before opening a bug, please take a look at the [troubleshooting guide](https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html).
+Before asking for support, please take a look at the [troubleshooting guide](https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html).
 This explains some common issues and will also help you to find the information that the issue template asks for.
 -->
 
-### Your environment
+## Your environment 
 
 <!--
 Everything in this section is optional, but it does help us to debug your issue!
@@ -30,17 +30,9 @@ Which version of HLS do you use and how did you install it?
 <!-- 1.7.0.1 from ghcup, etc. -->
 Have you configured HLS in any way (especially: a `hie.yaml` file)?
 
-### Steps to reproduce
+## What's wrong?
 
-<!-- Tell us how to reproduce this issue. -->
-
-### Expected behaviour
-
-<!-- Tell us what should happen. -->
-
-### Actual behaviour
-
-<!-- Tell us what happens instead. -->
+<!-- What's not working? What have you tried? -->
 
 ### Debug information
 
