@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TemplateHaskell           #-}
 {-# LANGUAGE TypeFamilies              #-}
+{-# OPTIONS_GHC -Wno-typed-holes #-}
 
 module Ide.Plugin.CodeRange.Rules
     ( CodeRange (..)
@@ -46,7 +47,7 @@ import           Development.IDE.Core.Rules         (toIdeResult)
 import qualified Development.IDE.Core.Shake         as Shake
 import           Development.IDE.GHC.Compat         (Annotated, HieAST (..),
                                                      HieASTs (getAsts),
-                                                     ParsedSource, RefMap)
+                                                     ParsedSource, RefMap, doublePrimTyConKey, exactPrint)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.ExactPrint     (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import           GHC.Generics                       (Generic)
@@ -105,13 +106,14 @@ instance Ord CodeRange where
 -- | Construct a 'CodeRange'. A valid CodeRange will be returned in any case. If anything go wrong,
 -- a list of warnings will be returned as 'Log'
 buildCodeRange :: HieAST a -> RefMap a -> Annotated ParsedSource -> Writer [Log] CodeRange
-buildCodeRange ast refMap _ = do
+buildCodeRange ast refMap annPS = do
     -- We work on 'HieAST', then convert it to 'CodeRange', so that applications such as selection range and folding
     -- range don't need to care about 'HieAST'
     -- TODO @sloorush actually use 'Annotated ParsedSource' to handle structures not in 'HieAST' properly (for example comments)
     let ast' = runReader (preProcessAST ast) (PreProcessEnv refMap)
     codeRange <- astToCodeRange ast'
-    pure $ simplify codeRange
+    codeRange' <- commentsToCodeRange annPS codeRange
+    pure $ simplify codeRange'
 
 astToCodeRange :: HieAST a -> Writer [Log] CodeRange
 astToCodeRange (Node _ sp []) = pure $ CodeRange (realSrcSpanToRange sp) mempty CodeKindRegion
@@ -119,6 +121,17 @@ astToCodeRange node@(Node _ sp children) = do
     children' <- removeInterleaving . sort =<< traverse astToCodeRange children
     let codeKind = if Just CustomNodeImportsGroup == isCustomNode node then CodeKindImports else CodeKindRegion
     pure $ CodeRange (realSrcSpanToRange sp) (V.fromList children') codeKind
+
+commentsToCodeRange :: Annotated ParsedSource -> CodeRange -> Writer [Log] CodeRange
+commentsToCodeRange annPS codeRange = do
+    let codeKind = CodeKindComment
+
+    -- TODO: figure out how to get comments out of annps
+    let comments = annPS
+    let comments' = fmap (\(sp, _) -> CodeRange (realSrcSpanToRange sp) mempty codeKind) comments
+    let children = V.fromList comments'
+    pure $ codeRange { _codeRange_children = children }
+
 
 -- | Remove interleaving of the list of 'CodeRange's.
 removeInterleaving :: [CodeRange] -> Writer [Log] [CodeRange]
