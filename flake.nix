@@ -160,8 +160,6 @@
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.implicit-hie-cradle {};
 
-              stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
-
               # https://github.com/NixOS/nixpkgs/issues/140774
               ormolu =
                 if final.system == "aarch64-darwin"
