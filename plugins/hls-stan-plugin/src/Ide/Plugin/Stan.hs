@@ -11,7 +11,6 @@ import           Data.Hashable                  (Hashable)
 import qualified Data.Map                       as Map
 import           Data.Maybe                     (fromJust, mapMaybe)
 import qualified Data.Text                      as T
-import           Data.Typeable                  (Typeable, cast)
 import           Development.IDE                (Action, FileDiagnostic,
                                                  GetHieAst (..),
                                                  GetModSummaryWithoutTimestamps (..),
@@ -26,7 +25,8 @@ import           Development.IDE                (Action, FileDiagnostic,
                                                  hscEnv, msrModSummary,
                                                  tmrTypechecked, use, uses)
 import           Development.IDE.Core.RuleTypes (HieAstResult (..))
-import           Development.IDE.Core.Rules     (getSourceFileSource)
+import           Development.IDE.Core.Rules     (getSourceFileSource,
+                                                 getHieFile)
 import qualified Development.IDE.Core.Shake     as Shake
 import           Development.IDE.GHC.Compat     (HieASTs (HieASTs),
                                                  RealSrcSpan (..), mkHieFile',
@@ -118,14 +118,3 @@ rules recorder = do
               _tags = Nothing
             }
           )
-
-getHieFile :: NormalizedFilePath -> Action (Maybe HieFile)
-getHieFile nfp = runMaybeT $ do
-  HAR {hieAst} <- MaybeT $ use GetHieAst nfp
-  tmr <- MaybeT $ use TypeCheck nfp
-  ghc <- MaybeT $ use GhcSession nfp
-  msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
-  source <- lift $ getSourceFileSource nfp
-  let exports = tcg_exports $ tmrTypechecked tmr
-  typedAst <- MaybeT $ pure $ cast hieAst
-  liftIO $ runHsc (hscEnv ghc) $ mkHieFile' (msrModSummary msr) exports typedAst source

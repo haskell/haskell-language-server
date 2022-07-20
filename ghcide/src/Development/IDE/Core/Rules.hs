@@ -28,6 +28,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleWithComments,
     getClientConfigAction,
     usePropertyAction,
+    getHieFile,
     -- * Rules
     CompiledLinkables(..),
     getParsedModuleRule,
@@ -97,6 +98,7 @@ import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
+import           Data.Typeable                                (cast)
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists hiding (LogShake, Log)
 import           Development.IDE.Core.FileStore               (getFileContents,
@@ -1218,3 +1220,15 @@ mainRule recorder RulesConfig{..} = do
     persistentDocMapRule
     persistentImportMapRule
     getLinkableRule recorder
+
+-- | Get HieFile for haskell file on NormalizedFilePath
+getHieFile :: NormalizedFilePath -> Action (Maybe HieFile)
+getHieFile nfp = runMaybeT $ do
+  HAR {hieAst} <- MaybeT $ use GetHieAst nfp
+  tmr <- MaybeT $ use TypeCheck nfp
+  ghc <- MaybeT $ use GhcSession nfp
+  msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
+  source <- lift $ getSourceFileSource nfp
+  let exports = tcg_exports $ tmrTypechecked tmr
+  typedAst <- MaybeT $ pure $ cast hieAst
+  liftIO $ runHsc (hscEnv ghc) $ mkHieFile' (msrModSummary msr) exports typedAst source
