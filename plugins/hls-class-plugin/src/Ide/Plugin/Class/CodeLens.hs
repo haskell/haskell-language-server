@@ -27,7 +27,7 @@ codeLens state plId CodeLensParams{..} = do
     enabled <- enableTypeLens <$> getCompletionsConfig plId
     if not enabled then pure $ pure $ List [] else pluginResponse $ do
         nfp <- getNormalizedFilePath plId uri
-        tmr <- handleMaybeM "Unable to typecheak"
+        tmr <- handleMaybeM "Unable to typecheck"
             $ liftIO
             $ runAction "classplugin.TypeCheck" state
             $ use TypeCheck nfp
