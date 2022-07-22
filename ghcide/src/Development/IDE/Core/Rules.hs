@@ -168,6 +168,7 @@ data Log
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
   | LogExactPrint ExactPrint.Log
+  | LogTypecheckedFOI !NormalizedFilePath
   deriving Show
 
 instance Pretty Log where
@@ -185,6 +186,14 @@ instance Pretty Log where
     LogLoadingHieFileSuccess path ->
       "SUCCEEDED LOADING HIE FILE FOR" <+> pretty path
     LogExactPrint log -> pretty log
+    LogTypecheckedFOI path -> vcat
+      [ "WARNING: Typechecked a file which is not currently open in the editor:" <+> pretty (fromNormalizedFilePath path)
+      , "This can indicate a bug which results in excessive memory usage."
+      , "This may be a spurious warning if you have recently closed the file."
+      , "If you haven't opened this file recently, please file a report on the issue tracker mentioning"
+        <+> "the HLS version being used, the plugins enabled, and if possible the codebase and file which"
+        <+> "triggered this warning."
+      ]
 
 templateHaskellInstructions :: T.Text
 templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#static-binaries"
@@ -653,6 +662,12 @@ typeCheckRule :: Recorder (WithPriority Log) -> Rules ()
 typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck file -> do
     pm <- use_ GetParsedModule file
     hsc  <- hscEnv <$> use_ GhcSessionDeps file
+    foi <- use_ IsFileOfInterest file
+    -- We should only call the typecheck rule for files of interest.
+    -- Keeping typechecked modules in memory for other files is
+    -- very expensive.
+    when (foi == NotFOI) $
+      logWith recorder Logger.Warning $ LogTypecheckedFOI file
     typeCheckRuleDefinition hsc pm
 
 knownFilesRule :: Recorder (WithPriority Log) -> Rules ()
