@@ -47,18 +47,20 @@ import           Language.LSP.Types                   (List (List),
                                                        Position (..),
                                                        Range (_start),
                                                        ResponseError,
-                                                       SMethod (STextDocumentSelectionRange),
+                                                       SMethod (STextDocumentSelectionRange, STextDocumentFoldingRange),
                                                        SelectionRange (..),
                                                        SelectionRangeParams (..),
+                                                       FoldingRange (..),
+                                                       FoldingRangeParams(..),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
-                                                       Uri)
+                                                       Uri
+                                                       )
 import           Prelude                              hiding (log, span)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentSelectionRange selectionRangeHandler
-    -- TODO @sloorush add folding range
-    -- <> mkPluginHandler STextDocumentFoldingRange foldingRangeHandler
+    <> mkPluginHandler STextDocumentFoldingRange foldingRangeHandler
     , pluginRules = codeRangeRule (cmapWithPrio LogRules recorder)
     }
 
@@ -67,6 +69,23 @@ data Log = LogRules Rules.Log
 instance Pretty Log where
     pretty log = case log of
         LogRules codeRangeLog -> pretty codeRangeLog
+
+foldingRangeHandler :: IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError (List FoldingRange))
+foldingRangeHandler ide _ FoldingRangeParams{..} = do
+    pluginResponse $ do
+        filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
+                toNormalizedFilePath' <$> uriToFilePath' uri
+        foldingRanges <- ExceptT . liftIO . runIdeAction "FoldingRange" (shakeExtras ide) . runExceptT $
+            getFoldingRanges filePath
+        pure . List $ foldingRanges
+    where
+        uri :: Uri
+        TextDocumentIdentifier uri = _textDocument
+
+getFoldingRanges :: NormalizedFilePath -> ExceptT String IdeAction [FoldingRange]
+getFoldingRanges file = do
+    codeRange <- maybeToExceptT  "fail to get code range" $ useE GetCodeRange file
+    -- let foldingRanges = 
 
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do
