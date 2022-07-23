@@ -187,7 +187,7 @@ instance Pretty Log where
       "SUCCEEDED LOADING HIE FILE FOR" <+> pretty path
     LogExactPrint log -> pretty log
     LogTypecheckedFOI path -> vcat
-      [ "WARNING: Typechecked a file which is not currently open in the editor:" <+> pretty (fromNormalizedFilePath path)
+      [ "Typechecked a file which is not currently open in the editor:" <+> pretty (fromNormalizedFilePath path)
       , "This can indicate a bug which results in excessive memory usage."
       , "This may be a spurious warning if you have recently closed the file."
       , "If you haven't opened this file recently, please file a report on the issue tracker mentioning"
