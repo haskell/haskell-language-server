@@ -12,13 +12,13 @@
 module Main where
 
 import           Control.Monad.Extra
-import           Data.Char  (isSpace)
+import           Data.Char                          (isSpace)
 import           Data.Default
 import           Data.Foldable
 import           Data.List
 import           Data.Void
-import qualified Development.IDE.Session as Session
-import qualified HIE.Bios.Environment    as HieBios
+import qualified Development.IDE.Session            as Session
+import qualified HIE.Bios.Environment               as HieBios
 import           HIE.Bios.Types
 import           Ide.Arguments
 import           Ide.Version
@@ -26,36 +26,43 @@ import           System.Directory
 import           System.Environment
 import           System.Exit
 import           System.FilePath
-import           System.IO
 import           System.Info
+import           System.IO
 #ifndef mingw32_HOST_OS
-import           System.Posix.Process (executeFile)
-import qualified Data.Map.Strict as Map
+import qualified Data.Map.Strict                    as Map
+import           System.Posix.Process               (executeFile)
 #else
 import           System.Process
 #endif
-import qualified Data.Text.IO as T
-import           Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
-import qualified Data.Text as T
-import           Language.LSP.Server (LspM)
-import           Control.Monad.IO.Class (MonadIO (liftIO))
-import           Control.Monad.IO.Unlift (MonadUnliftIO)
-import qualified Language.LSP.Server as LSP
-import qualified Development.IDE.Main as Main
-import           Ide.Plugin.Config (Config)
-import           Language.LSP.Types (RequestMessage, ResponseError, MessageActionItem (MessageActionItem), Method(Initialize), MessageType (MtError), SMethod (SWindowShowMessageRequest, SExit), ShowMessageRequestParams (ShowMessageRequestParams))
-import           Development.IDE.Types.Logger ( makeDefaultStderrRecorder,
-                                                cmapWithPrio,
-                                                Pretty(pretty),
-                                                Logger(Logger),
-                                                Priority(Error, Debug, Info, Warning),
-                                                Recorder(logger_),
-                                                WithPriority(WithPriority) )
+import           Control.Concurrent                 (tryPutMVar)
+import           Control.Monad.IO.Class             (MonadIO (liftIO))
+import           Control.Monad.IO.Unlift            (MonadUnliftIO)
+import           Control.Monad.Trans.Except         (ExceptT, runExceptT,
+                                                     throwE)
 import           Data.Maybe
-import           GHC.Stack.Types (emptyCallStack)
-import           Control.Concurrent (tryPutMVar)
+import qualified Data.Text                          as T
+import qualified Data.Text.IO                       as T
 import           Development.IDE.LSP.LanguageServer (runLanguageServer)
+import qualified Development.IDE.Main               as Main
+import           Development.IDE.Types.Logger       (Logger (Logger),
+                                                     Pretty (pretty),
+                                                     Priority (Debug, Error, Info, Warning),
+                                                     Recorder (logger_),
+                                                     WithPriority (WithPriority),
+                                                     cmapWithPrio,
+                                                     makeDefaultStderrRecorder)
+import           GHC.Stack.Types                    (emptyCallStack)
 import           HIE.Bios.Internal.Log
+import           Ide.Plugin.Config                  (Config)
+import           Language.LSP.Server                (LspM)
+import qualified Language.LSP.Server                as LSP
+import           Language.LSP.Types                 (MessageActionItem (MessageActionItem),
+                                                     MessageType (MtError),
+                                                     Method (Initialize),
+                                                     RequestMessage,
+                                                     ResponseError,
+                                                     SMethod (SExit, SWindowShowMessageRequest),
+                                                     ShowMessageRequestParams (ShowMessageRequestParams))
 
 -- ---------------------------------------------------------------------
 

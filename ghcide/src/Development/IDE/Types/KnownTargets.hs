@@ -3,11 +3,11 @@
 module Development.IDE.Types.KnownTargets (KnownTargets, Target(..), toKnownFiles) where
 
 import           Control.DeepSeq
+import           Data.Hashable
 import           Data.HashMap.Strict
 import qualified Data.HashMap.Strict            as HMap
 import           Data.HashSet
 import qualified Data.HashSet                   as HSet
-import           Data.Hashable
 import           Development.IDE.GHC.Compat     (ModuleName)
 import           Development.IDE.GHC.Orphans    ()
 import           Development.IDE.Types.Location

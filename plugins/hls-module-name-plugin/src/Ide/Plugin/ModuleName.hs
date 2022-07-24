@@ -35,8 +35,9 @@ import           Development.IDE            (GetParsedModule (GetParsedModule),
                                              uriToFilePath', use, use_)
 import           Development.IDE.GHC.Compat (GenLocated (L), getSessionDynFlags,
                                              hsmodName, importPaths, locA,
+                                             moduleNameString,
                                              pattern RealSrcSpan,
-                                             pm_parsed_source, unLoc, moduleNameString)
+                                             pm_parsed_source, unLoc)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types         hiding

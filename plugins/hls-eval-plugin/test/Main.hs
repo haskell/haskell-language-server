@@ -12,7 +12,7 @@ import           Control.Lens            (_Just, folded, preview, toListOf,
                                           view, (^..))
 import           Data.Aeson              (Value (Object), fromJSON, object,
                                           toJSON, (.=))
-import           Data.Aeson.Types        (Result (Success), Pair)
+import           Data.Aeson.Types        (Pair, Result (Success))
 import           Data.List               (isInfixOf)
 import           Data.List.Extra         (nubOrdOn)
 import qualified Data.Map                as Map

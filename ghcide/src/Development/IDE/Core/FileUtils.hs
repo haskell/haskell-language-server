@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP          #-}
+{-# LANGUAGE CPP #-}
 
 module Development.IDE.Core.FileUtils(
     getModTime,
@@ -7,10 +7,9 @@ module Development.IDE.Core.FileUtils(
 
 import           Data.Time.Clock.POSIX
 #ifdef mingw32_HOST_OS
-import qualified System.Directory                             as Dir
+import qualified System.Directory      as Dir
 #else
-import           System.Posix.Files                           (getFileStatus,
-                                                               modificationTimeHiRes)
+import           System.Posix.Files    (getFileStatus, modificationTimeHiRes)
 #endif
 
 -- Dir.getModificationTime is surprisingly slow since it performs
