@@ -3,7 +3,7 @@
 ## Configuring `haskell-language-server`
 
 Language servers like `haskell-language-server` expose most of their configuration via the client (i.e. the editor).
-That means that how you configure the settings will depend on the client.
+That means that the way in which you configure the settings will depend on the client.
 
 Most clients (editors) already have an opinion about how settings should be configured!
 For example, in VS Code you use the graphical Settings tab or `settings.json`, whereas in Emacs you use customization variables.
