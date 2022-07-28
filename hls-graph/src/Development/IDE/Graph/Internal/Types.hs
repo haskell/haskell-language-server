@@ -7,6 +7,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE PatternSynonyms            #-}
+{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 module Development.IDE.Graph.Internal.Types where
 
@@ -20,6 +23,7 @@ import qualified Data.ByteString               as BS
 import           Data.Dynamic
 import qualified Data.HashMap.Strict           as Map
 import           Data.HashSet                  (HashSet, member)
+import qualified Data.IntMap                   as IM
 import qualified Data.HashSet                  as Set
 import           Data.IORef
 import           Data.List                     (intercalate)
@@ -32,6 +36,7 @@ import qualified ListT
 import qualified StmContainers.Map             as SMap
 import           StmContainers.Map             (Map)
 import           System.Time.Extra             (Seconds)
+import           System.IO.Unsafe
 import           UnliftIO                      (MonadUnliftIO)
 
 
@@ -78,16 +83,54 @@ data ShakeDatabase = ShakeDatabase !Int [Action ()] Database
 newtype Step = Step Int
     deriving newtype (Eq,Ord,Hashable)
 
-data Key = forall a . (Typeable a, Eq a, Hashable a, Show a) => Key a
+---------------------------------------------------------------------
+-- Keys
+
+data KeyValue = forall a . (Typeable a, Hashable a, Show a) => KeyValue a
+
+newtype Key = UnsafeMkKey Int
+
+pattern Key a <- (lookupKeyValue -> KeyValue a)
+
+data KeyMap = KeyMap !(Map.HashMap KeyValue Key) !(IM.IntMap KeyValue) {-# UNPACK #-} !Int
+
+keyMap :: IORef KeyMap
+keyMap = unsafePerformIO $ newIORef (KeyMap Map.empty IM.empty 0)
+
+{-# NOINLINE keyMap #-}
+
+newKey :: (Typeable a, Hashable a, Show a) => a -> Key
+newKey k = unsafePerformIO $ do
+  let !newKey = KeyValue k
+  atomicModifyIORef' keyMap $ \km@(KeyMap hm im n) ->
+    let new_key = Map.lookup newKey hm
+    in case new_key of
+          Just v  -> (km, v)
+          Nothing ->
+            let !new_index = UnsafeMkKey n
+            in (KeyMap (Map.insert newKey new_index hm) (IM.insert n newKey im) (n+1), new_index)
+{-# NOINLINE newKey #-}
+
+lookupKeyValue :: Key -> KeyValue
+lookupKeyValue (UnsafeMkKey x) = unsafePerformIO $ do
+  KeyMap _ im _ <- readIORef keyMap
+  pure $! fromJust (IM.lookup x im)
+
+{-# NOINLINE lookupKeyValue #-}
 
 instance Eq Key where
-    Key a == Key b = Just a == cast b
-
+  UnsafeMkKey a == UnsafeMkKey b = a == b
 instance Hashable Key where
-    hashWithSalt i (Key x) = hashWithSalt i (typeOf x, x)
-
+  hashWithSalt i (UnsafeMkKey x) = hashWithSalt i x
 instance Show Key where
-    show (Key x) = show x
+  show (Key x) = show x
+
+instance Eq KeyValue where
+    KeyValue a == KeyValue b = Just a == cast b
+instance Hashable KeyValue where
+    hashWithSalt i (KeyValue x) = hashWithSalt i (typeOf x, x)
+instance Show KeyValue where
+    show (KeyValue x) = show x
 
 newtype Value = Value Dynamic
 
@@ -143,15 +186,15 @@ data Result = Result {
     resultData      :: !BS.ByteString
     }
 
-data ResultDeps = UnknownDeps | AlwaysRerunDeps ![Key] | ResultDeps ![Key]
+data ResultDeps = UnknownDeps | AlwaysRerunDeps !(HashSet Key) | ResultDeps !(HashSet Key)
   deriving (Eq, Show)
 
-getResultDepsDefault :: [Key] -> ResultDeps -> [Key]
+getResultDepsDefault :: (HashSet Key) -> ResultDeps -> (HashSet Key)
 getResultDepsDefault _ (ResultDeps ids)      = ids
 getResultDepsDefault _ (AlwaysRerunDeps ids) = ids
 getResultDepsDefault def UnknownDeps         = def
 
-mapResultDeps :: ([Key] -> [Key]) -> ResultDeps -> ResultDeps
+mapResultDeps :: (HashSet Key -> HashSet Key) -> ResultDeps -> ResultDeps
 mapResultDeps f (ResultDeps ids)      = ResultDeps $ f ids
 mapResultDeps f (AlwaysRerunDeps ids) = AlwaysRerunDeps $ f ids
 mapResultDeps _ UnknownDeps           = UnknownDeps
@@ -159,8 +202,8 @@ mapResultDeps _ UnknownDeps           = UnknownDeps
 instance Semigroup ResultDeps where
     UnknownDeps <> x = x
     x <> UnknownDeps = x
-    AlwaysRerunDeps ids <> x = AlwaysRerunDeps (ids <> getResultDepsDefault [] x)
-    x <> AlwaysRerunDeps ids = AlwaysRerunDeps (getResultDepsDefault [] x <> ids)
+    AlwaysRerunDeps ids <> x = AlwaysRerunDeps (ids <> getResultDepsDefault mempty x)
+    x <> AlwaysRerunDeps ids = AlwaysRerunDeps (getResultDepsDefault mempty x <> ids)
     ResultDeps ids <> ResultDeps ids' = ResultDeps (ids <> ids')
 
 instance Monoid ResultDeps where

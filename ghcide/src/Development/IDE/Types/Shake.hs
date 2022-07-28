@@ -26,7 +26,7 @@ import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes       (FileVersion)
-import           Development.IDE.Graph                (Key (..), RuleResult)
+import           Development.IDE.Graph                (Key (..), RuleResult, newKey)
 import qualified Development.IDE.Graph                as Shake
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
@@ -75,7 +75,7 @@ isBadDependency x
     | otherwise = False
 
 toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> Key
-toKey = (Key.) . curry Q
+toKey = (newKey.) . curry Q
 
 fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
 fromKey (Key k)
@@ -91,7 +91,7 @@ fromKeyType (Key k) = case typeOf k of
     _ -> Nothing
 
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
-toNoFileKey k = Key $ Q (k, emptyFilePath)
+toNoFileKey k = newKey $ Q (k, emptyFilePath)
 
 newtype Q k = Q (k, NormalizedFilePath)
     deriving newtype (Eq, Hashable, NFData)
