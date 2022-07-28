@@ -1,20 +1,21 @@
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE OverloadedLists     #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 module DatabaseSpec where
 
-import Control.Concurrent.STM
-import Development.IDE.Graph (shakeOptions)
-import Development.IDE.Graph.Database (shakeNewDatabase, shakeRunDatabase)
-import Development.IDE.Graph.Internal.Action (apply1)
-import Development.IDE.Graph.Internal.Types
-import Development.IDE.Graph.Rule
-import Example
-import qualified StmContainers.Map as STM
-import Test.Hspec
-import System.Time.Extra (timeout)
+import           Control.Concurrent.STM
+import           Development.IDE.Graph                 (shakeOptions)
+import           Development.IDE.Graph.Database        (shakeNewDatabase,
+                                                        shakeRunDatabase)
+import           Development.IDE.Graph.Internal.Action (apply1)
+import           Development.IDE.Graph.Internal.Types
+import           Development.IDE.Graph.Rule
+import           Example
+import qualified StmContainers.Map                     as STM
+import           System.Time.Extra                     (timeout)
+import           Test.Hspec
 
 spec :: Spec
 spec = do

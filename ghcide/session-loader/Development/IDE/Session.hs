@@ -36,8 +36,8 @@ import qualified Data.ByteString.Char8                as B
 import           Data.Default
 import           Data.Either.Extra
 import           Data.Function
-import qualified Data.HashMap.Strict                  as HM
 import           Data.Hashable
+import qualified Data.HashMap.Strict                  as HM
 import           Data.IORef
 import           Data.List
 import qualified Data.Map.Strict                      as Map
@@ -87,6 +87,7 @@ import           Data.Void
 import           Control.Concurrent.STM.Stats         (atomically, modifyTVar',
                                                        readTVar, writeTVar)
 import           Control.Concurrent.STM.TQueue
+import           Control.Monad.IO.Unlift              (MonadUnliftIO)
 import           Data.Foldable                        (for_)
 import           Data.HashMap.Strict                  (HashMap)
 import           Data.HashSet                         (HashSet)
@@ -97,9 +98,8 @@ import           Development.IDE.Types.Shake          (WithHieDb)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
-import           System.Random                        (RandomGen)
 import qualified System.Random                        as Random
-import Control.Monad.IO.Unlift (MonadUnliftIO)
+import           System.Random                        (RandomGen)
 
 data Log
   = LogSettingInitialDynFlags

@@ -41,8 +41,8 @@ import           Ide.Plugin.Eval.Types
 import           Language.LSP.Types                       (UInt)
 import           Language.LSP.Types.Lens                  (character, end, line,
                                                            start)
-import           Text.Megaparsec
 import qualified Text.Megaparsec                          as P
+import           Text.Megaparsec
 import           Text.Megaparsec.Char                     (alphaNumChar, char,
                                                            eol, hspace,
                                                            letterChar)

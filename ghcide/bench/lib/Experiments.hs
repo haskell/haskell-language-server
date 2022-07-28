@@ -37,9 +37,8 @@ import           Development.IDE.Test            (getBuildEdgesCount,
                                                   getBuildKeysBuilt,
                                                   getBuildKeysChanged,
                                                   getBuildKeysVisited,
-                                                  getStoredKeys,
                                                   getRebuildsCount,
-                                                  )
+                                                  getStoredKeys)
 import           Development.IDE.Test.Diagnostic
 import           Development.Shake               (CmdOption (Cwd, FileStdout),
                                                   cmd_)
@@ -428,20 +427,20 @@ runBenchmarksFun dir allBenchmarks = do
         }
 
 data BenchRun = BenchRun
-  { startup       :: !Seconds,
-    runSetup      :: !Seconds,
-    runExperiment :: !Seconds,
-    userWaits     :: !Seconds,
-    delayedWork   :: !Seconds,
-    firstResponse :: !Seconds,
+  { startup              :: !Seconds,
+    runSetup             :: !Seconds,
+    runExperiment        :: !Seconds,
+    userWaits            :: !Seconds,
+    delayedWork          :: !Seconds,
+    firstResponse        :: !Seconds,
     firstResponseDelayed :: !Seconds,
-    rulesBuilt    :: !Int,
-    rulesChanged  :: !Int,
-    rulesVisited  :: !Int,
-    rulesTotal    :: !Int,
-    edgesTotal    :: !Int,
-    rebuildsTotal :: !Int,
-    success       :: !Bool
+    rulesBuilt           :: !Int,
+    rulesChanged         :: !Int,
+    rulesVisited         :: !Int,
+    rulesTotal           :: !Int,
+    edgesTotal           :: !Int,
+    rebuildsTotal        :: !Int,
+    success              :: !Bool
   }
 
 badRun :: BenchRun

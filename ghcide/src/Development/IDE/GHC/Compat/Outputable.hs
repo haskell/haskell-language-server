@@ -44,7 +44,8 @@ import           GHC.Types.SourceError
 import           GHC.Types.SrcLoc
 import           GHC.Unit.State
 import           GHC.Utils.Error                 hiding (mkWarnMsg)
-import           GHC.Utils.Outputable            as Out hiding (defaultUserStyle)
+import           GHC.Utils.Outputable            as Out hiding
+                                                        (defaultUserStyle)
 import qualified GHC.Utils.Outputable            as Out
 import           GHC.Utils.Panic
 #elif MIN_VERSION_ghc(9,0,0)
@@ -54,7 +55,8 @@ import           GHC.Types.Name.Reader           (GlobalRdrEnv)
 import           GHC.Types.SrcLoc
 import           GHC.Utils.Error                 as Err hiding (mkWarnMsg)
 import qualified GHC.Utils.Error                 as Err
-import           GHC.Utils.Outputable            as Out hiding (defaultUserStyle)
+import           GHC.Utils.Outputable            as Out hiding
+                                                        (defaultUserStyle)
 import qualified GHC.Utils.Outputable            as Out
 #else
 import           Development.IDE.GHC.Compat.Core (GlobalRdrEnv)
@@ -62,7 +64,8 @@ import           DynFlags
 import           ErrUtils                        hiding (mkWarnMsg)
 import qualified ErrUtils                        as Err
 import           HscTypes
-import           Outputable                      as Out hiding (defaultUserStyle)
+import           Outputable                      as Out hiding
+                                                        (defaultUserStyle)
 import qualified Outputable                      as Out
 import           SrcLoc
 #endif

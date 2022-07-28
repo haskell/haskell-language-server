@@ -32,9 +32,9 @@ import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Text                                    as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
+import           Development.IDE.Core.FileUtils
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
-import           Development.IDE.Core.FileUtils
 import           Development.IDE.GHC.Orphans                  ()
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation

@@ -67,14 +67,15 @@ module Development.Benchmark.Rules
   ) where
 
 import           Control.Applicative
-import           Control.Lens                              ((^.), view, preview)
+import           Control.Lens                              (preview, view, (^.))
 import           Control.Monad
 import qualified Control.Monad.State                       as S
 import           Data.Aeson                                (FromJSON (..),
                                                             ToJSON (..),
                                                             Value (..), object,
                                                             (.!=), (.:?), (.=))
-import           Data.Aeson.Lens                           (_Object, AsJSON (_JSON), _String)
+import           Data.Aeson.Lens                           (AsJSON (_JSON),
+                                                            _Object, _String)
 import           Data.Char                                 (isDigit)
 import           Data.List                                 (find, isInfixOf,
                                                             stripPrefix,
@@ -562,9 +563,9 @@ instance Read Frame where
 
 -- | A file path containing the output of -S for a given run
 data RunLog = RunLog
-  { runVersion :: !String,
-    runFrames  :: ![Frame],
-    runSuccess :: !Bool,
+  { runVersion      :: !String,
+    runFrames       :: ![Frame],
+    runSuccess      :: !Bool,
     runFirstReponse :: !(Maybe Seconds)
   }
 

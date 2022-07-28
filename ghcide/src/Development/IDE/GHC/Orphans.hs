@@ -41,9 +41,9 @@ import           Data.Hashable
 import           Data.String                (IsString (fromString))
 import           Data.Text                  (unpack)
 #if MIN_VERSION_ghc(9,0,0)
-import          GHC.ByteCode.Types
+import           GHC.ByteCode.Types
 #else
-import          ByteCodeTypes
+import           ByteCodeTypes
 #endif
 
 -- Orphan instances for types from the GHC API.
@@ -57,8 +57,8 @@ instance NFData SafeHaskellMode where rnf = rwhnf
 instance Show Linkable where show = unpack . printOutputable
 instance NFData Linkable where rnf (LM a b c) = rnf a `seq` rnf b `seq` rnf c
 instance NFData Unlinked where
-  rnf (DotO f) = rnf f
-  rnf (DotA f) = rnf f
+  rnf (DotO f)   = rnf f
+  rnf (DotA f)   = rnf f
   rnf (DotDLL f) = rnf f
   rnf (BCOs a b) = seqCompiledByteCode a `seq` liftRnf rwhnf b
 instance Show PackageFlag where show = unpack . printOutputable
