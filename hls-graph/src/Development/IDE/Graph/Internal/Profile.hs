@@ -60,7 +60,7 @@ data ProfileEntry = ProfileEntry
 -- resultsOnly :: Map.HashMap Id (Key, Status) -> Map.HashMap Id (Key, Result (Either BS.ByteString Value))
 resultsOnly :: [(Key, Status)] -> Map.HashMap Key Result
 resultsOnly mp = Map.map (\r ->
-      r{resultDeps = mapResultDeps (filter (isJust . flip Map.lookup keep)) $ resultDeps r}
+      r{resultDeps = mapResultDeps (Set.filter (isJust . flip Map.lookup keep)) $ resultDeps r}
     ) keep
     where
         keep = Map.fromList $ mapMaybe (traverse getResult) mp
@@ -103,7 +103,7 @@ dependencyOrder shw status =
 prepareForDependencyOrder :: Database -> IO (HashMap Key Result)
 prepareForDependencyOrder db = do
     current <- readTVarIO $ databaseStep db
-    Map.insert (Key "alwaysRerun") (alwaysRerunResult current) .  resultsOnly
+    Map.insert (newKey "alwaysRerun") (alwaysRerunResult current) .  resultsOnly
         <$> getDatabaseValues db
 
 -- | Returns a list of profile entries, and a mapping linking a non-error Id to its profile entry
@@ -111,7 +111,7 @@ toReport :: Database -> IO ([ProfileEntry], HashMap Key Int)
 toReport db = do
     status <- prepareForDependencyOrder db
     let order = dependencyOrder show
-                $ map (second (getResultDepsDefault [Key "alwaysRerun"] . resultDeps))
+                $ map (second (Set.toList . getResultDepsDefault (Set.singleton $ newKey "alwaysRerun") . resultDeps))
                 $ Map.toList status
         ids = Map.fromList $ zip order [0..]
 
@@ -124,14 +124,14 @@ toReport db = do
             ,prfBuilt = fromStep resultBuilt
             ,prfVisited = fromStep resultVisited
             ,prfChanged = fromStep resultChanged
-            ,prfDepends = map pure $ mapMaybe (`Map.lookup` ids) $ getResultDepsDefault [Key "alwaysRerun"] resultDeps
+            ,prfDepends = map pure $ Map.elems $ Map.intersectionWith const ids $ Set.toMap $ getResultDepsDefault (Set.singleton $ newKey "alwaysRerun") resultDeps
             ,prfExecution = resultExecution
             }
             where fromStep i = fromJust $ Map.lookup i steps
     pure ([maybe (error "toReport") (f i) $ Map.lookup i status | i <- order], ids)
 
 alwaysRerunResult :: Step -> Result
-alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (ResultDeps []) 0 mempty
+alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (ResultDeps mempty) 0 mempty
 
 generateHTML :: Maybe [Int] -> [ProfileEntry] -> IO LBS.ByteString
 generateHTML dirtyKeys xs = do

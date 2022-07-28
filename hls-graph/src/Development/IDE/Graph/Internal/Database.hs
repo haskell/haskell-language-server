@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
 
@@ -87,7 +88,7 @@ build
 -- build _ st k | traceShow ("build", st, k) False = undefined
 build db stack keys = do
     built <- runAIO $ do
-        built <- builder db stack (fmap Key keys)
+        built <- builder db stack (fmap newKey keys)
         case built of
           Left clean  -> return clean
           Right dirty -> liftIO dirty
@@ -145,7 +146,7 @@ refresh :: Database -> Stack -> Key -> Maybe Result -> AIO (IO Result)
 -- refresh _ st k _ | traceShow ("refresh", st, k) False = undefined
 refresh db stack key result = case (addStack key stack, result) of
     (Left e, _) -> throw e
-    (Right stack, Just me@Result{resultDeps = ResultDeps deps}) -> do
+    (Right stack, Just me@Result{resultDeps = ResultDeps (HSet.toList -> deps)}) -> do
         res <- builder db stack deps
         let isDirty = any (\(_,dep) -> resultBuilt me < resultChanged dep)
         case res of
@@ -176,7 +177,7 @@ compute db@Database{..} stack key mode result = do
         actualDeps = if runChanged /= ChangedNothing then deps else previousDeps
         previousDeps= maybe UnknownDeps resultDeps result
     let res = Result runValue built' changed built actualDeps execution runStore
-    case getResultDepsDefault [] actualDeps of
+    case getResultDepsDefault mempty actualDeps of
         deps | not(null deps)
             && runChanged /= ChangedNothing
                     -> do
@@ -186,8 +187,8 @@ compute db@Database{..} stack key mode result = do
             -- on the next build.
             void $
                 updateReverseDeps key db
-                    (getResultDepsDefault [] previousDeps)
-                    (HSet.fromList deps)
+                    (getResultDepsDefault mempty previousDeps)
+                    deps
         _ -> pure ()
     atomicallyNamed "compute" $ SMap.focus (updateStatus $ Clean res) key databaseValues
     pure res
@@ -235,14 +236,13 @@ splitIO act = do
 updateReverseDeps
     :: Key        -- ^ Id
     -> Database
-    -> [Key] -- ^ Previous direct dependencies of Id
+    -> HashSet Key -- ^ Previous direct dependencies of Id
     -> HashSet Key -- ^ Current direct dependencies of Id
     -> IO ()
 -- mask to ensure that all the reverse dependencies are updated
 updateReverseDeps myId db prev new = do
-    forM_ prev $ \d ->
-        unless (d `HSet.member` new) $
-            doOne (HSet.delete myId) d
+    forM_ (HSet.toList $ prev `HSet.difference` new) $ \d ->
+         doOne (HSet.delete myId) d
     forM_ (HSet.toList new) $
         doOne (HSet.insert myId)
     where

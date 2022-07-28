@@ -1,8 +1,10 @@
+{-# LANGUAGE PatternSynonyms #-}
 module Development.IDE.Graph(
-    shakeOptions,
+      shakeOptions,
     Rules,
     Action, action,
-    Key(..),
+    Key(.., Key),
+    newKey,
     actionFinally, actionBracket, actionCatch, actionFork,
     -- * Configuration
     ShakeOptions(shakeAllowRedefineRules, shakeExtra),
