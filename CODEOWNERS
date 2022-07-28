@@ -29,6 +29,7 @@
 /plugins/hls-splice-plugin @konn
 /plugins/hls-stylish-haskell-plugin @Ailrun
 /plugins/hls-tactics-plugin @isovector
+/plugins/hls-stan-plugin @uhbif19
 
 # Benchmarking
 /shake-bench @pepeiborra

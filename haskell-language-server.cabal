@@ -151,6 +151,11 @@ flag hlint
   default:     True
   manual:      True
 
+flag stan
+  description: Enable stan plugin
+  default:     True
+  manual:      True
+
 flag moduleName
   description: Enable moduleName plugin
   default:     True
@@ -279,6 +284,11 @@ common hlint
     build-depends: hls-hlint-plugin ^>= 1.0
     cpp-options: -Dhlint
 
+common stan
+  if flag(stan) && (impl(ghc >= 8.8) && impl(ghc < 9.0))
+    build-depends: hls-stan-plugin ^>= 1.0
+    cpp-options: -Dstan
+
 common moduleName
   if flag(moduleName)
     build-depends: hls-module-name-plugin ^>= 1.0
@@ -364,6 +374,7 @@ executable haskell-language-server
                     , retrie
                     , tactic
                     , hlint
+                    , stan
                     , moduleName
                     , pragmas
                     , splice
