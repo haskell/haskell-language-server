@@ -28,6 +28,7 @@ packages:
          ./plugins/hls-qualify-imported-names-plugin
          ./plugins/hls-code-range-plugin
          ./plugins/hls-change-type-signature-plugin
+         ./plugins/hls-stan-plugin
          ./plugins/hls-gadt-plugin
          ./plugins/hls-hindent-plugin
 
@@ -68,4 +69,5 @@ allow-newer:
   ----------
   hiedb:base,
 
+  ekg-core,
   ekg-wai:time

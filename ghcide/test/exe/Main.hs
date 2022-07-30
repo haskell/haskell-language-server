@@ -1882,6 +1882,28 @@ extendImportTests = testGroup "extend import actions"
                     , "               )"
                     , "main = print (stuffA, stuffB)"
                     ])
+        , testSession "extend multi line import with trailing comma" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "stuffA :: Double"
+                    , "stuffA = 0.00750"
+                    , "stuffB :: Integer"
+                    , "stuffB = 123"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (stuffB,"
+                    , "               )"
+                    , "main = print (stuffA, stuffB)"
+                    ])
+            (Range (Position 3 17) (Position 3 18))
+            ["Add stuffA to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (stuffB, stuffA,"
+                    , "               )"
+                    , "main = print (stuffA, stuffB)"
+                    ])
         , testSession "extend single line import with method within class" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
@@ -4261,8 +4283,8 @@ canonicalizeLocation (Location uri range) = Location <$> canonicalizeUri uri <*>
 findDefinitionAndHoverTests :: TestTree
 findDefinitionAndHoverTests = let
 
-  tst :: (TextDocumentIdentifier -> Position -> Session a, a -> Session [Expect] -> Session ()) -> Position -> Session [Expect] -> String -> TestTree
-  tst (get, check) pos targetRange title = testSessionWithExtraFiles "hover" title $ \dir -> do
+  tst :: (TextDocumentIdentifier -> Position -> Session a, a -> Session [Expect] -> Session ()) -> Position -> String -> Session [Expect] -> String -> TestTree
+  tst (get, check) pos sfp targetRange title = testSessionWithExtraFiles "hover" title $ \dir -> do
 
     -- Dirty the cache to check that definitions work even in the presence of iface files
     liftIO $ runInDir dir $ do
@@ -4272,7 +4294,7 @@ findDefinitionAndHoverTests = let
       _ <- getHover fooDoc $ Position 4 3
       closeDoc fooDoc
 
-    doc <- openTestDataDoc (dir </> sourceFilePath)
+    doc <- openTestDataDoc (dir </> sfp)
     waitForProgressDone
     found <- get doc pos
     check found targetRange
@@ -4330,16 +4352,25 @@ findDefinitionAndHoverTests = let
           [ ( "GotoHover.hs", [(DsError, (62, 7), "Found hole: _")])
           , ( "GotoHover.hs", [(DsError, (65, 8), "Found hole: _")])
           ]
-    , testGroup "type-definition" typeDefinitionTests ]
+    , testGroup "type-definition" typeDefinitionTests
+    , testGroup "hover-record-dot-syntax" recordDotSyntaxTests ]
 
-  typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 (pure tcData) "Saturated data con"
-                        , tst (getTypeDefinitions, checkDefs) aL20 (pure [ExpectNoDefinitions]) "Polymorphic variable"]
+  typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 sourceFilePath (pure tcData) "Saturated data con"
+                        , tst (getTypeDefinitions, checkDefs) aL20 sourceFilePath (pure [ExpectNoDefinitions]) "Polymorphic variable"]
+  
+  recordDotSyntaxTests 
+    | ghcVersion >= GHC92 =
+        [ tst (getHover, checkHover) (Position 19 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent" 
+        , tst (getHover, checkHover) (Position 19 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child" 
+        , tst (getHover, checkHover) (Position 19 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child" 
+        ]
+    | otherwise = []
 
   test runDef runHover look expect = testM runDef runHover look (return expect)
 
   testM runDef runHover look expect title =
-    ( runDef   $ tst def   look expect title
-    , runHover $ tst hover look expect title ) where
+    ( runDef   $ tst def   look sourceFilePath expect title
+    , runHover $ tst hover look sourceFilePath expect title ) where
       def   = (getDefinitions, checkDefs)
       hover = (getHover      , checkHover)
 

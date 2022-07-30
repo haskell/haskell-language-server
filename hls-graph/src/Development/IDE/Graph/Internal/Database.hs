@@ -7,8 +7,8 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TupleSections #-}
 
 module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
 
@@ -36,15 +36,15 @@ import           Data.List.NonEmpty                   (unzip)
 import           Data.Maybe
 import           Data.Traversable                     (for)
 import           Data.Tuple.Extra
-import           Debug.Trace (traceM)
+import           Debug.Trace                          (traceM)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
 import qualified Focus
 import qualified ListT
 import qualified StmContainers.Map                    as SMap
-import           System.Time.Extra                    (duration, sleep)
 import           System.IO.Unsafe
+import           System.Time.Extra                    (duration, sleep)
 
 
 newDatabase :: Dynamic -> TheRules -> IO Database
@@ -89,7 +89,7 @@ build db stack keys = do
     built <- runAIO $ do
         built <- builder db stack (fmap Key keys)
         case built of
-          Left clean -> return clean
+          Left clean  -> return clean
           Right dirty -> liftIO dirty
     let (ids, vs) = unzip built
     pure (ids, fmap (asV . resultValue) vs)
@@ -325,7 +325,7 @@ data Wait
     | Spawn {justWait :: !(IO ())}
 
 fmapWait :: (IO () -> IO ()) -> Wait -> Wait
-fmapWait f (Wait io) = Wait (f io)
+fmapWait f (Wait io)  = Wait (f io)
 fmapWait f (Spawn io) = Spawn (f io)
 
 waitOrSpawn :: Wait -> IO (Either (IO ()) (Async ()))

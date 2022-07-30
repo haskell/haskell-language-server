@@ -7,12 +7,12 @@ module Text.Fuzzy.Parallel
     Scored(..)
 ) where
 
-import           Control.Parallel.Strategies (rseq, using, parList, evalList)
+import           Control.Parallel.Strategies (evalList, parList, rseq, using)
 import           Data.Bits                   ((.|.))
 import           Data.Maybe                  (fromMaybe, mapMaybe)
 import qualified Data.Text                   as T
-import qualified Data.Text.Internal          as T
 import qualified Data.Text.Array             as TA
+import qualified Data.Text.Internal          as T
 import           Prelude                     hiding (filter)
 
 data Scored a = Scored {score :: !Int, original:: !a}

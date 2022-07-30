@@ -3,7 +3,7 @@ module Development.IDE.Types.Monitoring
 ) where
 
 import           Data.Int
-import           Data.Text                (Text)
+import           Data.Text (Text)
 
 -- | An abstraction for runtime monitoring inspired by the 'ekg' package
 data Monitoring = Monitoring {
@@ -11,7 +11,7 @@ data Monitoring = Monitoring {
     registerGauge   :: Text -> IO Int64 -> IO (),
     -- | Register a non-negative, monotonically increasing, integer-valued metric.
     registerCounter :: Text -> IO Int64 -> IO (),
-    start :: IO (IO ()) -- ^ Start the monitoring system, returning an action which will stop the system.
+    start           :: IO (IO ()) -- ^ Start the monitoring system, returning an action which will stop the system.
   }
 
 instance Semigroup Monitoring where

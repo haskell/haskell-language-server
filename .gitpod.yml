@@ -10,7 +10,8 @@ tasks:
         $HOME/.local
         $HOME/.cabal
         $HOME/.stack
-        $HOME/.ghcup
+        $HOME/.cache/ghcide
+        $HOME/.cache/hie-bios
         /nix
       )
       for DIR in "${CACHE_DIRS[@]}"; do
@@ -41,9 +42,7 @@ tasks:
         echo '}' >> .vscode/settings.json
       fi
 
-      pushd docs
-        pip install -r requirements.txt
-      popd
+      pip install -r docs/requirements.txt
     init: |
       cabal update
       cabal configure --enable-executable-dynamic

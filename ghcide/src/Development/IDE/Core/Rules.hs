@@ -28,6 +28,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleWithComments,
     getClientConfigAction,
     usePropertyAction,
+    getHieFile,
     -- * Rules
     CompiledLinkables(..),
     getParsedModuleRule,
@@ -55,6 +56,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleDefinition,
     typeCheckRuleDefinition,
     getRebuildCount,
+    getSourceFileSource,
     GhcSessionDepsConfig(..),
     Log(..),
     DisplayTHWarning(..),
@@ -96,6 +98,7 @@ import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
+import           Data.Typeable                                (cast)
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists hiding (LogShake, Log)
 import           Development.IDE.Core.FileStore               (getFileContents,
@@ -165,6 +168,7 @@ data Log
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
   | LogExactPrint ExactPrint.Log
+  | LogTypecheckedFOI !NormalizedFilePath
   deriving Show
 
 instance Pretty Log where
@@ -182,6 +186,14 @@ instance Pretty Log where
     LogLoadingHieFileSuccess path ->
       "SUCCEEDED LOADING HIE FILE FOR" <+> pretty path
     LogExactPrint log -> pretty log
+    LogTypecheckedFOI path -> vcat
+      [ "Typechecked a file which is not currently open in the editor:" <+> pretty (fromNormalizedFilePath path)
+      , "This can indicate a bug which results in excessive memory usage."
+      , "This may be a spurious warning if you have recently closed the file."
+      , "If you haven't opened this file recently, please file a report on the issue tracker mentioning"
+        <+> "the HLS version being used, the plugins enabled, and if possible the codebase and file which"
+        <+> "triggered this warning."
+      ]
 
 templateHaskellInstructions :: T.Text
 templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#static-binaries"
@@ -650,6 +662,12 @@ typeCheckRule :: Recorder (WithPriority Log) -> Rules ()
 typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck file -> do
     pm <- use_ GetParsedModule file
     hsc  <- hscEnv <$> use_ GhcSessionDeps file
+    foi <- use_ IsFileOfInterest file
+    -- We should only call the typecheck rule for files of interest.
+    -- Keeping typechecked modules in memory for other files is
+    -- very expensive.
+    when (foi == NotFOI) $
+      logWith recorder Logger.Warning $ LogTypecheckedFOI file
     typeCheckRuleDefinition hsc pm
 
 knownFilesRule :: Recorder (WithPriority Log) -> Rules ()
@@ -1217,3 +1235,15 @@ mainRule recorder RulesConfig{..} = do
     persistentDocMapRule
     persistentImportMapRule
     getLinkableRule recorder
+
+-- | Get HieFile for haskell file on NormalizedFilePath
+getHieFile :: NormalizedFilePath -> Action (Maybe HieFile)
+getHieFile nfp = runMaybeT $ do
+  HAR {hieAst} <- MaybeT $ use GetHieAst nfp
+  tmr <- MaybeT $ use TypeCheck nfp
+  ghc <- MaybeT $ use GhcSession nfp
+  msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
+  source <- lift $ getSourceFileSource nfp
+  let exports = tcg_exports $ tmrTypechecked tmr
+  typedAst <- MaybeT $ pure $ cast hieAst
+  liftIO $ runHsc (hscEnv ghc) $ mkHieFile' (msrModSummary msr) exports typedAst source

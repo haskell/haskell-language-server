@@ -76,8 +76,8 @@
       url = "https://hackage.haskell.org/package/ptr-poker-0.1.2.8/ptr-poker-0.1.2.8.tar.gz";
       flake = false;
     };
-    stylish-haskell-01220 = {
-      url = "https://hackage.haskell.org/package/stylish-haskell-0.12.2.0/stylish-haskell-0.12.2.0.tar.gz";
+    stylish-haskell = {
+      url = "https://hackage.haskell.org/package/stylish-haskell-0.14.2.0/stylish-haskell-0.14.2.0.tar.gz";
       flake = false;
     };
     implicit-hie-cradle = {
@@ -213,7 +213,7 @@
         };
 
         ghc902Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
-        ghc922Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
+        ghc923Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
 
         # GHC versions
         # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached
@@ -222,12 +222,12 @@
           ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
           cases = {
             ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
-            ghc922 = ghc922Config.tweakHpkgs (pkgs.hlsHpkgs "ghc922");
+            ghc923 = ghc923Config.tweakHpkgs (pkgs.hlsHpkgs "ghc923");
           };
           in { default = cases."${ghcVersion}"; } // cases;
 
         ghc902 = supportedGHCs.ghc902;
-        ghc922 = supportedGHCs.ghc922;
+        ghc923 = supportedGHCs.ghc923;
         ghcDefault = supportedGHCs.default;
 
         # For markdown support
@@ -359,20 +359,20 @@
         simpleDevShells = {
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
           haskell-language-server-902-dev = mkDevShell ghc902 "cabal.project";
-          haskell-language-server-922-dev = mkDevShell ghc922 "cabal.project";
+          haskell-language-server-923-dev = mkDevShell ghc923 "cabal.project";
         };
 
         # Developement shell, haskell packages are also provided by nix
         nixDevShells = {
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
           haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
-          haskell-language-server-922-dev-nix = mkDevShellWithNixDeps ghc922 "cabal.project";
+          haskell-language-server-923-dev-nix = mkDevShellWithNixDeps ghc923 "cabal.project";
         };
 
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-902 = mkExe ghc902;
-          haskell-language-server-922 = mkExe ghc922;
+          haskell-language-server-923 = mkExe ghc923;
         };
 
         devShells = simpleDevShells // nixDevShells // {

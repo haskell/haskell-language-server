@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: I've spotted something specific thats' going wrong
 title: ''
 labels: 'status: needs triage, type: bug'
 assignees: ''
@@ -8,31 +8,40 @@ assignees: ''
 ---
 
 <!--
-Before opening an issue, please take a look at the [troubleshooting guide](https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html).
+Before opening a bug, please take a look at the [troubleshooting guide](https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html).
 This explains some common issues and will also help you to find the information that the issue template asks for.
-
-When filing an issue, please fill out as much of the information below as you can.
-This helps us to debug your issue, but is not required!
 -->
 
 ### Your environment
 
-Which OS do you use:
+<!--
+Everything in this section is optional, but it does help us to debug your issue!
+-->
+
+Which OS do you use?
 <!-- Windows, MacOS, Ubuntu, ArchLinux, etc... -->
-Which LSP client (editor/plugin) do you use:
+Which version of GHC do you use and how did you install it?
+<!-- 9.0.2 from stack/ghcup, etc. -->
+How is your project built (alternative: link to the project)?
+
+Which LSP client (editor/plugin) do you use?
 <!-- Neovim+LanguageClient-neovim, emacs+lsp-mode, VS Codium+vscode-haskell, etc... -->
-Describe your project (alternative: link to the project):
-<!-- stack.yaml, package.yaml, *.cabal files, cabal.project, hie.yaml -->
+Which version of HLS do you use and how did you install it?
+<!-- 1.7.0.1 from ghcup, etc. -->
+Have you configured HLS in any way (especially: a `hie.yaml` file)?
 
 ### Steps to reproduce
+
 <!-- Tell us how to reproduce this issue. -->
 
 ### Expected behaviour
+
 <!-- Tell us what should happen. -->
 
 ### Actual behaviour
+
 <!-- Tell us what happens instead. -->
 
-### Include debug information
+### Debug information
 
 <!-- Include any useful debug information, such as relevant log snippets. -->

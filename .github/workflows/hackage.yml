@@ -31,7 +31,7 @@ jobs:
                   "hls-brittany-plugin", "hls-floskell-plugin", "hls-fourmolu-plugin",
                   "hls-ormolu-plugin", "hls-stylish-haskell-plugin",
                   "hls-class-plugin", "hls-eval-plugin", "hls-explicit-imports-plugin",
-                  "hls-haddock-comments-plugin", "hls-hlint-plugin",
+                  "hls-haddock-comments-plugin", "hls-hlint-plugin", "hls-stan-plugin",
                   "hls-module-name-plugin", "hls-pragmas-plugin",
                   "hls-refine-imports-plugin", "hls-rename-plugin", "hls-retrie-plugin",
                   "hls-splice-plugin", "hls-tactics-plugin",

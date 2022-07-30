@@ -79,9 +79,9 @@ import           Development.IDE.Types.Logger            (Pretty (pretty),
                                                           Recorder,
                                                           WithPriority,
                                                           cmapWithPrio)
-import qualified GHC.Generics                            as GHC
 import           Generics.SYB
 import           Generics.SYB.GHC
+import qualified GHC.Generics                            as GHC
 import           Ide.PluginUtils
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Types

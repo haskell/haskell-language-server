@@ -5,9 +5,9 @@ module Development.IDE.Core.Preprocessor
   ( preprocessor
   ) where
 
-import           Development.IDE.GHC.CPP
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util   as Util
+import           Development.IDE.GHC.CPP
 import           Development.IDE.GHC.Orphans       ()
 
 import           Control.DeepSeq                   (NFData (rnf))

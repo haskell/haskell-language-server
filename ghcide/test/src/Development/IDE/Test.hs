@@ -63,9 +63,9 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import           Language.LSP.Types.Lens         as Lsp
 import           System.Directory                (canonicalizePath)
+import           System.FilePath                 (equalFilePath)
 import           System.Time.Extra
 import           Test.Tasty.HUnit
-import System.FilePath (equalFilePath)
 
 requireDiagnosticM
     :: (Foldable f, Show (f Diagnostic), HasCallStack)
