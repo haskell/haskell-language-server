@@ -55,6 +55,7 @@ extra-deps:
 - lsp-1.5.0.0
 - lsp-types-1.5.0.0
 - lsp-test-0.14.0.3
+- co-log-core-0.3.1.0
 
 configure-options:
   ghcide:
