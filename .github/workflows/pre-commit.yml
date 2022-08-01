@@ -28,7 +28,7 @@ jobs:
 
     - name: Compiled deps cache
       id: stylish-haskell-compiled-cache
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       env:
         cache-name: stylish-haskell-compiled-cache
       with:
@@ -39,5 +39,5 @@ jobs:
               ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
               ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-
 
-    - uses: actions/setup-python@v3
+    - uses: actions/setup-python@v4
     - uses: pre-commit/action@v3.0.0
