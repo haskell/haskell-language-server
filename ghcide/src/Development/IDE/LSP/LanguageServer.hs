@@ -34,17 +34,16 @@ import           UnliftIO.Concurrent
 import           UnliftIO.Directory
 import           UnliftIO.Exception
 
-import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.Shake            hiding (Log)
-import           Development.IDE.Core.Tracing
-import           Development.IDE.Types.Logger
-
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
-import           Data.Kind                             (Type)
+import           Development.IDE.Core.IdeConfiguration
+import           Development.IDE.Core.Shake            hiding (Log, Priority)
+import           Development.IDE.Core.Tracing
 import qualified Development.IDE.Session               as Session
+import           Development.IDE.Types.Logger
 import qualified Development.IDE.Types.Logger          as Logger
 import           Development.IDE.Types.Shake           (WithHieDb)
 import           Language.LSP.Server                   (LanguageContextEnv,
+                                                        LspServerLog,
                                                         type (<~>))
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
@@ -55,6 +54,7 @@ data Log
   | LogReactorThreadStopped
   | LogCancelledRequest !SomeLspId
   | LogSession Session.Log
+  | LogLspServer LspServerLog
   deriving Show
 
 instance Pretty Log where
@@ -74,13 +74,15 @@ instance Pretty Log where
     LogCancelledRequest requestId ->
       "Cancelled request" <+> viaShow requestId
     LogSession log -> pretty log
+    LogLspServer log -> pretty log
 
 -- used to smuggle RankNType WithHieDb through dbMVar
 newtype WithHieDbShield = WithHieDbShield WithHieDb
 
 runLanguageServer
     :: forall config a m. (Show config)
-    => LSP.Options
+    => Recorder (WithPriority Log)
+    -> LSP.Options
     -> Handle -- input
     -> Handle -- output
     -> config
@@ -90,7 +92,7 @@ runLanguageServer
                LSP.Handlers (m config),
                (LanguageContextEnv config, a) -> m config <~> IO))
     -> IO ()
-runLanguageServer options inH outH defaultConfig onConfigurationChange setup = do
+runLanguageServer recorder options inH outH defaultConfig onConfigurationChange setup = do
     -- This MVar becomes full when the server thread exits or we receive exit message from client.
     -- LSP server will be canceled when it's full.
     clientMsgVar <- newEmptyMVar
@@ -108,6 +110,8 @@ runLanguageServer options inH outH defaultConfig onConfigurationChange setup = d
 
     void $ untilMVar clientMsgVar $
           void $ LSP.runServerWithHandles
+            (toCologActionWithPrio (cmapWithPrio LogLspServer recorder))
+            (toCologActionWithPrio (cmapWithPrio LogLspServer recorder))
             inH
             outH
             serverDefinition

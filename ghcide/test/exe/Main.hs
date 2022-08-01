@@ -28,8 +28,8 @@ import           Data.Default
 import           Data.Foldable
 import           Data.List.Extra
 import           Data.Maybe
-import           Data.Rope.UTF16                          (Rope)
-import qualified Data.Rope.UTF16                          as Rope
+import           Data.Text.Utf16.Rope                          (Rope)
+import qualified Data.Text.Utf16.Rope                          as Rope
 import qualified Data.Set                                 as Set
 import qualified Data.Text                                as T
 import           Development.IDE.Core.PositionMapping     (PositionResult (..),
@@ -4357,12 +4357,12 @@ findDefinitionAndHoverTests = let
 
   typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 sourceFilePath (pure tcData) "Saturated data con"
                         , tst (getTypeDefinitions, checkDefs) aL20 sourceFilePath (pure [ExpectNoDefinitions]) "Polymorphic variable"]
-  
-  recordDotSyntaxTests 
+
+  recordDotSyntaxTests
     | ghcVersion >= GHC92 =
-        [ tst (getHover, checkHover) (Position 19 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent" 
-        , tst (getHover, checkHover) (Position 19 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child" 
-        , tst (getHover, checkHover) (Position 19 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child" 
+        [ tst (getHover, checkHover) (Position 19 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent"
+        , tst (getHover, checkHover) (Position 19 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child"
+        , tst (getHover, checkHover) (Position 19 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
         ]
     | otherwise = []
 

@@ -48,10 +48,6 @@ import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
 
-instance Hashable Location
-instance Hashable Range
-instance Hashable Position
-instance Hashable UInt
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
