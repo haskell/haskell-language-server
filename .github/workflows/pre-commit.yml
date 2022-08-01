@@ -28,7 +28,7 @@ jobs:
 
     - name: Compiled deps cache
       id: stylish-haskell-compiled-cache
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       env:
         cache-name: stylish-haskell-compiled-cache
       with:
