@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeOperators         #-}
 module Test.Hls.Util
@@ -46,7 +45,7 @@ where
 
 import           Control.Applicative.Combinators (skipManyTill, (<|>))
 import           Control.Exception               (catch, throwIO)
-import           Control.Lens                    ((^.))
+import           Control.Lens                    ((&), (?~), (^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Data.Aeson                      as A
@@ -59,6 +58,7 @@ import           Development.IDE                 (GhcVersion (..), ghcVersion)
 import qualified Language.LSP.Test               as Test
 import           Language.LSP.Types              hiding (Reason (..))
 import qualified Language.LSP.Types.Capabilities as C
+import           Language.LSP.Types.Lens         (textDocument)
 import qualified Language.LSP.Types.Lens         as L
 import           System.Directory
 import           System.Environment
@@ -74,13 +74,13 @@ import           Test.Tasty.HUnit                (Assertion, assertFailure,
                                                   (@?=))
 
 noLiteralCaps :: C.ClientCapabilities
-noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
+noLiteralCaps = def & textDocument ?~ textDocumentCaps
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
 codeActionSupportCaps :: C.ClientCapabilities
-codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
+codeActionSupportCaps = def & textDocument ?~ textDocumentCaps
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True) Nothing Nothing Nothing Nothing

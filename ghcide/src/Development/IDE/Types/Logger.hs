@@ -385,7 +385,6 @@ toCologActionWithPrio :: (MonadIO m, HasCallStack) => Recorder (WithPriority msg
 toCologActionWithPrio (Recorder _logger) = LogAction $ \WithSeverity{..} -> do
     let priority = severityToPriority getSeverity
     _logger $ WithPriority priority callStack getMsg
-    undefined
   where
     severityToPriority :: Severity -> Priority
     severityToPriority Colog.Debug   = Debug

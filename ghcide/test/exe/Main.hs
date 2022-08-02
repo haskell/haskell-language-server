@@ -28,10 +28,10 @@ import           Data.Default
 import           Data.Foldable
 import           Data.List.Extra
 import           Data.Maybe
-import           Data.Text.Utf16.Rope                          (Rope)
-import qualified Data.Text.Utf16.Rope                          as Rope
 import qualified Data.Set                                 as Set
 import qualified Data.Text                                as T
+import           Data.Text.Utf16.Rope                     (Rope)
+import qualified Data.Text.Utf16.Rope                     as Rope
 import           Development.IDE.Core.PositionMapping     (PositionResult (..),
                                                            fromCurrent,
                                                            positionResultToMaybe,
@@ -78,7 +78,7 @@ import qualified Language.LSP.Types.Lens                  as Lens (label)
 import qualified Language.LSP.Types.Lens                  as Lsp (diagnostics,
                                                                   message,
                                                                   params)
-import           Language.LSP.VFS                         (applyChange)
+import           Language.LSP.VFS                         (VfsLog, applyChange)
 import           Network.URI
 import           System.Directory
 import           System.Environment.Blank                 (getEnv, setEnv,
@@ -116,7 +116,8 @@ import           Development.IDE.Types.Logger             (Logger (Logger),
                                                            WithPriority (WithPriority, priority),
                                                            cfilter,
                                                            cmapWithPrio,
-                                                           makeDefaultStderrRecorder)
+                                                           makeDefaultStderrRecorder,
+                                                           toCologActionWithPrio)
 import qualified FuzzySearch
 import           GHC.Stack                                (emptyCallStack)
 import qualified HieDbRetry
@@ -128,6 +129,8 @@ import           Language.LSP.Types.Lens                  (didChangeWatchedFiles
 import qualified Language.LSP.Types.Lens                  as L
 import qualified Progress
 import           System.Time.Extra
+import           Test.QuickCheck.Monadic                  (forAllM, monadicIO)
+import qualified Test.QuickCheck.Monadic as MonadicQuickCheck
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
@@ -139,11 +142,13 @@ import           Text.Regex.TDFA                          ((=~))
 data Log
   = LogGhcIde Ghcide.Log
   | LogIDEMain IDE.Log
+  | LogVfs VfsLog
 
 instance Pretty Log where
   pretty = \case
     LogGhcIde log  -> pretty log
     LogIDEMain log -> pretty log
+    LogVfs log     -> pretty log
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -210,7 +215,7 @@ main = do
     , safeTests
     , unitTests recorder logger
     , haddockTests
-    , positionMappingTests
+    , positionMappingTests recorder
     , watchedFilesTests
     , cradleTests
     , dependentFileTest
@@ -250,7 +255,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "   find references"          _referencesProvider (Just $ InL True)
     , chk "   doc highlight"     _documentHighlightProvider (Just $ InL True)
     , chk "   doc symbol"           _documentSymbolProvider (Just $ InL True)
-    , chk "   workspace symbol"    _workspaceSymbolProvider (Just True)
+    , chk "   workspace symbol"    _workspaceSymbolProvider (Just $ InL True)
     , chk "   code action"             _codeActionProvider  (Just $ InL True)
     , chk "   code lens"                 _codeLensProvider  (Just $ CodeLensOptions (Just False) (Just False))
     , chk "NO doc formatting"   _documentFormattingProvider (Just $ InL False)
@@ -6869,10 +6874,8 @@ testIde recorder arguments session = do
     flip finally (setCurrentDirectory cwd) $ withAsync server $ \_ ->
         runSessionWithHandles hInWrite hOutRead config lspTestCaps projDir session
 
-
-
-positionMappingTests :: TestTree
-positionMappingTests =
+positionMappingTests :: Recorder (WithPriority Log) -> TestTree
+positionMappingTests recorder =
     testGroup "position mapping"
         [ testGroup "toCurrent"
               [ testCase "before" $
@@ -6986,18 +6989,20 @@ positionMappingTests =
                     \(range, replacement, oldPos, newPos) ->
                     fromCurrent range replacement newPos === PositionExact oldPos
               , testProperty "toCurrent r t <=< fromCurrent r t" $ do
-                let gen = do
+                let gen :: Gen (Rope, Range, T.Text)
+                    gen = do
                         rope <- genRope
                         range <- genRange rope
                         PrintableText replacement <- arbitrary
-                        let newRope = applyChange rope (TextDocumentContentChangeEvent (Just range) Nothing replacement)
-                        newPos <- genPosition newRope
-                        pure (range, replacement, newPos)
-                forAll
-                    (suchThatMap gen
-                        (\(range, replacement, newPos) -> positionResultToMaybe $ (range, replacement, newPos,) <$> fromCurrent range replacement newPos)) $
-                    \(range, replacement, newPos, oldPos) ->
-                    toCurrent range replacement oldPos === PositionExact newPos
+                        pure (rope, range, replacement)
+                monadicIO $ forAllM gen
+                    $ \(rope, range, replacement) -> do
+                        newRope <- liftIO $ applyChange (toCologActionWithPrio $ cmapWithPrio LogVfs recorder) rope (TextDocumentContentChangeEvent (Just range) Nothing replacement)
+                        newPos <- MonadicQuickCheck.pick $ genPosition newRope
+                        case positionResultToMaybe $ (range, replacement, newPos,) <$> fromCurrent range replacement newPos of
+                            Nothing -> MonadicQuickCheck.pre False
+                            Just (range, replacement, newPos, oldPos) ->
+                                MonadicQuickCheck.assert $ toCurrent range replacement oldPos == PositionExact newPos
               ]
         ]
 
@@ -7013,19 +7018,19 @@ genRope = Rope.fromText . getPrintableText <$> arbitrary
 
 genPosition :: Rope -> Gen Position
 genPosition r = do
-    let rows = Rope.rows r
+    let rows :: Int = fromIntegral $ Rope.lengthInLines r
     row <- choose (0, max 0 $ rows - 1) `suchThat` inBounds @UInt
-    let columns = Rope.columns (nthLine row r)
+    let columns = T.length (nthLine (fromIntegral row) r)
     column <- choose (0, max 0 $ columns - 1) `suchThat` inBounds @UInt
     pure $ Position (fromIntegral row) (fromIntegral column)
 
 genRange :: Rope -> Gen Range
 genRange r = do
-    let rows = Rope.rows r
+    let rows :: Int = fromIntegral $ Rope.lengthInLines r
     startPos@(Position startLine startColumn) <- genPosition r
     let maxLineDiff = max 0 $ rows - 1 - fromIntegral startLine
     endLine <- choose (fromIntegral startLine, fromIntegral startLine + maxLineDiff) `suchThat` inBounds @UInt
-    let columns = Rope.columns (nthLine (fromIntegral endLine) r)
+    let columns = T.length (nthLine (fromIntegral endLine) r)
     endColumn <-
         if fromIntegral startLine == endLine
             then choose (fromIntegral startColumn, columns)
@@ -7037,12 +7042,10 @@ inBounds :: forall b a . (Integral a, Integral b, Bounded b) => a -> Bool
 inBounds a = let i = toInteger a in i <= toInteger (maxBound @b) && i >= toInteger (minBound @b)
 
 -- | Get the ith line of a rope, starting from 0. Trailing newline not included.
-nthLine :: Int -> Rope -> Rope
+nthLine :: Int -> Rope -> T.Text
 nthLine i r
-    | i < 0 = error $ "Negative line number: " <> show i
-    | i == 0 && Rope.rows r == 0 = r
-    | i >= Rope.rows r = error $ "Row number out of bounds: " <> show i <> "/" <> show (Rope.rows r)
-    | otherwise = Rope.takeWhile (/= '\n') $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (i - 1) r
+    | Rope.null r = ""
+    | otherwise = Rope.lines r !! i
 
 getWatchedFilesSubscriptionsUntil :: forall m. SServerMethod m -> Session [DidChangeWatchedFilesRegistrationOptions]
 getWatchedFilesSubscriptionsUntil m = do

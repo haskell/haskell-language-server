@@ -437,6 +437,7 @@ test-suite ghcide-tests
         tasty-quickcheck,
         tasty-rerun,
         text,
+        text-rope,
         unordered-containers,
         vector,
     if (impl(ghc >= 8.6) && impl(ghc < 9.2))
