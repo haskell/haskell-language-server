@@ -6379,7 +6379,8 @@ clientSettingsTest = testGroup "client settings handling"
             void $ skipManyTill anyMessage $ message SClientRegisterCapability
             void $ createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
-            sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON ("" :: String)))
+            sendNotification SWorkspaceDidChangeConfiguration
+                (DidChangeConfigurationParams (toJSON (mempty :: A.Object)))
             skipManyTill anyMessage restartingBuildSession
 
     ]

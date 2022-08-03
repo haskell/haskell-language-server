@@ -706,7 +706,8 @@ shakeRestart recorder IdeState{..} vfs reason acts =
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
-              log Debug $ LogBuildSessionRestart reason queue backlog stopTime res
+              -- this log is required by tests
+              log Info $ LogBuildSessionRestart reason queue backlog stopTime res
         )
         -- It is crucial to be masked here, otherwise we can get killed
         -- between spawning the new thread and updating shakeSession.
