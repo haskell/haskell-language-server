@@ -15,7 +15,10 @@ import qualified Data.Map                              as Map
 import qualified Data.Text                             as T
 import           Development.IDE                       hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.Plugin.CodeAction
+import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.ExactPrint        (GetAnnotatedParsedSource (..))
+import qualified Development.IDE.GHC.ExactPrint                   as E
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs)
@@ -23,8 +26,8 @@ import           Language.Haskell.GHC.ExactPrint.Utils
 import           Language.LSP.Types
 
 -----------------------------------------------------------------------------
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId =
+descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = mkExactprintPluginDescriptor recorder $
   (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
     }

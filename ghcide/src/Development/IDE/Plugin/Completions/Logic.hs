@@ -59,7 +59,7 @@ import           GHC.Plugins                              (Depth (AllTheWay),
 #endif
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
-                                                           PluginId)
+                                                           IdePlugins(..), PluginId)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
@@ -161,7 +161,8 @@ occNameToComKind ty oc
 showModName :: ModuleName -> T.Text
 showModName = T.pack . moduleNameString
 
-mkCompl :: PluginId -> IdeOptions -> CompItem -> CompletionItem
+mkCompl :: Maybe PluginId -- ^ Plugin to use for the extend import command
+        -> IdeOptions -> CompItem -> CompletionItem
 mkCompl
   pId
   IdeOptions {..}
@@ -175,7 +176,7 @@ mkCompl
       docs,
       additionalTextEdits
     } = do
-  let mbCommand = mkAdditionalEditsCommand pId `fmap` additionalTextEdits
+  let mbCommand = mkAdditionalEditsCommand pId =<< additionalTextEdits
   let ci = CompletionItem
                  {_label = label,
                   _kind = kind,
@@ -217,9 +218,9 @@ mkCompl
             "line " <> printOutputable (srcLocLine loc) <> ", column " <> printOutputable (srcLocCol loc)
 
 
-mkAdditionalEditsCommand :: PluginId -> ExtendImport -> Command
-mkAdditionalEditsCommand pId edits =
-  mkLspCommand pId (CommandId extendImportCommandId) "extend import" (Just [toJSON edits])
+mkAdditionalEditsCommand :: Maybe PluginId -> ExtendImport -> Maybe Command
+mkAdditionalEditsCommand (Just pId) edits = Just $ mkLspCommand pId (CommandId extendImportCommandId) "extend import" (Just [toJSON edits])
+mkAdditionalEditsCommand _ _ = Nothing
 
 mkNameCompItem :: Uri -> Maybe T.Text -> OccName -> Provenance -> Maybe Type -> Maybe Backtick -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem
 mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp = CI {..}
@@ -553,7 +554,7 @@ removeSnippetsWhen condition x =
 
 -- | Returns the cached completions for the given module and position.
 getCompletions
-    :: PluginId
+    :: IdePlugins a
     -> IdeOptions
     -> CachedCompletions
     -> Maybe (ParsedModule, PositionMapping)
@@ -563,7 +564,7 @@ getCompletions
     -> CompletionsConfig
     -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
     -> IO [Scored CompletionItem]
-getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
+getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
                maybe_parsed (localBindings, bmapping) prefixInfo caps config moduleExportsMap = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
@@ -663,7 +664,8 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
     | otherwise -> do
         -- assumes that nubOrdBy is stable
         let uniqueFiltCompls = nubOrdBy (uniqueCompl `on` snd . Fuzzy.original) filtCompls
-        let compls = (fmap.fmap.fmap) (mkCompl plId ideOpts) uniqueFiltCompls
+        let compls = (fmap.fmap.fmap) (mkCompl pId ideOpts) uniqueFiltCompls
+            pId = lookupCommandProvider plugins (CommandId extendImportCommandId)
         return $
           (fmap.fmap) snd $
           sortBy (compare `on` lexicographicOrdering) $

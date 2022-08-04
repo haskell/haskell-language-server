@@ -1,7 +1,3 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternSynonyms   #-}
-
 -- | This module contains compatibility constructs to write type signatures across
 --   multiple ghc-exactprint versions, accepting that anything more ambitious is
 --   pretty much impossible with the GHC 9.2 redesign of ghc-exactprint

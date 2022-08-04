@@ -158,7 +158,7 @@ import           GHC.Stack                              (HasCallStack)
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
-import           Ide.Types                              (PluginId)
+import           Ide.Types                              (PluginId, IdePlugins)
 import           Language.LSP.Diagnostics
 import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.Types
@@ -239,6 +239,7 @@ data ShakeExtras = ShakeExtras
      lspEnv :: Maybe (LSP.LanguageContextEnv Config)
     ,debouncer :: Debouncer NormalizedUri
     ,logger :: Logger
+    ,idePlugins :: IdePlugins IdeState
     ,globals :: TVar (HMap.HashMap TypeRep Dynamic)
       -- ^ Registry of global state used by rules.
       -- Small and immutable after startup, so not worth using an STM.Map.
@@ -552,6 +553,7 @@ seqValue val = case val of
 shakeOpen :: Recorder (WithPriority Log)
           -> Maybe (LSP.LanguageContextEnv Config)
           -> Config
+          -> IdePlugins IdeState
           -> Logger
           -> Debouncer NormalizedUri
           -> Maybe FilePath
@@ -563,7 +565,7 @@ shakeOpen :: Recorder (WithPriority Log)
           -> Monitoring
           -> Rules ()
           -> IO IdeState
-shakeOpen recorder lspEnv defaultConfig logger debouncer
+shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
   ideTesting@(IdeTesting testing)
   withHieDb indexQueue opts monitoring rules = mdo

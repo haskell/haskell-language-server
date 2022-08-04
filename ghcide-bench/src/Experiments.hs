@@ -139,7 +139,7 @@ experiments =
           not . null <$> getCompletions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       benchWithSetup
-        "code actions"
+        "code lens"
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
@@ -148,13 +148,12 @@ experiments =
                 waitForProgressStart
             waitForProgressDone
         )
-        ( \docs -> not . null . catMaybes <$> forM docs (\DocumentPositions{..} ->
-            forM identifierP $ \p ->
-              getCodeActions doc (Range p p))
+        ( \docs -> not . null <$> forM docs (\DocumentPositions{..} ->
+            getCodeLenses doc)
         ),
       ---------------------------------------------------------------------------------------
       benchWithSetup
-        "code actions after edit"
+        "code lens after edit"
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
@@ -166,9 +165,8 @@ experiments =
               changeDoc doc [charEdit stringLiteralP]
               waitForProgressStart
             waitForProgressDone
-            not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
-              forM identifierP $ \p ->
-                getCodeActions doc (Range p p))
+            not . null <$> forM docs (\DocumentPositions{..} -> do
+              getCodeLenses doc)
         ),
       ---------------------------------------------------------------------------------------
       benchWithSetup

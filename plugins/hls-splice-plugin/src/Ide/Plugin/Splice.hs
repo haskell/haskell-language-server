@@ -47,6 +47,7 @@ import           Data.Maybe                      (fromMaybe, listToMaybe,
 import qualified Data.Text                       as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat      as Compat hiding (getLoc)
+import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util as Util
 import           Development.IDE.GHC.ExactPrint
 import           GHC.Exts
