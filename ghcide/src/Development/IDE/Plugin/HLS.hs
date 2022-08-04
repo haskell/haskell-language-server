@@ -127,7 +127,7 @@ executeCommandPlugins recorder ecs = mempty { P.pluginHandlers = executeCommandH
 executeCommandHandlers :: Recorder (WithPriority Log) -> [(PluginId, [PluginCommand IdeState])] -> LSP.Handlers (ServerM Config)
 executeCommandHandlers recorder ecs = requestHandler SWorkspaceExecuteCommand execCmd
   where
-    pluginMap = Map.fromList ecs
+    pluginMap = Map.fromListWith (++) ecs
 
     parseCmdId :: T.Text -> Maybe (PluginId, CommandId)
     parseCmdId x = case T.splitOn ":" x of
