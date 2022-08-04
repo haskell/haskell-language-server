@@ -14,34 +14,34 @@ examples:
   # Medium-sized project without TH
   - name: cabal
     package: Cabal
-    version: 3.0.0.0
+    version: 3.6.3.0
     modules:
-        - Distribution/Simple.hs
-        - Distribution/Types/Module.hs
+        - src/Distribution/Simple.hs
+        - src/Distribution/Types/Module.hs
     extra-args: [] # extra ghcide command line args
   - name: cabal-1module
     package: Cabal
-    version: 3.0.0.0
+    version: 3.6.3.0
     modules:
-        - Distribution/Simple.hs
+        - src/Distribution/Simple.hs
   - name: cabal-conservative
     package: Cabal
-    version: 3.0.0.0
+    version: 3.6.3.0
     modules:
-        - Distribution/Simple.hs
-        - Distribution/Types/Module.hs
+        - src/Distribution/Simple.hs
+        - src/Distribution/Types/Module.hs
     extra-args:  # extra ghcide command line args
       - --conservative-change-tracking
   # Small-sized project with TH
   - name: lsp-types
     package: lsp-types
-    version: 1.0.0.1
+    version: 1.5.0.0
     modules:
         - src/Language/LSP/VFS.hs
         - src/Language/LSP/Types/Lens.hs
   - name: lsp-types-conservative
     package: lsp-types
-    version: 1.0.0.1
+    version: 1.5.0.0
     modules:
         - src/Language/LSP/VFS.hs
         - src/Language/LSP/Types/Lens.hs
