@@ -6652,10 +6652,7 @@ runInDir'' lspCaps dir startExeIn startSessionIn extraOptions s = do
 
   shakeProfiling <- getEnv "SHAKE_PROFILING"
   let cmd = unwords $
-       -- With lsp-1.5, verbose logging is causing a lot of deeply nested JSON in ghcide-tests,
-       -- and finally results in OOM on a machine with 64GB RAM.
-       -- I can't find the root cause now.
-       [ghcideExe, "--lsp", "--test", "--verify-core-file", "-j2", "--cwd", startDir
+       [ghcideExe, "--lsp", "--test", "--verify-core-file", "--verbose", "-j2", "--cwd", startDir
        ] ++ ["--shake-profiling=" <> dir | Just dir <- [shakeProfiling]
        ] ++ extraOptions
   -- HIE calls getXgdDirectory which assumes that HOME is set.

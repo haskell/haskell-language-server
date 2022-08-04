@@ -34,6 +34,8 @@ import           UnliftIO.Concurrent
 import           UnliftIO.Directory
 import           UnliftIO.Exception
 
+import qualified Colog.Core                            as Colog
+import           Control.Monad.IO.Class
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log, Priority)
@@ -108,10 +110,15 @@ runLanguageServer recorder options inH outH defaultConfig onConfigurationChange 
             , LSP.options = modifyOptions options
             }
 
+    let lspCologAction :: MonadIO m2 => Colog.LogAction m2 (Colog.WithSeverity LspServerLog)
+        lspCologAction = toCologActionWithPrio $ cfilter
+            (\msg -> priority msg >= Info)
+            (cmapWithPrio LogLspServer recorder)
+
     void $ untilMVar clientMsgVar $
           void $ LSP.runServerWithHandles
-            (toCologActionWithPrio (cmapWithPrio LogLspServer recorder))
-            (toCologActionWithPrio (cmapWithPrio LogLspServer recorder))
+            lspCologAction
+            lspCologAction
             inH
             outH
             serverDefinition
