@@ -35,7 +35,6 @@ import           UnliftIO.Directory
 import           UnliftIO.Exception
 
 import qualified Colog.Core                            as Colog
-import           Control.Monad.IO.Class
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log, Priority)
