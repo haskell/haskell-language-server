@@ -2,8 +2,8 @@
 
 module Ide.Plugin.Fourmolu.Shim (
   -- * FourmoluConfig
-  FourmoluConfig (..),
-  toConfig,
+  cfgFilePrinterOpts,
+  cfgFileFixities,
   emptyConfig,
 
   -- * FixityMap
@@ -21,29 +21,27 @@ import           Ormolu.Fixity
 
 {-- Backport FourmoluConfig --}
 
-#if MIN_VERSION_fourmolu(0,7,0)
-toConfig :: FourmoluConfig -> FourmoluConfig
-toConfig = id
-#else
-data FourmoluConfig = FourmoluConfig
-  { cfgFilePrinterOpts :: PrinterOptsPartial
-  , cfgFileFixities    :: FixityMap
-  }
+#if !MIN_VERSION_fourmolu(0,7,0)
+type FourmoluConfig = PrinterOptsPartial
 
-toConfig :: PrinterOptsPartial -> FourmoluConfig
-toConfig opts =
-  FourmoluConfig
-    { cfgFilePrinterOpts = opts
-    , cfgFileFixities = mempty
-    }
+cfgFilePrinterOpts :: FourmoluConfig -> PrinterOptsPartial
+cfgFilePrinterOpts = id
+
+cfgFileFixities :: FourmoluConfig -> FixityMap
+cfgFileFixities _ = mempty
 #endif
 
+#if MIN_VERSION_fourmolu(0,7,0)
 emptyConfig :: FourmoluConfig
 emptyConfig =
   FourmoluConfig
     { cfgFilePrinterOpts = mempty
     , cfgFileFixities = mempty
     }
+#else
+emptyConfig :: FourmoluConfig
+emptyConfig = mempty
+#endif
 
 {-- Backport FixityMap --}
 

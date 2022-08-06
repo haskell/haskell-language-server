@@ -117,7 +117,7 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
              in liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> liftIO $ do
                         logWith recorder Info $ ConfigPath file
-                        format (toConfig opts)
+                        format opts
                     ConfigNotFound searchDirs -> liftIO $ do
                         logWith recorder Info $ NoConfigPath searchDirs
                         format emptyConfig
