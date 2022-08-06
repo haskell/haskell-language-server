@@ -16,7 +16,7 @@ import           Control.Exception               (IOException, try)
 import           Control.Lens                    ((^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.Bifunctor                  (first)
+import           Data.Bifunctor                  (bimap, first)
 import           Data.Maybe
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
@@ -100,8 +100,8 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                         pure . Left . responseError $ "Fourmolu failed with exit code " <> T.pack (show n)
         else do
             let format fourmoluConfig =
-                    first (mkError . show)
-                        <$> try @OrmoluException (makeDiffTextEdit contents <$> ormolu config fp' (T.unpack contents))
+                    bimap (mkError . show) (makeDiffTextEdit contents)
+                        <$> try @OrmoluException (ormolu config fp' (T.unpack contents))
                   where
                     printerOpts =
 #if MIN_VERSION_fourmolu(0,7,0)
