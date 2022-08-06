@@ -37,13 +37,13 @@ examples:
     package: lsp-types
     version: 1.5.0.0
     modules:
-        - src/Language/LSP/VFS.hs
+        - src/Language/LSP/Types/Uri.hs
         - src/Language/LSP/Types/Lens.hs
   - name: lsp-types-conservative
     package: lsp-types
     version: 1.5.0.0
     modules:
-        - src/Language/LSP/VFS.hs
+        - src/Language/LSP/Types/Uri.hs
         - src/Language/LSP/Types/Lens.hs
     extra-args:
       - --conservative-change-tracking
