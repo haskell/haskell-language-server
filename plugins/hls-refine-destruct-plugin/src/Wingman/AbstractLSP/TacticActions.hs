@@ -26,6 +26,7 @@ import Wingman.LanguageServer.TacticProviders
 import Wingman.Machinery (runTactic)
 import Wingman.Range
 import Wingman.Types
+import GHC (SrcSpanAnn'(SrcSpanAnn))
 
 
 ------------------------------------------------------------------------------
@@ -153,7 +154,7 @@ graftDecl
     -> (RdrName -> [Pat GhcPs] -> LHsDecl GhcPs)
     -> LMatch GhcPs (LHsExpr GhcPs)
     -> TransformT (Either String) [LMatch GhcPs (LHsExpr GhcPs)]
-graftDecl dflags dst ix make_decl (L src (AMatch (FunRhs (L _ name) _ _) pats _))
+graftDecl dflags dst ix make_decl (L (SrcSpanAnn _ src) (AMatch (FunRhs (L _ name) _ _) pats _))
   | dst `isSubspanOf` src = do
       L _ dec <- annotateDecl dflags $ make_decl name pats
       case dec of
@@ -165,8 +166,8 @@ graftDecl dflags dst ix make_decl (L src (AMatch (FunRhs (L _ name) _ _) pats _)
           -- insert a preceeding newline (done in 'annotateDecl') on all
           -- matches, except for the first one --- since it gets its newline
           -- from the line above.
-          when (ix == 0) $
-            setPrecedingLinesT first_match 0 0
+          -- when (ix == 0) $
+          --   setPrecedingLinesT first_match 0 0
           pure alts
         _ -> lift $ Left "annotateDecl didn't produce a funbind"
 graftDecl _ _ _ _ x = pure $ pure x

@@ -79,7 +79,7 @@ rulesPlugins rs = mempty { P.pluginRules = rules }
     where
         rules = foldMap snd rs
 
-dynFlagsPlugins :: [(PluginId, DynFlagsModifications)] -> Plugin Config
+dynFlagsPlugins :: [(PluginId, GhcOptsModifications)] -> Plugin Config
 dynFlagsPlugins rs = mempty
   { P.pluginModifyDynflags =
       flip foldMap rs $ \(plId, dflag_mods) cfg ->
@@ -173,7 +173,7 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
           Nothing -> do
             logWith recorder Info LogNoEnabledPlugins
             pure $ Left $ ResponseError InvalidRequest
-              (  "No plugin enabled for " <> T.pack (show m) 
+              (  "No plugin enabled for " <> T.pack (show m)
               <> ", available: " <> T.pack (show $ map (\(plid,_,_) -> plid) fs)
               )
               Nothing

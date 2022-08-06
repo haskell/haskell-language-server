@@ -34,6 +34,8 @@ import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.LanguageServer
 import           Wingman.Types
+import GHC (LocatedA, SrcSpanAnnA, SrcSpanAnn' (..))
+import GHC.Hs (LocatedL)
 
 
 data EmptyCaseT = EmptyCaseT
@@ -71,7 +73,7 @@ emptyCaseInteraction = Interaction $
         edits <- liftMaybe $ hush $
               mkWorkspaceEdits le_dflags ccs fc_uri (unTrack pm) $
                 graftMatchGroup (RealSrcSpan (unTrack ss) Nothing) $
-                  noLoc matches
+                  noLocA matches
         pure
           ( range
           , Metadata
@@ -111,7 +113,7 @@ hush (Right a) = Just a
 -- 'Match's that bind variables.
 graftMatchGroup
     :: SrcSpan
-    -> Located [LMatch GhcPs (LHsExpr GhcPs)]
+    -> LocatedL [LMatch GhcPs (LHsExpr GhcPs)]
     -> Graft (Either String) ParsedSource
 graftMatchGroup ss l =
   hoistGraft (runExcept . runExceptString) $ graftExprWithM ss $ \case
@@ -150,10 +152,10 @@ emptyCaseScrutinees state nfp = do
         True -> pure empty
         False ->
           case ss of
-            RealSrcSpan r _ -> do
+            SrcSpanAnn _ (RealSrcSpan r _) -> do
               rss' <- liftMaybe $ mapAgeTo tcg_map $ unsafeCopyAge aged r
               pure $ Just (rss', ty)
-            UnhelpfulSpan _ -> empty
+            SrcSpanAnn _ (UnhelpfulSpan _) -> empty
 
 data EmptyCaseSort a
   = EmptyCase a
@@ -162,9 +164,9 @@ data EmptyCaseSort a
 
 ------------------------------------------------------------------------------
 -- | Get the 'SrcSpan' and scrutinee of every empty case.
-emptyCaseQ :: GenericQ [(SrcSpan, EmptyCaseSort (HsExpr GhcTc))]
+emptyCaseQ :: GenericQ [(SrcSpanAnnA, EmptyCaseSort (HsExpr GhcTc))]
 emptyCaseQ = everything (<>) $ mkQ mempty $ \case
-  L new_span (Case scrutinee []) -> pure (new_span, EmptyCase scrutinee)
-  L new_span expr@(LamCase []) -> pure (new_span, EmptyLamCase expr)
+  (L new_span (CaseTc scrutinee [])) -> pure (new_span, EmptyCase scrutinee)
+  L new_span expr@(LamCaseTc []) -> pure (new_span, EmptyLamCase expr)
   (_ :: LHsExpr GhcTc) -> mempty
 

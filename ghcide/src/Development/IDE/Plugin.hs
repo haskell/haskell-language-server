@@ -4,13 +4,13 @@ import           Data.Default
 import           Development.IDE.Graph
 
 import           Development.IDE.LSP.Server
-import           Ide.Types                  (DynFlagsModifications)
+import           Ide.Types                  (GhcOptsModifications)
 import qualified Language.LSP.Server        as LSP
 
 data Plugin c = Plugin
     {pluginRules          :: Rules ()
     ,pluginHandlers       :: LSP.Handlers (ServerM c)
-    ,pluginModifyDynflags :: c -> DynFlagsModifications
+    ,pluginModifyDynflags :: c -> GhcOptsModifications
     }
 
 instance Default (Plugin c) where

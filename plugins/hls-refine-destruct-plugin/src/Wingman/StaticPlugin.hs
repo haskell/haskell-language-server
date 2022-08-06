@@ -9,7 +9,7 @@ import GHC.LanguageExtensions.Type (Extension(EmptyCase))
 
 import Ide.Types
 
-staticPlugin :: DynFlagsModifications
+staticPlugin :: GhcOptsModifications
 staticPlugin = mempty
   { dynFlagsModifyGlobal =
       \df -> allowEmptyCaseButWithWarning
@@ -19,7 +19,8 @@ staticPlugin = mempty
              { refLevelHoleFits = Just 0
              , maxRefHoleFits   = Just 0
              , maxValidHoleFits = Just 0
-#if __GLASGOW_HASKELL__ >= 808
+#if __GLASGOW_HASKELL__ >= 902
+#elif __GLASGOW_HASKELL__ >= 808
              , staticPlugins = staticPlugins df
 #endif
              }

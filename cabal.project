@@ -6,7 +6,7 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
-         ./plugins/hls-tactics-plugin
+         ./plugins/hls-refine-destruct-plugin
          ./plugins/hls-brittany-plugin
          ./plugins/hls-stylish-haskell-plugin
          ./plugins/hls-fourmolu-plugin

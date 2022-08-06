@@ -244,7 +244,7 @@ try' t = commit t $ pure ()
 ------------------------------------------------------------------------------
 -- | Sorry leaves a hole in its extract
 exact :: HsExpr GhcPs -> TacticsM ()
-exact = rule . const . pure . pure . noLoc
+exact = rule . const . pure . pure . noLocA
 
 ------------------------------------------------------------------------------
 -- | Lift a function over 'HyInfo's to one that takes an 'OccName' and tries to

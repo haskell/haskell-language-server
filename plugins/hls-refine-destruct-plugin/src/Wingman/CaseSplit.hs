@@ -65,7 +65,7 @@ containsVar name = everything (||) $
     (_ :: Pat GhcPs)   -> False
       )
   `extQ` \case
-    HsRecField lbl _ True ->  eqRdrName name $ unLoc $ rdrNameFieldOcc $ unLoc lbl
+    HsRecField _ lbl _ True ->  eqRdrName name $ unLoc $ rdrNameFieldOcc $ unLoc lbl
     (_ :: HsRecField' (FieldOcc GhcPs) (PatCompat GhcPs)) -> False
 
 
@@ -78,9 +78,9 @@ rewriteVarPat name rep = everywhere $
     (x :: Pat GhcPs)                        -> x
       )
   `extT` \case
-    HsRecField lbl _ True
+    HsRecField ann lbl _ True
       | eqRdrName name $ unLoc $ rdrNameFieldOcc $ unLoc lbl
-          -> HsRecField lbl (toPatCompat rep) False
+          -> HsRecField ann lbl (toPatCompat rep) False
     (x :: HsRecField' (FieldOcc GhcPs) (PatCompat GhcPs)) -> x
 
 
@@ -93,7 +93,7 @@ splitToDecl
     -> LHsDecl GhcPs
 splitToDecl fixity name ams = do
   traceX "fixity" fixity $
-    noLoc $
+    noLocA $
       funBindsWithFixity fixity (fromString . occNameString . occName $ name) $ do
         AgdaMatch pats body <- ams
         pure $ match pats body
