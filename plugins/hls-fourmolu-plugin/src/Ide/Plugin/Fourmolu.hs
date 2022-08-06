@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
@@ -25,6 +24,7 @@ import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
                                                             hang, vcat)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
+import           Ide.Plugin.Fourmolu.Shim
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                 (makeDiffTextEdit,
                                                   usePropertyLsp)
@@ -33,7 +33,6 @@ import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types              hiding (line)
 import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
-import           Ormolu.Config
 import           System.Exit
 import           System.FilePath
 import           System.Process.Run              (cwd, proc)
@@ -103,14 +102,9 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                     bimap (mkError . show) (makeDiffTextEdit contents)
                         <$> try @OrmoluException (ormolu config fp' (T.unpack contents))
                   where
-                    printerOpts =
-#if MIN_VERSION_fourmolu(0,7,0)
-                        cfgFilePrinterOpts fourmoluConfig
-#else
-                        fourmoluConfig
-
-#endif
+                    printerOpts = cfgFilePrinterOpts fourmoluConfig
                     config =
+                        addFixityOverrides (cfgFileFixities fourmoluConfig) $
                         defaultConfig
                             { cfgDynOptions = map DynOption fileOpts
                             , cfgRegion = region
@@ -119,29 +113,14 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                                 fillMissingPrinterOpts
                                     (printerOpts <> lspPrinterOpts)
                                     defaultPrinterOpts
-#if MIN_VERSION_fourmolu(0,7,0)
-                            , cfgFixityOverrides =
-                                cfgFileFixities fourmoluConfig
-#endif
                             }
              in liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> liftIO $ do
                         logWith recorder Info $ ConfigPath file
-                        format opts
+                        format (toConfig opts)
                     ConfigNotFound searchDirs -> liftIO $ do
                         logWith recorder Info $ NoConfigPath searchDirs
-                        format emptyOptions
-                      where
-                        emptyOptions =
-#if MIN_VERSION_fourmolu(0,7,0)
-                            FourmoluConfig
-                                { cfgFilePrinterOpts = mempty
-                                , cfgFileFixities = mempty
-                                }
-#else
-                            mempty
-#endif
-
+                        format emptyConfig
                     ConfigParseError f err -> do
                         sendNotification SWindowShowMessage $
                             ShowMessageParams
@@ -150,13 +129,7 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                                 }
                         return . Left $ responseError errorMessage
                       where
-                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (convertErr err)
-                        convertErr =
-#if MIN_VERSION_fourmolu(0,7,0)
-                            show
-#else
-                            snd
-#endif
+                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (showParseError err)
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
