@@ -48,6 +48,9 @@ import qualified Language.LSP.VFS                         as VFS
 import           Numeric.Natural
 import           Text.Fuzzy.Parallel                      (Scored (..))
 
+import qualified GHC.LanguageExtensions as LangExt
+import           Language.LSP.Types
+
 data Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
@@ -120,7 +123,7 @@ getCompletionsLSP ide plId
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
-        (ideOpts, compls, moduleExports) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
+        (ideOpts, compls, moduleExports, astres) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             localCompls <- useWithStaleFast LocalCompletions npath
             nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
@@ -139,19 +142,27 @@ getCompletionsLSP ide plId
                 exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap $ exportsMap
                 exportsCompls = mempty{anyQualCompls = exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls <> Just lModules
+            
+            -- get HieAst if OverloadedRecordDot is enabled
+            let uses_th_qq (ms_hspp_opts -> dflags) = xopt LangExt.OverloadedRecordDot dflags
+            ms <- fmap fst <$> useWithStaleFast GetModSummaryWithoutTimestamps npath
+            astres <- case ms of 
+              Just ms' -> if uses_th_qq . msrModSummary  $ ms' then useWithStaleFast GetHieAst npath else return Nothing
+              Nothing -> return Nothing
 
-            pure (opts, fmap (,pm,binds) compls, moduleExports)
+            pure (opts, fmap (,pm,binds) compls, moduleExports, astres)
         case compls of
           Just (cci', parsedMod, bindMap) -> do
-            pfix <- VFS.getCompletionPrefix position cnts
+            pfix <- getCompletionPrefix position cnts
             case (pfix, completionContext) of
-              (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
+              (Just (PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
                 -> return (InL $ List [])
               (Just pfix', _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
                     plugins = idePlugins $ shakeExtras ide
                 config <- getCompletionsConfig plId
-                allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod bindMap pfix' clientCaps config moduleExports
+                
+                allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix' clientCaps config moduleExports
                 pure $ InL (List $ orderedCompletions allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])
