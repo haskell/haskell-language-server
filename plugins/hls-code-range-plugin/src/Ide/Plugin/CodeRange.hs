@@ -33,7 +33,7 @@ import           Development.IDE.Core.PositionMapping (PositionMapping,
 import           Development.IDE.Types.Logger         (Pretty (..))
 import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
-                                                       codeRangeRule)
+                                                       codeRangeRule, CodeRangeKind (CodeKindRegion))
 import qualified Ide.Plugin.CodeRange.Rules           as Rules (Log)
 import           Ide.PluginUtils                      (pluginResponse,
                                                        positionInRange)
@@ -82,10 +82,31 @@ foldingRangeHandler ide _ FoldingRangeParams{..} = do
         uri :: Uri
         TextDocumentIdentifier uri = _textDocument
 
-getFoldingRanges :: NormalizedFilePath -> ExceptT String IdeAction [FoldingRange]
-getFoldingRanges file = do
-    codeRange <- maybeToExceptT  "fail to get code range" $ useE GetCodeRange file
-    -- let foldingRanges = 
+-- getFoldingRanges :: NormalizedFilePath -> ExceptT String IdeAction [FoldingRange]
+-- getFoldingRanges file = do
+--     codeRange <- maybeToExceptT  "fail to get code range" $ useE GetCodeRange file
+--     let foldingRanges = 
+--     -- get code range tree
+--     -- return folding range
+--     -- gg 
+    
+getFoldingRanges :: NormalizedFilePath -> [Position] -> ExceptT String IdeAction [FoldingRange]
+getFoldingRanges file positions = do
+    (codeRange, positionMapping) <- maybeToExceptT "fail to get code range" $ useE GetCodeRange file
+    -- 'positionMapping' should be appied to the input before using them
+    positions' <- maybeToExceptT "fail to apply position mapping to input positions" . MaybeT . pure $
+        traverse (fromCurrentPosition positionMapping) positions
+
+    let foldingRanges = flip fmap positions' $ \pos ->
+            -- We need a default folding range if the lookup fails, so that other positions can still have valid results.
+            let defaultFoldingRange = FoldingRange (0 pos pos) Nothing
+             -- TODO: Fix the return of find position folding range
+             in fromMaybe defaultFoldingRange . findPositionFoldingRange pos $ codeRange
+
+    -- TODO: Port this to traverse folding range
+    -- 'positionMapping' should be applied to the output ranges before returning them
+    maybeToExceptT "fail to apply position mapping to output positions" . MaybeT . pure $
+         traverse (toCurrentSelectionRange positionMapping) foldingRanges
 
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do
@@ -144,6 +165,34 @@ findPosition pos root = go Nothing root
             let (left, right) = V.splitAt (V.length v `div` 2) v
             startOfRight <- _start . _codeRange_range <$> V.headM right
             if pos < startOfRight then binarySearchPos left else binarySearchPos right
+
+findPositionFoldingRange :: Position -> CodeRange -> Maybe FoldingRange
+findPositionFoldingRange pos root = go Nothing root
+    where
+        -- Helper function for recursion. The range list is built top-down
+        go :: Maybe FoldingRange -> CodeRange -> Maybe FoldingRange
+        go acc node =
+            if  positionInRange pos range
+            then maybe acc' (go acc') (binarySearchPos children)
+            else Nothing
+            where
+                range = _codeRange_range node
+                children = _codeRange_children node
+                Range startPos endPos = range
+                Position lineStart _=startPos
+                Position lineEnd _ =endPos
+                -- (Maybe FoldingRangeKind)
+                acc'=Just $ maybe (FoldingRange lineStart 0 lineEnd 0 0) acc
+        -- todo: fix type situation of folding range
+        binarySearchPos :: Vector CodeRange -> Maybe CodeRange
+        binarySearchPos v
+            | V.null v = Nothing
+            | V.length v == 1,
+                Just r <- V.headM v = if positionInRange pos (_codeRange_range r) then Just r else Nothing
+            | otherwise = do
+                let (left, right) = V.splitAt (V.length v `div` 2) v
+                startOfRight <- _start . _codeRange_range <$> V.headM right
+                if pos < startOfRight then binarySearchPos left else binarySearchPos right
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange
