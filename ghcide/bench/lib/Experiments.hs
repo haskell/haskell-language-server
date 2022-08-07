@@ -72,8 +72,13 @@ data DocumentPositions = DocumentPositions {
     doc            :: !TextDocumentIdentifier
 }
 
-allWithIdentifierPos :: Monad m => (DocumentPositions -> m Bool) -> [DocumentPositions] -> m Bool
-allWithIdentifierPos f docs = allM f (filter (isJust . identifierP) docs)
+allWithIdentifierPos :: MonadFail m => (DocumentPositions -> m Bool) -> [DocumentPositions] -> m Bool
+allWithIdentifierPos f docs = case applicableDocs of
+    -- fail if there are no documents to benchmark
+    [] -> fail "None of the example modules have identifier positions"
+    docs' -> allM f docs'
+  where
+    applicableDocs = filter (isJust . identifierP) docs
 
 experiments :: [Bench]
 experiments =
