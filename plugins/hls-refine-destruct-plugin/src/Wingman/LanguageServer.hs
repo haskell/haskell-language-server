@@ -571,7 +571,7 @@ mkWorkspaceEdits
     -> Graft (Either String) ParsedSource
     -> Either UserFacingMessage WorkspaceEdit
 mkWorkspaceEdits dflags ccs uri pm g = do
-  let response = transform dflags ccs uri g pm
+  let (traceShowId -> response) = transform dflags ccs uri g pm
    in first (InfrastructureError . T.pack) response
 
 

@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeFamilies      #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Wingman.EmptyCase where
 
@@ -33,9 +34,12 @@ import           Wingman.CodeGen (destructionFor)
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.LanguageServer
-import           Wingman.Types
-import GHC (LocatedA, SrcSpanAnnA, SrcSpanAnn' (..))
+import           Wingman.Types hiding (traceShowId)
+import GHC (LocatedA, SrcSpanAnnA, SrcSpanAnn' (..), EpAnn (..))
 import GHC.Hs (LocatedL)
+import Debug.Trace
+import GHC.Plugins (generatedSrcSpan)
+import Language.Haskell.GHC.ExactPrint
 
 
 data EmptyCaseT = EmptyCaseT
@@ -70,10 +74,12 @@ emptyCaseInteraction = Interaction $
             destructionFor
               (foldMap (hySingleton . occName . fst) bindings)
               ty
+        traceShowM matches
         edits <- liftMaybe $ hush $
               mkWorkspaceEdits le_dflags ccs fc_uri (unTrack pm) $
                 graftMatchGroup (RealSrcSpan (unTrack ss) Nothing) $
                   noLocA matches
+        traceShowM edits
         pure
           ( range
           , Metadata
@@ -85,6 +91,8 @@ emptyCaseInteraction = Interaction $
     )
     (\ _ _ _ we -> pure $ pure $ RawEdit we)
 
+instance Show (GenLocated SrcSpanAnnA (Match GhcPs (GenLocated SrcSpanAnnA (HsExpr GhcPs)))) where
+  show = unsafeRender
 
 scrutinzedType :: EmptyCaseSort Type -> Maybe Type
 scrutinzedType (EmptyCase ty) = pure  ty
@@ -107,6 +115,12 @@ hush (Left _) = Nothing
 hush (Right a) = Just a
 
 
+instance Show (EpAnn AnnListItem) where
+  show = unsafeRender
+
+instance Show (EpAnn EpAnnHsCase) where
+  show = unsafeRender . fmap showAst
+
 ------------------------------------------------------------------------------
 -- | Graft a 'RunTacticResults' into the correct place in an AST. Correctly
 -- deals with top-level holes, in which we might need to fiddle with the
@@ -118,7 +132,7 @@ graftMatchGroup
 graftMatchGroup ss l =
   hoistGraft (runExcept . runExceptString) $ graftExprWithM ss $ \case
     L span (HsCase ext scrut mg) -> do
-      pure $ Just $ L span $ HsCase ext scrut $ mg { mg_alts = l }
+      pure $ Just $ traceShowId $ L span $ HsCase ext scrut $ mg { mg_alts = l }
     L span (HsLamCase ext mg) -> do
       pure $ Just $ L span $ HsLamCase ext $ mg { mg_alts = l }
     (_ :: LHsExpr GhcPs) -> pure Nothing

@@ -102,6 +102,7 @@ import           GHC                                     (EpAnn (..),
 import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           DeltaPos (SameLine),
                                                           EpaLocation (EpaDelta))
+import Debug.Trace (traceShowM)
 #endif
 
 ------------------------------------------------------------------------------
@@ -188,8 +189,10 @@ transform ::
     Either String WorkspaceEdit
 transform dflags ccs uri f a = do
     let src = printA a
+    traceShowM src
     a' <- transformA a $ runGraft f dflags
     let res = printA a'
+    traceShowM res
     pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
 ------------------------------------------------------------------------------

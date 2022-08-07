@@ -24,6 +24,13 @@ staticPlugin = mempty
              , staticPlugins = staticPlugins df
 #endif
              }
+#if MIN_VERSION_ghc(9,2,0)
+
+
+  , staticPlugins = []
+#else
+  , staticPlugins = []
+#endif
   }
 
 
