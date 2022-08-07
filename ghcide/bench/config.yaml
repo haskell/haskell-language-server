@@ -37,14 +37,14 @@ examples:
     package: lsp-types
     version: 1.5.0.0
     modules:
-        - src/Language/LSP/Types/Uri.hs
-        - src/Language/LSP/Types/Lens.hs
+        - src/Language/LSP/Types/WatchedFiles.hs
+        - src/Language/LSP/Types/CallHierarchy.hs
   - name: lsp-types-conservative
     package: lsp-types
     version: 1.5.0.0
     modules:
-        - src/Language/LSP/Types/Uri.hs
-        - src/Language/LSP/Types/Lens.hs
+        - src/Language/LSP/Types/WatchedFiles.hs
+        - src/Language/LSP/Types/CallHierarchy.hs
     extra-args:
       - --conservative-change-tracking
   # Small-sized project with TH
