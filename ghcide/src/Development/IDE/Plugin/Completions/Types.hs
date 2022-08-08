@@ -139,10 +139,10 @@ instance Semigroup CachedCompletions where
         CC (a<>a') (b<>b') (c<>c') (d<>d') (e<>e')
 
 
--- moved here from Language.LSP.VHS
+-- moved here from Language.LSP.VFS
 -- | Describes the line at the current cursor position
 data PosPrefixInfo = PosPrefixInfo
-  { fullLine :: !T.Text
+  { fullLine    :: !T.Text
     -- ^ The full contents of the line the cursor is at
 
   , prefixScope :: !T.Text
@@ -152,10 +152,10 @@ data PosPrefixInfo = PosPrefixInfo
     -- If OverloadedRecordDot is enabled, "Shape.rect.width" will be
     -- "Shape.rect"
 
-  , prefixText :: !T.Text
+  , prefixText  :: !T.Text
     -- ^ The word right before the cursor position, after removing the module part.
     -- For example if the user has typed "Data.Maybe.from",
     -- then this property will be "from"
-  , cursorPos :: !J.Position
+  , cursorPos   :: !J.Position
     -- ^ The cursor position
   } deriving (Show,Eq)

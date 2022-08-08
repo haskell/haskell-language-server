@@ -14,14 +14,14 @@ module Development.IDE.Plugin.Completions.Logic (
 ) where
 
 import           Control.Applicative
-import           Data.Char                                (isUpper)
+import           Data.Char                                (isAlphaNum, isUpper)
 import           Data.Generics
 import           Data.List.Extra                          as List hiding
                                                                   (stripPrefix)
 import qualified Data.Map                                 as Map
 
-import           Data.Maybe                               (fromMaybe, isJust,
-                                                           mapMaybe, catMaybes)
+import           Data.Maybe                               (catMaybes, fromMaybe,
+                                                           isJust, mapMaybe)
 import qualified Data.Text                                as T
 import qualified Text.Fuzzy.Parallel                      as Fuzzy
 
@@ -31,7 +31,7 @@ import           Data.Either                              (fromRight)
 import           Data.Function                            (on)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
-import qualified Data.Map.Strict                      as M
+import qualified Data.Map.Strict                          as M
 
 import qualified Data.HashSet                             as HashSet
 import           Data.Monoid                              (First (..))
@@ -70,11 +70,10 @@ import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
 
-import Development.IDE
-import           Data.Coerce                          (coerce)
+import           Data.Coerce                              (coerce)
+import           Development.IDE
 
-import           Data.Char (isAlphaNum)
-import qualified Data.Rope.UTF16 as Rope
+import qualified Data.Rope.UTF16                          as Rope
 
 -- Chunk size used for parallelizing fuzzy matching
 chunkSize :: Int
@@ -617,14 +616,14 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
                   lpos = lowerRange position'
                   hpos = upperRange position'
               in getCContext lpos pm <|> getCContext hpos pm
-          
+
           dotFieldSelectorToCompl :: T.Text -> (Bool, CompItem)
           dotFieldSelectorToCompl label = (True, CI CiVariable label (ImportedFrom T.empty) Nothing label Nothing emptySpanDoc False Nothing)
 
           -- we need the hieast to be fresh
           -- not fresh, hasfield won't have a chance. it would to another larger change to ghc IfaceTyCon to contain record fields
           tst :: [(Bool, CompItem)]
-          tst = case maybe_ast_res of 
+          tst = case maybe_ast_res of
             Just (HAR {hieAst = hieast, hieKind = HieFresh},_) -> concat $ pointCommand hieast (completionPrefixPos prefixInfo) (theFunc HieFresh)
             _ -> []
 
@@ -638,7 +637,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
               g :: Type -> [(Bool, CompItem)]
               g (TyConApp theTyCon _) = map dotFieldSelectorToCompl $ getSels theTyCon
               g _ = []
-          
+
           nodeInfoH :: HieKind a -> HieAST a -> NodeInfo a
           nodeInfoH (HieFromDisk _) = nodeInfo'
           nodeInfoH HieFresh        = nodeInfo
@@ -692,7 +691,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
               thisModName = Local $ nameSrcSpan name
 
           compls
-            | T.null prefixScope = map (notQual,) localCompls ++ map (qual,) unqualCompls ++ ((notQual,) . ($Nothing) <$> anyQualCompls)
+            | T.null prefixScope = map (notQual,) localCompls ++ map (qual,) unqualCompls ++ ((notQual,) . ($ Nothing) <$> anyQualCompls)
             | not $ null tst = tst
             | otherwise = ((qual,) <$> Map.findWithDefault [] prefixScope (getQualCompls qualCompls))
                  ++ ((notQual,) . ($ Just prefixScope) <$> anyQualCompls)
@@ -955,26 +954,26 @@ mergeListsBy cmp all_lists = merge_lists all_lists
 getCompletionPrefix :: (Monad m) => Position -> VFS.VirtualFile -> m (Maybe PosPrefixInfo)
 getCompletionPrefix pos@(Position l c) (VFS.VirtualFile _ _ ropetext) =
       return $ Just $ fromMaybe (PosPrefixInfo "" "" "" pos) $ do -- Maybe monad
-        let headMaybe [] = Nothing
+        let headMaybe []    = Nothing
             headMaybe (x:_) = Just x
-            lastMaybe [] = Nothing
-            lastMaybe xs = Just $ last xs
+            lastMaybe []     = Nothing
+            lastMaybe [x]    = Just x
+            lastMaybe (_:xs) = lastMaybe xs
 
         curLine <- headMaybe $ T.lines $ Rope.toText
                              $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) ropetext
         let beforePos = T.take (fromIntegral c) curLine
         curWord <-
-            if | T.null beforePos -> Just ""
+            if | T.null beforePos        -> Just ""
                | T.last beforePos == ' ' -> Just "" -- don't count abc as the curword in 'abc '
-               | otherwise -> lastMaybe (T.words beforePos)
+               | otherwise               -> lastMaybe (T.words beforePos)
 
         let parts = T.split (=='.')
                       $ T.takeWhileEnd (\x -> isAlphaNum x || x `elem` ("._'"::String)) curWord
         case reverse parts of
           [] -> Nothing
           (x:xs) -> do
-            let modParts = dropWhile (\_ -> False)
-                                $ reverse $ filter (not .T.null) xs
+            let modParts = reverse $ filter (not .T.null) xs
                 modName = T.intercalate "." modParts
             return $ PosPrefixInfo { fullLine = curLine, prefixScope = modName, prefixText = x, cursorPos = pos }
 

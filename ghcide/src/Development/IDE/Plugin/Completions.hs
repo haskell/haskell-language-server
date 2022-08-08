@@ -48,7 +48,7 @@ import qualified Language.LSP.VFS                         as VFS
 import           Numeric.Natural
 import           Text.Fuzzy.Parallel                      (Scored (..))
 
-import qualified GHC.LanguageExtensions as LangExt
+import qualified GHC.LanguageExtensions                       as LangExt
 import           Language.LSP.Types
 
 data Log = LogShake Shake.Log deriving Show
@@ -142,12 +142,14 @@ getCompletionsLSP ide plId
                 exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap $ exportsMap
                 exportsCompls = mempty{anyQualCompls = exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls <> Just lModules
-            
+
             -- get HieAst if OverloadedRecordDot is enabled
-            let uses_th_qq (ms_hspp_opts -> dflags) = xopt LangExt.OverloadedRecordDot dflags
+            let uses_overloaded_record_dot (ms_hspp_opts . msrModSummary -> dflags) = xopt LangExt.OverloadedRecordDot dflags
             ms <- fmap fst <$> useWithStaleFast GetModSummaryWithoutTimestamps npath
-            astres <- case ms of 
-              Just ms' -> if uses_th_qq . msrModSummary  $ ms' then useWithStaleFast GetHieAst npath else return Nothing
+            astres <- case ms of
+              Just ms' -> if uses_overloaded_record_dot ms'
+                then useWithStaleFast GetHieAst npath
+                else return Nothing
               Nothing -> return Nothing
 
             pure (opts, fmap (,pm,binds) compls, moduleExports, astres)
@@ -162,7 +164,7 @@ getCompletionsLSP ide plId
                     plugins = idePlugins $ shakeExtras ide
                 config <- getCompletionsConfig plId
                 
-                allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix' clientCaps config moduleExports
+                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod astres bindMap pfix' clientCaps config moduleExports
                 pure $ InL (List $ orderedCompletions allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])
