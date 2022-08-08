@@ -55,6 +55,7 @@ import           Data.List.Extra                 (find)
 import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
 import           Development.IDE                 (GhcVersion (..), ghcVersion)
+import           Development.IDE.Plugin.Test     (TestRequest (GetFilesOfInterest))
 import qualified Language.LSP.Test               as Test
 import           Language.LSP.Types              hiding (Reason (..))
 import qualified Language.LSP.Types.Capabilities as C
@@ -297,16 +298,7 @@ waitForDiagnosticsFrom doc = do
        else return diags
 
 waitForDiagnosticsFromSource :: TextDocumentIdentifier -> String -> Test.Session [Diagnostic]
-waitForDiagnosticsFromSource doc src = do
-    diagsNot <- skipManyTill Test.anyMessage (Test.message STextDocumentPublishDiagnostics)
-    let (List diags) = diagsNot ^. L.params . L.diagnostics
-    let res = filter matches diags
-    if doc ^. L.uri /= diagsNot ^. L.params . L.uri || null res
-       then waitForDiagnosticsFromSource doc src
-       else return res
-  where
-    matches :: Diagnostic -> Bool
-    matches d = d ^. L.source == Just (T.pack src)
+waitForDiagnosticsFromSource = waitForDiagnosticsFromSourceWithTimeout 5
 
 -- | wait for @timeout@ seconds and report an assertion failure
 -- if any diagnostic messages arrive in that period
@@ -322,38 +314,31 @@ expectNoMoreDiagnostics timeout doc src = do
 -- If timeout is 0 it will wait until the session timeout
 waitForDiagnosticsFromSourceWithTimeout :: Seconds -> TextDocumentIdentifier -> String -> Test.Session [Diagnostic]
 waitForDiagnosticsFromSourceWithTimeout timeout document source = do
-    when (timeout > 0) $ do
+    when (timeout > 0) $
         -- Give any further diagnostic messages time to arrive.
         liftIO $ sleep timeout
         -- Send a dummy message to provoke a response from the server.
         -- This guarantees that we have at least one message to
         -- process, so message won't block or timeout.
-        void $ Test.sendNotification (SCustomMethod "non-existent-method") A.Null
-    handleMessages
+    testId <- Test.sendRequest (SCustomMethod "test") (A.toJSON GetFilesOfInterest)
+    handleMessages testId
   where
     matches :: Diagnostic -> Bool
     matches d = d ^. L.source == Just (T.pack source)
 
-    handleMessages = handleDiagnostic <|> handleCustomMethodResponse <|> ignoreOthers
-    handleDiagnostic = do
+    handleMessages testId = handleDiagnostic testId <|> handleCustomMethodResponse testId <|> ignoreOthers testId
+    handleDiagnostic testId = do
         diagsNot <- Test.message STextDocumentPublishDiagnostics
         let fileUri = diagsNot ^. L.params . L.uri
             (List diags) = diagsNot ^. L.params . L.diagnostics
             res = filter matches diags
         if fileUri == document ^. L.uri && not (null res)
-            then return diags else handleMessages
-    handleCustomMethodResponse =
-        -- the CustomClientMethod triggers a RspCustomServer
-        -- handle that and then exit
-        void (Test.satisfyMaybe responseForNonExistentMethod) >> return []
+            then return diags else handleMessages testId
+    handleCustomMethodResponse testId = do
+        _ <- Test.responseForId (SCustomMethod "test") testId
+        pure []
 
-    responseForNonExistentMethod :: FromServerMessage -> Maybe FromServerMessage
-    responseForNonExistentMethod notif
-        | FromServerMess SWindowLogMessage logMsg <- notif,
-          "non-existent-method" `T.isInfixOf` (logMsg ^. L.params . L.message)  = Just notif
-        | otherwise = Nothing
-
-    ignoreOthers = void Test.anyMessage >> handleMessages
+    ignoreOthers testId = void Test.anyMessage >> handleMessages testId
 
 failIfSessionTimeout :: IO a -> IO a
 failIfSessionTimeout action = action `catch` errorHandler
