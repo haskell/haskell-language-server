@@ -23,7 +23,7 @@ basicTests = testGroup "Diagnostics work" [
             diags <- waitForDiagnosticsFromSource doc "example2"
             reduceDiag <- liftIO $ inspectDiagnostic diags ["example2 diagnostic, hello world"]
             liftIO $ do
-                length diags @?= 2
+                length diags @?= 1
                 reduceDiag ^. LSP.range @?= Range (Position 0 0) (Position 1 0)
                 reduceDiag ^. LSP.severity @?= Just DsError
     ]
