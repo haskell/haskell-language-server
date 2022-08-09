@@ -91,7 +91,7 @@ data CodeRangeKind =
   | CodeKindImports
   -- | a comment
   | CodeKindComment
-    deriving (Show, Generic, NFData)
+    deriving (Show, Eq, Generic, NFData)
 
 Lens.makeLenses ''CodeRange
 

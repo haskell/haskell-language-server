@@ -33,7 +33,7 @@ import           Development.IDE.Core.PositionMapping (PositionMapping,
 import           Development.IDE.Types.Logger         (Pretty (..))
 import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
-                                                       codeRangeRule)
+                                                       codeRangeRule, CodeRangeKind (CodeKindComment, CodeKindImports, CodeKindRegion))
 import qualified Ide.Plugin.CodeRange.Rules           as Rules (Log)
 import           Ide.PluginUtils                      (pluginResponse,
                                                        positionInRange)
@@ -53,7 +53,7 @@ import           Language.LSP.Types                   (List (List),
                                                        FoldingRange (..),
                                                        FoldingRangeParams(..),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
-                                                       Uri
+                                                       Uri, FoldingRangeKind (FoldingRangeComment, FoldingRangeImports, FoldingRangeRegion)
                                                        )
 import           Prelude                              hiding (log, span)
 import Data.Maybe (catMaybes)
@@ -149,24 +149,41 @@ findPosition pos root = go Nothing root
             startOfRight <- _start . _codeRange_range <$> V.headM right
             if pos < startOfRight then binarySearchPos left else binarySearchPos right
 
-appendFoldingRanges  :: Maybe FoldingRange -> [Maybe FoldingRange] -> [Maybe FoldingRange]
-appendFoldingRanges a [] = [a]
-appendFoldingRanges a (x:xs) = x : appendFoldingRanges a xs
-
 findFoldingRanges :: CodeRange -> [Maybe FoldingRange]
-findFoldingRanges root = go [] root
-    where
-        -- Helper function for recursion. The range list is built top-down
-        go :: [Maybe FoldingRange] -> CodeRange -> [Maybe FoldingRange]
-        go acc node = do
-                let acc' = appendFoldingRanges (Just $ FoldingRange lineStart 0 lineEnd 0 0) acc
-                go (acc' children)
-            where
-                range = _codeRange_range node
-                children = _codeRange_children node
-                Range startPos endPos = range
-                Position lineStart _= startPos
-                Position lineEnd _ = endPos
+findFoldingRanges root = do
+    let acc = []
+    let node = _codeRange_children root
+    binarySearch node acc
+
+makeFoldFromNode :: CodeRange -> Maybe FoldingRange
+makeFoldFromNode node1 = do
+    let range = _codeRange_range node1
+    -- let children = _codeRange_children node1
+    let Range startPos endPos = range
+    let Position lineStart _= startPos
+    let Position lineEnd _ = endPos
+    let codeRangeKind = _codeRange_kind node1
+
+    if codeRangeKind == CodeKindComment
+        then Just (FoldingRange lineStart Nothing lineEnd Nothing (Just FoldingRangeComment))
+    else if codeRangeKind== CodeKindImports
+        then Just (FoldingRange lineStart Nothing lineEnd Nothing ( Just FoldingRangeImports))
+    else if codeRangeKind==CodeKindRegion
+        then Just (FoldingRange lineStart Nothing lineEnd Nothing (Just FoldingRangeRegion))
+    else Nothing
+
+binarySearch :: Vector CodeRange -> [Maybe FoldingRange] -> [Maybe FoldingRange]
+binarySearch v acc
+    | V.null v = []
+    | V.length v == 1 = do
+        headi <- V.headM v
+        let foldingRangesOfRange = makeFoldFromNode headi
+        let acc' = acc ++ [foldingRangesOfRange]
+        acc'
+    | otherwise = do
+        let (left, right) = V.splitAt (V.length v `div` 2) v
+        _ <-binarySearch left acc
+        binarySearch right acc
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange
