@@ -15,7 +15,7 @@ import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        maybeToExceptT)
 import           Data.Either.Extra                    (maybeToEither)
-import           Data.Maybe                           (fromMaybe)
+import Data.Maybe ( fromMaybe, catMaybes )
 import           Data.Vector                          (Vector)
 import qualified Data.Vector                          as V
 import           Development.IDE                      (IdeAction,
@@ -56,7 +56,6 @@ import           Language.LSP.Types                   (List (List),
                                                        Uri, FoldingRangeKind (FoldingRangeComment, FoldingRangeImports, FoldingRangeRegion)
                                                        )
 import           Prelude                              hiding (log, span)
-import Data.Maybe (catMaybes)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
@@ -71,7 +70,7 @@ instance Pretty Log where
     pretty log = case log of
         LogRules codeRangeLog -> pretty codeRangeLog
 
-foldingRangeHandler :: IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError (List (FoldingRange)))
+foldingRangeHandler :: IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError (List FoldingRange))
 foldingRangeHandler ide _ FoldingRangeParams{..} = do
     pluginResponse $ do
         filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
