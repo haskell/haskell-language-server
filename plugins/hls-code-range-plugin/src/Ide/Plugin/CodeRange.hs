@@ -56,6 +56,7 @@ import           Language.LSP.Types                   (List (List),
                                                        Uri
                                                        )
 import           Prelude                              hiding (log, span)
+import Data.Maybe (catMaybes)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
@@ -82,16 +83,11 @@ foldingRangeHandler ide _ FoldingRangeParams{..} = do
         uri :: Uri
         TextDocumentIdentifier uri = _textDocument
 
-    -- let foldingRanges = findFoldingRanges codeRange
 getFoldingRanges :: NormalizedFilePath -> ExceptT String IdeAction [FoldingRange]
 getFoldingRanges file = do
     (codeRange, _) <- maybeToExceptT "fail to get code range" $ useE GetCodeRange file
 
-    -- We need a default selection range if the lookup fails, so that other positions can still have valid results.
-    let foldingRanges = let defaultFoldingRange = FoldingRange (0 0 0) Nothing
-             in fromMaybe defaultFoldingRange . findFoldingRanges codeRange
-
-    -- let foldingRanges = fromMaybe defaultFoldingRange . findFoldingRanges codeRange
+    let foldingRanges = catMaybes $ findFoldingRanges codeRange
 
     maybeToExceptT "Fail to generate folding range" (MaybeT . pure $ Just foldingRanges)
 
