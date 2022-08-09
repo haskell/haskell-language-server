@@ -2,10 +2,10 @@
 
 module Main where
 
-import Test.Hls
-import Ide.Plugin.ExplicitFixity (descriptor)
-import qualified Data.Text as T
-import System.FilePath
+import qualified Data.Text                 as T
+import           Ide.Plugin.ExplicitFixity (descriptor)
+import           System.FilePath
+import           Test.Hls
 
 plugin :: PluginDescriptor IdeState
 plugin = descriptor mempty

@@ -93,7 +93,7 @@ import           Ide.Plugin.GADT                   as GADT
 #endif
 
 #if explicitFixity
-import          Ide.Plugin.ExplicitFixity          as ExplicitFixity
+import           Ide.Plugin.ExplicitFixity         as ExplicitFixity
 #endif
 
 -- formatters
