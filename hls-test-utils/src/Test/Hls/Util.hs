@@ -333,7 +333,7 @@ waitForDiagnosticsFromSourceWithTimeout timeout document source = do
             (List diags) = diagsNot ^. L.params . L.diagnostics
             res = filter matches diags
         if fileUri == document ^. L.uri && not (null res)
-            then return diags else handleMessages testId
+            then return res else handleMessages testId
     handleCustomMethodResponse testId = do
         _ <- Test.responseForId (SCustomMethod "test") testId
         pure []
