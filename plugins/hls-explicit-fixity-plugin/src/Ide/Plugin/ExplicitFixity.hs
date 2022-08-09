@@ -27,7 +27,6 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util      (FastString)
 import qualified Development.IDE.GHC.Compat.Util      as Util
 import           GHC.Generics                         (Generic)
-import           GHC.Utils.Error                      (emptyMessages)
 import           Ide.PluginUtils                      (getNormalizedFilePath,
                                                        handleMaybeM,
                                                        pluginResponse)

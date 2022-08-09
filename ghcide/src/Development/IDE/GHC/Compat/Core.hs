@@ -382,6 +382,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Name.Cache,
     module GHC.Types.Name.Env,
     module GHC.Types.Name.Reader,
+    module GHC.Utils.Error,
 #if MIN_VERSION_ghc(9,2,0)
     module GHC.Types.Avail,
     module GHC.Types.SourceFile,
@@ -392,7 +393,6 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Unique.Supply,
     module GHC.Types.Var,
     module GHC.Unit.Module,
-    module GHC.Utils.Error,
 #else
     module BasicTypes,
     module Class,
@@ -622,7 +622,7 @@ import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface (..),
 import           GHC.Unit.Module.ModSummary   (ModSummary (..))
 #endif
 import           GHC.Unit.State               (ModuleOrigin (..))
-import           GHC.Utils.Error              (Severity (..))
+import           GHC.Utils.Error              (Severity (..), emptyMessages)
 import           GHC.Utils.Panic              hiding (try)
 import qualified GHC.Utils.Panic.Plain        as Plain
 #else
