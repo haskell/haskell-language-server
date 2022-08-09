@@ -152,10 +152,23 @@ findFoldingRanges :: CodeRange -> [Maybe FoldingRange]
 findFoldingRanges root = do
     let acc = []
     let node = _codeRange_children root
-    binarySearch node acc
+    binarySearchFoldingRange node acc
 
-makeFoldFromNode :: CodeRange -> Maybe FoldingRange
-makeFoldFromNode node1 = do
+binarySearchFoldingRange :: Vector CodeRange -> [Maybe FoldingRange] -> [Maybe FoldingRange]
+binarySearchFoldingRange v acc
+    | V.null v = []
+    | V.length v == 1 = do
+        headOfCodeRange <- V.headM v
+        let foldingRangesOfRange = createFoldingRange headOfCodeRange
+        let acc' = acc ++ [foldingRangesOfRange]
+        acc'
+    | otherwise = do
+        let (left, right) = V.splitAt (V.length v `div` 2) v
+        _ <- binarySearchFoldingRange left acc
+        binarySearchFoldingRange right acc
+
+createFoldingRange :: CodeRange -> Maybe FoldingRange
+createFoldingRange node1 = do
     let range = _codeRange_range node1
     -- let children = _codeRange_children node1
     let Range startPos endPos = range
@@ -170,19 +183,6 @@ makeFoldFromNode node1 = do
     else if codeRangeKind==CodeKindRegion
         then Just (FoldingRange lineStart Nothing lineEnd Nothing (Just FoldingRangeRegion))
     else Nothing
-
-binarySearch :: Vector CodeRange -> [Maybe FoldingRange] -> [Maybe FoldingRange]
-binarySearch v acc
-    | V.null v = []
-    | V.length v == 1 = do
-        headi <- V.headM v
-        let foldingRangesOfRange = makeFoldFromNode headi
-        let acc' = acc ++ [foldingRangesOfRange]
-        acc'
-    | otherwise = do
-        let (left, right) = V.splitAt (V.length v `div` 2) v
-        _ <-binarySearch left acc
-        binarySearch right acc
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange
