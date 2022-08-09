@@ -1,7 +1,7 @@
 cabal-version:      2.4
 name:               hls-explicit-fixity-plugin
 version:            1.0.0.0
-synopsis:           Show fixity explicitly
+synopsis:           Show fixity explicitly while hovering
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-explicit-fixity-plugin#readme>
 
@@ -22,11 +22,13 @@ library
   build-depends:
       base                  >=4.12 && <5
     , containers
+    , deepseq
     , extra
     , ghc
-    , ghcide                ^>= 1.7
-    , hls-plugin-api        ^>= 1.4
-    , lsp                    >=1.2.0.1
+    , ghcide               ^>=1.7
+    , hashable
+    , hls-plugin-api       ^>=1.4
+    , lsp                   >=1.2.0.1
     , text
 
   ghc-options:

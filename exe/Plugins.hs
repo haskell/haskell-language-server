@@ -207,7 +207,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
     -- (which restart the Shake build) run after everything else
       GhcIde.descriptors pluginRecorder
 #if explicitFixity
-        ++ [ExplicitFixity.descriptor]
+        ++ [ExplicitFixity.descriptor pluginRecorder]
 #endif
     examplePlugins =
       [Example.descriptor  pluginRecorder "eg"

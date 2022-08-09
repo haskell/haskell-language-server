@@ -1,85 +1,58 @@
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE TypeFamilies      #-}
 {-# OPTIONS_GHC -Wno-deprecations #-}
-{-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Functor law" #-}
 
-module Ide.Plugin.ExplicitFixity where
+module Ide.Plugin.ExplicitFixity(descriptor) where
 
-import           Control.Monad                 (forM)
-import           Control.Monad.IO.Class        (liftIO)
-import           Data.List.Extra               (nubOn)
-import qualified Data.Map                      as M
+import           Control.DeepSeq
+import           Control.Monad                        (forM)
+import           Control.Monad.IO.Class               (MonadIO, liftIO)
+import           Data.Coerce                          (coerce)
+import           Data.Either.Extra
+import           Data.Hashable
+import           Data.List.Extra                      (nubOn)
+import qualified Data.Map                             as M
 import           Data.Maybe
-import qualified Data.Text                     as T
-import           Development.IDE               hiding (pluginHandlers)
+import           Data.Monoid
+import qualified Data.Text                            as T
+import           Development.IDE                      hiding (pluginHandlers,
+                                                       pluginRules)
+import           Development.IDE.Core.PositionMapping (idDelta)
+import           Development.IDE.Core.Shake           (addPersistentRule)
+import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Spans.AtPoint (pointCommand)
-import           Ide.PluginUtils               (getNormalizedFilePath,
-                                                handleMaybeM, pluginResponse)
-import           Ide.Types                     hiding (pluginId)
+import           Development.IDE.GHC.Compat.Util      (FastString)
+import qualified Development.IDE.GHC.Compat.Util      as Util
+import           GHC.Generics                         (Generic)
+import           GHC.Utils.Error                      (emptyMessages)
+import           Ide.PluginUtils                      (getNormalizedFilePath,
+                                                       handleMaybeM,
+                                                       pluginResponse)
+import           Ide.Types                            hiding (pluginId)
 import           Language.LSP.Types
 
 pluginId :: PluginId
 pluginId = "explicitFixity"
 
-descriptor :: PluginDescriptor IdeState
-descriptor = (defaultPluginDescriptor pluginId)
-    { pluginHandlers = mkPluginHandler STextDocumentHover hover
+descriptor :: Recorder (WithPriority Log) -> PluginDescriptor IdeState
+descriptor recorder = (defaultPluginDescriptor pluginId)
+    { pluginRules = fixityRule recorder
+    , pluginHandlers = mkPluginHandler STextDocumentHover hover
     }
 
 hover :: PluginMethodHandler IdeState TextDocumentHover
 hover state plId (HoverParams (TextDocumentIdentifier uri) pos _) = pluginResponse $ do
     nfp <- getNormalizedFilePath plId uri
-    har <- handleMaybeM "Unable to get HieResult"
+    fixityTrees <- handleMaybeM "ExplicitFixity: Unable to get fixity"
         $ liftIO
-        $ runAction "ExplicitFixity.HieResult" state
-        $ use GetHieAst nfp
-
-    -- Names at the position
-    let names = case har of
-            HAR _ asts _ _ _ -> concat
-                $ pointCommand asts pos
-                $ \ast -> mapMaybe (either (const Nothing) Just) $ M.keys $ getNodeIds ast
-
-    -- Get fixity from HscEnv for local defined operator will crash the plugin,
-    -- we first try to use ModIface to get fixities, and then use
-    -- HscEnv if ModIface doesn't available.
-    fixities <- getFixityFromModIface nfp names
-
-    if isJust fixities then pure fixities else getFixityFromEnv nfp names
+        $ runAction "ExplicitFixity.GetFixity" state
+        $ use GetFixity nfp
+    -- We don't have much fixities on one position, so `nubOn` is acceptable.
+    pure $ toHover $ nubOn snd $ concat $ findInTree fixityTrees pos fNodeFixty
     where
-        -- | For local definition
-        getFixityFromModIface nfp names = do
-            hi <- handleMaybeM "Unable to get ModIface"
-                $ liftIO
-                $ runAction "ExplicitFixity.GetModIface" state
-                $ use GetModIface nfp
-            let iface = hirModIface hi
-                fixities = filter (\(_, fixity) -> fixity /= defaultFixity)
-                    $ map (\name -> (name, mi_fix iface (occName name))) names
-            -- We don't have much fixities on one position,
-            -- so `nubOn` is acceptable.
-            pure $ toHover $ nubOn snd fixities
-
-        -- | Get fixity from HscEnv
-        getFixityFromEnv nfp names = do
-            env <- fmap hscEnv
-                $ handleMaybeM "Unable to get GhcSession"
-                $ liftIO
-                $ runAction "ExplicitFixity.GhcSession" state
-                $ use GhcSession nfp
-            fixities <- liftIO
-                $ fmap (filter ((/= defaultFixity) . snd) . mapMaybe cond)
-                $ forM names $ \name ->
-                    (\(_, fixity) -> (name, fixity)) <$> runTcInteractive env (lookupFixityRn name)
-            pure $ toHover $ nubOn snd fixities
-
-            where
-                cond (_, Nothing) = Nothing
-                cond (name, Just f) = Just (name, f)
-
         toHover [] = Nothing
         toHover fixities =
             let contents = T.intercalate "\n\n" $ fixityText <$> fixities
@@ -88,3 +61,102 @@ hover state plId (HoverParams (TextDocumentIdentifier uri) pos _) = pluginRespon
 
         fixityText (name, Fixity _ precedence direction) =
             printOutputable direction <> " " <> printOutputable precedence <> " `" <> printOutputable name <> "`"
+
+-- | Transferred from ghc `selectSmallestContaining`
+selectSmallestContainingForFixityTree :: Span -> FixityTree -> Maybe FixityTree
+selectSmallestContainingForFixityTree sp node
+    | sp `containsSpan` fNodeSpan node = Just node
+    | fNodeSpan node `containsSpan` sp = getFirst $ mconcat
+        [ foldMap (First . selectSmallestContainingForFixityTree sp) $ fNodeChildren node
+        , First (Just node)
+        ]
+    | otherwise = Nothing
+
+-- | Transferred from ghcide `pointCommand`
+findInTree :: FixityTrees -> Position -> (FixityTree -> a) -> [a]
+findInTree tree pos k =
+    catMaybes $ M.elems $ flip M.mapWithKey tree $ \fs ast ->
+      case selectSmallestContainingForFixityTree (sp fs) ast of
+        Nothing   -> Nothing
+        Just ast' -> Just $ k ast'
+ where
+   sloc fs = mkRealSrcLoc fs (fromIntegral $ line+1) (fromIntegral $ cha+1)
+   sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
+   line = _line pos
+   cha = _character pos
+
+data FixityTree = FNode
+    { fNodeSpan     :: Span
+    , fNodeChildren :: [FixityTree]
+    , fNodeFixty    :: [(Name, Fixity)]
+    } deriving (Generic)
+
+instance NFData FixityTree where
+    rnf = rwhnf
+
+instance Show FixityTree where
+  show _ = "<FixityTree>"
+
+type FixityTrees = M.Map FastString FixityTree
+
+newtype Log = LogShake Shake.Log
+
+instance Pretty Log where
+  pretty = \case
+    LogShake log -> pretty log
+
+data GetFixity = GetFixity deriving (Show, Eq, Generic)
+
+instance Hashable GetFixity
+instance NFData GetFixity
+
+type instance RuleResult GetFixity = FixityTrees
+
+fakeFixityTrees :: FixityTrees
+fakeFixityTrees = M.empty
+
+-- | Convert a HieASTs to FixityTrees with fixity info gathered
+hieAstsToFixitTrees :: MonadIO m => ModIface -> HscEnv -> TcGblEnv -> HieASTs a -> m FixityTrees
+hieAstsToFixitTrees iface hscEnv tcGblEnv ast =
+    -- coerce to avoid compatibility issues.
+    M.mapKeysWith const coerce <$>
+        sequence (M.map (hieAstToFixtyTree iface hscEnv tcGblEnv) (getAsts ast))
+
+-- | Convert a HieAST to FixityTree with fixity info gathered
+hieAstToFixtyTree :: MonadIO m => ModIface -> HscEnv -> TcGblEnv -> HieAST a -> m FixityTree
+hieAstToFixtyTree iface hscEnv tcGblEnv ast = case ast of
+    (Node _ span []) -> FNode span [] <$> getFixities
+    (Node _ span children) -> do
+        fixities <- getFixities
+        childrenFixities <- mapM (hieAstToFixtyTree iface hscEnv tcGblEnv) children
+        pure $ FNode span childrenFixities fixities
+    where
+        -- Names at the current ast node
+        names :: [Name]
+        names = mapMaybe eitherToMaybe $ M.keys $ getNodeIds ast
+
+        getFixities :: MonadIO m => m [(Name, Fixity)]
+        getFixities = liftIO
+            $ fmap (filter ((/= defaultFixity) . snd) . mapMaybe pickFixity)
+            $ forM names $ \name ->
+                (\(_, fixity) -> (name, fixity))
+                    <$> Util.handleGhcException
+                        (const $ pure (emptyMessages, Nothing))
+                        (initTcWithGbl hscEnv tcGblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1) (lookupFixityRn name))
+
+        pickFixity :: (Name, Maybe Fixity) -> Maybe (Name, Fixity)
+        pickFixity (_, Nothing)   = Nothing
+        pickFixity (name, Just f) = Just (name, f)
+
+fixityRule :: Recorder (WithPriority Log) -> Rules ()
+fixityRule recorder = do
+    define (cmapWithPrio LogShake recorder) $ \GetFixity nfp -> do
+        HAR{hieAst} <- use_ GetHieAst nfp
+        env <- hscEnv <$> use_ GhcSession nfp
+        tcGblEnv <- tmrTypechecked <$> use_ TypeCheck nfp
+        iface <- hirModIface <$> use_ GetModIface nfp
+        tree <- hieAstsToFixitTrees iface env tcGblEnv hieAst
+        pure ([], Just tree)
+
+    -- Ensure that this plugin doesn't block on startup
+    addPersistentRule GetFixity $ \_ -> pure $ Just (fakeFixityTrees, idDelta, Nothing)

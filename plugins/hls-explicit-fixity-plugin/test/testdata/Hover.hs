@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
-module A where
+module Hover where
 import Control.Monad
 import Data.Function (on)
 import Control.Applicative ((<|>))
