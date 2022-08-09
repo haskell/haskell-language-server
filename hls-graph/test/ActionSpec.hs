@@ -1,21 +1,22 @@
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 
 module ActionSpec where
 
-import Control.Concurrent.STM
-import Development.IDE.Graph (shakeOptions)
-import Development.IDE.Graph.Database (shakeNewDatabase, shakeRunDatabase)
-import Development.IDE.Graph.Internal.Action (apply1)
-import Development.IDE.Graph.Internal.Types
-import Development.IDE.Graph.Rule
-import Example
-import qualified StmContainers.Map as STM
-import Test.Hspec
-import System.Time.Extra (timeout)
+import           Control.Concurrent.STM
+import qualified Data.HashSet                          as HashSet
+import           Development.IDE.Graph                 (shakeOptions)
+import           Development.IDE.Graph.Database        (shakeNewDatabase,
+                                                        shakeRunDatabase)
+import           Development.IDE.Graph.Internal.Action (apply1)
+import           Development.IDE.Graph.Internal.Types
+import           Development.IDE.Graph.Rule
+import           Example
+import qualified StmContainers.Map                     as STM
+import           System.Time.Extra                     (timeout)
+import           Test.Hspec
 
 spec :: Spec
 spec = do
@@ -54,7 +55,7 @@ spec = do
           apply1 theKey
       res `shouldBe` [True]
       Just KeyDetails {..} <- atomically $ STM.lookup (Key (Rule @())) databaseValues
-      keyReverseDeps `shouldBe` [Key theKey]
+      keyReverseDeps `shouldBe` HashSet.fromList [Key theKey]
     it "rethrows exceptions" $ do
       db <- shakeNewDatabase shakeOptions $ do
         addRule $ \(Rule :: Rule ()) old mode -> error "boom"

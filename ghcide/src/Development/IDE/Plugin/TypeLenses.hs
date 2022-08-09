@@ -29,9 +29,9 @@ import           Development.IDE                     (GhcSession (..),
                                                       RuleResult, Rules, define,
                                                       srcSpanToRange)
 import           Development.IDE.Core.Compile        (TcModuleResult (..))
+import           Development.IDE.Core.Rules          (IdeState, runAction)
 import           Development.IDE.Core.RuleTypes      (GetBindings (GetBindings),
                                                       TypeCheck (TypeCheck))
-import           Development.IDE.Core.Rules          (IdeState, runAction)
 import           Development.IDE.Core.Service        (getDiagnostics)
 import           Development.IDE.Core.Shake          (getHiddenDiagnostics, use)
 import qualified Development.IDE.Core.Shake          as Shake

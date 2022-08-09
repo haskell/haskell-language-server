@@ -28,6 +28,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleWithComments,
     getClientConfigAction,
     usePropertyAction,
+    getHieFile,
     -- * Rules
     CompiledLinkables(..),
     getParsedModuleRule,
@@ -55,6 +56,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleDefinition,
     typeCheckRuleDefinition,
     getRebuildCount,
+    getSourceFileSource,
     GhcSessionDepsConfig(..),
     Log(..),
     DisplayTHWarning(..),
@@ -96,10 +98,11 @@ import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
+import           Data.Typeable                                (cast)
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists hiding (LogShake, Log)
 import           Development.IDE.Core.FileStore               (getFileContents,
-                                                               resetInterfaceStore)
+                                                               getModTime)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest hiding (LogShake, Log)
 import           Development.IDE.Core.PositionMapping
@@ -135,7 +138,7 @@ import           Ide.Plugin.Config
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types                           (SMethod (SCustomMethod, SWindowShowMessage), ShowMessageParams (ShowMessageParams), MessageType (MtInfo))
 import           Language.LSP.VFS
-import           System.Directory                             (makeAbsolute)
+import           System.Directory                             (makeAbsolute, doesFileExist)
 import           Data.Default                                 (def, Default)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
@@ -154,6 +157,9 @@ import qualified Development.IDE.Core.Shake as Shake
 import qualified Development.IDE.GHC.ExactPrint as ExactPrint hiding (LogShake)
 import qualified Development.IDE.Types.Logger as Logger
 import qualified Development.IDE.Types.Shake as Shake
+import           Development.IDE.GHC.CoreFile
+import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
+import Control.Monad.IO.Unlift
 
 data Log
   = LogShake Shake.Log
@@ -162,6 +168,7 @@ data Log
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
   | LogExactPrint ExactPrint.Log
+  | LogTypecheckedFOI !NormalizedFilePath
   deriving Show
 
 instance Pretty Log where
@@ -179,6 +186,14 @@ instance Pretty Log where
     LogLoadingHieFileSuccess path ->
       "SUCCEEDED LOADING HIE FILE FOR" <+> pretty path
     LogExactPrint log -> pretty log
+    LogTypecheckedFOI path -> vcat
+      [ "Typechecked a file which is not currently open in the editor:" <+> pretty (fromNormalizedFilePath path)
+      , "This can indicate a bug which results in excessive memory usage."
+      , "This may be a spurious warning if you have recently closed the file."
+      , "If you haven't opened this file recently, please file a report on the issue tracker mentioning"
+        <+> "the HLS version being used, the plugins enabled, and if possible the codebase and file which"
+        <+> "triggered this warning."
+      ]
 
 templateHaskellInstructions :: T.Text
 templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#static-binaries"
@@ -647,6 +662,12 @@ typeCheckRule :: Recorder (WithPriority Log) -> Rules ()
 typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck file -> do
     pm <- use_ GetParsedModule file
     hsc  <- hscEnv <$> use_ GhcSessionDeps file
+    foi <- use_ IsFileOfInterest file
+    -- We should only call the typecheck rule for files of interest.
+    -- Keeping typechecked modules in memory for other files is
+    -- very expensive.
+    when (foi == NotFOI) $
+      logWith recorder Logger.Warning $ LogTypecheckedFOI file
     typeCheckRuleDefinition hsc pm
 
 knownFilesRule :: Recorder (WithPriority Log) -> Rules ()
@@ -673,9 +694,13 @@ typeCheckRuleDefinition hsc pm = do
   setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
 
-  linkables_to_keep <- currentLinkables
+  unlift <- askUnliftIO
+  let dets = TypecheckHelpers
+           { getLinkablesToKeep = unliftIO unlift $ currentLinkables
+           , getLinkables = unliftIO unlift . uses_ GetLinkable
+           }
   addUsageDependencies $ liftIO $
-    typecheckModule defer hsc linkables_to_keep pm
+    typecheckModule defer hsc dets pm
   where
     addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
     addUsageDependencies a = do
@@ -752,7 +777,7 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
 
-            let inLoadOrder = map hirHomeMod ifaces
+            let            inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails Nothing) ifaces
             session' <- liftIO $ mergeEnvs hsc mss inLoadOrder depSessions
 
             Just <$> liftIO (newHscEnvEqWithImportPaths (envImportPaths env) session' [])
@@ -768,6 +793,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
     Just session -> do
       linkableType <- getLinkableType f
       ver <- use_ GetModificationTime f
+      ShakeExtras{ideNc} <- getShakeExtras
       let m_old = case old of
             Shake.Succeeded (Just old_version) v -> Just (v, old_version)
             Shake.Stale _   (Just old_version) v -> Just (v, old_version)
@@ -776,6 +802,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             { source_version = ver
             , old_value = m_old
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
+            , get_linkable_hashes = \fs -> map (snd . fromJust . hirCoreFp) <$> uses_ GetModIface fs
             , regenerate = regenerateHiFile session f ms
             }
       r <- loadInterface (hscEnv session) ms linkableType recompInfo
@@ -897,12 +924,13 @@ getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ 
       linkableType <- getLinkableType f
       hsc <- hscEnv <$> use_ GhcSessionDeps f
       let compile = fmap ([],) $ use GenerateCore f
-      (diags, !hiFile) <- compileToObjCodeIfNeeded hsc linkableType compile tmr
+      se <- getShakeExtras
+      (diags, !hiFile) <- writeCoreFileIfNeeded se hsc linkableType compile tmr
       let fp = hiFileFingerPrint <$> hiFile
       hiDiags <- case hiFile of
         Just hiFile
           | OnDisk <- status
-          , not (tmrDeferedError tmr) -> writeHiFileAction hsc hiFile
+          , not (tmrDeferedError tmr) -> liftIO $ writeHiFile se hsc hiFile
         _ -> pure []
       return (fp, (diags++hiDiags, hiFile))
     NotFOI -> do
@@ -910,10 +938,6 @@ getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ 
       let fp = hiFileFingerPrint <$> hiFile
       return (fp, ([], hiFile))
 
-  -- Record the linkable so we know not to unload it
-  whenJust (hm_linkable . hirHomeMod =<< mhmi) $ \(LM time mod _) -> do
-      compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
-      liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
   pure res
 
 -- | Count of total times we asked GHC to recompile
@@ -958,11 +982,12 @@ regenerateHiFile sess f ms compNeeded = do
               Nothing -> pure (diags', Nothing)
               Just tmr -> do
 
-                -- compile writes .o file
                 let compile = liftIO $ compileModule (RunSimplifier True) hsc (pm_mod_summary pm) $ tmrTypechecked tmr
 
+                se <- getShakeExtras
+
                 -- Bang pattern is important to avoid leaking 'tmr'
-                (diags'', !res) <- compileToObjCodeIfNeeded hsc compNeeded compile tmr
+                (diags'', !res) <- writeCoreFileIfNeeded se hsc compNeeded compile tmr
 
                 -- Write hi file
                 hiDiags <- case res of
@@ -980,7 +1005,7 @@ regenerateHiFile sess f ms compNeeded = do
                     -- We don't write the `.hi` file if there are defered errors, since we won't get
                     -- accurate diagnostics next time if we do
                     hiDiags <- if not $ tmrDeferedError tmr
-                               then writeHiFileAction hsc hiFile
+                               then liftIO $ writeHiFile se hsc hiFile
                                else pure []
 
                     pure (hiDiags <> gDiags <> concat wDiags)
@@ -990,18 +1015,20 @@ regenerateHiFile sess f ms compNeeded = do
 
 
 -- | HscEnv should have deps included already
-compileToObjCodeIfNeeded :: HscEnv -> Maybe LinkableType -> Action (IdeResult ModGuts) -> TcModuleResult -> Action (IdeResult HiFileResult)
-compileToObjCodeIfNeeded hsc Nothing _ tmr = do
+-- This writes the core file if a linkable is required
+-- The actual linkable will be generated on demand when required by `GetLinkable`
+writeCoreFileIfNeeded :: ShakeExtras -> HscEnv -> Maybe LinkableType -> Action (IdeResult ModGuts) -> TcModuleResult -> Action (IdeResult HiFileResult)
+writeCoreFileIfNeeded _ hsc Nothing _ tmr = do
   incrementRebuildCount
   res <- liftIO $ mkHiFileResultNoCompile hsc tmr
   pure ([], Just $! res)
-compileToObjCodeIfNeeded hsc (Just linkableType) getGuts tmr = do
+writeCoreFileIfNeeded se hsc (Just _) getGuts tmr = do
   incrementRebuildCount
   (diags, mguts) <- getGuts
   case mguts of
     Nothing -> pure (diags, Nothing)
     Just guts -> do
-      (diags', !res) <- liftIO $ mkHiFileResultCompile hsc tmr guts linkableType
+      (diags', !res) <- liftIO $ mkHiFileResultCompile se hsc tmr guts
       pure (diags++diags', res)
 
 getClientSettingsRule :: Recorder (WithPriority Log) -> Rules ()
@@ -1033,12 +1060,57 @@ usePropertyAction kn plId p = do
 
 -- ---------------------------------------------------------------------
 
+getLinkableRule :: Recorder (WithPriority Log) -> Rules ()
+getLinkableRule recorder =
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetLinkable f -> do
+    ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary f
+    HiFileResult{hirModIface, hirModDetails, hirCoreFp} <- use_ GetModIface f
+    let obj_file  = ml_obj_file (ms_location ms)
+        core_file = ml_core_file (ms_location ms)
+    -- Can't use `GetModificationTime` rule because the core file was possibly written in this
+    -- very session, so the results aren't reliable
+    core_t <- liftIO $ getModTime core_file
+    case hirCoreFp of
+      Nothing -> error "called GetLinkable for a file without a linkable"
+      Just (bin_core, hash) -> do
+        session <- use_ GhcSessionDeps f
+        ShakeExtras{ideNc} <- getShakeExtras
+        let namecache_updater = mkUpdater ideNc
+        linkableType <- getLinkableType f >>= \case
+          Nothing -> error "called GetLinkable for a file which doesn't need compilation"
+          Just t -> pure t
+        (warns, hmi) <- case linkableType of
+          -- Bytecode needs to be regenerated from the core file
+          BCOLinkable -> liftIO $ coreFileToLinkable linkableType (hscEnv session) ms hirModIface hirModDetails bin_core (posixSecondsToUTCTime core_t)
+          -- Object code can be read from the disk
+          ObjectLinkable -> do
+            -- object file is up to date if it is newer than the core file
+            -- Can't use a rule like 'GetModificationTime' or 'GetFileExists' because 'coreFileToLinkable' will write the object file, and
+            -- thus bump its modification time, forcing this rule to be rerun every time.
+            exists <- liftIO $ doesFileExist obj_file
+            mobj_time <- liftIO $
+              if exists
+              then Just <$> getModTime obj_file
+              else pure Nothing
+            case mobj_time of
+              Just obj_t
+                | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (Just $ LM (posixSecondsToUTCTime obj_t) (ms_mod ms) [DotO obj_file]))
+              _ -> liftIO $ coreFileToLinkable linkableType (hscEnv session) ms hirModIface hirModDetails bin_core (error "object doesn't have time")
+        -- Record the linkable so we know not to unload it
+        whenJust (hm_linkable =<< hmi) $ \(LM time mod _) -> do
+            compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
+            liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
+        return (hash <$ hmi, (warns, LinkableResult <$> hmi <*> pure hash))
+
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
 getLinkableType f = use_ NeedsCompilation f
 
 -- needsCompilationRule :: Rules ()
 needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
+needsCompilationRule file 
+  | "boot" `isSuffixOf` (fromNormalizedFilePath file) = 
+    pure (Just $ encodeLinkableType Nothing, Just Nothing)
 needsCompilationRule file = do
   graph <- useNoFile GetModuleGraph
   res <- case graph of
@@ -1062,7 +1134,6 @@ needsCompilationRule file = do
             (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
                 (uses NeedsCompilation revdeps)
         pure $ computeLinkableType ms modsums (map join needsComps)
-
   pure (Just $ encodeLinkableType res, Just res)
   where
     computeLinkableType :: ModSummary -> [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
@@ -1083,7 +1154,7 @@ uses_th_qq (ms_hspp_opts -> dflags) =
 -- Depends on whether it uses unboxed tuples or sums
 computeLinkableTypeForDynFlags :: DynFlags -> LinkableType
 computeLinkableTypeForDynFlags d
-#if defined(GHC_PATCHED_UNBOXED_BYTECODE)
+#if defined(GHC_PATCHED_UNBOXED_BYTECODE) || MIN_VERSION_ghc(9,2,0)
           = BCOLinkable
 #else
           | unboxed_tuples_or_sums = ObjectLinkable
@@ -1096,15 +1167,6 @@ computeLinkableTypeForDynFlags d
 -- | Tracks which linkables are current, so we don't need to unload them
 newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (ModuleEnv UTCTime) }
 instance IsIdeGlobal CompiledLinkables
-
-
-writeHiFileAction :: HscEnv -> HiFileResult -> Action [FileDiagnostic]
-writeHiFileAction hsc hiFile = do
-    extras <- getShakeExtras
-    let targetPath = Compat.ml_hi_file $ ms_location $ hirModSummary hiFile
-    liftIO $ do
-        atomically $ resetInterfaceStore extras $ toNormalizedFilePath' targetPath
-        writeHiFile hsc hiFile
 
 data RulesConfig = RulesConfig
     { -- | Disable import cycle checking for improved performance in large codebases
@@ -1172,3 +1234,16 @@ mainRule recorder RulesConfig{..} = do
     persistentHieFileRule recorder
     persistentDocMapRule
     persistentImportMapRule
+    getLinkableRule recorder
+
+-- | Get HieFile for haskell file on NormalizedFilePath
+getHieFile :: NormalizedFilePath -> Action (Maybe HieFile)
+getHieFile nfp = runMaybeT $ do
+  HAR {hieAst} <- MaybeT $ use GetHieAst nfp
+  tmr <- MaybeT $ use TypeCheck nfp
+  ghc <- MaybeT $ use GhcSession nfp
+  msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
+  source <- lift $ getSourceFileSource nfp
+  let exports = tcg_exports $ tmrTypechecked tmr
+  typedAst <- MaybeT $ pure $ cast hieAst
+  liftIO $ runHsc (hscEnv ghc) $ mkHieFile' (msrModSummary msr) exports typedAst source

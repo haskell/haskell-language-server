@@ -85,9 +85,9 @@ import           System.Environment.Blank                 (getEnv, setEnv,
                                                            unsetEnv)
 import           System.Exit                              (ExitCode (ExitSuccess))
 import           System.FilePath
-import           System.IO.Extra                          hiding (withTempDir)
-import qualified System.IO.Extra
 import           System.Info.Extra                        (isMac, isWindows)
+import qualified System.IO.Extra
+import           System.IO.Extra                          hiding (withTempDir)
 import           System.Mem                               (performGC)
 import           System.Process.Extra                     (CreateProcess (cwd),
                                                            createPipe, proc,
@@ -95,7 +95,7 @@ import           System.Process.Extra                     (CreateProcess (cwd),
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
 import           Control.Concurrent.Async
-import           Control.Lens                             (to, (^.), (.~))
+import           Control.Lens                             (to, (.~), (^.))
 import           Control.Monad.Extra                      (whenJust)
 import           Data.Function                            ((&))
 import           Data.IORef
@@ -123,8 +123,9 @@ import qualified HieDbRetry
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
 import           Ide.Types
 import qualified Language.LSP.Types                       as LSP
+import           Language.LSP.Types.Lens                  (didChangeWatchedFiles,
+                                                           workspace)
 import qualified Language.LSP.Types.Lens                  as L
-import           Language.LSP.Types.Lens                  (workspace, didChangeWatchedFiles)
 import qualified Progress
 import           System.Time.Extra
 import           Test.Tasty
@@ -901,22 +902,21 @@ watchedFilesTests = testGroup "watched files"
 
 insertImportTests :: TestTree
 insertImportTests = testGroup "insert import"
-  [ expectFailBecause
-      ("'findPositionFromImportsOrModuleDecl' function adds import directly under line with module declaration, "
-      ++ "not accounting for case when 'where' keyword is placed on lower line")
-      (checkImport
-         "module where keyword lower in file no exports"
-         "WhereKeywordLowerInFileNoExports.hs"
-         "WhereKeywordLowerInFileNoExports.expected.hs"
-         "import Data.Int")
-  , expectFailBecause
-      ("'findPositionFromImportsOrModuleDecl' function adds import directly under line with module exports list, "
-      ++ "not accounting for case when 'where' keyword is placed on lower line")
-      (checkImport
-         "module where keyword lower in file with exports"
-         "WhereDeclLowerInFile.hs"
-         "WhereDeclLowerInFile.expected.hs"
-         "import Data.Int")
+  [ checkImport
+        "module where keyword lower in file no exports"
+        "WhereKeywordLowerInFileNoExports.hs"
+        "WhereKeywordLowerInFileNoExports.expected.hs"
+        "import Data.Int"
+  , checkImport
+        "module where keyword lower in file with exports"
+        "WhereDeclLowerInFile.hs"
+        "WhereDeclLowerInFile.expected.hs"
+        "import Data.Int"
+  , checkImport
+        "module where keyword lower in file with comments before it"
+        "WhereDeclLowerInFileWithCommentsBeforeIt.hs"
+        "WhereDeclLowerInFileWithCommentsBeforeIt.expected.hs"
+        "import Data.Int"
   , expectFailBecause
       "'findNextPragmaPosition' function doesn't account for case when shebang is not placed at top of file"
       (checkImport
@@ -1879,6 +1879,28 @@ extendImportTests = testGroup "extend import actions"
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA (stuffB, stuffA"
+                    , "               )"
+                    , "main = print (stuffA, stuffB)"
+                    ])
+        , testSession "extend multi line import with trailing comma" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "stuffA :: Double"
+                    , "stuffA = 0.00750"
+                    , "stuffB :: Integer"
+                    , "stuffB = 123"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (stuffB,"
+                    , "               )"
+                    , "main = print (stuffA, stuffB)"
+                    ])
+            (Range (Position 3 17) (Position 3 18))
+            ["Add stuffA to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (stuffB, stuffA,"
                     , "               )"
                     , "main = print (stuffA, stuffB)"
                     ])
@@ -4261,8 +4283,8 @@ canonicalizeLocation (Location uri range) = Location <$> canonicalizeUri uri <*>
 findDefinitionAndHoverTests :: TestTree
 findDefinitionAndHoverTests = let
 
-  tst :: (TextDocumentIdentifier -> Position -> Session a, a -> Session [Expect] -> Session ()) -> Position -> Session [Expect] -> String -> TestTree
-  tst (get, check) pos targetRange title = testSessionWithExtraFiles "hover" title $ \dir -> do
+  tst :: (TextDocumentIdentifier -> Position -> Session a, a -> Session [Expect] -> Session ()) -> Position -> String -> Session [Expect] -> String -> TestTree
+  tst (get, check) pos sfp targetRange title = testSessionWithExtraFiles "hover" title $ \dir -> do
 
     -- Dirty the cache to check that definitions work even in the presence of iface files
     liftIO $ runInDir dir $ do
@@ -4272,7 +4294,7 @@ findDefinitionAndHoverTests = let
       _ <- getHover fooDoc $ Position 4 3
       closeDoc fooDoc
 
-    doc <- openTestDataDoc (dir </> sourceFilePath)
+    doc <- openTestDataDoc (dir </> sfp)
     waitForProgressDone
     found <- get doc pos
     check found targetRange
@@ -4330,16 +4352,25 @@ findDefinitionAndHoverTests = let
           [ ( "GotoHover.hs", [(DsError, (62, 7), "Found hole: _")])
           , ( "GotoHover.hs", [(DsError, (65, 8), "Found hole: _")])
           ]
-    , testGroup "type-definition" typeDefinitionTests ]
+    , testGroup "type-definition" typeDefinitionTests
+    , testGroup "hover-record-dot-syntax" recordDotSyntaxTests ]
 
-  typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 (pure tcData) "Saturated data con"
-                        , tst (getTypeDefinitions, checkDefs) aL20 (pure [ExpectNoDefinitions]) "Polymorphic variable"]
+  typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 sourceFilePath (pure tcData) "Saturated data con"
+                        , tst (getTypeDefinitions, checkDefs) aL20 sourceFilePath (pure [ExpectNoDefinitions]) "Polymorphic variable"]
+  
+  recordDotSyntaxTests 
+    | ghcVersion >= GHC92 =
+        [ tst (getHover, checkHover) (Position 19 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent" 
+        , tst (getHover, checkHover) (Position 19 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child" 
+        , tst (getHover, checkHover) (Position 19 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child" 
+        ]
+    | otherwise = []
 
   test runDef runHover look expect = testM runDef runHover look (return expect)
 
   testM runDef runHover look expect title =
-    ( runDef   $ tst def   look expect title
-    , runHover $ tst hover look expect title ) where
+    ( runDef   $ tst def   look sourceFilePath expect title
+    , runHover $ tst hover look sourceFilePath expect title ) where
       def   = (getDefinitions, checkDefs)
       hover = (getHover      , checkHover)
 
@@ -4439,7 +4470,11 @@ findDefinitionAndHoverTests = let
   , test  no     yes    holeL65    hleInfo2      "hole with variable"
   , test  no     yes    cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
-  , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
+  , if | isWindows ->
+        -- Flaky on Windows: https://github.com/haskell/haskell-language-server/issues/2997
+        testM no     yes    reexported reexportedSig "Imported symbol (reexported)"
+       | otherwise ->
+        testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
   , if | ghcVersion == GHC90 && isWindows ->
         test  no     broken    thLocL57   thLoc         "TH Splice Hover"
        | ghcVersion == GHC92 && (isWindows || isMac) ->
@@ -4622,6 +4657,7 @@ thTests =
         return ()
     , thReloadingTest False
     , thLoadingTest
+    , thCoreTest
     , ignoreInWindowsBecause "Broken in windows" $ thReloadingTest True
     -- Regression test for https://github.com/haskell/haskell-language-server/issues/891
     , thLinkingTest False
@@ -4676,6 +4712,12 @@ thLoadingTest :: TestTree
 thLoadingTest = testCase "Loading linkables" $ runWithExtraFiles "THLoading" $ \dir -> do
     let thb = dir </> "THB.hs"
     _ <- openDoc thb "haskell"
+    expectNoMoreDiagnostics 1
+
+thCoreTest :: TestTree
+thCoreTest = testCase "Verifying TH core files" $ runWithExtraFiles "THCoreFile" $ \dir -> do
+    let thc = dir </> "THC.hs"
+    _ <- openDoc thc "haskell"
     expectNoMoreDiagnostics 1
 
 -- | test that TH is reevaluated on typecheck
@@ -5460,7 +5502,7 @@ completionDocTests =
             -- We ignore doc uris since it points to the local path which determined by specific machines
             case mn of
                 Nothing -> txt
-                Just n -> T.take n txt
+                Just n  -> T.take n txt
             | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown txt)), ..} <- compls
             , _label == label
             ]
@@ -5760,13 +5802,13 @@ knownBrokenFor = knownIssueFor Broken
 knownIssueFor :: IssueSolution -> BrokenTarget -> String -> TestTree -> TestTree
 knownIssueFor solution = go . \case
     BrokenSpecific bos vers -> isTargetOS bos && isTargetGhc vers
-    BrokenForOS bos -> isTargetOS bos
-    BrokenForGHC vers -> isTargetGhc vers
+    BrokenForOS bos         -> isTargetOS bos
+    BrokenForGHC vers       -> isTargetGhc vers
     where
         isTargetOS = \case
             Windows -> isWindows
-            MacOS -> isMac
-            Linux -> not isWindows && not isMac
+            MacOS   -> isMac
+            Linux   -> not isWindows && not isMac
 
         isTargetGhc = elem ghcVersion
 
@@ -6604,7 +6646,7 @@ runInDir'' lspCaps dir startExeIn startSessionIn extraOptions s = do
 
   shakeProfiling <- getEnv "SHAKE_PROFILING"
   let cmd = unwords $
-       [ghcideExe, "--lsp", "--test", "--verbose", "-j2", "--cwd", startDir
+       [ghcideExe, "--lsp", "--test", "--verify-core-file", "--verbose", "-j2", "--cwd", startDir
        ] ++ ["--shake-profiling=" <> dir | Just dir <- [shakeProfiling]
        ] ++ extraOptions
   -- HIE calls getXgdDirectory which assumes that HOME is set.
@@ -6714,7 +6756,7 @@ unitTests recorder logger = do
                 ] ++ Ghcide.descriptors (cmapWithPrio LogGhcIde recorder)
 
         testIde recorder (IDE.testing (cmapWithPrio LogIDEMain recorder) logger){IDE.argsHlsPlugins = plugins} $ do
-            _ <- createDoc "haskell" "A.hs" "module A where"
+            _ <- createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
             actualOrder <- liftIO $ readIORef orderRef
 

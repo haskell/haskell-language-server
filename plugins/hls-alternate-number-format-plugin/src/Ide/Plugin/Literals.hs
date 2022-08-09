@@ -16,9 +16,9 @@ import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
 import           Development.IDE.Graph.Classes (NFData (rnf))
-import qualified GHC.Generics                  as GHC
 import           Generics.SYB                  (Data, Typeable, everything,
                                                 extQ)
+import qualified GHC.Generics                  as GHC
 
 -- data type to capture what type of literal we are dealing with
 -- provides location and possibly source text (for OverLits) as well as it's value

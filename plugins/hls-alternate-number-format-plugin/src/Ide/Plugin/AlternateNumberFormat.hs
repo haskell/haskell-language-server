@@ -97,7 +97,6 @@ codeActionHandler state plId (CodeActionParams _ _ docId currRange _) = pluginRe
         literalPairs = map (\lit -> (lit, alternateFormat lit)) litsInRange
         -- make a code action for every literal and its' alternates (then flatten the result)
         actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit enabledExtensions pragma) alts) literalPairs
-
     pure $ List actions
     where
         inCurrentRange :: Literal -> Bool

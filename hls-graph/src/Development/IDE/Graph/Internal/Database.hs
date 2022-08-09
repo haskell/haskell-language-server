@@ -7,10 +7,12 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TupleSections #-}
 
 module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
+
+import           Prelude                              hiding (unzip)
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
@@ -30,18 +32,20 @@ import           Data.Foldable                        (for_, traverse_)
 import           Data.HashSet                         (HashSet)
 import qualified Data.HashSet                         as HSet
 import           Data.IORef.Extra
+import           Data.List.NonEmpty                   (unzip)
 import           Data.Maybe
 import           Data.Traversable                     (for)
 import           Data.Tuple.Extra
-import           Debug.Trace (traceM)
+import           Debug.Trace                          (traceM)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
 import qualified Focus
 import qualified ListT
 import qualified StmContainers.Map                    as SMap
-import           System.Time.Extra                    (duration, sleep)
 import           System.IO.Unsafe
+import           System.Time.Extra                    (duration, sleep)
+
 
 newDatabase :: Dynamic -> TheRules -> IO Database
 newDatabase databaseExtra databaseRules = do
@@ -78,13 +82,17 @@ updateDirty = Focus.adjust $ \(KeyDetails status rdeps) ->
             in KeyDetails status' rdeps
 -- | Unwrap and build a list of keys in parallel
 build
-    :: forall key value . (RuleResult key ~ value, Typeable key, Show key, Hashable key, Eq key, Typeable value)
-    => Database -> Stack -> [key] -> IO ([Key], [value])
+    :: forall f key value . (Traversable f, RuleResult key ~ value, Typeable key, Show key, Hashable key, Eq key, Typeable value)
+    => Database -> Stack -> f key -> IO (f Key, f value)
 -- build _ st k | traceShow ("build", st, k) False = undefined
 build db stack keys = do
-    (ids, vs) <- runAIO $ fmap unzip $ either return liftIO =<<
-            builder db stack (map Key keys)
-    pure (ids, map (asV . resultValue) vs)
+    built <- runAIO $ do
+        built <- builder db stack (fmap Key keys)
+        case built of
+          Left clean  -> return clean
+          Right dirty -> liftIO dirty
+    let (ids, vs) = unzip built
+    pure (ids, fmap (asV . resultValue) vs)
     where
         asV :: Value -> value
         asV (Value x) = unwrapDynamic x
@@ -93,7 +101,7 @@ build db stack keys = do
 --  If none of the keys are dirty, we can return the results immediately.
 --  Otherwise, a blocking computation is returned *which must be evaluated asynchronously* to avoid deadlock.
 builder
-    :: Database -> Stack -> [Key] -> AIO (Either [(Key, Result)] (IO [(Key, Result)]))
+    :: Traversable f => Database -> Stack -> f Key -> AIO (Either (f (Key, Result)) (IO (f (Key, Result))))
 -- builder _ st kk | traceShow ("builder", st,kk) False = undefined
 builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
     -- Things that I need to force before my results are ready
@@ -317,7 +325,7 @@ data Wait
     | Spawn {justWait :: !(IO ())}
 
 fmapWait :: (IO () -> IO ()) -> Wait -> Wait
-fmapWait f (Wait io) = Wait (f io)
+fmapWait f (Wait io)  = Wait (f io)
 fmapWait f (Spawn io) = Spawn (f io)
 
 waitOrSpawn :: Wait -> IO (Either (IO ()) (Async ()))

@@ -218,12 +218,10 @@ fullRange s = Range startPos endPos
         lastLine = fromIntegral $ length $ T.lines s
 
 subRange :: Range -> Range -> Bool
-subRange smallRange range =
-     positionInRange (_start smallRange) range
-  && positionInRange (_end smallRange) range
+subRange smallRange range = _start smallRange >= _start range && _end smallRange <= _end range
 
 positionInRange :: Position -> Range -> Bool
-positionInRange p (Range sp ep) = sp <= p && p <= ep
+positionInRange p (Range sp ep) = sp <= p && p < ep -- Range's end position is exclusive, see https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#range
 
 -- ---------------------------------------------------------------------
 
@@ -253,10 +251,8 @@ getNormalizedFilePath (PluginId plId) uri = handleMaybe errMsg
         errMsg = T.unpack $ "Error(" <> plId <> "): converting " <> getUri uri <> " to NormalizedFilePath"
 
 -- ---------------------------------------------------------------------
-throwPluginError :: Monad m => PluginId -> String -> String -> ExceptT String m b
-throwPluginError (PluginId who) what where' = throwE msg
-    where
-        msg = (T.unpack who) <> " failed with " <> what <> " at " <> where'
+throwPluginError :: Monad m => String -> ExceptT String m b
+throwPluginError = throwE
 
 handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
 handleMaybe msg = maybe (throwE msg) return

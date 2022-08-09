@@ -7,20 +7,26 @@ module Main(main) where
 
 import           Control.Monad.IO.Class       (liftIO)
 import           Data.Function                ((&))
-import           Data.Text (Text)
-import qualified Development.IDE.Types.Logger as Logger
-import           Development.IDE.Types.Logger (Priority (Debug, Info, Error),
+import           Data.Text                    (Text)
+import           Development.IDE.Types.Logger (Doc,
+                                               Priority (Debug, Error, Info),
                                                WithPriority (WithPriority, priority),
                                                cfilter, cmapWithPrio,
+                                               defaultLayoutOptions,
+                                               layoutPretty,
                                                makeDefaultStderrRecorder,
-                                               withDefaultRecorder, renderStrict, layoutPretty, defaultLayoutOptions, Doc)
+                                               renderStrict,
+                                               withDefaultRecorder)
+import qualified Development.IDE.Types.Logger as Logger
 import           Ide.Arguments                (Arguments (..),
                                                GhcideArguments (..),
                                                getArguments)
 import           Ide.Main                     (defaultMain)
 import qualified Ide.Main                     as IdeMain
 import           Ide.PluginUtils              (pluginDescToIdePlugins)
-import           Ide.Types                    (PluginDescriptor (pluginNotificationHandlers), defaultPluginDescriptor, mkPluginNotificationHandler)
+import           Ide.Types                    (PluginDescriptor (pluginNotificationHandlers),
+                                               defaultPluginDescriptor,
+                                               mkPluginNotificationHandler)
 import           Language.LSP.Server          as LSP
 import           Language.LSP.Types           as LSP
 import qualified Plugins

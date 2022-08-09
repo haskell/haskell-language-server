@@ -187,8 +187,8 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
       -- second layer is from the imports of first layer to their imports
       ImportMap importIm <- use_ GetImportMap path
       forM importIm $ \imp_path -> do
-        imp_tmr <- use_ TypeCheck imp_path
-        return $ tcg_exports $ tmrTypechecked imp_tmr
+        imp_hir <- use_ GetModIface imp_path
+        return $ mi_exports $ hirModIface imp_hir
 
   -- Use the GHC api to extract the "minimal" imports
   -- We shouldn't blindly refine imports

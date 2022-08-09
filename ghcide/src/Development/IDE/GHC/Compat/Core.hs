@@ -309,6 +309,7 @@ module Development.IDE.GHC.Compat.Core (
     -- * Panic
     PlainGhcException,
     panic,
+    panicDoc,
     -- * Other
     GHC.CoreModule(..),
     GHC.SafeHaskellMode(..),

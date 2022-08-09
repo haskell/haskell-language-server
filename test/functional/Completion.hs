@@ -147,6 +147,16 @@ tests = testGroup "completions" [
              item ^. label @?= "liftA"
              item ^. kind @?= Just CiFunction
              item ^. detail @?= Just "Control.Applicative"
+
+     , testCase "completes locally defined associated type family" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "AssociatedTypeFamily.hs" "haskell"
+
+         compls <- getCompletions doc (Position 5 20)
+         item <- getCompletionByLabel "Fam" compls
+         liftIO $ do
+             item ^. label @?= "Fam"
+             item ^. kind @?= Just CiStruct
+
      , contextTests
      , snippetTests
     ]

@@ -1,5 +1,6 @@
 {-# LANGUAGE PackageImports #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE RankNTypes     #-}
 module Development.IDE.Main
 (Arguments(..)
 ,defaultArguments
@@ -11,134 +12,144 @@ module Development.IDE.Main
 ,testing
 ,Log(..)
 ) where
-import           Control.Concurrent.Extra              (withNumCapabilities)
-import           Control.Concurrent.STM.Stats          (atomically,
-                                                        dumpSTMStats)
-import           Control.Exception.Safe                (SomeException, catchAny,
-                                                        displayException)
-import           Control.Monad.Extra                   (concatMapM, unless,
-                                                        when)
-import qualified Data.Aeson.Encode.Pretty              as A
-import           Data.Default                          (Default (def))
-import           Data.Foldable                         (traverse_)
-import qualified Data.HashMap.Strict                   as HashMap
-import           Data.Hashable                         (hashed)
-import           Data.List.Extra                       (intercalate, isPrefixOf,
-                                                        nub, nubOrd, partition)
-import           Data.Maybe                            (catMaybes, isJust)
-import qualified Data.Text                             as T
-import           Data.Text.Lazy.Encoding               (decodeUtf8)
-import qualified Data.Text.Lazy.IO                     as LT
-import           Data.Typeable                         (typeOf)
-import           Development.IDE                       (Action, GhcVersion (..),
-                                                        Priority (Debug, Error), Rules,
-                                                        ghcVersion,
-                                                        hDuplicateTo')
-import           Development.IDE.Core.Debouncer        (Debouncer,
-                                                        newAsyncDebouncer)
-import           Development.IDE.Core.FileStore        (isWatchSupported)
-import           Development.IDE.Core.IdeConfiguration (IdeConfiguration (..),
-                                                        registerIdeConfiguration)
-import           Development.IDE.Core.OfInterest       (FileOfInterestStatus (OnDisk),
-                                                        kick,
-                                                        setFilesOfInterest)
-import           Development.IDE.Core.RuleTypes        (GenerateCore (GenerateCore),
-                                                        GetHieAst (GetHieAst),
-                                                        GhcSession (GhcSession),
-                                                        GhcSessionDeps (GhcSessionDeps),
-                                                        TypeCheck (TypeCheck))
-import           Development.IDE.Core.Rules            (GhcSessionIO (GhcSessionIO),
-                                                        mainRule)
-import qualified Development.IDE.Core.Rules            as Rules
-import           Development.IDE.Core.Service          (initialise, runAction)
-import qualified Development.IDE.Core.Service          as Service
-import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
-                                                        ShakeExtras (state),
-                                                        shakeSessionInit, uses)
-import qualified Development.IDE.Core.Shake            as Shake
-import           Development.IDE.Core.Tracing          (measureMemory)
-import           Development.IDE.Graph                 (action)
-import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
-import qualified Development.IDE.LSP.LanguageServer    as LanguageServer
-import           Development.IDE.Main.HeapStats        (withHeapStats)
-import qualified Development.IDE.Main.HeapStats        as HeapStats
-import           Development.IDE.Types.Monitoring      (Monitoring)
-import qualified Development.IDE.Monitoring.EKG as EKG
+import           Control.Concurrent.Extra                 (withNumCapabilities)
+import           Control.Concurrent.STM.Stats             (atomically,
+                                                           dumpSTMStats)
+import           Control.Exception.Safe                   (SomeException,
+                                                           catchAny,
+                                                           displayException)
+import           Control.Monad.Extra                      (concatMapM, unless,
+                                                           when)
+import qualified Data.Aeson.Encode.Pretty                 as A
+import           Data.Default                             (Default (def))
+import           Data.Foldable                            (traverse_)
+import           Data.Hashable                            (hashed)
+import qualified Data.HashMap.Strict                      as HashMap
+import           Data.List.Extra                          (intercalate,
+                                                           isPrefixOf, nub,
+                                                           nubOrd, partition)
+import           Data.Maybe                               (catMaybes, isJust)
+import qualified Data.Text                                as T
+import           Data.Text.Lazy.Encoding                  (decodeUtf8)
+import qualified Data.Text.Lazy.IO                        as LT
+import           Data.Typeable                            (typeOf)
+import           Development.IDE                          (Action,
+                                                           GhcVersion (..),
+                                                           Priority (Debug, Error),
+                                                           Rules, ghcVersion,
+                                                           hDuplicateTo')
+import           Development.IDE.Core.Debouncer           (Debouncer,
+                                                           newAsyncDebouncer)
+import           Development.IDE.Core.FileStore           (isWatchSupported)
+import           Development.IDE.Core.IdeConfiguration    (IdeConfiguration (..),
+                                                           registerIdeConfiguration)
+import           Development.IDE.Core.OfInterest          (FileOfInterestStatus (OnDisk),
+                                                           kick,
+                                                           setFilesOfInterest)
+import           Development.IDE.Core.Rules               (GhcSessionIO (GhcSessionIO),
+                                                           mainRule)
+import qualified Development.IDE.Core.Rules               as Rules
+import           Development.IDE.Core.RuleTypes           (GenerateCore (GenerateCore),
+                                                           GetHieAst (GetHieAst),
+                                                           GhcSession (GhcSession),
+                                                           GhcSessionDeps (GhcSessionDeps),
+                                                           TypeCheck (TypeCheck))
+import           Development.IDE.Core.Service             (initialise,
+                                                           runAction)
+import qualified Development.IDE.Core.Service             as Service
+import           Development.IDE.Core.Shake               (IdeState (shakeExtras),
+                                                           IndexQueue,
+                                                           ShakeExtras (state),
+                                                           shakeSessionInit,
+                                                           uses)
+import qualified Development.IDE.Core.Shake               as Shake
+import           Development.IDE.Core.Tracing             (measureMemory)
+import           Development.IDE.Graph                    (action)
+import           Development.IDE.LSP.LanguageServer       (runLanguageServer,
+                                                           setupLSP)
+import qualified Development.IDE.LSP.LanguageServer       as LanguageServer
+import           Development.IDE.Main.HeapStats           (withHeapStats)
+import qualified Development.IDE.Main.HeapStats           as HeapStats
+import qualified Development.IDE.Monitoring.EKG           as EKG
 import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
-import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
-import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
-import qualified Development.IDE.Plugin.HLS            as PluginHLS
-import qualified Development.IDE.Plugin.HLS.GhcIde     as GhcIde
-import qualified Development.IDE.Plugin.Test           as Test
-import           Development.IDE.Session               (SessionLoadingOptions,
-                                                        getHieDbLoc,
-                                                        loadSessionWithOptions,
-                                                        retryOnSqliteBusy,
-                                                        runWithDb,
-                                                        setInitialDynFlags)
-import qualified Development.IDE.Session               as Session
-import           Development.IDE.Types.Location        (NormalizedUri,
-                                                        toNormalizedFilePath')
-import           Development.IDE.Types.Logger          (Logger, Pretty (pretty),
-                                                        Priority (Info, Warning),
-                                                        Recorder, WithPriority,
-                                                        cmapWithPrio, logWith,
-                                                        vsep, (<+>))
-import           Development.IDE.Types.Options         (IdeGhcSession,
-                                                        IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
-                                                        IdeTesting (IdeTesting),
-                                                        clientSupportsProgress,
-                                                        defaultIdeOptions,
-                                                        optModifyDynFlags,
-                                                        optTesting)
-import           Development.IDE.Types.Shake           (fromKeyType)
-import           GHC.Conc                              (getNumProcessors)
-import           GHC.IO.Encoding                       (setLocaleEncoding)
-import           GHC.IO.Handle                         (hDuplicate)
-import           HIE.Bios.Cradle                       (findCradle)
-import qualified HieDb.Run                             as HieDb
-import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
-                                                        Config, checkParents,
-                                                        checkProject,
-                                                        getConfigFromNotification)
-import           Ide.Plugin.ConfigUtils                (pluginsToDefaultConfig,
-                                                        pluginsToVSCodeExtensionSchema)
-import           Ide.PluginUtils                       (allLspCmdIds',
-                                                        getProcessID,
-                                                        idePluginsToPluginDesc,
-                                                        pluginDescToIdePlugins)
-import           Ide.Types                             (IdeCommand (IdeCommand),
-                                                        IdePlugins,
-                                                        PluginDescriptor (PluginDescriptor, pluginCli),
-                                                        PluginId (PluginId),
-                                                        ipMap)
-import qualified Language.LSP.Server                   as LSP
+import           Development.IDE.Plugin                   (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
+import           Development.IDE.Plugin.HLS               (asGhcIdePlugin)
+import qualified Development.IDE.Plugin.HLS               as PluginHLS
+import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
+import qualified Development.IDE.Plugin.Test              as Test
+import           Development.IDE.Session                  (SessionLoadingOptions,
+                                                           getHieDbLoc,
+                                                           loadSessionWithOptions,
+                                                           retryOnSqliteBusy,
+                                                           runWithDb,
+                                                           setInitialDynFlags)
+import qualified Development.IDE.Session                  as Session
+import           Development.IDE.Types.Location           (NormalizedUri,
+                                                           toNormalizedFilePath')
+import           Development.IDE.Types.Logger             (Logger,
+                                                           Pretty (pretty),
+                                                           Priority (Info, Warning),
+                                                           Recorder,
+                                                           WithPriority,
+                                                           cmapWithPrio,
+                                                           logWith, vsep, (<+>))
+import           Development.IDE.Types.Monitoring         (Monitoring)
+import           Development.IDE.Types.Options            (IdeGhcSession,
+                                                           IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
+                                                           IdeTesting (IdeTesting),
+                                                           clientSupportsProgress,
+                                                           defaultIdeOptions,
+                                                           optModifyDynFlags,
+                                                           optTesting)
+import           Development.IDE.Types.Shake              (WithHieDb,
+                                                           fromKeyType)
+import           GHC.Conc                                 (getNumProcessors)
+import           GHC.IO.Encoding                          (setLocaleEncoding)
+import           GHC.IO.Handle                            (hDuplicate)
+import           HIE.Bios.Cradle                          (findCradle)
+import qualified HieDb.Run                                as HieDb
+import           Ide.Plugin.Config                        (CheckParents (NeverCheck),
+                                                           Config, checkParents,
+                                                           checkProject,
+                                                           getConfigFromNotification)
+import           Ide.Plugin.ConfigUtils                   (pluginsToDefaultConfig,
+                                                           pluginsToVSCodeExtensionSchema)
+import           Ide.PluginUtils                          (allLspCmdIds',
+                                                           getProcessID,
+                                                           idePluginsToPluginDesc,
+                                                           pluginDescToIdePlugins)
+import           Ide.Types                                (IdeCommand (IdeCommand),
+                                                           IdePlugins,
+                                                           PluginDescriptor (PluginDescriptor, pluginCli),
+                                                           PluginId (PluginId),
+                                                           ipMap)
+import qualified Language.LSP.Server                      as LSP
 import qualified "list-t" ListT
-import           Numeric.Natural                       (Natural)
-import           Options.Applicative                   hiding (action)
-import qualified StmContainers.Map                     as STM
-import qualified System.Directory.Extra                as IO
-import           System.Exit                           (ExitCode (ExitFailure),
-                                                        exitWith)
-import           System.FilePath                       (takeExtension,
-                                                        takeFileName)
-import           System.IO                             (BufferMode (LineBuffering, NoBuffering),
-                                                        Handle, hFlush,
-                                                        hPutStrLn,
-                                                        hSetBuffering,
-                                                        hSetEncoding, stderr,
-                                                        stdin, stdout, utf8)
-import           System.Random                         (newStdGen)
-import           System.Time.Extra                     (Seconds, offsetTime,
-                                                        showDuration)
-import           Text.Printf                           (printf)
+import           Numeric.Natural                          (Natural)
+import           Options.Applicative                      hiding (action)
+import qualified StmContainers.Map                        as STM
+import qualified System.Directory.Extra                   as IO
+import           System.Exit                              (ExitCode (ExitFailure),
+                                                           exitWith)
+import           System.FilePath                          (takeExtension,
+                                                           takeFileName)
+import           System.IO                                (BufferMode (LineBuffering, NoBuffering),
+                                                           Handle, hFlush,
+                                                           hPutStrLn,
+                                                           hSetBuffering,
+                                                           hSetEncoding, stderr,
+                                                           stdin, stdout, utf8)
+import           System.Random                            (newStdGen)
+import           System.Time.Extra                        (Seconds, offsetTime,
+                                                           showDuration)
+import           Text.Printf                              (printf)
 
 data Log
   = LogHeapStats !HeapStats.Log
   | LogLspStart
   | LogLspStartDuration !Seconds
   | LogShouldRunSubset !Bool
-  | LogOnlyPartialGhc9Support
+  | LogOnlyPartialGhc92Support
   | LogSetInitialDynFlagsException !SomeException
   | LogService Service.Log
   | LogShake Shake.Log
@@ -160,8 +171,8 @@ instance Pretty Log where
       "Started LSP server in" <+> pretty (showDuration duration)
     LogShouldRunSubset shouldRunSubset ->
       "shouldRunSubset:" <+> pretty shouldRunSubset
-    LogOnlyPartialGhc9Support ->
-      "Currently, HLS supports GHC 9 only partially. See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
+    LogOnlyPartialGhc92Support ->
+      "Currently, HLS supports GHC 9.2 only partially. See [issue #2982](https://github.com/haskell/haskell-language-server/issues/2982) for more detail."
     LogSetInitialDynFlagsException e ->
       "setInitialDynFlags:" <+> pretty (displayException e)
     LogService log -> pretty log
@@ -293,7 +304,6 @@ testing recorder logger =
       , argsIdeOptions = ideOptions
       }
 
-
 defaultMain :: Recorder (WithPriority Log) -> Arguments -> IO ()
 defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats recorder) fun
  where
@@ -328,49 +338,54 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             t <- offsetTime
             log Info LogLspStart
 
-            runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env rootPath withHieDb hieChan -> do
-                traverse_ IO.setCurrentDirectory rootPath
-                t <- t
-                log Info $ LogLspStartDuration t
+            let getIdeState :: LSP.LanguageContextEnv Config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState
+                getIdeState env rootPath withHieDb hieChan = do
+                  traverse_ IO.setCurrentDirectory rootPath
+                  t <- t
+                  log Info $ LogLspStartDuration t
 
-                dir <- maybe IO.getCurrentDirectory return rootPath
+                  dir <- maybe IO.getCurrentDirectory return rootPath
 
-                -- We want to set the global DynFlags right now, so that we can use
-                -- `unsafeGlobalDynFlags` even before the project is configured
-                _mlibdir <-
-                    setInitialDynFlags (cmapWithPrio LogSession recorder) dir argsSessionLoadingOptions
-                        -- TODO: should probably catch/log/rethrow at top level instead
-                        `catchAny` (\e -> log Error (LogSetInitialDynFlagsException e) >> pure Nothing)
+                  -- We want to set the global DynFlags right now, so that we can use
+                  -- `unsafeGlobalDynFlags` even before the project is configured
+                  _mlibdir <-
+                      setInitialDynFlags (cmapWithPrio LogSession recorder) dir argsSessionLoadingOptions
+                          -- TODO: should probably catch/log/rethrow at top level instead
+                          `catchAny` (\e -> log Error (LogSetInitialDynFlagsException e) >> pure Nothing)
 
-                sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions dir
-                config <- LSP.runLspT env LSP.getConfig
-                let def_options = argsIdeOptions config sessionLoader
+                  sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions dir
+                  config <- LSP.runLspT env LSP.getConfig
+                  let def_options = argsIdeOptions config sessionLoader
 
-                -- disable runSubset if the client doesn't support watched files
-                runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
-                log Debug $ LogShouldRunSubset runSubset
+                  -- disable runSubset if the client doesn't support watched files
+                  runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
+                  log Debug $ LogShouldRunSubset runSubset
 
-                let options = def_options
-                            { optReportProgress = clientSupportsProgress caps
-                            , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
-                            , optRunSubset = runSubset
-                            }
-                    caps = LSP.resClientCapabilities env
-                -- FIXME: Remove this after GHC 9 gets fully supported
-                when (ghcVersion == GHC90) $
-                    log Warning LogOnlyPartialGhc9Support
-                monitoring <- argsMonitoring
-                initialise
-                    (cmapWithPrio LogService recorder)
-                    argsDefaultHlsConfig
-                    rules
-                    (Just env)
-                    logger
-                    debouncer
-                    options
-                    withHieDb
-                    hieChan
-                    monitoring
+                  let options = def_options
+                              { optReportProgress = clientSupportsProgress caps
+                              , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
+                              , optRunSubset = runSubset
+                              }
+                      caps = LSP.resClientCapabilities env
+                  -- FIXME: Remove this after GHC 9.2 gets fully supported
+                  when (ghcVersion == GHC92) $
+                      log Warning LogOnlyPartialGhc92Support
+                  monitoring <- argsMonitoring
+                  initialise
+                      (cmapWithPrio LogService recorder)
+                      argsDefaultHlsConfig
+                      rules
+                      (Just env)
+                      logger
+                      debouncer
+                      options
+                      withHieDb
+                      hieChan
+                      monitoring
+
+            let setup = setupLSP (cmapWithPrio LogLanguageServer recorder) argsGetHieDbLoc (pluginHandlers plugins) getIdeState
+
+            runLanguageServer options inH outH argsDefaultHlsConfig argsOnConfigChange setup
             dumpSTMStats
         Check argFiles -> do
           dir <- maybe IO.getCurrentDirectory return argsProjectRoot

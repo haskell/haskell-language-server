@@ -203,7 +203,7 @@ incomingCalls state pluginId param = pluginResponse $ do
         mergeIncomingCalls
   case calls of
     Just x  -> pure $ Just $ List x
-    Nothing -> throwPluginError callHierarchyId "Internal Error" "incomingCalls"
+    Nothing -> throwPluginError "incomingCalls - Internal Error"
   where
     mkCallHierarchyIncomingCall :: Vertex -> Action (Maybe CallHierarchyIncomingCall)
     mkCallHierarchyIncomingCall = mkCallHierarchyCall CallHierarchyIncomingCall
@@ -224,7 +224,7 @@ outgoingCalls state pluginId param = pluginResponse $ do
         mergeOutgoingCalls
   case calls of
       Just x  -> pure $ Just $ List x
-      Nothing -> throwPluginError callHierarchyId "Internal Error" "outgoingCalls"
+      Nothing -> throwPluginError "outgoingCalls - Internal Error"
   where
     mkCallHierarchyOutgoingCall :: Vertex -> Action (Maybe CallHierarchyOutgoingCall)
     mkCallHierarchyOutgoingCall = mkCallHierarchyCall CallHierarchyOutgoingCall

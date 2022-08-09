@@ -22,13 +22,22 @@ extra-source-files:
 
 library
   exposed-modules:    Ide.Plugin.Class
+  other-modules:      Ide.Plugin.Class.CodeAction
+                    , Ide.Plugin.Class.CodeLens
+                    , Ide.Plugin.Class.ExactPrint
+                    , Ide.Plugin.Class.Types
+                    , Ide.Plugin.Class.Utils
   hs-source-dirs:     src
   build-depends:
     , aeson
     , base            >=4.12 && <5
     , containers
+    , deepseq
+    , extra
     , ghc
     , ghcide          ^>=1.7
+    , ghc-boot-th
+    , hls-graph
     , hls-plugin-api  ^>=1.4
     , lens
     , lsp
@@ -44,8 +53,9 @@ library
   default-extensions:
     DataKinds
     TypeOperators
+    OverloadedStrings
 
-  ghc-options:        -Wno-unticked-promoted-constructors
+  ghc-options:        -Wall -Wno-unticked-promoted-constructors -Wno-name-shadowing
 
 test-suite tests
   type:             exitcode-stdio-1.0
@@ -54,9 +64,12 @@ test-suite tests
   main-is:          Main.hs
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
+    , aeson
     , base
     , filepath
+    , ghcide
     , hls-class-plugin
+    , hls-plugin-api
     , hls-test-utils     ^>=1.3
     , lens
     , lsp-types
