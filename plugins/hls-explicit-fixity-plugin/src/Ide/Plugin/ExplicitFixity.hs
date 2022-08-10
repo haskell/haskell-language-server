@@ -115,19 +115,19 @@ fakeFixityTrees :: FixityTrees
 fakeFixityTrees = M.empty
 
 -- | Convert a HieASTs to FixityTrees with fixity info gathered
-hieAstsToFixitTrees :: MonadIO m => ModIface -> HscEnv -> TcGblEnv -> HieASTs a -> m FixityTrees
-hieAstsToFixitTrees iface hscEnv tcGblEnv ast =
+hieAstsToFixitTrees :: MonadIO m => HscEnv -> TcGblEnv -> HieASTs a -> m FixityTrees
+hieAstsToFixitTrees hscEnv tcGblEnv ast =
     -- coerce to avoid compatibility issues.
     M.mapKeysWith const coerce <$>
-        sequence (M.map (hieAstToFixtyTree iface hscEnv tcGblEnv) (getAsts ast))
+        sequence (M.map (hieAstToFixtyTree hscEnv tcGblEnv) (getAsts ast))
 
 -- | Convert a HieAST to FixityTree with fixity info gathered
-hieAstToFixtyTree :: MonadIO m => ModIface -> HscEnv -> TcGblEnv -> HieAST a -> m FixityTree
-hieAstToFixtyTree iface hscEnv tcGblEnv ast = case ast of
+hieAstToFixtyTree :: MonadIO m => HscEnv -> TcGblEnv -> HieAST a -> m FixityTree
+hieAstToFixtyTree hscEnv tcGblEnv ast = case ast of
     (Node _ span []) -> FNode span [] <$> getFixities
     (Node _ span children) -> do
         fixities <- getFixities
-        childrenFixities <- mapM (hieAstToFixtyTree iface hscEnv tcGblEnv) children
+        childrenFixities <- mapM (hieAstToFixtyTree hscEnv tcGblEnv) children
         pure $ FNode span childrenFixities fixities
     where
         -- Names at the current ast node
@@ -153,9 +153,8 @@ fixityRule recorder = do
         HAR{hieAst} <- use_ GetHieAst nfp
         env <- hscEnv <$> use_ GhcSession nfp
         tcGblEnv <- tmrTypechecked <$> use_ TypeCheck nfp
-        iface <- hirModIface <$> use_ GetModIface nfp
-        tree <- hieAstsToFixitTrees iface env tcGblEnv hieAst
-        pure ([], Just tree)
+        trees <- hieAstsToFixitTrees env tcGblEnv hieAst
+        pure ([], Just trees)
 
     -- Ensure that this plugin doesn't block on startup
     addPersistentRule GetFixity $ \_ -> pure $ Just (fakeFixityTrees, idDelta, Nothing)
