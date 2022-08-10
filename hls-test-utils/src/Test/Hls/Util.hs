@@ -55,7 +55,6 @@ import           Data.List.Extra                 (find)
 import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
 import           Development.IDE                 (GhcVersion (..), ghcVersion)
-import           Development.IDE.Plugin.Test     (TestRequest (GetFilesOfInterest))
 import qualified Language.LSP.Test               as Test
 import           Language.LSP.Types              hiding (Reason (..))
 import qualified Language.LSP.Types.Capabilities as C
@@ -320,7 +319,7 @@ waitForDiagnosticsFromSourceWithTimeout timeout document source = do
         -- Send a dummy message to provoke a response from the server.
         -- This guarantees that we have at least one message to
         -- process, so message won't block or timeout.
-    testId <- Test.sendRequest (SCustomMethod "test") (A.toJSON GetFilesOfInterest)
+    testId <- Test.sendRequest (SCustomMethod "test") A.Null
     handleMessages testId
   where
     matches :: Diagnostic -> Bool
