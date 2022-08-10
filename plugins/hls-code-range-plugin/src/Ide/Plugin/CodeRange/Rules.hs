@@ -21,6 +21,7 @@ module Ide.Plugin.CodeRange.Rules
     -- * Internal
     , removeInterleaving
     , simplify
+    , crkToFrk
     ) where
 
 import           Control.DeepSeq                    (NFData)
@@ -57,6 +58,7 @@ import           Ide.Plugin.CodeRange.ASTPreProcess (CustomNodeType (..),
 import           Language.LSP.Types.Lens            (HasEnd (end),
                                                      HasStart (start))
 import           Prelude                            hiding (log)
+import Language.LSP.Types (FoldingRangeKind (FoldingRangeComment, FoldingRangeImports, FoldingRangeRegion))
 
 data Log = LogShake Shake.Log
     | LogNoAST
@@ -193,3 +195,11 @@ handleError recorder action' = do
             logWith recorder Error msg
             pure $ toIdeResult (Left [])
         Right value -> pure $ toIdeResult (Right value)
+
+-- | Maps type CodeRangeKind to FoldingRangeKind
+crkToFrk :: CodeRangeKind -> Maybe FoldingRangeKind
+crkToFrk crk = case crk of
+        CodeKindComment -> Just FoldingRangeComment
+        CodeKindImports -> Just FoldingRangeImports
+        CodeKindRegion -> Just FoldingRangeRegion
+        _ -> Nothing

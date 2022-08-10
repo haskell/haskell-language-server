@@ -159,7 +159,7 @@ instance A.FromJSON PluginConfig where
       <*> o .:? "completionOn"     .!= plcCompletionOn  def
       <*> o .:? "renameOn"         .!= plcRenameOn      def
       <*> o .:? "selectionRangeOn" .!= plcSelectionRangeOn def
-      <*> o .:? "selectionRangeOn" .!= plcFoldingRangeOn def
+      <*> o .:? "foldingRangeOn" .!= plcFoldingRangeOn def
       <*> o .:? "config"           .!= plcConfig        def
 
 -- ---------------------------------------------------------------------

@@ -33,7 +33,7 @@ import           Development.IDE.Core.PositionMapping (PositionMapping,
 import           Development.IDE.Types.Logger         (Pretty (..))
 import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
-                                                       codeRangeRule, CodeRangeKind (CodeKindComment, CodeKindImports, CodeKindRegion))
+                                                       codeRangeRule, crkToFrk)
 import qualified Ide.Plugin.CodeRange.Rules           as Rules (Log)
 import           Ide.PluginUtils                      (pluginResponse,
                                                        positionInRange)
@@ -53,7 +53,7 @@ import           Language.LSP.Types                   (List (List),
                                                        FoldingRange (..),
                                                        FoldingRangeParams(..),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
-                                                       Uri, FoldingRangeKind (FoldingRangeComment, FoldingRangeImports, FoldingRangeRegion)
+                                                       Uri
                                                        )
 import           Prelude                              hiding (log, span)
 
@@ -170,19 +170,16 @@ binarySearchFoldingRange v acc
 createFoldingRange :: CodeRange -> Maybe FoldingRange
 createFoldingRange node1 = do
     let range = _codeRange_range node1
-    -- let children = _codeRange_children node1
     let Range startPos endPos = range
     let Position lineStart _= startPos
     let Position lineEnd _ = endPos
     let codeRangeKind = _codeRange_kind node1
 
-    if codeRangeKind == CodeKindComment
-        then Just (FoldingRange lineStart Nothing lineEnd Nothing (Just FoldingRangeComment))
-    else if codeRangeKind== CodeKindImports
-        then Just (FoldingRange lineStart Nothing lineEnd Nothing ( Just FoldingRangeImports))
-    else if codeRangeKind==CodeKindRegion
-        then Just (FoldingRange lineStart Nothing lineEnd Nothing (Just FoldingRangeRegion))
-    else Nothing
+    let frk = crkToFrk codeRangeKind
+
+    case frk of
+        Just _ -> Just (FoldingRange lineStart Nothing lineEnd Nothing frk)
+        Nothing -> Nothing
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange
