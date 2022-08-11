@@ -144,7 +144,11 @@ getCompletionsLSP ide plId
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls <> Just lModules
 
             -- get HieAst if OverloadedRecordDot is enabled
+#if MIN_VERSION_ghc(9,2,0)
             let uses_overloaded_record_dot (ms_hspp_opts . msrModSummary -> dflags) = xopt LangExt.OverloadedRecordDot dflags
+#else
+            let uses_overloaded_record_dot _ = False
+#endif
             ms <- fmap fst <$> useWithStaleFast GetModSummaryWithoutTimestamps npath
             astres <- case ms of
               Just ms' -> if uses_overloaded_record_dot ms'
