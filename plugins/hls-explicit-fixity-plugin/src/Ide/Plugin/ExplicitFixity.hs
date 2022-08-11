@@ -4,6 +4,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# OPTIONS_GHC -Wno-deprecations #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use nubOrdOn" #-}
 
 module Ide.Plugin.ExplicitFixity(descriptor) where
 
@@ -50,16 +52,20 @@ hover state plId (HoverParams (TextDocumentIdentifier uri) pos _) = pluginRespon
         $ runAction "ExplicitFixity.GetFixity" state
         $ use GetFixity nfp
     -- We don't have much fixities on one position, so `nubOn` is acceptable.
-    pure $ toHover $ nubOn snd $ concat $ findInTree fixityTrees pos fNodeFixty
+    pure $ toHover $ nubOn snd $ findInTree fixityTrees pos fNodeFixty
     where
+        toHover :: [(T.Text, Fixity)] -> Maybe Hover
         toHover [] = Nothing
         toHover fixities =
-            let contents = T.intercalate "\n\n" $ fixityText <$> fixities
+            let -- Splicing fixity info
+                contents = T.intercalate "\n\n" $ fixityText <$> fixities
+                -- Append to the previous hover content
                 contents' = "\n" <> sectionSeparator <> contents
             in  Just $ Hover (HoverContents $ unmarkedUpContent contents') Nothing
 
+        fixityText :: (T.Text, Fixity) -> T.Text
         fixityText (name, Fixity _ precedence direction) =
-            printOutputable direction <> " " <> printOutputable precedence <> " `" <> printOutputable name <> "`"
+            printOutputable direction <> " " <> printOutputable precedence <> " `" <> name <> "`"
 
 -- | Transferred from ghc `selectSmallestContaining`
 selectSmallestContainingForFixityTree :: Span -> FixityTree -> Maybe FixityTree
@@ -72,12 +78,10 @@ selectSmallestContainingForFixityTree sp node
     | otherwise = Nothing
 
 -- | Transferred from ghcide `pointCommand`
-findInTree :: FixityTrees -> Position -> (FixityTree -> a) -> [a]
+findInTree :: FixityTrees -> Position -> (FixityTree -> [a]) -> [a]
 findInTree tree pos k =
-    catMaybes $ M.elems $ flip M.mapWithKey tree $ \fs ast ->
-        case selectSmallestContainingForFixityTree (sp fs) ast of
-            Nothing   -> Nothing
-            Just ast' -> Just $ k ast'
+    concat $ M.elems $ flip M.mapWithKey tree $ \fs ast ->
+        maybe [] k (selectSmallestContainingForFixityTree (sp fs) ast)
     where
         sloc fs = mkRealSrcLoc fs (fromIntegral $ line+1) (fromIntegral $ cha+1)
         sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
@@ -87,7 +91,7 @@ findInTree tree pos k =
 data FixityTree = FNode
     { fNodeSpan     :: Span
     , fNodeChildren :: [FixityTree]
-    , fNodeFixty    :: [(Name, Fixity)]
+    , fNodeFixty    :: [(T.Text, Fixity)]
     } deriving (Generic)
 
 instance NFData FixityTree where
@@ -134,17 +138,17 @@ hieAstToFixtyTree hscEnv tcGblEnv ast = case ast of
         names :: [Name]
         names = mapMaybe eitherToMaybe $ M.keys $ getNodeIds ast
 
-        getFixities :: MonadIO m => m [(Name, Fixity)]
+        getFixities :: MonadIO m => m [(T.Text, Fixity)]
         getFixities = liftIO
             $ fmap (filter ((/= defaultFixity) . snd) . mapMaybe pickFixity)
             $ forM names $ \name ->
-                (,) name
+                (,) (printOutputable name)
                 . snd
                 <$> Util.handleGhcException
                     (const $ pure (emptyMessages, Nothing))
                     (initTcWithGbl hscEnv tcGblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1) (lookupFixityRn name))
 
-        pickFixity :: (Name, Maybe Fixity) -> Maybe (Name, Fixity)
+        pickFixity :: (T.Text, Maybe Fixity) -> Maybe (T.Text, Fixity)
         pickFixity (_, Nothing)   = Nothing
         pickFixity (name, Just f) = Just (name, f)
 
