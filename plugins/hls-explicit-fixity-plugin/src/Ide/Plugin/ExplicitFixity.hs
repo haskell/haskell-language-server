@@ -138,10 +138,11 @@ hieAstToFixtyTree hscEnv tcGblEnv ast = case ast of
         getFixities = liftIO
             $ fmap (filter ((/= defaultFixity) . snd) . mapMaybe pickFixity)
             $ forM names $ \name ->
-                (\(_, fixity) -> (name, fixity))
-                    <$> Util.handleGhcException
-                        (const $ pure (emptyMessages, Nothing))
-                        (initTcWithGbl hscEnv tcGblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1) (lookupFixityRn name))
+                (,) name
+                . snd
+                <$> Util.handleGhcException
+                    (const $ pure (emptyMessages, Nothing))
+                    (initTcWithGbl hscEnv tcGblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1) (lookupFixityRn name))
 
         pickFixity :: (Name, Maybe Fixity) -> Maybe (Name, Fixity)
         pickFixity (_, Nothing)   = Nothing
