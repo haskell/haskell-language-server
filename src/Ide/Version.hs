@@ -38,9 +38,10 @@ hlsVersion =
     hlsGhcDisplayVersion = compilerName ++ "-" ++ VERSION_ghc
 
 data ProgramsOfInterest = ProgramsOfInterest
-  { cabalVersion :: Maybe Version
-  , stackVersion :: Maybe Version
-  , ghcVersion   :: Maybe Version
+  { cabalVersion    :: Maybe Version
+  , stackVersion    :: Maybe Version
+  , ghcVersion      :: Maybe Version
+  , stackGhcVersion :: Maybe Version
   }
 
 showProgramVersionOfInterest :: ProgramsOfInterest -> String
@@ -49,6 +50,7 @@ showProgramVersionOfInterest ProgramsOfInterest {..} =
     [ "cabal:\t\t" ++ showVersionWithDefault cabalVersion
     , "stack:\t\t" ++ showVersionWithDefault stackVersion
     , "ghc:\t\t" ++ showVersionWithDefault ghcVersion
+    , "stack ghc:\t" ++ showVersionWithDefault stackGhcVersion
     ]
   where
     showVersionWithDefault :: Maybe Version -> String
@@ -56,19 +58,19 @@ showProgramVersionOfInterest ProgramsOfInterest {..} =
 
 findProgramVersions :: IO ProgramsOfInterest
 findProgramVersions = ProgramsOfInterest
-  <$> findVersionOf "cabal"
-  <*> findVersionOf "stack"
-  <*> findVersionOf "ghc"
+  <$> findVersionOf "cabal" ["--numeric-version"]
+  <*> findVersionOf "stack" ["--numeric-version"]
+  <*> findVersionOf "ghc" ["--numeric-version"]
+  <*> findVersionOf "stack" ["ghc", "--", "--numeric-version"]
 
 -- | Find the version of the given program.
--- Assumes the program accepts the cli argument "--numeric-version".
 -- If the invocation has a non-zero exit-code, we return 'Nothing'
-findVersionOf :: FilePath -> IO (Maybe Version)
-findVersionOf tool =
+findVersionOf :: FilePath -> [String] -> IO (Maybe Version)
+findVersionOf tool args =
   findExecutable tool >>= \case
     Nothing -> pure Nothing
     Just path ->
-      readProcessWithExitCode path ["--numeric-version"] "" >>= \case
+      readProcessWithExitCode path args "" >>= \case
         (ExitSuccess, sout, _) -> pure $ consumeParser myVersionParser sout
         _                      -> pure Nothing
   where
