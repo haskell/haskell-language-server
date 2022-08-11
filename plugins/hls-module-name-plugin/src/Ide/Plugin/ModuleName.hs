@@ -1,9 +1,11 @@
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
 {-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 {- | Keep the module name in sync with its file path.
 
@@ -15,55 +17,61 @@ module Ide.Plugin.ModuleName (
     descriptor,
 ) where
 
-import           Control.Monad              (forM_, void)
-import           Control.Monad.IO.Class     (liftIO)
-import           Control.Monad.Trans.Class  (lift)
+import           Control.Monad                (forM_, void)
+import           Control.Monad.IO.Class       (liftIO)
+import           Control.Monad.Trans.Class    (lift)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                 (Value (Null), toJSON)
-import           Data.Char                  (isLower)
-import qualified Data.HashMap.Strict        as HashMap
-import           Data.List                  (intercalate, isPrefixOf, minimumBy)
-import qualified Data.List.NonEmpty         as NE
-import           Data.Maybe                 (maybeToList)
-import           Data.Ord                   (comparing)
-import           Data.String                (IsString)
-import qualified Data.Text                  as T
-import           Development.IDE            (GetParsedModule (GetParsedModule),
-                                             GhcSession (GhcSession), IdeState,
-                                             evalGhcEnv, hscEnvWithImportPaths,
-                                             realSrcSpanToRange, runAction,
-                                             uriToFilePath', use, use_)
-import           Development.IDE.GHC.Compat (GenLocated (L), getSessionDynFlags,
-                                             hsmodName, importPaths, locA,
-                                             moduleNameString,
-                                             pattern RealSrcSpan,
-                                             pm_parsed_source, unLoc)
+import           Data.Aeson                   (Value (Null), toJSON)
+import           Data.Char                    (isLower)
+import qualified Data.HashMap.Strict          as HashMap
+import           Data.List                    (intercalate, isPrefixOf,
+                                               minimumBy)
+import qualified Data.List.NonEmpty           as NE
+import           Data.Maybe                   (maybeToList)
+import           Data.Ord                     (comparing)
+import           Data.String                  (IsString)
+import qualified Data.Text                    as T
+import           Development.IDE              (GetParsedModule (GetParsedModule),
+                                               GhcSession (GhcSession),
+                                               IdeState, Pretty,
+                                               Priority (Debug, Info), Recorder,
+                                               WithPriority, evalGhcEnv,
+                                               hscEnvWithImportPaths, logWith,
+                                               realSrcSpanToRange, runAction,
+                                               uriToFilePath', use, use_)
+import           Development.IDE.GHC.Compat   (GenLocated (L),
+                                               getSessionDynFlags, hsmodName,
+                                               importPaths, locA,
+                                               moduleNameString,
+                                               pattern RealSrcSpan,
+                                               pm_parsed_source, unLoc)
+import           Development.IDE.Types.Logger (Pretty (..))
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types         hiding
-                                            (SemanticTokenAbsolute (length, line),
-                                             SemanticTokenRelative (length),
-                                             SemanticTokensEdit (_start))
-import           Language.LSP.VFS           (virtualFileText)
-import           System.Directory           (makeAbsolute)
-import           System.FilePath            (dropExtension, splitDirectories,
-                                             takeFileName)
+import           Language.LSP.Types           hiding
+                                              (SemanticTokenAbsolute (length, line),
+                                               SemanticTokenRelative (length),
+                                               SemanticTokensEdit (_start))
+import           Language.LSP.VFS             (virtualFileText)
+import           System.Directory             (canonicalizePath, makeAbsolute)
+import           System.FilePath              (dropExtension, splitDirectories,
+                                               takeFileName)
 
 -- |Plugin descriptor
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId =
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId =
     (defaultPluginDescriptor plId)
-        { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLens
-        , pluginCommands = [PluginCommand updateModuleNameCommand "set name of module to match with file path" command]
+        { pluginHandlers = mkPluginHandler STextDocumentCodeLens (codeLens recorder)
+        , pluginCommands = [PluginCommand updateModuleNameCommand "set name of module to match with file path" (command recorder)]
         }
 
 updateModuleNameCommand :: IsString p => p
 updateModuleNameCommand = "updateModuleName"
 
 -- | Generate code lenses
-codeLens :: PluginMethodHandler IdeState 'TextDocumentCodeLens
-codeLens state pluginId CodeLensParams{_textDocument=TextDocumentIdentifier uri} =
-  Right . List . maybeToList . (asCodeLens <$>) <$> action state uri
+codeLens :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'TextDocumentCodeLens
+codeLens recorder state pluginId CodeLensParams{_textDocument=TextDocumentIdentifier uri} =
+  Right . List . maybeToList . (asCodeLens <$>) <$> action recorder state uri
   where
     asCodeLens :: Action -> CodeLens
     asCodeLens Replace{..} = CodeLens aRange (Just cmd) Nothing
@@ -71,9 +79,9 @@ codeLens state pluginId CodeLensParams{_textDocument=TextDocumentIdentifier uri}
         cmd = mkLspCommand pluginId updateModuleNameCommand aTitle (Just [toJSON aUri])
 
 -- | (Quasi) Idempotent command execution: recalculate action to execute on command request
-command :: CommandFunction IdeState Uri
-command state uri = do
-  actMaybe <- action state uri
+command :: Recorder (WithPriority Log) -> CommandFunction IdeState Uri
+command recorder state uri = do
+  actMaybe <- action recorder state uri
   forM_ actMaybe $ \Replace{..} ->
     let
       -- | Convert an Action to the corresponding edit operation
@@ -92,19 +100,22 @@ data Action = Replace
   deriving (Show)
 
 -- | Required action (that can be converted to either CodeLenses or CodeActions)
-action :: IdeState -> Uri -> LspM c (Maybe Action)
-action state uri =
-  traceAs "action" <$> runMaybeT $ do
+action :: Recorder (WithPriority Log) -> IdeState -> Uri -> LspM c (Maybe Action)
+action recorder state uri =
+  runMaybeT $ do
     nfp <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri
     fp <- MaybeT . pure $ uriToFilePath' uri
 
     contents <- lift . getVirtualFile $ toNormalizedUri uri
     let emptyModule = maybe True (T.null . T.strip . virtualFileText) contents
 
-    correctNames <- liftIO $ traceAs "correctNames" <$> pathModuleNames state nfp fp
+    correctNames <- liftIO $ pathModuleNames recorder state nfp fp
+    logWith recorder Debug (ModuleNameLog $ "ModuleName.correctNames: " <> T.unlines correctNames)
     bestName <- minimumBy (comparing T.length) <$> (MaybeT . pure $ NE.nonEmpty correctNames)
+    logWith recorder Info (ModuleNameLog $ "ModuleName.bestName: " <> bestName)
 
-    statedNameMaybe <- liftIO $ traceAs "statedName" <$> codeModuleName state nfp
+    statedNameMaybe <- liftIO $ codeModuleName state nfp
+    logWith recorder Debug (ModuleNameLog $ "ModuleName.statedNameMaybe: " <> (T.pack $ show statedNameMaybe))
     case statedNameMaybe of
       Just (nameRange, statedName)
         | statedName `notElem` correctNames ->
@@ -118,14 +129,20 @@ action state uri =
 -- | Possible module names, as derived by the position of the module in the
 -- source directories.  There may be more than one possible name, if the source
 -- directories are nested inside each other.
-pathModuleNames :: IdeState -> NormalizedFilePath -> String -> IO [T.Text]
-pathModuleNames state normFilePath filePath
+pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FilePath -> IO [T.Text]
+pathModuleNames recorder state normFilePath filePath
   | isLower . head $ takeFileName filePath = return ["Main"]
   | otherwise = do
       session <- runAction "ModuleName.ghcSession" state $ use_ GhcSession normFilePath
       srcPaths <- evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
-      paths <- mapM makeAbsolute srcPaths
+      logWith recorder Debug (ModuleNameLog $ "ModuleName.srcpath: " <> T.pack (unlines srcPaths))
+
+      paths <- mapM canonicalizePath srcPaths
+      logWith recorder Debug (ModuleNameLog $ "ModuleName.paths: " <> T.pack (unlines paths))
+
       mdlPath <- makeAbsolute filePath
+      logWith recorder Debug (ModuleNameLog $ "ModuleName.mdlPath: " <> T.pack mdlPath)
+
       let prefixes = filter (`isPrefixOf` mdlPath) paths
       pure (map (moduleNameFrom mdlPath) prefixes)
   where
@@ -133,7 +150,7 @@ pathModuleNames state normFilePath filePath
       T.pack
         . intercalate "."
         . splitDirectories
-        . drop (length prefix + 1)
+        . drop (length prefix + 1) -- plus one to remove `/`, for example `a/b/c` to `b/c`.
         $ dropExtension mdlPath
 
 -- | The module name, as stated in the module
@@ -143,8 +160,8 @@ codeModuleName state nfp = runMaybeT $ do
   L (locA -> (RealSrcSpan l _)) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
   pure (realSrcSpanToRange l, T.pack $ moduleNameString m)
 
--- traceAs :: Show a => String -> a -> a
--- traceAs lbl a = trace (lbl ++ " = " ++ show a) a
+newtype Log = ModuleNameLog T.Text deriving Show
 
-traceAs :: b -> a -> a
-traceAs _ a = a
+instance Pretty Log where
+    pretty = \case
+        ModuleNameLog log -> pretty log
