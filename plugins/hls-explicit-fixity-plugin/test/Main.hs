@@ -62,7 +62,7 @@ hoverTest' docName title pos expected = testCase title $ runSessionWithServer pl
           HoverContentsMS _ -> liftIO $ assertFailure "Unexpected content type"
           HoverContents (MarkupContent mk txt) -> do
               liftIO
-                $ assertBool ("Failed to find " <> T.unpack expected <> " in hover message")
+                $ assertBool ("Failed to find `" <> T.unpack expected <> "` in hover message: " <> T.unpack txt)
                 $ expected `T.isInfixOf` txt
     closeDoc doc
 
