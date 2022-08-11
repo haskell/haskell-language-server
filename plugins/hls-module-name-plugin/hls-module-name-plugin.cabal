@@ -16,6 +16,8 @@ extra-source-files:
   LICENSE
   test/testdata/**/*.yaml
   test/testdata/**/*.hs
+  test/testdata/**/*.cabal
+  test/testdata/**/*.project
 
 library
   exposed-modules:  Ide.Plugin.ModuleName
