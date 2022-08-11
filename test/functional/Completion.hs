@@ -84,6 +84,22 @@ tests = testGroup "completions" [
          compls <- getCompletions doc (Position 5 7)
          liftIO $ assertBool "Expected completions" $ not $ null compls
 
+     , testGroup "recorddotsyntax"
+        [ testCase "shows field selectors" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+            doc <- openDoc "RecordDotSyntax.hs" "haskell"
+
+            let te = TextEdit (Range (Position 25 0) (Position 25 5)) "z = x.a"
+            _ <- applyEdit doc te
+
+            compls <- getCompletions doc (Position 25 6)
+            item <- getCompletionByLabel "a" compls
+            liftIO $ do
+                item ^. label @?= "a"
+                --item ^. detail @?= Just "Data.List"  TODO
+                --item ^. kind @?= Just CiModule
+            liftIO $ length compls @?= 6
+        ]
+
      -- See https://github.com/haskell/haskell-ide-engine/issues/903
      , testCase "strips compiler generated stuff from completions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "DupRecFields.hs" "haskell"
