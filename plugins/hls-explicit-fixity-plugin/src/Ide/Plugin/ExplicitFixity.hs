@@ -75,14 +75,14 @@ selectSmallestContainingForFixityTree sp node
 findInTree :: FixityTrees -> Position -> (FixityTree -> a) -> [a]
 findInTree tree pos k =
     catMaybes $ M.elems $ flip M.mapWithKey tree $ \fs ast ->
-      case selectSmallestContainingForFixityTree (sp fs) ast of
-        Nothing   -> Nothing
-        Just ast' -> Just $ k ast'
- where
-   sloc fs = mkRealSrcLoc fs (fromIntegral $ line+1) (fromIntegral $ cha+1)
-   sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
-   line = _line pos
-   cha = _character pos
+        case selectSmallestContainingForFixityTree (sp fs) ast of
+            Nothing   -> Nothing
+            Just ast' -> Just $ k ast'
+    where
+        sloc fs = mkRealSrcLoc fs (fromIntegral $ line+1) (fromIntegral $ cha+1)
+        sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
+        line = _line pos
+        cha = _character pos
 
 data FixityTree = FNode
     { fNodeSpan     :: Span
@@ -94,15 +94,15 @@ instance NFData FixityTree where
     rnf = rwhnf
 
 instance Show FixityTree where
-  show _ = "<FixityTree>"
+    show _ = "<FixityTree>"
 
 type FixityTrees = M.Map FastString FixityTree
 
 newtype Log = LogShake Shake.Log
 
 instance Pretty Log where
-  pretty = \case
-    LogShake log -> pretty log
+    pretty = \case
+        LogShake log -> pretty log
 
 data GetFixity = GetFixity deriving (Show, Eq, Generic)
 
