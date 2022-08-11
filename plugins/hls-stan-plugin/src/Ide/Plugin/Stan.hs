@@ -100,7 +100,7 @@ rules recorder = do
             T.unlines $
               [ " ✲ Name:        " <> inspectionName inspection,
                 " ✲ Description: " <> inspectionDescription inspection,
-                " ✲ Severity:    " <> (show $ inspectionSeverity inspection),
+                " ✲ Severity:    " <> (T.pack $ show $ inspectionSeverity inspection),
                 " ✲ Category:    " <> T.intercalate " "
                   (map (("#" <>) . unCategory) $ toList $ inspectionCategory inspection),
                 "Possible solutions:"
