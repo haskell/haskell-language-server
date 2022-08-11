@@ -43,6 +43,7 @@ import           Ide.Types                      (PluginDescriptor (..),
                                                  defaultPluginDescriptor)
 import qualified Language.LSP.Types             as LSP
 import           Stan.Analysis                  (Analysis (..), runAnalysis)
+import           Stan.Category                  (Category (..))
 import           Stan.Core.Id                   (Id (..))
 import           Stan.Inspection                (Inspection (..))
 import           Stan.Inspection.All            (inspectionsIds, inspectionsMap)
