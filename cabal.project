@@ -30,6 +30,7 @@ packages:
          ./plugins/hls-change-type-signature-plugin
          ./plugins/hls-stan-plugin
          ./plugins/hls-gadt-plugin
+         ./plugins/hls-explicit-fixity-plugin
 
 -- Standard location for temporary packages needed for particular environments
 -- For example it is used in the project gitlab mirror to help in the MAcOS M1 build script
@@ -44,7 +45,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-07-31T21:47:51Z
+index-state: 2022-08-09T13:13:41Z
 
 constraints:
   hyphenation +embed,
@@ -68,5 +69,4 @@ allow-newer:
   ----------
   hiedb:base,
 
-  ekg-core,
   ekg-wai:time
