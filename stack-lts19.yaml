@@ -1,4 +1,4 @@
-resolver: lts-19.5
+resolver: lts-19.18
 
 packages:
   - .
@@ -40,8 +40,8 @@ extra-deps:
 - Cabal-3.6.0.0
 - floskell-0.10.6@sha256:e77d194189e8540abe2ace2c7cb8efafc747ca35881a2fefcbd2d40a1292e036,3819
 - fourmolu-0.6.0.0
-- ghc-lib-9.2.3.20220527
-- ghc-lib-parser-9.2.3.20220527
+- ghc-lib-9.2.4.20220729
+- ghc-lib-parser-9.2.4.20220729
 - ghc-lib-parser-ex-9.2.0.4
 - heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
 - hiedb-0.4.1.0@sha256:fb20c657d9ecc91701b00dffcf4bbd77cb83720a1f9d867badd77ea227973135,2875

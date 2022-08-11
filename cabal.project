@@ -45,7 +45,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-06-12T00:00:00Z
+index-state: 2022-08-09T13:13:41Z
 
 constraints:
   hyphenation +embed,
@@ -69,5 +69,4 @@ allow-newer:
   ----------
   hiedb:base,
 
-  ekg-core,
   ekg-wai:time
