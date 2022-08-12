@@ -43,12 +43,11 @@ import           Ide.Types                      (PluginDescriptor (..),
                                                  defaultPluginDescriptor)
 import qualified Language.LSP.Types             as LSP
 import           Stan.Analysis                  (Analysis (..), runAnalysis)
-import           Stan.Category                  (prettyShowCategory)
+import           Stan.Category                  (Category (..))
 import           Stan.Core.Id                   (Id (..))
 import           Stan.Inspection                (Inspection (..))
 import           Stan.Inspection.All            (inspectionsIds, inspectionsMap)
 import           Stan.Observation               (Observation (..))
-import           Stan.Severity                  (prettyShowSeverity)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId) {pluginRules = rules recorder}
@@ -94,15 +93,16 @@ rules recorder = do
         let
           -- Looking similar to Stan CLI output
           -- We do not use `prettyShowInspection` cuz Id is redundant here
+          -- `prettyShowSeverity` and `prettyShowCategory` would contain color
+          -- codes and are replaced, too
           message :: T.Text
           message =
             T.unlines $
               [ " ✲ Name:        " <> inspectionName inspection,
                 " ✲ Description: " <> inspectionDescription inspection,
-                " ✲ Severity:    " <> (prettyShowSeverity $
-                  inspectionSeverity inspection),
+                " ✲ Severity:    " <> (T.pack $ show $ inspectionSeverity inspection),
                 " ✲ Category:    " <> T.intercalate " "
-                  (map prettyShowCategory $ toList $ inspectionCategory inspection),
+                  (map (("#" <>) . unCategory) $ toList $ inspectionCategory inspection),
                 "Possible solutions:"
               ]
                 ++ map ("  - " <>) (inspectionSolution inspection)
