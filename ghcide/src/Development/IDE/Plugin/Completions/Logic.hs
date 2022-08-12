@@ -31,7 +31,6 @@ import           Data.Either                              (fromRight)
 import           Data.Function                            (on)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
-import qualified Data.Map.Strict                          as M
 
 import qualified Data.HashSet                             as HashSet
 import           Data.Monoid                              (First (..))
@@ -70,10 +69,10 @@ import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
 
-import           Data.Coerce                              (coerce)
 import           Development.IDE
 
 import qualified Data.Rope.UTF16                          as Rope
+import           Development.IDE.Spans.AtPoint            (pointCommand)
 
 -- Chunk size used for parallelizing fuzzy matching
 chunkSize :: Int
@@ -617,52 +616,35 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
                   hpos = upperRange position'
               in getCContext lpos pm <|> getCContext hpos pm
 
-          dotFieldSelectorToCompl :: T.Text -> (Bool, CompItem)
-          dotFieldSelectorToCompl label = (True, CI CiVariable label (ImportedFrom T.empty) Nothing label Nothing emptySpanDoc False Nothing)
 
           -- we need the hieast to be fresh
           -- not fresh, hasfield won't have a chance. it would to another larger change to ghc IfaceTyCon to contain record fields
-          tst :: [(Bool, CompItem)]
-          tst = case maybe_ast_res of
-            Just (HAR {hieAst = hieast, hieKind = HieFresh},_) -> concat $ pointCommand hieast (completionPrefixPos prefixInfo) (theFunc HieFresh)
+          recordDotSyntaxCompls :: [(Bool, CompItem)]
+          recordDotSyntaxCompls = case maybe_ast_res of
+            Just (HAR {hieAst = hieast, hieKind = HieFresh},_) -> concat $ pointCommand hieast (completionPrefixPos prefixInfo) nodeCompletions
             _ -> []
-
-          getSels :: GHC.TyCon -> [T.Text]
-          getSels tycon = let f fieldLabel = printOutputable fieldLabel
-                          in map f $ tyConFieldLabels tycon
-
-          theFunc :: HieKind Type -> HieAST Type -> [(Bool, CompItem)]
-          theFunc kind node = concatMap g (nodeType $ nodeInfoH kind node)
             where
+              nodeCompletions :: HieAST Type -> [(Bool, CompItem)]
+              nodeCompletions node = concatMap g (nodeType $ nodeInfo node)
               g :: Type -> [(Bool, CompItem)]
-              g (TyConApp theTyCon _) = map dotFieldSelectorToCompl $ getSels theTyCon
+              g (TyConApp theTyCon _) = map (dotFieldSelectorToCompl (printOutputable $ GHC.tyConName theTyCon)) $ getSels theTyCon
               g _ = []
-
-          nodeInfoH :: HieKind a -> HieAST a -> NodeInfo a
-          nodeInfoH (HieFromDisk _) = nodeInfo'
-          nodeInfoH HieFresh        = nodeInfo
-
-          pointCommand :: HieASTs t -> Position -> (HieAST t -> a) -> [a]
-          pointCommand hf pos k =
-              catMaybes $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
-                -- Since GHC 9.2:
-                -- getAsts :: Map HiePath (HieAst a)
-                -- type HiePath = LexialFastString
-                --
-                -- but before:
-                -- getAsts :: Map HiePath (HieAst a)
-                -- type HiePath = FastString
-                --
-                -- 'coerce' here to avoid an additional function for maintaining
-                -- backwards compatibility.
-                case selectSmallestContaining (sp $ coerce fs) ast of
-                  Nothing   -> Nothing
-                  Just ast' -> Just $ k ast'
-            where
-              sloc fs = mkRealSrcLoc fs (fromIntegral $ line+1) (fromIntegral $ cha+1)
-              sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
-              line = _line pos
-              cha = _character pos
+              getSels :: GHC.TyCon -> [T.Text]
+              getSels tycon = let f fieldLabel = printOutputable fieldLabel
+                              in map f $ tyConFieldLabels tycon
+              dotFieldSelectorToCompl :: T.Text -> T.Text -> (Bool, CompItem)
+              --dotFieldSelectorToCompl label = (True, CI CiVariable label (ImportedFrom T.empty) Nothing label Nothing emptySpanDoc False Nothing)
+              dotFieldSelectorToCompl recname label = (True, CI
+                { compKind = CiField
+                , insertText = label
+                , provenance = DefinedIn recname
+                , typeText = Nothing
+                , label = label
+                , isInfix = Nothing
+                , docs = emptySpanDoc
+                , isTypeCompl = False
+                , additionalTextEdits = Nothing
+                })
 
           -- completions specific to the current context
           ctxCompls' = case mcc of
@@ -692,7 +674,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
 
           compls
             | T.null prefixScope = map (notQual,) localCompls ++ map (qual,) unqualCompls ++ ((notQual,) . ($ Nothing) <$> anyQualCompls)
-            | not $ null tst = tst
+            | not $ null recordDotSyntaxCompls = recordDotSyntaxCompls
             | otherwise = ((qual,) <$> Map.findWithDefault [] prefixScope (getQualCompls qualCompls))
                  ++ ((notQual,) . ($ Just prefixScope) <$> anyQualCompls)
 
