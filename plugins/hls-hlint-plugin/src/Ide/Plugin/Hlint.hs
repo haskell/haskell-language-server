@@ -333,8 +333,18 @@ getIdeas recorder nfp = do
 getExtensions :: NormalizedFilePath -> Action ([Extension], [Extension])
 getExtensions nfp = do
     dflags <- getFlags
-    -- XXX: we just assume that all not-enabled flags are disabled. this is
-    --      Kinda Sketchy!
+    -- XXX: We just assume that all not-enabled flags are disabled. This is
+    --      Kinda Sketchy, but it is the only way to propagate extensions that
+    --      are enabled by default by the Language but are explicitly disabled
+    --      in the cradle. Problematically, HLint will reenable any such extensions
+    --      if they are in the default language set and are not in
+    --      disabledExtensions.
+    --
+    --      We can't get a set of only explicitly-disabled extensions due to
+    --      `OnOff` not being exported by ghc.
+    --
+    --      There is a MR to export it: https://gitlab.haskell.org/ghc/ghc/-/merge_requests/8817
+    --      but it's not going to be in all our supported releases.
     let disabledExts = EnumSet.toList
           $ EnumSet.difference (EnumSet.fromList (enumFrom minBound))
           (extensionFlags dflags)

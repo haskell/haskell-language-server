@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 -- | GHC Utils and Datastructures re-exports.
 --
 -- Mainly handles module hierarchy re-organisation of GHC
@@ -107,6 +108,11 @@ import           UniqDFM
 import           Unique
 import           Util
 #endif
+#if !MIN_VERSION_ghc(9,2,0)
+-- EnumSet doesn't have difference exported prior to ghc 9.2
+import           Data.Coerce             (coerce)
+import qualified Data.IntSet             as IntSe
+#endif
 
 #if !MIN_VERSION_ghc(9,0,0)
 type MonadCatch = Exception.ExceptionMonad
@@ -117,4 +123,12 @@ catch = Exception.gcatch
 
 try :: (Exception.ExceptionMonad m, Exception e) => m a -> m (Either e a)
 try = Exception.gtry
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+-- EnumSet doesn't have difference exported prior to ghc 9.2
+-- (also, the inside of the EnumSet newtype is not exported, so unsafeCoerce time)
+{-# HLINT ignore "Avoid restricted function" #-}
+difference :: EnumSet a -> EnumSet a -> EnumSet a
+difference a b = unsafeCoerce $ IntSet.difference (unsafeCoerce a :: IntSet) (unsafeCoerce b :: IntSet)
 #endif
