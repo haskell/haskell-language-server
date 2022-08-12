@@ -346,7 +346,7 @@ getExtensions nfp = do
     --      There is a MR to export it: https://gitlab.haskell.org/ghc/ghc/-/merge_requests/8817
     --      but it's not going to be in all our supported releases.
     let disabledExts = EnumSet.toList
-          $ EnumSet.difference (EnumSet.fromList (enumFrom minBound))
+          $ EnumSet.difference EnumSet.allExtensions
           (extensionFlags dflags)
     let hscExts = EnumSet.toList (extensionFlags dflags)
 

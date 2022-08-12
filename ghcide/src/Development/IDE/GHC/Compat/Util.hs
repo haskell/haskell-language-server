@@ -38,6 +38,8 @@ module Development.IDE.GHC.Compat.Util (
     toList,
     fromList,
     difference,
+
+    allExtensions,
     -- * FastString exports
     FastString,
 #if MIN_VERSION_ghc(9,2,0)
@@ -84,6 +86,7 @@ import           GHC.Data.FastString
 import           GHC.Data.Maybe
 import           GHC.Data.Pair
 import           GHC.Data.StringBuffer
+import           GHC.LanguageExtensions  (Extension (..))
 import           GHC.Types.Unique
 import           GHC.Types.Unique.DFM
 import           GHC.Utils.Fingerprint
@@ -125,6 +128,15 @@ catch = Exception.gcatch
 try :: (Exception.ExceptionMonad m, Exception e) => m a -> m (Either e a)
 try = Exception.gtry
 #endif
+
+allExtensions :: EnumSet Extension
+#if MIN_VERSION_ghc(8,8,0)
+allExtensions = fromList $ enumFrom minBound
+#else
+-- GHC prior to 8.8 did not have an instance Bounded Extension :(
+allExtensions = fromList $ enumFrom Cpp
+#endif
+
 
 #if !MIN_VERSION_ghc(9,2,0)
 -- EnumSet doesn't have difference exported prior to ghc 9.2
