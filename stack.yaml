@@ -39,12 +39,12 @@ extra-deps:
 - hiedb-0.4.1.0@sha256:fb20c657d9ecc91701b00dffcf4bbd77cb83720a1f9d867badd77ea227973135,2875
 - implicit-hie-0.1.2.7@sha256:82bbbb1a8c05f99c8af3c16ac53e80c8648d8bf047b25ed5ce45a135bd736907,3122
 - implicit-hie-cradle-0.5.0.0@sha256:4276f60f3a59bc22df03fd918f73bca9f777de9568f85e3a8be8bd7566234a59,2368
-- lsp-1.4.0.0@sha256:d992cb88d6212f113baf372404c141a6bea14c436baa64ea6e4f01b6188c575b,5088
-- lsp-test-0.14.0.2@sha256:d62d2af45508f04c5fcad23e469c45b37ca19760cee15b025a0eb499cbd28050,4663
-- lsp-types-1.4.0.1@sha256:b902952df7becc1827947ee3ff1cd8c746aa8f9f80db330db20e2fdf1b6089e8,4504
+- lsp-1.5.0.0
+- lsp-test-0.14.0.3
+- lsp-types-1.5.0.0
 - monad-dijkstra-0.1.1.3@sha256:d2fc098d7c122555e726830a12ae0423ac187f89de9228f32e56e2f6fc2238e1,1900
 - retrie-1.2.0.1
-- rope-utf16-splay-0.3.2.0
+- co-log-core-0.3.1.0
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true

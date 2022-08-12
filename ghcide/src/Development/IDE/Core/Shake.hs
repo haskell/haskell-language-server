@@ -164,7 +164,7 @@ import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.Types                     as LSP
 import           Language.LSP.Types.Capabilities
-import           Language.LSP.VFS
+import           Language.LSP.VFS                       hiding (start)
 import qualified "list-t" ListT
 import           OpenTelemetry.Eventlog
 import qualified StmContainers.Map                      as STM
@@ -323,7 +323,7 @@ class Typeable a => IsIdeGlobal a where
 -- | Read a virtual file from the current snapshot
 getVirtualFile :: NormalizedFilePath -> Action (Maybe VirtualFile)
 getVirtualFile nf = do
-  vfs <- fmap vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
+  vfs <- fmap _vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
   pure $! Map.lookup (filePathToUri' nf) vfs -- Don't leak a reference to the entire map
 
 -- Take a snapshot of the current LSP VFS
@@ -706,6 +706,7 @@ shakeRestart recorder IdeState{..} vfs reason acts =
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
+              -- this log is required by tests
               log Debug $ LogBuildSessionRestart reason queue backlog stopTime res
         )
         -- It is crucial to be masked here, otherwise we can get killed

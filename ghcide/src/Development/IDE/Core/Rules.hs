@@ -92,7 +92,7 @@ import qualified Data.IntMap.Strict                           as IntMap
 import           Data.List
 import qualified Data.Map                                     as M
 import           Data.Maybe
-import qualified Data.Rope.UTF16                              as Rope
+import qualified Data.Text.Utf16.Rope                         as Rope
 import qualified Data.Set                                     as Set
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
@@ -574,10 +574,10 @@ persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
   res <- readHieFileForSrcFromDisk recorder file
   vfsRef <- asks vfsVar
-  vfsData <- liftIO $ vfsMap <$> readTVarIO vfsRef
+  vfsData <- liftIO $ _vfsMap <$> readTVarIO vfsRef
   (currentSource, ver) <- liftIO $ case M.lookup (filePathToUri' file) vfsData of
     Nothing -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
-    Just vf -> pure (Rope.toText $ _text vf, Just $ _lsp_version vf)
+    Just vf -> pure (Rope.toText $ _file_text vf, Just $ _lsp_version vf)
   let refmap = Compat.generateReferencesMap . Compat.getAsts . Compat.hie_asts $ res
       del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
@@ -1108,8 +1108,8 @@ getLinkableType f = use_ NeedsCompilation f
 
 -- needsCompilationRule :: Rules ()
 needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
-needsCompilationRule file 
-  | "boot" `isSuffixOf` (fromNormalizedFilePath file) = 
+needsCompilationRule file
+  | "boot" `isSuffixOf` (fromNormalizedFilePath file) =
     pure (Just $ encodeLinkableType Nothing, Just Nothing)
 needsCompilationRule file = do
   graph <- useNoFile GetModuleGraph
