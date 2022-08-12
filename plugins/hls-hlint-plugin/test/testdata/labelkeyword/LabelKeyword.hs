@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 module Foo (Node(..)) where
 
-data Node = Node
+newtype Node = Node
   {
     label :: ()
   }

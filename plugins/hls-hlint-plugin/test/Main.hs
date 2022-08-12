@@ -222,7 +222,9 @@ suggestionsTests =
         waitForAllProgressDone
         -- hlint will report a parse error if PatternSynonyms is enabled
         expectNoMoreDiagnostics 3 doc "hlint"
-    , testCase "hlint should not enable ForeignFunctionInterface if it is disabled" $ runHlintSession "labelkeyword" $ do
+    , onlyRunForGhcVersions (enumFrom GHC92) "uses OverloadedRecordDot" $
+            testCase "hlint should not enable ForeignFunctionInterface if it is disabled" $
+            runHlintSession "labelkeyword" $ do
         doc <- openDoc "LabelKeyword.hs" "haskell"
 
         waitForAllProgressDone

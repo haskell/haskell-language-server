@@ -35,6 +35,8 @@ module Development.IDE.GHC.Compat.Util (
     -- * EnumSet
     EnumSet,
     toList,
+    fromList,
+    difference,
     -- * FastString exports
     FastString,
 #if MIN_VERSION_ghc(9,2,0)

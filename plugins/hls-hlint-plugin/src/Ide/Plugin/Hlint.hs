@@ -333,11 +333,15 @@ getIdeas recorder nfp = do
 getExtensions :: NormalizedFilePath -> Action ([Extension], [Extension])
 getExtensions nfp = do
     dflags <- getFlags
-    let disabledExts = EnumSet.difference (EnumSet.fromList (enumFrom minBound)) (extensionFlags dflags)
+    -- XXX: we just assume that all not-enabled flags are disabled. this is
+    --      Kinda Sketchy!
+    let disabledExts = EnumSet.toList
+          $ EnumSet.difference (EnumSet.fromList (enumFrom minBound))
+          (extensionFlags dflags)
     let hscExts = EnumSet.toList (extensionFlags dflags)
-    let disabledExts' = EnumSet.toList disabledExts
+
     let hscExts' = toHlint hscExts
-    let notEnabled' = toHlint disabledExts'
+    let notEnabled' = toHlint disabledExts
     return (hscExts', notEnabled')
   where
     getFlags :: Action DynFlags
