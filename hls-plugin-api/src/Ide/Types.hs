@@ -9,6 +9,7 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE PolyKinds                  #-}
@@ -17,7 +18,6 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE ViewPatterns               #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Ide.Types
     where
@@ -31,10 +31,10 @@ import           System.Posix.Signals
 #endif
 import           Control.Lens                    ((^.))
 import           Data.Aeson                      hiding (defaultOptions)
-import qualified Data.DList                      as DList
 import qualified Data.Default
 import           Data.Dependent.Map              (DMap)
 import qualified Data.Dependent.Map              as DMap
+import qualified Data.DList                      as DList
 import           Data.GADT.Compare
 import           Data.List.NonEmpty              (NonEmpty (..), toList)
 import qualified Data.Map                        as Map
@@ -478,7 +478,7 @@ instance PluginRequestMethod TextDocumentSelectionRange where
   combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod TextDocumentFoldingRange where
-  combineResponses _ _ _ _ (x :| _) = x
+  combineResponses _ _ _ _ x = sconcat x
 
 instance PluginRequestMethod CallHierarchyIncomingCalls where
 
