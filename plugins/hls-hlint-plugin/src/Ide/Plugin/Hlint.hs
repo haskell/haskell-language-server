@@ -316,9 +316,9 @@ getIdeas recorder nfp = do
                      Just <$> liftIO (parseModuleEx flags' fp contents')
 
         setExtensions flags = do
-          hlintExts <- getExtensions nfp
+          (hlintExts, disabledExtensions) <- getExtensions nfp
           logWith recorder Debug $ LogUsingExtensions nfp (fmap show hlintExts)
-          return $ flags { enabledExtensions = hlintExts }
+          return $ flags { enabledExtensions = hlintExts, disabledExtensions }
 
 -- Gets extensions from ModSummary dynflags for the file.
 -- Previously this would union extensions from both hlint's parsedFlags
@@ -330,16 +330,21 @@ getIdeas recorder nfp = do
 -- these extensions to construct dynflags to parse the file again. Therefore
 -- using hlint default extensions doesn't seem to be a problem when
 -- HLINT_ON_GHC_LIB is not defined because we don't parse the file again.
-getExtensions :: NormalizedFilePath -> Action [Extension]
+getExtensions :: NormalizedFilePath -> Action ([Extension], [Extension])
 getExtensions nfp = do
     dflags <- getFlags
+    let disabledExts = EnumSet.difference (EnumSet.fromList (enumFrom minBound)) (extensionFlags dflags)
     let hscExts = EnumSet.toList (extensionFlags dflags)
-    let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
-    return hscExts'
-  where getFlags :: Action DynFlags
-        getFlags = do
-          modsum <- use_ GetModSummary nfp
-          return $ ms_hspp_opts $ msrModSummary modsum
+    let disabledExts' = EnumSet.toList disabledExts
+    let hscExts' = toHlint hscExts
+    let notEnabled' = toHlint disabledExts'
+    return (hscExts', notEnabled')
+  where
+    getFlags :: Action DynFlags
+    getFlags = do
+      modsum <- use_ GetModSummary nfp
+      return $ ms_hspp_opts $ msrModSummary modsum
+    toHlint = mapMaybe (GhclibParserEx.readExtension . show)
 #endif
 
 -- ---------------------------------------------------------------------
@@ -581,7 +586,7 @@ applyHint recorder ide nfp mhint =
             writeFileUTF8NoNewLineTranslation temp oldContent
             exts <- runAction' $ getExtensions nfp
             -- We have to reparse extensions to remove the invalid ones
-            let (enabled, disabled, _invalid) = Refact.parseExtensions $ map show exts
+            let (enabled, disabled, _invalid) = Refact.parseExtensions $ map show (fst exts)
             let refactExts = map show $ enabled ++ disabled
             (Right <$> withRuntimeLibdir (Refact.applyRefactorings position commands temp refactExts))
                 `catches` errorHandlers
