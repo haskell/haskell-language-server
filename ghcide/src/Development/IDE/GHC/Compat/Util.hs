@@ -110,8 +110,9 @@ import           Util
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
 -- EnumSet doesn't have difference exported prior to ghc 9.2
-import           Data.Coerce             (coerce)
-import qualified Data.IntSet             as IntSe
+import           Data.IntSet             (IntSet)
+import qualified Data.IntSet             as IntSet
+import           Unsafe.Coerce
 #endif
 
 #if !MIN_VERSION_ghc(9,0,0)
