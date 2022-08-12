@@ -53,8 +53,9 @@ import           Language.LSP.Types           hiding
                                                SemanticTokenRelative (length),
                                                SemanticTokensEdit (_start))
 import           Language.LSP.VFS             (virtualFileText)
-import           System.Directory             (canonicalizePath, makeAbsolute)
-import           System.FilePath              (dropExtension, splitDirectories,
+import           System.Directory             (makeAbsolute)
+import           System.FilePath              (dropExtension, normalise,
+                                               pathSeparator, splitDirectories,
                                                takeFileName)
 
 -- |Plugin descriptor
@@ -137,20 +138,21 @@ pathModuleNames recorder state normFilePath filePath
       srcPaths <- evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
       logWith recorder Debug (ModuleNameLog $ "ModuleName.srcpath: " <> T.pack (unlines srcPaths))
 
-      paths <- mapM canonicalizePath srcPaths
+      let paths = map (normalise . (<> pure pathSeparator)) srcPaths
       logWith recorder Debug (ModuleNameLog $ "ModuleName.paths: " <> T.pack (unlines paths))
 
       mdlPath <- makeAbsolute filePath
       logWith recorder Debug (ModuleNameLog $ "ModuleName.mdlPath: " <> T.pack mdlPath)
 
       let prefixes = filter (`isPrefixOf` mdlPath) paths
+      liftIO $ putStrLn $ "srcpath: " <> show srcPaths
       pure (map (moduleNameFrom mdlPath) prefixes)
   where
     moduleNameFrom mdlPath prefix =
       T.pack
         . intercalate "."
         . splitDirectories
-        . drop (length prefix + 1) -- plus one to remove `/`, for example `a/b/c` to `b/c`.
+        . drop (length prefix)
         $ dropExtension mdlPath
 
 -- | The module name, as stated in the module
