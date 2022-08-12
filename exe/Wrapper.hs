@@ -14,7 +14,7 @@ module Main where
 import           Control.Monad.Extra
 import           Data.Char                          (isSpace)
 import           Data.Default
-import           Data.Either                        (fromRight)
+import           Data.Either.Extra                  (eitherToMaybe)
 import           Data.Foldable
 import           Data.List
 import           Data.Void
@@ -83,7 +83,7 @@ main = do
           putStrLn "Tool versions in your project"
           cradle <- findProjectCradle' False
           ghcVersion <- runExceptT $ getRuntimeGhcVersion' cradle
-          putStrLn $ "ghc:\t\t" ++ fromRight "Not found" ghcVersion
+          putStrLn $ showProgramVersion "ghc" $ mkVersion =<< eitherToMaybe ghcVersion
 
       VersionMode PrintVersion ->
           putStrLn hlsVer
