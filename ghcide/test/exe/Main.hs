@@ -98,6 +98,7 @@ import           Control.Concurrent.Async
 import           Control.Lens                             (to, (.~), (^.))
 import           Control.Monad.Extra                      (whenJust)
 import           Data.Function                            ((&))
+import           Data.Functor.Identity                    (runIdentity)
 import           Data.IORef
 import           Data.IORef.Extra                         (atomicModifyIORef_)
 import           Data.String                              (IsString (fromString))
@@ -129,8 +130,8 @@ import           Language.LSP.Types.Lens                  (didChangeWatchedFiles
 import qualified Language.LSP.Types.Lens                  as L
 import qualified Progress
 import           System.Time.Extra
+import qualified Test.QuickCheck.Monadic                  as MonadicQuickCheck
 import           Test.QuickCheck.Monadic                  (forAllM, monadicIO)
-import qualified Test.QuickCheck.Monadic as MonadicQuickCheck
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
@@ -6990,20 +6991,19 @@ positionMappingTests recorder =
                     \(range, replacement, oldPos, newPos) ->
                     fromCurrent range replacement newPos === PositionExact oldPos
               , testProperty "toCurrent r t <=< fromCurrent r t" $ do
-                let gen :: Gen (Rope, Range, T.Text)
-                    gen = do
+                let gen = do
                         rope <- genRope
                         range <- genRange rope
                         PrintableText replacement <- arbitrary
-                        pure (rope, range, replacement)
-                monadicIO $ forAllM gen
-                    $ \(rope, range, replacement) -> do
-                        newRope <- liftIO $ applyChange (toCologActionWithPrio $ cmapWithPrio LogVfs recorder) rope (TextDocumentContentChangeEvent (Just range) Nothing replacement)
-                        newPos <- MonadicQuickCheck.pick $ genPosition newRope
-                        case positionResultToMaybe $ (range, replacement, newPos,) <$> fromCurrent range replacement newPos of
-                            Nothing -> MonadicQuickCheck.pre False
-                            Just (range, replacement, newPos, oldPos) ->
-                                MonadicQuickCheck.assert $ toCurrent range replacement oldPos == PositionExact newPos
+                        let newRope = runIdentity $ applyChange mempty rope
+                                (TextDocumentContentChangeEvent (Just range) Nothing replacement)
+                        newPos <- genPosition newRope
+                        pure (range, replacement, newPos)
+                forAll
+                    (suchThatMap gen
+                        (\(range, replacement, newPos) -> positionResultToMaybe $ (range, replacement, newPos,) <$> fromCurrent range replacement newPos)) $
+                    \(range, replacement, newPos, oldPos) ->
+                    toCurrent range replacement oldPos === PositionExact newPos
               ]
         ]
 
