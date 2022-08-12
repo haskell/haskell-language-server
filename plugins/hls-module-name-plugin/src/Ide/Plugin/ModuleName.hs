@@ -137,6 +137,9 @@ pathModuleNames recorder state normFilePath filePath
       srcPaths <- evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
       logWith recorder Debug (SrcPaths srcPaths)
 
+      -- Append a `pathSeparator` to make the path looks like a directory,
+      --   and then we can drop it uniformly.
+      -- See https://github.com/haskell/haskell-language-server/pull/3092 for details.
       let paths = map (normalise . (<> pure pathSeparator)) srcPaths
       logWith recorder Debug (NormalisedPaths paths)
 
