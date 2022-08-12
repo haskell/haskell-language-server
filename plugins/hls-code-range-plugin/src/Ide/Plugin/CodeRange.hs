@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Ide.Plugin.CodeRange (
     descriptor
@@ -86,7 +87,7 @@ getFoldingRanges :: NormalizedFilePath -> ExceptT String IdeAction [FoldingRange
 getFoldingRanges file = do
     (codeRange, _) <- maybeToExceptT "fail to get code range" $ useE GetCodeRange file
 
-    let foldingRanges = catMaybes $ findFoldingRanges codeRange
+    let foldingRanges = findFoldingRanges codeRange
 
     maybeToExceptT "Fail to generate folding range" (MaybeT . pure $ Just foldingRanges)
 
@@ -148,24 +149,14 @@ findPosition pos root = go Nothing root
             startOfRight <- _start . _codeRange_range <$> V.headM right
             if pos < startOfRight then binarySearchPos left else binarySearchPos right
 
-findFoldingRanges :: CodeRange -> [Maybe FoldingRange]
-findFoldingRanges root = do
-    let acc = []
-    let node = _codeRange_children root
-    binarySearchFoldingRange node acc
+findFoldingRanges :: CodeRange -> [FoldingRange]
+findFoldingRanges r@(CodeRange _ children _) =
+  let frRoot :: [FoldingRange] = case createFoldingRange r of
+        Just x -> [x]
+        Nothing -> []
 
-binarySearchFoldingRange :: Vector CodeRange -> [Maybe FoldingRange] -> [Maybe FoldingRange]
-binarySearchFoldingRange v acc
-    | V.null v = []
-    | V.length v == 1 = do
-        headOfCodeRange <- V.headM v
-        let foldingRangesOfRange = createFoldingRange headOfCodeRange
-        let acc' = acc ++ [foldingRangesOfRange]
-        acc'
-    | otherwise = do
-        let (left, right) = V.splitAt (V.length v `div` 2) v
-        _ <- binarySearchFoldingRange left acc
-        binarySearchFoldingRange right acc
+      frChildren :: [FoldingRange] = concat $ V.toList $ fmap findFoldingRanges children
+   in frRoot ++ frChildren
 
 createFoldingRange :: CodeRange -> Maybe FoldingRange
 createFoldingRange node1 = do
