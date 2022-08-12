@@ -28,8 +28,8 @@ import           Control.Exception
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Data.ByteString                              as BS
-import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Text                                    as T
+import qualified Data.Text.Utf16.Rope                         as Rope
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.FileUtils
@@ -188,7 +188,7 @@ getFileContentsImpl file = do
     time <- use_ GetModificationTime file
     res <- do
         mbVirtual <- getVirtualFile file
-        pure $ Rope.toText . _text <$> mbVirtual
+        pure $ Rope.toText . _file_text <$> mbVirtual
     pure ([], Just (time, res))
 
 -- | Returns the modification time and the contents.
