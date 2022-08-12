@@ -111,6 +111,7 @@ runLanguageServer recorder options inH outH defaultConfig onConfigurationChange 
 
     let lspCologAction :: MonadIO m2 => Colog.LogAction m2 (Colog.WithSeverity LspServerLog)
         lspCologAction = toCologActionWithPrio $ cfilter
+            -- filter out bad logs in lsp, see: https://github.com/haskell/lsp/issues/447
             (\msg -> priority msg >= Info)
             (cmapWithPrio LogLspServer recorder)
 
