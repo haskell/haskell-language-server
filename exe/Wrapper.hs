@@ -80,7 +80,7 @@ main = do
           putStrLn hlsVer
           putStrLn "Tool versions found on the $PATH"
           putStrLn $ showProgramVersionOfInterest programsOfInterest
-          putStrLn "Tool versions found by cradle"
+          putStrLn "Tool versions in your project"
           cradle <- findProjectCradle' False
           ghcVersion <- runExceptT $ getRuntimeGhcVersion' cradle
           putStrLn $ "ghc:\t\t" ++ fromRight "Not found" ghcVersion
