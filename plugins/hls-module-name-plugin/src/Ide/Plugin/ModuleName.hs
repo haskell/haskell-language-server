@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -35,10 +34,10 @@ import           Development.IDE              (GetParsedModule (GetParsedModule)
                                                GhcSession (GhcSession),
                                                IdeState, Pretty,
                                                Priority (Debug, Info), Recorder,
-                                               WithPriority, evalGhcEnv,
+                                               WithPriority, colon, evalGhcEnv,
                                                hscEnvWithImportPaths, logWith,
                                                realSrcSpanToRange, runAction,
-                                               uriToFilePath', use, use_)
+                                               uriToFilePath', use, use_, (<+>))
 import           Development.IDE.GHC.Compat   (GenLocated (L),
                                                getSessionDynFlags, hsmodName,
                                                importPaths, locA,
@@ -111,12 +110,12 @@ action recorder state uri =
     let emptyModule = maybe True (T.null . T.strip . virtualFileText) contents
 
     correctNames <- liftIO $ pathModuleNames recorder state nfp fp
-    logWith recorder Debug (ModuleNameLog $ "ModuleName.correctNames: " <> T.unlines correctNames)
+    logWith recorder Debug (CorrectNames correctNames)
     bestName <- minimumBy (comparing T.length) <$> (MaybeT . pure $ NE.nonEmpty correctNames)
-    logWith recorder Info (ModuleNameLog $ "ModuleName.bestName: " <> bestName)
+    logWith recorder Info (BestName bestName)
 
     statedNameMaybe <- liftIO $ codeModuleName state nfp
-    logWith recorder Debug (ModuleNameLog $ "ModuleName.statedNameMaybe: " <> (T.pack $ show statedNameMaybe))
+    logWith recorder Debug (ModuleName $ snd <$> statedNameMaybe)
     case statedNameMaybe of
       Just (nameRange, statedName)
         | statedName `notElem` correctNames ->
@@ -136,16 +135,15 @@ pathModuleNames recorder state normFilePath filePath
   | otherwise = do
       session <- runAction "ModuleName.ghcSession" state $ use_ GhcSession normFilePath
       srcPaths <- evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
-      logWith recorder Debug (ModuleNameLog $ "ModuleName.srcpath: " <> T.pack (unlines srcPaths))
+      logWith recorder Debug (SrcPaths srcPaths)
 
       let paths = map (normalise . (<> pure pathSeparator)) srcPaths
-      logWith recorder Debug (ModuleNameLog $ "ModuleName.paths: " <> T.pack (unlines paths))
+      logWith recorder Debug (NormalisedPaths paths)
 
       mdlPath <- makeAbsolute filePath
-      logWith recorder Debug (ModuleNameLog $ "ModuleName.mdlPath: " <> T.pack mdlPath)
+      logWith recorder Debug (AbsoluteFilePath mdlPath)
 
       let prefixes = filter (`isPrefixOf` mdlPath) paths
-      liftIO $ putStrLn $ "srcpath: " <> show srcPaths
       pure (map (moduleNameFrom mdlPath) prefixes)
   where
     moduleNameFrom mdlPath prefix =
@@ -162,8 +160,20 @@ codeModuleName state nfp = runMaybeT $ do
   L (locA -> (RealSrcSpan l _)) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
   pure (realSrcSpanToRange l, T.pack $ moduleNameString m)
 
-newtype Log = ModuleNameLog T.Text deriving Show
+data Log =
+    CorrectNames [T.Text]
+  | BestName T.Text
+  | ModuleName (Maybe T.Text)
+  | SrcPaths [FilePath]
+  | NormalisedPaths [FilePath]
+  | AbsoluteFilePath FilePath
+  deriving Show
 
 instance Pretty Log where
-    pretty = \case
-        ModuleNameLog log -> pretty log
+    pretty log = "ModuleName." <> case log of
+        CorrectNames log     -> "CorrectNames" <> colon <+> pretty log
+        BestName log         -> "BestName" <> colon <+> pretty log
+        ModuleName log       -> "StatedNameMaybe" <> colon <+> pretty log
+        SrcPaths log         -> "SrcPaths" <> colon <+> pretty log
+        NormalisedPaths log  -> "NormalisedPaths" <> colon <+> pretty log
+        AbsoluteFilePath log -> "AbsoluteFilePath" <> colon <+> pretty log
