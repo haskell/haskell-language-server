@@ -149,6 +149,7 @@ findPosition pos root = go Nothing root
             startOfRight <- _start . _codeRange_range <$> V.headM right
             if pos < startOfRight then binarySearchPos left else binarySearchPos right
 
+-- | Traverses through the code range and children to a folding ranges
 findFoldingRanges :: CodeRange -> [FoldingRange]
 findFoldingRanges r@(CodeRange _ children _) =
   let frRoot :: [FoldingRange] = case createFoldingRange r of
@@ -158,6 +159,7 @@ findFoldingRanges r@(CodeRange _ children _) =
       frChildren :: [FoldingRange] = concat $ V.toList $ fmap findFoldingRanges children
    in frRoot ++ frChildren
 
+-- | Parses code range to folding range
 createFoldingRange :: CodeRange -> Maybe FoldingRange
 createFoldingRange node1 = do
     let range = _codeRange_range node1
