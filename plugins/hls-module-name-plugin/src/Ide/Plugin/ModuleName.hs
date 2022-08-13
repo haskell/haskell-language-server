@@ -173,10 +173,10 @@ data Log =
   deriving Show
 
 instance Pretty Log where
-    pretty log = "ModuleName." <> case log of
-        CorrectNames log     -> "CorrectNames" <> colon <+> pretty log
-        BestName log         -> "BestName" <> colon <+> pretty log
-        ModuleName log       -> "StatedNameMaybe" <> colon <+> pretty log
-        SrcPaths log         -> "SrcPaths" <> colon <+> pretty log
-        NormalisedPaths log  -> "NormalisedPaths" <> colon <+> pretty log
-        AbsoluteFilePath log -> "AbsoluteFilePath" <> colon <+> pretty log
+  pretty log = "ModuleName." <> case log of
+    CorrectNames log     -> "CorrectNames" <> colon <+> pretty log
+    BestName log         -> "BestName" <> colon <+> pretty log
+    ModuleName log       -> "StatedNameMaybe" <> colon <+> pretty log
+    SrcPaths log         -> "SrcPaths" <> colon <+> pretty log
+    NormalisedPaths log  -> "NormalisedPaths" <> colon <+> pretty log
+    AbsoluteFilePath log -> "AbsoluteFilePath" <> colon <+> pretty log
