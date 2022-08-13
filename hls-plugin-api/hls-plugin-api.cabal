@@ -49,7 +49,7 @@ library
     , hls-graph             ^>= 1.7
     , lens
     , lens-aeson
-    , lsp                   >=1.4.0.0 && < 1.6
+    , lsp                   ^>=1.5.0.0
     , opentelemetry         >=0.4
     , optparse-applicative
     , process

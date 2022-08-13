@@ -14,6 +14,7 @@ module Main where
 import           Control.Monad.Extra
 import           Data.Char                          (isSpace)
 import           Data.Default
+import           Data.Either.Extra                  (eitherToMaybe)
 import           Data.Foldable
 import           Data.List
 import           Data.Void
@@ -79,6 +80,10 @@ main = do
           putStrLn hlsVer
           putStrLn "Tool versions found on the $PATH"
           putStrLn $ showProgramVersionOfInterest programsOfInterest
+          putStrLn "Tool versions in your project"
+          cradle <- findProjectCradle' False
+          ghcVersion <- runExceptT $ getRuntimeGhcVersion' cradle
+          putStrLn $ showProgramVersion "ghc" $ mkVersion =<< eitherToMaybe ghcVersion
 
       VersionMode PrintVersion ->
           putStrLn hlsVer
@@ -301,7 +306,7 @@ launchErrorLSP errorMsg = do
         let interpretHandler (env,  _st) = LSP.Iso (LSP.runLspT env . unErrorLSPM) liftIO
         pure (doInitialize, asyncHandlers, interpretHandler)
 
-  runLanguageServer
+  runLanguageServer (cmapWithPrio pretty recorder)
     (Main.argsLspOptions defaultArguments)
     inH
     outH

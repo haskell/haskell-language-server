@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.7 || == 9.0.2 || == 9.2.2 || == 9.2.3
+tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.7 || == 9.0.2 || == 9.2.3 || == 9.2.4
 extra-source-files:
   README.md
   ChangeLog.md
@@ -196,6 +196,11 @@ flag gadt
   default:     True
   manual:      True
 
+flag explicitFixity
+  description: Enable explicitFixity plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -335,6 +340,11 @@ common gadt
     build-depends: hls-gadt-plugin ^>= 1.0
     cpp-options: -Dhls_gadt
 
+common explicitFixity
+  if flag(explicitFixity)
+    build-depends: hls-explicit-fixity-plugin ^>= 1.0
+    cpp-options: -DexplicitFixity
+
 -- formatters
 
 common floskell
@@ -393,6 +403,7 @@ executable haskell-language-server
                     , qualifyImportedNames
                     , codeRange
                     , gadt
+                    , explicitFixity
                     , floskell
                     , fourmolu
                     , ormolu
