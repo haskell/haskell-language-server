@@ -110,7 +110,7 @@ data PluginConfig =
       , plcCompletionOn     :: !Bool
       , plcRenameOn         :: !Bool
       , plcSelectionRangeOn :: !Bool
-      , plcFoldingRangeOn   :: !Bool
+      , plcFoldingRangeOn :: !Bool
       , plcConfig           :: !A.Object
       } deriving (Show,Eq)
 
