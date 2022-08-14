@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE ViewPatterns      #-}
 module Main
   ( main
   ) where
 
 import           Control.Lens                 ((^.))
+import           Data.Either                  (isRight)
 import           Data.Function
 import qualified Data.Text                    as Text
 import           Development.IDE.Types.Logger
@@ -15,14 +15,13 @@ import qualified Ide.Plugin.Cabal.Parse       as Lib
 import qualified Language.LSP.Types.Lens      as J
 import           System.FilePath
 import           Test.Hls
-import Data.Either (isRight)
 
 cabalPlugin :: Recorder (WithPriority Log) -> PluginDescriptor IdeState
 cabalPlugin recorder = descriptor recorder "cabal"
 
 main :: IO ()
 main = do
-  recorder <- initialiseRecorder True
+  recorder <- initialiseRecorder False
   defaultTestRunner $
     testGroup "Cabal Plugin Tests"
       [ unitTests
@@ -68,22 +67,42 @@ pluginTests recorder = testGroup "Plugin Tests"
     [ runCabalTestCaseSession "Publishes Diagnostics on Error" recorder "" $ do
         doc <- openDoc "invalid.cabal" "cabal"
         diags <- waitForDiagnosticsFromSource doc "parsing"
-        reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
+        unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
         liftIO $ do
             length diags @?= 1
-            reduceDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
-            reduceDiag ^. J.severity @?= Just DsError
+            unknownLicenseDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
+            unknownLicenseDiag ^. J.severity @?= Just DsError
     , runCabalTestCaseSession "Clears diagnostics" recorder "" $ do
         doc <- openDoc "invalid.cabal" "cabal"
         diags <- waitForDiagnosticsFrom doc
-        reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
+        unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
         liftIO $ do
             length diags @?= 1
-            reduceDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
-            reduceDiag ^. J.severity @?= Just DsError
+            unknownLicenseDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
+            unknownLicenseDiag ^. J.severity @?= Just DsError
         _ <- applyEdit doc $ TextEdit (Range (Position 3 20) (Position 4 0)) "BSD-3-Clause\n"
         newDiags <- waitForDiagnosticsFrom doc
         liftIO $ newDiags @?= []
+    , runCabalTestCaseSession "No Diagnostics in .hs files from valid .cabal file" recorder "simple-cabal" $ do
+        hsDoc <- openDoc "A.hs" "haskell"
+        expectNoMoreDiagnostics 1 hsDoc "typechecking"
+        cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
+        expectNoMoreDiagnostics 1 cabalDoc "parsing"
+    , runCabalTestCaseSession "Diagnostics in .hs files from invalid .cabal file" recorder "simple-cabal" $ do
+        hsDoc <- openDoc "A.hs" "haskell"
+        expectNoMoreDiagnostics 1 hsDoc "typechecking"
+        cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
+        expectNoMoreDiagnostics 1 cabalDoc "parsing"
+        let theRange = Range (Position 3 20) (Position 3 23)
+        -- Invalid license
+        changeDoc cabalDoc [TextDocumentContentChangeEvent (Just theRange) Nothing "MIT3"]
+        cabalDiags <- waitForDiagnosticsFrom cabalDoc
+        unknownLicenseDiag <- liftIO $ inspectDiagnostic cabalDiags ["Unknown SPDX license identifier: 'MIT3'"]
+        expectNoMoreDiagnostics 1 hsDoc "typechecking"
+        liftIO $ do
+            length cabalDiags @?= 1
+            unknownLicenseDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
+            unknownLicenseDiag ^. J.severity @?= Just DsError
     ]
   , testGroup "Code Actions"
     [ runCabalTestCaseSession "BSD-3" recorder "" $ do
