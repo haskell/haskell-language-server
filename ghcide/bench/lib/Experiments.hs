@@ -24,8 +24,8 @@ module Experiments
 ) where
 import           Control.Applicative.Combinators (skipManyTill)
 import           Control.Exception.Safe          (IOException, handleAny, try)
-import Control.Monad.Extra
-    ( forM_, void, unless, forM, (&&^), allM, whenJust )
+import           Control.Monad.Extra             (allM, forM, forM_, unless,
+                                                  void, whenJust, (&&^))
 import           Control.Monad.Fail              (MonadFail)
 import           Control.Monad.IO.Class
 import           Data.Aeson                      (Value (Null), toJSON)
@@ -77,7 +77,7 @@ data DocumentPositions = DocumentPositions {
 allWithIdentifierPos :: MonadFail m => (DocumentPositions -> m Bool) -> [DocumentPositions] -> m Bool
 allWithIdentifierPos f docs = case applicableDocs of
     -- fail if there are no documents to benchmark
-    [] -> fail "None of the example modules have identifier positions"
+    []    -> fail "None of the example modules have identifier positions"
     docs' -> allM f docs'
   where
     applicableDocs = filter (isJust . identifierP) docs
