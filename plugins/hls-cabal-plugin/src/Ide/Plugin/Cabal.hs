@@ -17,7 +17,7 @@ import           Control.Monad.IO.Class
 import qualified Data.ByteString                 as BS
 import           Data.Hashable
 import qualified Data.List.NonEmpty              as NE
-import           Data.Maybe                      (catMaybes)
+import           Data.Maybe                      (mapMaybe)
 import qualified Data.Text.Encoding              as Encoding
 import           Data.Typeable
 import           Development.IDE                 as D
@@ -50,7 +50,7 @@ instance Pretty Log where
     LogModificationTime nfp modTime  ->
       "Modified:" <+> pretty (fromNormalizedFilePath nfp) <+> pretty (show modTime)
     LogDiagnostics nfp diags ->
-      "Diagnostics for " <+> pretty (fromNormalizedFilePath nfp) <> ":" <+> pretty (show diags)
+      "Diagnostics for" <+> pretty (fromNormalizedFilePath nfp) <> ":" <+> pretty (show diags)
     LogDocOpened uri ->
       "Opened text document:" <+> pretty (getUri uri)
     LogDocModified uri ->
@@ -68,34 +68,26 @@ descriptor recorder plId = (defaultCabalPluginDescriptor plId)
   [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       whenUriFile _uri $ \file -> do
-          log' Debug $ LogDocOpened _uri
-          join $ atomically $ Shake.recordDirtyKeys (shakeExtras ide) GetModificationTime [file]
-          restartShakeSession (shakeExtras ide) (VFSModified vfs) (fromNormalizedFilePath file ++ " (opened)") []
-          join $ Shake.shakeEnqueue (shakeExtras ide) $ Shake.mkDelayedAction "cabal parse modified" Info $ void $ use ParseCabal file
+        log' Debug $ LogDocOpened _uri
+        restartCabalShakeSession ide vfs file "(opened)"
 
   , mkPluginNotificationHandler LSP.STextDocumentDidChange $
       \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
       whenUriFile _uri $ \file -> do
         log' Debug $ LogDocModified _uri
-        join $ atomically $ Shake.recordDirtyKeys (shakeExtras ide) GetModificationTime [file]
-        restartShakeSession (shakeExtras ide) (VFSModified vfs) (fromNormalizedFilePath file ++ " (modified)") []
-        join $ Shake.shakeEnqueue (shakeExtras ide) $ Shake.mkDelayedAction "cabal parse modified" Info $ void $ use ParseCabal file
+        restartCabalShakeSession ide vfs file "(changed)"
 
   , mkPluginNotificationHandler LSP.STextDocumentDidSave $
       \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
-        whenUriFile _uri $ \file -> do
-          log' Debug $ LogDocSaved _uri
-          join $ atomically $ Shake.recordDirtyKeys (shakeExtras ide) GetModificationTime [file]
-          restartShakeSession (shakeExtras ide) (VFSModified vfs) (fromNormalizedFilePath file ++ " (saved)") []
-          join $ Shake.shakeEnqueue (shakeExtras ide) $ Shake.mkDelayedAction "cabal parse modified" Info $ void $ use ParseCabal file
+      whenUriFile _uri $ \file -> do
+        log' Debug $ LogDocSaved _uri
+        restartCabalShakeSession ide vfs file "(saved)"
 
   , mkPluginNotificationHandler LSP.STextDocumentDidClose $
-        \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
-          whenUriFile _uri $ \file -> do
-              log' Debug $ LogDocClosed _uri
-              join $ atomically $ Shake.recordDirtyKeys (shakeExtras ide) GetModificationTime [file]
-              restartShakeSession (shakeExtras ide) (VFSModified vfs) (fromNormalizedFilePath file ++ " (closed)") []
-              join $ Shake.shakeEnqueue (shakeExtras ide) $ Shake.mkDelayedAction "cabal parse modified" Info $ void $ use ParseCabal file
+      \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
+      whenUriFile _uri $ \file -> do
+        log' Debug $ LogDocClosed _uri
+        restartCabalShakeSession ide vfs file "(closed)"
   ]
   }
   where
@@ -103,6 +95,15 @@ descriptor recorder plId = (defaultCabalPluginDescriptor plId)
 
     whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
     whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
+
+-- | Helper function to restart the shake session, specifically for modifying .cabal files.
+-- No special logic, just group up a bunch of functions you need for the base
+-- Notification Handlers.
+restartCabalShakeSession :: IdeState -> VFS.VFS -> NormalizedFilePath -> String -> IO ()
+restartCabalShakeSession ide vfs file actionMsg = do
+  join $ atomically $ Shake.recordDirtyKeys (shakeExtras ide) GetModificationTime [file]
+  restartShakeSession (shakeExtras ide) (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) []
+  join $ Shake.shakeEnqueue (shakeExtras ide) $ Shake.mkDelayedAction "cabal parse modified" Info $ void $ use ParseCabal file
 
 -- ----------------------------------------------------------------
 -- Plugin Rules
@@ -150,4 +151,4 @@ licenseSuggestCodeAction
   -> CodeActionParams
   -> LspM Config (Either ResponseError (ResponseResult 'TextDocumentCodeAction))
 licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List diags}) =
-  pure $ Right $ List $ catMaybes $ map (fmap InR . LicenseSuggest.licenseErrorAction uri) diags
+  pure $ Right $ List $ mapMaybe (fmap InR . LicenseSuggest.licenseErrorAction uri) diags
