@@ -188,7 +188,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       RefineImports.descriptor pluginRecorder "refineImports" :
 #endif
 #if hls_moduleName
-      ModuleName.descriptor "moduleName" :
+      ModuleName.descriptor pluginRecorder "moduleName" :
 #endif
 #if hls_hlint
       Hlint.descriptor pluginRecorder "hlint" :
