@@ -140,24 +140,23 @@ jobs:
       run: |
         column -s, -t < ghcide/bench-results/unprofiled/${{ matrix.example }}/results.csv | tee ghcide/bench-results/unprofiled/${{ matrix.example }}/results.txt
 
+    - name: tar benchmarking artifacts
+      run:  find ghcide/bench-results -name "*.csv" -or -name "*.svg" -or -name "*.html" | xargs tar -czf benchmark-artifacts.tar.gz
+
     - name: Archive benchmarking artifacts
       uses: actions/upload-artifact@v3
       with:
         name: bench-results-${{ runner.os }}-${{ matrix.ghc }}
-        path: |
-           ghcide/bench-results/results.*
-           ghcide/bench-results/**/*.csv
-           ghcide/bench-results/**/*.svg
-           ghcide/bench-results/**/*.eventlog.html
+        path: benchmark-artifacts.tar.gz
+
+    - name: tar benchmarking logs
+      run: find ghcide/bench-results -name "*.log" -or -name "*.eventlog" -or -name "*.hp" | xargs tar -czf benchmark-logs.tar.gz
 
     - name: Archive benchmark logs
       uses: actions/upload-artifact@v3
       with:
         name: bench-logs-${{ runner.os }}-${{ matrix.ghc }}
-        path: |
-           ghcide/bench-results/**/*.log
-           ghcide/bench-results/**/*.eventlog
-           ghcide/bench-results/**/*.hp
+        path: benchmark-logs.tar.gz
 
   bench_post_job:
     if: always()
