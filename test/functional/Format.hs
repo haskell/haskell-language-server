@@ -6,6 +6,7 @@ import           Control.Lens            ((^.))
 import           Control.Monad.IO.Class
 import           Data.Aeson
 import qualified Data.ByteString.Lazy    as BS
+import qualified Data.Text               as T
 import qualified Data.Text.Encoding      as T
 import qualified Data.Text.IO            as T
 import           Language.LSP.Test
@@ -47,8 +48,7 @@ providerTests = testGroup "formatting provider" [
     testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
         resp <- request STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
-        liftIO $ resp ^. LSP.result @?= Left (ResponseError InvalidRequest "No plugin enabled for STextDocumentFormatting, available:\nPluginId \"floskell\"\nPluginId \"fourmolu\"\nPluginId \"ormolu\"\nPluginId \"stylish-haskell\"\nPluginId \"brittany\"\n" Nothing)
-
+        liftIO $ foramattingNoneResultCorrect (resp ^. LSP.result) @? "Result incorrect"
     , requiresOrmoluPlugin . requiresFloskellPlugin $ testCase "can change on the fly" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
         formattedFloskell <- liftIO $ T.readFile "test/testdata/format/Format.floskell.formatted.hs"
@@ -81,6 +81,10 @@ providerTests = testGroup "formatting provider" [
        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
        documentContents doc >>= liftIO . (@?= formattedFloskell)
     ]
+        where
+            foramattingNoneResultCorrect (Left (ResponseError InvalidRequest text Nothing)) =
+                T.isPrefixOf "No plugin enabled for STextDocumentFormatting" text
+            foramattingNoneResultCorrect _ = False
 
 formatLspConfig :: Value -> Value
 formatLspConfig provider = object [ "haskell" .= object ["formattingProvider" .= (provider :: Value)] ]
