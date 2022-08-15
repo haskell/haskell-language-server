@@ -119,7 +119,7 @@ import qualified Ide.Plugin.Brittany               as Brittany
 #endif
 
 #if hindent
-import qualified Ide.Plugin.HIndent               as HIndent
+import qualified Ide.Plugin.HIndent                as HIndent
 #endif
 
 

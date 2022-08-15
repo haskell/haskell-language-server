@@ -4,22 +4,12 @@ module Main
   ) where
 
 import qualified Ide.Plugin.HIndent as HIndent
-import System.FilePath ( (</>) )
-import Test.Hls
-    ( testGroup,
-      defaultTestRunner,
-      TestName,
-      TestTree,
-      goldenWithHaskellDocFormatter,
-      def,
-      Session,
-      TextDocumentIdentifier,
-      formatDoc,
-      formatRange,
-      Position (..),
-      Range (..),
-      FormattingOptions (..),
-     )
+import           System.FilePath    ((</>))
+import           Test.Hls           (FormattingOptions (..), Position (..),
+                                     Range (..), Session, TestName, TestTree,
+                                     TextDocumentIdentifier, def,
+                                     defaultTestRunner, formatDoc, formatRange,
+                                     goldenWithHaskellDocFormatter, testGroup)
 
 main :: IO ()
 main = defaultTestRunner tests
