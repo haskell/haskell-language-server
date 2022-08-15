@@ -32,6 +32,7 @@ packages:
   - ./plugins/hls-change-type-signature-plugin
   - ./plugins/hls-gadt-plugin
   - ./plugins/hls-explicit-fixity-plugin
+  - ./plugins/hls-hindent-plugin
 
 ghc-options:
   "$everything": -haddock

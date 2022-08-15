@@ -32,6 +32,7 @@ packages:
 - ./plugins/hls-change-type-signature-plugin
 - ./plugins/hls-gadt-plugin
 - ./plugins/hls-explicit-fixity-plugin
+- ./plugins/hls-hindent-plugin
 
 extra-deps:
 - floskell-0.10.6@sha256:e77d194189e8540abe2ace2c7cb8efafc747ca35881a2fefcbd2d40a1292e036,3819
