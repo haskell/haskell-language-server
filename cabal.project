@@ -45,7 +45,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-08-09T13:13:41Z
+index-state: 2022-08-15T06:53:13Z
 
 constraints:
   hyphenation +embed,
@@ -63,12 +63,6 @@ source-repository-package
   location: https://github.com/pepeiborra/ekg-json
   tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
   -- https://github.com/tibbe/ekg-json/pull/12
-
--- TODO: remove me when the fix is merged upstream
-source-repository-package
-  type: git
-  location: https://github.com/kokobd/ghc-check.git
-  tag: 3522cc27cb4582bea1656581cc863d80de770dce
 
 allow-newer:
   -- ghc-9.2
