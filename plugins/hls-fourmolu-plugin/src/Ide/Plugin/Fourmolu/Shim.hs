@@ -31,7 +31,9 @@ cfgFileFixities :: FourmoluConfig -> FixityMap
 cfgFileFixities _ = mempty
 #endif
 
-#if MIN_VERSION_fourmolu(0,7,0)
+#if MIN_VERSION_fourmolu(0,8,1)
+-- emptyConfig now provided
+#elif MIN_VERSION_fourmolu(0,7,0)
 emptyConfig :: FourmoluConfig
 emptyConfig =
   FourmoluConfig
