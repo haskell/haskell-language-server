@@ -385,7 +385,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
 
             let setup = setupLSP (cmapWithPrio LogLanguageServer recorder) argsGetHieDbLoc (pluginHandlers plugins) getIdeState
 
-            runLanguageServer options inH outH argsDefaultHlsConfig argsOnConfigChange setup
+            runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsOnConfigChange setup
             dumpSTMStats
         Check argFiles -> do
           dir <- maybe IO.getCurrentDirectory return argsProjectRoot

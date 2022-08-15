@@ -24,7 +24,7 @@
           {
             "id": "mixed-line-ending",
             "args": ["--fix", "lf"],
-            "exclude": "test/testdata/.*CRLF*.hs$"
+            "exclude": "test/testdata/.*CRLF.*?\\.hs$"
           }
        ]
     }

@@ -23,13 +23,15 @@ source-repository head
   location: git://github.com/haskell/haskell-language-server.git
 
 library
-  exposed-modules:  Ide.Plugin.Fourmolu
+  exposed-modules:
+      Ide.Plugin.Fourmolu
+    , Ide.Plugin.Fourmolu.Shim
   hs-source-dirs:   src
   ghc-options:      -Wall
   build-depends:
     , base            >=4.12 && <5
     , filepath
-    , fourmolu        ^>=0.3 || ^>=0.4 || ^>= 0.6 || ^>= 0.7
+    , fourmolu        ^>=0.3 || ^>=0.4 || ^>= 0.6 || ^>= 0.7 || ^>= 0.8
     , ghc
     , ghc-boot-th
     , ghcide          ^>=1.7

@@ -38,14 +38,15 @@ module Development.IDE.Core.Compile
 
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats      hiding (orElse)
-import           Control.DeepSeq                   (force, liftRnf, rnf, rwhnf, NFData(..))
+import           Control.DeepSeq                   (NFData (..), force, liftRnf,
+                                                    rnf, rwhnf)
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe
 import           Control.Lens                      hiding (List, (<.>))
 import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Control.Monad.Trans.Except
-import qualified Control.Monad.Trans.State.Strict as S
+import qualified Control.Monad.Trans.State.Strict  as S
 import           Data.Aeson                        (toJSON)
 import           Data.Bifunctor                    (first, second)
 import           Data.Binary
@@ -53,12 +54,12 @@ import qualified Data.ByteString                   as BS
 import           Data.Coerce
 import qualified Data.DList                        as DL
 import           Data.Functor
-import Data.Generics.Schemes
-import Data.Generics.Aliases
+import           Data.Generics.Aliases
+import           Data.Generics.Schemes
 import qualified Data.HashMap.Strict               as HashMap
-import           Data.IORef
 import           Data.IntMap                       (IntMap)
 import qualified Data.IntMap.Strict                as IntMap
+import           Data.IORef
 import           Data.List.Extra
 import           Data.Map                          (Map)
 import qualified Data.Map.Strict                   as Map
@@ -79,6 +80,7 @@ import           Development.IDE.GHC.Compat        hiding (loadInterface,
 import qualified Development.IDE.GHC.Compat        as Compat
 import qualified Development.IDE.GHC.Compat        as GHC
 import qualified Development.IDE.GHC.Compat.Util   as Util
+import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.GHC.Util
@@ -86,12 +88,10 @@ import           Development.IDE.GHC.Warnings
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           Development.IDE.GHC.CoreFile
 import           GHC                               (ForeignHValue,
                                                     GetDocsFailure (..),
-                                                    parsedSource,
-                                                    GhcException(..)
-                                                    )
+                                                    GhcException (..),
+                                                    parsedSource)
 import qualified GHC.LanguageExtensions            as LangExt
 import           GHC.Serialized
 import           HieDb
@@ -111,25 +111,26 @@ import           ErrUtils
 import           GHC.Tc.Gen.Splice
 
 #if MIN_VERSION_ghc(9,2,1)
-import           GHC.Types.HpcInfo
 import           GHC.Types.ForeignStubs
+import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
 #else
 import           GHC.Driver.Types
 #endif
 
 #else
-import           TcSplice
 import           HscTypes
+import           TcSplice
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC                               (Anchor (anchor),
                                                     EpaComment (EpaComment),
                                                     EpaCommentTok (EpaBlockComment, EpaLineComment),
-                                                    epAnnComments,
+                                                    ModuleGraph, epAnnComments,
+                                                    mgLookupModule,
+                                                    mgModSummaries,
                                                     priorComments)
-import           GHC                               (ModuleGraph, mgLookupModule, mgModSummaries)
 import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
@@ -163,7 +164,7 @@ computePackageDeps env pkg = do
 data TypecheckHelpers
   = TypecheckHelpers
   { getLinkablesToKeep :: !(IO (ModuleEnv UTCTime))
-  , getLinkables :: !([NormalizedFilePath] -> IO [LinkableResult])
+  , getLinkables       :: !([NormalizedFilePath] -> IO [LinkableResult])
   }
 
 typecheckModule :: IdeDefer
@@ -486,7 +487,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
                 in setIdOccInfo v' noOccInfo
             else v
           isOtherUnfolding (OtherCon _) = True
-          isOtherUnfolding _ = False
+          isOtherUnfolding _            = False
 
 
       when (not $ null diffs) $
@@ -1229,7 +1230,7 @@ data RecompilationInfo m
 data IdeLinkable = GhcLinkable !Linkable | CoreLinkable !UTCTime !CoreFile
 
 instance NFData IdeLinkable where
-  rnf (GhcLinkable lb) = rnf lb
+  rnf (GhcLinkable lb)      = rnf lb
   rnf (CoreLinkable time _) = rnf time
 
 ml_core_file :: ModLocation -> FilePath
@@ -1258,7 +1259,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
 
     mb_dest_version <- case mb_old_version of
       Just ver -> pure $ Just ver
-      Nothing -> get_file_version (toNormalizedFilePath' iface_file)
+      Nothing  -> get_file_version (toNormalizedFilePath' iface_file)
 
     -- The source is modified if it is newer than the destination (iface file)
     -- A more precise check for the core file is performed later
@@ -1290,7 +1291,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
              maybe_recomp <- checkLinkableDependencies get_linkable_hashes (hsc_mod_graph sessionWithMsDynFlags) (hirRuntimeModules old_hir)
              case maybe_recomp of
                Just msg -> do_regenerate msg
-               Nothing -> return ([], Just old_hir)
+               Nothing  -> return ([], Just old_hir)
            -- Otherwise use the value from disk, provided the core file is up to date if required
            _ -> do
              details <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface
@@ -1393,7 +1394,7 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
       tyCons = typeEnvTyCons (md_types details)
   let cgi_guts = CgGuts this_mod tyCons (implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
   (warns, lb) <- case linkableType of
-    BCOLinkable -> generateByteCode (CoreFileTime t) session ms cgi_guts
+    BCOLinkable    -> generateByteCode (CoreFileTime t) session ms cgi_guts
     ObjectLinkable -> generateObjectCode session ms cgi_guts
   pure (warns, HomeModInfo iface details . Just <$> lb)
 

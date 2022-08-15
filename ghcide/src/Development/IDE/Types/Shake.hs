@@ -25,6 +25,7 @@ import           Data.Hashable
 import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleTypes       (FileVersion)
 import           Development.IDE.Graph                (Key (..), RuleResult)
 import qualified Development.IDE.Graph                as Shake
 import           Development.IDE.Types.Diagnostics
@@ -37,7 +38,6 @@ import           Type.Reflection                      (SomeTypeRep (SomeTypeRep)
                                                        typeOf, typeRep,
                                                        typeRepTyCon)
 import           Unsafe.Coerce                        (unsafeCoerce)
-import Development.IDE.Core.RuleTypes (FileVersion)
 
 -- | Intended to represent HieDb calls wrapped with (currently) retry
 -- functionality

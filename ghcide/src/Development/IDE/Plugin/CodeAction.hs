@@ -36,9 +36,9 @@ import qualified Data.List.NonEmpty                                as NE
 import qualified Data.Map.Strict                                   as M
 import           Data.Maybe
 import           Data.Ord                                          (comparing)
-import qualified Data.Rope.UTF16                                   as Rope
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
+import qualified Data.Text.Utf16.Rope                              as Rope
 import           Data.Tuple.Extra                                  (fst3)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
@@ -75,7 +75,8 @@ import           Language.LSP.Types                                (CodeAction (
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InR),
                                                                     uriToFilePath)
-import           Language.LSP.VFS
+import           Language.LSP.VFS                                  (VirtualFile,
+                                                                    _file_text)
 import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
 #if MIN_VERSION_ghc(9,2,0)
@@ -109,7 +110,7 @@ codeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs}) = do
   contents <- LSP.getVirtualFile $ toNormalizedUri uri
   liftIO $ do
-    let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
+    let text = Rope.toText . (_file_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     diag <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile

@@ -1,21 +1,21 @@
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 module Ide.Plugin.ExampleCabal where
 
 import           Control.Monad.IO.Class
 import           Data.Aeson
-import qualified Data.HashMap.Strict        as Map
-import qualified Data.Text as T
-import           Development.IDE            as D hiding (pluginHandlers)
+import qualified Data.HashMap.Strict    as Map
+import qualified Data.Text              as T
+import           Development.IDE        as D hiding (pluginHandlers)
 import           GHC.Generics
 import           Ide.PluginUtils
 import           Ide.Types

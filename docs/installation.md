@@ -19,27 +19,10 @@ You can check if HLS is available for your platform via `ghcup` here: <https://h
 You can also install HLS from source without checking out the code manually:
 
 ```bash
-# `ghcup compile` uses cabal under the hood to build, so you may 
-# want to run `cabal update` beforehand
-cabal update
 ghcup compile hls -v $HLS_VERSION --ghc $GHC_VERSION
 ```
 
-Make sure to check `ghcup compile hls --help` for more complete help.
-
-Examples:
-
-Install HLS 1.7.0.0 for GHC 8.10.7, or for multiple GHC versions:
-```bash
-ghcup compile hls -v 1.7.0.0 --ghc 8.10.7
-ghcup compile hls -v 1.7.0.0 --ghc 8.10.7 --ghc 9.2.3
-```
-
-Install HLS from master, or a specific commit:
-```
-ghcup compile hls -g master --ghc 9.2.3
-ghcup compile hls -g 510bd51e46fea8fb51ddfaa60bba505f0663497d --ghc 9.2.3
-```
+More information here: <https://www.haskell.org/ghcup/guide/#hls>
 
 ## Installation from source
 

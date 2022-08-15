@@ -27,18 +27,18 @@ import qualified Data.ByteString               as BS
 import           Data.Dynamic
 import qualified Data.HashMap.Strict           as Map
 import           Data.HashSet                  (HashSet, member)
+import qualified Data.HashSet                  as Set
 import           Data.IORef
+import           Data.List                     (intercalate)
 import           Data.Maybe
 import           Data.Typeable
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                  (Generic)
 import qualified ListT
-import           StmContainers.Map             (Map)
 import qualified StmContainers.Map             as SMap
+import           StmContainers.Map             (Map)
 import           System.Time.Extra             (Seconds)
-import qualified Data.HashSet as Set
-import Data.List (intercalate)
-import UnliftIO (MonadUnliftIO)
+import           UnliftIO                      (MonadUnliftIO)
 
 
 unwrapDynamic :: forall a . Typeable a => Dynamic -> a

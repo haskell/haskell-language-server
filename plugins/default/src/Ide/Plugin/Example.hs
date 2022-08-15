@@ -22,8 +22,8 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Functor
-import qualified Data.HashMap.Strict        as Map
 import           Data.Hashable
+import qualified Data.HashMap.Strict        as Map
 import qualified Data.Text                  as T
 import           Data.Typeable
 import           Development.IDE            as D

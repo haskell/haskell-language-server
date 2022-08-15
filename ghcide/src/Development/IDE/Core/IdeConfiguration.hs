@@ -16,8 +16,8 @@ import           Control.Concurrent.Strict
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Aeson.Types               (Value)
-import           Data.HashSet                   (HashSet, singleton)
 import           Data.Hashable                  (Hashed, hashed, unhashed)
+import           Data.HashSet                   (HashSet, singleton)
 import           Data.Text                      (Text, isPrefixOf)
 import           Development.IDE.Core.Shake
 import           Development.IDE.Graph

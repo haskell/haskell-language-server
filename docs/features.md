@@ -38,11 +38,23 @@ Provided by: `hls-hlint-plugin`
 
 Provides hlint hints as diagnostics.
 
+### Stan hints
+
+Provided by: `hls-stan-plugin`
+
+Provides Stan hints as diagnostics.
+
 ## Hovers
 
 Provided by: `ghcide`
 
 Type information and documentation on hover, [including from local definitions](./configuration.md#how-to-show-local-documentation-on-hover).
+
+### Show fixity
+
+Provided by: `hls-explicit-fixity-plugin`
+
+Provides fixity information.
 
 ## Jump to definition
 

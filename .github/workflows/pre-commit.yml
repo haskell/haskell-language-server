@@ -1,0 +1,42 @@
+name: pre-commit
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - uses: ./.github/actions/setup-build
+      with:
+        os: ${{ runner.os }}
+        shorten-hls: false
+
+    - name: "Install stylish-haskell"
+      run: |
+        cabal install stylish-haskell
+        echo "${HOME}/.cabal/bin" >> $GITHUB_PATH
+
+    - name: "Check stylish-haskell is available"
+      run: |
+        echo $(which stylish-haskell)
+
+    - name: Compiled deps cache
+      id: stylish-haskell-compiled-cache
+      uses: actions/cache@v3
+      env:
+        cache-name: stylish-haskell-compiled-cache
+      with:
+        path: ${{ env.CABAL_PKGS_DIR }}
+        key:  ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
+        restore-keys: |
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-
+
+    - uses: actions/setup-python@v4
+    - uses: pre-commit/action@v3.0.0

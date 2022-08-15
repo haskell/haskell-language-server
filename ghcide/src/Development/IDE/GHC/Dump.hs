@@ -10,8 +10,8 @@ import           HsDumpAst
 #if MIN_VERSION_ghc(9,2,1)
 import qualified Data.ByteString                 as B
 import           Development.IDE.GHC.Compat.Util
-import           GHC.Hs
 import           Generics.SYB                    (ext1Q, ext2Q, extQ)
+import           GHC.Hs
 #endif
 #if MIN_VERSION_ghc(9,0,1)
 import           GHC.Plugins

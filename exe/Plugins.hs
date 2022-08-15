@@ -16,96 +16,105 @@ import qualified Ide.Plugin.Example2               as Example2
 import qualified Ide.Plugin.ExampleCabal           as ExampleCabal
 
 -- haskell-language-server optional plugins
-#if qualifyImportedNames
+#if hls_qualifyImportedNames
 import qualified Ide.Plugin.QualifyImportedNames   as QualifyImportedNames
 #endif
 
-#if callHierarchy
+#if hls_callHierarchy
 import qualified Ide.Plugin.CallHierarchy          as CallHierarchy
 #endif
 
-#if class
+#if hls_class
 import qualified Ide.Plugin.Class                  as Class
 #endif
 
-#if haddockComments
+#if hls_haddockComments
 import qualified Ide.Plugin.HaddockComments        as HaddockComments
 #endif
 
-#if eval
+#if hls_eval
 import qualified Ide.Plugin.Eval                   as Eval
 #endif
 
-#if importLens
+#if hls_importLens
 import qualified Ide.Plugin.ExplicitImports        as ExplicitImports
 #endif
 
-#if refineImports
+#if hls_refineImports
 import qualified Ide.Plugin.RefineImports          as RefineImports
 #endif
 
-#if rename
+#if hls_rename
 import qualified Ide.Plugin.Rename                 as Rename
 #endif
 
-#if retrie
+#if hls_retrie
 import qualified Ide.Plugin.Retrie                 as Retrie
 #endif
 
-#if tactic
+#if hls_tactic
 import qualified Ide.Plugin.Tactic                 as Tactic
 #endif
 
-#if hlint
+#if hls_hlint
 import qualified Ide.Plugin.Hlint                  as Hlint
 #endif
 
-#if moduleName
+#if hls_stan
+import qualified Ide.Plugin.Stan                   as Stan
+#endif
+
+#if hls_moduleName
 import qualified Ide.Plugin.ModuleName             as ModuleName
 #endif
 
-#if pragmas
+#if hls_pragmas
 import qualified Ide.Plugin.Pragmas                as Pragmas
 #endif
 
-#if splice
+#if hls_splice
 import qualified Ide.Plugin.Splice                 as Splice
 #endif
 
-#if alternateNumberFormat
+#if hls_alternateNumberFormat
 import qualified Ide.Plugin.AlternateNumberFormat  as AlternateNumberFormat
 #endif
 
-#if codeRange
+#if hls_codeRange
 import qualified Ide.Plugin.CodeRange              as CodeRange
 #endif
 
-#if changeTypeSignature
+#if hls_changeTypeSignature
 import           Ide.Plugin.ChangeTypeSignature    as ChangeTypeSignature
 #endif
 
-#if gadt
+#if hls_gadt
 import           Ide.Plugin.GADT                   as GADT
 #endif
+
+#if explicitFixity
+import           Ide.Plugin.ExplicitFixity         as ExplicitFixity
+#endif
+
 -- formatters
 
-#if floskell
+#if hls_floskell
 import qualified Ide.Plugin.Floskell               as Floskell
 #endif
 
-#if fourmolu
+#if hls_fourmolu
 import qualified Ide.Plugin.Fourmolu               as Fourmolu
 #endif
 
-#if ormolu
+#if hls_ormolu
 import qualified Ide.Plugin.Ormolu                 as Ormolu
 #endif
 
-#if stylishHaskell
+#if hls_stylishHaskell
 import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 #endif
 
-#if brittany
+#if hls_brittany
 import qualified Ide.Plugin.Brittany               as Brittany
 #endif
 
@@ -130,80 +139,89 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
                    then basePlugins ++ examplePlugins
                    else basePlugins
     basePlugins =
-#if pragmas
+#if hls_pragmas
       Pragmas.descriptor  "pragmas" :
 #endif
-#if floskell
+#if hls_floskell
       Floskell.descriptor "floskell" :
 #endif
-#if fourmolu
+#if hls_fourmolu
       Fourmolu.descriptor pluginRecorder "fourmolu" :
 #endif
-#if tactic
+#if hls_tactic
       Tactic.descriptor pluginRecorder "tactics" :
 #endif
-#if ormolu
+#if hls_ormolu
       Ormolu.descriptor   "ormolu" :
 #endif
-#if stylishHaskell
+#if hls_stylishHaskell
       StylishHaskell.descriptor "stylish-haskell" :
 #endif
-#if rename
+#if hls_rename
       Rename.descriptor "rename" :
 #endif
-#if retrie
+#if hls_retrie
       Retrie.descriptor "retrie" :
 #endif
-#if brittany
+#if hls_brittany
       Brittany.descriptor "brittany" :
 #endif
-#if callHierarchy
+#if hls_callHierarchy
       CallHierarchy.descriptor :
 #endif
-#if class
+#if hls_class
       Class.descriptor pluginRecorder "class" :
 #endif
-#if haddockComments
+#if hls_haddockComments
       HaddockComments.descriptor "haddockComments" :
 #endif
-#if eval
+#if hls_eval
       Eval.descriptor pluginRecorder "eval" :
 #endif
-#if importLens
+#if hls_importLens
       ExplicitImports.descriptor pluginRecorder "importLens" :
 #endif
-#if qualifyImportedNames
+#if hls_qualifyImportedNames
       QualifyImportedNames.descriptor "qualifyImportedNames" :
 #endif
-#if refineImports
+#if hls_refineImports
       RefineImports.descriptor pluginRecorder "refineImports" :
 #endif
-#if moduleName
-      ModuleName.descriptor "moduleName" :
+#if hls_moduleName
+      ModuleName.descriptor pluginRecorder "moduleName" :
 #endif
-#if hlint
+#if hls_hlint
       Hlint.descriptor pluginRecorder "hlint" :
 #endif
-#if splice
+#if hls_stan
+      Stan.descriptor pluginRecorder "stan" :
+#endif
+#if hls_splice
       Splice.descriptor "splice" :
 #endif
-#if alternateNumberFormat
+#if hls_alternateNumberFormat
       AlternateNumberFormat.descriptor pluginRecorder :
 #endif
-#if codeRange
+#if hls_codeRange
       CodeRange.descriptor pluginRecorder "codeRange" :
 #endif
-#if changeTypeSignature
+#if hls_changeTypeSignature
       ChangeTypeSignature.descriptor :
 #endif
-#if gadt
+#if hls_gadt
       GADT.descriptor "gadt" :
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else
       GhcIde.descriptors pluginRecorder
+#if explicitFixity
+    -- Make this plugin has a lower priority than ghcide's plugin to ensure
+    -- type info display first.
+      ++ [ExplicitFixity.descriptor pluginRecorder]
+#endif
     examplePlugins =
       [Example.descriptor  pluginRecorder "eg"
       ,Example2.descriptor pluginRecorder "eg2"
       ,ExampleCabal.descriptor pluginRecorder "ec"
       ]
+

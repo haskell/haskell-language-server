@@ -25,10 +25,9 @@ import           Data.Maybe                           (isJust)
 import           Data.String
 import           Data.Text                            (Text, pack)
 import           Development.IDE.Core.OfInterest      (getFilesOfInterest)
-import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service
-import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Rules
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph                (Action)
 import qualified Development.IDE.Graph                as Graph

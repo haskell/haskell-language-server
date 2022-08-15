@@ -17,12 +17,12 @@ module Development.IDE.Types.Exports
 import           Control.DeepSeq             (NFData (..))
 import           Control.Monad
 import           Data.Bifunctor              (Bifunctor (second))
+import           Data.Hashable               (Hashable)
 import           Data.HashMap.Strict         (HashMap, elems)
 import qualified Data.HashMap.Strict         as Map
 import           Data.HashSet                (HashSet)
 import qualified Data.HashSet                as Set
-import           Data.Hashable               (Hashable)
-import           Data.List                   (isSuffixOf, foldl')
+import           Data.List                   (foldl', isSuffixOf)
 import           Data.Text                   (Text, pack)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
