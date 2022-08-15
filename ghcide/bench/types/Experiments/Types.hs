@@ -3,10 +3,12 @@
 {-# LANGUAGE OverloadedStrings  #-}
 module Experiments.Types (module Experiments.Types ) where
 
+import           Control.DeepSeq
 import           Data.Aeson
+import           Data.Binary (Binary)
+import           Data.Hashable (Hashable)
 import           Data.Maybe                (fromMaybe)
 import           Data.Version
-import           Development.Shake.Classes
 import           GHC.Generics
 import           Numeric.Natural
 

@@ -1,4 +1,4 @@
-cabal-version:      2.4
+cabal-version:      3.0
 build-type:         Simple
 category:           Development
 name:               ghcide
@@ -272,8 +272,7 @@ benchmark benchHist
     default-language: Haskell2010
     ghc-options: -Wall -Wno-name-shadowing -threaded
     main-is: Main.hs
-    hs-source-dirs: bench/hist bench/lib
-    other-modules: Experiments.Types
+    hs-source-dirs: bench/hist
     build-tool-depends:
         ghcide:ghcide-bench,
         hp2pretty:hp2pretty,
@@ -300,6 +299,7 @@ benchmark benchHist
         directory,
         extra,
         filepath,
+        ghcide:experiments-types,
         lens,
         optparse-applicative,
         shake,
@@ -309,6 +309,35 @@ benchmark benchHist
 flag executable
     description: Build the ghcide executable
     default: True
+
+library experiments-types
+    default-language: Haskell2010
+    visibility: public
+    hs-source-dirs: bench/types
+    ghc-options: -Wall -Wno-name-shadowing
+    exposed-modules:
+        Experiments.Types
+    build-depends:
+        aeson,
+        base == 4.*,
+        binary,
+        deepseq,
+        hashable,
+    default-extensions:
+        BangPatterns
+        DeriveFunctor
+        DeriveGeneric
+        FlexibleContexts
+        GeneralizedNewtypeDeriving
+        LambdaCase
+        NamedFieldPuns
+        RecordWildCards
+        ScopedTypeVariables
+        StandaloneDeriving
+        TupleSections
+        TypeApplications
+        ViewPatterns
+
 
 executable ghcide
     default-language:   Haskell2010
@@ -406,6 +435,7 @@ test-suite ghcide-tests
         ghc,
         --------------------------------------------------------------
         ghcide,
+        ghcide:experiments-types,
         ghc-typelits-knownnat,
         haddock-library,
         lsp,
@@ -451,7 +481,6 @@ test-suite ghcide-tests
         Development.IDE.Test.Diagnostic
         Development.IDE.Test.Runfiles
         Experiments
-        Experiments.Types
         FuzzySearch
         Progress
         HieDbRetry
@@ -489,6 +518,7 @@ executable ghcide-bench
         extra,
         filepath,
         ghcide,
+        ghcide:experiments-types,
         hls-plugin-api,
         lens,
         lsp-test,
@@ -507,7 +537,6 @@ executable ghcide-bench
         Development.IDE.Test
         Development.IDE.Test.Diagnostic
         Experiments
-        Experiments.Types
     default-extensions:
         BangPatterns
         DeriveFunctor
