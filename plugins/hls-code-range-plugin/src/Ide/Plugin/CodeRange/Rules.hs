@@ -55,10 +55,10 @@ import           Ide.Plugin.CodeRange.ASTPreProcess (CustomNodeType (..),
                                                      PreProcessEnv (..),
                                                      isCustomNode,
                                                      preProcessAST)
+import           Language.LSP.Types                 (FoldingRangeKind (FoldingRangeComment, FoldingRangeImports, FoldingRangeRegion))
 import           Language.LSP.Types.Lens            (HasEnd (end),
                                                      HasStart (start))
 import           Prelude                            hiding (log)
-import Language.LSP.Types (FoldingRangeKind (FoldingRangeComment, FoldingRangeImports, FoldingRangeRegion))
 
 data Log = LogShake Shake.Log
     | LogNoAST
@@ -201,5 +201,5 @@ crkToFrk :: CodeRangeKind -> Maybe FoldingRangeKind
 crkToFrk crk = case crk of
         CodeKindComment -> Just FoldingRangeComment
         CodeKindImports -> Just FoldingRangeImports
-        CodeKindRegion -> Just FoldingRangeRegion
-        _ -> Nothing
+        CodeKindRegion  -> Just FoldingRangeRegion
+        _               -> Nothing

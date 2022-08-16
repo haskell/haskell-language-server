@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Ide.Plugin.CodeRange (
@@ -16,7 +16,7 @@ import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        maybeToExceptT)
 import           Data.Either.Extra                    (maybeToEither)
-import Data.Maybe ( fromMaybe, catMaybes )
+import           Data.Maybe                           (catMaybes, fromMaybe)
 import           Data.Vector                          (Vector)
 import qualified Data.Vector                          as V
 import           Development.IDE                      (IdeAction,
@@ -43,19 +43,18 @@ import           Ide.Types                            (PluginDescriptor (pluginH
                                                        defaultPluginDescriptor,
                                                        mkPluginHandler)
 import           Language.LSP.Server                  (LspM)
-import           Language.LSP.Types                   (List (List),
+import           Language.LSP.Types                   (FoldingRange (..),
+                                                       FoldingRangeParams (..),
+                                                       List (List),
                                                        NormalizedFilePath,
                                                        Position (..),
                                                        Range (_start),
                                                        ResponseError,
-                                                       SMethod (STextDocumentSelectionRange, STextDocumentFoldingRange),
+                                                       SMethod (STextDocumentFoldingRange, STextDocumentSelectionRange),
                                                        SelectionRange (..),
                                                        SelectionRangeParams (..),
-                                                       FoldingRange (..),
-                                                       FoldingRangeParams(..),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
-                                                       Uri
-                                                       )
+                                                       Uri)
 import           Prelude                              hiding (log, span)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
@@ -153,7 +152,7 @@ findPosition pos root = go Nothing root
 findFoldingRanges :: CodeRange -> [FoldingRange]
 findFoldingRanges r@(CodeRange _ children _) =
   let frRoot :: [FoldingRange] = case createFoldingRange r of
-        Just x -> [x]
+        Just x  -> [x]
         Nothing -> []
 
       frChildren :: [FoldingRange] = concat $ V.toList $ fmap findFoldingRanges children
@@ -171,7 +170,7 @@ createFoldingRange node1 = do
     let frk = crkToFrk codeRangeKind
 
     case frk of
-        Just _ -> Just (FoldingRange lineStart Nothing lineEnd Nothing frk)
+        Just _  -> Just (FoldingRange lineStart Nothing lineEnd Nothing frk)
         Nothing -> Nothing
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
