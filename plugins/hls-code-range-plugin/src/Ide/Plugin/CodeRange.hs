@@ -16,7 +16,7 @@ import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        maybeToExceptT)
 import           Data.Either.Extra                    (maybeToEither)
-import           Data.Maybe                           (catMaybes, fromMaybe)
+import           Data.Maybe                           (fromMaybe)
 import           Data.Vector                          (Vector)
 import qualified Data.Vector                          as V
 import           Development.IDE                      (IdeAction,
@@ -160,17 +160,11 @@ findFoldingRanges r@(CodeRange _ children _) =
 
 -- | Parses code range to folding range
 createFoldingRange :: CodeRange -> Maybe FoldingRange
-createFoldingRange node1 = do
-    let range = _codeRange_range node1
-    let Range startPos endPos = range
-    let Position lineStart _= startPos
-    let Position lineEnd _ = endPos
-    let codeRangeKind = _codeRange_kind node1
-
-    let frk = crkToFrk codeRangeKind
+createFoldingRange (CodeRange (Range (Position lineStart charStart) (Position lineEnd charEnd)) _ ck) = do
+    let frk = crkToFrk ck
 
     case frk of
-        Just _  -> Just (FoldingRange lineStart Nothing lineEnd Nothing frk)
+        Just _  -> Just (FoldingRange lineStart (Just charStart) lineEnd (Just charEnd) frk)
         Nothing -> Nothing
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
