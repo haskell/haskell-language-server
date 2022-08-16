@@ -215,6 +215,7 @@
 
         ghc902Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
         ghc924Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
+        ghc941Config = (import ./configuration-ghc-94.nix) { inherit pkgs inputs; };
 
         # GHC versions
         # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached
@@ -224,11 +225,13 @@
           cases = {
             ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
             ghc924 = ghc924Config.tweakHpkgs (pkgs.hlsHpkgs "ghc924");
+            ghc941 = ghc941Config.tweakHpkgs (pkgs.hlsHpkgs "ghc941");
           };
           in { default = cases."${ghcVersion}"; } // cases;
 
         ghc902 = supportedGHCs.ghc902;
         ghc924 = supportedGHCs.ghc924;
+        ghc941 = supportedGHCs.ghc941;
         ghcDefault = supportedGHCs.default;
 
         # For markdown support
@@ -361,6 +364,7 @@
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
           haskell-language-server-902-dev = mkDevShell ghc902 "cabal.project";
           haskell-language-server-924-dev = mkDevShell ghc924 "cabal.project";
+          haskell-language-server-941-dev = mkDevShell ghc941 "cabal.project";
         };
 
         # Developement shell, haskell packages are also provided by nix
@@ -368,12 +372,14 @@
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
           haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
           haskell-language-server-924-dev-nix = mkDevShellWithNixDeps ghc924 "cabal.project";
+          haskell-language-server-941-dev-nix = mkDevShellWithNixDeps ghc941 "cabal.project";
         };
 
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-902 = mkExe ghc902;
           haskell-language-server-924 = mkExe ghc924;
+          haskell-language-server-941 = mkExe ghc941;
         };
 
         devShells = simpleDevShells // nixDevShells // {
