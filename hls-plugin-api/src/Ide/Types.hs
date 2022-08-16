@@ -12,6 +12,7 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE PolyKinds                  #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
@@ -20,6 +21,30 @@
 {-# LANGUAGE ViewPatterns               #-}
 
 module Ide.Types
+( PluginDescriptor(..), defaultPluginDescriptor, defaultCabalPluginDescriptor
+, IdeCommand(..)
+, IdeMethod(..)
+, IdeNotification(..)
+, IdePlugins(IdePlugins, ipMap)
+, DynFlagsModifications(..)
+, ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin, pluginEnabledConfig
+, CustomConfig(..), mkCustomConfig
+, FallbackCodeActionParams(..)
+, FormattingType(..), FormattingMethod, FormattingHandler, mkFormattingHandlers
+, HasTracing(..)
+, PluginCommand(..), CommandId(..), CommandFunction, mkLspCommand, mkLspCmdId
+, PluginId(..)
+, PluginHandler(..), mkPluginHandler
+, PluginHandlers(..)
+, PluginMethod(..)
+, PluginMethodHandler
+, PluginNotificationHandler(..), mkPluginNotificationHandler
+, PluginNotificationHandlers(..)
+, PluginRequestMethod(..)
+, getProcessID, getPid
+, installSigUsr1Handler
+, responseError
+)
     where
 
 #ifdef mingw32_HOST_OS
@@ -36,6 +61,7 @@ import           Data.Dependent.Map              (DMap)
 import qualified Data.Dependent.Map              as DMap
 import qualified Data.DList                      as DList
 import           Data.GADT.Compare
+import           Data.List.Extra (nubOrdOn)
 import           Data.List.NonEmpty              (NonEmpty (..), toList)
 import qualified Data.Map                        as Map
 import           Data.Maybe
@@ -76,9 +102,19 @@ import           Text.Regex.TDFA.Text            ()
 
 -- ---------------------------------------------------------------------
 
-newtype IdePlugins ideState = IdePlugins
-  { ipMap :: [(PluginId, PluginDescriptor ideState)]}
-  deriving newtype (Monoid, Semigroup)
+newtype IdePlugins ideState = IdePlugins_
+  { ipMap_ :: [(PluginId, PluginDescriptor ideState)]}
+  deriving newtype Monoid
+
+-- | Smart constructor that deduplicates plugins
+pattern IdePlugins :: [(PluginId, PluginDescriptor ideState)] -> IdePlugins ideState
+pattern IdePlugins{ipMap} <- IdePlugins_ ipMap
+  where
+    IdePlugins ipMap = IdePlugins_{ipMap_ = nubOrdOn fst ipMap}
+{-# COMPLETE IdePlugins #-}
+
+instance Semigroup (IdePlugins s) where
+    IdePlugins a <> IdePlugins b = IdePlugins(a <> b)
 
 -- | Hooks for modifying the 'DynFlags' at different times of the compilation
 -- process. Plugins can install a 'DynFlagsModifications' via
