@@ -103,6 +103,7 @@ extra-deps:
   - trial-tomland-0.0.0.0@sha256:743a9baaa36891ed3a44618fdfd5bc4ed9afc39cf9b9fa23ea1b96f3787f5ec0,2526
   - text-rope-0.2
   - co-log-core-0.3.1.0
+  - hindent-5.3.4
 
 configure-options:
   ghcide:
