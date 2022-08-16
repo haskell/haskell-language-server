@@ -13,8 +13,6 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
     , pluginRules = rules recorder
     , pluginHandlers = mkPluginHandler STextDocumentCodeAction (codeAction recorder)
         <> mkPluginHandler STextDocumentCodeLens codeLens
-    , pluginConfigDescriptor =
-        defaultConfigDescriptor { configCustomConfig = mkCustomConfig properties }
     }
 
 commands :: PluginId -> [PluginCommand IdeState]

@@ -92,15 +92,6 @@ codeLensTests recorder = testGroup
                 [ "(==) :: B -> B -> Bool"
                 , "(==) :: A -> A -> Bool"
                 ]
-    , testCase "Should no lens if disabled" $ do
-        runSessionWithServer (classPlugin recorder) testDataDir $ do
-            sendConfigurationChanged
-                $ toJSON
-                $ def { Plugin.plugins = [("class", def { plcConfig = "typelensOn" .= False })] }
-            doc <- openDoc "CodeLensSimple.hs" "haskell"
-            lens <- getCodeLenses doc
-            let titles = map (^. J.title) $ mapMaybe (^. J.command) lens
-            liftIO $ titles @?= []
     , goldenCodeLens recorder "Apply code lens" "CodeLensSimple" 1
     , goldenCodeLens recorder "Apply code lens for local class" "LocalClassDefine" 0
     , goldenCodeLens recorder "Apply code lens on the same line" "Inline" 0
