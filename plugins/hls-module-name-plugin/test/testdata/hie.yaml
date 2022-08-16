@@ -1,8 +1,17 @@
 cradle:
-  direct:
-    arguments:
-      - "-isubdir"
-      - "TEmptyModule"
-      - "TWrongModuleName"
-      - "mainlike"
-      - "CorrectName"
+  multi:
+    - path: "./"
+      config:
+        cradle:
+          direct:
+            arguments:
+              - "-isubdir"
+              - "TEmptyModule"
+              - "TWrongModuleName"
+              - "CorrectName"
+    - path: "./canonicalize"
+      config:
+        cradle:
+          cabal:
+            - path: "./"
+              component: "lib:canonicalize"
