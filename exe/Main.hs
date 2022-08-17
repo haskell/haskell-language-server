@@ -8,6 +8,8 @@ module Main(main) where
 import           Control.Monad.IO.Class       (liftIO)
 import           Data.Function                ((&))
 import           Data.Text                    (Text)
+import qualified Development.IDE.Main           as GhcideMain
+import qualified Development.IDE.Main.HeapStats as HeapStats
 import           Development.IDE.Types.Logger (Doc,
                                                Priority (Debug, Error, Info),
                                                WithPriority (WithPriority, priority),
@@ -16,7 +18,7 @@ import           Development.IDE.Types.Logger (Doc,
                                                layoutPretty,
                                                makeDefaultStderrRecorder,
                                                renderStrict,
-                                               withDefaultRecorder)
+                                               withDefaultRecorder, payload)
 import qualified Development.IDE.Types.Logger as Logger
 import           Ide.Arguments                (Arguments (..),
                                                GhcideArguments (..),
@@ -32,6 +34,7 @@ import           Language.LSP.Types           as LSP
 import qualified Plugins
 #if MIN_VERSION_prettyprinter(1,7,0)
 import           Prettyprinter                (Pretty (pretty), vsep)
+import Control.Arrow ((&&&))
 #else
 import           Data.Text.Prettyprint.Doc    (Pretty (pretty), vsep)
 #endif
@@ -71,15 +74,19 @@ main = do
 
     withDefaultRecorder logFilePath Nothing minPriority $ \textWithPriorityRecorder -> do
       let
-        recorder = cmapWithPrio pretty $ mconcat
+        recorder = cmapWithPrio (pretty &&& id) $ mconcat
             [textWithPriorityRecorder
                 & cfilter (\WithPriority{ priority } -> priority >= minPriority)
+                & cmapWithPrio fst
             , lspMessageRecorder
                 & cfilter (\WithPriority{ priority } -> priority >= Error)
-                & cmapWithPrio renderDoc
+                & cmapWithPrio (renderDoc . fst)
             , lspLogRecorder
                 & cfilter (\WithPriority{ priority } -> priority >= minPriority)
-                & cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions)
+                & cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions . fst)
+                -- do not log heap stats to the LSP log as they interfere with the
+                -- ability of lsp-test to detect a stuck server in tests and benchmarks
+                & cfilter (not . heapStats . snd . payload)
             ]
         plugins = (Plugins.idePlugins (cmapWithPrio LogPlugins recorder) includeExamplePlugins)
 
@@ -96,3 +103,7 @@ renderDoc d = renderStrict $ layoutPretty defaultLayoutOptions $ vsep
 
 issueTrackerUrl :: Doc a
 issueTrackerUrl = "https://github.com/haskell/haskell-language-server/issues"
+
+heapStats :: Log -> Bool
+heapStats (LogIdeMain (IdeMain.LogIDEMain (GhcideMain.LogHeapStats _))) = True
+heapStats _ = False
