@@ -209,8 +209,11 @@ rules recorder plugin = do
     liftIO $ argsSettings flags
 
   action $ do
-    files <- getFilesOfInterestUntracked
-    void $ uses GetHlintDiagnostics $ Map.keys files
+    config <- getClientConfigAction def
+    let hlintOn = pluginEnabledConfig plcDiagnosticsOn plugin config
+    when hlintOn $ do
+        files <- getFilesOfInterestUntracked
+        void $ uses GetHlintDiagnostics $ Map.keys files
 
   where
 
