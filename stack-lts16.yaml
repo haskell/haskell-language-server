@@ -104,6 +104,7 @@ extra-deps:
   - text-rope-0.2
   - co-log-core-0.3.1.0
   - hindent-5.3.4
+  - haskell-src-exts-1.23.1
 
 configure-options:
   ghcide:
