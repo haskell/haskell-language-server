@@ -5,11 +5,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
 
-import           Control.Arrow ((&&&))
+import           Control.Arrow                ((&&&))
 import           Control.Monad.IO.Class       (liftIO)
 import           Data.Function                ((&))
 import           Data.Text                    (Text)
-import qualified Development.IDE.Main           as GhcideMain
+import qualified Development.IDE.Main         as GhcideMain
 import           Development.IDE.Types.Logger (Doc,
                                                Priority (Debug, Error, Info),
                                                WithPriority (WithPriority, priority),
@@ -17,8 +17,8 @@ import           Development.IDE.Types.Logger (Doc,
                                                defaultLayoutOptions,
                                                layoutPretty,
                                                makeDefaultStderrRecorder,
-                                               renderStrict,
-                                               withDefaultRecorder, payload)
+                                               payload, renderStrict,
+                                               withDefaultRecorder)
 import qualified Development.IDE.Types.Logger as Logger
 import           Ide.Arguments                (Arguments (..),
                                                GhcideArguments (..),
@@ -105,4 +105,4 @@ issueTrackerUrl = "https://github.com/haskell/haskell-language-server/issues"
 
 heapStats :: Log -> Bool
 heapStats (LogIdeMain (IdeMain.LogIDEMain (GhcideMain.LogHeapStats _))) = True
-heapStats _ = False
+heapStats _                                                             = False
