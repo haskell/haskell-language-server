@@ -5,11 +5,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
 
+import           Control.Arrow ((&&&))
 import           Control.Monad.IO.Class       (liftIO)
 import           Data.Function                ((&))
 import           Data.Text                    (Text)
 import qualified Development.IDE.Main           as GhcideMain
-import qualified Development.IDE.Main.HeapStats as HeapStats
 import           Development.IDE.Types.Logger (Doc,
                                                Priority (Debug, Error, Info),
                                                WithPriority (WithPriority, priority),
@@ -34,7 +34,6 @@ import           Language.LSP.Types           as LSP
 import qualified Plugins
 #if MIN_VERSION_prettyprinter(1,7,0)
 import           Prettyprinter                (Pretty (pretty), vsep)
-import Control.Arrow ((&&&))
 #else
 import           Data.Text.Prettyprint.Doc    (Pretty (pretty), vsep)
 #endif
