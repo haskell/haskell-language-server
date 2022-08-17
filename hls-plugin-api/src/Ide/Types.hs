@@ -61,7 +61,7 @@ import           Data.Dependent.Map              (DMap)
 import qualified Data.Dependent.Map              as DMap
 import qualified Data.DList                      as DList
 import           Data.GADT.Compare
-import           Data.List.Extra (nubOrdOn)
+import           Data.List.Extra                 (nubOrdOn)
 import           Data.List.NonEmpty              (NonEmpty (..), toList)
 import qualified Data.Map                        as Map
 import           Data.Maybe
