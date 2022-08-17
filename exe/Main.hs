@@ -64,12 +64,12 @@ main = do
               liftIO $ (cb1 <> cb2) env
           }
 
-    let (minPriority, logFilePath, includeExamplePlugins) =
+    let (argsTesting, minPriority, logFilePath, includeExamplePlugins) =
           case args of
             Ghcide GhcideArguments{ argsTesting, argsDebugOn, argsLogFile, argsExamplePlugin } ->
               let minPriority = if argsDebugOn || argsTesting then Debug else Info
-              in (minPriority, argsLogFile, argsExamplePlugin)
-            _ -> (Info, Nothing, False)
+              in (argsTesting, minPriority, argsLogFile, argsExamplePlugin)
+            _ -> (False, Info, Nothing, False)
 
     withDefaultRecorder logFilePath Nothing minPriority $ \textWithPriorityRecorder -> do
       let
@@ -85,7 +85,7 @@ main = do
                 & cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions . fst)
                 -- do not log heap stats to the LSP log as they interfere with the
                 -- ability of lsp-test to detect a stuck server in tests and benchmarks
-                & cfilter (not . heapStats . snd . payload)
+                & if argsTesting then cfilter (not . heapStats . snd . payload) else id
             ]
         plugins = (Plugins.idePlugins (cmapWithPrio LogPlugins recorder) includeExamplePlugins)
 
