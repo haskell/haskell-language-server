@@ -22,6 +22,7 @@
 
 module Ide.Types
 ( PluginDescriptor(..), defaultPluginDescriptor, defaultCabalPluginDescriptor
+, defaultPluginPriority
 , IdeCommand(..)
 , IdeMethod(..)
 , IdeNotification(..)
@@ -61,10 +62,14 @@ import           Data.Dependent.Map              (DMap)
 import qualified Data.Dependent.Map              as DMap
 import qualified Data.DList                      as DList
 import           Data.GADT.Compare
-import           Data.List.Extra                 (nubOrdOn)
+import           Data.Hashable                   (Hashable)
+import           Data.HashMap.Strict             (HashMap)
+import qualified Data.HashMap.Strict             as HashMap
+import           Data.List.Extra                 (sortOn)
 import           Data.List.NonEmpty              (NonEmpty (..), toList)
 import qualified Data.Map                        as Map
 import           Data.Maybe
+import           Data.Ord
 import           Data.Semigroup
 import           Data.String
 import qualified Data.Text                       as T
@@ -94,6 +99,7 @@ import           Language.LSP.Types.Lens         as J (HasChildren (children),
                                                        HasTitle (title),
                                                        HasUri (..))
 import           Language.LSP.VFS
+import           Numeric.Natural
 import           OpenTelemetry.Eventlog
 import           Options.Applicative             (ParserInfo)
 import           System.FilePath
@@ -102,19 +108,15 @@ import           Text.Regex.TDFA.Text            ()
 
 -- ---------------------------------------------------------------------
 
-newtype IdePlugins ideState = IdePlugins_
-  { ipMap_ :: [(PluginId, PluginDescriptor ideState)]}
-  deriving newtype Monoid
+newtype IdePlugins ideState = IdePlugins_ { ipMap_ :: HashMap PluginId (PluginDescriptor ideState)}
+  deriving newtype (Semigroup, Monoid)
 
 -- | Smart constructor that deduplicates plugins
 pattern IdePlugins :: [(PluginId, PluginDescriptor ideState)] -> IdePlugins ideState
-pattern IdePlugins{ipMap} <- IdePlugins_ ipMap
+pattern IdePlugins{ipMap} <- IdePlugins_ (sortOn (Down . pluginPriority . snd) . HashMap.toList -> ipMap)
   where
-    IdePlugins ipMap = IdePlugins_{ipMap_ = nubOrdOn fst ipMap}
+    IdePlugins ipMap = IdePlugins_{ipMap_ = HashMap.fromList ipMap}
 {-# COMPLETE IdePlugins #-}
-
-instance Semigroup (IdePlugins s) where
-    IdePlugins a <> IdePlugins b = IdePlugins(a <> b)
 
 -- | Hooks for modifying the 'DynFlags' at different times of the compilation
 -- process. Plugins can install a 'DynFlagsModifications' via
@@ -149,6 +151,8 @@ instance Show (IdeCommand st) where show _ = "<ide command>"
 data PluginDescriptor (ideState :: *) =
   PluginDescriptor { pluginId           :: !PluginId
                    -- ^ Unique identifier of the plugin.
+                   , pluginPriority     :: Natural
+                   -- ^ Plugin handlers are called in priority order, higher priority first
                    , pluginRules        :: !(Rules ())
                    , pluginCommands     :: ![PluginCommand ideState]
                    , pluginHandlers     :: PluginHandlers ideState
@@ -631,6 +635,9 @@ mkPluginNotificationHandler m f
   where
     f' pid ide vfs = f ide vfs pid
 
+defaultPluginPriority :: Natural
+defaultPluginPriority = 1000
+
 -- | Set up a plugin descriptor, initialized with default values.
 -- This is plugin descriptor is prepared for @haskell@ files, such as
 --
@@ -644,6 +651,7 @@ defaultPluginDescriptor :: PluginId -> PluginDescriptor ideState
 defaultPluginDescriptor plId =
   PluginDescriptor
     plId
+    defaultPluginPriority
     mempty
     mempty
     mempty
@@ -663,6 +671,7 @@ defaultCabalPluginDescriptor :: PluginId -> PluginDescriptor ideState
 defaultCabalPluginDescriptor plId =
   PluginDescriptor
     plId
+    defaultPluginPriority
     mempty
     mempty
     mempty
@@ -694,6 +703,7 @@ type CommandFunction ideState a
 
 newtype PluginId = PluginId T.Text
   deriving (Show, Read, Eq, Ord)
+  deriving newtype Hashable
 
 instance IsString PluginId where
   fromString = PluginId . T.pack

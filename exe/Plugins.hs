@@ -211,12 +211,8 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
 #if hls_gadt
       GADT.descriptor "gadt" :
 #endif
-    -- The ghcide descriptors should come last so that the notification handlers
-    -- (which restart the Shake build) run after everything else
       GhcIde.descriptors pluginRecorder
 #if explicitFixity
-    -- Make this plugin has a lower priority than ghcide's plugin to ensure
-    -- type info display first.
       ++ [ExplicitFixity.descriptor pluginRecorder]
 #endif
     examplePlugins =
