@@ -36,6 +36,7 @@ module Ide.PluginUtils
 where
 
 
+import           Control.Arrow                   ((&&&))
 import           Control.Monad.Extra             (maybeM)
 import           Control.Monad.Trans.Class       (lift)
 import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
@@ -224,15 +225,8 @@ positionInRange p (Range sp ep) = sp <= p && p < ep -- Range's end position is e
 -- ---------------------------------------------------------------------
 
 allLspCmdIds' :: T.Text -> IdePlugins ideState -> [T.Text]
-allLspCmdIds' pid (IdePlugins ls) = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
-    where
-        justs (p, Just x)  = [(p, x)]
-        justs (_, Nothing) = []
-
-
-        mkPlugin maker selector
-            = maker $ concatMap (\p -> justs (pluginId p, selector p)) ls
-
+allLspCmdIds' pid (IdePlugins ls) =
+    allLspCmdIds pid $ map (pluginId &&& pluginCommands) ls
 
 allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand ideState])] -> [T.Text]
 allLspCmdIds pid commands = concatMap go commands

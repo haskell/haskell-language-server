@@ -290,7 +290,8 @@ initializeResponseTests = withResource acquire release tests where
             doTest = do
                 ir <- getInitializeResponse
                 let Just ExecuteCommandOptions {_commands = List commands} = getActual $ innerCaps ir
-                zipWithM_ (\e o -> T.isSuffixOf e o @? show (e,o)) expected commands
+                    commandNames = (!! 2) . T.splitOn ":" <$> commands
+                zipWithM_ (\e o -> T.isSuffixOf e o @? show (e,o)) (sort expected) (sort commandNames)
 
   innerCaps :: ResponseMessage Initialize -> ServerCapabilities
   innerCaps (ResponseMessage _ _ (Right (InitializeResult c _))) = c
