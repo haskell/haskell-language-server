@@ -34,7 +34,7 @@ pluginsToDefaultConfig IdePlugins {..} =
   A.toJSON defaultConfig & ix "haskell" . _Object . at "plugin" ?~ elems
   where
     defaultConfig@Config {} = def
-    elems = A.object $ mconcat $ singlePlugin <$> map snd ipMap
+    elems = A.object $ mconcat $ singlePlugin <$> ipMap
     -- Splice genericDefaultConfig and dedicatedDefaultConfig
     -- Example:
     --
@@ -96,7 +96,7 @@ pluginsToDefaultConfig IdePlugins {..} =
 -- | Generates json schema used in haskell vscode extension
 -- Similar to 'pluginsToDefaultConfig' but simpler, since schema has a flatten structure
 pluginsToVSCodeExtensionSchema :: IdePlugins a -> A.Value
-pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlugin <$> map snd ipMap
+pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlugin <$> ipMap
   where
     singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {..}, ..} = genericSchema <> dedicatedSchema
       where

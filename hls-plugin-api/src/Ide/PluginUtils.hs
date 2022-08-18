@@ -42,7 +42,6 @@ import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
 import           Data.Bifunctor                  (Bifunctor (first))
-import           Data.Containers.ListUtils       (nubOrdOn)
 import qualified Data.HashMap.Strict             as H
 import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
@@ -159,11 +158,10 @@ clientSupportsDocumentChanges caps =
 -- ---------------------------------------------------------------------
 
 pluginDescToIdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
-pluginDescToIdePlugins plugins =
-    IdePlugins $ map (\p -> (pluginId p, p)) $ nubOrdOn pluginId plugins
+pluginDescToIdePlugins = IdePlugins
 
 idePluginsToPluginDesc :: IdePlugins ideState -> [PluginDescriptor ideState]
-idePluginsToPluginDesc (IdePlugins pp) = map snd pp
+idePluginsToPluginDesc (IdePlugins pp) = pp
 
 -- ---------------------------------------------------------------------
 -- | Returns the current client configuration. It is not wise to permanently
@@ -233,7 +231,7 @@ allLspCmdIds' pid (IdePlugins ls) = mkPlugin (allLspCmdIds pid) (Just . pluginCo
 
 
         mkPlugin maker selector
-            = maker $ concatMap (\(pid, p) -> justs (pid, selector p)) ls
+            = maker $ concatMap (\p -> justs (pluginId p, selector p)) ls
 
 
 allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand ideState])] -> [T.Text]

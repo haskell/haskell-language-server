@@ -55,6 +55,7 @@ import           Control.Monad                   (void)
 import qualified System.Posix.Process            as P (getProcessID)
 import           System.Posix.Signals
 #endif
+import           Control.Arrow                   ((&&&))
 import           Control.Lens                    ((^.))
 import           Data.Aeson                      hiding (defaultOptions)
 import qualified Data.Default
@@ -112,10 +113,10 @@ newtype IdePlugins ideState = IdePlugins_ { ipMap_ :: HashMap PluginId (PluginDe
   deriving newtype (Semigroup, Monoid)
 
 -- | Smart constructor that deduplicates plugins
-pattern IdePlugins :: [(PluginId, PluginDescriptor ideState)] -> IdePlugins ideState
-pattern IdePlugins{ipMap} <- IdePlugins_ (sortOn (Down . pluginPriority . snd) . HashMap.toList -> ipMap)
+pattern IdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
+pattern IdePlugins{ipMap} <- IdePlugins_ (sortOn (Down . pluginPriority) . HashMap.elems -> ipMap)
   where
-    IdePlugins ipMap = IdePlugins_{ipMap_ = HashMap.fromList ipMap}
+    IdePlugins ipMap = IdePlugins_{ipMap_ = HashMap.fromList $ (pluginId &&& id) <$> ipMap}
 {-# COMPLETE IdePlugins #-}
 
 -- | Hooks for modifying the 'DynFlags' at different times of the compilation

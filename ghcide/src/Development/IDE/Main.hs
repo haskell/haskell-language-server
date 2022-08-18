@@ -122,7 +122,7 @@ import           Ide.Types                                (IdeCommand (IdeComman
                                                            IdePlugins,
                                                            PluginDescriptor (PluginDescriptor, pluginCli),
                                                            PluginId (PluginId),
-                                                           ipMap)
+                                                           ipMap, pluginId)
 import qualified Language.LSP.Server                      as LSP
 import qualified "list-t" ListT
 import           Numeric.Natural                          (Natural)
@@ -224,7 +224,7 @@ commandP plugins =
 
     pluginCommands = mconcat
         [ command (T.unpack pId) (Custom <$> p)
-        | (PluginId pId, PluginDescriptor{pluginCli = Just p}) <- ipMap plugins
+        | PluginDescriptor{pluginCli = Just p, pluginId = PluginId pId} <- ipMap plugins
         ]
 
 
