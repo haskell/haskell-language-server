@@ -6750,24 +6750,26 @@ unitTests recorder logger = do
          let expected = "1:2-3:4"
          assertBool (unwords ["expected to find range", expected, "in diagnostic", shown]) $
              expected `isInfixOf` shown
-     , testCase "notification handlers run sequentially" $ do
+     , testCase "notification handlers run in priority order" $ do
         orderRef <- newIORef []
         let plugins = pluginDescToIdePlugins $
-                [ (defaultPluginDescriptor $ fromString $ show i)
+                [ (priorityPluginDescriptor i)
                     { pluginNotificationHandlers = mconcat
                         [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $ \_ _ _ _ ->
                             liftIO $ atomicModifyIORef_ orderRef (i:)
                         ]
                     }
-                    | i <- [(1::Int)..20]
+                    | i <- [1..20]
                 ] ++ Ghcide.descriptors (cmapWithPrio LogGhcIde recorder)
+            priorityPluginDescriptor i = (defaultPluginDescriptor $ fromString $ show i){pluginPriority = i}
 
         testIde recorder (IDE.testing (cmapWithPrio LogIDEMain recorder) logger){IDE.argsHlsPlugins = plugins} $ do
             _ <- createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
-            actualOrder <- liftIO $ readIORef orderRef
+            actualOrder <- liftIO $ reverse <$> readIORef orderRef
 
-            liftIO $ actualOrder @?= reverse [(1::Int)..20]
+            -- Handlers are run in priority descending order
+            liftIO $ actualOrder @?= [20, 19 .. 1]
      , ignoreTestBecause "The test fails sometimes showing 10000us" $
          testCase "timestamps have millisecond resolution" $ do
            resolution_us <- findResolution_us 1

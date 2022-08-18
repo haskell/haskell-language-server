@@ -13,7 +13,6 @@ import           Control.Exception            (SomeException)
 import           Control.Lens                 ((^.))
 import           Control.Monad
 import qualified Data.Aeson                   as J
-import           Data.Bifunctor
 import           Data.Dependent.Map           (DMap)
 import qualified Data.Dependent.Map           as DMap
 import           Data.Dependent.Sum
@@ -96,7 +95,7 @@ asGhcIdePlugin recorder (IdePlugins ls) =
 
         mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor IdeState -> b) -> Plugin Config
         mkPlugin maker selector =
-          case map (second selector) ls of
+          case map (\p -> (pluginId p, selector p)) ls of
             -- If there are no plugins that provide a descriptor, use mempty to
             -- create the plugin – otherwise we we end up declaring handlers for
             -- capabilities that there are no plugins for
