@@ -5,7 +5,6 @@
 
 module Ide.Plugin.Class.ExactPrint where
 
-import           Control.Lens                            (Identity)
 import           Control.Monad.Trans.Maybe
 import qualified Data.Text                               as T
 import           Development.IDE.GHC.Compat
