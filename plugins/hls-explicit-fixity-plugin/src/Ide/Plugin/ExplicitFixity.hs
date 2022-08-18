@@ -28,6 +28,7 @@ import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util      (FastString)
 import qualified Development.IDE.GHC.Compat.Util      as Util
+import           Development.IDE.LSP.Notifications    (ghcideNotificationsPluginPriority)
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (getNormalizedFilePath,
                                                        handleMaybeM,
@@ -42,6 +43,9 @@ descriptor :: Recorder (WithPriority Log) -> PluginDescriptor IdeState
 descriptor recorder = (defaultPluginDescriptor pluginId)
     { pluginRules = fixityRule recorder
     , pluginHandlers = mkPluginHandler STextDocumentHover hover
+    -- Make this plugin has a lower priority than ghcide's plugin to ensure
+    -- type info display first.
+    , pluginPriority = ghcideNotificationsPluginPriority - 1
     }
 
 hover :: PluginMethodHandler IdeState TextDocumentHover

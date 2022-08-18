@@ -192,6 +192,7 @@ library
         Development.IDE.Monitoring.EKG
         Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.LanguageServer
+        Development.IDE.LSP.Notifications
         Development.IDE.LSP.Outline
         Development.IDE.LSP.Server
         Development.IDE.Session
@@ -225,7 +226,6 @@ library
         Development.IDE.Core.FileExists
         Development.IDE.GHC.CPP
         Development.IDE.GHC.Warnings
-        Development.IDE.LSP.Notifications
         Development.IDE.Plugin.CodeAction.PositionIndexed
         Development.IDE.Plugin.CodeAction.Args
         Development.IDE.Plugin.Completions.Logic
