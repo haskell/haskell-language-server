@@ -47,7 +47,10 @@ providerTests = testGroup "formatting provider" [
     testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
         resp <- request STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
-        liftIO $ resp ^. LSP.result @?= Left (ResponseError InvalidRequest "No plugin enabled for STextDocumentFormatting, available:\nPluginId \"floskell\"\nPluginId \"fourmolu\"\nPluginId \"ormolu\"\nPluginId \"stylish-haskell\"\nPluginId \"brittany\"\n" Nothing)
+        liftIO $ resp ^. LSP.result @?= Left (ResponseError InvalidRequest
+            ("No plugin enabled for STextDocumentFormatting, available:\n"
+            <> "PluginId \"floskell\"\nPluginId \"fourmolu\"\nPluginId \"stylish-haskell\"\nPluginId \"brittany\"\nPluginId \"ormolu\"\n")
+            Nothing)
 
     , requiresOrmoluPlugin . requiresFloskellPlugin $ testCase "can change on the fly" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
