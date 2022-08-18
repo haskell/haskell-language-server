@@ -21,6 +21,7 @@ import           Control.Exception.Safe                   (SomeException,
 import           Control.Monad.Extra                      (concatMapM, unless,
                                                            when)
 import qualified Data.Aeson.Encode.Pretty                 as A
+import           Data.Coerce                              (coerce)
 import           Data.Default                             (Default (def))
 import           Data.Foldable                            (traverse_)
 import           Data.Hashable                            (hashed)
@@ -92,7 +93,8 @@ import           Development.IDE.Types.Logger             (Logger,
                                                            Recorder,
                                                            WithPriority,
                                                            cmapWithPrio,
-                                                           logWith, vsep, (<+>))
+                                                           logWith, nest, vsep,
+                                                           (<+>))
 import           Development.IDE.Types.Monitoring         (Monitoring)
 import           Development.IDE.Types.Options            (IdeGhcSession,
                                                            IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
@@ -146,7 +148,7 @@ import           Text.Printf                              (printf)
 
 data Log
   = LogHeapStats !HeapStats.Log
-  | LogLspStart
+  | LogLspStart [PluginId]
   | LogLspStartDuration !Seconds
   | LogShouldRunSubset !Bool
   | LogOnlyPartialGhc92Support
@@ -163,10 +165,12 @@ data Log
 instance Pretty Log where
   pretty = \case
     LogHeapStats log -> pretty log
-    LogLspStart ->
-      vsep
-        [ "Staring LSP server..."
-        , "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"]
+    LogLspStart pluginIds ->
+      nest 2 $ vsep
+        [ "Starting LSP server..."
+        , "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
+        , "PluginIds:" <+> pretty (coerce @_ @[T.Text] pluginIds)
+        ]
     LogLspStartDuration duration ->
       "Started LSP server in" <+> pretty (showDuration duration)
     LogShouldRunSubset shouldRunSubset ->
@@ -336,7 +340,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig argsHlsPlugins
         LSP -> withNumCapabilities (maybe (numProcessors `div` 2) fromIntegral argsThreads) $ do
             t <- offsetTime
-            log Info LogLspStart
+            log Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
 
             let getIdeState :: LSP.LanguageContextEnv Config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState
                 getIdeState env rootPath withHieDb hieChan = do
