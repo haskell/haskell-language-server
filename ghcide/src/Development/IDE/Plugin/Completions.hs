@@ -5,6 +5,7 @@
 module Development.IDE.Plugin.Completions
     ( descriptor
     , Log(..)
+    , ghcideCompletionsPluginPriority
     ) where
 
 import           Control.Concurrent.Async                     (concurrently)
@@ -49,6 +50,7 @@ import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.VFS                             as VFS
+import           Numeric.Natural
 import           Text.Fuzzy.Parallel                          (Scored (..))
 
 data Log = LogShake Shake.Log deriving Show
@@ -57,12 +59,16 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
+ghcideCompletionsPluginPriority :: Natural
+ghcideCompletionsPluginPriority = defaultPluginPriority
+
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions recorder
   , pluginHandlers = mkPluginHandler STextDocumentCompletion getCompletionsLSP
   , pluginCommands = [extendImportCommand]
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
+  , pluginPriority = ghcideCompletionsPluginPriority
   }
 
 produceCompletions :: Recorder (WithPriority Log) -> Rules ()
