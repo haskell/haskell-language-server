@@ -130,7 +130,7 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLog
       , IDEMain.argsHlsPlugins = IDEMain.argsHlsPlugins args <> idePlugins
       , IDEMain.argsLogger = pure logger <> pure telemetryLogger
       , IDEMain.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
-      , IDEMain.argsIdeOptions = \_config sessionLoader ->
-        let defOptions = Ghcide.defaultIdeOptions sessionLoader
+      , IDEMain.argsIdeOptions = \config sessionLoader ->
+        let defOptions = IDEMain.argsIdeOptions args config sessionLoader
         in defOptions { Ghcide.optShakeProfiling = argsShakeProfiling }
       }
