@@ -151,7 +151,8 @@ jobs:
         path: benchmark-artifacts.tar.gz
 
     - name: tar benchmarking logs
-      run: find bench-results -name "*.log" -or -name "*.eventlog" -or -name "*.hp" | xargs tar -czf benchmark-logs.tar.gz
+      # We dont' store the eventlogs because the CI workers risk running out of disk space
+      run: find bench-results -name "*.log" -or -name "*.hp" | xargs tar -czf benchmark-logs.tar.gz
 
     - name: Archive benchmark logs
       uses: actions/upload-artifact@v3
