@@ -61,6 +61,7 @@ import           System.FilePath                 ((<.>), (</>))
 import           System.Process
 import           System.Time.Extra
 import           Text.ParserCombinators.ReadP    (readP_to_S)
+import           Text.Printf
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
     TextDocumentContentChangeEvent
@@ -368,15 +369,15 @@ runBenchmarksFun dir allBenchmarks = do
         [ [ name,
             show success,
             show samples,
-            show startup,
-            show runSetup',
-            show userWaits,
-            show delayedWork,
-            show $ firstResponse+firstResponseDelayed,
+            showMs startup,
+            showMs runSetup',
+            showMs userWaits,
+            showMs delayedWork,
+            showMs $ firstResponse+firstResponseDelayed,
             -- Exclude first response as it has a lot of setup time included
             -- Assume that number of requests = number of modules * number of samples
-            show ((userWaits - firstResponse)/((fromIntegral samples - 1)*modules)),
-            show runExperiment,
+            showMs ((userWaits - firstResponse)/((fromIntegral samples - 1)*modules)),
+            showMs runExperiment,
             show rulesBuilt,
             show rulesChanged,
             show rulesVisited,
@@ -442,6 +443,9 @@ runBenchmarksFun dir allBenchmarks = do
           ++ ["--ot-memory-profiling" | Just _ <- [otMemoryProfiling ?config]]
     lspTestCaps =
       fullCaps {_window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
+
+showMs :: Seconds -> String
+showMs = printf "%.2f"
 
 data BenchRun = BenchRun
   { startup              :: !Seconds,
