@@ -49,8 +49,8 @@ callHierarchyId = PluginId "callHierarchy"
 
 -- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHierarchy
-prepareCallHierarchy state pluginId param = pluginResponse $ do
-    nfp <- getNormalizedFilePath pluginId (param ^. L.textDocument ^. L.uri)
+prepareCallHierarchy state _ param = pluginResponse $ do
+    nfp <- getNormalizedFilePath (param ^. L.textDocument ^. L.uri)
     items <- liftIO (runAction "CallHierarchy.prepareHierarchy" state (prepareCallHierarchyItem nfp (param ^. L.position)))
     pure (List <$> items)
 

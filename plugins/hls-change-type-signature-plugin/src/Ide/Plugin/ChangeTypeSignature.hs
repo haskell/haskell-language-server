@@ -38,8 +38,8 @@ descriptor :: PluginDescriptor IdeState
 descriptor = (defaultPluginDescriptor changeTypeSignatureId) { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler }
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = pluginResponse $ do
-      nfp <- getNormalizedFilePath plId uri
+codeActionHandler ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = pluginResponse $ do
+      nfp <- getNormalizedFilePath uri
       decls <- getDecls ideState nfp
       let actions = mapMaybe (generateAction uri decls) diags
       pure $ List actions
