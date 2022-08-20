@@ -61,6 +61,7 @@ jobs:
       with:
         ghc: ${{ matrix.ghc }}
         os:  ${{ runner.os }}
+        shorten-hls: "false"
 
     # max-backjumps is increased as a temporary solution
     # for dependency resolution failure
