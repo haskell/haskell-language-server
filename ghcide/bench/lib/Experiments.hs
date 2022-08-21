@@ -28,7 +28,9 @@ import           Control.Monad.Extra             (allM, forM, forM_, unless,
                                                   void, whenJust, (&&^))
 import           Control.Monad.Fail              (MonadFail)
 import           Control.Monad.IO.Class
-import           Data.Aeson                      (Value (Null), toJSON)
+import           Data.Aeson                      (Value (Null),
+                                                  eitherDecodeStrict', toJSON)
+import qualified Data.ByteString                 as BS
 import           Data.Either                     (fromRight)
 import           Data.List
 import           Data.Maybe
@@ -59,7 +61,6 @@ import           System.FilePath                 ((<.>), (</>))
 import           System.Process
 import           System.Time.Extra
 import           Text.ParserCombinators.ReadP    (readP_to_S)
-
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
     TextDocumentContentChangeEvent
@@ -82,7 +83,7 @@ allWithIdentifierPos f docs = case applicableDocs of
   where
     applicableDocs = filter (isJust . identifierP) docs
 
-experiments :: [Bench]
+experiments :: HasConfig => [Bench]
 experiments =
     [ ---------------------------------------------------------------------------------------
       bench "hover" $ allWithIdentifierPos $ \DocumentPositions{..} ->
@@ -94,6 +95,7 @@ experiments =
           -- wait for a fresh build start
           waitForProgressStart
         -- wait for the build to be finished
+        output "edit: waitForProgressDone"
         waitForProgressDone
         return True,
       ---------------------------------------------------------------------------------------
@@ -267,6 +269,7 @@ configP =
                 <$> (Left <$> pathP)
                 <*> some moduleOption
                 <*> pure [])
+    <*> switch (long "lsp-config" <> help "Read an LSP config payload from standard input")
   where
       moduleOption = strOption (long "example-module" <> metavar "PATH")
 
@@ -324,9 +327,23 @@ runBenchmarksFun dir allBenchmarks = do
   whenJust (otMemoryProfiling ?config) $ \eventlogDir ->
       createDirectoryIfMissing True eventlogDir
 
-  results <- forM benchmarks $ \b@Bench{name} -> do
-                let run = runSessionWithConfig conf (cmd name dir) lspTestCaps dir
-                (b,) <$> runBench run b
+  lspConfig <- if Experiments.Types.lspConfig ?config
+    then either error Just . eitherDecodeStrict' <$> BS.getContents
+    else return Nothing
+
+  let conf = defaultConfig
+        { logStdErr = verbose ?config,
+          logMessages = verbose ?config,
+          logColor = False,
+          Language.LSP.Test.lspConfig = lspConfig,
+          messageTimeout = timeoutLsp ?config
+        }
+  results <- forM benchmarks $ \b@Bench{name} ->  do
+    let p = (proc (ghcide ?config) (allArgs name dir))
+                { std_in = CreatePipe, std_out = CreatePipe }
+        run sess = withCreateProcess p $ \(Just inH) (Just outH) _errH _pH ->
+                        runSessionWithHandles inH outH conf lspTestCaps dir sess
+    (b,) <$> runBench run b
 
   -- output raw data as CSV
   let headers =
@@ -402,36 +419,29 @@ runBenchmarksFun dir allBenchmarks = do
   outputRow $ (map . map) (const '-') paddedHeaders
   forM_ rowsHuman $ \row -> outputRow $ zipWith pad pads row
   where
-    ghcideCmd dir =
-        [ ghcide ?config,
-          "--lsp",
+    ghcideArgs dir =
+        [ "--lsp",
           "--test",
           "--cwd",
-          dir,
-          "+RTS"
+          dir
         ]
-    cmd name dir =
-      unwords $
-            ghcideCmd dir
-          ++ case otMemoryProfiling ?config of
-            Just dir -> ["-l", "-ol" ++ (dir </> map (\c -> if c == ' ' then '-' else c) name <.> "eventlog")]
-            Nothing -> []
-          ++ [ "-RTS" ]
+    allArgs name dir =
+        ghcideArgs dir
+          ++ concat
+             [ [ "+RTS"
+               , "-l"
+               , "-ol" ++ (dir </> map (\c -> if c == ' ' then '-' else c) name <.> "eventlog")
+               , "-RTS"
+               ]
+             | Just dir <- [otMemoryProfiling ?config]
+             ]
           ++ ghcideOptions ?config
           ++ concat
             [ ["--shake-profiling", path] | Just path <- [shakeProfiling ?config]
             ]
-          ++ ["--verbose" | verbose ?config]
           ++ ["--ot-memory-profiling" | Just _ <- [otMemoryProfiling ?config]]
     lspTestCaps =
       fullCaps {_window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
-    conf =
-      defaultConfig
-        { logStdErr = verbose ?config,
-          logMessages = verbose ?config,
-          logColor = False,
-          messageTimeout = timeoutLsp ?config
-        }
 
 data BenchRun = BenchRun
   { startup              :: !Seconds,
@@ -483,7 +493,7 @@ waitForBuildQueue = do
         _                                   -> return 0
 
 runBench ::
-  (?config :: Config) =>
+  HasConfig =>
   (Session BenchRun -> IO BenchRun) ->
   Bench ->
   IO BenchRun

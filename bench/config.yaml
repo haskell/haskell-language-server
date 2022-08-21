@@ -7,6 +7,13 @@ buildTool: cabal
 # Output folder for the experiments
 outputFolder: bench-results
 
+# Heap profile interval in seconds (+RTS -i)
+# Comment out to disable heap profiling
+profileInterval: 1
+
+# Number of concurrent benchmark and warmup runs
+parallelism: 1
+
 # Example project used to run the experiments
 # Can either be a Hackage package (name,version)
 # or a local project (path) with a valid `hie.yaml` file
@@ -18,20 +25,7 @@ examples:
     modules:
         - src/Distribution/Simple.hs
         - src/Distribution/Types/Module.hs
-    extra-args: [] # extra ghcide command line args
-  - name: cabal-1module
-    package: Cabal
-    version: 3.6.3.0
-    modules:
-        - src/Distribution/Simple.hs
-  - name: cabal-conservative
-    package: Cabal
-    version: 3.6.3.0
-    modules:
-        - src/Distribution/Simple.hs
-        - src/Distribution/Types/Module.hs
-    extra-args:  # extra ghcide command line args
-      - --conservative-change-tracking
+    extra-args: [] # extra HLS command line args
   # Small-sized project with TH
   - name: lsp-types
     package: lsp-types
@@ -39,15 +33,6 @@ examples:
     modules:
         - src/Language/LSP/Types/WatchedFiles.hs
         - src/Language/LSP/Types/CallHierarchy.hs
-  - name: lsp-types-conservative
-    package: lsp-types
-    version: 1.5.0.0
-    modules:
-        - src/Language/LSP/Types/WatchedFiles.hs
-        - src/Language/LSP/Types/CallHierarchy.hs
-    extra-args:
-      - --conservative-change-tracking
-  # Small-sized project with TH
   # Small but heavily multi-component example
   # Disabled as it is far to slow. hie-bios >0.7.2 should help
   # - name: HLS
@@ -90,27 +75,87 @@ versions:
 #    parent: <tag/branch/commithash> # version to compare with in .diff graphs
 
 
-# - ghcide-v0.0.5
-# - ghcide-v0.0.6
-# - ghcide-v0.1.0
-# - ghcide-v0.2.0
-# - ghcide-v0.3.0
-# - ghcide-v0.4.0
-# - ghcide-v0.5.0
-# - ghcide-v0.6.0
-# - ghcide-v0.7.0
-# - ghcide-v0.7.1
-# - ghcide-v0.7.2
-# - ghcide-v0.7.3
-# - ghcide-v0.7.4
-# - ghcide-v0.7.5
-# - 1.0.0
-# - ghcide-v1.1.0
-# - ghcide-v1.2.0
-# - ghcide-v1.3.0
-- upstream: origin/master
+# - 1.8.0.0
+# - upstream: origin/master
+# - HEAD~1
 - HEAD
 
-# Heap profile interval in seconds (+RTS -i)
-# Comment out to disable heap profiling
-profileInterval: 1
+configurations:
+- None: []
+- Core:
+  - callHierarchy
+  - codeRange
+  - eval
+  - ghcide-code-actions-bindings
+  - ghcide-code-actions-fill-holes
+  - ghcide-code-actions-imports-exports
+  - ghcide-code-actions-type-signatures
+  - ghcide-completions
+  - ghcide-type-lenses
+  - pragmas
+- Ghcide:
+  - ghcide-code-actions-bindings
+  - ghcide-code-actions-fill-holes
+  - ghcide-code-actions-imports-exports
+  - ghcide-code-actions-type-signatures
+  - ghcide-completions
+  - ghcide-type-lenses
+- All:
+  - alternateNumberFormat
+  - callHierarchy
+  - changeTypeSignature
+  - class
+  - codeRange
+  - eval
+  - explicitFixity
+  - floskell
+  - fourmolu
+  - gadt
+  - ghcide-code-actions-bindings
+  - ghcide-code-actions-fill-holes
+  - ghcide-code-actions-imports-exports
+  - ghcide-code-actions-type-signatures
+  - ghcide-completions
+  - ghcide-type-lenses
+  - hlint
+  - importLens
+  - moduleName
+  - ormolu
+  - pragmas
+  - qualifyImportedNames
+  - refineImports
+  - rename
+  - stylish-haskell
+- alternateNumberFormat
+- brittany
+- callHierarchy
+- changeTypeSignature
+- class
+- codeRange
+- eval
+- explicitFixity
+- floskell
+- fourmolu
+- gadt
+- ghcide-code-actions-bindings
+- ghcide-code-actions-fill-holes
+- ghcide-code-actions-imports-exports
+- ghcide-code-actions-type-signatures
+- ghcide-completions
+# - ghcide-core                    # implicitly included in all configurations
+# - ghcide-hover-and-symbols       # implicitly included in all configurations
+- ghcide-type-lenses
+- haddockComments
+- hlint
+- importLens
+- moduleName
+- ormolu
+- pragmas
+- qualifyImportedNames
+- refineImports
+- rename
+- retrie
+- splice
+- stan
+- stylish-haskell
+- tactics

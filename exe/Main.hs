@@ -3,6 +3,7 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports    #-}
 module Main(main) where
 
 import           Control.Arrow                ((&&&))

@@ -67,10 +67,10 @@ jobs:
     - run: cabal configure --enable-benchmarks --max-backjumps 12000
 
     - name: Build
-      run: cabal build ghcide:benchHist
+      run: cabal build haskell-language-server:benchmark
 
     - name: Bench init
-      run: cabal bench ghcide:benchHist  -j --benchmark-options="all-binaries"
+      run: cabal bench -j --benchmark-options="all-binaries"
 
     # tar is required to preserve file permissions
     # compression speeds up upload/download nicely
@@ -134,14 +134,14 @@ jobs:
         tar xzf cabal.tar.gz --directory ~/.cabal
 
     - name: Bench
-      run: cabal bench ghcide:benchHist  -j --benchmark-options="${{ matrix.example }}"
+      run: cabal bench -j --benchmark-options="${{ matrix.example }}"
 
     - name: Display results
       run: |
-        column -s, -t < ghcide/bench-results/unprofiled/${{ matrix.example }}/results.csv | tee ghcide/bench-results/unprofiled/${{ matrix.example }}/results.txt
+        column -s, -t < bench-results/unprofiled/${{ matrix.example }}/results.csv | tee bench-results/unprofiled/${{ matrix.example }}/results.txt
 
     - name: tar benchmarking artifacts
-      run:  find ghcide/bench-results -name "*.csv" -or -name "*.svg" -or -name "*.html" | xargs tar -czf benchmark-artifacts.tar.gz
+      run:  find bench-results -name "*.csv" -or -name "*.svg" -or -name "*.html" | xargs tar -czf benchmark-artifacts.tar.gz
 
     - name: Archive benchmarking artifacts
       uses: actions/upload-artifact@v3
@@ -150,7 +150,7 @@ jobs:
         path: benchmark-artifacts.tar.gz
 
     - name: tar benchmarking logs
-      run: find ghcide/bench-results -name "*.log" -or -name "*.eventlog" -or -name "*.hp" | xargs tar -czf benchmark-logs.tar.gz
+      run: find bench-results -name "*.log" -or -name "*.eventlog" -or -name "*.hp" | xargs tar -czf benchmark-logs.tar.gz
 
     - name: Archive benchmark logs
       uses: actions/upload-artifact@v3
