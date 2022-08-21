@@ -24,9 +24,11 @@ module Experiments
 , exampleToOptions
 ) where
 import           Control.Applicative.Combinators (skipManyTill)
+import           Control.Concurrent.Async        (withAsync)
 import           Control.Exception.Safe          (IOException, handleAny, try)
-import           Control.Monad.Extra             (allM, forM, forM_, unless,
-                                                  void, whenJust, (&&^))
+import           Control.Monad.Extra             (allM, forM, forM_, forever,
+                                                  unless, void, when, whenJust,
+                                                  (&&^))
 import           Control.Monad.Fail              (MonadFail)
 import           Control.Monad.IO.Class
 import           Data.Aeson                      (Value (Null),
@@ -55,10 +57,12 @@ import           Options.Applicative
 import           System.Directory
 import           System.Environment.Blank        (getEnv)
 import           System.FilePath                 ((<.>), (</>))
+import           System.IO
 import           System.Process
 import           System.Time.Extra
 import           Text.ParserCombinators.ReadP    (readP_to_S)
 import           Text.Printf
+
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
     TextDocumentContentChangeEvent
@@ -341,8 +345,15 @@ runBenchmarksFun dir allBenchmarks = do
         }
   results <- forM benchmarks $ \b@Bench{name} ->  do
     let p = (proc (ghcide ?config) (allArgs name dir))
-                { std_in = CreatePipe, std_out = CreatePipe }
-        run sess = withCreateProcess p $ \(Just inH) (Just outH) _errH _pH ->
+                { std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe }
+        run sess = withCreateProcess p $ \(Just inH) (Just outH) (Just errH) _pH -> do
+                    -- Need to continuously consume to stderr else it gets blocked
+                    -- Can't pass NoStream either to std_err
+                    hSetBuffering errH NoBuffering
+                    hSetBinaryMode errH True
+                    let errSinkThread =
+                            forever $ hGetLine errH >>= when (verbose ?config). putStrLn
+                    withAsync errSinkThread $ \_ -> do
                         runSessionWithHandles inH outH conf lspTestCaps dir sess
     (b,) <$> runBench run b
 
