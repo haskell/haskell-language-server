@@ -235,12 +235,12 @@ allLspCmdIds pid commands = concatMap go commands
 
 -- ---------------------------------------------------------------------
 
-getNormalizedFilePath :: Monad m => PluginId -> Uri -> ExceptT String m NormalizedFilePath
-getNormalizedFilePath (PluginId plId) uri = handleMaybe errMsg
+getNormalizedFilePath :: Monad m => Uri -> ExceptT String m NormalizedFilePath
+getNormalizedFilePath uri = handleMaybe errMsg
         $ uriToNormalizedFilePath
         $ toNormalizedUri uri
     where
-        errMsg = T.unpack $ "Error(" <> plId <> "): converting " <> getUri uri <> " to NormalizedFilePath"
+        errMsg = T.unpack $ "Failed converting " <> getUri uri <> " to NormalizedFilePath"
 
 -- ---------------------------------------------------------------------
 throwPluginError :: Monad m => String -> ExceptT String m b

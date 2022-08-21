@@ -197,7 +197,7 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
         case nonEmpty fs of
           Nothing -> logAndReturnError recorder InvalidRequest (pluginNotEnabled m fs')
           Just fs -> do
-            let msg e pid = "Exception in plugin " <> T.pack (show pid) <> "while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
+            let msg e pid = "Exception in plugin " <> T.pack (show pid) <> " while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
                 handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
             es <- runConcurrently msg (show m) handlers ide params
             let (errs,succs) = partitionEithers $ toList es

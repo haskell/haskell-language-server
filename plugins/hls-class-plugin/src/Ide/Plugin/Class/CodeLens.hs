@@ -24,7 +24,7 @@ import qualified Language.LSP.Types.Lens         as J
 
 codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
 codeLens state plId CodeLensParams{..} = pluginResponse $ do
-    nfp <- getNormalizedFilePath plId uri
+    nfp <- getNormalizedFilePath uri
     tmr <- handleMaybeM "Unable to typecheck"
         $ liftIO
         $ runAction "classplugin.TypeCheck" state
