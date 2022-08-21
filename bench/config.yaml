@@ -127,15 +127,15 @@ configurations:
   - rename
   - stylish-haskell
 - alternateNumberFormat
-- brittany
+# - brittany
 - callHierarchy
 - changeTypeSignature
 - class
 - codeRange
 - eval
 - explicitFixity
-- floskell
-- fourmolu
+# - floskell
+# - fourmolu
 - gadt
 - ghcide-code-actions-bindings
 - ghcide-code-actions-fill-holes
@@ -149,7 +149,7 @@ configurations:
 - hlint
 - importLens
 - moduleName
-- ormolu
+# - ormolu
 - pragmas
 - qualifyImportedNames
 - refineImports
@@ -157,5 +157,5 @@ configurations:
 - retrie
 - splice
 - stan
-- stylish-haskell
+# - stylish-haskell
 - tactics
