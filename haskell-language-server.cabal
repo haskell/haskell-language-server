@@ -589,7 +589,7 @@ benchmark benchmark
     main-is: Main.hs
     hs-source-dirs: bench
     build-tool-depends:
-        ghcide:ghcide-bench,
+        ghcide-bench:ghcide-bench,
         hp2pretty:hp2pretty,
         implicit-hie:gen-hie
     default-extensions:
@@ -615,7 +615,7 @@ benchmark benchmark
         directory,
         extra,
         filepath,
-        ghcide:experiments-types,
+        ghcide-bench,
         haskell-language-server:plugins,
         hls-plugin-api,
         lens,

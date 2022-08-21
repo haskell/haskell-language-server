@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE ImplicitParams            #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
+{-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE PolyKinds                 #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
@@ -30,19 +31,15 @@ import           Control.Monad.Fail              (MonadFail)
 import           Control.Monad.IO.Class
 import           Data.Aeson                      (Value (Null),
                                                   eitherDecodeStrict', toJSON)
+import qualified Data.Aeson                      as A
 import qualified Data.ByteString                 as BS
 import           Data.Either                     (fromRight)
 import           Data.List
 import           Data.Maybe
+import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Data.Version
 import           Development.IDE.Plugin.Test
-import           Development.IDE.Test            (getBuildEdgesCount,
-                                                  getBuildKeysBuilt,
-                                                  getBuildKeysChanged,
-                                                  getBuildKeysVisited,
-                                                  getRebuildsCount,
-                                                  getStoredKeys)
 import           Development.IDE.Test.Diagnostic
 import           Development.Shake               (CmdOption (Cwd, FileStdout),
                                                   cmd_)
@@ -71,8 +68,11 @@ charEdit p =
     }
 
 data DocumentPositions = DocumentPositions {
+    -- | A position that can be used to generate non null goto-def and completion responses
     identifierP    :: Maybe Position,
+    -- | A position that can be modified without generating a new diagnostic
     stringLiteralP :: !Position,
+    -- | The document containing the above positions
     doc            :: !TextDocumentIdentifier
 }
 
@@ -702,3 +702,42 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
       checkCompletions pos =
         not . null <$> getCompletions doc pos
 
+
+getBuildKeysBuilt :: Session (Either ResponseError [T.Text])
+getBuildKeysBuilt = tryCallTestPlugin GetBuildKeysBuilt
+
+getBuildKeysVisited :: Session (Either ResponseError [T.Text])
+getBuildKeysVisited = tryCallTestPlugin GetBuildKeysVisited
+
+getBuildKeysChanged :: Session (Either ResponseError [T.Text])
+getBuildKeysChanged = tryCallTestPlugin GetBuildKeysChanged
+
+getBuildEdgesCount :: Session (Either ResponseError Int)
+getBuildEdgesCount = tryCallTestPlugin GetBuildEdgesCount
+
+getRebuildsCount :: Session (Either ResponseError Int)
+getRebuildsCount = tryCallTestPlugin GetRebuildsCount
+
+-- Copy&paste from ghcide/test/Development.IDE.Test
+getStoredKeys :: Session [Text]
+getStoredKeys = callTestPlugin GetStoredKeys
+
+-- Copy&paste from ghcide/test/Development.IDE.Test
+tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+tryCallTestPlugin cmd = do
+    let cm = SCustomMethod "test"
+    waitId <- sendRequest cm (A.toJSON cmd)
+    ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
+    return $ case _result of
+         Left e -> Left e
+         Right json -> case A.fromJSON json of
+             A.Success a -> Right a
+             A.Error e   -> error e
+
+-- Copy&paste from ghcide/test/Development.IDE.Test
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
+callTestPlugin cmd = do
+    res <- tryCallTestPlugin cmd
+    case res of
+        Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+        Right a                      -> pure a
