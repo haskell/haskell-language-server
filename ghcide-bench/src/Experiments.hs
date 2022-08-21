@@ -346,7 +346,7 @@ runBenchmarksFun dir allBenchmarks = do
   results <- forM benchmarks $ \b@Bench{name} ->  do
     let p = (proc (ghcide ?config) (allArgs name dir))
                 { std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe }
-        run sess = withCreateProcess p $ \(Just inH) (Just outH) (Just errH) _pH -> do
+        run sess = withCreateProcess p $ \(Just inH) (Just outH) (Just errH) pH -> do
                     -- Need to continuously consume to stderr else it gets blocked
                     -- Can't pass NoStream either to std_err
                     hSetBuffering errH NoBuffering
@@ -354,7 +354,7 @@ runBenchmarksFun dir allBenchmarks = do
                     let errSinkThread =
                             forever $ hGetLine errH >>= when (verbose ?config). putStrLn
                     withAsync errSinkThread $ \_ -> do
-                        runSessionWithHandles inH outH conf lspTestCaps dir sess
+                        runSessionWithHandles' (Just pH) inH outH conf lspTestCaps dir sess
     (b,) <$> runBench run b
 
   -- output raw data as CSV

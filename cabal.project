@@ -65,6 +65,14 @@ source-repository-package
   tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
   -- https://github.com/tibbe/ekg-json/pull/12
 
+-- Needed for ghcide-bench until a new release of lsp-test is out
+source-repository-package
+  type:git
+  location: https://github.com/haskell/lsp
+  subdir: lsp-test
+  tag: c95eb06c70c35f1e13c37ed11a7d9e5b36bfa2e8
+  -- https://github.com/haskell/lsp/pull/450
+
 allow-newer:
   -- ghc-9.2
   ----------
