@@ -14,6 +14,8 @@ maintainer:          zubin.duggal@gmail.com
 build-type:          Simple
 extra-source-files:  CHANGELOG.md README.md
 category:            Development
+homepage:            https://github.com/haskell/haskell-language-server/tree/master/hie-compat#readme
+bug-reports:         https://github.com/haskell/haskell-language-server/issues
 
 flag ghc-lib
   description: build against ghc-lib instead of the ghc package
