@@ -80,7 +80,21 @@ versions:
 # - HEAD~1
 - HEAD
 
+# A list of plugin configurations to analyze
 configurations:
+# A configuration contains one or more plugins:
+# - ConfigurationName:
+#   - plugin1
+#   - plugin2
+#
+# There is short-hand notation for defining singleton configurations.
+# Simply give the plugin name top level:
+# - plugin1
+#
+# Some plugins are implicitly included since they are required by the benchmark driver:
+# The implicitly included plugins are:
+# - ghcide-core
+# - ghcide-hover-and-symbols
 - None: []
 - Core:
   - callHierarchy

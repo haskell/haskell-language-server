@@ -11,7 +11,7 @@ By default it compares HEAD with "origin/master"
 
 The benchmark suites runs a set of experiments (hover, completion, edit, etc.)
 over all the defined examples (currently Cabal and lsp-types). Examples are defined
-in `bench/config.yaml` whereas experiments are coded in `ghcide/bench/lib/Experiments.hs`.
+in `bench/config.yaml` whereas experiments are coded in `ghcide-bench/src/Experiments.hs`.
 
 # Phony targets
 

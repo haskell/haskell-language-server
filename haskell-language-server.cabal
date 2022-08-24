@@ -415,6 +415,8 @@ executable haskell-language-server
     -- Enable collection of heap statistics
     "-with-rtsopts=-I0 -A128M -T"
     -Wno-unticked-promoted-constructors
+  if flag(pedantic)
+    ghc-options: -Werror
   if !os(windows) && flag(dynamic)
   -- We want to link against the dyn rts just like official GHC binaries do;
   --   the linked rts determines how external libs are loaded dynamically by TH.
