@@ -25,7 +25,6 @@ library
     , extra
     , ghc
     , ghcide                ^>=1.7
-    , ghc-paths
     , hashable
     , hls-plugin-api        ^>=1.4
     , lsp

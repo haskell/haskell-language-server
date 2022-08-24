@@ -66,6 +66,7 @@ import           Development.IDE.GHC.Compat           (GenLocated (L), GhcPs,
                                                        isQual_maybe, locA,
                                                        mi_fixities,
                                                        moduleNameString,
+                                                       ms_hspp_opts,
                                                        nameModule_maybe,
                                                        nameRdrName, noLocA,
                                                        occNameFS, occNameString,
@@ -74,13 +75,13 @@ import           Development.IDE.GHC.Compat           (GenLocated (L), GhcPs,
                                                        pattern RealSrcSpan,
                                                        pm_parsed_source,
                                                        rdrNameOcc, rds_rules,
-                                                       srcSpanFile, unLocA)
+                                                       srcSpanFile, topDir,
+                                                       unLocA)
 import           Development.IDE.GHC.Compat.Util      hiding (catch, try)
 import qualified GHC                                  (Module,
                                                        ParsedModule (..),
                                                        moduleName, parseModule)
 import           GHC.Generics                         (Generic)
-import           GHC.Paths                            (libdir)
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server                  (LspM,
@@ -330,6 +331,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
                 CodeActionRefactor,
                 RunRetrieParams {..}
               )
+suggestRuleRewrites _ _ _ _ = []
 
 qualify :: GHC.Module -> String -> String
 qualify ms_mod x = T.unpack (printOutputable ms_mod) <> "." <> x
@@ -361,15 +363,19 @@ callRetrie ::
   IO ([CallRetrieError], WorkspaceEdit)
 callRetrie state session rewrites origin restrictToOriginatingFile = do
   knownFiles <- toKnownFiles . unhashed <$> readTVarIO (knownTargetsVar $ shakeExtras state)
+#if MIN_VERSION_ghc(9,2,0)
+  -- retrie needs the libdir for `parseRewriteSpecs`
+  libdir <- topDir . ms_hspp_opts . msrModSummary <$> useOrFail "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary origin
+#endif
   let reuseParsedModule f = do
-        pm <- useOrFail "GetParsedModule" NoParse GetParsedModule f
+        pm <- useOrFail "Retrie.GetParsedModule" NoParse GetParsedModule f
         (fixities, pm') <- fixFixities f (fixAnns pm)
         return (fixities, pm')
       getCPPmodule t = do
         nt <- toNormalizedFilePath' <$> makeAbsolute t
         let getParsedModule f contents = do
               modSummary <- msrModSummary <$>
-                useOrFail "GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
+                useOrFail "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
               let ms' =
                     modSummary
                       { ms_hspp_buf =
@@ -427,7 +433,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
     (\specs -> apply specs >> addImports annotatedImports)
       <$> parseRewriteSpecs
 #if MIN_VERSION_ghc(9,2,0)
-        libdir -- TODO: does this actualy get the proper libdir?
+        libdir
 #endif
         (\_f -> return $ NoCPP originParsedModule)
         originFixities
