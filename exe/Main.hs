@@ -20,6 +20,7 @@ import           Development.IDE.Types.Logger (Doc,
                                                payload, renderStrict,
                                                withDefaultRecorder)
 import qualified Development.IDE.Types.Logger as Logger
+import qualified HlsPlugins                   as Plugins
 import           Ide.Arguments                (Arguments (..),
                                                GhcideArguments (..),
                                                getArguments)
@@ -31,7 +32,6 @@ import           Ide.Types                    (PluginDescriptor (pluginNotificat
                                                mkPluginNotificationHandler)
 import           Language.LSP.Server          as LSP
 import           Language.LSP.Types           as LSP
-import qualified Plugins
 #if MIN_VERSION_prettyprinter(1,7,0)
 import           Prettyprinter                (Pretty (pretty), vsep)
 #else
@@ -52,7 +52,7 @@ main = do
     -- plugin cli commands use stderr logger for now unless we change the args
     -- parser to get logging arguments first or do more complicated things
     pluginCliRecorder <- cmapWithPrio pretty <$> makeDefaultStderrRecorder Nothing Info
-    args <- getArguments "haskell-language-server" (Plugins.idePlugins (cmapWithPrio LogPlugins pluginCliRecorder) False)
+    args <- getArguments "haskell-language-server" (Plugins.idePlugins (cmapWithPrio LogPlugins pluginCliRecorder))
 
     (lspLogRecorder, cb1) <- Logger.withBacklog Logger.lspClientLogRecorder
     (lspMessageRecorder, cb2) <- Logger.withBacklog Logger.lspClientMessageRecorder
@@ -64,12 +64,12 @@ main = do
               liftIO $ (cb1 <> cb2) env
           }
 
-    let (argsTesting, minPriority, logFilePath, includeExamplePlugins) =
+    let (argsTesting, minPriority, logFilePath) =
           case args of
-            Ghcide GhcideArguments{ argsTesting, argsDebugOn, argsLogFile, argsExamplePlugin } ->
+            Ghcide GhcideArguments{ argsTesting, argsDebugOn, argsLogFile} ->
               let minPriority = if argsDebugOn || argsTesting then Debug else Info
-              in (argsTesting, minPriority, argsLogFile, argsExamplePlugin)
-            _ -> (False, Info, Nothing, False)
+              in (argsTesting, minPriority, argsLogFile)
+            _ -> (False, Info, Nothing)
 
     withDefaultRecorder logFilePath Nothing minPriority $ \textWithPriorityRecorder -> do
       let
@@ -87,7 +87,7 @@ main = do
                 -- ability of lsp-test to detect a stuck server in tests and benchmarks
                 & if argsTesting then cfilter (not . heapStats . snd . payload) else id
             ]
-        plugins = (Plugins.idePlugins (cmapWithPrio LogPlugins recorder) includeExamplePlugins)
+        plugins = (Plugins.idePlugins (cmapWithPrio LogPlugins recorder))
 
       defaultMain
         (cmapWithPrio LogIdeMain recorder)

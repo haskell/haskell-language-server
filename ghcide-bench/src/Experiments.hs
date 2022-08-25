@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE ImplicitParams            #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
+{-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE PolyKinds                 #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
@@ -23,24 +24,24 @@ module Experiments
 , exampleToOptions
 ) where
 import           Control.Applicative.Combinators (skipManyTill)
+import           Control.Concurrent.Async        (withAsync)
 import           Control.Exception.Safe          (IOException, handleAny, try)
-import           Control.Monad.Extra             (allM, forM, forM_, unless,
-                                                  void, whenJust, (&&^))
+import           Control.Monad.Extra             (allM, forM, forM_, forever,
+                                                  unless, void, when, whenJust,
+                                                  (&&^))
 import           Control.Monad.Fail              (MonadFail)
 import           Control.Monad.IO.Class
-import           Data.Aeson                      (Value (Null), toJSON)
+import           Data.Aeson                      (Value (Null),
+                                                  eitherDecodeStrict', toJSON)
+import qualified Data.Aeson                      as A
+import qualified Data.ByteString                 as BS
 import           Data.Either                     (fromRight)
 import           Data.List
 import           Data.Maybe
+import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Data.Version
 import           Development.IDE.Plugin.Test
-import           Development.IDE.Test            (getBuildEdgesCount,
-                                                  getBuildKeysBuilt,
-                                                  getBuildKeysChanged,
-                                                  getBuildKeysVisited,
-                                                  getRebuildsCount,
-                                                  getStoredKeys)
 import           Development.IDE.Test.Diagnostic
 import           Development.Shake               (CmdOption (Cwd, FileStdout),
                                                   cmd_)
@@ -56,9 +57,11 @@ import           Options.Applicative
 import           System.Directory
 import           System.Environment.Blank        (getEnv)
 import           System.FilePath                 ((<.>), (</>))
+import           System.IO
 import           System.Process
 import           System.Time.Extra
 import           Text.ParserCombinators.ReadP    (readP_to_S)
+import           Text.Printf
 
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
@@ -69,8 +72,11 @@ charEdit p =
     }
 
 data DocumentPositions = DocumentPositions {
+    -- | A position that can be used to generate non null goto-def and completion responses
     identifierP    :: Maybe Position,
+    -- | A position that can be modified without generating a new diagnostic
     stringLiteralP :: !Position,
+    -- | The document containing the above positions
     doc            :: !TextDocumentIdentifier
 }
 
@@ -82,7 +88,7 @@ allWithIdentifierPos f docs = case applicableDocs of
   where
     applicableDocs = filter (isJust . identifierP) docs
 
-experiments :: [Bench]
+experiments :: HasConfig => [Bench]
 experiments =
     [ ---------------------------------------------------------------------------------------
       bench "hover" $ allWithIdentifierPos $ \DocumentPositions{..} ->
@@ -94,6 +100,7 @@ experiments =
           -- wait for a fresh build start
           waitForProgressStart
         -- wait for the build to be finished
+        output "edit: waitForProgressDone"
         waitForProgressDone
         return True,
       ---------------------------------------------------------------------------------------
@@ -267,6 +274,7 @@ configP =
                 <$> (Left <$> pathP)
                 <*> some moduleOption
                 <*> pure [])
+    <*> switch (long "lsp-config" <> help "Read an LSP config payload from standard input")
   where
       moduleOption = strOption (long "example-module" <> metavar "PATH")
 
@@ -324,9 +332,30 @@ runBenchmarksFun dir allBenchmarks = do
   whenJust (otMemoryProfiling ?config) $ \eventlogDir ->
       createDirectoryIfMissing True eventlogDir
 
-  results <- forM benchmarks $ \b@Bench{name} -> do
-                let run = runSessionWithConfig conf (cmd name dir) lspTestCaps dir
-                (b,) <$> runBench run b
+  lspConfig <- if Experiments.Types.lspConfig ?config
+    then either error Just . eitherDecodeStrict' <$> BS.getContents
+    else return Nothing
+
+  let conf = defaultConfig
+        { logStdErr = verbose ?config,
+          logMessages = verbose ?config,
+          logColor = False,
+          Language.LSP.Test.lspConfig = lspConfig,
+          messageTimeout = timeoutLsp ?config
+        }
+  results <- forM benchmarks $ \b@Bench{name} ->  do
+    let p = (proc (ghcide ?config) (allArgs name dir))
+                { std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe }
+        run sess = withCreateProcess p $ \(Just inH) (Just outH) (Just errH) pH -> do
+                    -- Need to continuously consume to stderr else it gets blocked
+                    -- Can't pass NoStream either to std_err
+                    hSetBuffering errH NoBuffering
+                    hSetBinaryMode errH True
+                    let errSinkThread =
+                            forever $ hGetLine errH >>= when (verbose ?config). putStrLn
+                    withAsync errSinkThread $ \_ -> do
+                        runSessionWithHandles' (Just pH) inH outH conf lspTestCaps dir sess
+    (b,) <$> runBench run b
 
   -- output raw data as CSV
   let headers =
@@ -335,31 +364,31 @@ runBenchmarksFun dir allBenchmarks = do
         , "samples"
         , "startup"
         , "setup"
-        , "userTime"
-        , "delayedTime"
-        , "firstBuildTime"
-        , "averageTimePerResponse"
-        , "totalTime"
-        , "buildRulesBuilt"
-        , "buildRulesChanged"
-        , "buildRulesVisited"
-        , "buildRulesTotal"
-        , "buildEdges"
+        , "userT"
+        , "delayedT"
+        , "1stBuildT"
+        , "avgPerRespT"
+        , "totalT"
+        , "rulesBuilt"
+        , "rulesChanged"
+        , "rulesVisited"
+        , "rulesTotal"
+        , "ruleEdges"
         , "ghcRebuilds"
         ]
       rows =
         [ [ name,
             show success,
             show samples,
-            show startup,
-            show runSetup',
-            show userWaits,
-            show delayedWork,
-            show $ firstResponse+firstResponseDelayed,
+            showMs startup,
+            showMs runSetup',
+            showMs userWaits,
+            showMs delayedWork,
+            showMs $ firstResponse+firstResponseDelayed,
             -- Exclude first response as it has a lot of setup time included
             -- Assume that number of requests = number of modules * number of samples
-            show ((userWaits - firstResponse)/((fromIntegral samples - 1)*modules)),
-            show runExperiment,
+            showMs ((userWaits - firstResponse)/((fromIntegral samples - 1)*modules)),
+            showMs runExperiment,
             show rulesBuilt,
             show rulesChanged,
             show rulesVisited,
@@ -402,36 +431,32 @@ runBenchmarksFun dir allBenchmarks = do
   outputRow $ (map . map) (const '-') paddedHeaders
   forM_ rowsHuman $ \row -> outputRow $ zipWith pad pads row
   where
-    ghcideCmd dir =
-        [ ghcide ?config,
-          "--lsp",
+    ghcideArgs dir =
+        [ "--lsp",
           "--test",
           "--cwd",
-          dir,
-          "+RTS"
+          dir
         ]
-    cmd name dir =
-      unwords $
-            ghcideCmd dir
-          ++ case otMemoryProfiling ?config of
-            Just dir -> ["-l", "-ol" ++ (dir </> map (\c -> if c == ' ' then '-' else c) name <.> "eventlog")]
-            Nothing -> []
-          ++ [ "-RTS" ]
+    allArgs name dir =
+        ghcideArgs dir
+          ++ concat
+             [ [ "+RTS"
+               , "-l"
+               , "-ol" ++ (dir </> map (\c -> if c == ' ' then '-' else c) name <.> "eventlog")
+               , "-RTS"
+               ]
+             | Just dir <- [otMemoryProfiling ?config]
+             ]
           ++ ghcideOptions ?config
           ++ concat
             [ ["--shake-profiling", path] | Just path <- [shakeProfiling ?config]
             ]
-          ++ ["--verbose" | verbose ?config]
           ++ ["--ot-memory-profiling" | Just _ <- [otMemoryProfiling ?config]]
     lspTestCaps =
       fullCaps {_window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
-    conf =
-      defaultConfig
-        { logStdErr = verbose ?config,
-          logMessages = verbose ?config,
-          logColor = False,
-          messageTimeout = timeoutLsp ?config
-        }
+
+showMs :: Seconds -> String
+showMs = printf "%.2f"
 
 data BenchRun = BenchRun
   { startup              :: !Seconds,
@@ -483,7 +508,7 @@ waitForBuildQueue = do
         _                                   -> return 0
 
 runBench ::
-  (?config :: Config) =>
+  HasConfig =>
   (Session BenchRun -> IO BenchRun) ->
   Bench ->
   IO BenchRun
@@ -688,3 +713,42 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
       checkCompletions pos =
         not . null <$> getCompletions doc pos
 
+
+getBuildKeysBuilt :: Session (Either ResponseError [T.Text])
+getBuildKeysBuilt = tryCallTestPlugin GetBuildKeysBuilt
+
+getBuildKeysVisited :: Session (Either ResponseError [T.Text])
+getBuildKeysVisited = tryCallTestPlugin GetBuildKeysVisited
+
+getBuildKeysChanged :: Session (Either ResponseError [T.Text])
+getBuildKeysChanged = tryCallTestPlugin GetBuildKeysChanged
+
+getBuildEdgesCount :: Session (Either ResponseError Int)
+getBuildEdgesCount = tryCallTestPlugin GetBuildEdgesCount
+
+getRebuildsCount :: Session (Either ResponseError Int)
+getRebuildsCount = tryCallTestPlugin GetRebuildsCount
+
+-- Copy&paste from ghcide/test/Development.IDE.Test
+getStoredKeys :: Session [Text]
+getStoredKeys = callTestPlugin GetStoredKeys
+
+-- Copy&paste from ghcide/test/Development.IDE.Test
+tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+tryCallTestPlugin cmd = do
+    let cm = SCustomMethod "test"
+    waitId <- sendRequest cm (A.toJSON cmd)
+    ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
+    return $ case _result of
+         Left e -> Left e
+         Right json -> case A.fromJSON json of
+             A.Success a -> Right a
+             A.Error e   -> error e
+
+-- Copy&paste from ghcide/test/Development.IDE.Test
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
+callTestPlugin cmd = do
+    res <- tryCallTestPlugin cmd
+    case res of
+        Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+        Right a                      -> pure a
