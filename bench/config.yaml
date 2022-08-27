@@ -76,7 +76,7 @@ versions:
 
 
 # - 1.8.0.0
-# - upstream: origin/master
+- upstream: origin/master
 # - HEAD~1
 - HEAD
 
@@ -95,25 +95,27 @@ configurations:
 # The implicitly included plugins are:
 # - ghcide-core
 # - ghcide-hover-and-symbols
-- None: []
-- Core:
-  - callHierarchy
-  - codeRange
-  - eval
-  - ghcide-code-actions-bindings
-  - ghcide-code-actions-fill-holes
-  - ghcide-code-actions-imports-exports
-  - ghcide-code-actions-type-signatures
-  - ghcide-completions
-  - ghcide-type-lenses
-  - pragmas
-- Ghcide:
-  - ghcide-code-actions-bindings
-  - ghcide-code-actions-fill-holes
-  - ghcide-code-actions-imports-exports
-  - ghcide-code-actions-type-signatures
-  - ghcide-completions
-  - ghcide-type-lenses
+
+# Uncomment below sections if needed
+# - None: []
+# - Core:
+#   - callHierarchy
+#   - codeRange
+#   - eval
+#   - ghcide-code-actions-bindings
+#   - ghcide-code-actions-fill-holes
+#   - ghcide-code-actions-imports-exports
+#   - ghcide-code-actions-type-signatures
+#   - ghcide-completions
+#   - ghcide-type-lenses
+#   - pragmas
+# - Ghcide:
+#   - ghcide-code-actions-bindings
+#   - ghcide-code-actions-fill-holes
+#   - ghcide-code-actions-imports-exports
+#   - ghcide-code-actions-type-signatures
+#   - ghcide-completions
+#   - ghcide-type-lenses
 - All:
   - alternateNumberFormat
   - callHierarchy
@@ -140,36 +142,36 @@ configurations:
   - refineImports
   - rename
   - stylish-haskell
-- alternateNumberFormat
-# - brittany
-- callHierarchy
-- changeTypeSignature
-- class
-- codeRange
-- eval
-- explicitFixity
-# - floskell
-# - fourmolu
-- gadt
-- ghcide-code-actions-bindings
-- ghcide-code-actions-fill-holes
-- ghcide-code-actions-imports-exports
-- ghcide-code-actions-type-signatures
-- ghcide-completions
-# - ghcide-core                    # implicitly included in all configurations
-# - ghcide-hover-and-symbols       # implicitly included in all configurations
-- ghcide-type-lenses
-- haddockComments
-- hlint
-- importLens
-- moduleName
-# - ormolu
-- pragmas
-- qualifyImportedNames
-- refineImports
-- rename
-- retrie
-- splice
-- stan
-# - stylish-haskell
-- tactics
+# - alternateNumberFormat
+# # - brittany
+# - callHierarchy
+# - changeTypeSignature
+# - class
+# - codeRange
+# - eval
+# - explicitFixity
+# # - floskell
+# # - fourmolu
+# - gadt
+# - ghcide-code-actions-bindings
+# - ghcide-code-actions-fill-holes
+# - ghcide-code-actions-imports-exports
+# - ghcide-code-actions-type-signatures
+# - ghcide-completions
+# # - ghcide-core                    # implicitly included in all configurations
+# # - ghcide-hover-and-symbols       # implicitly included in all configurations
+# - ghcide-type-lenses
+# - haddockComments
+# - hlint
+# - importLens
+# - moduleName
+# # - ormolu
+# - pragmas
+# - qualifyImportedNames
+# - refineImports
+# - rename
+# - retrie
+# - splice
+# - stan
+# # - stylish-haskell
+# - tactics
