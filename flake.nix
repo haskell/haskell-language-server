@@ -138,6 +138,7 @@
           sourceDirs = {
             haskell-language-server = ./.;
             ghcide = ./ghcide;
+            ghcide-bench = ./ghcide-bench;
             hls-graph = ./hls-graph;
             shake-bench = ./shake-bench;
             hie-compat = ./hie-compat;
