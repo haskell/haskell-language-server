@@ -3,10 +3,12 @@
 {-# LANGUAGE OverloadedStrings  #-}
 module Experiments.Types (module Experiments.Types ) where
 
+import           Control.DeepSeq
 import           Data.Aeson
-import           Data.Maybe                (fromMaybe)
+import           Data.Binary     (Binary)
+import           Data.Hashable   (Hashable)
+import           Data.Maybe      (fromMaybe)
 import           Data.Version
-import           Development.Shake.Classes
 import           GHC.Generics
 import           Numeric.Natural
 
@@ -27,7 +29,8 @@ data Config = Config
     repetitions       :: Maybe Natural,
     ghcide            :: FilePath,
     timeoutLsp        :: Int,
-    example           :: Example
+    example           :: Example,
+    lspConfig         :: Bool
   }
   deriving (Eq, Show)
 
@@ -64,11 +67,13 @@ exampleToOptions :: Example -> [String] -> [String]
 exampleToOptions Example{exampleDetails = Right ExamplePackage{..}, ..} extraArgs =
     ["--example-package-name", packageName
     ,"--example-package-version", showVersion packageVersion
-    ,"--ghcide-options", unwords $ exampleExtraArgs ++ extraArgs
     ] ++
-    ["--example-module=" <> m | m <- exampleModules]
+    ["--example-module=" <> m | m <- exampleModules
+    ] ++
+    ["--ghcide-options=" <> o | o <- exampleExtraArgs ++ extraArgs]
 exampleToOptions Example{exampleDetails = Left examplePath, ..} extraArgs =
     ["--example-path", examplePath
-    ,"--ghcide-options", unwords $ exampleExtraArgs ++ extraArgs
     ] ++
-    ["--example-module=" <> m | m <- exampleModules]
+    ["--example-module=" <> m | m <- exampleModules
+    ] ++
+    ["--ghcide-options=" <> o | o <- exampleExtraArgs ++ extraArgs]

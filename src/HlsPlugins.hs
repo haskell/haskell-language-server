@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP                       #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE OverloadedStrings         #-}
-module Plugins where
+module HlsPlugins where
 
 import           Development.IDE.Types.Logger      (Pretty (pretty), Recorder,
                                                     WithPriority, cmapWithPrio)
@@ -11,9 +11,6 @@ import           Ide.Types                         (IdePlugins)
 -- fixed plugins
 import           Development.IDE                   (IdeState)
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import qualified Ide.Plugin.Example                as Example
-import qualified Ide.Plugin.Example2               as Example2
-import qualified Ide.Plugin.ExampleCabal           as ExampleCabal
 
 -- haskell-language-server optional plugins
 #if hls_qualifyImportedNames
@@ -130,15 +127,12 @@ instance Pretty Log where
 -- These can be freely added or removed to tailor the available
 -- features of the server.
 
-idePlugins :: Recorder (WithPriority Log) -> Bool -> IdePlugins IdeState
-idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
+idePlugins :: Recorder (WithPriority Log) -> IdePlugins IdeState
+idePlugins recorder = pluginDescToIdePlugins allPlugins
   where
     pluginRecorder :: forall log. (Pretty log) => Recorder (WithPriority log)
     pluginRecorder = cmapWithPrio Log recorder
-    allPlugins = if includeExamples
-                   then basePlugins ++ examplePlugins
-                   else basePlugins
-    basePlugins =
+    allPlugins =
 #if hls_pragmas
       Pragmas.descriptor  "pragmas" :
 #endif
@@ -215,9 +209,4 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
 #if explicitFixity
       ++ [ExplicitFixity.descriptor pluginRecorder]
 #endif
-    examplePlugins =
-      [Example.descriptor  pluginRecorder "eg"
-      ,Example2.descriptor pluginRecorder "eg2"
-      ,ExampleCabal.descriptor pluginRecorder "ec"
-      ]
 

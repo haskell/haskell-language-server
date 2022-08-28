@@ -1,4 +1,4 @@
-cabal-version:      2.4
+cabal-version:      3.0
 category:           Development
 name:               haskell-language-server
 version:            1.7.0.0
@@ -233,12 +233,6 @@ flag dynamic
   default:     True
   manual:      True
 
-common example-plugins
-  hs-source-dirs: plugins/default/src
-  other-modules: Ide.Plugin.Example,
-                 Ide.Plugin.Example2,
-                 Ide.Plugin.ExampleCabal
-
 common class
   if flag(class)
     build-depends: hls-class-plugin ^>= 1.0
@@ -366,13 +360,12 @@ common brittany
     build-depends: hls-brittany-plugin ^>= 1.0
     cpp-options: -Dhls_brittany
 
-executable haskell-language-server
+library plugins
   import:             common-deps
                     -- configuration
                     , warnings
                     , pedantic
                     -- plugins
-                    , example-plugins
                     , callHierarchy
                     , changeTypeSignature
                     , class
@@ -398,10 +391,20 @@ executable haskell-language-server
                     , ormolu
                     , stylishHaskell
                     , brittany
+  exposed-modules: HlsPlugins
+  hs-source-dirs: src
 
+  build-depends: ghcide, hls-plugin-api
+  default-language: Haskell2010
+  default-extensions: DataKinds, TypeOperators
+
+executable haskell-language-server
+  import:           common-deps
+                    -- configuration
+                  , warnings
+                  , pedantic
   main-is:          Main.hs
   hs-source-dirs:   exe
-  other-modules:    Plugins
 
   ghc-options:
     -threaded
@@ -438,6 +441,7 @@ executable haskell-language-server
     , ghcide
     , hashable
     , haskell-language-server
+    , haskell-language-server:plugins
     , lsp
     , hie-bios
     , hiedb
@@ -579,3 +583,47 @@ test-suite wrapper-test
 
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs
+
+benchmark benchmark
+    type: exitcode-stdio-1.0
+    default-language: Haskell2010
+    ghc-options: -Wall -Wno-name-shadowing -threaded
+    main-is: Main.hs
+    hs-source-dirs: bench
+    build-tool-depends:
+        ghcide-bench:ghcide-bench,
+        hp2pretty:hp2pretty,
+        implicit-hie:gen-hie
+    default-extensions:
+        BangPatterns
+        DeriveFunctor
+        DeriveGeneric
+        FlexibleContexts
+        GeneralizedNewtypeDeriving
+        LambdaCase
+        NamedFieldPuns
+        RecordWildCards
+        ScopedTypeVariables
+        StandaloneDeriving
+        TupleSections
+        TypeApplications
+        ViewPatterns
+
+    build-depends:
+        aeson,
+        base == 4.*,
+        containers,
+        data-default,
+        directory,
+        extra,
+        filepath,
+        ghcide-bench,
+        haskell-language-server:plugins,
+        hls-plugin-api,
+        lens,
+        lens-aeson,
+        optparse-applicative,
+        shake,
+        shake-bench == 0.1.*,
+        text,
+        yaml

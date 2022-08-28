@@ -1,4 +1,4 @@
-cabal-version:      2.4
+cabal-version:      3.0
 build-type:         Simple
 category:           Development
 name:               ghcide
@@ -267,45 +267,6 @@ executable ghcide-test-preprocessor
     if !flag(test-exe)
         buildable: False
 
-benchmark benchHist
-    type: exitcode-stdio-1.0
-    default-language: Haskell2010
-    ghc-options: -Wall -Wno-name-shadowing -threaded
-    main-is: Main.hs
-    hs-source-dirs: bench/hist bench/lib
-    other-modules: Experiments.Types
-    build-tool-depends:
-        ghcide:ghcide-bench,
-        hp2pretty:hp2pretty,
-        implicit-hie:gen-hie
-    default-extensions:
-        BangPatterns
-        DeriveFunctor
-        DeriveGeneric
-        FlexibleContexts
-        GeneralizedNewtypeDeriving
-        LambdaCase
-        NamedFieldPuns
-        RecordWildCards
-        ScopedTypeVariables
-        StandaloneDeriving
-        TupleSections
-        TypeApplications
-        ViewPatterns
-
-    build-depends:
-        aeson,
-        base == 4.*,
-        shake-bench == 0.1.*,
-        directory,
-        extra,
-        filepath,
-        lens,
-        optparse-applicative,
-        shake,
-        text,
-        yaml
-
 flag executable
     description: Build the ghcide executable
     default: True
@@ -389,8 +350,6 @@ test-suite ghcide-tests
         aeson,
         async,
         base,
-        binary,
-        bytestring,
         containers,
         data-default,
         directory,
@@ -407,7 +366,6 @@ test-suite ghcide-tests
         --------------------------------------------------------------
         ghcide,
         ghc-typelits-knownnat,
-        haddock-library,
         lsp,
         lsp-types,
         hls-plugin-api,
@@ -416,20 +374,13 @@ test-suite ghcide-tests
         lsp-test ^>= 0.14,
         monoid-subclasses,
         network-uri,
-        optparse-applicative,
-        parallel,
-        process,
         QuickCheck,
-        quickcheck-instances,
         random,
         regex-tdfa ^>= 1.3.1,
-        safe,
-        safe-exceptions,
         shake,
         sqlite-simple,
         stm,
         stm-containers,
-        hls-graph,
         tasty,
         tasty-expected-failure,
         tasty-hunit >= 0.10,
@@ -438,7 +389,6 @@ test-suite ghcide-tests
         text,
         text-rope,
         unordered-containers,
-        vector,
     if (impl(ghc >= 8.6) && impl(ghc < 9.2))
       build-depends:
           record-dot-preprocessor,
@@ -450,8 +400,6 @@ test-suite ghcide-tests
         Development.IDE.Test
         Development.IDE.Test.Diagnostic
         Development.IDE.Test.Runfiles
-        Experiments
-        Experiments.Types
         FuzzySearch
         Progress
         HieDbRetry
@@ -470,59 +418,3 @@ test-suite ghcide-tests
         TupleSections
         TypeApplications
         ViewPatterns
-
-flag bench-exe
-    description: Build the ghcide-bench executable
-    default: True
-
-executable ghcide-bench
-    default-language: Haskell2010
-    build-tool-depends:
-        ghcide:ghcide
-    build-depends:
-        aeson,
-        base,
-        bytestring,
-        containers,
-        data-default,
-        directory,
-        extra,
-        filepath,
-        ghcide,
-        hls-plugin-api,
-        lens,
-        lsp-test,
-        lsp-types,
-        optparse-applicative,
-        process,
-        safe-exceptions,
-        hls-graph,
-        shake,
-        tasty-hunit >= 0.10,
-        text
-    hs-source-dirs: bench/lib bench/exe test/src
-    ghc-options: -threaded -Wall -Wno-name-shadowing -rtsopts
-    main-is: Main.hs
-    other-modules:
-        Development.IDE.Test
-        Development.IDE.Test.Diagnostic
-        Experiments
-        Experiments.Types
-    default-extensions:
-        BangPatterns
-        DeriveFunctor
-        DeriveGeneric
-        FlexibleContexts
-        GeneralizedNewtypeDeriving
-        LambdaCase
-        NamedFieldPuns
-        OverloadedStrings
-        RecordWildCards
-        ScopedTypeVariables
-        StandaloneDeriving
-        TupleSections
-        TypeApplications
-        ViewPatterns
-
-    if !flag(bench-exe)
-        buildable: False

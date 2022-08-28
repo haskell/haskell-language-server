@@ -65,7 +65,6 @@ import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
 import           Development.Shake                        (getDirectoryFilesIO)
-import qualified Experiments                              as Bench
 import           Ide.Plugin.Config
 import           Language.LSP.Test
 import           Language.LSP.Types                       hiding
@@ -221,7 +220,6 @@ main = do
     , cradleTests
     , dependentFileTest
     , nonLspCommandLine
-    , benchmarkTests
     , ifaceTests
     , bootTests
     , rootUriTests
@@ -6310,25 +6308,6 @@ nonLspCommandLine = testGroup "ghcide command line"
 
         ec @?= ExitSuccess
   ]
-
-benchmarkTests :: TestTree
-benchmarkTests =
-    let ?config = Bench.defConfig
-            { Bench.verbosity = Bench.Quiet
-            , Bench.repetitions = Just 3
-            , Bench.buildTool = Bench.Cabal
-            } in
-    withResource Bench.setup Bench.cleanUp $ \getResource -> testGroup "benchmark experiments"
-    [ testCase (Bench.name e) $ do
-        Bench.SetupResult{Bench.benchDir} <- getResource
-        res <- Bench.runBench (runInDir benchDir) e
-        assertBool "did not successfully complete 5 repetitions" $ Bench.success res
-        | e <- Bench.experiments
-        , Bench.name e /= "edit" -- the edit experiment does not ever fail
-        , Bench.name e /= "hole fit suggestions" -- is too slow!
-        -- the cradle experiments are way too slow
-        , not ("cradle" `isInfixOf` Bench.name e)
-    ]
 
 -- | checks if we use InitializeParams.rootUri for loading session
 rootUriTests :: TestTree

@@ -1,22 +1,17 @@
 
 # Benchmarks
 
-This folder contains two Haskell programs that work together to simplify the
-performance analysis of ghcide:
-
-- `exe/Main.hs` - a standalone benchmark runner. Run with `stack run ghcide-bench`
-- `hist/Main.hs` - a Shake script for running the benchmark suite over a set of commits.
-  - Run with `stack bench ghcide` or `cabal bench ghcide`,
-  - Requires a `ghcide-bench` binary in the PATH (usually provided by stack/cabal),
-  - Calls `cabal` (or `stack`, configurable) internally to build the project,
-  - Driven by the `bench/config.yaml` configuration file.
-    By default it compares HEAD with "master"
+This folder contains a Shake script to simplify the performance analysis of HLS.
+It drives the `ghcide-bench` benchmark suite over a set of commits and experiments.
+To run it, use `cabal bench`.
+To configure it, edit `bench/config.yaml`.
+By default it compares HEAD with "origin/master"
 
 # Examples and experiments
 
 The benchmark suites runs a set of experiments (hover, completion, edit, etc.)
 over all the defined examples (currently Cabal and lsp-types). Examples are defined
-in `ghcide/bench/config.yaml` whereas experiments are coded in `ghcide/bench/lib/Experiments.hs`.
+in `bench/config.yaml` whereas experiments are coded in `ghcide-bench/src/Experiments.hs`.
 
 # Phony targets
 
@@ -34,11 +29,14 @@ The Shake script supports a number of phony targets that allow running a subset 
 * profiled-Cabal-3.0.0.0
 :  runs the Cabal example, with heap profiling
 
+* all-binaries
+:  build all the HLS binaries for each of the versions under analysis
+
 * etc
 
 `--help` lists all the phony targets. Invoke it with:
 
-    cabal bench ghcide --benchmark-options="--help"
+    cabal bench --benchmark-options="--help"
 
 ```
 Targets:
