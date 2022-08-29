@@ -70,19 +70,19 @@ source-repository-package
   type:git
   location: https://github.com/kokobd/lsp
   subdir: lsp
-  tag: 80ebd816454a9e44d4cd93793ef3badc661b0f2f
+  tag: 974d97c8fdbe067bf6fe31fae2046835c9717c6c
 
 source-repository-package
   type:git
   location: https://github.com/kokobd/lsp
   subdir: lsp-types
-  tag: 80ebd816454a9e44d4cd93793ef3badc661b0f2f
+  tag: 974d97c8fdbe067bf6fe31fae2046835c9717c6c
 
 source-repository-package
   type:git
   location: https://github.com/kokobd/lsp
   subdir: lsp-test
-  tag: 80ebd816454a9e44d4cd93793ef3badc661b0f2f
+  tag: 974d97c8fdbe067bf6fe31fae2046835c9717c6c
 
 allow-newer:
   -- ghc-9.2
