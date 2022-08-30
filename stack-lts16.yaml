@@ -5,6 +5,7 @@ packages:
   - ./hie-compat
   - ./hls-graph
   - ./ghcide/
+  - ./ghcide/test
   - ./shake-bench
   - ./hls-plugin-api
   - ./hls-test-utils
