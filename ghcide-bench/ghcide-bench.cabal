@@ -63,8 +63,6 @@ library
     exposed-modules:
         Experiments.Types
         Experiments
-    other-modules:
-        Development.IDE.Test.Diagnostic
     build-depends:
         aeson,
         async,
@@ -76,6 +74,7 @@ library
         extra,
         filepath,
         ghcide,
+        ghcide-test-utils,
         hashable,
         lens,
         lsp-test,

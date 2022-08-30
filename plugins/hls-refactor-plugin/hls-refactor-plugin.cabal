@@ -102,7 +102,7 @@ test-suite tests
     , text-rope
     , containers
     , ghcide
-    , ghcide:ghcide-test-utils
+    , ghcide-test-utils
     , shake
     , hls-plugin-api
     , lsp-test

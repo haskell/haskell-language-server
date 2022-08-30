@@ -349,7 +349,7 @@ test-suite ghcide-tests
         ghc,
         --------------------------------------------------------------
         ghcide,
-        ghcide-test-utils,
+        ghcide-test-utils-internal,
         ghc-typelits-knownnat,
         lsp,
         lsp-types,
@@ -402,8 +402,7 @@ test-suite ghcide-tests
         TypeApplications
         ViewPatterns
 
-library ghcide-test-utils
-    visibility: public
+library ghcide-test-utils-internal
     default-language: Haskell2010
     build-depends:
         aeson,
