@@ -24,6 +24,7 @@ import           Test.Hls.Command
 
 tests :: TestTree
 tests = testGroup "code actions" [
+#if hls_refactor
       importTests
     , packageTests
     , redundantImportTests
@@ -31,6 +32,7 @@ tests = testGroup "code actions" [
     , signatureTests
     , typedHoleTests
     , unusedTermTests
+#endif
     ]
 
 renameTests :: TestTree

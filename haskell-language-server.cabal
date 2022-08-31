@@ -520,6 +520,7 @@ test-suite func-test
   import:             common-deps
                     , warnings
                     , pedantic
+                    , refactor
   type:               exitcode-stdio-1.0
   default-language:   Haskell2010
   build-tool-depends:
