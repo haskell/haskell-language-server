@@ -69,9 +69,9 @@ import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
 
+import qualified Data.Text.Utf16.Rope                     as Rope
 import           Development.IDE
 
-import qualified Data.Rope.UTF16                          as Rope
 import           Development.IDE.Spans.AtPoint            (pointCommand)
 
 -- Chunk size used for parallelizing fuzzy matching
