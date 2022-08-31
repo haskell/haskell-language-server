@@ -306,19 +306,14 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                     [homeUnitId_ dflags]
 #endif
                  mods_transitive = getTransitiveMods hsc_env needed_mods
+
                  -- If we don't support multiple home units, ModuleNames are sufficient because all the units will be the same
                  mods_transitive_list = 
 #if MIN_VERSION_ghc(9,3,0)
                                          mapMaybe nodeKeyToInstalledModule $ Set.toList mods_transitive
 #else
-                                         map 
-#if MIN_VERSION_ghc(9,0,0)
-                                            (mkModule (homeUnitId_ dflags))
-#else
-                                            (InstalledModule (toInstalledUnitId $ homeUnitId_ dflags))
-#endif
                                         -- Non det OK as we will put it into maps later anyway
-                                       $ nonDetEltsUniqSet mods_transitive
+                                         map (Compat.installedModule (homeUnitId_ dflags)) $ nonDetEltsUniqSet mods_transitive
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
