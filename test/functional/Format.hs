@@ -8,6 +8,7 @@ import           Data.Aeson
 import qualified Data.ByteString.Lazy    as BS
 import qualified Data.Text.Encoding      as T
 import qualified Data.Text.IO            as T
+import qualified Data.Text               as T
 import           Language.LSP.Test
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens as LSP
@@ -47,10 +48,10 @@ providerTests = testGroup "formatting provider" [
     testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
         resp <- request STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
-        case resp ^. LSP.result of
+        liftIO $ case resp ^. LSP.result of
           result@(Left (ResponseError reason message Nothing)) -> case reason of
             MethodNotFound -> pure () -- No formatter
-            InvalidRequest | "No plugin enabled for STextDocumentFormatting" `isPrefixOf` message -> pure ()
+            InvalidRequest | "No plugin enabled for STextDocumentFormatting" `T.isPrefixOf` message -> pure ()
             _ -> assertFailure $ "strange response from formatting provider:" ++ show result
           result -> assertFailure $ "strange response from formatting provider:" ++ show result
 
