@@ -67,6 +67,7 @@ import           Control.Applicative                          (liftA2)
 #endif
 import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.Strict
+import           Control.DeepSeq
 import           Control.Exception.Safe
 import           Control.Monad.Extra
 import           Control.Monad.Reader
@@ -668,7 +669,7 @@ typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck fi
     -- very expensive.
     when (foi == NotFOI) $
       logWith recorder Logger.Warning $ LogTypecheckedFOI file
-    typeCheckRuleDefinition hsc pm file
+    typeCheckRuleDefinition hsc pm
 
 knownFilesRule :: Recorder (WithPriority Log) -> Rules ()
 knownFilesRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GetKnownTargets -> do
@@ -689,9 +690,8 @@ getModuleGraphRule recorder = defineNoFile (cmapWithPrio LogShake recorder) $ \G
 typeCheckRuleDefinition
     :: HscEnv
     -> ParsedModule
-    -> NormalizedFilePath
     -> Action (IdeResult TcModuleResult)
-typeCheckRuleDefinition hsc pm file = do
+typeCheckRuleDefinition hsc pm = do
   setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
 
@@ -759,6 +759,11 @@ instance Default GhcSessionDepsConfig where
     { checkForImportCycles = True
     }
 
+-- | Note [GhcSessionDeps]
+-- For a file 'Foo', GhcSessionDeps "Foo.hs" results in an HscEnv which includes
+-- 1. HomeModInfo's (in the HUG/HPT) for all modules in the transitive closure of "Foo", **NOT** including "Foo" itself.
+-- 2. ModSummary's (in the ModuleGraph) for all modules in the transitive closure of "Foo", including "Foo" itself.
+-- 3. ModLocation's (in the FinderCache) all modules in the transitive closure of "Foo", including "Foo" itself.
 ghcSessionDepsDefinition
     :: -- | full mod summary
         Bool ->
@@ -771,27 +776,26 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
         Nothing -> return Nothing
         Just deps -> do
             when checkForImportCycles $ void $ uses_ ReportImportCycles deps
-            mss <- map msrModSummary <$> if fullModSummary
-                then uses_ GetModSummary deps
-                else uses_ GetModSummaryWithoutTimestamps deps
+            ms <- msrModSummary <$> if fullModSummary
+                then use_ GetModSummary file
+                else use_ GetModSummaryWithoutTimestamps file
 
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
             let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails Nothing) ifaces
 #if MIN_VERSION_ghc(9,3,0)
-            mss_imports <- uses_ GetLocatedImports (file : deps)
-            final_deps <- forM mss_imports $ \imports -> do
-              let fs = mapMaybe (fmap artifactFilePath . snd) imports
-              dep_mss <- map msrModSummary <$> if fullModSummary
-                    then uses_ GetModSummary fs
-                    else uses_ GetModSummaryWithoutTimestamps fs
-              return (map (NodeKey_Module . msKey) dep_mss)
-            ms <- msrModSummary <$> use_ GetModSummary file
-            let moduleNodes = zipWith ModuleNode final_deps (ms : mss)
+            -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
+            -- also points to all the direct descendents of the current module. To get the keys for the descendents
+            -- we must get their `ModSummary`s
+            !final_deps <- do
+              dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
+             -- Don't want to retain references to the entire ModSummary when just the key will do
+              return $!! map (NodeKey_Module . msKey) dep_mss
+            let moduleNode = (ms, final_deps)
 #else
-            let moduleNodes = mss
+            let moduleNode = ms
 #endif
-            session' <- liftIO $ mergeEnvs hsc moduleNodes inLoadOrder depSessions
+            session' <- liftIO $ mergeEnvs hsc moduleNode inLoadOrder depSessions
 
             Just <$> liftIO (newHscEnvEqWithImportPaths (envImportPaths env) session' [])
 
@@ -996,7 +1000,7 @@ regenerateHiFile sess f ms compNeeded = do
         Just pm -> do
             -- Invoke typechecking directly to update it without incurring a dependency
             -- on the parsed module and the typecheck rules
-            (diags', mtmr) <- typeCheckRuleDefinition hsc pm f
+            (diags', mtmr) <- typeCheckRuleDefinition hsc pm
             case mtmr of
               Nothing -> pure (diags', Nothing)
               Just tmr -> do

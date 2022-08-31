@@ -1029,21 +1029,21 @@ loadModulesHome mod_infos e =
 #endif
 
 -- Merge the HPTs, module graphs and FinderCaches
+-- See Note [GhcSessionDeps] in Development.IDE.Core.Rules
+-- Add the current ModSummary to the graph, along with the
+-- HomeModInfo's of all direct dependencies (by induction hypothesis all
+-- transitive dependencies will be contained in envs)
 #if MIN_VERSION_ghc(9,3,0)
-mergeEnvs :: HscEnv -> [ModuleGraphNode] -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
-mergeEnvs env extraNodes extraMods envs = do
-    let extraModSummaries = mapMaybe moduleGraphNodeModSum extraNodes
-        ims  = map (\ms -> Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms)  (moduleName (ms_mod ms))) extraModSummaries
-        ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) extraModSummaries ims
-        curFinderCache =
-            foldl'
-                (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) Compat.emptyInstalledModuleEnv
-                $ zip ims ifrs
+mergeEnvs :: HscEnv -> (ModSummary, [NodeKey]) -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
+mergeEnvs env (ms, deps) extraMods envs = do
+    let im  = Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms) (moduleName (ms_mod ms))
+        ifr = InstalledFound (ms_location ms) im
+        curFinderCache = Compat.extendInstalledModuleEnv Compat.emptyInstalledModuleEnv im ifr
         -- Very important to force this as otherwise the hsc_mod_graph field is not
         -- forced and ends up retaining a reference to all the old hsc_envs we have merged to get
         -- this new one, which in turn leads to the EPS referencing the HPT.
         module_graph_nodes =
-          extraNodes ++ nubOrdOn mkNodeKey (concatMap (mgModSummaries' . hsc_mod_graph) envs)
+          nubOrdOn mkNodeKey (ModuleNode deps ms : concatMap (mgModSummaries' . hsc_mod_graph) envs)
 
     newFinderCache <- concatFC curFinderCache (map hsc_FC envs)
     liftRnf rwhnf module_graph_nodes `seq` (return $ loadModulesHome extraMods $
@@ -1065,16 +1065,16 @@ mergeEnvs env extraNodes extraMods envs = do
         concatFC cur xs = do
           fcModules <- mapM (readIORef . fcModuleCache) xs
           fcFiles <- mapM (readIORef . fcFileCache) xs
-          fcModules' <- newIORef (foldl' (plusInstalledModuleEnv const) cur fcModules)
-          fcFiles' <- newIORef (Map.unions fcFiles)
+          fcModules' <- newIORef $! foldl' (plusInstalledModuleEnv const) cur fcModules
+          fcFiles' <- newIORef $! Map.unions fcFiles
           pure $ FinderCache fcModules' fcFiles'
 
 #else
-mergeEnvs :: HscEnv -> [ModSummary] -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
-mergeEnvs env extraModSummaries extraMods envs = do
+mergeEnvs :: HscEnv -> ModSummary -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
+mergeEnvs env ms extraMods envs = do
     prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
-    let ims  = map (\ms -> Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms)  (moduleName (ms_mod ms))) extraModSummaries
-        ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) extraModSummaries ims
+    let im  = Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms) (moduleName (ms_mod ms))
+        ifr = InstalledFound (ms_location ms) im
         -- Very important to force this as otherwise the hsc_mod_graph field is not
         -- forced and ends up retaining a reference to all the old hsc_envs we have merged to get
         -- this new one, which in turn leads to the EPS referencing the HPT.
@@ -1085,12 +1085,9 @@ mergeEnvs env extraModSummaries extraMods envs = do
         -- This may have to change in the future.
           map extendModSummaryNoDeps $
 #endif
-          extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
+          nubOrdOn ms_mod (ms : concatMap (mgModSummaries . hsc_mod_graph) envs)
 
-    newFinderCache <- newIORef $
-            foldl'
-                (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
-                $ zip ims ifrs
+    newFinderCache <- newIORef $! Compat.extendInstalledModuleEnv prevFinderCache im ifr
     liftRnf rwhnf module_graph_nodes `seq` (return $ loadModulesHome extraMods $
       env{
           hsc_HPT = foldMapBy mergeUDFM emptyUDFM hsc_HPT envs,

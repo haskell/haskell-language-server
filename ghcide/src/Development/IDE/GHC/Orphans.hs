@@ -223,4 +223,7 @@ instance NFData PkgQual where
 
 instance NFData UnitId where
   rnf = rwhnf
+
+instance NFData NodeKey where
+  rnf = rwhnf
 #endif
