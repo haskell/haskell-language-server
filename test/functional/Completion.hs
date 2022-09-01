@@ -84,7 +84,8 @@ tests = testGroup "completions" [
          compls <- getCompletions doc (Position 5 7)
          liftIO $ assertBool "Expected completions" $ not $ null compls
 
-     , testGroup "recorddotsyntax"
+     , expectFailIfBeforeGhc92 "record dot syntax is introduced in GHC 9.2"
+       $ testGroup "recorddotsyntax"
         [ testCase "shows field selectors" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
             doc <- openDoc "RecordDotSyntax.hs" "haskell"
 
@@ -364,3 +365,6 @@ shouldNotContainCompl :: [CompletionItem] -> T.Text -> Assertion
 compls `shouldNotContainCompl` lbl =
     all ((/= lbl) . (^. label)) compls
     @? "Should not contain completion: " ++ show lbl
+
+expectFailIfBeforeGhc92 :: String -> TestTree -> TestTree
+expectFailIfBeforeGhc92 = knownBrokenForGhcVersions [GHC810, GHC88, GHC86]
