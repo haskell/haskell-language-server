@@ -23,7 +23,7 @@ let
       ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_2_0_4;
 
       Cabal = hself.Cabal_3_6_3_0;
-      ormolu = hself.ormolu_0_5_0_0;
+      ormolu = hself.ormolu_0_5_0_1;
       fourmolu = hself.fourmolu_0_6_0_0;
       # Hlint is still broken
       hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint-34 { });
