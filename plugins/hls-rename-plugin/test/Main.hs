@@ -13,7 +13,7 @@ main :: IO ()
 main = defaultTestRunner tests
 
 renamePlugin :: PluginDescriptor IdeState
-renamePlugin = Rename.descriptor "rename"
+renamePlugin = Rename.descriptor mempty "rename"
 
 -- See https://github.com/wz1000/HieDb/issues/45
 recordConstructorIssue :: String

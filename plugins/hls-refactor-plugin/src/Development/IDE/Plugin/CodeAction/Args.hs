@@ -1,6 +1,3 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE FlexibleInstances #-}
-
 module Development.IDE.Plugin.CodeAction.Args
   ( CodeActionTitle,
     CodeActionPreferred,
@@ -27,6 +24,7 @@ import           Development.IDE                              hiding
                                                               (pluginHandlers)
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Plugin.CodeAction.ExactPrint (Rewrite,
                                                                rewriteToEdit)

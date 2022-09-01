@@ -29,8 +29,6 @@ import           Unique                     (getKey)
 #endif
 
 
-import           Retrie.ExactPrint          (Annotated)
-
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 
@@ -194,12 +192,6 @@ instance NFData ModGuts where
 
 instance NFData (ImportDecl GhcPs) where
     rnf = rwhnf
-
-instance Show (Annotated ParsedSource) where
-  show _ = "<Annotated ParsedSource>"
-
-instance NFData (Annotated ParsedSource) where
-  rnf = rwhnf
 
 #if MIN_VERSION_ghc(9,0,1)
 instance (NFData HsModule) where

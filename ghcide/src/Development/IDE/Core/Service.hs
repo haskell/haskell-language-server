@@ -41,6 +41,7 @@ import           Development.IDE.Core.Shake       hiding (Log)
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.Types.Monitoring (Monitoring)
 import           Development.IDE.Types.Shake      (WithHieDb)
+import           Ide.Types                        (IdePlugins)
 import           System.Environment               (lookupEnv)
 
 data Log
@@ -61,6 +62,7 @@ instance Pretty Log where
 -- | Initialise the Compiler Service.
 initialise :: Recorder (WithPriority Log)
            -> Config
+           -> IdePlugins IdeState
            -> Rules ()
            -> Maybe (LSP.LanguageContextEnv Config)
            -> Logger
@@ -70,7 +72,7 @@ initialise :: Recorder (WithPriority Log)
            -> IndexQueue
            -> Monitoring
            -> IO IdeState
-initialise recorder defaultConfig mainRule lspEnv logger debouncer options withHieDb hiedbChan metrics = do
+initialise recorder defaultConfig plugins mainRule lspEnv logger debouncer options withHieDb hiedbChan metrics = do
     shakeProfiling <- do
         let fromConf = optShakeProfiling options
         fromEnv <- lookupEnv "GHCIDE_BUILD_PROFILING"
@@ -79,6 +81,7 @@ initialise recorder defaultConfig mainRule lspEnv logger debouncer options withH
         (cmapWithPrio LogShake recorder)
         lspEnv
         defaultConfig
+        plugins
         logger
         debouncer
         shakeProfiling

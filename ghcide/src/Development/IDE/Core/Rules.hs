@@ -119,7 +119,6 @@ import           Development.IDE.GHC.Compat                   hiding
 import qualified Development.IDE.GHC.Compat                   as Compat hiding (vcat, nest)
 import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.ExactPrint hiding (LogShake, Log)
 import           Development.IDE.GHC.Util                     hiding
                                                               (modifyDynFlags)
 import           Development.IDE.Graph
@@ -154,7 +153,6 @@ import System.Info.Extra (isWindows)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
 import Development.IDE.Types.Logger (Recorder, logWith, cmapWithPrio, WithPriority, Pretty (pretty), (<+>), nest, vcat)
 import qualified Development.IDE.Core.Shake as Shake
-import qualified Development.IDE.GHC.ExactPrint as ExactPrint hiding (LogShake)
 import qualified Development.IDE.Types.Logger as Logger
 import qualified Development.IDE.Types.Shake as Shake
 import           Development.IDE.GHC.CoreFile
@@ -167,7 +165,6 @@ data Log
   | LogLoadingHieFile !NormalizedFilePath
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
-  | LogExactPrint ExactPrint.Log
   | LogTypecheckedFOI !NormalizedFilePath
   deriving Show
 
@@ -185,7 +182,6 @@ instance Pretty Log where
           , pretty (displayException e) ]
     LogLoadingHieFileSuccess path ->
       "SUCCEEDED LOADING HIE FILE FOR" <+> pretty path
-    LogExactPrint log -> pretty log
     LogTypecheckedFOI path -> vcat
       [ "Typechecked a file which is not currently open in the editor:" <+> pretty (fromNormalizedFilePath path)
       , "This can indicate a bug which results in excessive memory usage."
@@ -1230,7 +1226,6 @@ mainRule recorder RulesConfig{..} = do
       else defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \NeedsCompilation _ -> return $ Just Nothing
     generateCoreRule recorder
     getImportMapRule recorder
-    getAnnotatedParsedSourceRule (cmapWithPrio LogExactPrint recorder)
     persistentHieFileRule recorder
     persistentDocMapRule
     persistentImportMapRule

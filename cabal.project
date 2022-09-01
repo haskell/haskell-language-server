@@ -5,6 +5,7 @@ packages:
          ./hls-graph
          ./ghcide
          ./ghcide-bench
+         ./ghcide/test
          ./hls-plugin-api
          ./hls-test-utils
          ./plugins/hls-tactics-plugin
@@ -32,6 +33,7 @@ packages:
          ./plugins/hls-stan-plugin
          ./plugins/hls-gadt-plugin
          ./plugins/hls-explicit-fixity-plugin
+         ./plugins/hls-refactor-plugin
 
 -- Standard location for temporary packages needed for particular environments
 -- For example it is used in the project gitlab mirror to help in the MAcOS M1 build script

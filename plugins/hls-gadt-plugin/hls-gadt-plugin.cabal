@@ -30,6 +30,7 @@ library
     , ghc-boot-th
     , ghc-exactprint
     , hls-plugin-api        ^>= 1.4
+    , hls-refactor-plugin
     , lens
     , lsp                    >=1.2.0.1
     , mtl

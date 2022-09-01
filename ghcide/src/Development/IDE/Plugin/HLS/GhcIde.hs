@@ -12,7 +12,6 @@ import           Development.IDE
 import           Development.IDE.LSP.HoverDefinition
 import qualified Development.IDE.LSP.Notifications   as Notifications
 import           Development.IDE.LSP.Outline
-import qualified Development.IDE.Plugin.CodeAction   as CodeAction
 import qualified Development.IDE.Plugin.Completions  as Completions
 import qualified Development.IDE.Plugin.TypeLenses   as TypeLenses
 import           Ide.Types
@@ -35,10 +34,6 @@ instance Pretty Log where
 descriptors :: Recorder (WithPriority Log) -> [PluginDescriptor IdeState]
 descriptors recorder =
   [ descriptor "ghcide-hover-and-symbols",
-    CodeAction.iePluginDescriptor "ghcide-code-actions-imports-exports",
-    CodeAction.typeSigsPluginDescriptor "ghcide-code-actions-type-signatures",
-    CodeAction.bindingsPluginDescriptor "ghcide-code-actions-bindings",
-    CodeAction.fillHolePluginDescriptor "ghcide-code-actions-fill-holes",
     Completions.descriptor (cmapWithPrio LogCompletions recorder) "ghcide-completions",
     TypeLenses.descriptor (cmapWithPrio LogTypeLenses recorder) "ghcide-type-lenses",
     Notifications.descriptor (cmapWithPrio LogNotifications recorder) "ghcide-core"

@@ -1,10 +1,5 @@
-{-# LANGUAGE CPP                    #-}
-{-# LANGUAGE DerivingVia            #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GADTs                  #-}
-{-# LANGUAGE RankNTypes             #-}
-{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs        #-}
 
 -- | This module hosts various abstractions and utility functions to work with ghc-exactprint.
 module Development.IDE.GHC.ExactPrint
@@ -49,6 +44,7 @@ where
 
 import           Control.Applicative                     (Alternative)
 import           Control.Arrow                           (right, (***))
+import           Control.DeepSeq
 import           Control.Monad
 import qualified Control.Monad.Fail                      as Fail
 import           Control.Monad.IO.Class                  (MonadIO)
@@ -72,6 +68,7 @@ import qualified Development.IDE.Core.Shake              as Shake
 import           Development.IDE.GHC.Compat              hiding (parseImport,
                                                           parsePattern,
                                                           parseType)
+import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location
@@ -112,6 +109,12 @@ instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
 
+instance Show (Annotated ParsedSource) where
+  show _ = "<Annotated ParsedSource>"
+ 
+instance NFData (Annotated ParsedSource) where
+  rnf = rwhnf
+ 
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
   deriving (Eq, Show, Typeable, GHC.Generic)
 

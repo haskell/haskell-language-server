@@ -1,20 +1,17 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE GADTs #-}
 
 module Development.IDE.Plugin.CodeAction
     (
+    mkExactprintPluginDescriptor,
     iePluginDescriptor,
     typeSigsPluginDescriptor,
     bindingsPluginDescriptor,
     fillHolePluginDescriptor,
-    newImport,
-    newImportToEdit
+    extendImportPluginDescriptor,
     -- * For testing
-    , matchRegExMultipleImports
+    matchRegExMultipleImports
     ) where
 
 import           Control.Applicative                               ((<|>))
@@ -22,8 +19,10 @@ import           Control.Arrow                                     (second,
                                                                     (&&&),
                                                                     (>>>))
 import           Control.Concurrent.STM.Stats                      (atomically)
-import           Control.Monad                                     (guard, join)
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Maybe
+import           Control.Monad.Extra
+import           Data.Aeson
 import           Data.Char
 import qualified Data.DList                                        as DL
 import           Data.Function
@@ -40,18 +39,24 @@ import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Utf16.Rope                              as Rope
 import           Data.Tuple.Extra                                  (fst3)
+import           Development.IDE.Types.Logger                      hiding (group)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
+import           Development.IDE.GHC.ExactPrint
+import qualified Development.IDE.GHC.ExactPrint                   as E
 import           Development.IDE.GHC.Util                          (printOutputable,
-                                                                    printRdrName,
-                                                                    traceAst)
+                                                                    printRdrName)
+import           Development.IDE.Core.Shake                   hiding (Log)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
+import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
+import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
@@ -60,21 +65,24 @@ import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
-import           Language.LSP.Types                                (CodeAction (..),
+import           Language.LSP.Types                                (ApplyWorkspaceEditParams(..), CodeAction (..),
                                                                     CodeActionContext (CodeActionContext, _diagnostics),
                                                                     CodeActionKind (CodeActionQuickFix, CodeActionUnknown),
                                                                     CodeActionParams (CodeActionParams),
                                                                     Command,
                                                                     Diagnostic (..),
+                                                                    MessageType (..),
+                                                                    ShowMessageParams (..),
                                                                     List (..),
                                                                     ResponseError,
-                                                                    SMethod (STextDocumentCodeAction),
+                                                                    SMethod (..),
                                                                     TextDocumentIdentifier (TextDocumentIdentifier),
-                                                                    TextEdit (TextEdit),
+                                                                    TextEdit (TextEdit, _range),
                                                                     UInt,
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InR),
                                                                     uriToFilePath)
+import           GHC.Exts                                           (fromList)
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import           Text.Regex.TDFA                                   (mrAfter,
@@ -90,7 +98,6 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     LEpaComment,
                                                                     LocatedA)
 
-import           Control.Monad                                     (msum)
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
                                                                     DeltaPos,
@@ -121,8 +128,8 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
 
 -------------------------------------------------------------------------------------------------
 
-iePluginDescriptor :: PluginId -> PluginDescriptor IdeState
-iePluginDescriptor plId =
+iePluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
+iePluginDescriptor recorder plId =
   let old =
         mkGhcideCAsPlugin [
             wrap suggestExtendImport
@@ -135,10 +142,10 @@ iePluginDescriptor plId =
           , wrap suggestExportUnusedTopBinding
           ]
           plId
-   in old {pluginHandlers = pluginHandlers old <> mkPluginHandler STextDocumentCodeAction codeAction}
+   in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler STextDocumentCodeAction codeAction }
 
-typeSigsPluginDescriptor :: PluginId -> PluginDescriptor IdeState
-typeSigsPluginDescriptor =
+typeSigsPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
+typeSigsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
   mkGhcideCAsPlugin [
       wrap $ suggestSignature True
     , wrap suggestFillTypeWildcard
@@ -146,18 +153,107 @@ typeSigsPluginDescriptor =
     , wrap suggestAddTypeAnnotationToSatisfyContraints
     , wrap suggestConstraint
     ]
+    plId
 
-bindingsPluginDescriptor :: PluginId -> PluginDescriptor IdeState
-bindingsPluginDescriptor =
+bindingsPluginDescriptor :: Recorder (WithPriority E.Log) ->  PluginId -> PluginDescriptor IdeState
+bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
   mkGhcideCAsPlugin [
       wrap suggestReplaceIdentifier
     , wrap suggestImplicitParameter
     , wrap suggestNewDefinition
     , wrap suggestDeleteUnusedBinding
     ]
+    plId
 
-fillHolePluginDescriptor :: PluginId -> PluginDescriptor IdeState
-fillHolePluginDescriptor = mkGhcideCAPlugin $ wrap suggestFillHole
+fillHolePluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
+fillHolePluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder (mkGhcideCAPlugin (wrap suggestFillHole) plId)
+
+extendImportPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
+extendImportPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor plId)
+  { pluginCommands = [extendImportCommand] }
+
+
+-- | Add the ability for a plugin to call GetAnnotatedParsedSource
+mkExactprintPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginDescriptor a -> PluginDescriptor a
+mkExactprintPluginDescriptor recorder desc = desc { pluginRules = pluginRules desc >> getAnnotatedParsedSourceRule recorder }
+
+-------------------------------------------------------------------------------------------------
+
+
+extendImportCommand :: PluginCommand IdeState
+extendImportCommand =
+  PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
+
+extendImportHandler :: CommandFunction IdeState ExtendImport
+extendImportHandler ideState edit@ExtendImport {..} = do
+  res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
+  whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
+    let (_, List (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . Map.toList
+        srcSpan = rangeToSrcSpan nfp _range
+    LSP.sendNotification SWindowShowMessage $
+      ShowMessageParams MtInfo $
+        "Import "
+          <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent
+          <> "’ from "
+          <> importName
+          <> " (at "
+          <> printOutputable srcSpan
+          <> ")"
+    void $ LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  return $ Right Null
+
+extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
+extendImportHandler' ideState ExtendImport {..}
+  | Just fp <- uriToFilePath doc,
+    nfp <- toNormalizedFilePath' fp =
+    do
+      (ModSummaryResult {..}, ps, contents) <- MaybeT $ liftIO $
+        runAction "extend import" ideState $
+          runMaybeT $ do
+            -- We want accurate edits, so do not use stale data here
+            msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
+            ps <- MaybeT $ use GetAnnotatedParsedSource nfp
+            (_, contents) <- MaybeT $ use GetFileContents nfp
+            return (msr, ps, contents)
+      let df = ms_hspp_opts msrModSummary
+          wantedModule = mkModuleName (T.unpack importName)
+          wantedQual = mkModuleName . T.unpack <$> importQual
+          existingImport = find (isWantedModule wantedModule wantedQual) msrImports
+      case existingImport of
+        Just imp -> do
+            fmap (nfp,) $ liftEither $
+              rewriteToWEdit df doc
+#if !MIN_VERSION_ghc(9,2,0)
+                (annsA ps)
+#endif
+                $
+                  extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
+
+        Nothing -> do
+            let n = newImport importName sym importQual False
+                sym = if isNothing importQual then Just it else Nothing
+                it = case thingParent of
+                  Nothing -> newThing
+                  Just p  -> p <> "(" <> newThing <> ")"
+            t <- liftMaybe $ snd <$> newImportToEdit n ps (fromMaybe "" contents)
+            return (nfp, WorkspaceEdit {_changes=Just (fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
+  | otherwise =
+    mzero
+
+isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl GhcPs) -> Bool
+isWantedModule wantedModule Nothing (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
+    not (isQualifiedImport it) && unLoc ideclName == wantedModule
+isWantedModule wantedModule (Just qual) (L _ ImportDecl{ideclAs, ideclName, ideclHiding = Just (False, _)}) =
+    unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc . reLoc <$> ideclAs) == Just qual)
+isWantedModule _ _ _ = False
+
+
+liftMaybe :: Monad m => Maybe a -> MaybeT m a
+liftMaybe a = MaybeT $ pure a
+
+liftEither :: Monad m => Either e a -> MaybeT m a
+liftEither (Left _)  = mzero
+liftEither (Right x) = return x
 
 -------------------------------------------------------------------------------------------------
 
@@ -278,7 +374,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
   | otherwise = []
   where
     L _ HsModule {hsmodImports} = astA ps
-
+ 
     suggests identifier modName s
       | Just tcM <- mTcM,
         Just har <- mHar,

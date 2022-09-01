@@ -115,6 +115,10 @@ import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 import qualified Ide.Plugin.Brittany               as Brittany
 #endif
 
+#if hls_refactor
+import qualified Development.IDE.Plugin.CodeAction as Refactor
+#endif
+
 data Log = forall a. (Pretty a) => Log a
 
 instance Pretty Log where
@@ -152,7 +156,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       StylishHaskell.descriptor "stylish-haskell" :
 #endif
 #if hls_rename
-      Rename.descriptor "rename" :
+      Rename.descriptor pluginRecorder "rename" :
 #endif
 #if hls_retrie
       Retrie.descriptor "retrie" :
@@ -167,7 +171,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       Class.descriptor pluginRecorder "class" :
 #endif
 #if hls_haddockComments
-      HaddockComments.descriptor "haddockComments" :
+      HaddockComments.descriptor pluginRecorder "haddockComments" :
 #endif
 #if hls_eval
       Eval.descriptor pluginRecorder "eval" :
@@ -204,6 +208,13 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_gadt
       GADT.descriptor "gadt" :
+#endif
+#if hls_refactor
+      Refactor.iePluginDescriptor pluginRecorder "ghcide-code-actions-imports-exports" :
+      Refactor.typeSigsPluginDescriptor pluginRecorder "ghcide-code-actions-type-signatures" :
+      Refactor.bindingsPluginDescriptor pluginRecorder "ghcide-code-actions-bindings" :
+      Refactor.fillHolePluginDescriptor pluginRecorder "ghcide-code-actions-fill-holes" :
+      Refactor.extendImportPluginDescriptor pluginRecorder "ghcide-extend-import-action" :
 #endif
       GhcIde.descriptors pluginRecorder
 #if explicitFixity

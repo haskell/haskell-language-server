@@ -228,6 +228,11 @@ flag brittany
   default:     True
   manual:      True
 
+flag refactor
+  description: Enable refactor plugin
+  default:     True
+  manual:      True
+
 flag dynamic
   description: Build with the dyn rts
   default:     True
@@ -360,6 +365,11 @@ common brittany
     build-depends: hls-brittany-plugin ^>= 1.0
     cpp-options: -Dhls_brittany
 
+common refactor
+  if flag(refactor)
+    build-depends: hls-refactor-plugin ^>= 1.0
+    cpp-options: -Dhls_refactor
+
 library plugins
   import:             common-deps
                     -- configuration
@@ -391,6 +401,7 @@ library plugins
                     , ormolu
                     , stylishHaskell
                     , brittany
+                    , refactor
   exposed-modules: HlsPlugins
   hs-source-dirs: src
 
