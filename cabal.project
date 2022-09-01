@@ -51,7 +51,9 @@ write-ghc-environment-files: never
 index-state: 2022-08-29T06:53:13Z
 
 constraints:
+  -- For GHC 9.4, older versions of entropy fail to build on Windows
   entropy >= 0.4.1.10,
+  -- For GHC 9.4
   basement >= 0.0.15,
   hyphenation +embed,
   -- remove this when hlint sets ghc-lib to true by default
