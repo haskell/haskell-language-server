@@ -48,7 +48,7 @@ import qualified Language.LSP.VFS                         as VFS
 import           Numeric.Natural
 import           Text.Fuzzy.Parallel                      (Scored (..))
 
-import qualified GHC.LanguageExtensions                       as LangExt
+import qualified GHC.LanguageExtensions                   as LangExt
 import           Language.LSP.Types
 
 data Log = LogShake Shake.Log deriving Show
@@ -167,8 +167,8 @@ getCompletionsLSP ide plId
                 let clientCaps = clientCapabilities $ shakeExtras ide
                     plugins = idePlugins $ shakeExtras ide
                 config <- getCompletionsConfig plId
-                
-                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod astres bindMap pfix' clientCaps config moduleExports
+
+                allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix' clientCaps config moduleExports
                 pure $ InL (List $ orderedCompletions allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])
