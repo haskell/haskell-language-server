@@ -51,6 +51,7 @@ write-ghc-environment-files: never
 index-state: 2022-08-15T06:53:13Z
 
 constraints:
+  entropy == 0.4.1.10,
   hyphenation +embed,
   -- remove this when hlint sets ghc-lib to true by default
   -- https://github.com/ndmitchell/hlint/issues/1376
