@@ -101,6 +101,7 @@ allow-newer:
   diagrams-postscript:lens,
   diagrams-svg:base,
   diagrams-svg:lens,
+  ekg-json:base,
   ghc-paths:Cabal,
   haddock-library:base,
   hie-bios:aeson,
