@@ -56,7 +56,6 @@ import           Control.Monad                   (void)
 import qualified System.Posix.Process            as P (getProcessID)
 import           System.Posix.Signals
 #endif
-import           Control.Applicative             ((<|>))
 import           Control.Arrow                   ((&&&))
 import           Control.Lens                    ((^.))
 import           Data.Aeson                      hiding (defaultOptions)
@@ -68,7 +67,7 @@ import           Data.GADT.Compare
 import           Data.Hashable                   (Hashable)
 import           Data.HashMap.Strict             (HashMap)
 import qualified Data.HashMap.Strict             as HashMap
-import           Data.List.Extra                 (find, sortOn)
+import           Data.List.Extra                 (sortOn, find)
 import           Data.List.NonEmpty              (NonEmpty (..), toList)
 import qualified Data.Map                        as Map
 import           Data.Maybe
@@ -108,11 +107,12 @@ import           Options.Applicative             (ParserInfo)
 import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text            ()
+import           Control.Applicative             ((<|>))
 
 -- ---------------------------------------------------------------------
 
 data IdePlugins ideState = IdePlugins_
-  { ipMap_                :: HashMap PluginId (PluginDescriptor ideState)
+  { ipMap_ :: HashMap PluginId (PluginDescriptor ideState)
   , lookupCommandProvider :: CommandId -> Maybe PluginId
   }
 

@@ -8,45 +8,46 @@ module Development.IDE.Plugin.Completions
     , ghcideCompletionsPluginPriority
     ) where
 
-import           Control.Concurrent.Async                 (concurrently)
-import           Control.Concurrent.STM.Stats             (readTVarIO)
+import           Control.Concurrent.Async                     (concurrently)
+import           Control.Concurrent.STM.Stats                 (readTVarIO)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import qualified Data.HashMap.Strict                      as Map
-import qualified Data.HashSet                             as Set
-import           Data.List                                (find)
+import qualified Data.HashMap.Strict                          as Map
+import qualified Data.HashSet                                 as Set
+import           Data.List                                    (find)
 import           Data.Maybe
-import qualified Data.Text                                as T
+import qualified Data.Text                                    as T
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service             hiding (Log, LogShake)
-import           Development.IDE.Core.Shake               hiding (Log)
-import qualified Development.IDE.Core.Shake               as Shake
+import           Development.IDE.Core.Service                 hiding (Log,
+                                                               LogShake)
+import           Development.IDE.Core.Shake                   hiding (Log)
+import qualified Development.IDE.Core.Shake                   as Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error                (rangeToSrcSpan)
-import           Development.IDE.GHC.Util                 (printOutputable)
+import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
+import           Development.IDE.GHC.Util                     (printOutputable)
 import           Development.IDE.Graph
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageExports),
-                                                           hscEnv)
-import qualified Development.IDE.Types.KnownTargets       as KT
+import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPackageExports),
+                                                               hscEnv)
+import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger             (Pretty (pretty),
-                                                           Recorder,
-                                                           WithPriority,
-                                                           cmapWithPrio)
-import           GHC.Exts                                 (fromList, toList)
-import           Ide.Plugin.Config                        (Config)
+import           Development.IDE.Types.Logger                 (Pretty (pretty),
+                                                               Recorder,
+                                                               WithPriority,
+                                                               cmapWithPrio)
+import           GHC.Exts                                     (fromList, toList)
+import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
-import qualified Language.LSP.Server                      as LSP
+import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
-import qualified Language.LSP.VFS                         as VFS
+import qualified Language.LSP.VFS                             as VFS
 import           Numeric.Natural
-import           Text.Fuzzy.Parallel                      (Scored (..))
+import           Text.Fuzzy.Parallel                          (Scored (..))
 
 data Log = LogShake Shake.Log deriving Show
 

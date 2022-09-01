@@ -23,42 +23,41 @@ module Ide.Plugin.CodeRange.Rules
     , simplify
     ) where
 
-import           Control.DeepSeq                       (NFData)
-import qualified Control.Lens                          as Lens
-import           Control.Monad                         (foldM)
-import           Control.Monad.Except                  (ExceptT (..),
-                                                        runExceptT)
-import           Control.Monad.Reader                  (runReader)
-import           Control.Monad.Trans.Class             (lift)
-import           Control.Monad.Trans.Maybe             (MaybeT (MaybeT),
-                                                        maybeToExceptT)
+import           Control.DeepSeq                    (NFData)
+import qualified Control.Lens                       as Lens
+import           Control.Monad                      (foldM)
+import           Control.Monad.Except               (ExceptT (..), runExceptT)
+import           Control.Monad.Reader               (runReader)
+import           Control.Monad.Trans.Class          (lift)
+import           Control.Monad.Trans.Maybe          (MaybeT (MaybeT),
+                                                     maybeToExceptT)
 import           Control.Monad.Trans.Writer.CPS
-import           Data.Coerce                           (coerce)
-import           Data.Data                             (Typeable)
-import           Data.Foldable                         (traverse_)
-import           Data.Function                         (on, (&))
+import           Data.Coerce                        (coerce)
+import           Data.Data                          (Typeable)
+import           Data.Foldable                      (traverse_)
+import           Data.Function                      (on, (&))
 import           Data.Hashable
-import           Data.List                             (sort)
-import qualified Data.Map.Strict                       as Map
-import           Data.Vector                           (Vector)
-import qualified Data.Vector                           as V
+import           Data.List                          (sort)
+import qualified Data.Map.Strict                    as Map
+import           Data.Vector                        (Vector)
+import qualified Data.Vector                        as V
 import           Development.IDE
-import           Development.IDE.Core.Rules            (toIdeResult)
-import qualified Development.IDE.Core.Shake            as Shake
-import           Development.IDE.GHC.Compat            (HieAST (..),
-                                                        HieASTs (getAsts),
-                                                        ParsedSource, RefMap)
+import           Development.IDE.Core.Rules         (toIdeResult)
+import qualified Development.IDE.Core.Shake         as Shake
 import           Development.IDE.GHC.Compat.ExactPrint (Annotated)
+import           Development.IDE.GHC.Compat         (HieAST (..),
+                                                     HieASTs (getAsts),
+                                                     ParsedSource, RefMap)
 import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.ExactPrint        (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
-import           GHC.Generics                          (Generic)
-import           Ide.Plugin.CodeRange.ASTPreProcess    (CustomNodeType (..),
-                                                        PreProcessEnv (..),
-                                                        isCustomNode,
-                                                        preProcessAST)
-import           Language.LSP.Types.Lens               (HasEnd (end),
-                                                        HasStart (start))
-import           Prelude                               hiding (log)
+import           Development.IDE.GHC.ExactPrint     (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
+import           GHC.Generics                       (Generic)
+import           Ide.Plugin.CodeRange.ASTPreProcess (CustomNodeType (..),
+                                                     PreProcessEnv (..),
+                                                     isCustomNode,
+                                                     preProcessAST)
+import           Language.LSP.Types.Lens            (HasEnd (end),
+                                                     HasStart (start))
+import           Prelude                            hiding (log)
 
 data Log = LogShake Shake.Log
     | LogNoAST
