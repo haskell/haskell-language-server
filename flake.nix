@@ -144,6 +144,7 @@
             hie-compat = ./hie-compat;
             hls-plugin-api = ./hls-plugin-api;
             hls-test-utils = ./hls-test-utils;
+            ghcide-test-utils = ./ghcide/test;
           } // pluginSourceDirs;
 
           # Tweak our packages
