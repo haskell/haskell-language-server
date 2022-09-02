@@ -36,7 +36,11 @@ showAstDataHtml a0 = html $
             li (showAstDataHtml' a0),
             li (nested "Raw" $ pre $ showAstData NoBlankSrcSpan NoBlankEpAnnotations a0)
 #else
-            li (nested "Raw" $ pre $ showAstData NoBlankSrcSpan a0)
+            li (nested "Raw" $ pre $ showAstData NoBlankSrcSpan
+#if MIN_VERSION_ghc(9,3,0)
+                                                 NoBlankEpAnnotations
+#endif
+                                                 a0)
 #endif
         ])
   where
@@ -49,7 +53,7 @@ showAstDataHtml a0 = html $
     li = tag "li"
     caret x = tag' [("class", text "caret")] "span" "" <+> x
     nested foo cts
-#if MIN_VERSION_ghc(9,2,1)
+#if MIN_VERSION_ghc(9,2,1) && !MIN_VERSION_ghc(9,3,0)
       | cts == empty = foo
 #endif
       | otherwise = foo $$ (caret $ ul cts)

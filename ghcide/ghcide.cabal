@@ -350,7 +350,6 @@ test-suite ghcide-tests
         --------------------------------------------------------------
         ghcide,
         ghcide-test-utils-internal,
-        ghc-typelits-knownnat,
         lsp,
         lsp-types,
         hls-plugin-api,
@@ -378,6 +377,8 @@ test-suite ghcide-tests
       build-depends:
           record-dot-preprocessor,
           record-hasfield
+    if impl(ghc < 9.3)
+       build-depends:  ghc-typelits-knownnat
     hs-source-dirs: test/cabal test/exe bench/lib
     ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors
     main-is: Main.hs

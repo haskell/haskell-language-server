@@ -56,8 +56,8 @@ parseConfiguration InitializeParams {..} =
   clientSettings = hashed _initializationOptions
 
 parseWorkspaceFolder :: WorkspaceFolder -> NormalizedUri
-parseWorkspaceFolder =
-  toNormalizedUri . Uri . (_uri :: WorkspaceFolder -> Text)
+parseWorkspaceFolder WorkspaceFolder{_uri} =
+  toNormalizedUri (Uri _uri)
 
 modifyWorkspaceFolders
   :: IdeState -> (HashSet NormalizedUri -> HashSet NormalizedUri) -> IO ()
