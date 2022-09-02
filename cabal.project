@@ -68,21 +68,21 @@ source-repository-package
 -- Remove me when a new version of lsp is released
 source-repository-package
   type:git
-  location: https://github.com/haskell/lsp
+  location: https://github.com/kokobd/lsp
   subdir: lsp
-  tag: 78dc807159c5e0faa04704198d18f24ece3ebc96
+  tag: 77a434087b1f39ae6fd4bc6d88fddbcd1d23e185
 
 source-repository-package
   type:git
-  location: https://github.com/haskell/lsp
+  location: https://github.com/kokobd/lsp
   subdir: lsp-types
-  tag: 78dc807159c5e0faa04704198d18f24ece3ebc96
+  tag: 77a434087b1f39ae6fd4bc6d88fddbcd1d23e185
 
 source-repository-package
   type:git
-  location: https://github.com/haskell/lsp
+  location: https://github.com/kokobd/lsp
   subdir: lsp-test
-  tag: 78dc807159c5e0faa04704198d18f24ece3ebc96
+  tag: 77a434087b1f39ae6fd4bc6d88fddbcd1d23e185
 
 allow-newer:
   -- ghc-9.2
