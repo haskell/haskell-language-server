@@ -59,7 +59,8 @@ import           GHC.Plugins                              (Depth (AllTheWay),
 #endif
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
-                                                           IdePlugins(..), PluginId)
+                                                           IdePlugins (..),
+                                                           PluginId)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS

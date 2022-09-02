@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Development.IDE.Plugin.CodeAction.Args
   ( CodeActionTitle,
     CodeActionPreferred,

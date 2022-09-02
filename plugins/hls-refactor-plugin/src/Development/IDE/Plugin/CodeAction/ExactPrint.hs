@@ -1,5 +1,6 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE GADTs        #-}
+{-# LANGUAGE TypeFamilies #-}
 module Development.IDE.Plugin.CodeAction.ExactPrint (
   Rewrite (..),
   rewriteToEdit,
@@ -20,17 +21,17 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
 
 import           Control.Monad
 import           Control.Monad.Trans
-import           Data.Char                       (isAlphaNum)
-import           Data.Data                       (Data)
-import           Data.Generics                   (listify)
-import qualified Data.Text                       as T
-import           Development.IDE.GHC.Compat      hiding (Annotation)
+import           Data.Char                              (isAlphaNum)
+import           Data.Data                              (Data)
+import           Data.Generics                          (listify)
+import qualified Data.Text                              as T
+import           Development.IDE.GHC.Compat             hiding (Annotation)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util
 import           Development.IDE.Spans.Common
-import           GHC.Exts                        (IsList (fromList))
-import           GHC.Stack                       (HasCallStack)
+import           GHC.Exts                               (IsList (fromList))
+import           GHC.Stack                              (HasCallStack)
 import           Language.Haskell.GHC.ExactPrint
 import           Language.LSP.Types
 
@@ -38,28 +39,35 @@ import           Development.IDE.Plugin.CodeAction.Util
 
 -- GHC version specific imports. For any supported GHC version, make sure there is no warning in imports.
 #if MIN_VERSION_ghc(9,2,0)
-import           Control.Lens   (_head, _last, over)
-import           Data.Bifunctor (first)
-import           Data.Default   (Default (..))
-import           Data.Maybe     (fromJust, fromMaybe, mapMaybe)
-import           GHC            (AddEpAnn (..), AnnContext (..), AnnList (..),
-                                 AnnParen (..), DeltaPos (SameLine), EpAnn (..),
-                                 EpaLocation (EpaDelta),
-                                 IsUnicodeSyntax (NormalSyntax),
-                                 NameAdornment (NameParens),
-                                 TrailingAnn (AddCommaAnn), addAnns, ann,
-                                 emptyComments, reAnnL)
+import           Control.Lens                           (_head, _last, over)
+import           Data.Bifunctor                         (first)
+import           Data.Default                           (Default (..))
+import           Data.Maybe                             (fromJust, fromMaybe,
+                                                         mapMaybe)
+import           GHC                                    (AddEpAnn (..),
+                                                         AnnContext (..),
+                                                         AnnList (..),
+                                                         AnnParen (..),
+                                                         DeltaPos (SameLine),
+                                                         EpAnn (..),
+                                                         EpaLocation (EpaDelta),
+                                                         IsUnicodeSyntax (NormalSyntax),
+                                                         NameAdornment (NameParens),
+                                                         TrailingAnn (AddCommaAnn),
+                                                         addAnns, ann,
+                                                         emptyComments, reAnnL)
 #else
-import           Control.Applicative                   (Alternative ((<|>)))
-import           Control.Monad.Extra                   (whenJust)
-import           Data.Foldable                         (find)
-import           Data.Functor                          (($>))
-import qualified Data.Map.Strict                       as Map
-import           Data.Maybe                            (fromJust, isJust,
-                                                        isNothing, mapMaybe)
-import qualified Development.IDE.GHC.Compat.Util       as Util
-import           Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP),
-                                                        KeywordId (G), mkAnnKey)
+import           Control.Applicative                    (Alternative ((<|>)))
+import           Control.Monad.Extra                    (whenJust)
+import           Data.Foldable                          (find)
+import           Data.Functor                           (($>))
+import qualified Data.Map.Strict                        as Map
+import           Data.Maybe                             (fromJust, isJust,
+                                                         isNothing, mapMaybe)
+import qualified Development.IDE.GHC.Compat.Util        as Util
+import           Language.Haskell.GHC.ExactPrint.Types  (DeltaPos (DP),
+                                                         KeywordId (G),
+                                                         mkAnnKey)
 #endif
 
 ------------------------------------------------------------------------------
@@ -256,7 +264,7 @@ appendConstraint constraintT = go . traceAst "appendConstraint"
     -- we have to reposition it manually into the AnnContext
         close_dp = case ctxt of
             [L _ (HsParTy EpAnn{anns=AnnParen{ap_close}} _)] -> Just ap_close
-            _ -> Nothing
+            _                                                -> Nothing
         ctxt' = over _last (first addComma) $ map dropHsParTy ctxt
     return $ L l $ it{hst_ctxt = Just $ L l'' $ ctxt' ++ [constraint]}
 #endif
@@ -293,7 +301,7 @@ liftParseAST df s = case parseAST df "" s of
 #if !MIN_VERSION_ghc(9,2,0)
   Right (anns, x) -> modifyAnnsT (anns <>) $> x
 #else
-  Right x ->  pure (makeDeltaAst x)
+  Right x         ->  pure (makeDeltaAst x)
 #endif
   Left _          -> lift $ Left $ "No parse: " <> s
 
@@ -433,33 +441,33 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       srcChild <- uniqueSrcSpanT
       let childRdr = reLocA $ L srcChild $ mkRdrUnqual $ mkVarOcc child
           childLIE = reLocA $ L srcChild $ IEName childRdr
-#if !MIN_VERSION_ghc(9,2,0)
-          x :: LIE GhcPs = L ll' $ IEThingWith noExtField absIE NoIEWildcard [childLIE] []
+#if MIN_VERSION_ghc(9,2,0)
+          x :: LIE GhcPs = L ll' (IEThingWith (addAnns mempty [AddEpAnn AnnOpenP (EpaDelta (SameLine 1) []), AddEpAnn AnnCloseP def] emptyComments) absIE NoIEWildcard [childLIE])
+#else
+          x :: LIE GhcPs = L ll' (IEThingWith noExtField absIE NoIEWildcard [childLIE] [])
       -- take anns from ThingAbs, and attatch parens to it
       transferAnn lAbs x $ \old -> old{annsDP = annsDP old ++ [(G AnnOpenP, DP (0, 1)), (G AnnCloseP, dp00)]}
       addSimpleAnnT childRdr dp00 [(G AnnVal, dp00)]
-#else
-          x :: LIE GhcPs = L ll' $ IEThingWith (addAnns mempty [AddEpAnn AnnOpenP (EpaDelta (SameLine 1) []), AddEpAnn AnnCloseP def] emptyComments) absIE NoIEWildcard [childLIE]
 #endif
       return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [x] ++ xs)}
 #if !MIN_VERSION_ghc(9,2,0)
   go hide l' pre ((L l'' (IEThingWith _ twIE@(L _ ie) _ lies' _)) : xs)
-#else
-  go hide l' pre ((L l'' (IEThingWith l''' twIE@(L _ ie) _ lies')) : xs)
-#endif
     -- ThingWith ie lies' => ThingWith ie (lies' ++ [child])
     | parent == unIEWrappedName ie
     , child == wildCardSymbol = do
-#if MIN_VERSION_ghc(9,2,0)
+        let thing = L l'' (IEThingWith noExtField twIE (IEWildcard 2)  [] [])
+        modifyAnnsT (Map.map (\ann -> ann{annsDP = (G AnnDotdot, dp00) : annsDP ann}))
+        return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [thing] ++ xs)}
+#else
+  go hide l' pre ((L l'' (IEThingWith l''' twIE@(L _ ie) _ lies')) : xs)
+    -- ThingWith ie lies' => ThingWith ie (lies' ++ [child])
+    | parent == unIEWrappedName ie
+    , child == wildCardSymbol = do
         let it' = it{ideclHiding = Just (hide, lies)}
             thing = IEThingWith newl twIE (IEWildcard 2) []
             newl = (\ann -> ann ++ [(AddEpAnn AnnDotdot d0)]) <$> l'''
             lies = L l' $ reverse pre ++ [L l'' thing] ++ xs
         return $ L l it'
-#else
-        let thing = L l'' (IEThingWith noExtField twIE (IEWildcard 2)  [] [])
-        modifyAnnsT (Map.map (\ann -> ann{annsDP = (G AnnDotdot, dp00) : annsDP ann}))
-        return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [thing] ++ xs)}
 #endif
     | parent == unIEWrappedName ie
     , hasSibling <- not $ null lies' =
@@ -507,7 +515,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       let parentLIE = reLocA $ L srcParent $ (if isParentOperator then IEType (epl 0) parentRdr' else IEName parentRdr')
           parentRdr' = modifyAnns parentRdr $ \case
               it@NameAnn{nann_adornment = NameParens} -> it{nann_open = epl 1}
-              other -> other
+              other                                   -> other
           childLIE = reLocA $ L srcChild $ IEName childRdr
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
@@ -546,14 +554,14 @@ addCommaInImportList lies x =
   where
     isTrailingAnnComma :: TrailingAnn -> Bool
     isTrailingAnnComma (AddCommaAnn _) = True
-    isTrailingAnnComma _ = False
+    isTrailingAnnComma _               = False
 
     -- check if there is an existing trailing comma
     existingTrailingComma = fromMaybe False $ do
         L lastItemSrcAnn _ <- lastMaybe lies
         lastItemAnn <- case ann lastItemSrcAnn of
             EpAnn _ lastItemAnn _ -> pure lastItemAnn
-            _ -> Nothing
+            _                     -> Nothing
         pure $ any isTrailingAnnComma (lann_trailing lastItemAnn)
 
     hasSibling = not . null $ lies
@@ -638,7 +646,7 @@ extendHiding symbol (L l idecls) mlies df = do
   lies <- pure $ over _head (`setEntryDP` SameLine 1) lies
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
-      singleHide = L l' [x]
+  let singleHide = L l' [x]
   when (isNothing mlies) $ do
     addSimpleAnnT
       singleHide
@@ -693,11 +701,11 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
 #endif
   pure lidecl'
  where
-  deletedLies =
 #if MIN_VERSION_ghc(9,2,0)
-    over _last removeTrailingComma $
+  deletedLies = over _last removeTrailingComma $ mapMaybe killLie lies
+#else
+  deletedLies = mapMaybe killLie lies
 #endif
-    mapMaybe killLie lies
   killLie :: LIE GhcPs -> Maybe (LIE GhcPs)
   killLie v@(L _ (IEVar _ (L _ (unqualIEWrapName -> nam))))
     | nam == symbol = Nothing
@@ -707,9 +715,6 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
     | otherwise = Just v
 #if !MIN_VERSION_ghc(9,2,0)
   killLie (L lieL (IEThingWith xt ty@(L _ (unqualIEWrapName -> nam)) wild cons flds))
-#else
-  killLie (L lieL (IEThingWith xt ty@(L _ (unqualIEWrapName -> nam)) wild cons))
-#endif
     | nam == symbol = Nothing
     | otherwise =
       Just $
@@ -719,7 +724,17 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
             ty
             wild
             (filter ((/= symbol) . unqualIEWrapName . unLoc) cons)
-#if !MIN_VERSION_ghc(9,2,0)
             (filter ((/= symbol) . T.pack . Util.unpackFS . flLabel . unLoc) flds)
+#else
+  killLie (L lieL (IEThingWith xt ty@(L _ (unqualIEWrapName -> nam)) wild cons))
+    | nam == symbol = Nothing
+    | otherwise =
+      Just $
+        L lieL $
+          IEThingWith
+            xt
+            ty
+            wild
+            (filter ((/= symbol) . unqualIEWrapName . unLoc) cons)
 #endif
   killLie v = Just v

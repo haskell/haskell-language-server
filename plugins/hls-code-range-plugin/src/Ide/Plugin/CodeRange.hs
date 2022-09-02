@@ -30,9 +30,9 @@ import           Development.IDE.Core.Actions         (useE)
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentPosition,
                                                        toCurrentRange)
-import           Development.IDE.Types.Logger         (Pretty (..))
 import qualified Development.IDE.GHC.ExactPrint       as E
 import           Development.IDE.Plugin.CodeAction
+import           Development.IDE.Types.Logger         (Pretty (..))
 import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
                                                        codeRangeRule)
@@ -69,7 +69,7 @@ data Log = LogRules Rules.Log
 
 instance Pretty Log where
     pretty log = case log of
-        LogRules codeRangeLog -> pretty codeRangeLog
+        LogRules codeRangeLog       -> pretty codeRangeLog
         LogExactPrint exactPrintLog -> pretty exactPrintLog
 
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
