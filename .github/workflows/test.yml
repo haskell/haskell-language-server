@@ -180,7 +180,7 @@ jobs:
         name: Test hls-class-plugin
         run: cabal test hls-class-plugin --test-options="$TEST_OPTS" || cabal test hls-class-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-class-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test
         name: Test hls-pragmas-plugin
         run: cabal test hls-pragmas-plugin --test-options="$TEST_OPTS" || cabal test hls-pragmas-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-pragmas-plugin --test-options="$TEST_OPTS"
 
@@ -212,15 +212,15 @@ jobs:
         name: Test hls-tactics-plugin test suite
         run: cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-tactics-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test
         name: Test hls-refine-imports-plugin test suite
         run: cabal test hls-refine-imports-plugin --test-options="$TEST_OPTS" || cabal test hls-refine-imports-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-refine-imports-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test
         name: Test hls-explicit-imports-plugin test suite
         run: cabal test hls-explicit-imports-plugin --test-options="$TEST_OPTS" || cabal test hls-explicit-imports-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-explicit-imports-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test
         name: Test hls-call-hierarchy-plugin test suite
         run: cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS" || cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS"
 
@@ -236,7 +236,7 @@ jobs:
         name: Test hls-stan-plugin test suite
         run: cabal test hls-stan-plugin --test-options="$TEST_OPTS" || cabal test hls-hlint-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-stan-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test
         name: Test hls-module-name-plugin test suite
         run: cabal test hls-module-name-plugin --test-options="$TEST_OPTS" || cabal test hls-module-name-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-module-name-plugin --test-options="$TEST_OPTS"
 
@@ -244,7 +244,7 @@ jobs:
         name: Test hls-alternate-number-format-plugin test suite
         run: cabal test hls-alternate-number-format-plugin --test-options="$TEST_OPTS" || cabal test hls-alternate-number-format-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-alternate-number-format-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test
         name: Test hls-qualify-imported-names-plugin test suite
         run: cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS" || cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS"
 
@@ -260,7 +260,7 @@ jobs:
         name: Test hls-gadt-plugin test suit
         run: cabal test hls-gadt-plugin --test-options="$TEST_OPTS" || cabal test hls-gadt-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-gadt-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test
         name: Test hls-explicit-fixity-plugin test suite
         run: cabal test hls-explicit-fixity-plugin --test-options="$TEST_OPTS" || cabal test hls-explicit-fixity-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-explicit-fixity-plugin --test-options="$TEST_OPTS"
 
