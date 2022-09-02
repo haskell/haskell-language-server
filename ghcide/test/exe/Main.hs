@@ -259,11 +259,11 @@ initializeResponseTests = withResource acquire release tests where
                           _documentOnTypeFormattingProvider Nothing
     , chk "NO renaming"                     _renameProvider (Just $ InL False)
     , chk "NO doc link"               _documentLinkProvider Nothing
-    , chk "NO color"                         _colorProvider (Just $ InL False)
+    , chk "NO color"                   (^. L.colorProvider) (Just $ InL False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ InL False)
     , che "   execute command"      _executeCommandProvider [typeLensCommandId, blockCommandId]
-    , chk "   workspace"                         _workspace (Just $ WorkspaceServerCapabilities (Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )}))
-    , chk "NO experimental"                   _experimental Nothing
+    , chk "   workspace"                   (^. L.workspace) (Just $ WorkspaceServerCapabilities (Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )}))
+    , chk "NO experimental"             (^. L.experimental) Nothing
     ] where
 
       tds = Just (InL (TextDocumentSyncOptions
@@ -564,13 +564,20 @@ diagnosticTests = testGroup "diagnostics"
             , "useBase = BaseList.map"
             , "wrong1 = ThisList.map"
             , "wrong2 = BaseList.x"
+            , "main = pure ()"
             ]
       _ <- createDoc "Data/List.hs" "haskell" thisDataListContent
       _ <- createDoc "Main.hs" "haskell" mainContent
       expectDiagnostics
         [ ( "Main.hs"
-          , [(DsError, (6, 9), "Not in scope: \8216ThisList.map\8217")
-            ,(DsError, (7, 9), "Not in scope: \8216BaseList.x\8217")
+          , [(DsError, (6, 9),
+                if ghcVersion >= GHC94
+                then "Variable not in scope: map" -- See https://gitlab.haskell.org/ghc/ghc/-/issues/22130
+                else "Not in scope: \8216ThisList.map\8217")
+            ,(DsError, (7, 9),
+                if ghcVersion >= GHC94
+                then "Variable not in scope: x" -- See https://gitlab.haskell.org/ghc/ghc/-/issues/22130
+                else "Not in scope: \8216BaseList.x\8217")
             ]
           )
         ]
@@ -588,7 +595,7 @@ diagnosticTests = testGroup "diagnostics"
       -- where appropriate. The warning should use an unqualified name 'Ord', not
       -- sometihng like 'GHC.Classes.Ord'. The choice of redundant-constraints to
       -- test this is fairly arbitrary.
-          , [(DsWarning, (2, 0), "Redundant constraint: Ord a")
+          , [(DsWarning, (2, if ghcVersion >= GHC94 then 7 else 0), "Redundant constraint: Ord a")
             ]
           )
         ]
@@ -621,7 +628,7 @@ diagnosticTests = testGroup "diagnostics"
           -- Check that if we put a lower-case drive in for A.A
           -- the diagnostics for A.B will also be lower-case.
           liftIO $ fileUri @?= uriB
-          let msg = _message (head (toList diags) :: Diagnostic)
+          let msg = head (toList diags) ^. L.message
           liftIO $ unless ("redundant" `T.isInfixOf` msg) $
               assertFailure ("Expected redundant import but got " <> T.unpack msg)
           closeDoc a
@@ -1096,7 +1103,7 @@ findDefinitionAndHoverTests = let
   holeL65 = Position 65 8  ;  hleInfo2 = [ExpectHoverText ["_ :: a -> Maybe a"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverTextRegex "\\*Defined in 'GHC.Types'\\* \\*\\(ghc-prim-[0-9.]+\\)\\*\n\n"]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
-  reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
+  reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 (if ghcVersion >= GHC94 then 5 else 0) 3 (if ghcVersion >= GHC94 then 8 else 14)]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
   in
   mkFindTests
@@ -1180,7 +1187,7 @@ checkFileCompiles fp diag =
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
   ignoreInWindowsForGHC88And810 $
-  ignoreForGHC92 "blocked on ghc-typelits-natnormalise" $
+  ignoreForGHC92Plus "blocked on ghc-typelits-natnormalise" $
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
@@ -1195,7 +1202,7 @@ pluginSimpleTests =
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
   ignoreInWindowsForGHC88And810 $
-  ignoreForGHC92 "No need for this plugin anymore!" $
+  ignoreForGHC92Plus "No need for this plugin anymore!" $
   testSessionWithExtraFiles "plugin-recorddot" "parsedResultAction plugin" $ \dir -> do
     _ <- openDoc (dir</> "RecordDot.hs") "haskell"
     expectNoMoreDiagnostics 2
@@ -1778,10 +1785,10 @@ packageCompletionTests =
               , _label == "fromList"
               ]
         liftIO $ take 3 (sort compls') @?=
-          map ("Defined in "<>)
+          map ("Defined in "<>) (
               [ "'Data.List.NonEmpty"
               , "'GHC.Exts"
-              ]
+              ] ++ if ghcVersion >= GHC94 then [ "'GHC.IsList" ] else [])
 
   , testSessionWait "Map" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
@@ -1994,10 +2001,10 @@ completionDocTests =
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
   ]
   where
-    brokenForGhc9 = knownBrokenFor (BrokenForGHC [GHC90, GHC92]) "Completion doc doesn't support ghc9"
-    brokenForWinGhc9 = knownBrokenFor (BrokenSpecific Windows [GHC90, GHC92]) "Extern doc doesn't support Windows for ghc9.2"
+    brokenForGhc9 = knownBrokenFor (BrokenForGHC [GHC90, GHC92, GHC94]) "Completion doc doesn't support ghc9"
+    brokenForWinGhc9 = knownBrokenFor (BrokenSpecific Windows [GHC90, GHC92, GHC94]) "Extern doc doesn't support Windows for ghc9.2"
     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
-    brokenForMacGhc9 = knownBrokenFor (BrokenSpecific MacOS [GHC90, GHC92]) "Extern doc doesn't support MacOS for ghc9"
+    brokenForMacGhc9 = knownBrokenFor (BrokenSpecific MacOS [GHC90, GHC92, GHC94]) "Extern doc doesn't support MacOS for ghc9"
     test doc pos label mn expected = do
       _ <- waitForDiagnostics
       compls <- getCompletions doc pos
@@ -2040,7 +2047,7 @@ highlightTests = testGroup "highlight"
             , DocumentHighlight (R 6 10 6 13) (Just HkRead)
             , DocumentHighlight (R 7 12 7 15) (Just HkRead)
             ]
-  , knownBrokenForGhcVersions [GHC90, GHC92] "Ghc9 highlights the constructor and not just this field" $
+  , knownBrokenForGhcVersions [GHC90, GHC92, GHC94] "Ghc9 highlights the constructor and not just this field" $
         testSessionWait "record" $ do
         doc <- createDoc "A.hs" "haskell" recsource
         _ <- waitForDiagnostics
@@ -2048,8 +2055,8 @@ highlightTests = testGroup "highlight"
         liftIO $ highlights @?= List
           -- Span is just the .. on 8.10, but Rec{..} before
           [ if ghcVersion >= GHC810
-              then DocumentHighlight (R 4 8 4 10) (Just HkWrite)
-              else DocumentHighlight (R 4 4 4 11) (Just HkWrite)
+            then DocumentHighlight (R 4 8 4 10) (Just HkWrite)
+            else DocumentHighlight (R 4 4 4 11) (Just HkWrite)
           , DocumentHighlight (R 4 14 4 20) (Just HkRead)
           ]
         highlights <- getHighlights doc (Position 3 17)
@@ -2270,8 +2277,8 @@ ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
 ignoreInWindowsForGHC88And810 =
     ignoreFor (BrokenSpecific Windows [GHC88, GHC810]) "tests are unreliable in windows for ghc 8.8 and 8.10"
 
-ignoreForGHC92 :: String -> TestTree -> TestTree
-ignoreForGHC92 = ignoreFor (BrokenForGHC [GHC92])
+ignoreForGHC92Plus :: String -> TestTree -> TestTree
+ignoreForGHC92Plus = ignoreFor (BrokenForGHC [GHC92, GHC94])
 
 ignoreInWindowsForGHC88 :: TestTree -> TestTree
 ignoreInWindowsForGHC88 =

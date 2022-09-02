@@ -527,7 +527,11 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
             --
             -- is encoded as @[[arg1, arg2], [arg3], [arg4]]@
             -- Hence, we must concat nested arguments into one to get all the fields.
+#if MIN_VERSION_ghc(9,3,0)
+            = map (foLabel . unLoc) cd_fld_names
+#else
             = map (rdrNameFieldOcc . unLoc) cd_fld_names
+#endif
         -- XConDeclField
         extract _ = []
 findRecordCompl _ _ _ _ = []

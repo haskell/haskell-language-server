@@ -32,7 +32,7 @@ module Development.IDE.GHC.Util(
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Data.FastString
 import           GHC.Data.StringBuffer
-import           GHC.Driver.Env
+import           GHC.Driver.Env                    hiding (hscSetFlags)
 import           GHC.Driver.Monad
 import           GHC.Driver.Session                hiding (ExposePackage)
 import           GHC.Parser.Lexer

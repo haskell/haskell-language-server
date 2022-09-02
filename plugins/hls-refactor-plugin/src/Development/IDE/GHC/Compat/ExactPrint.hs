@@ -5,6 +5,9 @@
 {-# LANGUAGE PatternSynonyms #-}
 
 module Development.IDE.GHC.Compat.ExactPrint
+#if MIN_VERSION_ghc(9,3,0)
+    ( ) where
+#else
     ( ExactPrint
     , exactPrint
     , makeDeltaAst
@@ -36,4 +39,6 @@ pattern Annotated {astA, annsA} <- (Retrie.astA &&& Retrie.annsA -> (astA, annsA
 #else
 pattern Annotated :: ast -> ApiAnns -> Retrie.Annotated ast
 pattern Annotated {astA, annsA} <- ((,()) . Retrie.astA -> (astA, annsA))
+#endif
+
 #endif
