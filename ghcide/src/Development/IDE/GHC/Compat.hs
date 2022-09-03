@@ -413,11 +413,6 @@ getMessages' pst dflags =
 #endif
 #endif
 
-#if MIN_VERSION_ghc(9,3,0)
-renderDiagnosticMessageWithHints :: Diagnostic a => a -> DecoratedSDoc
-renderDiagnosticMessageWithHints a = unionDecoratedSDoc (diagnosticMessage a) (mkDecorated $ map ppr $ diagnosticHints a)
-#endif
-
 #if MIN_VERSION_ghc(9,2,0)
 pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope DecoratedSDoc)) -> ParseResult a
 pattern PFailedWithErrorMessages msgs
