@@ -132,14 +132,16 @@ iePluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescrip
 iePluginDescriptor recorder plId =
   let old =
         mkGhcideCAsPlugin [
-            wrap suggestExtendImport
-          , wrap suggestImportDisambiguation
-          , wrap suggestNewOrExtendImportForClassMethod
-          , wrap suggestNewImport
+            wrap suggestExportUnusedTopBinding
           , wrap suggestModuleTypo
           , wrap suggestFixConstructorImport
+          , wrap suggestNewImport
+#if !MIN_VERSION_ghc(9,3,0)
+          , wrap suggestExtendImport
+          , wrap suggestImportDisambiguation
+          , wrap suggestNewOrExtendImportForClassMethod
           , wrap suggestHideShadow
-          , wrap suggestExportUnusedTopBinding
+#endif
           ]
           plId
    in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler STextDocumentCodeAction codeAction }
@@ -149,9 +151,11 @@ typeSigsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
   mkGhcideCAsPlugin [
       wrap $ suggestSignature True
     , wrap suggestFillTypeWildcard
-    , wrap removeRedundantConstraints
     , wrap suggestAddTypeAnnotationToSatisfyContraints
+#if !MIN_VERSION_ghc(9,3,0)
+    , wrap removeRedundantConstraints
     , wrap suggestConstraint
+#endif
     ]
     plId
 
@@ -159,7 +163,9 @@ bindingsPluginDescriptor :: Recorder (WithPriority E.Log) ->  PluginId -> Plugin
 bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
   mkGhcideCAsPlugin [
       wrap suggestReplaceIdentifier
+#if !MIN_VERSION_ghc(9,3,0)
     , wrap suggestImplicitParameter
+#endif
     , wrap suggestNewDefinition
     , wrap suggestDeleteUnusedBinding
     ]
@@ -296,7 +302,11 @@ findSigOfBind range bind =
       msum
         [findSigOfBinds range (grhssLocalBinds grhs) -- where clause
         , do
+#if MIN_VERSION_ghc(9,3,0)
+          grhs <- findDeclContainingLoc (_start range) (grhssGRHSs grhs)
+#else
           grhs <- findDeclContainingLoc (_start range) (map reLocA $ grhssGRHSs grhs)
+#endif
           case unLoc grhs of
             GRHS _ _ bd -> findSigOfExpr (unLoc bd)
         ]
@@ -305,7 +315,11 @@ findSigOfBind range bind =
     findSigOfExpr :: HsExpr p -> Maybe (Sig p)
     findSigOfExpr = go
       where
+#if MIN_VERSION_ghc(9,3,0)
+        go (HsLet _ _ binds _ _) = findSigOfBinds range binds
+#else
         go (HsLet _ binds _) = findSigOfBinds range binds
+#endif
         go (HsDo _ _ stmts) = do
           stmtlr <- unLoc <$> findDeclContainingLoc (_start range) (unLoc stmts)
           case stmtlr of
@@ -355,6 +369,7 @@ findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 --  imported from ‘Data.ByteString’ at B.hs:6:1-22
 --  imported from ‘Data.ByteString.Lazy’ at B.hs:8:1-27
 --  imported from ‘Data.Text’ at B.hs:7:1-16
+#if !MIN_VERSION_ghc(9,3,0)
 suggestHideShadow :: Annotated ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
 suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
   | Just [identifier, modName, s] <-
@@ -386,6 +401,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
           then maybeToList $ (\(_, te) -> (title, [Left te])) <$> newImportToEdit (hideImplicitPreludeSymbol identifier) ps fileContents
           else maybeToList $ (title,) . pure . pure . hideSymbol (T.unpack identifier) <$> mDecl
       | otherwise = []
+#endif
 
 findImportDeclByModuleName :: [LImportDecl GhcPs] -> String -> Maybe (LImportDecl GhcPs)
 findImportDeclByModuleName decls modName = flip find decls $ \case
@@ -978,6 +994,7 @@ getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
 indentation :: T.Text -> Int
 indentation = T.length . T.takeWhile isSpace
 
+#if !MIN_VERSION_ghc(9,3,0)
 suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, Rewrite)]
 suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
@@ -1025,6 +1042,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
                 , parent = Nothing
                 , isDatacon = False
                 , moduleNameText = mod}
+#endif
 
 data HidingMode
     = HideOthers [ModuleTarget]
@@ -1050,6 +1068,7 @@ oneAndOthers = go
 isPreludeImplicit :: DynFlags -> Bool
 isPreludeImplicit = xopt Lang.ImplicitPrelude
 
+#if !MIN_VERSION_ghc(9,3,0)
 -- | Suggests disambiguation for ambiguous symbols.
 suggestImportDisambiguation ::
     DynFlags ->
@@ -1141,6 +1160,7 @@ suggestImportDisambiguation df (Just txt) ps fileContents diag@Diagnostic {..}
                 <> "."
                 <> symbol
 suggestImportDisambiguation _ _ _ _ _ = []
+#endif
 
 occursUnqualified :: T.Text -> ImportDecl GhcPs -> Bool
 occursUnqualified symbol ImportDecl{..}
@@ -1163,6 +1183,7 @@ targetModuleName (ExistingImp (L _ ImportDecl{..} :| _)) =
 targetModuleName (ExistingImp _) =
     error "Cannot happen!"
 
+#if !MIN_VERSION_ghc(9,3,0)
 disambiguateSymbol ::
     Annotated ParsedSource ->
     T.Text ->
@@ -1195,6 +1216,8 @@ disambiguateSymbol ps fileContents Diagnostic {..} (T.unpack -> symbol) = \case
                     liftParseAST @RdrName df $
                     T.unpack $ printOutputable $ L (mkGeneralSrcSpan  "") rdr
             ]
+#endif
+
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
 findImportDeclByRange xs range = find (\(L (locA -> l) _)-> srcSpanToRange l == Just range) xs
 
@@ -1212,6 +1235,7 @@ suggestFixConstructorImport Diagnostic{_range=_range,..}
     in [("Fix import of " <> fixedImport, TextEdit _range fixedImport)]
   | otherwise = []
 
+#if !MIN_VERSION_ghc(9,3,0)
 -- | Suggests a constraint for a declaration for which a constraint is missing.
 suggestConstraint :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
 suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
@@ -1293,10 +1317,12 @@ suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _rang
       [( "Add " <> implicitT <> " to the context of " <> T.pack (printRdrName funId)
         , appendConstraint (T.unpack implicitT) hsib_body)]
   | otherwise = []
+#endif
 
 findTypeSignatureName :: T.Text -> Maybe T.Text
 findTypeSignatureName t = matchRegexUnifySpaces t "([^ ]+) :: " <&> head
 
+#if !MIN_VERSION_ghc(9,3,0)
 -- | Suggests a constraint for a type signature with any number of existing constraints.
 suggestFunctionConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
 
@@ -1443,6 +1469,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
             ]
               <> [(quickFixImportKind "new.all", newImportAll moduleNameText)]
             | otherwise -> []
+#endif
 
 suggestNewImport :: ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
 suggestNewImport packageExportsMap ps fileContents Diagnostic{_message}

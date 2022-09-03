@@ -3,6 +3,9 @@
 
 -- | This module hosts various abstractions and utility functions to work with ghc-exactprint.
 module Development.IDE.GHC.ExactPrint
+#if MIN_VERSION_ghc(9,3,0)
+   (  ) where
+#else
     ( Graft(..),
       graftDecls,
       graftDeclsWithM,
@@ -664,4 +667,6 @@ removeTrailingComma = flip modifyAnns $ \(AnnListItem l) -> AnnListItem $ filter
 isCommaAnn :: TrailingAnn -> Bool
 isCommaAnn AddCommaAnn{} = True
 isCommaAnn _             = False
+#endif
+
 #endif
