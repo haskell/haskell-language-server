@@ -44,7 +44,8 @@ import qualified Data.Vector                        as V
 import           Development.IDE
 import           Development.IDE.Core.Rules         (toIdeResult)
 import qualified Development.IDE.Core.Shake         as Shake
-import           Development.IDE.GHC.Compat         (Annotated, HieAST (..),
+import           Development.IDE.GHC.Compat.ExactPrint (Annotated)
+import           Development.IDE.GHC.Compat         (HieAST (..),
                                                      HieASTs (getAsts),
                                                      ParsedSource, RefMap)
 import           Development.IDE.GHC.Compat.Util

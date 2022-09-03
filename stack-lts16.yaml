@@ -5,6 +5,7 @@ packages:
   - ./hie-compat
   - ./hls-graph
   - ./ghcide/
+  - ./ghcide/test
   - ./shake-bench
   - ./hls-plugin-api
   - ./hls-test-utils
@@ -33,6 +34,7 @@ packages:
   - ./plugins/hls-change-type-signature-plugin
   - ./plugins/hls-gadt-plugin
   - ./plugins/hls-explicit-fixity-plugin
+  - ./plugins/hls-refactor-plugin
 
 ghc-options:
   "$everything": -haddock

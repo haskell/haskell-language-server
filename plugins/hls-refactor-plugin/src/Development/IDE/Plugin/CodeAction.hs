@@ -1,20 +1,17 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE GADTs #-}
 
 module Development.IDE.Plugin.CodeAction
     (
+    mkExactprintPluginDescriptor,
     iePluginDescriptor,
     typeSigsPluginDescriptor,
     bindingsPluginDescriptor,
     fillHolePluginDescriptor,
-    newImport,
-    newImportToEdit
+    extendImportPluginDescriptor,
     -- * For testing
-    , matchRegExMultipleImports
+    matchRegExMultipleImports
     ) where
 
 import           Control.Applicative                               ((<|>))
@@ -22,8 +19,10 @@ import           Control.Arrow                                     (second,
                                                                     (&&&),
                                                                     (>>>))
 import           Control.Concurrent.STM.Stats                      (atomically)
-import           Control.Monad                                     (guard, join)
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Maybe
+import           Control.Monad.Extra
+import           Data.Aeson
 import           Data.Char
 import qualified Data.DList                                        as DL
 import           Data.Function
@@ -40,18 +39,24 @@ import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Utf16.Rope                              as Rope
 import           Data.Tuple.Extra                                  (fst3)
+import           Development.IDE.Types.Logger                      hiding (group)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
+import           Development.IDE.GHC.ExactPrint
+import qualified Development.IDE.GHC.ExactPrint                   as E
 import           Development.IDE.GHC.Util                          (printOutputable,
-                                                                    printRdrName,
-                                                                    traceAst)
+                                                                    printRdrName)
+import           Development.IDE.Core.Shake                   hiding (Log)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
+import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
+import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
@@ -60,21 +65,24 @@ import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
-import           Language.LSP.Types                                (CodeAction (..),
+import           Language.LSP.Types                                (ApplyWorkspaceEditParams(..), CodeAction (..),
                                                                     CodeActionContext (CodeActionContext, _diagnostics),
                                                                     CodeActionKind (CodeActionQuickFix, CodeActionUnknown),
                                                                     CodeActionParams (CodeActionParams),
                                                                     Command,
                                                                     Diagnostic (..),
+                                                                    MessageType (..),
+                                                                    ShowMessageParams (..),
                                                                     List (..),
                                                                     ResponseError,
-                                                                    SMethod (STextDocumentCodeAction),
+                                                                    SMethod (..),
                                                                     TextDocumentIdentifier (TextDocumentIdentifier),
-                                                                    TextEdit (TextEdit),
+                                                                    TextEdit (TextEdit, _range),
                                                                     UInt,
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InR),
                                                                     uriToFilePath)
+import           GHC.Exts                                           (fromList)
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import           Text.Regex.TDFA                                   (mrAfter,
@@ -90,7 +98,6 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     LEpaComment,
                                                                     LocatedA)
 
-import           Control.Monad                                     (msum)
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
                                                                     DeltaPos,
@@ -121,43 +128,138 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
 
 -------------------------------------------------------------------------------------------------
 
-iePluginDescriptor :: PluginId -> PluginDescriptor IdeState
-iePluginDescriptor plId =
+iePluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
+iePluginDescriptor recorder plId =
   let old =
         mkGhcideCAsPlugin [
-            wrap suggestExtendImport
-          , wrap suggestImportDisambiguation
-          , wrap suggestNewOrExtendImportForClassMethod
-          , wrap suggestNewImport
+            wrap suggestExportUnusedTopBinding
           , wrap suggestModuleTypo
           , wrap suggestFixConstructorImport
+          , wrap suggestNewImport
+#if !MIN_VERSION_ghc(9,3,0)
+          , wrap suggestExtendImport
+          , wrap suggestImportDisambiguation
+          , wrap suggestNewOrExtendImportForClassMethod
           , wrap suggestHideShadow
-          , wrap suggestExportUnusedTopBinding
+#endif
           ]
           plId
-   in old {pluginHandlers = pluginHandlers old <> mkPluginHandler STextDocumentCodeAction codeAction}
+   in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler STextDocumentCodeAction codeAction }
 
-typeSigsPluginDescriptor :: PluginId -> PluginDescriptor IdeState
-typeSigsPluginDescriptor =
+typeSigsPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
+typeSigsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
   mkGhcideCAsPlugin [
       wrap $ suggestSignature True
     , wrap suggestFillTypeWildcard
-    , wrap removeRedundantConstraints
     , wrap suggestAddTypeAnnotationToSatisfyContraints
+#if !MIN_VERSION_ghc(9,3,0)
+    , wrap removeRedundantConstraints
     , wrap suggestConstraint
+#endif
     ]
+    plId
 
-bindingsPluginDescriptor :: PluginId -> PluginDescriptor IdeState
-bindingsPluginDescriptor =
+bindingsPluginDescriptor :: Recorder (WithPriority E.Log) ->  PluginId -> PluginDescriptor IdeState
+bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
   mkGhcideCAsPlugin [
       wrap suggestReplaceIdentifier
+#if !MIN_VERSION_ghc(9,3,0)
     , wrap suggestImplicitParameter
+#endif
     , wrap suggestNewDefinition
     , wrap suggestDeleteUnusedBinding
     ]
+    plId
 
-fillHolePluginDescriptor :: PluginId -> PluginDescriptor IdeState
-fillHolePluginDescriptor = mkGhcideCAPlugin $ wrap suggestFillHole
+fillHolePluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
+fillHolePluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder (mkGhcideCAPlugin (wrap suggestFillHole) plId)
+
+extendImportPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
+extendImportPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor plId)
+  { pluginCommands = [extendImportCommand] }
+
+
+-- | Add the ability for a plugin to call GetAnnotatedParsedSource
+mkExactprintPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginDescriptor a -> PluginDescriptor a
+mkExactprintPluginDescriptor recorder desc = desc { pluginRules = pluginRules desc >> getAnnotatedParsedSourceRule recorder }
+
+-------------------------------------------------------------------------------------------------
+
+
+extendImportCommand :: PluginCommand IdeState
+extendImportCommand =
+  PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
+
+extendImportHandler :: CommandFunction IdeState ExtendImport
+extendImportHandler ideState edit@ExtendImport {..} = do
+  res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
+  whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
+    let (_, List (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . Map.toList
+        srcSpan = rangeToSrcSpan nfp _range
+    LSP.sendNotification SWindowShowMessage $
+      ShowMessageParams MtInfo $
+        "Import "
+          <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent
+          <> "’ from "
+          <> importName
+          <> " (at "
+          <> printOutputable srcSpan
+          <> ")"
+    void $ LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  return $ Right Null
+
+extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
+extendImportHandler' ideState ExtendImport {..}
+  | Just fp <- uriToFilePath doc,
+    nfp <- toNormalizedFilePath' fp =
+    do
+      (ModSummaryResult {..}, ps, contents) <- MaybeT $ liftIO $
+        runAction "extend import" ideState $
+          runMaybeT $ do
+            -- We want accurate edits, so do not use stale data here
+            msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
+            ps <- MaybeT $ use GetAnnotatedParsedSource nfp
+            (_, contents) <- MaybeT $ use GetFileContents nfp
+            return (msr, ps, contents)
+      let df = ms_hspp_opts msrModSummary
+          wantedModule = mkModuleName (T.unpack importName)
+          wantedQual = mkModuleName . T.unpack <$> importQual
+          existingImport = find (isWantedModule wantedModule wantedQual) msrImports
+      case existingImport of
+        Just imp -> do
+            fmap (nfp,) $ liftEither $
+              rewriteToWEdit df doc
+#if !MIN_VERSION_ghc(9,2,0)
+                (annsA ps)
+#endif
+                $
+                  extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
+
+        Nothing -> do
+            let n = newImport importName sym importQual False
+                sym = if isNothing importQual then Just it else Nothing
+                it = case thingParent of
+                  Nothing -> newThing
+                  Just p  -> p <> "(" <> newThing <> ")"
+            t <- liftMaybe $ snd <$> newImportToEdit n ps (fromMaybe "" contents)
+            return (nfp, WorkspaceEdit {_changes=Just (fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
+  | otherwise =
+    mzero
+
+isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl GhcPs) -> Bool
+isWantedModule wantedModule Nothing (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
+    not (isQualifiedImport it) && unLoc ideclName == wantedModule
+isWantedModule wantedModule (Just qual) (L _ ImportDecl{ideclAs, ideclName, ideclHiding = Just (False, _)}) =
+    unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc . reLoc <$> ideclAs) == Just qual)
+isWantedModule _ _ _ = False
+
+
+liftMaybe :: Monad m => Maybe a -> MaybeT m a
+liftMaybe a = MaybeT $ pure a
+
+liftEither :: Monad m => Either e a -> MaybeT m a
+liftEither (Left _)  = mzero
+liftEither (Right x) = return x
 
 -------------------------------------------------------------------------------------------------
 
@@ -200,7 +302,11 @@ findSigOfBind range bind =
       msum
         [findSigOfBinds range (grhssLocalBinds grhs) -- where clause
         , do
+#if MIN_VERSION_ghc(9,3,0)
+          grhs <- findDeclContainingLoc (_start range) (grhssGRHSs grhs)
+#else
           grhs <- findDeclContainingLoc (_start range) (map reLocA $ grhssGRHSs grhs)
+#endif
           case unLoc grhs of
             GRHS _ _ bd -> findSigOfExpr (unLoc bd)
         ]
@@ -209,7 +315,11 @@ findSigOfBind range bind =
     findSigOfExpr :: HsExpr p -> Maybe (Sig p)
     findSigOfExpr = go
       where
+#if MIN_VERSION_ghc(9,3,0)
+        go (HsLet _ _ binds _ _) = findSigOfBinds range binds
+#else
         go (HsLet _ binds _) = findSigOfBinds range binds
+#endif
         go (HsDo _ _ stmts) = do
           stmtlr <- unLoc <$> findDeclContainingLoc (_start range) (unLoc stmts)
           case stmtlr of
@@ -259,6 +369,7 @@ findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 --  imported from ‘Data.ByteString’ at B.hs:6:1-22
 --  imported from ‘Data.ByteString.Lazy’ at B.hs:8:1-27
 --  imported from ‘Data.Text’ at B.hs:7:1-16
+#if !MIN_VERSION_ghc(9,3,0)
 suggestHideShadow :: Annotated ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
 suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
   | Just [identifier, modName, s] <-
@@ -278,7 +389,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
   | otherwise = []
   where
     L _ HsModule {hsmodImports} = astA ps
-
+ 
     suggests identifier modName s
       | Just tcM <- mTcM,
         Just har <- mHar,
@@ -290,6 +401,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
           then maybeToList $ (\(_, te) -> (title, [Left te])) <$> newImportToEdit (hideImplicitPreludeSymbol identifier) ps fileContents
           else maybeToList $ (title,) . pure . pure . hideSymbol (T.unpack identifier) <$> mDecl
       | otherwise = []
+#endif
 
 findImportDeclByModuleName :: [LImportDecl GhcPs] -> String -> Maybe (LImportDecl GhcPs)
 findImportDeclByModuleName decls modName = flip find decls $ \case
@@ -882,6 +994,7 @@ getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
 indentation :: T.Text -> Int
 indentation = T.length . T.takeWhile isSpace
 
+#if !MIN_VERSION_ghc(9,3,0)
 suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, Rewrite)]
 suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
@@ -929,6 +1042,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
                 , parent = Nothing
                 , isDatacon = False
                 , moduleNameText = mod}
+#endif
 
 data HidingMode
     = HideOthers [ModuleTarget]
@@ -954,6 +1068,7 @@ oneAndOthers = go
 isPreludeImplicit :: DynFlags -> Bool
 isPreludeImplicit = xopt Lang.ImplicitPrelude
 
+#if !MIN_VERSION_ghc(9,3,0)
 -- | Suggests disambiguation for ambiguous symbols.
 suggestImportDisambiguation ::
     DynFlags ->
@@ -1045,6 +1160,7 @@ suggestImportDisambiguation df (Just txt) ps fileContents diag@Diagnostic {..}
                 <> "."
                 <> symbol
 suggestImportDisambiguation _ _ _ _ _ = []
+#endif
 
 occursUnqualified :: T.Text -> ImportDecl GhcPs -> Bool
 occursUnqualified symbol ImportDecl{..}
@@ -1067,6 +1183,7 @@ targetModuleName (ExistingImp (L _ ImportDecl{..} :| _)) =
 targetModuleName (ExistingImp _) =
     error "Cannot happen!"
 
+#if !MIN_VERSION_ghc(9,3,0)
 disambiguateSymbol ::
     Annotated ParsedSource ->
     T.Text ->
@@ -1099,6 +1216,8 @@ disambiguateSymbol ps fileContents Diagnostic {..} (T.unpack -> symbol) = \case
                     liftParseAST @RdrName df $
                     T.unpack $ printOutputable $ L (mkGeneralSrcSpan  "") rdr
             ]
+#endif
+
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
 findImportDeclByRange xs range = find (\(L (locA -> l) _)-> srcSpanToRange l == Just range) xs
 
@@ -1116,6 +1235,7 @@ suggestFixConstructorImport Diagnostic{_range=_range,..}
     in [("Fix import of " <> fixedImport, TextEdit _range fixedImport)]
   | otherwise = []
 
+#if !MIN_VERSION_ghc(9,3,0)
 -- | Suggests a constraint for a declaration for which a constraint is missing.
 suggestConstraint :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
 suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
@@ -1197,10 +1317,12 @@ suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _rang
       [( "Add " <> implicitT <> " to the context of " <> T.pack (printRdrName funId)
         , appendConstraint (T.unpack implicitT) hsib_body)]
   | otherwise = []
+#endif
 
 findTypeSignatureName :: T.Text -> Maybe T.Text
 findTypeSignatureName t = matchRegexUnifySpaces t "([^ ]+) :: " <&> head
 
+#if !MIN_VERSION_ghc(9,3,0)
 -- | Suggests a constraint for a type signature with any number of existing constraints.
 suggestFunctionConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
 
@@ -1347,6 +1469,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
             ]
               <> [(quickFixImportKind "new.all", newImportAll moduleNameText)]
             | otherwise -> []
+#endif
 
 suggestNewImport :: ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
 suggestNewImport packageExportsMap ps fileContents Diagnostic{_message}

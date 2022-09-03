@@ -1,11 +1,10 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternSynonyms   #-}
-
 -- | This module contains compatibility constructs to write type signatures across
 --   multiple ghc-exactprint versions, accepting that anything more ambitious is
 --   pretty much impossible with the GHC 9.2 redesign of ghc-exactprint
 module Development.IDE.GHC.Compat.ExactPrint
+#if MIN_VERSION_ghc(9,3,0)
+    ( ) where
+#else
     ( ExactPrint
     , exactPrint
     , makeDeltaAst
@@ -34,4 +33,6 @@ pattern Annotated {astA, annsA} <- (Retrie.astA &&& Retrie.annsA -> (astA, annsA
 #else
 pattern Annotated :: ast -> ApiAnns -> Retrie.Annotated ast
 pattern Annotated {astA, annsA} <- ((,()) . Retrie.astA -> (astA, annsA))
+#endif
+
 #endif

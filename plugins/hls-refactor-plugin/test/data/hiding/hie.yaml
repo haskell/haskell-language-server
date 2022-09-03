@@ -8,3 +8,4 @@ cradle:
         - CVec.hs
         - DVec.hs
         - EVec.hs
+        - FVec.hs

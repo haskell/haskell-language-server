@@ -19,7 +19,7 @@ main :: IO ()
 main = defaultTestRunner tests
 
 haddockCommentsPlugin :: PluginDescriptor IdeState
-haddockCommentsPlugin = HaddockComments.descriptor "haddockComments"
+haddockCommentsPlugin = HaddockComments.descriptor mempty "haddockComments"
 
 tests :: TestTree
 tests =

@@ -21,6 +21,10 @@ extra-source-files:
   test/testdata/*.hs
 
 library
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   exposed-modules:    Ide.Plugin.Class
   other-modules:      Ide.Plugin.Class.CodeAction
                     , Ide.Plugin.Class.CodeLens
@@ -58,6 +62,10 @@ library
   ghc-options:        -Wall -Wno-unticked-promoted-constructors -Wno-name-shadowing
 
 test-suite tests
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test

@@ -31,7 +31,7 @@ module Ide.PluginUtils
     pluginResponse,
     handleMaybe,
     handleMaybeM,
-    throwPluginError
+    throwPluginError,
     )
 where
 
@@ -44,6 +44,7 @@ import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
 import           Data.Bifunctor                  (Bifunctor (first))
 import qualified Data.HashMap.Strict             as H
+import           Data.List                       (find)
 import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
 import           Ide.Plugin.Config
@@ -229,6 +230,7 @@ allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand ideState])] -> [T.Text]
 allLspCmdIds pid commands = concatMap go commands
   where
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
+
 
 -- ---------------------------------------------------------------------
 

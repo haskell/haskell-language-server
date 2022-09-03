@@ -21,6 +21,10 @@ extra-source-files:
   test/testdata/selection-range/*.txt
 
 library
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   exposed-modules:
     Ide.Plugin.CodeRange
     Ide.Plugin.CodeRange.Rules
@@ -38,6 +42,7 @@ library
     , ghcide           ^>=1.6 || ^>=1.7
     , hashable
     , hls-plugin-api   ^>=1.3 || ^>=1.4
+    , hls-refactor-plugin
     , lens
     , lsp
     , mtl
@@ -47,6 +52,10 @@ library
     , vector
 
 test-suite tests
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test

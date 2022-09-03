@@ -25,6 +25,10 @@ flag pedantic
   manual:      True
 
 library
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   hs-source-dirs:     src
   exposed-modules:
     Ide.Plugin.Tactic
@@ -85,6 +89,7 @@ library
     , ghcide                ^>=1.7
     , hls-graph
     , hls-plugin-api        ^>=1.4
+    , hls-refactor-plugin
     , hyphenation
     , lens
     , lsp
@@ -126,6 +131,10 @@ library
     ViewPatterns
 
 test-suite tests
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   type:               exitcode-stdio-1.0
   main-is:            Main.hs
   other-modules:

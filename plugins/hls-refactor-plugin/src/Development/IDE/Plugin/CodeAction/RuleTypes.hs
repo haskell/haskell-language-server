@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeFamilies #-}
 module Development.IDE.Plugin.CodeAction.RuleTypes
     (PackageExports(..)
     ,IdentInfo(..)

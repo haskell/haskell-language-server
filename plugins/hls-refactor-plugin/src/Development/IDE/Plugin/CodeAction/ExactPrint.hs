@@ -1,11 +1,5 @@
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs        #-}
 module Development.IDE.Plugin.CodeAction.ExactPrint (
   Rewrite (..),
   rewriteToEdit,
@@ -39,6 +33,8 @@ import           GHC.Exts                        (IsList (fromList))
 import           GHC.Stack                       (HasCallStack)
 import           Language.Haskell.GHC.ExactPrint
 import           Language.LSP.Types
+
+import           Development.IDE.Plugin.CodeAction.Util
 
 -- GHC version specific imports. For any supported GHC version, make sure there is no warning in imports.
 #if MIN_VERSION_ghc(9,2,0)

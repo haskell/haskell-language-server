@@ -45,6 +45,7 @@ module Ide.Types
 , getProcessID, getPid
 , installSigUsr1Handler
 , responseError
+, lookupCommandProvider
 )
     where
 
@@ -66,7 +67,7 @@ import           Data.GADT.Compare
 import           Data.Hashable                   (Hashable)
 import           Data.HashMap.Strict             (HashMap)
 import qualified Data.HashMap.Strict             as HashMap
-import           Data.List.Extra                 (sortOn)
+import           Data.List.Extra                 (sortOn, find)
 import           Data.List.NonEmpty              (NonEmpty (..), toList)
 import qualified Data.Map                        as Map
 import           Data.Maybe
@@ -106,18 +107,35 @@ import           Options.Applicative             (ParserInfo)
 import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text            ()
+import           Control.Applicative             ((<|>))
 
 -- ---------------------------------------------------------------------
 
-newtype IdePlugins ideState = IdePlugins_ { ipMap_ :: HashMap PluginId (PluginDescriptor ideState)}
-  deriving newtype (Semigroup, Monoid)
+data IdePlugins ideState = IdePlugins_
+  { ipMap_ :: HashMap PluginId (PluginDescriptor ideState)
+  , lookupCommandProvider :: CommandId -> Maybe PluginId
+  }
 
 -- | Smart constructor that deduplicates plugins
 pattern IdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
-pattern IdePlugins{ipMap} <- IdePlugins_ (sortOn (Down . pluginPriority) . HashMap.elems -> ipMap)
+pattern IdePlugins{ipMap} <- IdePlugins_ (sortOn (Down . pluginPriority) . HashMap.elems -> ipMap) _
   where
-    IdePlugins ipMap = IdePlugins_{ipMap_ = HashMap.fromList $ (pluginId &&& id) <$> ipMap}
+    IdePlugins ipMap = IdePlugins_{ipMap_ = HashMap.fromList $ (pluginId &&& id) <$> ipMap
+                                  , lookupCommandProvider = lookupPluginId ipMap
+                                  }
 {-# COMPLETE IdePlugins #-}
+
+instance Semigroup (IdePlugins a) where
+  (IdePlugins_ a f) <> (IdePlugins_ b g) = IdePlugins_ (a <> b) (\x -> f x <|> g x)
+
+instance Monoid (IdePlugins a) where
+  mempty = IdePlugins_ mempty (const Nothing)
+
+-- | Lookup the plugin that exposes a particular command
+lookupPluginId :: [PluginDescriptor a] -> CommandId -> Maybe PluginId
+lookupPluginId ls cmd = pluginId <$> find go ls
+  where
+    go desc = cmd `elem` map commandId (pluginCommands desc)
 
 -- | Hooks for modifying the 'DynFlags' at different times of the compilation
 -- process. Plugins can install a 'DynFlagsModifications' via
