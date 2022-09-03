@@ -47,14 +47,14 @@ codeActionTests =
   , codeActionTest "Pragma then line haddock then newline line comment splits line" "PragmaThenLineHaddockNewlineLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "does not add pragma after OPTIONS_GHC pragma located after a declaration" "OptionsGhcAfterDecl" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "adds LANGUAGE with no other pragmas at start ignoring later INLINE pragma" "AddPragmaIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , onlyWorkForGhcVersions (>GHC94) ghc94regression $ codeActionTest "adds LANGUAGE before Doc comments after interchanging pragmas" "BeforeDocInterchanging" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "adds LANGUAGE before Doc comments after interchanging pragmas" "BeforeDocInterchanging" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
   , codeActionTest "Add language after altering OPTIONS_GHC and Language" "AddLanguagePragmaAfterInterchaningOptsGhcAndLangs" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "Add language after pragmas with non standard space between prefix and name" "AddPragmaWithNonStandardSpacingInPrecedingPragmas" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "adds LANGUAGE after OptGHC at start ignoring later INLINE pragma" "AddPragmaAfterOptsGhcIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , onlyWorkForGhcVersions (>GHC94) ghc94regression $ codeActionTest "adds LANGUAGE ignore later Ann pragma" "AddPragmaIgnoreLaterAnnPragma" [("Add \"BangPatterns\"", "Contains BangPatterns code action")]
-  , onlyWorkForGhcVersions (>GHC94) ghc94regression $ codeActionTest "adds LANGUAGE after interchanging pragmas ignoring later Ann pragma" "AddLanguageAfterInterchaningIgnoringLaterAnn" [("Add \"BangPatterns\"", "Contains BangPatterns code action")]
-  , onlyWorkForGhcVersions (>GHC94) ghc94regression $ codeActionTest "adds LANGUAGE after OptGHC preceded by another language pragma" "AddLanguageAfterLanguageThenOptsGhc" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
-  , onlyWorkForGhcVersions (>GHC94) ghc94regression $ codeActionTest "adds LANGUAGE pragma after shebang and last language pragma" "AfterShebangAndPragma" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "adds LANGUAGE ignore later Ann pragma" "AddPragmaIgnoreLaterAnnPragma" [("Add \"BangPatterns\"", "Contains BangPatterns code action")]
+  , codeActionTest "adds LANGUAGE after interchanging pragmas ignoring later Ann pragma" "AddLanguageAfterInterchaningIgnoringLaterAnn" [("Add \"BangPatterns\"", "Contains BangPatterns code action")]
+  , codeActionTest "adds LANGUAGE after OptGHC preceded by another language pragma" "AddLanguageAfterLanguageThenOptsGhc" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "adds LANGUAGE pragma after shebang and last language pragma" "AfterShebangAndPragma" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
   , codeActionTest "adds above module keyword on first line" "ModuleOnFirstLine" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "adds LANGUAGE pragma after GHC_OPTIONS" "AfterGhcOptions" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "adds LANGUAGE pragma after shebang and GHC_OPTIONS" "AfterShebangAndOpts" [("Add \"TupleSections\"", "Contains TupleSections code action")]
@@ -63,9 +63,9 @@ codeActionTests =
   , codeActionTest "adds LANGUAGE pragma after all others ignoring multiple later INLINE pragma" "AfterAllWithMultipleInlines" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "adds LANGUAGE pragma correctly ignoring later INLINE pragma" "AddLanguagePragma" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "adds TypeApplications pragma" "TypeApplications" [("Add \"TypeApplications\"", "Contains TypeApplications code action")]
-  , onlyWorkForGhcVersions (>GHC94) ghc94regression $ codeActionTest "after shebang" "AfterShebang" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
-  , onlyWorkForGhcVersions (>GHC94) ghc94regression $ codeActionTest "append to existing pragmas" "AppendToExisting" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
-  , onlyWorkForGhcVersions (>GHC94) ghc94regression $ codeActionTest "before doc comments" "BeforeDocComment" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "after shebang" "AfterShebang" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "append to existing pragmas" "AppendToExisting" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "before doc comments" "BeforeDocComment" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
   , codeActionTest "before doc comments" "MissingSignatures" [("Disable \"missing-signatures\" warnings", "Contains missing-signatures code action")]
   , codeActionTest "before doc comments" "UnusedImports" [("Disable \"unused-imports\" warnings", "Contains unused-imports code action")]
   , codeActionTest "adds TypeSynonymInstances pragma" "NeedsPragmas" [("Add \"TypeSynonymInstances\"", "Contains TypeSynonymInstances code action"), ("Add \"FlexibleInstances\"", "Contains FlexibleInstances code action")]
@@ -91,7 +91,7 @@ codeActionTests' :: TestTree
 codeActionTests' =
   testGroup "additional code actions"
   [
-    onlyWorkForGhcVersions (>GHC94) ghc94regression $ goldenWithPragmas "no duplication" "NamedFieldPuns" $ \doc -> do
+ goldenWithPragmas "no duplication" "NamedFieldPuns" $ \doc -> do
       _ <- waitForDiagnosticsFrom doc
       cas <- map fromAction <$> getCodeActions doc (Range (Position 8 9) (Position 8 9))
       ca <- liftIO $ case cas of
