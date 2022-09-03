@@ -2002,7 +2002,7 @@ completionDocTests =
   ]
   where
     brokenForGhc9 = knownBrokenFor (BrokenForGHC [GHC90, GHC92, GHC94]) "Completion doc doesn't support ghc9"
-    brokenForWinGhc9 = knownBrokenFor (BrokenSpecific Windows [GHC90, GHC92, GHC94]) "Extern doc doesn't support Windows for ghc9.2"
+    brokenForWinGhc9 = knownBrokenFor (BrokenSpecific Windows [GHC90, GHC92]) "Extern doc doesn't support Windows for ghc9.2"
     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
     brokenForMacGhc9 = knownBrokenFor (BrokenSpecific MacOS [GHC90, GHC92, GHC94]) "Extern doc doesn't support MacOS for ghc9"
     test doc pos label mn expected = do

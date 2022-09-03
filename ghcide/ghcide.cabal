@@ -349,7 +349,6 @@ test-suite ghcide-tests
         ghc,
         --------------------------------------------------------------
         ghcide,
-        ghcide-test-utils-internal,
         lsp,
         lsp-types,
         hls-plugin-api,
@@ -379,7 +378,7 @@ test-suite ghcide-tests
           record-hasfield
     if impl(ghc < 9.3)
        build-depends:  ghc-typelits-knownnat
-    hs-source-dirs: test/cabal test/exe bench/lib
+    hs-source-dirs: test/cabal test/exe test/src bench/lib
     ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors
     main-is: Main.hs
     other-modules:
@@ -387,42 +386,6 @@ test-suite ghcide-tests
         FuzzySearch
         Progress
         HieDbRetry
-    default-extensions:
-        BangPatterns
-        DeriveFunctor
-        DeriveGeneric
-        FlexibleContexts
-        GeneralizedNewtypeDeriving
-        LambdaCase
-        NamedFieldPuns
-        OverloadedStrings
-        RecordWildCards
-        ScopedTypeVariables
-        StandaloneDeriving
-        TupleSections
-        TypeApplications
-        ViewPatterns
-
-library ghcide-test-utils-internal
-    default-language: Haskell2010
-    build-depends:
-        aeson,
-        base,
-        containers,
-        data-default,
-        directory,
-        extra,
-        filepath,
-        ghcide,
-        lsp-types,
-        hls-plugin-api,
-        lens,
-        lsp-test ^>= 0.14,
-        tasty-hunit >= 0.10,
-        text,
-    hs-source-dirs: test/src
-    ghc-options: -Wunused-packages
-    exposed-modules:
         Development.IDE.Test
         Development.IDE.Test.Diagnostic
     default-extensions:
