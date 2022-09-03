@@ -116,7 +116,7 @@ completionTests =
   , completionTest "completes language extensions case insensitive" "Completion.hs" "lAnGuaGe Overloaded" "OverloadedStrings" Nothing Nothing Nothing [0, 4, 0, 34, 0, 24]
   , completionTest "completes the Strict language extension" "Completion.hs" "Str" "Strict" Nothing Nothing Nothing [0, 13, 0, 31, 0, 16]
   , completionTest "completes No- language extensions" "Completion.hs" "NoOverload" "NoOverloadedStrings" Nothing Nothing Nothing [0, 13, 0, 31, 0, 23]
-  , onlyWorkForGhcVersions [GHC92] "GHC2021 flag introduced since ghc9.2" $
+  , onlyWorkForGhcVersions (==GHC92) "GHC2021 flag introduced since ghc9.2" $
     completionTest "completes GHC2021 extensions" "Completion.hs" "ghc" "GHC2021" Nothing Nothing Nothing [0, 13, 0, 31, 0, 16]
   ]
 
