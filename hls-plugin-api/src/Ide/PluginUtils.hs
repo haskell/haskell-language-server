@@ -32,6 +32,7 @@ module Ide.PluginUtils
     handleMaybe,
     handleMaybeM,
     throwPluginError,
+    unescape,
     )
 where
 
@@ -43,10 +44,11 @@ import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
 import           Data.Bifunctor                  (Bifunctor (first))
+import           Data.Char                       (isPrint, showLitChar)
 import qualified Data.HashMap.Strict             as H
-import           Data.List                       (find)
 import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
+import           Data.Void                       (Void)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Ide.Types
@@ -57,6 +59,9 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
+import qualified Text.Megaparsec                 as P
+import qualified Text.Megaparsec.Char            as P
+import qualified Text.Megaparsec.Char.Lexer      as P
 
 -- ---------------------------------------------------------------------
 
@@ -258,3 +263,29 @@ pluginResponse :: Monad m => ExceptT String m a -> m (Either ResponseError a)
 pluginResponse =
   fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
     . runExceptT
+
+-- ---------------------------------------------------------------------
+
+type TextParser = P.Parsec Void T.Text
+
+unescape :: T.Text -> T.Text
+unescape input =
+    case P.runParser escapedTextParser "inline" input of
+        Left _     -> input
+        Right strs -> T.pack strs
+
+escapedTextParser :: TextParser String
+escapedTextParser = do
+    xs <- P.many (P.try stringLiteral)
+    x <- P.manyTill P.anySingle P.eof
+    pure $ concat xs ++ x
+  where
+    stringLiteral :: TextParser String
+    stringLiteral = do
+        before <- P.manyTill P.anySingle (P.char '"')
+        inside <- P.manyTill P.charLiteral (P.char '"')
+        let f '"' = "\\\""
+            f ch  = if isPrint ch then [ch] else showLitChar ch ""
+            inside' = concatMap f inside
+
+        pure $ before <> "\"" <> inside' <> "\""

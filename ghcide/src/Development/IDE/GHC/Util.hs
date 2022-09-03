@@ -81,6 +81,7 @@ import           GHC.IO.Exception
 import           GHC.IO.Handle.Internals
 import           GHC.IO.Handle.Types
 import           GHC.Stack
+import           Ide.PluginUtils                   (unescape)
 import           System.Environment.Blank          (getEnvDefault)
 import           System.FilePath
 import           System.IO.Unsafe
@@ -292,5 +293,5 @@ instance Outputable SDoc where
 --
 -- It internal using `showSDocUnsafe` with `unsafeGlobalDynFlags`.
 printOutputable :: Outputable a => a -> T.Text
-printOutputable = T.pack . printWithoutUniques
+printOutputable = unescape . T.pack . printWithoutUniques
 {-# INLINE printOutputable #-}
