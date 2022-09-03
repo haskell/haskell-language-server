@@ -274,7 +274,7 @@ common rename
     cpp-options: -Dhls_rename
 
 common retrie
-  if flag(retrie)
+  if flag(retrie) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-retrie-plugin ^>= 1.0
     cpp-options: -Dhls_retrie
 
