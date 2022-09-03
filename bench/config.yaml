@@ -79,7 +79,6 @@ versions:
 - upstream: origin/master
 # - HEAD~1
 - HEAD
-- 19d87ffedf1dd239cad81f85c5ad5070dcd6d6df
 
 # A list of plugin configurations to analyze
 configurations:
