@@ -309,7 +309,7 @@ common splice
     cpp-options: -Dhls_splice
 
 common alternateNumberFormat
-  if flag(alternateNumberFormat) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(alternateNumberFormat) 
     build-depends: hls-alternate-number-format-plugin ^>= 1.1
     cpp-options: -Dhls_alternateNumberFormat
 
