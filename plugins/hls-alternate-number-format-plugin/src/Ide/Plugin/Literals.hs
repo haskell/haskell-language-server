@@ -78,9 +78,8 @@ getPattern (L (locA -> (RealSrcSpan patSpan _)) pat) = case pat of
         HsInt _ val   -> fromIntegralLit patSpan val
         HsRat _ val _ -> fromFractionalLit patSpan val
         _             -> Nothing
-    -- a located HsOverLit is (GenLocated SrcSpan HsOverLit) NOT (GenLocated SrcSpanAnn' a HsOverLit)
-    NPat _ (L (RealSrcSpan sSpan _) overLit) _ _ -> fromOverLit overLit sSpan
-    NPlusKPat _ _ (L (RealSrcSpan sSpan _) overLit1) _ _ _ -> fromOverLit overLit1 sSpan
+    NPat _ (L (locA -> (RealSrcSpan sSpan _)) overLit) _ _ -> fromOverLit overLit sSpan
+    NPlusKPat _ _ (L (locA -> (RealSrcSpan sSpan _)) overLit1) _ _ _ -> fromOverLit overLit1 sSpan
     _ -> Nothing
 getPattern _ = Nothing
 
