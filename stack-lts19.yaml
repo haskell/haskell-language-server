@@ -55,9 +55,12 @@ extra-deps:
 - refinery-0.4.0.0@sha256:fe3a43add8ff1db5cfffee7e7694c86128b1dfe62c541f26e25a8eadf9585610,1663
 - retrie-1.1.0.0
 - stylish-haskell-0.14.2.0@sha256:fffe1c13ad4c2678cf28a7470cac5d3bf20c71c36f09969e3e5f186787cceb7c,4321
-- lsp-1.5.0.0
-- lsp-types-1.5.0.0
-- lsp-test-0.14.0.3
+- git: git@github.com:haskell/lsp
+  commit: b0f8596887088b8ab65fc1015c773f45b47234ae
+  subdirs:
+  - lsp
+  - lsp-types
+  - lsp-test
 - co-log-core-0.3.1.0
 
 configure-options:
