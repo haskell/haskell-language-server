@@ -48,9 +48,13 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-08-15T06:53:13Z
+index-state: 2022-08-29T06:53:13Z
 
 constraints:
+  -- For GHC 9.4, older versions of entropy fail to build on Windows
+  entropy >= 0.4.1.10,
+  -- For GHC 9.4
+  basement >= 0.0.15,
   hyphenation +embed,
   -- remove this when hlint sets ghc-lib to true by default
   -- https://github.com/ndmitchell/hlint/issues/1376
@@ -86,8 +90,29 @@ source-repository-package
   -- https://github.com/haskell/lsp/pull/450
 
 allow-newer:
-  base, ghc-prim, ghc-bignum, ghc, Cabal, binary, bytestring, unix, time, template-haskell,
+  -- ghc-9.4
+  Chart-diagrams:lens,
+  Chart:lens,
+  co-log-core:base,
+  constraints-extras:base,
+  constraints-extras:template-haskell,
+  dependent-sum:some,
+  diagrams-contrib:base,
+  diagrams-contrib:lens,
+  diagrams-postscript:base,
+  diagrams-postscript:lens,
+  diagrams-svg:base,
+  diagrams-svg:lens,
+  ekg-json:base,
   ghc-paths:Cabal,
+  haddock-library:base,
+  hie-bios:aeson,
+  hie-bios:ghc,
+  monoid-extras:base,
+  monoid-subclasses:vector,
+  svg-builder:base,
+  uuid:time,
+  vector-space:base,
 
   -- ghc-9.2
   ----------
