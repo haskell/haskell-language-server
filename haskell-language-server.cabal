@@ -324,7 +324,7 @@ common codeRange
     cpp-options: -Dhls_codeRange
 
 common changeTypeSignature
-  if flag(changeTypeSignature) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(changeTypeSignature)
     build-depends: hls-change-type-signature-plugin ^>= 1.0
     cpp-options: -Dhls_changeTypeSignature
 
