@@ -319,7 +319,7 @@ common qualifyImportedNames
     cpp-options: -Dhls_qualifyImportedNames
 
 common codeRange
-  if flag(codeRange) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(codeRange)
     build-depends: hls-code-range-plugin ^>= 1.0
     cpp-options: -Dhls_codeRange
 
