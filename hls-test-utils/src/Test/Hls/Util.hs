@@ -154,8 +154,8 @@ ignoreForGhcVersions vers = ignoreInEnv (map GhcVer vers)
 
 -- | Mark as broken if GHC does not match only work versions.
 onlyWorkForGhcVersions :: (GhcVersion -> Bool) -> String -> TestTree -> TestTree
-onlyWorkForGhcVersions pred reason =
-    if pred ghcVersion
+onlyWorkForGhcVersions p reason =
+    if p ghcVersion
         then id
         else expectFailBecause reason
 
