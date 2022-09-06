@@ -52,6 +52,8 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokenRelative (length),
                                                   SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities
+import qualified Language.LSP.Types.Lens         as L
+import           Control.Lens                    (view)
 import           Numeric.Natural
 import           Options.Applicative
 import           System.Directory
@@ -91,10 +93,14 @@ allWithIdentifierPos f docs = case applicableDocs of
 experiments :: HasConfig => [Bench]
 experiments =
     [ ---------------------------------------------------------------------------------------
-      bench "hover" $ allWithIdentifierPos $ \DocumentPositions{..} ->
+      bench "hover"
+        hoverSupported
+        $ allWithIdentifierPos $ \DocumentPositions{..} ->
         isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "edit" $ \docs -> do
+      bench "edit"
+        ( const True )
+        $ \docs -> do
         forM_ docs $ \DocumentPositions{..} -> do
           changeDoc doc [charEdit stringLiteralP]
           -- wait for a fresh build start
@@ -104,35 +110,49 @@ experiments =
         waitForProgressDone
         return True,
       ---------------------------------------------------------------------------------------
-      bench "hover after edit" $ \docs -> do
+      bench "hover after edit"
+        hoverSupported
+        $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "getDefinition" $ allWithIdentifierPos $ \DocumentPositions{..} ->
+      bench "getDefinition"
+        definitionSupported
+        $ allWithIdentifierPos $ \DocumentPositions{..} ->
         either (not . null) (not . null) . toEither <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "getDefinition after edit" $ \docs -> do
+      bench "getDefinition after edit"
+        definitionSupported
+        $ \docs -> do
           forM_ docs $ \DocumentPositions{..} ->
             changeDoc doc [charEdit stringLiteralP]
           flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
             either (not . null) (not . null) . toEither <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "documentSymbols" $ allM $ \DocumentPositions{..} -> do
+      bench "documentSymbols"
+        documentSymbolsSupported
+        $ allM $ \DocumentPositions{..} -> do
         fmap (either (not . null) (not . null)) . getDocumentSymbols $ doc,
       ---------------------------------------------------------------------------------------
-      bench "documentSymbols after edit" $ \docs -> do
+      bench "documentSymbols after edit"
+        documentSymbolsSupported
+        $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
         flip allM docs $ \DocumentPositions{..} ->
           either (not . null) (not . null) <$> getDocumentSymbols doc,
       ---------------------------------------------------------------------------------------
-      bench "completions" $ \docs -> do
+      bench "completions"
+        completionsSupported
+        $ \docs -> do
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           not . null <$> getCompletions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "completions after edit" $ \docs -> do
+      bench "completions after edit"
+        completionsSupported
+        $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
@@ -140,6 +160,7 @@ experiments =
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "code actions"
+        codeActionsSupported
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
@@ -155,6 +176,7 @@ experiments =
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "code actions after edit"
+        codeActionsSupported
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
@@ -173,6 +195,7 @@ experiments =
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "code actions after cradle edit"
+        codeActionsSupported
         ( \docs -> do
             forM_ docs $ \DocumentPositions{..} -> do
                 forM identifierP $ \p -> do
@@ -196,6 +219,7 @@ experiments =
       ---------------------------------------------------------------------------------------
       bench
         "hover after cradle edit"
+        hoverSupported
         (\docs -> do
             hieYamlUri <- getDocUri "hie.yaml"
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
@@ -206,6 +230,7 @@ experiments =
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "hole fit suggestions"
+        ( const True )
         ( mapM_ $ \DocumentPositions{..} -> do
             let edit :: TextDocumentContentChangeEvent =TextDocumentContentChangeEvent
                   { _range = Just Range {_start = bottom, _end = bottom}
@@ -234,6 +259,14 @@ experiments =
                     Just _err -> pure False
         )
     ]
+    where
+      hoverSupported = genericSupported L.hoverProvider
+      definitionSupported = genericSupported L.definitionProvider
+      documentSymbolsSupported = genericSupported L.documentSymbolProvider
+      completionsSupported = isJust . view (L.capabilities . L.completionProvider)
+      codeActionsSupported = genericSupported L.codeActionProvider
+      genericSupported x = maybe False (either id (const True) . toEither) . view (L.capabilities . x)
+
 
 ---------------------------------------------------------------------------------------------
 
@@ -301,7 +334,8 @@ data Bench =
     enabled    :: !Bool,
     samples    :: !Natural,
     benchSetup :: [DocumentPositions] -> Session (),
-    experiment :: Experiment
+    experiment :: Experiment,
+    benchAvailable :: InitializeResult -> Bool
   }
 
 select :: HasConfig => Bench -> Bool
@@ -312,16 +346,17 @@ select Bench {name, enabled} =
 
 benchWithSetup ::
   String ->
+  (InitializeResult -> Bool) ->
   ([DocumentPositions] -> Session ()) ->
   Experiment ->
   Bench
-benchWithSetup name benchSetup experiment = Bench {..}
+benchWithSetup name benchAvailable benchSetup experiment = Bench {..}
   where
     enabled = True
     samples = 100
 
-bench :: String -> Experiment -> Bench
-bench name = benchWithSetup name (const $ pure ())
+bench :: String -> (InitializeResult -> Bool) -> Experiment -> Bench
+bench name benchAvailable = benchWithSetup name benchAvailable (const $ pure ())
 
 runBenchmarksFun :: HasConfig => FilePath -> [Bench] -> IO ()
 runBenchmarksFun dir allBenchmarks = do
@@ -401,6 +436,7 @@ runBenchmarksFun dir allBenchmarks = do
                 modules = fromIntegral $ length $ exampleModules $ example ?config
         ]
       csv = unlines $ map (intercalate ", ") (headers : rows)
+      skipped = length [ () | (_, BenchSkipped) <- results ]
   writeFile (outputCSV ?config) csv
 
   -- print a nice table
@@ -430,6 +466,7 @@ runBenchmarksFun dir allBenchmarks = do
   outputRow paddedHeaders
   outputRow $ (map . map) (const '-') paddedHeaders
   forM_ rowsHuman $ \row -> outputRow $ zipWith pad pads row
+  putStrLn (show skipped ++ " benchmarks skipped")
   where
     ghcideArgs dir =
         [ "--lsp",
@@ -474,6 +511,7 @@ data BenchRun = BenchRun
     rebuildsTotal        :: !Int,
     success              :: !Bool
   }
+  | BenchSkipped
 
 badRun :: BenchRun
 badRun = BenchRun 0 0 0 0 0 0 0 0 0 0 0 0 0 False
@@ -528,31 +566,36 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
         return docs
 
       liftIO $ output $ "Running " <> name <> " benchmark"
-      (runSetup, ()) <- duration $ benchSetup docs
-      let loop' (Just timeForFirstResponse) !userWaits !delayedWork 0 = return $ Just (userWaits, delayedWork, timeForFirstResponse)
-          loop' timeForFirstResponse !userWaits !delayedWork n = do
-            (t, res) <- duration $ experiment docs
-            if not res
-              then return Nothing
-            else do
-                output (showDuration t)
-                -- Wait for the delayed actions to finish
-                td <- waitForBuildQueue
-                loop' (timeForFirstResponse <|> (Just (t,td))) (userWaits+t) (delayedWork+td) (n -1)
-          loop = loop' Nothing
+      init_res <- initializeResponse
+      case _result init_res of
+        Right res
+          | benchAvailable res -> do
+          (runSetup, ()) <- duration $ benchSetup docs
+          let loop' (Just timeForFirstResponse) !userWaits !delayedWork 0 = return $ Just (userWaits, delayedWork, timeForFirstResponse)
+              loop' timeForFirstResponse !userWaits !delayedWork n = do
+                (t, res) <- duration $ experiment docs
+                if not res
+                  then return Nothing
+                else do
+                    output (showDuration t)
+                    -- Wait for the delayed actions to finish
+                    td <- waitForBuildQueue
+                    loop' (timeForFirstResponse <|> (Just (t,td))) (userWaits+t) (delayedWork+td) (n -1)
+              loop = loop' Nothing
 
-      (runExperiment, result) <- duration $ loop 0 0 samples
-      let success = isJust result
-          (userWaits, delayedWork, (firstResponse, firstResponseDelayed)) = fromMaybe (0,0,(0,0)) result
+          (runExperiment, result) <- duration $ loop 0 0 samples
+          let success = isJust result
+              (userWaits, delayedWork, (firstResponse, firstResponseDelayed)) = fromMaybe (0,0,(0,0)) result
 
-      rulesTotal <- length <$> getStoredKeys
-      rulesBuilt <- either (const 0) length <$> getBuildKeysBuilt
-      rulesChanged <- either (const 0) length <$> getBuildKeysChanged
-      rulesVisited <- either (const 0) length <$> getBuildKeysVisited
-      edgesTotal   <- fromRight 0 <$> getBuildEdgesCount
-      rebuildsTotal <- fromRight 0 <$> getRebuildsCount
+          rulesTotal <- length <$> getStoredKeys
+          rulesBuilt <- either (const 0) length <$> getBuildKeysBuilt
+          rulesChanged <- either (const 0) length <$> getBuildKeysChanged
+          rulesVisited <- either (const 0) length <$> getBuildKeysVisited
+          edgesTotal   <- fromRight 0 <$> getBuildEdgesCount
+          rebuildsTotal <- fromRight 0 <$> getRebuildsCount
 
-      return BenchRun {..}
+          return BenchRun {..}
+        _ -> return BenchSkipped
 
 data SetupResult = SetupResult {
     runBenchmarks :: [Bench] -> IO (),
