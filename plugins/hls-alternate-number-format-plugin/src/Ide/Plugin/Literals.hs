@@ -12,11 +12,16 @@ module Ide.Plugin.Literals (
     , testCodeForPreCommitGithubAction
 ) where
 
-import           Data.Maybe                    (maybeToList)
 import           Data.Text                     (Text)
+
+import           Data.Maybe                    (maybeToList)
+
 import qualified Data.Text                     as T
+
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
+
 import           Development.IDE.Graph.Classes (NFData (rnf))
+
 import           Generics.SYB                  (Data, Typeable, everything,
                                                 extQ)
 import qualified GHC.Generics                  as GHC

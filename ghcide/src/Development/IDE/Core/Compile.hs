@@ -38,6 +38,7 @@ module Development.IDE.Core.Compile
 
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats      hiding (orElse)
+
 import           Control.DeepSeq                   (NFData (..), force, liftRnf,
                                                     rnf, rwhnf)
 import           Control.Exception                 (evaluate)
@@ -47,17 +48,17 @@ import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Control.Monad.Trans.Except
 import qualified Control.Monad.Trans.State.Strict  as S
-import           Data.Aeson                        (toJSON)
-import           Data.Bifunctor                    (first, second)
+import           Data.Aeson       (toJSON)
+import           Data.Bifunctor          (first, second)
 import           Data.Binary
-import qualified Data.ByteString                   as BS
+import qualified Data.ByteString               as BS
 import           Data.Coerce
-import qualified Data.DList                        as DL
+import qualified Data.DList                as DL
 import           Data.Functor
 import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import qualified Data.HashMap.Strict               as HashMap
-import           Data.IntMap                       (IntMap)
+import           Data.IntMap                  (IntMap)
 import qualified Data.IntMap.Strict                as IntMap
 import           Data.IORef
 import           Data.List.Extra
@@ -147,7 +148,9 @@ parseModule
 parseModule IdeOptions{..} env filename ms =
     fmap (either (, Nothing) id) $
     runExceptT $ do
+
         (diag, modu) <- parseFileContents env optPreprocessor filename ms
+
         return (diag, Just modu)
 
 
@@ -159,7 +162,7 @@ computePackageDeps
 computePackageDeps env pkg = do
     case lookupUnit env pkg of
         Nothing -> return $ Left [ideErrorText (toNormalizedFilePath' noFilePath) $
-            T.pack $ "unknown package: " ++ show pkg]
+                        T.pack $ "unknown package: " ++ show pkg]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
 data TypecheckHelpers
