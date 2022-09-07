@@ -82,6 +82,16 @@ testTree =
                     ] CodeKindRegion)
                     [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion),
                     FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeRegion),
-                    FoldingRange 3 (Just 7) 5 (Just 10) (Just FoldingRangeRegion)]
+                    FoldingRange 3 (Just 7) 5 (Just 10) (Just FoldingRangeRegion)],
+
+                -- Single line
+                testCase "Test Single Line" $ check
+                    (mkCodeRange (Position 1 0) (Position 1 15) [] CodeKindRegion)
+                    [FoldingRange 1 (Just 0) 1 (Just 15) (Just FoldingRangeRegion)],
+
+                -- MultiLine imports
+                testCase "MultiLine Imports" $ check
+                (mkCodeRange (Position 1 0) (Position 5 15) [] CodeKindImports)
+                [FoldingRange 1 (Just 0) 5 (Just 15) (Just FoldingRangeImports)]
             ]
     ]
