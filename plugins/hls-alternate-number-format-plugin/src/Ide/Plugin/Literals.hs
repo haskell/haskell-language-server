@@ -9,6 +9,7 @@ module Ide.Plugin.Literals (
     , Literal(..)
     , getSrcText
     , getSrcSpan
+    , testCodeForPreCommitGithubAction
 ) where
 
 import           Data.Maybe                    (maybeToList)
@@ -70,6 +71,9 @@ type LocPat a = GenLocated SrcSpan (Pat a)
 #else
 type LocPat a = LPat a
 #endif
+
+testCodeForPreCommitGithubAction :: String
+testCodeForPreCommitGithubAction = undefined
 
 -- | Destructure Patterns to unwrap any Literals
 getPattern :: LocPat GhcPs -> Maybe Literal
