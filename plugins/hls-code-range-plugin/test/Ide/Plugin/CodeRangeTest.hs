@@ -55,11 +55,33 @@ testTree =
             let check :: CodeRange -> [FoldingRange] -> Assertion
                 check codeRange = (findFoldingRanges codeRange @?=)
 
-                mkCodeRange :: Position -> Position -> V.Vector CodeRange -> CodeRange
-                mkCodeRange start end children = CodeRange (Range start end) children CodeKindRegion
+                mkCodeRange :: Position -> Position -> V.Vector CodeRange -> CodeRangeKind -> CodeRange
+                mkCodeRange start end children crk = CodeRange (Range start end) children crk
             in [
-                testCase "General" $ check
-                (mkCodeRange (Position 1 1) (Position 5 10) [])
-                [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion)]
+                -- General test
+                testCase "Test General Code Block" $ check
+                    (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindRegion)
+                    [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion)],
+
+                -- Tests for code kind
+                testCase "Test Code Kind Region" $ check
+                    (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindRegion)
+                    [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion)],
+                testCase "Test Code Kind Comment" $ check
+                    (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindComment)
+                    [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeComment)],
+                testCase "Test Code Kind Import" $ check
+                    (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindImports)
+                    [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeImports)],
+
+                -- Test for Code Portions with children
+                testCase "Test Children" $ check
+                    (mkCodeRange (Position 1 1) (Position 5 10) [
+                        mkCodeRange (Position 1 2) (Position 3 6) [] CodeKindRegion,
+                        mkCodeRange (Position 3 7) (Position 5 10) [] CodeKindRegion
+                    ] CodeKindRegion)
+                    [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion),
+                    FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeRegion),
+                    FoldingRange 3 (Just 7) 5 (Just 10) (Just FoldingRangeRegion)]
             ]
     ]
