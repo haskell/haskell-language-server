@@ -13,12 +13,13 @@ jobs:
     - uses: technote-space/get-diff-action@v4.0.1
       with:
         PATTERNS: |
-          +src/**/*.hs
+          +(src|exe|test|ghcide|plugins|hls-plugin-api|hie-compat|hls-graph|hls-test-utils)/**/*.hs
 
     - uses: ./.github/actions/setup-build
       with:
         os: ${{ runner.os }}
         shorten-hls: false
+      if: env.GIT_DIFF
 
     - name: "Install stylish-haskell"
       run: |
