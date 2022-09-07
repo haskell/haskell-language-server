@@ -19,7 +19,7 @@ jobs:
       if: env.GIT_DIFF
     - uses: pre-commit/action@v3.0.0
       with:
-        extra_args: --files $GIT_DIFF
+        extra_args: --files ${{ env.GIT_DIFF }}
       if: env.GIT_DIFF
 
     - uses: ./.github/actions/setup-build
