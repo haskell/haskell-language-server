@@ -10,16 +10,16 @@ module Development.IDE.Plugin.HLS
     ) where
 
 import           Control.Exception            (SomeException)
-import           Control.Lens                 ((^.))
+import           Control.Lens         ((^.))
 import           Control.Monad
-import qualified Data.Aeson                   as J
+import qualified Data.Aeson      as J
 import           Data.Dependent.Map           (DMap)
 import qualified Data.Dependent.Map           as DMap
 import           Data.Dependent.Sum
 import           Data.Either
-import qualified Data.List                    as List
+import qualified Data.List      as List
 import           Data.List.NonEmpty           (NonEmpty, nonEmpty, toList)
-import qualified Data.Map                     as Map
+import qualified Data.Map                 as Map
 import           Data.String
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T
@@ -133,7 +133,7 @@ executeCommandHandlers recorder ecs = requestHandler SWorkspaceExecuteCommand ex
     parseCmdId x = case T.splitOn ":" x of
       [plugin, command]    -> Just (PluginId plugin, CommandId command)
       [_, plugin, command] -> Just (PluginId plugin, CommandId command)
-      _                    -> Nothing
+      _          -> Nothing
 
     -- The parameters to the HLS command are always the first element
 
@@ -141,7 +141,7 @@ executeCommandHandlers recorder ecs = requestHandler SWorkspaceExecuteCommand ex
       let cmdParams :: J.Value
           cmdParams = case args of
             Just (J.List (x:_)) -> x
-            _                   -> J.Null
+            _  -> J.Null
       case parseCmdId cmdId of
         -- Shortcut for immediately applying a applyWorkspaceEdit as a fallback for v3.8 code actions
         Just ("hls", "fallbackCodeAction") ->
@@ -206,6 +206,7 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
               Nothing -> pure $ Left $ combineErrors errs
               Just xs -> do
                 caps <- LSP.getClientCapabilities
+
                 pure $ Right $ combineResponses m config caps params xs
 
 -- ---------------------------------------------------------------------
