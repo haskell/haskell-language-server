@@ -9,19 +9,13 @@ module Ide.Plugin.Literals (
     , Literal(..)
     , getSrcText
     , getSrcSpan
-    , testCodeForPreCommitGithubAction
 ) where
 
-import           Data.Text                     (Text)
-
 import           Data.Maybe                    (maybeToList)
-
+import           Data.Text                     (Text)
 import qualified Data.Text                     as T
-
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
-
 import           Development.IDE.Graph.Classes (NFData (rnf))
-
 import           Generics.SYB                  (Data, Typeable, everything,
                                                 extQ)
 import qualified GHC.Generics                  as GHC
@@ -76,9 +70,6 @@ type LocPat a = GenLocated SrcSpan (Pat a)
 #else
 type LocPat a = LPat a
 #endif
-
-testCodeForPreCommitGithubAction :: String
-testCodeForPreCommitGithubAction = undefined
 
 -- | Destructure Patterns to unwrap any Literals
 getPattern :: LocPat GhcPs -> Maybe Literal
