@@ -17,7 +17,7 @@ module Development.IDE.GHC.Compat(
     NameCacheUpdater(..),
 #if MIN_VERSION_ghc(9,3,0)
     getMessages,
-    diagnosticMessage,
+    renderDiagnosticMessageWithHints,
     nameEnvElts,
 #else
     upNameCache,
@@ -402,7 +402,7 @@ type WarnMsg  = MsgEnvelope DecoratedSDoc
 getMessages' :: PState -> DynFlags -> (Bag WarnMsg, Bag ErrMsg)
 getMessages' pst dflags =
 #if MIN_VERSION_ghc(9,3,0)
-  bimap (fmap (fmap diagnosticMessage) . getMessages) (fmap (fmap diagnosticMessage) . getMessages) $ getPsMessages pst
+  bimap (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) $ getPsMessages pst
 #else
 #if MIN_VERSION_ghc(9,2,0)
                  bimap (fmap pprWarning) (fmap pprError) $
@@ -417,7 +417,7 @@ getMessages' pst dflags =
 pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope DecoratedSDoc)) -> ParseResult a
 pattern PFailedWithErrorMessages msgs
 #if MIN_VERSION_ghc(9,3,0)
-     <- PFailed (const . fmap (fmap diagnosticMessage) . getMessages . getPsErrorMessages -> msgs)
+     <- PFailed (const . fmap (fmap renderDiagnosticMessageWithHints) . getMessages . getPsErrorMessages -> msgs)
 #else
      <- PFailed (const . fmap pprError . getErrorMessages -> msgs)
 #endif
