@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - uses: technote-space/get-diff-action@v4.0.1
+      with:
+        PATTERNS: |
+          +src/**/*.hs
 
     - uses: ./.github/actions/setup-build
       with:
@@ -20,10 +24,12 @@ jobs:
       run: |
         cabal install stylish-haskell
         echo "${HOME}/.cabal/bin" >> $GITHUB_PATH
+      if: env.GIT_DIFF
 
     - name: "Check stylish-haskell is available"
       run: |
         echo $(which stylish-haskell)
+      if: env.GIT_DIFF
 
     - name: Compiled deps cache
       id: stylish-haskell-compiled-cache
@@ -37,6 +43,11 @@ jobs:
               ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-
               ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
               ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-
+      if: env.GIT_DIFF
 
     - uses: actions/setup-python@v4
+      if: env.GIT_DIFF
     - uses: pre-commit/action@v3.0.0
+      with:
+        extra_args: --files env.GIT_DIFF
+      if: env.GIT_DIFF
