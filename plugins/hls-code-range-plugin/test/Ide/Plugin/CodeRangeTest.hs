@@ -17,7 +17,7 @@ testTree =
 
                 mkCodeRange :: Position -> Position -> V.Vector CodeRange -> CodeRange
                 mkCodeRange start end children = CodeRange (Range start end) children CodeKindRegion
-             in [
+            in [
                 testCase "not in range" $ check
                     (Position 10 1)
                     (mkCodeRange (Position 1 1) (Position 5 10) [])
@@ -50,5 +50,16 @@ testTree =
                         ( SelectionRange (Range (Position 1 1) (Position 5 10)) Nothing
                         )
                     )
+            ],
+        testGroup "findFoldingRanges" $
+            let check :: CodeRange -> [FoldingRange] -> Assertion
+                check codeRange = (findFoldingRanges codeRange @?=)
+
+                mkCodeRange :: Position -> Position -> V.Vector CodeRange -> CodeRange
+                mkCodeRange start end children = CodeRange (Range start end) children CodeKindRegion
+            in [
+                testCase "General" $ check
+                (mkCodeRange (Position 1 1) (Position 5 10) [])
+                [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion)]
             ]
     ]
