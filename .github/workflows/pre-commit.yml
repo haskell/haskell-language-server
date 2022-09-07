@@ -15,13 +15,6 @@ jobs:
         PATTERNS: |
           +(src|exe|test|ghcide|plugins|hls-plugin-api|hie-compat|hls-graph|hls-test-utils)/**/*.hs
 
-    - uses: actions/setup-python@v4
-      if: env.GIT_DIFF
-    - uses: pre-commit/action@v3.0.0
-      with:
-        extra_args: --files ${{ env.GIT_DIFF }}
-      if: env.GIT_DIFF
-
     - uses: ./.github/actions/setup-build
       with:
         os: ${{ runner.os }}
@@ -53,3 +46,9 @@ jobs:
               ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-
       if: env.GIT_DIFF
 
+    - uses: actions/setup-python@v4
+      if: env.GIT_DIFF
+    - uses: pre-commit/action@v3.0.0
+      with:
+        extra_args: --files ${{ env.GIT_DIFF }}
+      if: env.GIT_DIFF
