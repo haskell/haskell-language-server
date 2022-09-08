@@ -8,7 +8,6 @@ module Ide.Plugin.Literals (
     collectLiterals
     , Literal(..)
     , getSrcText
-
     , getSrcSpan
 ) where
 
@@ -17,7 +16,7 @@ import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
 import           Development.IDE.Graph.Classes (NFData (rnf))
-import           Generics.SYB  (Data, Typeable, everything,
+import           Generics.SYB                  (Data, Typeable, everything,
                                                 extQ)
 import qualified GHC.Generics                  as GHC
 
@@ -30,11 +29,7 @@ data Literal = IntLiteral  LiteralSrcSpan Text Integer
              deriving (GHC.Generic, Show, Ord, Eq, Data)
 
 newtype LiteralSrcSpan = LiteralSrcSpan { unLit :: RealSrcSpan }
-
                         deriving (GHC.Generic, Show, Ord, Eq, Data)
-
-
-
 
 instance NFData LiteralSrcSpan where
     rnf x = x `seq` ()
@@ -45,14 +40,14 @@ instance NFData Literal
 -- | Return a Literal's Source representation
 getSrcText :: Literal -> Text
 getSrcText = \case
-  IntLiteral _ txt _     -> txt
+  IntLiteral _ txt _  -> txt
   FracLiteral _ txt _ -> txt
 
 -- | Return a Literal's Real Source location
 getSrcSpan :: Literal -> RealSrcSpan
 getSrcSpan = \case
-    IntLiteral ss _ _ -> unLit ss
-    FracLiteral ss _ _     -> unLit ss
+    IntLiteral ss _ _  -> unLit ss
+    FracLiteral ss _ _ -> unLit ss
 
 -- | Find all literals in a Parsed Source File
 collectLiterals :: (Data ast, Typeable ast) => ast -> [Literal]
