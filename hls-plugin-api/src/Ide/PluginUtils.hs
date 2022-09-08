@@ -268,23 +268,29 @@ pluginResponse =
 
 type TextParser = P.Parsec Void T.Text
 
+-- | Unescape printable escape sequences within double quotes.
+-- This is useful if you have to call 'show' indirectly, and it escapes some characters which you would prefer to
+-- display as is.
 unescape :: T.Text -> T.Text
 unescape input =
     case P.runParser escapedTextParser "inline" input of
         Left _     -> input
         Right strs -> T.pack strs
 
+-- | Parser for a string that contains double quotes. Returns unescaped string.
 escapedTextParser :: TextParser String
 escapedTextParser = do
     xs <- P.many (P.try stringLiteral)
-    x <- P.manyTill P.anySingle P.eof
+    x <- P.manyTill P.anySingle P.eof -- consume characters after the final double quote
     pure $ concat xs ++ x
   where
     stringLiteral :: TextParser String
     stringLiteral = do
-        before <- P.manyTill P.anySingle (P.char '"')
+        before <- P.manyTill P.anySingle (P.char '"') -- include any character before the first double quote
         inside <- P.manyTill P.charLiteral (P.char '"')
-        let f '"' = "\\\""
+        let f '"' = "\\\"" -- double quote should still be escaped
+            -- Despite the docs, 'showLitChar' and 'showLitString' from 'Data.Char' DOES ESCAPE unicode printable
+            -- characters. So we need to call 'isPrint' from 'Data.Char' manually.
             f ch  = if isPrint ch then [ch] else showLitChar ch ""
             inside' = concatMap f inside
 

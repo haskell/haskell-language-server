@@ -289,9 +289,13 @@ instance Outputable SDoc where
 
 -- | Print a GHC value in `defaultUserStyle` without unique symbols.
 --
--- This is the most common print utility, will print with a user-friendly style like: `a_a4ME` as `a`.
+-- This is the most common print utility, and it will print with a user-friendly style like: `a_a4ME` as `a`.
 --
--- It internal using `showSDocUnsafe` with `unsafeGlobalDynFlags`.
+-- It uses `showSDocUnsafe` with `unsafeGlobalDynFlags` internally.
 printOutputable :: Outputable a => a -> T.Text
-printOutputable = unescape . T.pack . printWithoutUniques
+printOutputable =
+    -- IfaceTyLit from GHC.Iface.Type implements Outputable with 'show'.
+    -- Showing a String escapes non-ascii printable characters. We unescape it here.
+    -- More discussion at https://github.com/haskell/haskell-language-server/issues/3115.
+    unescape . T.pack . printWithoutUniques
 {-# INLINE printOutputable #-}
