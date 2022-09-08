@@ -19,6 +19,7 @@ module Development.IDE.GHC.Compat.Outputable (
     PsError,
 #if MIN_VERSION_ghc(9,3,0)
     DiagnosticReason(..),
+    renderDiagnosticMessageWithHints,
 #else
     pprWarning,
     pprError,
@@ -202,8 +203,13 @@ mkPrintUnqualifiedDefault env =
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
+renderDiagnosticMessageWithHints :: Diagnostic a => a -> DecoratedSDoc
+renderDiagnosticMessageWithHints a = Error.unionDecoratedSDoc (diagnosticMessage a) (mkDecorated $ map ppr $ diagnosticHints a)
+#endif
+
+#if MIN_VERSION_ghc(9,3,0)
 mkWarnMsg :: DynFlags -> Maybe DiagnosticReason -> b -> SrcSpan -> PrintUnqualified -> SDoc -> MsgEnvelope DecoratedSDoc
-mkWarnMsg df reason _logFlags l st doc = fmap diagnosticMessage $ mkMsgEnvelope (initDiagOpts df) l st (mkPlainDiagnostic (fromMaybe WarningWithoutFlag reason) [] doc)
+mkWarnMsg df reason _logFlags l st doc = fmap renderDiagnosticMessageWithHints $ mkMsgEnvelope (initDiagOpts df) l st (mkPlainDiagnostic (fromMaybe WarningWithoutFlag reason) [] doc)
 #else
 mkWarnMsg :: a -> b -> DynFlags -> SrcSpan -> PrintUnqualified -> SDoc -> MsgEnvelope DecoratedSDoc
 mkWarnMsg _ _ =

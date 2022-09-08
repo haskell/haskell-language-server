@@ -108,6 +108,7 @@
     - Ide.Plugin.Class.ExactPrint
     - TExpectedActual
     - TRigidType
+    - TRigidType2
     - RightToLeftFixities
     - Typeclass
     - Wingman.Judgements

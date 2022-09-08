@@ -244,7 +244,7 @@ common class
     cpp-options: -Dhls_class
 
 common callHierarchy
-  if flag(callHierarchy) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(callHierarchy)
     build-depends: hls-call-hierarchy-plugin ^>= 1.0
     cpp-options: -Dhls_callHierarchy
 
@@ -259,12 +259,12 @@ common eval
     cpp-options: -Dhls_eval
 
 common importLens
-  if flag(importLens) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(importLens)
     build-depends: hls-explicit-imports-plugin ^>= 1.1
     cpp-options: -Dhls_importLens
 
 common refineImports
-  if flag(refineImports) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(refineImports)
     build-depends: hls-refine-imports-plugin ^>=1.0
     cpp-options: -Dhls_refineImports
 
@@ -274,7 +274,7 @@ common rename
     cpp-options: -Dhls_rename
 
 common retrie
-  if flag(retrie) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(retrie) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-retrie-plugin ^>= 1.0
     cpp-options: -Dhls_retrie
 
@@ -294,12 +294,12 @@ common stan
     cpp-options: -Dhls_stan
 
 common moduleName
-  if flag(moduleName) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(moduleName)
     build-depends: hls-module-name-plugin ^>= 1.0
     cpp-options: -Dhls_moduleName
 
 common pragmas
-  if flag(pragmas) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(pragmas)
     build-depends: hls-pragmas-plugin ^>= 1.0
     cpp-options: -Dhls_pragmas
 
@@ -309,22 +309,22 @@ common splice
     cpp-options: -Dhls_splice
 
 common alternateNumberFormat
-  if flag(alternateNumberFormat) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(alternateNumberFormat) 
     build-depends: hls-alternate-number-format-plugin ^>= 1.1
     cpp-options: -Dhls_alternateNumberFormat
 
 common qualifyImportedNames
-  if flag(qualifyImportedNames) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(qualifyImportedNames)
     build-depends: hls-qualify-imported-names-plugin ^>=1.0
     cpp-options: -Dhls_qualifyImportedNames
 
 common codeRange
-  if flag(codeRange) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(codeRange)
     build-depends: hls-code-range-plugin ^>= 1.0
     cpp-options: -Dhls_codeRange
 
 common changeTypeSignature
-  if flag(changeTypeSignature) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(changeTypeSignature)
     build-depends: hls-change-type-signature-plugin ^>= 1.0
     cpp-options: -Dhls_changeTypeSignature
 
@@ -334,7 +334,7 @@ common gadt
     cpp-options: -Dhls_gadt
 
 common explicitFixity
-  if flag(explicitFixity) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(explicitFixity)
     build-depends: hls-explicit-fixity-plugin ^>= 1.0
     cpp-options: -DexplicitFixity
 
