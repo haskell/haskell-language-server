@@ -9,6 +9,7 @@ module Ide.Plugin.CodeRange (
     -- * Internal
     , findPosition
     , findFoldingRanges
+    , createFoldingRange
     ) where
 
 import           Control.Monad.Except                 (ExceptT (ExceptT),

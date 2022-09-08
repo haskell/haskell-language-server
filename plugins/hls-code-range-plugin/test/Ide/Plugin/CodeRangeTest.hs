@@ -51,6 +51,7 @@ testTree =
                         )
                     )
             ],
+
         testGroup "findFoldingRanges" $
             let check :: CodeRange -> [FoldingRange] -> Assertion
                 check codeRange = (findFoldingRanges codeRange @?=)
@@ -81,8 +82,8 @@ testTree =
                         mkCodeRange (Position 3 7) (Position 5 10) [] CodeKindRegion
                     ] CodeKindRegion)
                     [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion),
-                    FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeRegion),
-                    FoldingRange 3 (Just 7) 5 (Just 10) (Just FoldingRangeRegion)],
+                        FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeRegion),
+                        FoldingRange 3 (Just 7) 5 (Just 10) (Just FoldingRangeRegion)],
 
                 -- Single line
                 testCase "Test Single Line" $ check
@@ -91,7 +92,20 @@ testTree =
 
                 -- MultiLine imports
                 testCase "MultiLine Imports" $ check
-                (mkCodeRange (Position 1 0) (Position 5 15) [] CodeKindImports)
-                [FoldingRange 1 (Just 0) 5 (Just 15) (Just FoldingRangeImports)]
-            ]
+                    (mkCodeRange (Position 1 0) (Position 5 15) [] CodeKindImports)
+                    [FoldingRange 1 (Just 0) 5 (Just 15) (Just FoldingRangeImports)]
+            ],
+
+        testGroup "createFoldingRange" $
+        let check :: CodeRange -> Maybe FoldingRange -> Assertion
+            check codeRange = (createFoldingRange codeRange @?=)
+
+            mkCodeRange :: Position -> Position -> V.Vector CodeRange -> CodeRangeKind -> CodeRange
+            mkCodeRange start end children crk = CodeRange (Range start end) children crk
+        in [
+            -- General test
+            testCase "Test General Code Block" $ check
+                (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindRegion)
+                (Just (FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion)))
+        ]
     ]
