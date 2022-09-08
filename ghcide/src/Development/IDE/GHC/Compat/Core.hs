@@ -215,6 +215,7 @@ module Development.IDE.GHC.Compat.Core (
     getLocA,
     locA,
     noLocA,
+    unLocA,
     LocatedAn,
 #if MIN_VERSION_ghc(9,2,0)
     GHC.AnnListItem(..),
@@ -1123,6 +1124,13 @@ locA :: SrcSpanAnn' a -> SrcSpan
 locA = GHC.locA
 #else
 locA = id
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+unLocA :: forall pass a. XRec (GhcPass pass) a -> a
+unLocA = unXRec @(GhcPass pass)
+#else
+unLocA = id
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
