@@ -31,8 +31,6 @@ import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentPosition,
                                                        toCurrentRange)
 import           Development.IDE.Types.Logger         (Pretty (..))
-import qualified Development.IDE.GHC.ExactPrint       as E
-import           Development.IDE.Plugin.CodeAction
 import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
                                                        codeRangeRule)
@@ -57,7 +55,7 @@ import           Language.LSP.Types                   (List (List),
 import           Prelude                              hiding (log, span)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = mkExactprintPluginDescriptor (cmapWithPrio LogExactPrint recorder) $ (defaultPluginDescriptor plId)
+descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentSelectionRange selectionRangeHandler
     -- TODO @sloorush add folding range
     -- <> mkPluginHandler STextDocumentFoldingRange foldingRangeHandler
@@ -65,12 +63,10 @@ descriptor recorder plId = mkExactprintPluginDescriptor (cmapWithPrio LogExactPr
     }
 
 data Log = LogRules Rules.Log
-         | LogExactPrint E.Log
 
 instance Pretty Log where
     pretty log = case log of
         LogRules codeRangeLog -> pretty codeRangeLog
-        LogExactPrint exactPrintLog -> pretty exactPrintLog
 
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do

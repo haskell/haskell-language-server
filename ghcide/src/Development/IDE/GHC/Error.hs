@@ -174,7 +174,7 @@ catchSrcErrors dflags fromWhere ghcM = do
         ghcExceptionToDiagnostics dflags = return . Left . diagFromGhcException fromWhere dflags
         sourceErrorToDiagnostics dflags = return . Left . diagFromErrMsgs fromWhere dflags
 #if MIN_VERSION_ghc(9,3,0)
-                                        . fmap (fmap Compat.diagnosticMessage) . Compat.getMessages
+                                        . fmap (fmap Compat.renderDiagnosticMessageWithHints) . Compat.getMessages
 #endif
                                         . srcErrorMessages
 
