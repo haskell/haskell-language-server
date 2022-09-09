@@ -5,6 +5,7 @@
 {-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE EmptyCase #-}
 
 -- | This module hosts various abstractions and utility functions to work with ghc-exactprint.
 module Development.IDE.GHC.ExactPrint
@@ -58,7 +59,7 @@ import           Control.Monad.Zip
 import           Data.Bifunctor
 import           Data.Bool                               (bool)
 import qualified Data.DList                              as DL
-import           Data.Either.Extra                       (mapLeft)
+import           Data.Either.Extra                       (mapLeft, fromRight)
 import           Data.Foldable                           (Foldable (fold))
 import           Data.Functor.Classes
 import           Data.Functor.Contravariant
@@ -90,6 +91,7 @@ import           Retrie.ExactPrint                       hiding (Annotated (..),
                                                           parseDecl, parseExpr,
                                                           parsePattern,
                                                           parseType)
+import           qualified Retrie.ExactPrint as Retrie
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC                                     (EpAnn (..),
                                                           NameAdornment (NameParens),
@@ -102,7 +104,11 @@ import           GHC                                     (EpAnn (..),
 import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           DeltaPos (SameLine),
                                                           EpaLocation (EpaDelta))
-import Debug.Trace (traceShowM)
+import Debug.Trace (traceShowM, traceM, traceShowId, trace)
+import GHC.IO
+import Development.IDE.GHC.Util
+import Control.Exception
+import Control.DeepSeq
 #endif
 
 ------------------------------------------------------------------------------
@@ -179,6 +185,12 @@ instance Monad m => Monoid (Graft m a) where
 
 ------------------------------------------------------------------------------
 
+-- transformA'
+--   :: Monad m => Retrie.Annotated ast1 -> (ast1 -> TransformT m ast2) -> m (Retrie.Annotated ast2)
+-- transformA' (Retrie.Annotated ast seed) f = do
+--   (ast',seed',_) <- runTransformFromT seed (f ast)
+--   return $ Retrie.unsafeMkA ast' seed'
+
 -- | Convert a 'Graft' into a 'WorkspaceEdit'.
 transform ::
     DynFlags ->
@@ -189,10 +201,16 @@ transform ::
     Either String WorkspaceEdit
 transform dflags ccs uri f a = do
     let src = printA a
-    traceShowM src
-    a' <- transformA a $ runGraft f dflags
-    let res = printA a'
-    traceShowM res
+    -- traceShowM src
+    a' <- transformA a $ fmap (\ ast -> trace "" $ ast) <$> runGraft f dflags
+    -- traceM $ unsafeRender' $ ppr $ makeDeltaAst $ astA a'
+    -- traceM $ showAst $ trimA a'
+    a'' <- transformA a' (pure . makeDeltaAst)
+    -- traceM $ unsafeRender' $ ppr $ makeDeltaAst $ astA a''
+    -- traceM $ showAstA $ trimA $ a'
+    -- traceM $ showAstA $ trimA $ a''
+    let res = printA $ a''
+    -- traceShowM res
     pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
 ------------------------------------------------------------------------------
@@ -317,30 +335,46 @@ getNeedsSpaceAndParenthesize dst a =
       )
 
 
+unsafeRender' :: SDoc -> String
+unsafeRender' sdoc = unsafePerformIO $ do
+  let z = T.unpack $ printOutputable sdoc
+  -- We might not have unsafeGlobalDynFlags (like during testing), in which
+  -- case GHC panics. Instead of crashing, let's just fail to print.
+  !res <- try @PlainGhcException $ evaluate $ deepseq z z
+  pure $ fromRight "<unsafeRender'>" res
+{-# NOINLINE unsafeRender' #-}
+
 ------------------------------------------------------------------------------
 
 graftExprWithM ::
     forall m a.
-    (Fail.MonadFail m, Data a) =>
+    (Fail.MonadFail m, Data a, Outputable a) =>
     SrcSpan ->
     (LHsExpr GhcPs -> TransformT m (Maybe (LHsExpr GhcPs))) ->
     Graft m a
-graftExprWithM dst trans = Graft $ \dflags a -> do
-    let (needs_space, mk_parens) = getNeedsSpaceAndParenthesize dst a
+graftExprWithM dst trans = Graft $ \dflags a -> fmap (\a -> trace "" a) $ do
 
+    let (needs_space, mk_parens) = getNeedsSpaceAndParenthesize dst a
     everywhereM'
         ( mkM $
             \case
-                val@(L src _ :: LHsExpr GhcPs)
+                val@(L src@(SrcSpanAnn (EpAnn anchor _ _) _) _ :: LHsExpr GhcPs)
                     | locA src `eqSrcSpan` dst -> do
                         mval <- trans val
+                        -- traceM $ showAst mval
+                        -- traceM $ unsafeRender' $ ppr mval
                         case mval of
                             Just val' -> do
 #if MIN_VERSION_ghc(9,2,0)
-                                val'' <-
+                                (makeDeltaAst -> val'') <-
                                     hoistTransform (either Fail.fail pure)
-                                        (annotate @AnnListItem @(HsExpr GhcPs) dflags needs_space (mk_parens val'))
-                                pure val''
+                                        (annotate @AnnListItem @(HsExpr GhcPs) dflags True (mk_parens val'))
+                                case val'' of
+                                  L (SrcSpanAnn (EpAnn _ extAnn extComments) span) e -> do
+                                    -- traceM $ showAst $ val''
+                                    pure $ L (SrcSpanAnn (EpAnn anchor extAnn extComments) span) e
+                                  _ -> error ""
+                                -- pure val''
 #else
                                 (anns, val'') <-
                                     hoistTransform (either Fail.fail pure)
@@ -519,6 +553,12 @@ fixAnns ParsedModule {..} =
     let ranns = relativiseApiAnns pm_parsed_source pm_annotations
      in unsafeMkA pm_parsed_source ranns 0
 #endif
+
+-- -- | Dark magic I stole from retrie. No idea what it does.
+-- fixAnns :: ParsedSource -> Annotated ParsedSource
+-- fixAnns ps =
+--     let ranns = relativiseApiAnns ps
+--      in unsafeMkA pm_parsed_source ranns 0
 
 ------------------------------------------------------------------------------
 

@@ -31,7 +31,7 @@ import           Wingman.Judgements
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
-import GHC (EpAnn(..), emptyComments)
+import GHC (EpAnn(..), emptyComments, AnchorOperation (UnchangedAnchor))
 
 
 destructMatches

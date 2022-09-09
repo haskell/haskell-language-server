@@ -61,5 +61,5 @@ traceShowId = Debug.Trace.traceShowId
 #else
 traceM _ = pure ()
 trace _ = id
-traceShowId = Debug.Trace.traceShowId
+traceShowId = id
 #endif

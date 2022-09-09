@@ -27,6 +27,7 @@ import Wingman.Machinery (runTactic)
 import Wingman.Range
 import Wingman.Types
 import GHC (SrcSpanAnn'(SrcSpanAnn))
+import Debug.Trace (traceShowM)
 
 
 ------------------------------------------------------------------------------
@@ -72,7 +73,7 @@ makeTacticInteraction cmd =
                   $ ErrorMessages
                   $ pure NothingToDo
               _ -> do
-                traceMX "solution" $ rtr_extract rtr
+                -- traceMX "solution" $ rtr_extract rtr
                 pure
                   $ addTimeoutMessage rtr
                   $ pure
@@ -110,11 +111,12 @@ graftHole
     :: SrcSpan
     -> RunTacticResults
     -> Graft (Either String) ParsedSource
-graftHole span rtr
+graftHole span (rtr)
   | _jIsTopHole (rtr_jdg rtr)
       = genericGraftWithSmallestM
             (Proxy @(Located [LMatch GhcPs (LHsExpr GhcPs)])) span
-      $ \dflags matches ->
+      $ \dflags matches -> do
+          -- traceShowM $ "matches: " <> unsafeRender matches
           everywhereM'
             $ mkBindListT $ \ix ->
               graftDecl dflags span ix $ \name pats ->
@@ -132,7 +134,7 @@ graftHole span rtr
             $ mkFirstAgda (fmap unXPat pats)
             $ unLoc
             $ rtr_extract rtr
-graftHole span rtr
+graftHole span (rtr)
   = graft span
   $ rtr_extract rtr
 

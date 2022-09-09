@@ -35,11 +35,15 @@ import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.LanguageServer
 import           Wingman.Types hiding (traceShowId)
-import GHC (LocatedA, SrcSpanAnnA, SrcSpanAnn' (..), EpAnn (..))
+import GHC (LocatedA, SrcSpanAnnA, SrcSpanAnn' (..), EpAnn (..), emptyComments, deltaPos, EpaLocation(..),
+  AddEpAnn(..))
 import GHC.Hs (LocatedL)
 import Debug.Trace
 import GHC.Plugins (generatedSrcSpan)
 import Language.Haskell.GHC.ExactPrint
+import Control.Arrow
+import Control.Lens (view, _1, Identity (runIdentity))
+import Data.Either (fromRight)
 
 
 data EmptyCaseT = EmptyCaseT
@@ -69,17 +73,18 @@ emptyCaseInteraction = Interaction $
         binds_ss <- liftMaybe $ mapAgeFrom bind_map ss
         let bindings = getLocalScope (unTrack binds) $ unTrack binds_ss
             range = realSrcSpanToRange $ unTrack ss
-        matches <-
+        (matches) <-
           liftMaybe $
             destructionFor
               (foldMap (hySingleton . occName . fst) bindings)
               ty
-        traceShowM matches
+        -- Debug.Trace.traceM $ unlines $ showAst <$> matches
+        -- traceShowM matches
         edits <- liftMaybe $ hush $
               mkWorkspaceEdits le_dflags ccs fc_uri (unTrack pm) $
                 graftMatchGroup (RealSrcSpan (unTrack ss) Nothing) $
                   noLocA matches
-        traceShowM edits
+        -- traceShowM edits
         pure
           ( range
           , Metadata
@@ -130,12 +135,26 @@ graftMatchGroup
     -> LocatedL [LMatch GhcPs (LHsExpr GhcPs)]
     -> Graft (Either String) ParsedSource
 graftMatchGroup ss l =
-  hoistGraft (runExcept . runExceptString) $ graftExprWithM ss $ \case
+  hoistGraft (runExcept . runExceptString) $ graftExprWithM ss $ (\case
     L span (HsCase ext scrut mg) -> do
-      pure $ Just $ traceShowId $ L span $ HsCase ext scrut $ mg { mg_alts = l }
-    L span (HsLamCase ext mg) -> do
-      pure $ Just $ L span $ HsLamCase ext $ mg { mg_alts = l }
-    (_ :: LHsExpr GhcPs) -> pure Nothing
+      pure $ Just $ L span $ HsCase ext scrut $ mg { mg_alts = l }
+    -- old@(L (SrcSpanAnn anns span) (HsLamCase (EpAnn anchor extAns comments) mg)) -> do
+    --   pure $ Just old
+      -- let res = L span $ HsLamCase ext $ mg { mg_alts = l }
+      -- traceShowM $ unsafeRender res
+      -- traceShowM $ ss
+      -- traceShowM "hi"
+      -- pure $ Just $ L (SrcSpanAnn anns generatedSrcSpan) $
+      --   HsLamCase (EpAnn anchor [] comments) $ mg -- { mg_alts = l }
+        -- HsLamCase (EpAnn anchor [AddEpAnn AnnLam (EpaDelta (deltaPos 2 1) []), AddEpAnn AnnCase (EpaDelta (deltaPos 0 2) [])] comments) $ mg { mg_alts = l }
+    L span (HsLamCase ann mg) -> do
+    --   -- let res = L span $ HsLamCase ext $ mg { mg_alts = l }
+    --   -- traceShowM $ unsafeRender res
+    --   -- traceShowM $ ss
+      pure $ Just $ L span $ HsLamCase ann $ mg { mg_alts = l }
+      -- pure $ Just $ L span $ HsLamCase ann $ mg
+      -- pure $ Nothing
+    (_ :: LHsExpr GhcPs) -> pure Nothing)
 
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a
@@ -158,6 +177,7 @@ emptyCaseScrutinees state nfp = do
 
     let scrutinees = traverse (emptyCaseQ . tcg_binds) tcg
     fmap catMaybes $ for scrutinees $ \aged@(unTrack -> (ss, scrutinee)) -> do
+      -- traceShowM scrutinee
       ty <- MaybeT
           . fmap (scrutinzedType <=< sequence)
           . traverse (typeCheck (hscEnv $ untrackedStaleValue hscenv) tcg')

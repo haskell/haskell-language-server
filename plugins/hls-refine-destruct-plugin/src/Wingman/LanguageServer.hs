@@ -53,6 +53,7 @@ import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Range
 import           Wingman.Types
 import GHC (EpAnn(..), SrcSpanAnn' (..), SrcSpan (RealSrcSpan))
+import Debug.Trace
 
 
 newtype Log
@@ -571,8 +572,9 @@ mkWorkspaceEdits
     -> Graft (Either String) ParsedSource
     -> Either UserFacingMessage WorkspaceEdit
 mkWorkspaceEdits dflags ccs uri pm g = do
-  let (traceShowId -> response) = transform dflags ccs uri g pm
-   in first (InfrastructureError . T.pack) response
+  let response = transform dflags ccs uri g pm
+  -- traceShowM response
+  first (InfrastructureError . T.pack) response
 
 
 splitId :: Id -> (OccName, CType)
