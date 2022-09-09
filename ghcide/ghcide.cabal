@@ -378,7 +378,7 @@ test-suite ghcide-tests
           record-hasfield
     if impl(ghc < 9.3)
        build-depends:  ghc-typelits-knownnat
-    hs-source-dirs: test/cabal test/exe test/src bench/lib
+    hs-source-dirs: test/cabal test/exe test/src
     ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors
     main-is: Main.hs
     other-modules:

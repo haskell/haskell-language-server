@@ -81,13 +81,24 @@ source-repository-package
   location: https://github.com/wz1000/hie-bios
   tag: aa73d3d2eb89df0003d2468a105e326d71b62cc7
 
--- Needed for ghcide-bench until a new release of lsp-test is out
+-- Remove me when a new version of lsp is released
+source-repository-package
+  type:git
+  location: https://github.com/haskell/lsp
+  subdir: lsp
+  tag: b0f8596887088b8ab65fc1015c773f45b47234ae
+
+source-repository-package
+  type:git
+  location: https://github.com/haskell/lsp
+  subdir: lsp-types
+  tag: b0f8596887088b8ab65fc1015c773f45b47234ae
+
 source-repository-package
   type:git
   location: https://github.com/haskell/lsp
   subdir: lsp-test
-  tag: c95eb06c70c35f1e13c37ed11a7d9e5b36bfa2e8
-  -- https://github.com/haskell/lsp/pull/450
+  tag: b0f8596887088b8ab65fc1015c773f45b47234ae
 
 allow-newer:
   -- ghc-9.4

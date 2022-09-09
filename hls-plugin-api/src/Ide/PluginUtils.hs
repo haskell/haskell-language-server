@@ -223,10 +223,7 @@ fullRange s = Range startPos endPos
         lastLine = fromIntegral $ length $ T.lines s
 
 subRange :: Range -> Range -> Bool
-subRange smallRange range = _start smallRange >= _start range && _end smallRange <= _end range
-
-positionInRange :: Position -> Range -> Bool
-positionInRange p (Range sp ep) = sp <= p && p < ep -- Range's end position is exclusive, see https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#range
+subRange = isSubrangeOf
 
 -- ---------------------------------------------------------------------
 
