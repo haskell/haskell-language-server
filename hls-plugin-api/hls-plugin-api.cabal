@@ -91,4 +91,5 @@ test-suite tests
     , tasty
     , tasty-hunit
     , tasty-rerun
+    , text
     , lsp-types
