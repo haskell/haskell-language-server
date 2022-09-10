@@ -38,7 +38,7 @@ import           Data.Ord                                          (comparing)
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Utf16.Rope                              as Rope
-import           Data.Tuple.Extra                                  (fst3)
+import           Data.Tuple.Extra                                  (fst3, first)
 import           Development.IDE.Types.Logger                      hiding (group)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
@@ -62,7 +62,7 @@ import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified GHC.LanguageExtensions                            as Lang
-import           Ide.PluginUtils                                   (subRange)
+import           Ide.PluginUtils                                   (subRange, makeDiffTextEdit)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
 import           Language.LSP.Types                                (ApplyWorkspaceEditParams(..), CodeAction (..),
@@ -82,7 +82,7 @@ import           Language.LSP.Types                                (ApplyWorkspa
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InR),
                                                                     uriToFilePath)
-import           GHC.Exts                                           (fromList)
+import           GHC.Exts                                           (IsList (fromList))
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import           Text.Regex.TDFA                                   (mrAfter,
@@ -96,7 +96,9 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpAnn (..),
                                                                     EpaLocation (..),
                                                                     LEpaComment,
-                                                                    LocatedA)
+                                                                    LocatedA, spans)
+import Language.Haskell.GHC.ExactPrint (runTransformFromT, noAnnSrcSpanDP1, runTransform, runTransformT)
+import GHC.Types.SrcLoc (generatedSrcSpan)
 
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
@@ -167,6 +169,7 @@ bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestImplicitParameter
 #endif
     , wrap suggestNewDefinition
+    , wrap suggestAddArgument
     , wrap suggestDeleteUnusedBinding
     ]
     plId
@@ -242,7 +245,7 @@ extendImportHandler' ideState ExtendImport {..}
                   Nothing -> newThing
                   Just p  -> p <> "(" <> newThing <> ")"
             t <- liftMaybe $ snd <$> newImportToEdit n ps (fromMaybe "" contents)
-            return (nfp, WorkspaceEdit {_changes=Just (fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
+            return (nfp, WorkspaceEdit {_changes=Just (GHC.Exts.fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
 
@@ -389,7 +392,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
   | otherwise = []
   where
     L _ HsModule {hsmodImports} = astA ps
- 
+
     suggests identifier modName s
       | Just tcM <- mTcM,
         Just har <- mHar,
@@ -845,34 +848,93 @@ suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
         = [ ("Replace with ‘" <> name <> "’", [mkRenameEdit contents _range name]) | name <- renameSuggestions ]
     | otherwise = []
 
-suggestNewDefinition :: IdeOptions -> ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestNewDefinition ideOptions parsedModule contents Diagnostic{_message, _range}
---     * Variable not in scope:
---         suggestAcion :: Maybe T.Text -> Range -> Range
-    | Just [name, typ] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+) :: ([^*•]+)"
-    = newDefinitionAction ideOptions parsedModule _range name typ
-    | Just [name, typ] <- matchRegexUnifySpaces message "Found hole: _([^ ]+) :: ([^*•]+) Or perhaps"
-    , [(label, newDefinitionEdits)] <- newDefinitionAction ideOptions parsedModule _range name typ
-    = [(label, mkRenameEdit contents _range name : newDefinitionEdits)]
-    | otherwise = []
-    where
-      message = unifySpaces _message
+matchVariableNotInScope :: T.Text -> Maybe (T.Text, Maybe T.Text)
+matchVariableNotInScope message
+  --     * Variable not in scope:
+  --         suggestAcion :: Maybe T.Text -> Range -> Range
+  --     * Variable not in scope:
+  --         suggestAcion
+  | Just (name, typ) <- matchVariableNotInScopeTyped message = Just (name, Just typ)
+  | Just name <- matchVariableNotInScopeUntyped message = Just (name, Nothing)
+  | otherwise = Nothing
+  where
+    matchVariableNotInScopeTyped message
+      | Just [name, typ] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+) :: ([^*•]+)" =
+          Just (name, typ)
+      | otherwise = Nothing
+    matchVariableNotInScopeUntyped message
+      | Just [name] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+)" =
+          Just name
+      | otherwise = Nothing
 
-newDefinitionAction :: IdeOptions -> ParsedModule -> Range -> T.Text -> T.Text -> [(T.Text, [TextEdit])]
-newDefinitionAction IdeOptions{..} parsedModule Range{_start} name typ
-    | Range _ lastLineP : _ <-
+matchFoundHole :: T.Text -> Maybe (T.Text, T.Text)
+matchFoundHole message
+  | Just [name, typ] <- matchRegexUnifySpaces message "Found hole: _([^ ]+) :: ([^*•]+) Or perhaps" =
+      Just (name, typ)
+  | otherwise = Nothing
+
+matchFoundHoleIncludeUnderscore :: T.Text -> Maybe (T.Text, T.Text)
+matchFoundHoleIncludeUnderscore message = first ("_" <>) <$> matchFoundHole message
+
+suggestNewDefinition :: IdeOptions -> ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestNewDefinition ideOptions parsedModule contents Diagnostic {_message, _range}
+  | Just (name, typ) <- matchVariableNotInScope message =
+      newDefinitionAction ideOptions parsedModule _range name typ
+  | Just (name, typ) <- matchFoundHole message,
+    [(label, newDefinitionEdits)] <- newDefinitionAction ideOptions parsedModule _range name (Just typ) =
+      [(label, mkRenameEdit contents _range name : newDefinitionEdits)]
+  | otherwise = []
+  where
+    message = unifySpaces _message
+
+newDefinitionAction :: IdeOptions -> ParsedModule -> Range -> T.Text -> Maybe T.Text -> [(T.Text, [TextEdit])]
+newDefinitionAction IdeOptions {..} parsedModule Range {_start} name typ
+  | Range _ lastLineP : _ <-
       [ realSrcSpanToRange sp
-      | (L (locA -> l@(RealSrcSpan sp _)) _) <- hsmodDecls
-      , _start `isInsideSrcSpan` l]
-    , nextLineP <- Position{ _line = _line lastLineP + 1, _character = 0}
-    = [ ("Define " <> sig
-        , [TextEdit (Range nextLineP nextLineP) (T.unlines ["", sig, name <> " = _"])]
-        )]
-    | otherwise = []
+        | (L (locA -> l@(RealSrcSpan sp _)) _) <- hsmodDecls,
+          _start `isInsideSrcSpan` l
+      ],
+    nextLineP <- Position {_line = _line lastLineP + 1, _character = 0} =
+      [ ( "Define " <> sig,
+          [TextEdit (Range nextLineP nextLineP) (T.unlines ["", sig, name <> " = _"])]
+        )
+      ]
+  | otherwise = []
   where
     colon = if optNewColonConvention then " : " else " :: "
-    sig = name <> colon <> T.dropWhileEnd isSpace typ
-    ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}} = parsedModule
+    sig = name <> colon <> T.dropWhileEnd isSpace (fromMaybe "_" typ)
+    ParsedModule {pm_parsed_source = L _ HsModule {hsmodDecls}} = parsedModule
+
+suggestAddArgument :: ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestAddArgument parsedModule Diagnostic {_message, _range}
+  | Just (name, typ) <- matchVariableNotInScope message = addArgumentAction parsedModule _range name typ
+  | Just (name, typ) <- matchFoundHoleIncludeUnderscore message = addArgumentAction parsedModule _range name (Just typ)
+  | otherwise = []
+  where
+    message = unifySpaces _message
+
+-- TODO use typ to modify type signature
+addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> [(T.Text, [TextEdit])]
+addArgumentAction (ParsedModule _ parsedSource _ _) range name _typ =
+  do
+    let addArgToMatch = \(L locMatch (Match xMatch ctxMatch pats rhs)) -> do
+          let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
+          let newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
+          pure $ L locMatch (Match xMatch ctxMatch (pats <> [newPat]) rhs)
+        insertArg = \case
+          (L locDecl (ValD xVal (FunBind xFunBind idFunBind mg coreFunBind))) -> do
+            mg' <- modifyMgMatchesT mg addArgToMatch
+            let decl' = L locDecl (ValD xVal (FunBind xFunBind idFunBind mg' coreFunBind))
+            pure $ Just [decl']
+          _ -> pure Nothing
+    case runTransformT $ modifySmallestDeclWithM (`spanContainsRange` range) insertArg (makeDeltaAst parsedSource) of
+      Left err -> error $ "Error when inserting argument: " <> err
+      Right (newSource, _, _) ->
+        let diff = makeDiffTextEdit (T.pack $ exactPrint parsedSource) (T.pack $ exactPrint newSource)
+         in [("Add argument ‘" <> name <> "’ to function", fromLspList $ diff)]
+
+fromLspList :: List a -> [a]
+fromLspList (List a) = a
 
 suggestFillTypeWildcard :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillTypeWildcard Diagnostic{_range=_range,..}
