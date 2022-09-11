@@ -88,7 +88,7 @@ testTree =
                 -- Single line
                 testCase "Test Single Line" $ check
                     (mkCodeRange (Position 1 0) (Position 1 15) [] CodeKindRegion)
-                    [FoldingRange 1 (Just 0) 1 (Just 15) (Just FoldingRangeRegion)],
+                    [],
 
                 -- MultiLine imports
                 testCase "MultiLine Imports" $ check
@@ -106,6 +106,10 @@ testTree =
             -- General test
             testCase "Test General Code Block" $ check
                 (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindRegion)
-                (Just (FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion)))
+                (Just (FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion))),
+            -- General test
+            testCase "Test Same Start Line" $ check
+                (mkCodeRange (Position 1 1) (Position 1 10) [] CodeKindRegion)
+                Nothing
         ]
     ]

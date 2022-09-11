@@ -79,7 +79,7 @@ foldingRangeHandler ide _ FoldingRangeParams{..} = do
                 toNormalizedFilePath' <$> uriToFilePath' uri
         foldingRanges <- ExceptT . liftIO . runIdeAction "FoldingRange" (shakeExtras ide) . runExceptT $
             getFoldingRanges filePath
-        pure . List $ foldingRanges
+        pure . List $ removeDupStartLineFoldings foldingRanges
     where
         uri :: Uri
         TextDocumentIdentifier uri = _textDocument
@@ -164,10 +164,19 @@ findFoldingRanges r@(CodeRange _ children _) =
 createFoldingRange :: CodeRange -> Maybe FoldingRange
 createFoldingRange (CodeRange (Range (Position lineStart charStart) (Position lineEnd charEnd)) _ ck) = do
     let frk = crkToFrk ck
-
-    case frk of
+    if lineStart == lineEnd
+        then Nothing
+    else case frk of
         Just _  -> Just (FoldingRange lineStart (Just charStart) lineEnd (Just charEnd) frk)
         Nothing -> Nothing
+
+-- Removes all small foldings that start from the same line
+removeDupStartLineFoldings :: [FoldingRange] -> [FoldingRange]
+removeDupStartLineFoldings [] = []
+removeDupStartLineFoldings [x] = [x]
+removeDupStartLineFoldings (frx@(FoldingRange x _ _ _ _):xs@((FoldingRange y _ _ _ _):xs2))
+    | x == y = removeDupStartLineFoldings ([frx]++xs2)
+    | otherwise = frx : removeDupStartLineFoldings xs
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange
