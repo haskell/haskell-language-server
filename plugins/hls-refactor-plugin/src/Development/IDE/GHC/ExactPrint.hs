@@ -47,6 +47,8 @@ module Development.IDE.GHC.ExactPrint
       ExceptStringT (..),
       TransformT,
       Log(..),
+      prependDecl,
+      prependDeclToWhereDecls,
     )
 where
 
@@ -109,6 +111,13 @@ import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           DeltaPos (SameLine),
                                                           EpaLocation (EpaDelta),
                                                           deltaPos)
+import GHC (DeltaPos(..))
+import GHC.Types.SrcLoc (generatedSrcSpan)
+import GHC (Anchor(..))
+import GHC (AnchorOperation(..))
+import GHC (realSrcSpan)
+import GHC (EpAnnComments(..))
+import Debug.Trace (traceShowM, trace, traceM)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -475,6 +484,90 @@ modifyMgMatchesT ::
 modifyMgMatchesT (MG xMg (L locMatches matches) originMg) f = do
   matches' <- mapM f matches
   pure $ MG xMg (L locMatches matches') originMg
+
+insertAtStart' :: (Monad m, HasDecls ast) => ast -> HsDecl GhcPs -> TransformT m ast
+insertAtStart' old newDecl = do
+    srcs <- replicateM 5 uniqueSrcSpanT
+    liftT $ insertAt (insertDeclAtStart srcs) old . noLocA $ newDecl
+  where
+    insertDeclAtStart ssps (L _ newDecl) [] = [L (noAnnSrcSpanDP (ssps !! 0) (DifferentLine 1 4)) newDecl]
+    insertDeclAtStart _ (L _ newDecl) [L (SrcSpanAnn (EpAnn (Anchor dRealSpan (MovedAnchor (SameLine _))) dAnn dComments) dSpan) d] =
+      [ L (noAnnSrcSpanDP generatedSrcSpan (DifferentLine 1 2)) newDecl,
+        L (SrcSpanAnn (EpAnn (Anchor dRealSpan (MovedAnchor $ DifferentLine 1 0)) dAnn dComments) dSpan) d
+      ]
+    insertDeclAtStart ssps (L _ newDecl) (L (SrcSpanAnn (EpAnn (Anchor dRealSpan ancOp) dAnn dComments) dSpan) d:ds) =
+      let newDeclSpan = ssps !! 0
+          newDecl' = L
+            (SrcSpanAnn
+              (EpAnn (Anchor dRealSpan ancOp) mempty emptyComments)
+              newDeclSpan)
+            newDecl
+          secondDecl' = L
+            (SrcSpanAnn
+              (EpAnn
+                (Anchor (realSrcSpan $ newDeclSpan) (MovedAnchor $ DifferentLine 1 0))
+                dAnn
+                dComments)
+              dSpan)
+            d
+      in newDecl' : secondDecl' : ds
+    insertDeclAtStart _ d ds = d : ds
+
+prependDeclToWhereDecls decl newWhereDecl = do
+  traceShowM "tag2"
+  ds <- balanceCommentsList =<< hsDecls decl
+  traceShowM "tag3"
+  let ds' = prependDecl (wrapDecl newWhereDecl) ds
+  traceShowM "tag4"
+  replaceDecls decl ds'
+
+prependDecl :: LHsDecl GhcPs -> [LHsDecl GhcPs] -> [LHsDecl GhcPs]
+prependDecl ldecl = \case
+   [] -> [setEntryDP ldecl (DifferentLine 1 2)]
+   ld1:lds -> ldecl':ld1'':lds
+     where
+       (ancOp, ld1'') = case ld1 of
+         L (SrcSpanAnn (EpAnn d1Anc d1Ann (EpaComments (L (Anchor c1Rss cAnc) c1:restCs))) ss) d1 ->
+           -- NOTE cannot use setEntryDP to simply assign `DL 1 0` here because when there is no prior decl, the
+           --      DeltaPos on the declaration is absolute instead of relative, and so we must manually update the
+           --      DeltaPos to be relative (since there is about to be a prior declaration).
+           let ld1' = L
+                 (SrcSpanAnn
+                   (EpAnn
+                     (setAnchorDp d1Anc $ DifferentLine 1 0)
+                     d1Ann
+                     (EpaCommentsBalanced (L (Anchor c1Rss $ MovedAnchor $ DifferentLine 1 0) c1:restCs) []))
+                   ss)
+                 d1
+           in (cAnc, ld1')
+         (L (SrcSpanAnn (EpAnn d1Anc d1Ann (EpaCommentsBalanced (L (Anchor c1Rss cAnc) c1:restCs) d1AfterCs)) ss) d1) ->
+           -- NOTE cannot use setEntryDP to simply assign `DL 1 0` here because when there is no prior decl, the
+           --      DeltaPos on the declaration is absolute instead of relative, and so we must manually update the
+           --      DeltaPos to be relative (since there is about to be a prior declaration).
+           let ld1' = L
+                 (SrcSpanAnn
+                   (EpAnn
+                     (setAnchorDp d1Anc $ DifferentLine 1 0)
+                     d1Ann
+                     (EpaCommentsBalanced (L (Anchor c1Rss $ MovedAnchor $ DifferentLine 1 0) c1:restCs) d1AfterCs))
+                   ss)
+                 d1
+           in (cAnc, ld1')
+         (L (SrcSpanAnn (EpAnn (Anchor d1Rss d1AncOp) d1Ann epaCs@(EpaComments [])) ss) d1) ->
+           let ld1' = L (SrcSpanAnn (EpAnn (Anchor d1Rss $ MovedAnchor $ DifferentLine 1 0) d1Ann epaCs) ss) d1
+           in (d1AncOp, ld1')
+         (L (SrcSpanAnn (EpAnn (Anchor d1Rss d1AncOp) d1Ann epaCs@(EpaCommentsBalanced [] _)) ss) d1) ->
+           let ld1' = L (SrcSpanAnn (EpAnn (Anchor d1Rss $ MovedAnchor $ DifferentLine 1 0) d1Ann epaCs) ss) d1
+           in (d1AncOp, ld1')
+         L (SrcSpanAnn EpAnnNotUsed _) _ -> trace "tag6" error "Unexpected EpAnnNotUsed"
+       ldecl' = setEntryDP ldecl (maybe (trace "tag7" error "what to do with UnchangedAnchor?") id $ getAnchorOpDp ancOp)
+
+setAnchorDp :: Anchor -> DeltaPos -> Anchor
+setAnchorDp (Anchor rss _) dp = Anchor rss (MovedAnchor dp)
+
+getAnchorOpDp :: AnchorOperation -> Maybe DeltaPos
+getAnchorOpDp (MovedAnchor dp) = Just dp
+getAnchorOpDp UnchangedAnchor = Nothing
 #endif
 
 graftSmallestDeclsWithM ::

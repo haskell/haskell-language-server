@@ -3,9 +3,7 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE ImplicitParams        #-}
 {-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PatternSynonyms       #-}
@@ -312,7 +310,6 @@ codeActionTests = testGroup "code actions"
   , fillTypedHoleTests
   , addSigActionTests
   , insertNewDefinitionTests
-  , deleteUnusedDefinitionTests
   , addInstanceConstraintTests
   , addFunctionConstraintTests
   , removeRedundantConstraintsTests
@@ -322,6 +319,7 @@ codeActionTests = testGroup "code actions"
   , removeExportTests
 #if MIN_VERSION_ghc(9,2,1)
   , addFunctionArgumentTests
+  , addToWhereTests
 #endif
   ]
 
@@ -1511,7 +1509,10 @@ extendImportTests = testGroup "extend import actions"
             actionsOrCommands <- getCodeActions docB range
             let codeActions =
                   filter
-                    (liftA2 (&&) (T.isPrefixOf "Add") (not . T.isPrefixOf "Add argument") . codeActionTitle)
+                    (liftA2 (&&)
+                      (T.isPrefixOf "Add")
+                      (\cmd -> not $ or $ fmap ($ cmd) [T.isPrefixOf "Add argument", T.isPrefixOf "Add to where"])
+                     . codeActionTitle)
                     [ca | InR ca <- actionsOrCommands]
                 actualTitles = codeActionTitle <$> codeActions
             -- Note that we are not testing the order of the actions, as the
@@ -2375,6 +2376,209 @@ addFunctionArgumentTests =
         liftIO $ contentAfterAction @?= T.unlines foo'
     ]
 #endif
+
+addToWhereTests :: TestTree
+addToWhereTests =
+  testGroup
+    "add_to_where"
+  [ testSession "insert_new_where" $ do
+      let foo =
+            [ "module Foo where"
+            , ""
+            , "bar = 1"
+            , ""
+            , "foo True = _select [True]"
+            ,  ""
+            , "foo False = False"
+            ]
+          foo' =
+            [ "module Foo where"
+            , ""
+            , "bar = 1"
+            , ""
+            , "foo True = _select [True]"
+            , "  where"
+            , "    _select = _"
+            , ""
+            , "foo False = False"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" (T.unlines foo)
+      _ <- waitForDiagnostics
+      InR action@CodeAction { _title = actionTitle } : _
+                    <- filter (\(InR CodeAction{_title=x}) -> "Add to " `isPrefixOf` T.unpack x ) <$>
+                     getCodeActions docB (R 4 0 4 50)
+      liftIO $ actionTitle @?= "Add to where ‘_select’"
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ contentAfterAction @?= T.unlines foo'
+  , testSession "simple" $ do
+      let foo =
+            [ "module Foo where"
+            , ""
+            , "bar = 1"
+            , ""
+            , "foo True = _select [True]"
+            , " where"
+            , "  baz = 2"
+            , "foo False = False"
+            ]
+          foo' =
+            [ "module Foo where"
+            , ""
+            , "bar = 1"
+            , ""
+            , "foo True = _select [True]"
+            , " where"
+            , "  _select = _"
+            , "  baz = 2"
+            , "foo False = False"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" (T.unlines foo)
+      _ <- waitForDiagnostics
+      InR action@CodeAction { _title = actionTitle } : _
+                    <- filter (\(InR CodeAction{_title=x}) -> "Add to " `isPrefixOf` T.unpack x ) <$>
+                     getCodeActions docB (R 4 0 4 50)
+      liftIO $ actionTitle @?= "Add to where ‘_select’"
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ contentAfterAction @?= T.unlines foo'
+  , testSession "simple" $ do
+      let foo =
+            [ "module Foo where"
+            , ""
+            , "bar = 1"
+            , ""
+            , "foo True = _select [True]"
+            , " where baz = 2"
+            , "foo False = False"
+            ]
+          foo' =
+            [ "module Foo where"
+            , ""
+            , "bar = 1"
+            , ""
+            , "foo True = _select [True]"
+            , " where _select = _"
+            , "       baz = 2"
+            , "foo False = False"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" (T.unlines foo)
+      _ <- waitForDiagnostics
+      InR action@CodeAction { _title = actionTitle } : _
+                    <- filter (\(InR CodeAction{_title=x}) -> "Add to " `isPrefixOf` T.unpack x ) <$>
+                     getCodeActions docB (R 4 0 4 50)
+      liftIO $ actionTitle @?= "Add to where ‘_select’"
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ contentAfterAction @?= T.unlines foo'
+  , testSession "simple" $ do
+      let foo =
+            [ "module Foo where"
+            , ""
+            , "bar = 1"
+            , ""
+            , "foo True = _select [True]"
+            , "  where"
+            , "foo False = False"
+            ]
+          foo' =
+            [ "module Foo where"
+            , ""
+            , "bar = 1"
+            , ""
+            , "foo True = _select [True]"
+            , "  where"
+            , "  _select = _"
+            , "foo False = False"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" (T.unlines foo)
+      _ <- waitForDiagnostics
+      InR action@CodeAction { _title = actionTitle } : _
+                    <- filter (\(InR CodeAction{_title=x}) -> "Add to " `isPrefixOf` T.unpack x ) <$>
+                     getCodeActions docB (R 4 0 4 50)
+      liftIO $ actionTitle @?= "Add to where ‘_select’"
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ contentAfterAction @?= T.unlines foo'
+  , testSession "empty where" $ do
+      let foo =
+            [ "module Foo where"
+            , ""
+            , "bar = 1"
+            , ""
+            , "foo True = _select [True]"
+            , "  where"
+            , "foo False = False"
+            ]
+          foo' =
+            [ "module Foo where"
+            , ""
+            , "bar = 1"
+            , ""
+            , "foo True = _select [True]"
+            , "  where"
+            , "  _select = _"
+            , "foo False = False"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" (T.unlines foo)
+      _ <- waitForDiagnostics
+      InR action@CodeAction { _title = actionTitle } : _
+                    <- filter (\(InR CodeAction{_title=x}) -> "Add to " `isPrefixOf` T.unpack x ) <$>
+                     getCodeActions docB (R 4 0 4 50)
+      liftIO $ actionTitle @?= "Add to where ‘_select’"
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ contentAfterAction @?= T.unlines foo'
+  , testSession "untyped error" $ do
+      let foo =
+            ["module Foo where"
+            ,""
+            ,"foo = select"
+            ]
+          foo' =
+            ["module Foo where"
+            ,""
+            ,"foo = select"
+            , "  where"
+            , "    select = _"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" (T.unlines foo)
+      _ <- waitForDiagnostics
+      InR action@CodeAction { _title = actionTitle } : _
+                    <- filter (\(InR CodeAction{_title=x}) -> "Add to " `isPrefixOf` T.unpack x ) <$>
+                     getCodeActions docB (R 2 0 2 50)
+      liftIO $ actionTitle @?= "Add to where ‘select’"
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ contentAfterAction @?= T.unlines foo'
+  , testSession "untyped_error" $ do
+      let foo =
+            [ "module Foo where"
+            , ""
+            , "foo = new_def"
+            , "  where"
+            , "    -- hi"
+            , "    baz = 2"
+            ]
+          foo' =
+            [ "module Foo where"
+            , ""
+            , "foo = new_def"
+            , "  where"
+            , "    new_def = _"
+            , "    "
+            , "        -- hibaz = 2"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" (T.unlines foo)
+      _ <- waitForDiagnostics
+      InR action@CodeAction { _title = actionTitle } : _
+                    <- filter (\(InR CodeAction{_title=x}) -> "Add to " `isPrefixOf` T.unpack x ) <$>
+                     getCodeActions docB (R 2 0 2 50)
+      liftIO $ actionTitle @?= "Add to where ‘new_def’"
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ contentAfterAction @?= T.unlines foo'
+    ]
 
 deleteUnusedDefinitionTests :: TestTree
 deleteUnusedDefinitionTests = testGroup "delete unused definition action"
