@@ -47,13 +47,12 @@ import           Development.IDE.LSP.LanguageServer (runLanguageServer)
 import qualified Development.IDE.Main               as Main
 import           Development.IDE.Types.Logger       (Logger (Logger),
                                                      Pretty (pretty),
-                                                     Priority (Debug, Error, Info, Warning),
+                                                     Priority (Info),
                                                      Recorder (logger_),
                                                      WithPriority (WithPriority),
                                                      cmapWithPrio,
                                                      makeDefaultStderrRecorder)
 import           GHC.Stack.Types                    (emptyCallStack)
-import           HIE.Bios.Internal.Log
 import           Ide.Plugin.Config                  (Config)
 import           Language.LSP.Server                (LspM)
 import qualified Language.LSP.Server                as LSP
@@ -316,11 +315,3 @@ launchErrorLSP errorMsg = do
 
 exitHandler :: IO () -> LSP.Handlers (ErrorLSPM c)
 exitHandler exit = LSP.notificationHandler SExit $ const $ liftIO exit
-
-hlsWrapperLogger :: Logger
-hlsWrapperLogger = Logger $ \pri txt ->
-    case pri of
-      Debug   -> debugm   (T.unpack txt)
-      Info    -> logm     (T.unpack txt)
-      Warning -> warningm (T.unpack txt)
-      Error   -> errorm   (T.unpack txt)

@@ -1,7 +1,7 @@
 cabal-version:      3.0
 category:           Development
 name:               haskell-language-server
-version:            1.7.0.0
+version:            1.8.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -71,12 +71,12 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>=1.7
+    , ghcide                ^>=1.8
     , githash               >=0.1.6.1
     , lsp
     , hie-bios
     , hiedb
-    , hls-plugin-api        ^>=1.4
+    , hls-plugin-api        ^>=1.5
     , optparse-applicative
     , optparse-simple
     , process
@@ -240,22 +240,22 @@ flag dynamic
 
 common class
   if flag(class) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-class-plugin ^>= 1.0
+    build-depends: hls-class-plugin ^>= 1.1
     cpp-options: -Dhls_class
 
 common callHierarchy
   if flag(callHierarchy)
-    build-depends: hls-call-hierarchy-plugin ^>= 1.0
+    build-depends: hls-call-hierarchy-plugin ^>= 1.1
     cpp-options: -Dhls_callHierarchy
 
 common haddockComments
   if flag(haddockComments) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-haddock-comments-plugin ^>= 1.0
+    build-depends: hls-haddock-comments-plugin ^>= 1.1
     cpp-options: -Dhls_haddockComments
 
 common eval
   if flag(eval) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-eval-plugin ^>= 1.2
+    build-depends: hls-eval-plugin ^>= 1.3
     cpp-options: -Dhls_eval
 
 common importLens
@@ -280,12 +280,12 @@ common retrie
 
 common tactic
   if flag(tactic) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-tactics-plugin >=1.2.0.0 && <1.7
+    build-depends: hls-tactics-plugin ^>= 1.7
     cpp-options: -Dhls_tactic
 
 common hlint
   if flag(hlint) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-hlint-plugin ^>= 1.0
+    build-depends: hls-hlint-plugin ^>= 1.1
     cpp-options: -Dhls_hlint
 
 common stan
@@ -295,7 +295,7 @@ common stan
 
 common moduleName
   if flag(moduleName)
-    build-depends: hls-module-name-plugin ^>= 1.0
+    build-depends: hls-module-name-plugin ^>= 1.1
     cpp-options: -Dhls_moduleName
 
 common pragmas
@@ -310,7 +310,7 @@ common splice
 
 common alternateNumberFormat
   if flag(alternateNumberFormat) 
-    build-depends: hls-alternate-number-format-plugin ^>= 1.1
+    build-depends: hls-alternate-number-format-plugin ^>= 1.2
     cpp-options: -Dhls_alternateNumberFormat
 
 common qualifyImportedNames
@@ -347,7 +347,7 @@ common floskell
 
 common fourmolu
   if flag(fourmolu) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-fourmolu-plugin ^>= 1.0
+    build-depends: hls-fourmolu-plugin ^>= 1.1
     cpp-options: -Dhls_fourmolu
 
 common ormolu
@@ -534,7 +534,7 @@ test-suite func-test
     , lens
     , lens-aeson
     , ghcide
-    , hls-test-utils ^>=1.3
+    , hls-test-utils ^>=1.4
     , lsp-types
     , aeson
     , hls-plugin-api

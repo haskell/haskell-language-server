@@ -7,7 +7,7 @@ stages:
 # https://gitlab.haskell.org/haskell/haskell-language-server/-/pipelines
 variables:
   # Commit of ghc/ci-images repository from which to pull Docker images
-  DOCKER_REV: "4ed1a4f27828ba96a34662dc954335e29b470cd2"
+  DOCKER_REV: "9e4c540d9e4972a36291dfdf81f079f37d748890"
 
   CABAL_INSTALL_VERSION: 3.8.1.0
 
