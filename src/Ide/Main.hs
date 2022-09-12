@@ -27,7 +27,7 @@ import           Development.IDE.Types.Logger  as G
 import qualified Development.IDE.Types.Options as Ghcide
 import           GHC.Stack                     (emptyCallStack)
 import qualified HIE.Bios.Environment          as HieBios
-import           HIE.Bios.Types
+import           HIE.Bios.Types                hiding (Log)
 import           Ide.Arguments
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
                                                 pluginsToVSCodeExtensionSchema)

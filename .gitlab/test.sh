@@ -45,17 +45,17 @@ case "$(uname -s)" in
 		;;
 esac
 
-case "$(uname)" in
-    MSYS_*|MINGW*)
-        # workaround for https://gitlab.haskell.org/ghc/ghc/-/issues/21196
-        export PATH="${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin:${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/usr/bin:$PATH"
-        ls ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin
-        cp ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin/libgcc_s_seh-1.dll ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/bin
-        cp ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin/libwinpthread-1.dll ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/bin
-        ghc --info
-        ;;
-	*) ;;
-esac
+# case "$(uname)" in
+#     MSYS_*|MINGW*)
+#         # workaround for https://gitlab.haskell.org/ghc/ghc/-/issues/21196
+#         export PATH="${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin:${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/usr/bin:$PATH"
+#         ls ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin
+#         cp ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin/libgcc_s_seh-1.dll ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/bin
+#         cp ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin/libwinpthread-1.dll ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/bin
+#         ghc --info
+#         ;;
+# 	*) ;;
+# esac
 
 # make sure out/ dir is gone, so build host rpaths don't
 # kick in (TODO: we should probably remove those)
