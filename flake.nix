@@ -21,15 +21,15 @@
 
     # List of hackage dependencies
     lsp = {
-      url = "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz";
+      url = "https://hackage.haskell.org/package/lsp-1.5.0.0/lsp-1.5.0.0.tar.gz";
       flake = false;
     };
     lsp-types = {
-      url = "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz";
+      url = "https://hackage.haskell.org/package/lsp-types-1.5.0.0/lsp-types-1.5.0.0.tar.gz";
       flake = false;
     };
     lsp-test = {
-      url = "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz";
+      url = "https://hackage.haskell.org/package/lsp-test-0.14.0.3/lsp-test-0.14.0.3.tar.gz";
       flake = false;
     };
     ghc-exactprint-150 = {
@@ -76,8 +76,8 @@
       url = "https://hackage.haskell.org/package/ptr-poker-0.1.2.8/ptr-poker-0.1.2.8.tar.gz";
       flake = false;
     };
-    stylish-haskell-01220 = {
-      url = "https://hackage.haskell.org/package/stylish-haskell-0.12.2.0/stylish-haskell-0.12.2.0.tar.gz";
+    stylish-haskell = {
+      url = "https://hackage.haskell.org/package/stylish-haskell-0.14.2.0/stylish-haskell-0.14.2.0.tar.gz";
       flake = false;
     };
     implicit-hie-cradle = {
@@ -138,11 +138,13 @@
           sourceDirs = {
             haskell-language-server = ./.;
             ghcide = ./ghcide;
+            ghcide-bench = ./ghcide-bench;
             hls-graph = ./hls-graph;
             shake-bench = ./shake-bench;
             hie-compat = ./hie-compat;
             hls-plugin-api = ./hls-plugin-api;
             hls-test-utils = ./hls-test-utils;
+            ghcide-test-utils = ./ghcide/test;
           } // pluginSourceDirs;
 
           # Tweak our packages
@@ -213,7 +215,8 @@
         };
 
         ghc902Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
-        ghc922Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
+        ghc924Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
+        ghc941Config = (import ./configuration-ghc-94.nix) { inherit pkgs inputs; };
 
         # GHC versions
         # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached
@@ -222,12 +225,14 @@
           ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
           cases = {
             ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
-            ghc922 = ghc922Config.tweakHpkgs (pkgs.hlsHpkgs "ghc922");
+            ghc924 = ghc924Config.tweakHpkgs (pkgs.hlsHpkgs "ghc924");
+            ghc941 = ghc941Config.tweakHpkgs (pkgs.hlsHpkgs "ghc941");
           };
           in { default = cases."${ghcVersion}"; } // cases;
 
         ghc902 = supportedGHCs.ghc902;
-        ghc922 = supportedGHCs.ghc922;
+        ghc924 = supportedGHCs.ghc924;
+        ghc941 = supportedGHCs.ghc941;
         ghcDefault = supportedGHCs.default;
 
         # For markdown support
@@ -359,20 +364,23 @@
         simpleDevShells = {
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
           haskell-language-server-902-dev = mkDevShell ghc902 "cabal.project";
-          haskell-language-server-922-dev = mkDevShell ghc922 "cabal.project";
+          haskell-language-server-924-dev = mkDevShell ghc924 "cabal.project";
+          haskell-language-server-941-dev = mkDevShell ghc941 "cabal.project";
         };
 
         # Developement shell, haskell packages are also provided by nix
         nixDevShells = {
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
           haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
-          haskell-language-server-922-dev-nix = mkDevShellWithNixDeps ghc922 "cabal.project";
+          haskell-language-server-924-dev-nix = mkDevShellWithNixDeps ghc924 "cabal.project";
+          haskell-language-server-941-dev-nix = mkDevShellWithNixDeps ghc941 "cabal.project";
         };
 
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-902 = mkExe ghc902;
-          haskell-language-server-922 = mkExe ghc922;
+          haskell-language-server-924 = mkExe ghc924;
+          haskell-language-server-941 = mkExe ghc941;
         };
 
         devShells = simpleDevShells // nixDevShells // {

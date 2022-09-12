@@ -16,6 +16,10 @@ extra-source-files:
   test/testdata/*.hs
 
 library
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   exposed-modules:    Ide.Plugin.GADT
   other-modules:      Ide.Plugin.GHC
 
@@ -30,6 +34,7 @@ library
     , ghc-boot-th
     , ghc-exactprint
     , hls-plugin-api        ^>= 1.4
+    , hls-refactor-plugin
     , lens
     , lsp                    >=1.2.0.1
     , mtl
@@ -45,6 +50,10 @@ library
   default-extensions: DataKinds
 
 test-suite tests
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test

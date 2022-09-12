@@ -16,6 +16,7 @@ import           Data.List.Extra                         (stripInfix)
 import qualified Data.Text                               as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.ExactPrint
 import           Ide.PluginUtils                         (subRange)
 import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
 

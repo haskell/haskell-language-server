@@ -5,6 +5,7 @@ packages:
   - ./hie-compat
   - ./hls-graph
   - ./ghcide/
+  - ./ghcide/test
   - ./shake-bench
   - ./hls-plugin-api
   - ./hls-test-utils
@@ -15,6 +16,7 @@ packages:
   - ./plugins/hls-explicit-imports-plugin
   - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-hlint-plugin
+  - ./plugins/hls-stan-plugin
   - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
@@ -31,6 +33,8 @@ packages:
   - ./plugins/hls-code-range-plugin
   - ./plugins/hls-change-type-signature-plugin
   - ./plugins/hls-gadt-plugin
+  - ./plugins/hls-explicit-fixity-plugin
+  - ./plugins/hls-refactor-plugin
 
 ghc-options:
   "$everything": -haddock
@@ -46,7 +50,7 @@ extra-deps:
   - extra-1.7.10
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  - ghc-check-0.5.0.4
+  - ghc-check-0.5.0.8
   - ghc-exactprint-0.6.4
   - ghc-lib-8.10.7.20210828
   - ghc-lib-parser-8.10.7.20210828
@@ -83,14 +87,26 @@ extra-deps:
   - constraints-extras-0.3.0.2@sha256:013b8d0392582c6ca068e226718a4fe8be8e22321cc0634f6115505bf377ad26,1853
   - some-1.0.1@sha256:26e5bab7276f48b25ea8660d3fd1166c0f20fd497dac879a40f408e23211f93e,2055
   - unliftio-core-0.2.0.1@sha256:9b3e44ea9aacacbfc35b3b54015af450091916ac3618a41868ebf6546977659a,1082
-  - lsp-1.4.0.0
-  - lsp-types-1.4.0.1
-  - lsp-test-0.14.0.2
+  - git: git@github.com:haskell/lsp
+    commit: b0f8596887088b8ab65fc1015c773f45b47234ae
+    subdirs:
+    - lsp
+    - lsp-types
+    - lsp-test
   - stm-containers-1.1.0.4
   - stm-hamt-1.2.0.6@sha256:fba86ccb4b45c5706c19b0e1315ba63dcac3b5d71de945ec001ba921fae80061,3972
   - primitive-extras-0.10.1
   - primitive-unlifted-0.1.3.1
   - githash-0.1.6.2
+  - stan-0.0.1.0
+  - dir-traverse-0.2.3.0@sha256:adcc128f201ff95131b15ffe41365dc99c50dc3fa3a910f021521dc734013bfa,2137
+  - extensions-0.0.0.1@sha256:16517ab9df3dd6c7a20da746c8ed02cfd59c8cb40ae5719aef8b5dd4edceadc0,3993
+  - microaeson-0.1.0.1@sha256:88ba1cc52181b57abc453e222bbb76ca6ab252e38c6507d15a596d6a582fdf69,3968
+  - trial-0.0.0.0@sha256:834d3be439dc9b52a759a45a4d3944e5e55c3d50fd5874003147cc1f6231d4aa,4301
+  - trial-optparse-applicative-0.0.0.0@sha256:ba05edfc327a281766df5e0f44d91229e6a98afaf59abe1894b293453f076192,2449
+  - trial-tomland-0.0.0.0@sha256:743a9baaa36891ed3a44618fdfd5bc4ed9afc39cf9b9fa23ea1b96f3787f5ec0,2526
+  - text-rope-0.2
+  - co-log-core-0.3.1.0
 
 configure-options:
   ghcide:

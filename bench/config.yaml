@@ -1,0 +1,178 @@
+# The number of samples to run per experiment.
+# At least 100 is recommended in order to observe space leaks
+samples: 50
+
+buildTool: cabal
+
+# Output folder for the experiments
+outputFolder: bench-results
+
+# Heap profile interval in seconds (+RTS -i)
+# Comment out to disable heap profiling
+profileInterval: 1
+
+# Number of concurrent benchmark and warmup runs
+parallelism: 1
+
+# Example project used to run the experiments
+# Can either be a Hackage package (name,version)
+# or a local project (path) with a valid `hie.yaml` file
+examples:
+  # Medium-sized project without TH
+  - name: cabal
+    package: Cabal
+    version: 3.6.3.0
+    modules:
+        - src/Distribution/Simple.hs
+        - src/Distribution/Types/Module.hs
+    extra-args: [] # extra HLS command line args
+  # Small-sized project with TH
+  - name: lsp-types
+    package: lsp-types
+    version: 1.5.0.0
+    modules:
+        - src/Language/LSP/Types/WatchedFiles.hs
+        - src/Language/LSP/Types/CallHierarchy.hs
+  # Small but heavily multi-component example
+  # Disabled as it is far to slow. hie-bios >0.7.2 should help
+  # - name: HLS
+  #   path: bench/example/HLS
+  #   modules:
+  #       - hls-plugin-api/src/Ide/Plugin/Config.hs
+  #       - ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs
+  #       - ghcide/bench/hist/Main.hs
+  #       - ghcide/bench/lib/Experiments/Types.hs
+  #       - ghcide/test/exe/Main.hs
+  #       - exe/Plugins.hs
+
+# The set of experiments to execute
+experiments:
+    - "edit"
+    - "hover"
+    - "hover after edit"
+    # - "hover after cradle edit"
+    - "getDefinition"
+    - "getDefinition after edit"
+    - "completions"
+    - "completions after edit"
+    - "code actions"
+    - "code actions after edit"
+    - "code actions after cradle edit"
+    - "documentSymbols after edit"
+    - "hole fit suggestions"
+
+# An ordered list of versions to analyze
+versions:
+# A version can be defined briefly:
+# - <tag>
+# - <branch>
+# - <commit hash>
+
+# Or in extended form, where all the fields are optional:
+# - <name>:
+#    git: <tag/branch/commithash>
+#    include: true                   # whether to include in comparison graphs
+#    parent: <tag/branch/commithash> # version to compare with in .diff graphs
+
+
+# - 1.8.0.0
+- upstream: origin/master
+# - HEAD~1
+- HEAD
+
+# A list of plugin configurations to analyze
+configurations:
+# A configuration contains one or more plugins:
+# - ConfigurationName:
+#   - plugin1
+#   - plugin2
+#
+# There is short-hand notation for defining singleton configurations.
+# Simply give the plugin name top level:
+# - plugin1
+#
+# Some plugins are implicitly included since they are required by the benchmark driver:
+# The implicitly included plugins are:
+# - ghcide-core
+# - ghcide-hover-and-symbols
+
+# Uncomment below sections if needed
+# - None: []
+# - Core:
+#   - callHierarchy
+#   - codeRange
+#   - eval
+#   - ghcide-code-actions-bindings
+#   - ghcide-code-actions-fill-holes
+#   - ghcide-code-actions-imports-exports
+#   - ghcide-code-actions-type-signatures
+#   - ghcide-completions
+#   - ghcide-type-lenses
+#   - pragmas
+# - Ghcide:
+#   - ghcide-completions
+#   - ghcide-type-lenses
+# - Refactor:
+#   - ghcide-code-actions-bindings
+#   - ghcide-code-actions-fill-holes
+#   - ghcide-code-actions-imports-exports
+#   - ghcide-code-actions-type-signatures
+- All:
+  - alternateNumberFormat
+  - callHierarchy
+  - changeTypeSignature
+  - class
+  - codeRange
+  - eval
+  - explicitFixity
+  - floskell
+  - fourmolu
+  - gadt
+  - ghcide-code-actions-bindings
+  - ghcide-code-actions-fill-holes
+  - ghcide-code-actions-imports-exports
+  - ghcide-code-actions-type-signatures
+  - ghcide-completions
+  - ghcide-type-lenses
+  - hlint
+  - importLens
+  - moduleName
+  - ormolu
+  - pragmas
+  - qualifyImportedNames
+  - refineImports
+  - rename
+  - stylish-haskell
+# - alternateNumberFormat
+# # - brittany
+# - callHierarchy
+# - changeTypeSignature
+# - class
+# - codeRange
+# - eval
+# - explicitFixity
+# # - floskell
+# # - fourmolu
+# - gadt
+# - ghcide-code-actions-bindings
+# - ghcide-code-actions-fill-holes
+# - ghcide-code-actions-imports-exports
+# - ghcide-code-actions-type-signatures
+# - ghcide-completions
+# # - ghcide-core                    # implicitly included in all configurations
+# # - ghcide-hover-and-symbols       # implicitly included in all configurations
+# - ghcide-type-lenses
+# - haddockComments
+# - hlint
+# - importLens
+# - moduleName
+# # - ormolu
+# - pragmas
+# - qualifyImportedNames
+# - refineImports
+# - rename
+# - retrie
+# - splice
+# - stan
+# # - stylish-haskell
+# - tactics

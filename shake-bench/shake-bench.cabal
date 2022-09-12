@@ -17,6 +17,7 @@ library
   build-depends:
         aeson,
         base == 4.*,
+        bytestring,
         Chart,
         Chart-diagrams,
         diagrams-contrib,

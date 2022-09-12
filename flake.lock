@@ -54,11 +54,11 @@
     },
     "flake-utils": {
       "locked": {
-        "lastModified": 1653893745,
-        "narHash": "sha256-0jntwV3Z8//YwuOjzhV2sgJJPt+HY6KhU7VZUL0fKZQ=",
+        "lastModified": 1656928814,
+        "narHash": "sha256-RIFfgBuKz6Hp89yRr7+NR5tzIAbn52h8vT6vXkYjZoM=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "1ed9fb1935d260de5fe1c2f7ee0ebaae17ed2fa1",
+        "rev": "7e2a3b3dfd9af950a856d66b0a7d01e3c18aa249",
         "type": "github"
       },
       "original": {
@@ -69,11 +69,11 @@
     },
     "flake-utils_2": {
       "locked": {
-        "lastModified": 1653893745,
-        "narHash": "sha256-0jntwV3Z8//YwuOjzhV2sgJJPt+HY6KhU7VZUL0fKZQ=",
+        "lastModified": 1656928814,
+        "narHash": "sha256-RIFfgBuKz6Hp89yRr7+NR5tzIAbn52h8vT6vXkYjZoM=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "1ed9fb1935d260de5fe1c2f7ee0ebaae17ed2fa1",
+        "rev": "7e2a3b3dfd9af950a856d66b0a7d01e3c18aa249",
         "type": "github"
       },
       "original": {
@@ -133,11 +133,11 @@
     "gitignore": {
       "flake": false,
       "locked": {
-        "lastModified": 1646480205,
-        "narHash": "sha256-kekOlTlu45vuK2L9nq8iVN17V3sB0WWPqTTW3a2SQG0=",
+        "lastModified": 1657706534,
+        "narHash": "sha256-5jIzNHKtDu06mA325K/5CshUVb5r7sSmnRiula6Gr7o=",
         "owner": "hercules-ci",
         "repo": "gitignore.nix",
-        "rev": "bff2832ec341cf30acb3a4d3e2e7f1f7b590116a",
+        "rev": "f840a659d57e53fa751a9248b17149fd0cf2a221",
         "type": "github"
       },
       "original": {
@@ -197,37 +197,37 @@
     "lsp": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-OcyNHNRh9j5nbJ8SjaNAWIEKuixAJlA7+vTimFY0c2c=",
+        "narHash": "sha256-+rkFYvSAI1hyFxPkgWZReyM2P6irVDpGVUGK8mcfEJE=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-1.5.0.0/lsp-1.5.0.0.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-1.5.0.0/lsp-1.5.0.0.tar.gz"
       }
     },
     "lsp-test": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-IOmbQH6tKdu9kAyirvLx6xFS2N+/tbs6vZn0mNGm3No=",
+        "narHash": "sha256-TXRy/VT94Cn0BPtiL65c7UqahyJZgUtBQQgESZacrdY=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.3/lsp-test-0.14.0.3.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.3/lsp-test-0.14.0.3.tar.gz"
       }
     },
     "lsp-types": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-HGg4upgirM6/px+vflY5S0Y79gAIDpl32Ad9mbbzTdU=",
+        "narHash": "sha256-q4XTvIvsLvISjgedpRktJbWsWHSRIQbOx2Z/2u+3s50=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-types-1.5.0.0/lsp-types-1.5.0.0.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-types-1.5.0.0/lsp-types-1.5.0.0.tar.gz"
       }
     },
     "myst-parser": {
@@ -249,11 +249,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1650049622,
-        "narHash": "sha256-fh/xYFctwzuowIWsVdtXUVtil4pxk54GabGY/sNKU30=",
-        "owner": "nixos",
+        "lastModified": 1659782844,
+        "narHash": "sha256-tM/qhHFE61puBxh9ebP3BIG1fkRAT4rHqD3jCM0HXGY=",
+        "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "92d1f76186bb974dd90971d7619f8bf0bff23a73",
+        "rev": "c85e56bb060291eac3fb3c75d4e0e64f6836fcfe",
         "type": "github"
       },
       "original": {
@@ -265,11 +265,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1654085299,
-        "narHash": "sha256-sR1pefD3cvNvYIcGTUXvUMe9UesEkSKtjGN1H/TBXsQ=",
+        "lastModified": 1657888067,
+        "narHash": "sha256-GnwJoFBTPfW3+mz7QEeJEEQ9OMHZOiIJ/qDhZxrlKh8=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "3b4bdfbe6f19ca497d999ad08aeb668839858a18",
+        "rev": "65fae659e31098ca4ac825a6fef26d890aaf3f4e",
         "type": "github"
       },
       "original": {
@@ -284,11 +284,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1653561148,
-        "narHash": "sha256-JzAttqACdvMOTwkzkJ0jFF8MWIo8Uau4w/XUMyqpnd8=",
+        "lastModified": 1657626303,
+        "narHash": "sha256-O/JJ0hSBCmlx0oP8QGAlRrWn0BvlC5cj7/EZ0CCWHTU=",
         "owner": "nix-community",
         "repo": "poetry2nix",
-        "rev": "3b01c3e3dc57d511848d8433153ab67db79640e1",
+        "rev": "920ba682377d5c0d87945c5eb6141ab8447ca509",
         "type": "github"
       },
       "original": {
@@ -347,7 +347,7 @@
         "ptr-poker": "ptr-poker",
         "retrie": "retrie",
         "sphinx_rtd_theme": "sphinx_rtd_theme",
-        "stylish-haskell-01220": "stylish-haskell-01220"
+        "stylish-haskell": "stylish-haskell"
       }
     },
     "sphinx_rtd_theme": {
@@ -367,16 +367,16 @@
         "type": "github"
       }
     },
-    "stylish-haskell-01220": {
+    "stylish-haskell": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-uQIvhz/xRbKLHe9et+tHUVE9To5vt1Pz3+vvDEqJaLI=",
+        "narHash": "sha256-oZSR5UQ+ieMFRq7MvL0sJqOblMk74awvcepuT+JHYtA=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/stylish-haskell-0.12.2.0/stylish-haskell-0.12.2.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/stylish-haskell-0.14.2.0/stylish-haskell-0.14.2.0.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/stylish-haskell-0.12.2.0/stylish-haskell-0.12.2.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/stylish-haskell-0.14.2.0/stylish-haskell-0.14.2.0.tar.gz"
       }
     }
   },

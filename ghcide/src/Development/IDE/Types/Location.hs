@@ -50,11 +50,7 @@ toNormalizedFilePath' "" = emptyFilePath
 toNormalizedFilePath' fp = LSP.toNormalizedFilePath fp
 
 emptyFilePath :: LSP.NormalizedFilePath
-#if MIN_VERSION_lsp_types(1,3,0)
-emptyFilePath = LSP.normalizedFilePath emptyPathUri ""
-#else
-emptyFilePath = LSP.NormalizedFilePath emptyPathUri ""
-#endif
+emptyFilePath = LSP.emptyNormalizedFilePath
 
 -- | We use an empty string as a filepath when we don’t have a file.
 -- However, haskell-lsp doesn’t support that in uriToFilePath and given

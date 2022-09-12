@@ -10,23 +10,8 @@ import           Test.Hls.Command
 -- ---------------------------------------------------------------------
 
 tests :: TestTree
-tests = testGroup "diagnostics providers" [
-        basicTests
-        , warningTests
-    ]
+tests = testGroup "diagnostics providers" [ warningTests ]
 
-basicTests :: TestTree
-basicTests = testGroup "Diagnostics work" [
-    testCase "example plugin produces diagnostics" $
-        runSession hlsCommandExamplePlugin fullCaps "test/testdata/diagnostics" $ do
-            doc <- openDoc "Foo.hs" "haskell"
-            diags <- waitForDiagnosticsFromSource doc "example2"
-            reduceDiag <- liftIO $ inspectDiagnostic diags ["example2 diagnostic, hello world"]
-            liftIO $ do
-                length diags @?= 1
-                reduceDiag ^. LSP.range @?= Range (Position 0 0) (Position 1 0)
-                reduceDiag ^. LSP.severity @?= Just DsError
-    ]
 
 warningTests :: TestTree
 warningTests = testGroup  "Warnings are warnings" [

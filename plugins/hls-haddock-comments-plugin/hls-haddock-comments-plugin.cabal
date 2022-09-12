@@ -35,6 +35,7 @@ library
     , ghc-exactprint        < 1
     , ghcide                ^>=1.6 || ^>=1.7
     , hls-plugin-api        ^>=1.3 || ^>=1.4
+    , hls-refactor-plugin
     , lsp-types
     , text
     , unordered-containers

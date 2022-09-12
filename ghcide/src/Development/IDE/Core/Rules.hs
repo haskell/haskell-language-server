@@ -28,6 +28,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleWithComments,
     getClientConfigAction,
     usePropertyAction,
+    getHieFile,
     -- * Rules
     CompiledLinkables(..),
     getParsedModuleRule,
@@ -55,6 +56,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleDefinition,
     typeCheckRuleDefinition,
     getRebuildCount,
+    getSourceFileSource,
     GhcSessionDepsConfig(..),
     Log(..),
     DisplayTHWarning(..),
@@ -65,6 +67,7 @@ import           Control.Applicative                          (liftA2)
 #endif
 import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.Strict
+import           Control.DeepSeq
 import           Control.Exception.Safe
 import           Control.Monad.Extra
 import           Control.Monad.Reader
@@ -90,12 +93,13 @@ import qualified Data.IntMap.Strict                           as IntMap
 import           Data.List
 import qualified Data.Map                                     as M
 import           Data.Maybe
-import qualified Data.Rope.UTF16                              as Rope
+import qualified Data.Text.Utf16.Rope                         as Rope
 import qualified Data.Set                                     as Set
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
+import           Data.Typeable                                (cast)
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists hiding (LogShake, Log)
 import           Development.IDE.Core.FileStore               (getFileContents,
@@ -116,7 +120,6 @@ import           Development.IDE.GHC.Compat                   hiding
 import qualified Development.IDE.GHC.Compat                   as Compat hiding (vcat, nest)
 import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.ExactPrint hiding (LogShake, Log)
 import           Development.IDE.GHC.Util                     hiding
                                                               (modifyDynFlags)
 import           Development.IDE.Graph
@@ -151,12 +154,15 @@ import System.Info.Extra (isWindows)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
 import Development.IDE.Types.Logger (Recorder, logWith, cmapWithPrio, WithPriority, Pretty (pretty), (<+>), nest, vcat)
 import qualified Development.IDE.Core.Shake as Shake
-import qualified Development.IDE.GHC.ExactPrint as ExactPrint hiding (LogShake)
 import qualified Development.IDE.Types.Logger as Logger
 import qualified Development.IDE.Types.Shake as Shake
 import           Development.IDE.GHC.CoreFile
 import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Control.Monad.IO.Unlift
+#if MIN_VERSION_ghc(9,3,0)
+import GHC.Unit.Module.Graph
+import GHC.Unit.Env
+#endif
 
 data Log
   = LogShake Shake.Log
@@ -164,7 +170,7 @@ data Log
   | LogLoadingHieFile !NormalizedFilePath
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
-  | LogExactPrint ExactPrint.Log
+  | LogTypecheckedFOI !NormalizedFilePath
   deriving Show
 
 instance Pretty Log where
@@ -181,7 +187,14 @@ instance Pretty Log where
           , pretty (displayException e) ]
     LogLoadingHieFileSuccess path ->
       "SUCCEEDED LOADING HIE FILE FOR" <+> pretty path
-    LogExactPrint log -> pretty log
+    LogTypecheckedFOI path -> vcat
+      [ "Typechecked a file which is not currently open in the editor:" <+> pretty (fromNormalizedFilePath path)
+      , "This can indicate a bug which results in excessive memory usage."
+      , "This may be a spurious warning if you have recently closed the file."
+      , "If you haven't opened this file recently, please file a report on the issue tracker mentioning"
+        <+> "the HLS version being used, the plugins enabled, and if possible the codebase and file which"
+        <+> "triggered this warning."
+      ]
 
 templateHaskellInstructions :: T.Text
 templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#static-binaries"
@@ -562,10 +575,10 @@ persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
   res <- readHieFileForSrcFromDisk recorder file
   vfsRef <- asks vfsVar
-  vfsData <- liftIO $ vfsMap <$> readTVarIO vfsRef
+  vfsData <- liftIO $ _vfsMap <$> readTVarIO vfsRef
   (currentSource, ver) <- liftIO $ case M.lookup (filePathToUri' file) vfsData of
     Nothing -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
-    Just vf -> pure (Rope.toText $ _text vf, Just $ _lsp_version vf)
+    Just vf -> pure (Rope.toText $ _file_text vf, Just $ _lsp_version vf)
   let refmap = Compat.generateReferencesMap . Compat.getAsts . Compat.hie_asts $ res
       del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
@@ -650,6 +663,12 @@ typeCheckRule :: Recorder (WithPriority Log) -> Rules ()
 typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck file -> do
     pm <- use_ GetParsedModule file
     hsc  <- hscEnv <$> use_ GhcSessionDeps file
+    foi <- use_ IsFileOfInterest file
+    -- We should only call the typecheck rule for files of interest.
+    -- Keeping typechecked modules in memory for other files is
+    -- very expensive.
+    when (foi == NotFOI) $
+      logWith recorder Logger.Warning $ LogTypecheckedFOI file
     typeCheckRuleDefinition hsc pm
 
 knownFilesRule :: Recorder (WithPriority Log) -> Rules ()
@@ -740,6 +759,11 @@ instance Default GhcSessionDepsConfig where
     { checkForImportCycles = True
     }
 
+-- | Note [GhcSessionDeps]
+-- For a file 'Foo', GhcSessionDeps "Foo.hs" results in an HscEnv which includes
+-- 1. HomeModInfo's (in the HUG/HPT) for all modules in the transitive closure of "Foo", **NOT** including "Foo" itself.
+-- 2. ModSummary's (in the ModuleGraph) for all modules in the transitive closure of "Foo", including "Foo" itself.
+-- 3. ModLocation's (in the FinderCache) all modules in the transitive closure of "Foo", including "Foo" itself.
 ghcSessionDepsDefinition
     :: -- | full mod summary
         Bool ->
@@ -752,15 +776,26 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
         Nothing -> return Nothing
         Just deps -> do
             when checkForImportCycles $ void $ uses_ ReportImportCycles deps
-            mss <- map msrModSummary <$> if fullModSummary
-                then uses_ GetModSummary deps
-                else uses_ GetModSummaryWithoutTimestamps deps
+            ms <- msrModSummary <$> if fullModSummary
+                then use_ GetModSummary file
+                else use_ GetModSummaryWithoutTimestamps file
 
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
-
-            let            inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails Nothing) ifaces
-            session' <- liftIO $ mergeEnvs hsc mss inLoadOrder depSessions
+            let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails Nothing) ifaces
+#if MIN_VERSION_ghc(9,3,0)
+            -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
+            -- also points to all the direct descendents of the current module. To get the keys for the descendents
+            -- we must get their `ModSummary`s
+            !final_deps <- do
+              dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
+             -- Don't want to retain references to the entire ModSummary when just the key will do
+              return $!! map (NodeKey_Module . msKey) dep_mss
+            let moduleNode = (ms, final_deps)
+#else
+            let moduleNode = ms
+#endif
+            session' <- liftIO $ mergeEnvs hsc moduleNode inLoadOrder depSessions
 
             Just <$> liftIO (newHscEnvEqWithImportPaths (envImportPaths env) session' [])
 
@@ -866,8 +901,12 @@ getModSummaryRule displayTHWarning recorder = do
                 when (uses_th_qq $ msrModSummary res) $ do
                     DisplayTHWarning act <- getIdeGlobalAction
                     liftIO act
+#if MIN_VERSION_ghc(9,3,0)
+                let bufFingerPrint = ms_hs_hash (msrModSummary res)
+#else
                 bufFingerPrint <- liftIO $
                     fingerprintFromStringBuffer $ fromJust $ ms_hspp_buf $ msrModSummary res
+#endif
                 let fingerPrint = Util.fingerprintFingerprints
                         [ msrFingerprint res, bufFingerPrint ]
                 return ( Just (fingerprintToBS fingerPrint) , ([], Just res))
@@ -878,7 +917,9 @@ getModSummaryRule displayTHWarning recorder = do
         case ms of
             Just res@ModSummaryResult{..} -> do
                 let ms = msrModSummary {
+#if !MIN_VERSION_ghc(9,3,0)
                     ms_hs_date = error "use GetModSummary instead of GetModSummaryWithoutTimestamps",
+#endif
                     ms_hspp_buf = error "use GetModSummary instead of GetModSummaryWithoutTimestamps"
                     }
                     fp = fingerprintToBS msrFingerprint
@@ -1090,8 +1131,8 @@ getLinkableType f = use_ NeedsCompilation f
 
 -- needsCompilationRule :: Rules ()
 needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
-needsCompilationRule file 
-  | "boot" `isSuffixOf` (fromNormalizedFilePath file) = 
+needsCompilationRule file
+  | "boot" `isSuffixOf` (fromNormalizedFilePath file) =
     pure (Just $ encodeLinkableType Nothing, Just Nothing)
 needsCompilationRule file = do
   graph <- useNoFile GetModuleGraph
@@ -1212,8 +1253,19 @@ mainRule recorder RulesConfig{..} = do
       else defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \NeedsCompilation _ -> return $ Just Nothing
     generateCoreRule recorder
     getImportMapRule recorder
-    getAnnotatedParsedSourceRule (cmapWithPrio LogExactPrint recorder)
     persistentHieFileRule recorder
     persistentDocMapRule
     persistentImportMapRule
     getLinkableRule recorder
+
+-- | Get HieFile for haskell file on NormalizedFilePath
+getHieFile :: NormalizedFilePath -> Action (Maybe HieFile)
+getHieFile nfp = runMaybeT $ do
+  HAR {hieAst} <- MaybeT $ use GetHieAst nfp
+  tmr <- MaybeT $ use TypeCheck nfp
+  ghc <- MaybeT $ use GhcSession nfp
+  msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
+  source <- lift $ getSourceFileSource nfp
+  let exports = tcg_exports $ tmrTypechecked tmr
+  typedAst <- MaybeT $ pure $ cast hieAst
+  liftIO $ runHsc (hscEnv ghc) $ mkHieFile' (msrModSummary msr) exports typedAst source

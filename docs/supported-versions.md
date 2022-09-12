@@ -10,15 +10,16 @@ Last supporting HLS version:
 - specific version number: this GHC version is no longer one of the actively supported versions, and the last version of HLS which supports it is listed.
 
 Support status (see the support policy below for more details):
-- "supported": this version of GHC is currently actively supported 
+- "supported": this version of GHC is currently actively supported
 - "deprecated": this version of GHC was supported in the past, but is now deprecated
 - "will be deprecated ...": this version of GHC has special deprecation conditions that deviate from the support policy
 - "partial": not all features and plugins work, see the plugin support table and any linked issues for more details
 
 | GHC version | Last supporting HLS version                                                                                                                              | Support status                                                                         |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| 9.2.3       | next                                                                                                                                                     | supported, ([partial](https://github.com/haskell/haskell-language-server/issues/2982)) |
-| 9.2.2       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)                                                                             | supported, ([partial](https://github.com/haskell/haskell-language-server/issues/2982)) |
+| 9.2.4       | next                                                                                                                                                     | supported([partial](https://github.com/haskell/haskell-language-server/issues/2982)) |
+| 9.2.3       | next                                                                                                                                                     | supported([partial](https://github.com/haskell/haskell-language-server/issues/2982)) |
+| 9.2.2       | [1.7.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.7.0.0)                                                                             | supported, ([partial](https://github.com/haskell/haskell-language-server/issues/2982)) |
 | 9.2.1       | [1.7.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.7.0.0)                                                                       | deprecated                                                                             |
 | 9.0.2       | [latest](https://github.com/haskell/haskell-language-server/releases/latest)                                                                             | supported                                                                              |
 | 9.0.1       | [1.6.1.0](https://github.com/haskell/haskell-language-server/releases/tag/1.6.1.0)                                                                       | deprecated                                                                             |
@@ -58,6 +59,7 @@ Sometimes a plugin will be supported in the pre-built binaries but not in a HLS 
 | `hls-fourmolu-plugin`               |                          |
 | `hls-haddock-comments-plugin`       | 9.2                      |
 | `hls-hlint-plugin`                  |                          |
+| `hls-stan-plugin`                   | 8.6, 9.0, 9.2            |
 | `hls-module-name-plugin`            |                          |
 | `hls-ormolu-plugin`                 |                          |
 | `hls-pragmas-plugin`                |                          |

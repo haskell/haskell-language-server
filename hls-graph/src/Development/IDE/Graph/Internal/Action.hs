@@ -24,9 +24,9 @@ import           Control.Exception
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Reader
-import           Data.IORef
+import           Data.Foldable                           (toList)
 import           Data.Functor.Identity
-import           Data.Foldable (toList)
+import           Data.IORef
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Database
 import           Development.IDE.Graph.Internal.Rules    (RuleResult)

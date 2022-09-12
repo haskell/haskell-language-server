@@ -54,6 +54,7 @@
     within:
     - Development.IDE.Core.Shake
     - Development.IDE.GHC.Util
+    - Development.IDE.Plugin.CodeAction.Util
     - Development.IDE.Graph.Internal.Database
     - Development.IDE.Graph.Internal.Paths
     - Development.IDE.Graph.Internal.Profile
@@ -107,6 +108,7 @@
     - Ide.Plugin.Class.ExactPrint
     - TExpectedActual
     - TRigidType
+    - TRigidType2
     - RightToLeftFixities
     - Typeclass
     - Wingman.Judgements
@@ -184,6 +186,7 @@
     - Development.IDE.Core.Shake
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.CodeAction.ExactPrint
+    - Development.IDE.Plugin.CodeAction
     - Development.IDE.Test
     - Development.IDE.Graph.Internal.Profile
     - Development.IDE.Graph.Internal.Rules
@@ -221,6 +224,7 @@
     - Development.IDE.Core.Compile
     - Development.IDE.Graph.Internal.Database
     - Development.IDE.GHC.Util
+    - Development.IDE.Plugin.CodeAction.Util
     - Wingman.Debug
 
 # We really do not want novel usages of restricted functions, and mere

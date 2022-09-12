@@ -208,11 +208,11 @@ If you are touching performance sensitive code, take the time to run a different
 benchmark between HEAD and master using the benchHist script. This assumes that
 "master" points to the upstream master.
 
-Run the benchmarks with `cabal bench ghcide`.
+Run the benchmarks with `cabal bench`.
 
-It should take around 25 minutes and the results will be stored in the `ghcide/bench-results` folder. To interpret the results, see the comments in the `ghcide/bench/hist/Main.hs` module.
+It should take around 25 minutes and the results will be stored in the `bench-results` folder. To interpret the results, see the comments in the `bench/Main.hs` module.
 
-More details in [bench/README](../../ghcide/bench/README.md)
+More details in [bench/README](../../bench/README.md)
 
 ### Tracing
 

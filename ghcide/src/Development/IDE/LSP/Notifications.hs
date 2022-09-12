@@ -10,6 +10,7 @@ module Development.IDE.LSP.Notifications
     ( whenUriFile
     , descriptor
     , Log(..)
+    , ghcideNotificationsPluginPriority
     ) where
 
 import           Language.LSP.Types
@@ -38,6 +39,7 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Shake           (toKey)
 import           Ide.Types
+import           Numeric.Natural
 
 data Log
   = LogShake Shake.Log
@@ -138,5 +140,12 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
       success <- registerFileWatches globs
       unless success $
         liftIO $ logDebug (ideLogger ide) "Warning: Client does not support watched files. Falling back to OS polling"
-  ]
+  ],
+
+    -- The ghcide descriptors should come last'ish so that the notification handlers
+    -- (which restart the Shake build) run after everything else
+        pluginPriority = ghcideNotificationsPluginPriority
     }
+
+ghcideNotificationsPluginPriority :: Natural
+ghcideNotificationsPluginPriority = defaultPluginPriority - 900

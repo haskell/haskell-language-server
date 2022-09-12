@@ -1,4 +1,4 @@
-cabal-version:      2.4
+cabal-version:      3.0
 category:           Development
 name:               haskell-language-server
 version:            1.7.0.0
@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.7 || == 9.0.2 || == 9.2.2 || == 9.2.3
+tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.7 || == 9.0.2 || == 9.2.3 || == 9.2.4
 extra-source-files:
   README.md
   ChangeLog.md
@@ -151,6 +151,11 @@ flag hlint
   default:     True
   manual:      True
 
+flag stan
+  description: Enable stan plugin
+  default:     True
+  manual:      True
+
 flag moduleName
   description: Enable moduleName plugin
   default:     True
@@ -191,6 +196,11 @@ flag gadt
   default:     True
   manual:      True
 
+flag explicitFixity
+  description: Enable explicitFixity plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -218,141 +228,154 @@ flag brittany
   default:     True
   manual:      True
 
+flag refactor
+  description: Enable refactor plugin
+  default:     True
+  manual:      True
+
 flag dynamic
   description: Build with the dyn rts
   default:     True
   manual:      True
 
-common example-plugins
-  hs-source-dirs: plugins/default/src
-  other-modules: Ide.Plugin.Example,
-                 Ide.Plugin.Example2,
-                 Ide.Plugin.ExampleCabal
-
 common class
-  if flag(class)
+  if flag(class) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-class-plugin ^>= 1.0
-    cpp-options: -Dclass
+    cpp-options: -Dhls_class
 
 common callHierarchy
   if flag(callHierarchy)
     build-depends: hls-call-hierarchy-plugin ^>= 1.0
-    cpp-options: -DcallHierarchy
+    cpp-options: -Dhls_callHierarchy
 
 common haddockComments
   if flag(haddockComments) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-haddock-comments-plugin ^>= 1.0
-    cpp-options: -DhaddockComments
+    cpp-options: -Dhls_haddockComments
 
 common eval
-  if flag(eval)
+  if flag(eval) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-eval-plugin ^>= 1.2
-    cpp-options: -Deval
+    cpp-options: -Dhls_eval
 
 common importLens
   if flag(importLens)
     build-depends: hls-explicit-imports-plugin ^>= 1.1
-    cpp-options: -DimportLens
+    cpp-options: -Dhls_importLens
 
 common refineImports
   if flag(refineImports)
     build-depends: hls-refine-imports-plugin ^>=1.0
-    cpp-options: -DrefineImports
+    cpp-options: -Dhls_refineImports
 
 common rename
-  if flag(rename)
+  if flag(rename) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-rename-plugin ^>= 1.0
-    cpp-options: -Drename
+    cpp-options: -Dhls_rename
 
 common retrie
-  if flag(retrie) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(retrie) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-retrie-plugin ^>= 1.0
-    cpp-options: -Dretrie
+    cpp-options: -Dhls_retrie
 
 common tactic
   if flag(tactic) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-tactics-plugin >=1.2.0.0 && <1.7
-    cpp-options: -Dtactic
+    cpp-options: -Dhls_tactic
 
 common hlint
-  if flag(hlint)
+  if flag(hlint) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-hlint-plugin ^>= 1.0
-    cpp-options: -Dhlint
+    cpp-options: -Dhls_hlint
+
+common stan
+  if flag(stan) && (impl(ghc >= 8.8) && impl(ghc < 9.0))
+    build-depends: hls-stan-plugin ^>= 1.0
+    cpp-options: -Dhls_stan
 
 common moduleName
   if flag(moduleName)
     build-depends: hls-module-name-plugin ^>= 1.0
-    cpp-options: -DmoduleName
+    cpp-options: -Dhls_moduleName
 
 common pragmas
   if flag(pragmas)
     build-depends: hls-pragmas-plugin ^>= 1.0
-    cpp-options: -Dpragmas
+    cpp-options: -Dhls_pragmas
 
 common splice
   if flag(splice) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-splice-plugin ^>=1.0.0.1
-    cpp-options: -Dsplice
+    cpp-options: -Dhls_splice
 
 common alternateNumberFormat
-  if flag(alternateNumberFormat)
+  if flag(alternateNumberFormat) 
     build-depends: hls-alternate-number-format-plugin ^>= 1.1
-    cpp-options: -DalternateNumberFormat
+    cpp-options: -Dhls_alternateNumberFormat
 
 common qualifyImportedNames
   if flag(qualifyImportedNames)
     build-depends: hls-qualify-imported-names-plugin ^>=1.0
-    cpp-options: -DqualifyImportedNames
+    cpp-options: -Dhls_qualifyImportedNames
 
 common codeRange
   if flag(codeRange)
     build-depends: hls-code-range-plugin ^>= 1.0
-    cpp-options: -DcodeRange
+    cpp-options: -Dhls_codeRange
 
 common changeTypeSignature
   if flag(changeTypeSignature)
     build-depends: hls-change-type-signature-plugin ^>= 1.0
-    cpp-options: -DchangeTypeSignature
+    cpp-options: -Dhls_changeTypeSignature
 
 common gadt
-  if flag(gadt)
+  if flag(gadt) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-gadt-plugin ^>= 1.0
-    cpp-options: -Dgadt
+    cpp-options: -Dhls_gadt
+
+common explicitFixity
+  if flag(explicitFixity)
+    build-depends: hls-explicit-fixity-plugin ^>= 1.0
+    cpp-options: -DexplicitFixity
 
 -- formatters
 
 common floskell
-  if flag(floskell)
+  if flag(floskell) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-floskell-plugin ^>= 1.0
-    cpp-options: -Dfloskell
+    cpp-options: -Dhls_floskell
 
 common fourmolu
-  if flag(fourmolu)
+  if flag(fourmolu) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-fourmolu-plugin ^>= 1.0
-    cpp-options: -Dfourmolu
+    cpp-options: -Dhls_fourmolu
 
 common ormolu
-  if flag(ormolu)
+  if flag(ormolu) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-ormolu-plugin ^>= 1.0
-    cpp-options: -Dormolu
+    cpp-options: -Dhls_ormolu
 
 common stylishHaskell
-  if flag(stylishHaskell)
+  if flag(stylishHaskell) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-stylish-haskell-plugin ^>= 1.0
-    cpp-options: -DstylishHaskell
+    cpp-options: -Dhls_stylishHaskell
 
 common brittany
   if flag(brittany) && (impl(ghc < 9.0.2) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-brittany-plugin ^>= 1.0
-    cpp-options: -Dbrittany
+    cpp-options: -Dhls_brittany
 
-executable haskell-language-server
+common refactor
+  if flag(refactor) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+    build-depends: hls-refactor-plugin ^>= 1.0
+    cpp-options: -Dhls_refactor
+
+library plugins
   import:             common-deps
                     -- configuration
                     , warnings
                     , pedantic
                     -- plugins
-                    , example-plugins
                     , callHierarchy
                     , changeTypeSignature
                     , class
@@ -364,6 +387,7 @@ executable haskell-language-server
                     , retrie
                     , tactic
                     , hlint
+                    , stan
                     , moduleName
                     , pragmas
                     , splice
@@ -371,15 +395,27 @@ executable haskell-language-server
                     , qualifyImportedNames
                     , codeRange
                     , gadt
+                    , explicitFixity
                     , floskell
                     , fourmolu
                     , ormolu
                     , stylishHaskell
                     , brittany
+                    , refactor
+  exposed-modules: HlsPlugins
+  hs-source-dirs: src
 
+  build-depends: ghcide, hls-plugin-api
+  default-language: Haskell2010
+  default-extensions: DataKinds, TypeOperators
+
+executable haskell-language-server
+  import:           common-deps
+                    -- configuration
+                  , warnings
+                  , pedantic
   main-is:          Main.hs
   hs-source-dirs:   exe
-  other-modules:    Plugins
 
   ghc-options:
     -threaded
@@ -416,6 +452,7 @@ executable haskell-language-server
     , ghcide
     , hashable
     , haskell-language-server
+    , haskell-language-server:plugins
     , lsp
     , hie-bios
     , hiedb
@@ -483,6 +520,7 @@ test-suite func-test
   import:             common-deps
                     , warnings
                     , pedantic
+                    , refactor
   type:               exitcode-stdio-1.0
   default-language:   Haskell2010
   build-tool-depends:
@@ -532,14 +570,14 @@ test-suite func-test
 
 -- Duplicating inclusion plugin conditions until tests are moved to their own packages
   if flag(eval)
-    cpp-options: -Deval
+    cpp-options: -Dhls_eval
 -- formatters
   if flag(floskell) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
-    cpp-options: -Dfloskell
+    cpp-options: -Dhls_floskell
   if flag(fourmolu)
-    cpp-options: -Dfourmolu
+    cpp-options: -Dhls_fourmolu
   if flag(ormolu)
-    cpp-options: -Dormolu
+    cpp-options: -Dhls_ormolu
 
 test-suite wrapper-test
   import:             common-deps
@@ -557,3 +595,47 @@ test-suite wrapper-test
 
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs
+
+benchmark benchmark
+    type: exitcode-stdio-1.0
+    default-language: Haskell2010
+    ghc-options: -Wall -Wno-name-shadowing -threaded
+    main-is: Main.hs
+    hs-source-dirs: bench
+    build-tool-depends:
+        ghcide-bench:ghcide-bench,
+        hp2pretty:hp2pretty,
+        implicit-hie:gen-hie
+    default-extensions:
+        BangPatterns
+        DeriveFunctor
+        DeriveGeneric
+        FlexibleContexts
+        GeneralizedNewtypeDeriving
+        LambdaCase
+        NamedFieldPuns
+        RecordWildCards
+        ScopedTypeVariables
+        StandaloneDeriving
+        TupleSections
+        TypeApplications
+        ViewPatterns
+
+    build-depends:
+        aeson,
+        base == 4.*,
+        containers,
+        data-default,
+        directory,
+        extra,
+        filepath,
+        ghcide-bench,
+        haskell-language-server:plugins,
+        hls-plugin-api,
+        lens,
+        lens-aeson,
+        optparse-applicative,
+        shake,
+        shake-bench == 0.1.*,
+        text,
+        yaml

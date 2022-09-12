@@ -26,14 +26,13 @@ module Development.IDE.GHC.Util(
     setHieDir,
     dontWriteHieFiles,
     disableWarningsAsErrors,
-    traceAst,
     printOutputable
     ) where
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Data.FastString
 import           GHC.Data.StringBuffer
-import           GHC.Driver.Env
+import           GHC.Driver.Env                    hiding (hscSetFlags)
 import           GHC.Driver.Monad
 import           GHC.Driver.Session                hiding (ExposePackage)
 import           GHC.Parser.Lexer
@@ -70,7 +69,6 @@ import           Debug.Trace
 import           Development.IDE.GHC.Compat        as GHC
 import qualified Development.IDE.GHC.Compat.Parser as Compat
 import qualified Development.IDE.GHC.Compat.Units  as Compat
-import           Development.IDE.GHC.Dump          (showAstDataHtml)
 import           Development.IDE.Types.Location
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
@@ -280,36 +278,6 @@ ioe_dupHandlesNotCompatible h =
 
 --------------------------------------------------------------------------------
 -- Tracing exactprint terms
-
-{-# NOINLINE timestamp #-}
-timestamp :: POSIXTime
-timestamp = utcTimeToPOSIXSeconds $ unsafePerformIO getCurrentTime
-
-debugAST :: Bool
-debugAST = unsafePerformIO (getEnvDefault "GHCIDE_DEBUG_AST" "0") == "1"
-
--- | Prints an 'Outputable' value to stderr and to an HTML file for further inspection
-traceAst :: (Data a, ExactPrint a, Outputable a, HasCallStack) => String -> a -> a
-traceAst lbl x
-  | debugAST = trace doTrace x
-  | otherwise = x
-  where
-#if MIN_VERSION_ghc(9,2,0)
-    renderDump = renderWithContext defaultSDocContext{sdocStyle = defaultDumpStyle, sdocPprDebug = True}
-#else
-    renderDump = showSDocUnsafe . ppr
-#endif
-    htmlDump = showAstDataHtml x
-    doTrace = unsafePerformIO $ do
-        u <- U.newUnique
-        let htmlDumpFileName = printf "/tmp/hls/%s-%s-%d.html" (show timestamp) lbl (U.hashUnique u)
-        writeFile htmlDumpFileName $ renderDump htmlDump
-        return $ unlines
-            [prettyCallStack callStack ++ ":"
-#if MIN_VERSION_ghc(9,2,0)
-            , exactPrint x
-#endif
-            , "file://" ++ htmlDumpFileName]
 
 -- Should in `Development.IDE.GHC.Orphans`,
 -- leave it here to prevent cyclic module dependency

@@ -1,16 +1,16 @@
 {-# LANGUAGE CPP #-}
 module Development.IDE.Monitoring.EKG(monitoring) where
 
-import           Development.IDE.Types.Monitoring (Monitoring (..))
 import           Development.IDE.Types.Logger     (Logger)
+import           Development.IDE.Types.Monitoring (Monitoring (..))
 #ifdef MONITORING_EKG
 import           Control.Concurrent               (killThread)
 import           Control.Concurrent.Async         (async, waitCatch)
 import           Control.Monad                    (forM_)
 import           Data.Text                        (pack)
 import           Development.IDE.Types.Logger     (logInfo)
-import qualified System.Remote.Monitoring.Wai     as Monitoring
 import qualified System.Metrics                   as Monitoring
+import qualified System.Remote.Monitoring.Wai     as Monitoring
 
 -- | Monitoring using EKG
 monitoring :: Logger -> Int -> IO Monitoring

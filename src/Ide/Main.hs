@@ -32,7 +32,7 @@ import           Ide.Arguments
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
                                                 pluginsToVSCodeExtensionSchema)
 import           Ide.Types                     (IdePlugins, PluginId (PluginId),
-                                                ipMap)
+                                                ipMap, pluginId)
 import           Ide.Version
 import           System.Directory
 import qualified System.Directory.Extra        as IO
@@ -80,7 +80,7 @@ defaultMain recorder args idePlugins = do
 
         ListPluginsMode -> do
             let pluginNames = sort
-                    $ map ((\(PluginId t) -> T.unpack t) . fst)
+                    $ map ((\(PluginId t) -> T.unpack t) . pluginId)
                     $ ipMap idePlugins
             mapM_ putStrLn pluginNames
 
@@ -118,20 +118,19 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLog
     log Info $ LogDirectory dir
 
     when (isLSP argsCommand) $ do
-        log Info $ LogLspStart ghcideArgs (map fst $ ipMap idePlugins)
+        log Info $ LogLspStart ghcideArgs (map pluginId $ ipMap idePlugins)
 
     -- exists so old-style logging works. intended to be phased out
     let logger = Logger $ \p m -> logger_ recorder (WithPriority p emptyCallStack $ LogOther m)
+        args = (if argsTesting then IDEMain.testing else IDEMain.defaultArguments)
+                    (cmapWithPrio LogIDEMain recorder) logger
 
-    IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) (IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) logger)
+    IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) args
       { IDEMain.argCommand = argsCommand
-      , IDEMain.argsHlsPlugins = idePlugins
+      , IDEMain.argsHlsPlugins = IDEMain.argsHlsPlugins args <> idePlugins
       , IDEMain.argsLogger = pure logger <> pure telemetryLogger
       , IDEMain.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
-      , IDEMain.argsIdeOptions = \_config sessionLoader ->
-        let defOptions = Ghcide.defaultIdeOptions sessionLoader
-        in defOptions
-            { Ghcide.optShakeProfiling = argsShakeProfiling
-            , Ghcide.optTesting = Ghcide.IdeTesting argsTesting
-            }
+      , IDEMain.argsIdeOptions = \config sessionLoader ->
+        let defOptions = IDEMain.argsIdeOptions args config sessionLoader
+        in defOptions { Ghcide.optShakeProfiling = argsShakeProfiling }
       }

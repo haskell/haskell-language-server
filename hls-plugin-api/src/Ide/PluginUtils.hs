@@ -31,19 +31,20 @@ module Ide.PluginUtils
     pluginResponse,
     handleMaybe,
     handleMaybeM,
-    throwPluginError
+    throwPluginError,
     )
 where
 
 
+import           Control.Arrow                   ((&&&))
 import           Control.Monad.Extra             (maybeM)
 import           Control.Monad.Trans.Class       (lift)
 import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
 import           Data.Bifunctor                  (Bifunctor (first))
-import           Data.Containers.ListUtils       (nubOrdOn)
 import qualified Data.HashMap.Strict             as H
+import           Data.List                       (find)
 import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
 import           Ide.Plugin.Config
@@ -159,11 +160,10 @@ clientSupportsDocumentChanges caps =
 -- ---------------------------------------------------------------------
 
 pluginDescToIdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
-pluginDescToIdePlugins plugins =
-    IdePlugins $ map (\p -> (pluginId p, p)) $ nubOrdOn pluginId plugins
+pluginDescToIdePlugins = IdePlugins
 
 idePluginsToPluginDesc :: IdePlugins ideState -> [PluginDescriptor ideState]
-idePluginsToPluginDesc (IdePlugins pp) = map snd pp
+idePluginsToPluginDesc (IdePlugins pp) = pp
 
 -- ---------------------------------------------------------------------
 -- | Returns the current client configuration. It is not wise to permanently
@@ -218,37 +218,28 @@ fullRange s = Range startPos endPos
         lastLine = fromIntegral $ length $ T.lines s
 
 subRange :: Range -> Range -> Bool
-subRange smallRange range = _start smallRange >= _start range && _end smallRange <= _end range
-
-positionInRange :: Position -> Range -> Bool
-positionInRange p (Range sp ep) = sp <= p && p < ep -- Range's end position is exclusive, see https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#range
+subRange = isSubrangeOf
 
 -- ---------------------------------------------------------------------
 
 allLspCmdIds' :: T.Text -> IdePlugins ideState -> [T.Text]
-allLspCmdIds' pid (IdePlugins ls) = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
-    where
-        justs (p, Just x)  = [(p, x)]
-        justs (_, Nothing) = []
-
-
-        mkPlugin maker selector
-            = maker $ concatMap (\(pid, p) -> justs (pid, selector p)) ls
-
+allLspCmdIds' pid (IdePlugins ls) =
+    allLspCmdIds pid $ map (pluginId &&& pluginCommands) ls
 
 allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand ideState])] -> [T.Text]
 allLspCmdIds pid commands = concatMap go commands
   where
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
 
+
 -- ---------------------------------------------------------------------
 
-getNormalizedFilePath :: Monad m => PluginId -> Uri -> ExceptT String m NormalizedFilePath
-getNormalizedFilePath (PluginId plId) uri = handleMaybe errMsg
+getNormalizedFilePath :: Monad m => Uri -> ExceptT String m NormalizedFilePath
+getNormalizedFilePath uri = handleMaybe errMsg
         $ uriToNormalizedFilePath
         $ toNormalizedUri uri
     where
-        errMsg = T.unpack $ "Error(" <> plId <> "): converting " <> getUri uri <> " to NormalizedFilePath"
+        errMsg = T.unpack $ "Failed converting " <> getUri uri <> " to NormalizedFilePath"
 
 -- ---------------------------------------------------------------------
 throwPluginError :: Monad m => String -> ExceptT String m b

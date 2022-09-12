@@ -63,10 +63,10 @@ data State
 -- | State transitions used in 'delayedProgressReporting'
 data Transition = Event ProgressEvent | StopProgress
 
-updateState :: IO () -> Transition -> State -> IO State
+updateState :: IO (Async ()) -> Transition -> State -> IO State
 updateState _      _                    Stopped     = pure Stopped
-updateState start (Event KickStarted)   NotStarted  = Running <$> async start
-updateState start (Event KickStarted)   (Running a) = cancel a >> Running <$> async start
+updateState start (Event KickStarted)   NotStarted  = Running <$> start
+updateState start (Event KickStarted)   (Running a) = cancel a >> Running <$> start
 updateState _     (Event KickCompleted) (Running a) = cancel a $> NotStarted
 updateState _     (Event KickCompleted) st          = pure st
 updateState _     StopProgress          (Running a) = cancel a $> Stopped
@@ -110,12 +110,13 @@ delayedProgressReporting
   -> Maybe (LSP.LanguageContextEnv c)
   -> ProgressReportingStyle
   -> IO ProgressReporting
-delayedProgressReporting before after lspEnv optProgressStyle = do
+delayedProgressReporting before after Nothing optProgressStyle = noProgressReporting
+delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
     inProgressState <- newInProgress
     progressState <- newVar NotStarted
     let progressUpdate event = updateStateVar $ Event event
         progressStop   =  updateStateVar StopProgress
-        updateStateVar = modifyVar_ progressState . updateState (mRunLspT lspEnv $ lspShakeProgress inProgressState)
+        updateStateVar = modifyVar_ progressState . updateState (lspShakeProgress inProgressState)
 
         inProgress = updateStateForFile inProgressState
     return ProgressReporting{..}
@@ -127,11 +128,11 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
             u <- ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
 
             b <- liftIO newBarrier
-            void $ LSP.sendRequest LSP.SWindowWorkDoneProgressCreate
+            void $ LSP.runLspT lspEnv $ LSP.sendRequest LSP.SWindowWorkDoneProgressCreate
                 LSP.WorkDoneProgressCreateParams { _token = u } $ liftIO . signalBarrier b
-            ready <- liftIO $ waitBarrier b
-
-            for_ ready $ const $ bracket_ (start u) (stop u) (loop u 0)
+            liftIO $ async $ do
+                ready <- waitBarrier b
+                LSP.runLspT lspEnv $ for_ ready $ const $ bracket_ (start u) (stop u) (loop u 0)
             where
                 start id = LSP.sendNotification LSP.SProgress $
                     LSP.ProgressParams

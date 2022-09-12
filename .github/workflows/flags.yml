@@ -44,7 +44,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: [ "9.2.3"
+        ghc: [ "9.2.4"
              , "9.0.2"
              , "8.10.7"
              , "8.8.4"
@@ -68,7 +68,7 @@ jobs:
         run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe ekg"
 
       # we have to clean up warnings for 9.0 and 9.2 before enable -WAll
-      - if: matrix.ghc != '9.0.2' && matrix.ghc != '9.2.3'
+      - if: matrix.ghc != '9.0.2' && matrix.ghc != '9.2.4'
         name: Build with pedantic (-WError)
         run: cabal v2-build --flags="pedantic"
 

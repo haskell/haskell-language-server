@@ -12,6 +12,7 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE PolyKinds                  #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
@@ -20,6 +21,32 @@
 {-# LANGUAGE ViewPatterns               #-}
 
 module Ide.Types
+( PluginDescriptor(..), defaultPluginDescriptor, defaultCabalPluginDescriptor
+, defaultPluginPriority
+, IdeCommand(..)
+, IdeMethod(..)
+, IdeNotification(..)
+, IdePlugins(IdePlugins, ipMap)
+, DynFlagsModifications(..)
+, ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin, pluginEnabledConfig
+, CustomConfig(..), mkCustomConfig
+, FallbackCodeActionParams(..)
+, FormattingType(..), FormattingMethod, FormattingHandler, mkFormattingHandlers
+, HasTracing(..)
+, PluginCommand(..), CommandId(..), CommandFunction, mkLspCommand, mkLspCmdId
+, PluginId(..)
+, PluginHandler(..), mkPluginHandler
+, PluginHandlers(..)
+, PluginMethod(..)
+, PluginMethodHandler
+, PluginNotificationHandler(..), mkPluginNotificationHandler
+, PluginNotificationHandlers(..)
+, PluginRequestMethod(..)
+, getProcessID, getPid
+, installSigUsr1Handler
+, responseError
+, lookupCommandProvider
+)
     where
 
 #ifdef mingw32_HOST_OS
@@ -29,6 +56,7 @@ import           Control.Monad                   (void)
 import qualified System.Posix.Process            as P (getProcessID)
 import           System.Posix.Signals
 #endif
+import           Control.Arrow                   ((&&&))
 import           Control.Lens                    ((^.))
 import           Data.Aeson                      hiding (defaultOptions)
 import qualified Data.Default
@@ -36,9 +64,14 @@ import           Data.Dependent.Map              (DMap)
 import qualified Data.Dependent.Map              as DMap
 import qualified Data.DList                      as DList
 import           Data.GADT.Compare
+import           Data.Hashable                   (Hashable)
+import           Data.HashMap.Strict             (HashMap)
+import qualified Data.HashMap.Strict             as HashMap
+import           Data.List.Extra                 (sortOn, find)
 import           Data.List.NonEmpty              (NonEmpty (..), toList)
 import qualified Data.Map                        as Map
 import           Data.Maybe
+import           Data.Ord
 import           Data.Semigroup
 import           Data.String
 import qualified Data.Text                       as T
@@ -68,17 +101,41 @@ import           Language.LSP.Types.Lens         as J (HasChildren (children),
                                                        HasTitle (title),
                                                        HasUri (..))
 import           Language.LSP.VFS
+import           Numeric.Natural
 import           OpenTelemetry.Eventlog
 import           Options.Applicative             (ParserInfo)
 import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text            ()
+import           Control.Applicative             ((<|>))
 
 -- ---------------------------------------------------------------------
 
-newtype IdePlugins ideState = IdePlugins
-  { ipMap :: [(PluginId, PluginDescriptor ideState)]}
-  deriving newtype (Monoid, Semigroup)
+data IdePlugins ideState = IdePlugins_
+  { ipMap_ :: HashMap PluginId (PluginDescriptor ideState)
+  , lookupCommandProvider :: CommandId -> Maybe PluginId
+  }
+
+-- | Smart constructor that deduplicates plugins
+pattern IdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
+pattern IdePlugins{ipMap} <- IdePlugins_ (sortOn (Down . pluginPriority) . HashMap.elems -> ipMap) _
+  where
+    IdePlugins ipMap = IdePlugins_{ipMap_ = HashMap.fromList $ (pluginId &&& id) <$> ipMap
+                                  , lookupCommandProvider = lookupPluginId ipMap
+                                  }
+{-# COMPLETE IdePlugins #-}
+
+instance Semigroup (IdePlugins a) where
+  (IdePlugins_ a f) <> (IdePlugins_ b g) = IdePlugins_ (a <> b) (\x -> f x <|> g x)
+
+instance Monoid (IdePlugins a) where
+  mempty = IdePlugins_ mempty (const Nothing)
+
+-- | Lookup the plugin that exposes a particular command
+lookupPluginId :: [PluginDescriptor a] -> CommandId -> Maybe PluginId
+lookupPluginId ls cmd = pluginId <$> find go ls
+  where
+    go desc = cmd `elem` map commandId (pluginCommands desc)
 
 -- | Hooks for modifying the 'DynFlags' at different times of the compilation
 -- process. Plugins can install a 'DynFlagsModifications' via
@@ -113,6 +170,8 @@ instance Show (IdeCommand st) where show _ = "<ide command>"
 data PluginDescriptor (ideState :: *) =
   PluginDescriptor { pluginId           :: !PluginId
                    -- ^ Unique identifier of the plugin.
+                   , pluginPriority     :: Natural
+                   -- ^ Plugin handlers are called in priority order, higher priority first
                    , pluginRules        :: !(Rules ())
                    , pluginCommands     :: ![PluginCommand ideState]
                    , pluginHandlers     :: PluginHandlers ideState
@@ -605,6 +664,9 @@ mkPluginNotificationHandler m f
   where
     f' pid ide vfs = f ide vfs pid
 
+defaultPluginPriority :: Natural
+defaultPluginPriority = 1000
+
 -- | Set up a plugin descriptor, initialized with default values.
 -- This is plugin descriptor is prepared for @haskell@ files, such as
 --
@@ -618,6 +680,7 @@ defaultPluginDescriptor :: PluginId -> PluginDescriptor ideState
 defaultPluginDescriptor plId =
   PluginDescriptor
     plId
+    defaultPluginPriority
     mempty
     mempty
     mempty
@@ -637,6 +700,7 @@ defaultCabalPluginDescriptor :: PluginId -> PluginDescriptor ideState
 defaultCabalPluginDescriptor plId =
   PluginDescriptor
     plId
+    defaultPluginPriority
     mempty
     mempty
     mempty
@@ -668,6 +732,7 @@ type CommandFunction ideState a
 
 newtype PluginId = PluginId T.Text
   deriving (Show, Read, Eq, Ord)
+  deriving newtype (FromJSON, Hashable)
 
 instance IsString PluginId where
   fromString = PluginId . T.pack

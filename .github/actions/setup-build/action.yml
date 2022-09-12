@@ -7,7 +7,7 @@ inputs:
   cabal:
     description: "Cabal version"
     required: false
-    default: "3.6"
+    default: "3.8.1.0"
   os:
     description: "Operating system: Linux, Windows or macOS"
     required: true
@@ -40,27 +40,6 @@ runs:
       name: (Linux,macOS) Platform config
       run: |
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
-      shell: bash
-
-    # This copy an alternative cabal-ghc${GHCVER}.project (for example cabal-ghc92.project)
-    # as main cabal-project, for not fully supported ghc versions
-    # Needs to be before the caching step so that the cache can detect changes to the modified cabal.project file
-    - name: Use possible modified `cabal.project`
-      env:
-        GHCVER: ${{ inputs.ghc }}
-      run: |
-        # File has some protections preventing regular `rm`.
-        # (most probably sticky bit is set on $HOME)
-        # `&&` insures `rm -f` return is positive.
-        # Many platforms also have `alias cp='cp -i'`.
-        GHCVER2=${GHCVER//./}
-        ALT_PROJECT_FILE_MINOR=cabal-ghc${GHCVER2}.project
-        ALT_PROJECT_FILE_MAJOR=cabal-ghc${GHCVER2:0:2}.project
-        if [[ -f "$ALT_PROJECT_FILE_MINOR" ]]; then
-          rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE_MINOR" cabal.project
-        elif [[ -f "$ALT_PROJECT_FILE_MAJOR" ]]; then
-          rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE_MAJOR" cabal.project
-        fi
       shell: bash
 
     - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'

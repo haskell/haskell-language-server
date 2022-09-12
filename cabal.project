@@ -4,6 +4,8 @@ packages:
          ./shake-bench
          ./hls-graph
          ./ghcide
+         ./ghcide-bench
+         ./ghcide/test
          ./hls-plugin-api
          ./hls-test-utils
          ./plugins/hls-tactics-plugin
@@ -28,7 +30,10 @@ packages:
          ./plugins/hls-qualify-imported-names-plugin
          ./plugins/hls-code-range-plugin
          ./plugins/hls-change-type-signature-plugin
+         ./plugins/hls-stan-plugin
          ./plugins/hls-gadt-plugin
+         ./plugins/hls-explicit-fixity-plugin
+         ./plugins/hls-refactor-plugin
 
 -- Standard location for temporary packages needed for particular environments
 -- For example it is used in the project gitlab mirror to help in the MAcOS M1 build script
@@ -43,9 +48,13 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-06-12T00:00:00Z
+index-state: 2022-08-29T06:53:13Z
 
 constraints:
+  -- For GHC 9.4, older versions of entropy fail to build on Windows
+  entropy >= 0.4.1.10,
+  -- For GHC 9.4
+  basement >= 0.0.15,
   hyphenation +embed,
   -- remove this when hlint sets ghc-lib to true by default
   -- https://github.com/ndmitchell/hlint/issues/1376
@@ -62,7 +71,60 @@ source-repository-package
   tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
   -- https://github.com/tibbe/ekg-json/pull/12
 
+source-repository-package
+  type:git
+  location: https://github.com/wz1000/hiedb
+  tag: 67b92df2359558091df9102db5b701327308b930
+
+source-repository-package
+  type:git
+  location: https://github.com/wz1000/hie-bios
+  tag: aa73d3d2eb89df0003d2468a105e326d71b62cc7
+
+-- Remove me when a new version of lsp is released
+source-repository-package
+  type:git
+  location: https://github.com/haskell/lsp
+  subdir: lsp
+  tag: b0f8596887088b8ab65fc1015c773f45b47234ae
+
+source-repository-package
+  type:git
+  location: https://github.com/haskell/lsp
+  subdir: lsp-types
+  tag: b0f8596887088b8ab65fc1015c773f45b47234ae
+
+source-repository-package
+  type:git
+  location: https://github.com/haskell/lsp
+  subdir: lsp-test
+  tag: b0f8596887088b8ab65fc1015c773f45b47234ae
+
 allow-newer:
+  -- ghc-9.4
+  Chart-diagrams:lens,
+  Chart:lens,
+  co-log-core:base,
+  constraints-extras:base,
+  constraints-extras:template-haskell,
+  dependent-sum:some,
+  diagrams-contrib:base,
+  diagrams-contrib:lens,
+  diagrams-postscript:base,
+  diagrams-postscript:lens,
+  diagrams-svg:base,
+  diagrams-svg:lens,
+  ekg-json:base,
+  ghc-paths:Cabal,
+  haddock-library:base,
+  hie-bios:aeson,
+  hie-bios:ghc,
+  monoid-extras:base,
+  monoid-subclasses:vector,
+  svg-builder:base,
+  uuid:time,
+  vector-space:base,
+
   -- ghc-9.2
   ----------
   hiedb:base,

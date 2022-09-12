@@ -13,7 +13,6 @@ import           Control.Exception            (SomeException)
 import           Control.Lens                 ((^.))
 import           Control.Monad
 import qualified Data.Aeson                   as J
-import           Data.Bifunctor
 import           Data.Dependent.Map           (DMap)
 import qualified Data.Dependent.Map           as DMap
 import           Data.Dependent.Sum
@@ -96,7 +95,7 @@ asGhcIdePlugin recorder (IdePlugins ls) =
 
         mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor IdeState -> b) -> Plugin Config
         mkPlugin maker selector =
-          case map (second selector) ls of
+          case map (\p -> (pluginId p, selector p)) ls of
             -- If there are no plugins that provide a descriptor, use mempty to
             -- create the plugin – otherwise we we end up declaring handlers for
             -- capabilities that there are no plugins for
@@ -128,7 +127,7 @@ executeCommandPlugins recorder ecs = mempty { P.pluginHandlers = executeCommandH
 executeCommandHandlers :: Recorder (WithPriority Log) -> [(PluginId, [PluginCommand IdeState])] -> LSP.Handlers (ServerM Config)
 executeCommandHandlers recorder ecs = requestHandler SWorkspaceExecuteCommand execCmd
   where
-    pluginMap = Map.fromList ecs
+    pluginMap = Map.fromListWith (++) ecs
 
     parseCmdId :: T.Text -> Maybe (PluginId, CommandId)
     parseCmdId x = case T.splitOn ":" x of
@@ -198,7 +197,7 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
         case nonEmpty fs of
           Nothing -> logAndReturnError recorder InvalidRequest (pluginNotEnabled m fs')
           Just fs -> do
-            let msg e pid = "Exception in plugin " <> T.pack (show pid) <> "while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
+            let msg e pid = "Exception in plugin " <> T.pack (show pid) <> " while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
                 handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
             es <- runConcurrently msg (show m) handlers ide params
             let (errs,succs) = partitionEithers $ toList es

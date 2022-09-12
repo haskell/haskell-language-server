@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 module Development.IDE.GHC.Error
@@ -121,13 +122,17 @@ p `isInsideSrcSpan` r = case srcSpanToRange r of
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).
 toDSeverity :: GHC.Severity -> Maybe D.DiagnosticSeverity
+#if !MIN_VERSION_ghc(9,3,0)
 toDSeverity SevOutput      = Nothing
 toDSeverity SevInteractive = Nothing
 toDSeverity SevDump        = Nothing
 toDSeverity SevInfo        = Just DsInfo
+toDSeverity SevFatal       = Just DsError
+#else
+toDSeverity SevIgnore      = Nothing
+#endif
 toDSeverity SevWarning     = Just DsWarning
 toDSeverity SevError       = Just DsError
-toDSeverity SevFatal       = Just DsError
 
 
 -- | Produce a bag of GHC-style errors (@ErrorMessages@) from the given
@@ -167,7 +172,11 @@ catchSrcErrors dflags fromWhere ghcM = do
       Right <$> ghcM
     where
         ghcExceptionToDiagnostics dflags = return . Left . diagFromGhcException fromWhere dflags
-        sourceErrorToDiagnostics dflags = return . Left . diagFromErrMsgs fromWhere dflags . srcErrorMessages
+        sourceErrorToDiagnostics dflags = return . Left . diagFromErrMsgs fromWhere dflags
+#if MIN_VERSION_ghc(9,3,0)
+                                        . fmap (fmap Compat.renderDiagnosticMessageWithHints) . Compat.getMessages
+#endif
+                                        . srcErrorMessages
 
 
 diagFromGhcException :: T.Text -> DynFlags -> GhcException -> [FileDiagnostic]

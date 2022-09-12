@@ -18,7 +18,7 @@ The LSP protocol is designed to support many useful server configuration options
 These are sent to the server by the client, and can be controlled without reference to a specific language.
 
 For example, there are protocol methods for highlighting matching identifiers throughout a document.
-This is a capability which any server can implement, so the client can decide generically whether to ask the server to do it or not.
+This is a capability that any server can implement, so the client can decide generically whether to ask the server to do it or not.
 So your editor can provide a setting to turn this on or off globally, for any language server you might use.
 
 Settings like this are typically provided by the generic LSP client support for your editor, for example in Emacs by [lsp-mode](https://github.com/emacs-lsp/lsp-mode).
@@ -42,7 +42,7 @@ Here is a list of the additional settings currently supported by `haskell-langua
 
 - Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `floskell`, `ormolu`, `fourmolu`, `stylish-haskell`, or `brittany` (if compiled with the brittany plugin).
 - Max completions (`haskell.maxCompletions`, default 40): maximum number of completions sent to the LSP client.
-- Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on load. As it is activated by default could drive to bad perfomance in large projects.
+- Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on load. As it is activated by default could drive to bad performance in large projects.
 - Check parents (`haskell.checkParents`, default `CheckOnSaveAndClose`): when to typecheck reverse dependencies of a file; one of `NeverCheck`, `CheckOnClose`, `CheckOnSaveAndClose`, or `AlwaysCheck`.
 
 #### Generic plugin configuration
@@ -72,7 +72,7 @@ Plugins have a generic config to control their behaviour. The schema of such con
     - `haskell.plugin.ghcide-completions.config.snippetsOn`, default true: Inserts snippets when using code completions.
     - `haskell.plugin.ghcide-completions.config.autoExtendOn`, default true: Extends the import list automatically when completing a out-of-scope identifier.
   - `ghcide-type-lenses`:
-    - `haskell.plugin.ghcide-type-lenses.config.mode`, default `always`: Control how type lenses are shown. One of `always`, `exported`, `diganostics`.
+    - `haskell.plugin.ghcide-type-lenses.config.mode`, default `always`: Control how type lenses are shown. One of `always`, `exported`, `diagnostics`.
   - `hlint`:
     - `haskell.plugin.hlint.config.flags`, default empty: List of flags used by hlint.
 This reference of configuration can be outdated at any time but we can query the `haskell-server-executable` about what configuration is effectively used:

@@ -1,16 +1,16 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveAnyClass      #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeFamilies        #-}
 module Example where
 
-import Development.IDE.Graph
-import Development.IDE.Graph.Rule
-import Development.IDE.Graph.Classes
-import GHC.Generics
-import Type.Reflection (typeRep)
+import           Development.IDE.Graph
+import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph.Rule
+import           GHC.Generics
+import           Type.Reflection               (typeRep)
 
 data Rule a = Rule
     deriving (Eq, Generic, Hashable, NFData)

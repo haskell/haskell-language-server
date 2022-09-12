@@ -1,6 +1,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE CPP                       #-}
 
 {-|
 The logic for setting up a ghcide session by tapping into hie-bios.
@@ -36,8 +37,8 @@ import qualified Data.ByteString.Char8                as B
 import           Data.Default
 import           Data.Either.Extra
 import           Data.Function
-import qualified Data.HashMap.Strict                  as HM
 import           Data.Hashable
+import qualified Data.HashMap.Strict                  as HM
 import           Data.IORef
 import           Data.List
 import qualified Data.Map.Strict                      as Map
@@ -87,6 +88,7 @@ import           Data.Void
 import           Control.Concurrent.STM.Stats         (atomically, modifyTVar',
                                                        readTVar, writeTVar)
 import           Control.Concurrent.STM.TQueue
+import           Control.Monad.IO.Unlift              (MonadUnliftIO)
 import           Data.Foldable                        (for_)
 import           Data.HashMap.Strict                  (HashMap)
 import           Data.HashSet                         (HashSet)
@@ -97,9 +99,11 @@ import           Development.IDE.Types.Shake          (WithHieDb)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
-import           System.Random                        (RandomGen)
 import qualified System.Random                        as Random
+import           System.Random                        (RandomGen)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
+import Control.Exception (evaluate)
+import Control.DeepSeq
 
 data Log
   = LogSettingInitialDynFlags
@@ -208,11 +212,13 @@ data SessionLoadingOptions = SessionLoadingOptions
   , getCacheDirs           :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
   , getInitialGhcLibDir    :: Recorder (WithPriority Log) -> FilePath -> IO (Maybe LibDir)
+#if !MIN_VERSION_ghc(9,3,0)
   , fakeUid                :: UnitId
     -- ^ unit id used to tag the internal component built by ghcide
     --   To reuse external interface files the unit ids must match,
     --   thus make sure to build them with `--this-unit-id` set to the
     --   same value as the ghcide fake uid
+#endif
   }
 
 instance Default SessionLoadingOptions where
@@ -221,7 +227,9 @@ instance Default SessionLoadingOptions where
         ,loadCradle = loadWithImplicitCradle
         ,getCacheDirs = getCacheDirsDefault
         ,getInitialGhcLibDir = getInitialGhcLibDirDefault
+#if !MIN_VERSION_ghc(9,3,0)
         ,fakeUid = Compat.toUnitId (Compat.stringToUnit "main")
+#endif
         }
 
 -- | Find the cradle for a given 'hie.yaml' configuration.
@@ -494,7 +502,11 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
               new_deps' <- forM new_deps $ \RawComponentInfo{..} -> do
                   -- Remove all inplace dependencies from package flags for
                   -- components in this HscEnv
+#if MIN_VERSION_ghc(9,3,0)
+                  let (df2, uids) = (rawComponentDynFlags, [])
+#else
                   let (df2, uids) = removeInplacePackages fakeUid inplace rawComponentDynFlags
+#endif
                   let prefix = show rawComponentUnitId
                   -- See Note [Avoiding bad interface files]
                   let hscComponents = sort $ map show uids
@@ -517,10 +529,14 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
               -- that I do not fully understand
               log Info $ LogMakingNewHscEnv inplace
               hscEnv <- emptyHscEnv ideNc libDir
-              newHscEnv <-
+              !newHscEnv <-
                 -- Add the options for the current component to the HscEnv
                 evalGhcEnv hscEnv $ do
-                  _ <- setSessionDynFlags $ setHomeUnitId_ fakeUid df
+                  _ <- setSessionDynFlags
+#if !MIN_VERSION_ghc(9,3,0)
+                          $ setHomeUnitId_ fakeUid
+#endif
+                          df
                   getSession
 
               -- Modify the map so the hieYaml now maps to the newly created
@@ -718,7 +734,11 @@ cradleToOptsAndLibDir recorder cradle file = do
             logWith recorder Info $ LogNoneCradleFound file
             return (Left [])
 
+#if MIN_VERSION_ghc(9,3,0)
+emptyHscEnv :: NameCache -> FilePath -> IO HscEnv
+#else
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
+#endif
 emptyHscEnv nc libDir = do
     env <- runGhc (Just libDir) getSession
     initDynLinker env
@@ -757,7 +777,11 @@ toFlagsMap TargetDetails{..} =
     [ (l, (targetEnv, targetDepends)) | l <-  targetLocations]
 
 
+#if MIN_VERSION_ghc(9,3,0)
+setNameCache :: NameCache -> HscEnv -> HscEnv
+#else
 setNameCache :: IORef NameCache -> HscEnv -> HscEnv
+#endif
 setNameCache nc hsc = hsc { hsc_NC = nc }
 
 -- | Create a mapping from FilePaths to HscEnvEqs
@@ -773,6 +797,11 @@ newComponentCache
 newComponentCache recorder exts cradlePath cfp hsc_env uids ci = do
     let df = componentDynFlags ci
     hscEnv' <-
+#if MIN_VERSION_ghc(9,3,0)
+      -- Set up a multi component session with the other units on GHC 9.4
+        Compat.initUnits (map snd uids) (hscSetFlags df hsc_env)
+#elif MIN_VERSION_ghc(9,2,0)
+      -- This initializes the units for GHC 9.2
       -- Add the options for the current component to the HscEnv
       -- We want to call `setSessionDynFlags` instead of `hscSetFlags`
       -- because `setSessionDynFlags` also initializes the package database,
@@ -782,7 +811,10 @@ newComponentCache recorder exts cradlePath cfp hsc_env uids ci = do
       evalGhcEnv hsc_env $ do
         _ <- setSessionDynFlags $ df
         getSession
-
+#else
+      -- getOptions is enough to initialize units on GHC <9.2
+      pure $ hscSetFlags df hsc_env { hsc_IC = (hsc_IC hsc_env) { ic_dflags = df } }
+#endif
 
     let newFunc = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
     henv <- newFunc hscEnv' uids
@@ -790,6 +822,7 @@ newComponentCache recorder exts cradlePath cfp hsc_env uids ci = do
         targetDepends = componentDependencyInfo ci
         res = (targetEnv, targetDepends)
     logWith recorder Debug $ LogNewComponentCache res
+    evaluate $ liftRnf rwhnf $ componentTargets ci
 
     let mk t = fromTargetId (importPaths df) exts (targetId t) targetEnv targetDepends
     ctargets <- concatMapM mk (componentTargets ci)
@@ -998,9 +1031,11 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
     -- initPackages parses the -package flags and
     -- sets up the visibility for each component.
     -- Throws if a -package flag cannot be satisfied.
-    env <- hscSetFlags dflags'' <$> getSession
-    final_env' <- liftIO $ wrapPackageSetupException $ Compat.initUnits env
-    return (hsc_dflags final_env', targets)
+    -- This only works for GHC <9.2
+    -- For GHC >= 9.2, we need to modify the unit env in the hsc_dflags, which
+    -- is done later in newComponentCache
+    final_flags <- liftIO $ wrapPackageSetupException $ Compat.oldInitUnits dflags''
+    return (final_flags, targets)
 
 setIgnoreInterfacePragmas :: DynFlags -> DynFlags
 setIgnoreInterfacePragmas df =

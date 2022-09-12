@@ -34,6 +34,9 @@ import           ToolSettings
 import           DynFlags
 #endif
 #endif
+#if MIN_VERSION_ghc(9,3,0)
+import qualified GHC.Driver.Pipeline.Execute as Pipeline
+#endif
 
 addOptP :: String -> DynFlags -> DynFlags
 #if MIN_VERSION_ghc (8,10,0)

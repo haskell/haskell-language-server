@@ -45,11 +45,10 @@ import qualified Data.Vector                        as V
 import           Development.IDE
 import           Development.IDE.Core.Rules         (toIdeResult)
 import qualified Development.IDE.Core.Shake         as Shake
-import           Development.IDE.GHC.Compat         (Annotated, HieAST (..),
+import           Development.IDE.GHC.Compat         (HieAST (..),
                                                      HieASTs (getAsts),
-                                                     ParsedSource, RefMap)
+                                                     RefMap)
 import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.ExactPrint     (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import           GHC.Generics                       (Generic)
 import           Ide.Plugin.CodeRange.ASTPreProcess (CustomNodeType (..),
                                                      PreProcessEnv (..),
@@ -106,8 +105,8 @@ instance Ord CodeRange where
 
 -- | Construct a 'CodeRange'. A valid CodeRange will be returned in any case. If anything go wrong,
 -- a list of warnings will be returned as 'Log'
-buildCodeRange :: HieAST a -> RefMap a -> Annotated ParsedSource -> Writer [Log] CodeRange
-buildCodeRange ast refMap _ = do
+buildCodeRange :: HieAST a -> RefMap a -> Writer [Log] CodeRange
+buildCodeRange ast refMap = do
     -- We work on 'HieAST', then convert it to 'CodeRange', so that applications such as selection range and folding
     -- range don't need to care about 'HieAST'
     -- TODO @sloorush actually use 'Annotated ParsedSource' to handle structures not in 'HieAST' properly (for example comments)
@@ -179,9 +178,7 @@ codeRangeRule recorder =
         HAR{hieAst, refMap} <- lift $ use_ GetHieAst file
         ast <- maybeToExceptT LogNoAST . MaybeT . pure $
             getAsts hieAst Map.!? (coerce . mkFastString . fromNormalizedFilePath) file
-        annPS <- lift $ use_ GetAnnotatedParsedSource file
-
-        let (codeRange, warnings) = runWriter (buildCodeRange ast refMap annPS)
+        let (codeRange, warnings) = runWriter (buildCodeRange ast refMap)
         traverse_ (logWith recorder Warning) warnings
 
         pure codeRange

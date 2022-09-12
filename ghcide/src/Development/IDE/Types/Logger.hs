@@ -27,6 +27,7 @@ module Development.IDE.Types.Logger
   , lspClientLogRecorder
   , module PrettyPrinterModule
   , renderStrict
+  , toCologActionWithPrio
   ) where
 
 import           Control.Concurrent                    (myThreadId)
@@ -59,7 +60,6 @@ import           Language.LSP.Server
 import qualified Language.LSP.Server                   as LSP
 import           Language.LSP.Types                    (LogMessageParams (..),
                                                         MessageType (..),
-                                                        ResponseError,
                                                         SMethod (SWindowLogMessage, SWindowShowMessage),
                                                         ShowMessageParams (..))
 #if MIN_VERSION_prettyprinter(1,7,0)
@@ -69,11 +69,10 @@ import           Prettyprinter.Render.Text             (renderStrict)
 import           Data.Text.Prettyprint.Doc             as PrettyPrinterModule
 import           Data.Text.Prettyprint.Doc.Render.Text (renderStrict)
 #endif
-import           Control.Lens                          ((^.))
-import           Ide.Types                             (CommandId (CommandId),
-                                                        PluginId (PluginId))
-import           Language.LSP.Types.Lens               (HasCode (code),
-                                                        HasMessage (message))
+import           Colog.Core                            (LogAction (..),
+                                                        Severity,
+                                                        WithSeverity (..))
+import qualified Colog.Core                            as Colog
 import           System.IO                             (Handle,
                                                         IOMode (AppendMode),
                                                         hClose, hFlush,
@@ -381,3 +380,14 @@ priorityToLsp =
     Info    -> MtInfo
     Warning -> MtWarning
     Error   -> MtError
+
+toCologActionWithPrio :: (MonadIO m, HasCallStack) => Recorder (WithPriority msg) -> LogAction m (WithSeverity msg)
+toCologActionWithPrio (Recorder _logger) = LogAction $ \WithSeverity{..} -> do
+    let priority = severityToPriority getSeverity
+    _logger $ WithPriority priority callStack getMsg
+  where
+    severityToPriority :: Severity -> Priority
+    severityToPriority Colog.Debug   = Debug
+    severityToPriority Colog.Info    = Info
+    severityToPriority Colog.Warning = Warning
+    severityToPriority Colog.Error   = Error

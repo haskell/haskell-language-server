@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-alternate-number-format-plugin
-version:            1.1.0.0
+version:            1.1.0.1
 synopsis:           Provide Alternate Number Formats plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -18,6 +18,7 @@ extra-source-files:
   test/testdata/*.yaml
 
 library
+  buildable: True
   exposed-modules:  Ide.Plugin.AlternateNumberFormat, Ide.Plugin.Conversion
   other-modules:    Ide.Plugin.Literals
   hs-source-dirs:   src
@@ -47,6 +48,7 @@ library
     RecordWildCards
 
 test-suite tests
+  buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test

@@ -33,7 +33,7 @@ provider _ideState typ contents fp _ = liftIO $ do
     config <- findConfigOrDefault file
     let (range, selectedContents) = case typ of
           FormatText    -> (fullRange contents, contents)
-          FormatRange r -> (r, extractRange r contents)
+          FormatRange r -> (normalize r, extractRange r contents)
         result = reformat config (Just file) . TL.encodeUtf8 $ TL.fromStrict selectedContents
     case result of
       Left  err -> pure $ Left $ responseError $ T.pack $ "floskellCmd: " ++ err

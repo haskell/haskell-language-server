@@ -23,41 +23,39 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens         as J
 
 codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
-codeLens state plId CodeLensParams{..} = do
-    enabled <- enableTypeLens <$> getCompletionsConfig plId
-    if not enabled then pure $ pure $ List [] else pluginResponse $ do
-        nfp <- getNormalizedFilePath plId uri
-        tmr <- handleMaybeM "Unable to typecheak"
-            $ liftIO
-            $ runAction "classplugin.TypeCheck" state
-            $ use TypeCheck nfp
+codeLens state plId CodeLensParams{..} = pluginResponse $ do
+    nfp <- getNormalizedFilePath uri
+    tmr <- handleMaybeM "Unable to typecheck"
+        $ liftIO
+        $ runAction "classplugin.TypeCheck" state
+        $ use TypeCheck nfp
 
-        -- All instance binds
-        InstanceBindTypeSigsResult allBinds <-
-            handleMaybeM "Unable to get InstanceBindTypeSigsResult"
-            $ liftIO
-            $ runAction "classplugin.GetInstanceBindTypeSigs" state
-            $ use GetInstanceBindTypeSigs nfp
+    -- All instance binds
+    InstanceBindTypeSigsResult allBinds <-
+        handleMaybeM "Unable to get InstanceBindTypeSigsResult"
+        $ liftIO
+        $ runAction "classplugin.GetInstanceBindTypeSigs" state
+        $ use GetInstanceBindTypeSigs nfp
 
-        pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
+    pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
 
-        let (hsGroup, _, _, _) = tmrRenamed tmr
-            tycls = hs_tyclds hsGroup
-            -- declared instance methods without signatures
-            bindInfos = [ bind
-                        | instds <- map group_instds tycls -- class instance decls
-                        , instd <- instds
-                        , inst <- maybeToList $ getClsInstD (unLoc instd)
-                        , bind <- getBindSpanWithoutSig inst
-                        ]
-            targetSigs = matchBind bindInfos allBinds
-            makeLens (range, title) =
-                generateLens plId range title
-                    $ workspaceEdit pragmaInsertion
-                    $ makeEdit range title
-            codeLens = makeLens <$> mapMaybe getRangeWithSig targetSigs
+    let (hsGroup, _, _, _) = tmrRenamed tmr
+        tycls = hs_tyclds hsGroup
+        -- declared instance methods without signatures
+        bindInfos = [ bind
+                    | instds <- map group_instds tycls -- class instance decls
+                    , instd <- instds
+                    , inst <- maybeToList $ getClsInstD (unLoc instd)
+                    , bind <- getBindSpanWithoutSig inst
+                    ]
+        targetSigs = matchBind bindInfos allBinds
+        makeLens (range, title) =
+            generateLens plId range title
+                $ workspaceEdit pragmaInsertion
+                $ makeEdit range title
+        codeLens = makeLens <$> mapMaybe getRangeWithSig targetSigs
 
-        pure $ List codeLens
+    pure $ List codeLens
     where
         uri = _textDocument ^. J.uri
 
