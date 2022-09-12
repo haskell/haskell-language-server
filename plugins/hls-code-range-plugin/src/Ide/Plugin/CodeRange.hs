@@ -175,7 +175,7 @@ removeDupStartLineFoldings :: [FoldingRange] -> [FoldingRange]
 removeDupStartLineFoldings [] = []
 removeDupStartLineFoldings [x] = [x]
 removeDupStartLineFoldings (frx@(FoldingRange x _ _ _ _):xs@((FoldingRange y _ _ _ _):xs2))
-    | x == y = removeDupStartLineFoldings ([frx]++xs2)
+    | x == y = removeDupStartLineFoldings (frx:xs2)
     | otherwise = frx : removeDupStartLineFoldings xs
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
