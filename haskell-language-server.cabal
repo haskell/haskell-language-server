@@ -50,45 +50,6 @@ common pedantic
   if flag(pedantic)
     ghc-options: -Werror
 
-library
-  import:           common-deps
-                    -- configuration
-                  , warnings
-                  , pedantic
-  exposed-modules:
-    Ide.Arguments
-    Ide.Main
-    Ide.Version
-
-  other-modules:    Paths_haskell_language_server
-  autogen-modules:  Paths_haskell_language_server
-  hs-source-dirs:   src
-  build-depends:
-    , async
-    , base16-bytestring
-    , bytestring
-    , containers
-    , cryptohash-sha1
-    , data-default
-    , ghc
-    , ghcide                ^>=1.8
-    , githash               >=0.1.6.1
-    , lsp
-    , hie-bios
-    , hiedb
-    , hls-plugin-api        ^>=1.5
-    , optparse-applicative
-    , optparse-simple
-    , process
-    , hls-graph
-    , safe-exceptions
-    , sqlite-simple
-    , unordered-containers
-    , aeson-pretty
-
-  default-language: Haskell2010
-  default-extensions: DataKinds, TypeOperators
-
 -- Plugin flags are designed for 'cabal install haskell-language-server':
 -- - Bulk flags should be default:False
 -- - Individual flags should be default:True
@@ -370,42 +331,71 @@ common refactor
     build-depends: hls-refactor-plugin ^>= 1.0
     cpp-options: -Dhls_refactor
 
-library plugins
-  import:             common-deps
+library
+  import:           common-deps
                     -- configuration
-                    , warnings
-                    , pedantic
-                    -- plugins
-                    , callHierarchy
-                    , changeTypeSignature
-                    , class
-                    , haddockComments
-                    , eval
-                    , importLens
-                    , refineImports
-                    , rename
-                    , retrie
-                    , tactic
-                    , hlint
-                    , stan
-                    , moduleName
-                    , pragmas
-                    , splice
-                    , alternateNumberFormat
-                    , qualifyImportedNames
-                    , codeRange
-                    , gadt
-                    , explicitFixity
-                    , floskell
-                    , fourmolu
-                    , ormolu
-                    , stylishHaskell
-                    , brittany
-                    , refactor
-  exposed-modules: HlsPlugins
-  hs-source-dirs: src
+                  , warnings
+                  , pedantic
+                  -- plugins
+                  , callHierarchy
+                  , changeTypeSignature
+                  , class
+                  , haddockComments
+                  , eval
+                  , importLens
+                  , refineImports
+                  , rename
+                  , retrie
+                  , tactic
+                  , hlint
+                  , stan
+                  , moduleName
+                  , pragmas
+                  , splice
+                  , alternateNumberFormat
+                  , qualifyImportedNames
+                  , codeRange
+                  , gadt
+                  , explicitFixity
+                  , floskell
+                  , fourmolu
+                  , ormolu
+                  , stylishHaskell
+                  , brittany
+                  , refactor
 
-  build-depends: ghcide, hls-plugin-api
+  exposed-modules:
+    Ide.Arguments
+    Ide.Main
+    Ide.Version
+    HlsPlugins
+
+  other-modules:    Paths_haskell_language_server
+  autogen-modules:  Paths_haskell_language_server
+  hs-source-dirs:   src
+  build-depends:
+    , async
+    , base16-bytestring
+    , bytestring
+    , containers
+    , cryptohash-sha1
+    , data-default
+    , ghc
+    , ghcide                ^>=1.8
+    , githash               >=0.1.6.1
+    , lsp
+    , hie-bios
+    , hiedb
+    , hls-plugin-api        ^>=1.5
+    , optparse-applicative
+    , optparse-simple
+    , process
+    , hls-graph
+    , safe-exceptions
+    , sqlite-simple
+    , unordered-containers
+    , aeson-pretty
+
   default-language: Haskell2010
   default-extensions: DataKinds, TypeOperators
 
@@ -452,7 +442,6 @@ executable haskell-language-server
     , ghcide
     , hashable
     , haskell-language-server
-    , haskell-language-server:plugins
     , lsp
     , hie-bios
     , hiedb
@@ -630,7 +619,7 @@ benchmark benchmark
         extra,
         filepath,
         ghcide-bench,
-        haskell-language-server:plugins,
+        haskell-language-server,
         hls-plugin-api,
         lens,
         lens-aeson,
