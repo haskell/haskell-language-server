@@ -71,7 +71,6 @@ library
         hiedb == 0.4.2.*,
         lsp-types ^>= 1.6.0.0,
         lsp ^>= 1.6.0.0 ,
-        monoid-subclasses,
         mtl,
         optparse-applicative,
         parallel,
@@ -230,6 +229,9 @@ library
       exposed-modules:
         Development.IDE.GHC.Compat.CPP
 
+    if impl(ghc >= 9)
+        ghc-options: -Wunused-packages -Werror=unused-packages
+
     if flag(ekg)
         build-depends:
             ekg-wai,
@@ -271,28 +273,15 @@ executable ghcide
                 "-with-rtsopts=-I0 -A128M -T"
     main-is: Main.hs
     build-depends:
-        hiedb,
-        aeson,
         base == 4.*,
         data-default,
-        directory,
         extra,
-        filepath,
         gitrev,
-        safe-exceptions,
-        ghc,
-        hashable,
         lsp,
         lsp-types,
-        heapsize,
-        hie-bios,
         hls-plugin-api,
         ghcide,
-        lens,
         optparse-applicative,
-        hls-graph,
-        text,
-        unordered-containers,
     other-modules:
         Arguments
         Paths_ghcide
@@ -322,6 +311,9 @@ executable ghcide
             ekg-wai,
             ekg-core,
         cpp-options:   -DMONITORING_EKG
+    if impl(ghc >= 9)
+        ghc-options: -Wunused-packages -Werror=unused-packages
+
 
 test-suite ghcide-tests
     type: exitcode-stdio-1.0
@@ -378,6 +370,8 @@ test-suite ghcide-tests
           record-hasfield
     if impl(ghc < 9.3)
        build-depends:  ghc-typelits-knownnat
+    if impl(ghc >= 9)
+        ghc-options: -Wunused-packages
     hs-source-dirs: test/cabal test/exe test/src
     ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors
     main-is: Main.hs
