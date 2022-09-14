@@ -19,10 +19,8 @@ library
   else
     buildable: False
   exposed-modules:    Ide.Plugin.Ecta
-  hs-source-dirs:     src
   build-depends:
       base                  >=4.12 && <5
-    , ecta
     , ecta-plugin
     , ghcide                >=1.8
     , hls-graph

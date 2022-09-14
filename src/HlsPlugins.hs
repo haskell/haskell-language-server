@@ -194,7 +194,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "haddockComments" in HaddockComments.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_ecta
-      Ecta.descriptor pluginRecorder "ecta" :
+      Ecta.descriptor "ecta" :
 #endif
 #if hls_eval
       let pId = "eval" in Eval.descriptor (pluginRecorder pId) pId:
