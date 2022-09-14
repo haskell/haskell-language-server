@@ -35,7 +35,7 @@ fi
 
 echo HLS version $ver
 
-host="webhost.haskell.org"
+host="gitlab-storage.haskell.org"
 
 usage() {
     echo "Usage: [rel_name=<name>] SIGNING_KEY=<key> $0 <action>"

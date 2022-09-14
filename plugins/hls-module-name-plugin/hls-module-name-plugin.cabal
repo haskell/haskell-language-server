@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-module-name-plugin
-version:            1.0.2.0
+version:            1.1.0.0
 synopsis:           Module name plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -28,8 +28,8 @@ library
     , base                  >=4.12 && <5
     , directory
     , filepath
-    , ghcide                ^>=1.7
-    , hls-plugin-api        ^>=1.4
+    , ghcide                ^>=1.8
+    , hls-plugin-api        ^>=1.5
     , lsp
     , text
     , transformers
@@ -48,4 +48,4 @@ test-suite tests
     , base
     , filepath
     , hls-module-name-plugin
-    , hls-test-utils          ^>=1.3
+    , hls-test-utils          ^>=1.4
