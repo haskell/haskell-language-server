@@ -370,7 +370,6 @@ Contributions welcome!
 | Signature help         | Unimplemented     | `textDocument/signatureHelp`                   |
 | Jump to declaration    | Unclear if useful | `textDocument/declaration`                     |
 | Jump to implementation | Unclear if useful | `textDocument/implementation`                  |
-| Folding                | Unimplemented     | `textDocument/foldingRange`                    |
 | Semantic tokens        | Unimplemented     | `textDocument/semanticTokens`                  |
 | Linked editing         | Unimplemented     | `textDocument/linkedEditingRange`              |
 | Document links         | Unimplemented     | `textDocument/documentLink`                    |

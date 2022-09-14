@@ -85,7 +85,7 @@ testTree =
                         FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeRegion),
                         FoldingRange 3 (Just 7) 5 (Just 10) (Just FoldingRangeRegion)],
 
-                -- Single line
+                -- Single line returns [] because single line ranges need not be folded
                 testCase "Test Single Line" $ check
                     (mkCodeRange (Position 1 0) (Position 1 15) [] CodeKindRegion)
                     [],
@@ -103,11 +103,11 @@ testTree =
             mkCodeRange :: Position -> Position -> V.Vector CodeRange -> CodeRangeKind -> CodeRange
             mkCodeRange start end children crk = CodeRange (Range start end) children crk
         in [
-            -- General test
+            -- General tests
             testCase "Test General Code Block" $ check
                 (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindRegion)
                 (Just (FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion))),
-            -- General test
+            -- If a range has the same start and end line it need not be folded so Nothing is expected
             testCase "Test Same Start Line" $ check
                 (mkCodeRange (Position 1 1) (Position 1 10) [] CodeKindRegion)
                 Nothing
