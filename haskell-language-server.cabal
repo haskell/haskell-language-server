@@ -84,6 +84,11 @@ flag haddockComments
   default:     True
   manual:      True
 
+flag ecta
+  description: Enable ecta plugin
+  default:     True
+  manual:      True
+
 flag eval
   description: Enable eval plugin
   default:     True
@@ -241,6 +246,11 @@ common haddockComments
     build-depends: hls-haddock-comments-plugin == 2.0.0.0
     cpp-options: -Dhls_haddockComments
 
+common ecta
+  if flag(ecta) && (impl(ghc < 9) || flag(ignore-plugins-ghc-bounds))
+    build-depends: hls-ecta-plugin
+    cpp-options: -Dhls_ecta
+
 common eval
   if flag(eval)
     build-depends: hls-eval-plugin == 2.0.0.0
@@ -375,6 +385,7 @@ library
                   , changeTypeSignature
                   , class
                   , haddockComments
+                  , ecta
                   , eval
                   , importLens
                   , refineImports
