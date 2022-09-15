@@ -49,10 +49,11 @@ safeTyThingId (AConLike (RealDataCon dataCon)) = Just (dataConWrapId dataCon)
 safeTyThingId _                                = Nothing
 
 -- Possible documentation for an element in the code
-data SpanDoc
 #if MIN_VERSION_ghc(9,3,0)
+data SpanDoc
   = SpanDocString [HsDocString] SpanDocUris
 #else
+data SpanDoc
   = SpanDocString HsDocString SpanDocUris
 #endif
   | SpanDocText   [T.Text] SpanDocUris

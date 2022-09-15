@@ -130,8 +130,10 @@ import           Development.IDE.GHC.Compat             (NameCache,
                                                          NameCacheUpdater (..),
                                                          initNameCache,
                                                          knownKeyNames,
-                                                         mkSplitUniqSupply,
-                                                         upNameCache)
+                                                         mkSplitUniqSupply)
+#if !MIN_VERSION_ghc(9,3,0)
+import           Development.IDE.GHC.Compat             (upNameCache)
+#endif
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
