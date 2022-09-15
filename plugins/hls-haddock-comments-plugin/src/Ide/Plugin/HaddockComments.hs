@@ -13,12 +13,13 @@ import           Control.Monad.IO.Class
 import qualified Data.HashMap.Strict                   as HashMap
 import qualified Data.Map                              as Map
 import qualified Data.Text                             as T
+import           Debug.Trace                           (traceShowId)
 import           Development.IDE                       hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.ExactPrint        (GetAnnotatedParsedSource (..))
-import qualified Development.IDE.GHC.ExactPrint                   as E
+import qualified Development.IDE.GHC.ExactPrint        as E
+import           Development.IDE.Plugin.CodeAction
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs)
@@ -58,9 +59,13 @@ data GenComments = forall a.
     fromDecl      :: HsDecl GhcPs -> Maybe a,
     collectKeys   :: a -> [AnnKey],
     isFresh       :: Annotation -> Bool,
-    updateAnn     :: Annotation -> Annotation,
+    updateAnn     :: UpdateAnn,
     updateDeclAnn :: Annotation -> Annotation
   }
+
+type UpdateAnn = Bool -- ^ is first
+              -> Annotation
+              -> Annotation
 
 runGenComments :: GenComments -> Maybe [LHsDecl GhcPs] -> Maybe Anns -> Range -> Maybe (T.Text, TextEdit)
 runGenComments GenComments {..} mLocDecls mAnns range
@@ -69,9 +74,10 @@ runGenComments GenComments {..} mLocDecls mAnns range
     [(locDecl, src, x)] <- [(locDecl, l, x) | locDecl@(L l (fromDecl -> Just x)) <- locDecls, range `isIntersectWith` l],
     annKeys <- collectKeys x,
     not $ null annKeys,
-    and $ maybe False isFresh . flip Map.lookup anns <$> annKeys,
+    and $ maybe False isFresh . flip Map.lookup (traceShowId anns) <$> annKeys,
     declKey <- mkAnnKey locDecl,
-    anns' <- Map.adjust updateDeclAnn declKey $ foldr (Map.adjust updateAnn) anns annKeys,
+    anns' <- Map.adjust updateDeclAnn declKey $ foldr (\(key, isFirst) ->
+        Map.adjust (updateAnn isFirst) key) anns (zip annKeys (True : repeat False)),
     Just range' <- toRange src,
     result <- T.strip . T.pack $ exactPrint locDecl anns' =
     Just (title, TextEdit range' result)
@@ -87,7 +93,7 @@ genForSig = GenComments {..}
     fromDecl (SigD _ (TypeSig _ _ (HsWC _ (HsIB _ x)))) = Just x
     fromDecl _                                          = Nothing
 
-    updateAnn x = x {annEntryDelta = DP (0, 1), annsDP = dp}
+    updateAnn _ x = x {annEntryDelta = DP (0, 1), annsDP = dp}
     updateDeclAnn = cleanPriorComments
 
     isFresh Ann {annsDP} = null [() | (AnnComment _, _) <- annsDP]
@@ -111,7 +117,9 @@ genForRecord = GenComments {..}
       Just [x | (L _ ConDeclH98 {con_args = x}) <- cons]
     fromDecl _ = Nothing
 
-    updateAnn x = x {annEntryDelta = DP (1, 2), annPriorComments = [(comment, DP (1, 2))]}
+    updateAnn isFirst x =
+        let delta = if isFirst then (0, 1) else (1, 0)
+         in x {annEntryDelta = DP (1, 0), annPriorComments = [(comment, DP delta)]}
     updateDeclAnn = cleanPriorComments
 
     isFresh Ann {annPriorComments} = null annPriorComments
