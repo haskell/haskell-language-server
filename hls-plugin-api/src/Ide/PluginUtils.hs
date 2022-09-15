@@ -45,6 +45,7 @@ import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
 import           Data.Bifunctor                  (Bifunctor (first))
 import           Data.Char                       (isPrint, showLitChar)
+import           Data.Functor                    (void)
 import qualified Data.HashMap.Strict             as H
 import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
@@ -277,18 +278,19 @@ unescape input =
 -- | Parser for a string that contains double quotes. Returns unescaped string.
 escapedTextParser :: TextParser String
 escapedTextParser = do
-    xs <- P.many (P.try stringLiteral)
-    x <- P.manyTill P.anySingle P.eof -- consume characters after the final double quote
-    pure $ concat xs ++ x
+    xs <- P.many (outsideStringLiteral P.<|> stringLiteral)
+    pure $ concat xs
   where
+    outsideStringLiteral :: TextParser String
+    outsideStringLiteral = P.someTill (P.anySingleBut '"') (P.lookAhead (void (P.char '"') P.<|> P.eof))
+
     stringLiteral :: TextParser String
     stringLiteral = do
-        before <- P.manyTill P.anySingle (P.char '"') -- include any character before the first double quote
-        inside <- P.manyTill P.charLiteral (P.char '"')
+        inside <- P.char '"' >> P.manyTill P.charLiteral (P.char '"')
         let f '"' = "\\\"" -- double quote should still be escaped
             -- Despite the docs, 'showLitChar' and 'showLitString' from 'Data.Char' DOES ESCAPE unicode printable
             -- characters. So we need to call 'isPrint' from 'Data.Char' manually.
             f ch  = if isPrint ch then [ch] else showLitChar ch ""
             inside' = concatMap f inside
 
-        pure $ before <> "\"" <> inside' <> "\""
+        pure $ "\"" <> inside' <> "\""
