@@ -108,7 +108,7 @@ test-suite test
         implicit-hie:gen-hie
     main-is: Main.hs
     hs-source-dirs: test
-    ghc-options: -Wunused-packages -Werror=unused-packages
+    ghc-options: -Wunused-packages
     ghc-options: -threaded -Wall
     build-depends:
         base,

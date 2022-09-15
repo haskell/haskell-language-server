@@ -70,7 +70,7 @@ library
   if flag(pedantic)
     ghc-options: -Werror
   if impl(ghc >= 9)
-    ghc-options: -Wunused-packages -Werror=unused-packages
+    ghc-options: -Wunused-packages
 
   default-language:   Haskell2010
   default-extensions:

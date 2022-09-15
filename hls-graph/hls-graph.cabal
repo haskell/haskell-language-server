@@ -91,7 +91,7 @@ library
   if flag(stm-stats)
         cpp-options: -DSTM_STATS
   if impl(ghc >= 9)
-        ghc-options: -Wunused-packages -Werror=unused-packages
+        ghc-options: -Wunused-packages
 
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing
@@ -137,4 +137,4 @@ test-suite tests
     , unordered-containers
   build-tool-depends: hspec-discover:hspec-discover -any
   if impl(ghc >= 9)
-        ghc-options: -Wunused-packages -Werror=unused-packages
+        ghc-options: -Wunused-packages

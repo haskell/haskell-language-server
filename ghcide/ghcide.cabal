@@ -230,7 +230,7 @@ library
         Development.IDE.GHC.Compat.CPP
 
     if impl(ghc >= 9)
-        ghc-options: -Wunused-packages -Werror=unused-packages
+        ghc-options: -Wunused-packages
 
     if flag(ekg)
         build-depends:
@@ -312,7 +312,7 @@ executable ghcide
             ekg-core,
         cpp-options:   -DMONITORING_EKG
     if impl(ghc >= 9)
-        ghc-options: -Wunused-packages -Werror=unused-packages
+        ghc-options: -Wunused-packages
 
 
 test-suite ghcide-tests
