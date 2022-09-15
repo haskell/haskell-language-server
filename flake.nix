@@ -20,6 +20,10 @@
     };
 
     # List of hackage dependencies
+    base-compat = {
+      url = "https://hackage.haskell.org/package/base-compat-0.12.2/base-compat-0.12.2.tar.gz";
+      flake = false;
+    };
     lsp = {
       url = "https://hackage.haskell.org/package/lsp-1.6.0.0/lsp-1.6.0.0.tar.gz";
       flake = false;
@@ -153,6 +157,7 @@
             with haskell.lib; {
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
+              base-compat = hself.callCabal2nix "base-compat" inputs.base-compat {};
               # GHCIDE requires hie-bios ^>=0.9.1
               hie-bios = hself.callCabal2nix "hie-bios" inputs.hie-bios {};
 
