@@ -28,6 +28,10 @@
       url = "https://hackage.haskell.org/package/base-compat-batteries-0.12.2/base-compat-batteries-0.12.2.tar.gz";
       flake = false;
     };
+    cereal = {
+      url = "https://hackage.haskell.org/package/cereal-0.5.8.3/cereal-0.5.8.3.tar.gz";
+      flake = false;
+    };
     lsp = {
       url = "https://hackage.haskell.org/package/lsp-1.6.0.0/lsp-1.6.0.0.tar.gz";
       flake = false;
@@ -163,6 +167,7 @@
               github = overrideCabal hsuper.github (drv: { patches = []; });
               base-compat = hself.callCabal2nix "base-compat" inputs.base-compat {};
               base-compat-batteries = hself.callCabal2nix "base-compat-batteries" inputs.base-compat-batteries {};
+              cereal = hself.callCabal2nix "cereal" inputs.cereal {};
               # GHCIDE requires hie-bios ^>=0.9.1
               hie-bios = hself.callCabal2nix "hie-bios" inputs.hie-bios {};
 

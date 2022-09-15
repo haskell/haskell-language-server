@@ -48,6 +48,18 @@
         "url": "https://hackage.haskell.org/package/brittany-0.13.1.2/brittany-0.13.1.2.tar.gz"
       }
     },
+    "cereal": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-UII2NFJdfJU7YzrU8jUJjZJ+2H/0RUJopxGVJQeadyk=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/cereal-0.5.8.3/cereal-0.5.8.3.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/cereal-0.5.8.3/cereal-0.5.8.3.tar.gz"
+      }
+    },
     "constraints-extras": {
       "flake": false,
       "locked": {
@@ -352,6 +364,7 @@
         "base-compat": "base-compat",
         "base-compat-batteries": "base-compat-batteries",
         "brittany-01312": "brittany-01312",
+        "cereal": "cereal",
         "constraints-extras": "constraints-extras",
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
