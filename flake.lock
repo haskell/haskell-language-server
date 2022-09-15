@@ -182,6 +182,18 @@
         "type": "github"
       }
     },
+    "hashable": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-1o7UxdUV75QAdvSjZIx+zzoyY/pK6veIIJ5lspNrSFc=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hashable-1.4.1.0/hashable-1.4.1.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hashable-1.4.1.0/hashable-1.4.1.0.tar.gz"
+      }
+    },
     "hie-bios": {
       "flake": false,
       "locked": {
@@ -373,6 +385,7 @@
         "ghc-exactprint": "ghc-exactprint",
         "ghc-exactprint-150": "ghc-exactprint-150",
         "gitignore": "gitignore",
+        "hashable": "hashable",
         "hie-bios": "hie-bios",
         "hlint": "hlint",
         "hlint-34": "hlint-34",

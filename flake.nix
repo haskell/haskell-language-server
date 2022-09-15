@@ -32,6 +32,10 @@
       url = "https://hackage.haskell.org/package/cereal-0.5.8.3/cereal-0.5.8.3.tar.gz";
       flake = false;
     };
+    hashable = {
+      url = "https://hackage.haskell.org/package/hashable-1.4.1.0/hashable-1.4.1.0.tar.gz";
+      flake = false;
+    };
     lsp = {
       url = "https://hackage.haskell.org/package/lsp-1.6.0.0/lsp-1.6.0.0.tar.gz";
       flake = false;
@@ -168,6 +172,7 @@
               base-compat = hself.callCabal2nix "base-compat" inputs.base-compat {};
               base-compat-batteries = hself.callCabal2nix "base-compat-batteries" inputs.base-compat-batteries {};
               cereal = hself.callCabal2nix "cereal" inputs.cereal {};
+              hashable = hself.callCabal2nix "hashable" inputs.hashable {};
               # GHCIDE requires hie-bios ^>=0.9.1
               hie-bios = hself.callCabal2nix "hie-bios" inputs.hie-bios {};
 
