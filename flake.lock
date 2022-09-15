@@ -24,6 +24,18 @@
         "url": "https://hackage.haskell.org/package/base-compat-0.12.2/base-compat-0.12.2.tar.gz"
       }
     },
+    "base-compat-batteries": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-6sCgAD6EJvE4xBpu02F5thHvKqGuSK3QUQWJcNaSKK0=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/base-compat-batteries-0.12.2/base-compat-batteries-0.12.2.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/base-compat-batteries-0.12.2/base-compat-batteries-0.12.2.tar.gz"
+      }
+    },
     "brittany-01312": {
       "flake": false,
       "locked": {
@@ -338,6 +350,7 @@
       "inputs": {
         "aeson-1520": "aeson-1520",
         "base-compat": "base-compat",
+        "base-compat-batteries": "base-compat-batteries",
         "brittany-01312": "brittany-01312",
         "constraints-extras": "constraints-extras",
         "flake-compat": "flake-compat",
