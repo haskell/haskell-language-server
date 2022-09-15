@@ -21,7 +21,7 @@ library
   exposed-modules:    Ide.Plugin.Ecta
   build-depends:
       base                  >=4.12 && <5
-    , ecta-plugin
+    , ecta-plugin           >=0.1.1.2
     , ghcide                >=1.8
     , hls-graph
     , hls-plugin-api        >=1.4
