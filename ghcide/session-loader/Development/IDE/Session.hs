@@ -68,12 +68,14 @@ import           Development.IDE.Types.Logger         (Pretty (pretty),
                                                        Priority (Debug, Error, Info, Warning),
                                                        Recorder, WithPriority,
                                                        logWith, nest, vcat,
-                                                       viaShow, (<+>))
+                                                       viaShow, (<+>),
+                                                       toCologActionWithPrio, cmapWithPrio)
 import           Development.IDE.Types.Options
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
+import qualified HIE.Bios.Types                       as HieBios
 import           HIE.Bios.Environment                 hiding (getCacheDir)
-import           HIE.Bios.Types
+import           HIE.Bios.Types                       hiding (Log)
 import           Hie.Implicit.Cradle                  (loadImplicitHieCradle)
 import           Language.LSP.Server
 import           Language.LSP.Types
@@ -123,6 +125,7 @@ data Log
   | LogCradle !(Cradle Void)
   | LogNoneCradleFound FilePath
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
+  | LogHieBios HieBios.Log
 deriving instance Show Log
 
 instance Pretty Log where
@@ -192,6 +195,7 @@ instance Pretty Log where
       "Cradle:" <+> viaShow cradle
     LogNewComponentCache componentCache ->
       "New component cache HscEnvEq:" <+> viaShow componentCache
+    LogHieBios log -> pretty log
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -716,7 +720,8 @@ cradleToOptsAndLibDir recorder cradle file = do
     --     noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
     -- Start off by getting the session options
     logWith recorder Debug $ LogCradle cradle
-    cradleRes <- HieBios.getCompilerOptions file cradle
+    let logger = toCologActionWithPrio $ cmapWithPrio LogHieBios recorder
+    cradleRes <- HieBios.getCompilerOptions logger file cradle
     case cradleRes of
         CradleSuccess r -> do
             -- Now get the GHC lib dir

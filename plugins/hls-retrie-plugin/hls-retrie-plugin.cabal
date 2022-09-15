@@ -28,9 +28,9 @@ library
     , directory
     , extra
     , ghc
-    , ghcide                ^>=1.7
+    , ghcide                ^>=1.8
     , hashable
-    , hls-plugin-api        ^>=1.4
+    , hls-plugin-api        ^>=1.5
     , lsp
     , lsp-types
     , retrie                >=0.1.1.0
