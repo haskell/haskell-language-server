@@ -29,7 +29,7 @@ unescapeTest = testGroup "unescape"
     , testCase "many pairs of quote" $
         unescape "oo\"hello\\19990\\30028\"abc\"\1087\1088\1080\1074\1077\1090\"hh" @?= "oo\"hello世界\"abc\"привет\"hh"
     , testCase "double quote itself should not be unescaped" $
-        unescape "\"\\\"o\"" @?= "\"\\\"o\""
+        unescape "\"\\\"\\19990o\"" @?= "\"\\\"世o\""
     , testCase "control characters should not be escaped" $
         unescape "\"\\n\\t\"" @?= "\"\\n\\t\""
     ]

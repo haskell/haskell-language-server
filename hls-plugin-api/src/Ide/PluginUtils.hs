@@ -277,9 +277,7 @@ unescape input =
 
 -- | Parser for a string that contains double quotes. Returns unescaped string.
 escapedTextParser :: TextParser String
-escapedTextParser = do
-    xs <- P.many (outsideStringLiteral P.<|> stringLiteral)
-    pure $ concat xs
+escapedTextParser = concat <$> P.many (outsideStringLiteral P.<|> stringLiteral)
   where
     outsideStringLiteral :: TextParser String
     outsideStringLiteral = P.someTill (P.anySingleBut '"') (P.lookAhead (void (P.char '"') P.<|> P.eof))

@@ -288,10 +288,13 @@ instance Outputable SDoc where
 #endif
 
 -- | Print a GHC value in `defaultUserStyle` without unique symbols.
---
--- This is the most common print utility, and it will print with a user-friendly style like: `a_a4ME` as `a`.
---
 -- It uses `showSDocUnsafe` with `unsafeGlobalDynFlags` internally.
+--
+-- This is the most common print utility.
+-- It will do something additionally compared to what the 'Outputable' instance does.
+--
+--   1. print with a user-friendly style: `a_a4ME` as `a`.
+--   2. unescape escape sequences of printable unicode characters within a pair of double quotes
 printOutputable :: Outputable a => a -> T.Text
 printOutputable =
     -- IfaceTyLit from GHC.Iface.Type implements Outputable with 'show'.
