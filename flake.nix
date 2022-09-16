@@ -21,11 +21,11 @@
 
     # List of hackage dependencies
     lsp = {
-      url = "https://hackage.haskell.org/package/lsp-1.5.0.0/lsp-1.5.0.0.tar.gz";
+      url = "https://hackage.haskell.org/package/lsp-1.6.0.0/lsp-1.6.0.0.tar.gz";
       flake = false;
     };
     lsp-types = {
-      url = "https://hackage.haskell.org/package/lsp-types-1.5.0.0/lsp-types-1.5.0.0.tar.gz";
+      url = "https://hackage.haskell.org/package/lsp-types-1.6.0.0/lsp-types-1.6.0.0.tar.gz";
       flake = false;
     };
     lsp-test = {
@@ -85,7 +85,7 @@
       flake = false;
     };
     hie-bios = {
-      url = "https://hackage.haskell.org/package/hie-bios-0.9.1/hie-bios-0.9.1.tar.gz";
+      url = "https://hackage.haskell.org/package/hie-bios-0.11.0/hie-bios-0.11.0.tar.gz";
       flake = false;
     };
     myst-parser = {

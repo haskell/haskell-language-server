@@ -3,7 +3,7 @@ cabal-version:      3.0
 build-type:         Simple
 category:           Development
 name:               ghcide-test-utils
-version:            1.7.0.1
+version:            1.8.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -25,7 +25,7 @@ library
     default-language: Haskell2010
     build-depends:
         aeson,
-        base,
+        base > 4.9 && < 5,
         containers,
         data-default,
         directory,
