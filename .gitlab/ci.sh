@@ -84,7 +84,7 @@ case "$(uname)" in
 		emake --version
 		emake GHCUP=ghcup hls
 		emake GHCUP=ghcup bindist
-		rm -rf out/*.*.*
+		emake GHCUP=ghcup clean-all
         ;;
 esac
 

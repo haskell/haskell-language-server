@@ -69,8 +69,7 @@ hls: bindist/ghcs
 	for ghc in $(shell [ -e "bindist/ghcs-`uname -o`" ] && cat "bindist/ghcs-`uname -o`" || cat "bindist/ghcs") ; do \
 		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
 		$(GHCUP) -v gc -p -s -c && \
-		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` PROJECT_FILE=`echo $$ghc | $(AWK) -F ',' '{ print $$2 }'` hls-ghc && \
-		$(GHCUP) -v rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
+		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` PROJECT_FILE=`echo $$ghc | $(AWK) -F ',' '{ print $$2 }'` hls-ghc ; \
 	done
 
 hls-ghc:
@@ -85,8 +84,7 @@ bindist:
 	for ghc in $(shell [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" || cat "bindist/ghcs") ; do \
 		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
 		$(GHCUP) -v gc -p -s -c && \
-		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` bindist-ghc && \
-		$(GHCUP) -v rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
+		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` bindist-ghc ; \
 	done
 	$(SED) -e "s/@@HLS_VERSION@@/$(HLS_VERSION)/" \
 		bindist/GNUmakefile.in > "$(BINDIST_OUT_DIR)/GNUmakefile"
@@ -120,8 +118,11 @@ version:
 
 clean:
 	$(RM_RF) out/*
+	for ghc in $(shell [ -e "bindist/ghcs-`uname -o`" ] && cat "bindist/ghcs-`uname -o`" || cat "bindist/ghcs") ; do \
+		$(GHCUP) -v rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
+	done
 
-clean-all:
-	$(RM_RF) out/* $(STORE_DIR)
+clean-all: clean
+	$(RM_RF) $(STORE_DIR)
 
 .PHONY: hls hls-ghc bindist bindist-ghc bindist-tar clean clean-all install-ghcs
