@@ -42,8 +42,8 @@ Here is a list of the additional settings currently supported by `haskell-langua
 
 - Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `floskell`, `ormolu`, `fourmolu`, `stylish-haskell`, or `brittany` (if compiled with the brittany plugin).
 - Max completions (`haskell.maxCompletions`, default 40): maximum number of completions sent to the LSP client.
-- Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on load. As it is activated by default could drive to bad performance in large projects.
-- Check parents (`haskell.checkParents`, default `CheckOnSaveAndClose`): when to typecheck reverse dependencies of a file; one of `NeverCheck`, `CheckOnClose`, `CheckOnSaveAndClose`, or `AlwaysCheck`.
+- Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on initial load. As it is activated by default could drive to bad performance in large projects.
+- Check parents (`haskell.checkParents`, default `CheckOnSave`): when to typecheck reverse dependencies of a file; one of `NeverCheck`, `CheckOnSave` (means dependent/parent modules will only be checked when you save), or `AlwaysCheck` (means re-typechecking them on every change).
 
 #### Generic plugin configuration
 
