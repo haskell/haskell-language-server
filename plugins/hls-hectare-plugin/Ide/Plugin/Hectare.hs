@@ -1,8 +1,8 @@
-module Ide.Plugin.Ecta (descriptor) where
+module Ide.Plugin.Hectare (descriptor) where
 
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import qualified ECTA.Plugin                     as Ecta
+import qualified ECTA.Plugin                     as GHC
 import           Ide.Types
 
 descriptor :: PluginId -> PluginDescriptor s
@@ -13,9 +13,9 @@ descriptor pluginId = (defaultPluginDescriptor pluginId)
 staticPlugin :: DynFlagsModifications
 staticPlugin = mempty
   { dynFlagsModifyGlobal = \df -> df
-    { staticPlugins = staticPlugins df <> [ectaPlugin]
+    { staticPlugins = staticPlugins df <> [hectarePlugin]
     }
   }
 
-ectaPlugin :: StaticPlugin
-ectaPlugin = StaticPlugin $ PluginWithArgs Ecta.plugin []
+hectarePlugin :: StaticPlugin
+hectarePlugin = StaticPlugin $ PluginWithArgs GHC.plugin []

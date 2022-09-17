@@ -84,8 +84,8 @@ flag haddockComments
   default:     True
   manual:      True
 
-flag ecta
-  description: Enable ecta plugin
+flag hectare
+  description: Enable hectare plugin
   default:     True
   manual:      True
 
@@ -246,10 +246,10 @@ common haddockComments
     build-depends: hls-haddock-comments-plugin == 2.0.0.0
     cpp-options: -Dhls_haddockComments
 
-common ecta
-  if flag(ecta) && (impl(ghc < 9) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-ecta-plugin
-    cpp-options: -Dhls_ecta
+common hectare
+  if flag(hectare) && (impl(ghc < 9) || flag(ignore-plugins-ghc-bounds))
+    build-depends: hls-hectare-plugin
+    cpp-options: -Dhls_hectare
 
 common eval
   if flag(eval)
@@ -385,7 +385,7 @@ library
                   , changeTypeSignature
                   , class
                   , haddockComments
-                  , ecta
+                  , hectare
                   , eval
                   , importLens
                   , refineImports

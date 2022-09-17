@@ -1,5 +1,5 @@
 cabal-version:      2.2
-name:               hls-ecta-plugin
+name:               hls-hectare-plugin
 version:            1.0
 synopsis:           Code synthesis for typed holes via ECTA
 description:
@@ -18,7 +18,7 @@ library
     buildable: True
   else
     buildable: False
-  exposed-modules:    Ide.Plugin.Ecta
+  exposed-modules:    Ide.Plugin.Hectare
   build-depends:
       base                  >=4.12 && <5
     , ecta-plugin           >=0.1.1.2

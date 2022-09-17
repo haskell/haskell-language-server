@@ -32,8 +32,8 @@ import qualified Ide.Plugin.Class                  as Class
 import qualified Ide.Plugin.HaddockComments        as HaddockComments
 #endif
 
-#if hls_ecta
-import qualified Ide.Plugin.Ecta                   as Ecta
+#if hls_hectare
+import qualified Ide.Plugin.Hectare                as Hectare
 #endif
 
 #if hls_eval
@@ -193,8 +193,8 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #if hls_haddockComments
       let pId = "haddockComments" in HaddockComments.descriptor (pluginRecorder pId) pId:
 #endif
-#if hls_ecta
-      Ecta.descriptor "ecta" :
+#if hls_hectare
+      Hectare.descriptor "hectare" :
 #endif
 #if hls_eval
       let pId = "eval" in Eval.descriptor (pluginRecorder pId) pId:
