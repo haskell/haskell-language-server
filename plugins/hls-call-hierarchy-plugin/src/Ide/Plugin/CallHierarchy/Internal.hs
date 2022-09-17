@@ -146,7 +146,7 @@ construct nfp hf (ident, contexts, ssp)
 
     renderTyDecl = case ident of
       Left _ -> Nothing
-      Right name -> case getNameBindingInClass name ssp (getAsts hf) of
+      Right name -> case getNameBinding name (getAsts hf) of
         Nothing -> Nothing
         Just sp -> case resolveIntoCallHierarchy hf (realSrcSpanToRange sp ^. L.start) nfp of
           Just (Just items) -> listToMaybe items
