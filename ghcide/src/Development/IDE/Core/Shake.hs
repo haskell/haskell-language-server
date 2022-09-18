@@ -629,12 +629,9 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
     shakeDatabaseProfile <- shakeDatabaseProfileIO shakeProfileDir
 
     IdeOptions
-        { optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled
-        , optProgressStyle
+        { optProgressStyle
         , optCheckParents
         } <- getIdeOptionsIO shakeExtras
-
-    startProfilingTelemetry otProfilingEnabled logger $ state shakeExtras
 
     checkParents <- optCheckParents
 

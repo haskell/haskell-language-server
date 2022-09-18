@@ -45,7 +45,6 @@ extra-deps:
 - ghc-lib-9.2.4.20220729
 - ghc-lib-parser-9.2.4.20220729
 - ghc-lib-parser-ex-9.2.0.4
-- heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
 - hiedb-0.4.2.0
 - hlint-3.4
 - implicit-hie-0.1.2.7@sha256:82bbbb1a8c05f99c8af3c16ac53e80c8648d8bf047b25ed5ce45a135bd736907,3122
@@ -65,8 +64,6 @@ configure-options:
   ghcide:
       - --disable-library-for-ghci
   haskell-language-server:
-      - --disable-library-for-ghci
-  heapsize:
       - --disable-library-for-ghci
 
 flags:
