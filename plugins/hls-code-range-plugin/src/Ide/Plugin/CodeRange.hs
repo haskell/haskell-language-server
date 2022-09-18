@@ -157,7 +157,7 @@ findFoldingRanges r@(CodeRange _ children _) =
     let frChildren :: [FoldingRange] = concat $ V.toList $ fmap findFoldingRanges children
     in case createFoldingRange r of
         Just x  -> x:frChildren
-        Nothing -> []
+        Nothing -> frChildren
 
 -- | Parses code range to folding range
 createFoldingRange :: CodeRange -> Maybe FoldingRange
