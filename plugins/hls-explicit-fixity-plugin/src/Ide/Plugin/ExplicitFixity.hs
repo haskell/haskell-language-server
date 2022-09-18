@@ -48,7 +48,7 @@ descriptor recorder pluginId = (defaultPluginDescriptor pluginId)
 hover :: PluginMethodHandler IdeState TextDocumentHover
 hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
-    fixityTrees <- handleMaybeM "ExplicitFixity: Unable to get fixity"
+    fixityTrees <- handleMaybeM "Unable to get fixity"
         $ liftIO
         $ runAction "ExplicitFixity.GetFixity" state
         $ use GetFixity nfp

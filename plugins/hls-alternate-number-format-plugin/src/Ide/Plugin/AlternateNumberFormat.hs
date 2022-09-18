@@ -143,7 +143,7 @@ isInsideRealSrcSpan :: Position -> RealSrcSpan -> Bool
 p `isInsideRealSrcSpan` r = let (Range sp ep) = realSrcSpanToRange r in sp <= p && p <= ep
 
 getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
-getFirstPragma pId state nfp = handleMaybeM "Error: Could not get NextPragmaInfo" $ do
+getFirstPragma pId state nfp = handleMaybeM "Could not get NextPragmaInfo" $ do
       ghcSession <- liftIO $ runAction (show pId <> ".GhcSession") state $ useWithStale GhcSession nfp
       (_, fileContents) <- liftIO $ runAction (show pId <> ".GetFileContents") state $ getFileContents nfp
       case ghcSession of
@@ -151,7 +151,7 @@ getFirstPragma pId state nfp = handleMaybeM "Error: Could not get NextPragmaInfo
         Nothing                                           -> pure Nothing
 
 requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
-requestLiterals pId state = handleMaybeM "Error: Could not Collect Literals"
+requestLiterals pId state = handleMaybeM "Could not Collect Literals"
                 . liftIO
                 . runAction (show pId <> ".CollectLiterals") state
                 . use CollectLiterals
