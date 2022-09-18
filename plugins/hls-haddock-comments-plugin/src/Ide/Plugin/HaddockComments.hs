@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP                       #-}
+{-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE NamedFieldPuns            #-}
@@ -8,8 +9,9 @@
 
 module Ide.Plugin.HaddockComments (descriptor) where
 
-import           Control.Monad                         (join)
+import           Control.Monad                         (join, when)
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Class             (lift)
 import qualified Data.HashMap.Strict                   as HashMap
 import qualified Data.Map                              as Map
 import qualified Data.Text                             as T
@@ -19,6 +21,8 @@ import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.ExactPrint        (GetAnnotatedParsedSource (..))
 import qualified Development.IDE.GHC.ExactPrint        as E
 import           Development.IDE.Plugin.CodeAction
+import           Ide.Plugin.HaddockComments.Data       (genForDataDecl)
+import           Ide.Plugin.HaddockComments.Prelude
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs)
@@ -40,47 +44,50 @@ codeActionProvider ideState _pId (CodeActionParams _ _ (TextDocumentIdentifier u
     (join -> pm) <- liftIO $ runAction "HaddockComments.GetAnnotatedParsedSource" ideState $ use GetAnnotatedParsedSource `traverse` nfp
     let locDecls = hsmodDecls . unLoc . astA <$> pm
         anns = annsA <$> pm
-        edits = [runGenComments gen locDecls anns range | noErr, gen <- genList]
+        edits = [gen locDecls anns range | noErr, gen <- genList]
     return $ Right $ List [InR $ toAction title uri edit | (Just (title, edit)) <- edits]
 
-genList :: [GenComments]
+genList :: [Maybe [LHsDecl GhcPs] -> Maybe Anns -> Range -> Maybe (T.Text, TextEdit)]
 genList =
-  [ genForSig,
-    genForRecord
+  [ runGenCommentsSimple genForSig,
+    -- runGenCommentsSimple genForRecord
+    runGenComments genForDataDecl
   ]
 
 -----------------------------------------------------------------------------
 
--- | Defines how to generate haddock comments by tweaking annotations of AST
-data GenComments = forall a.
-  GenComments
-  { title         :: T.Text,
-    fromDecl      :: HsDecl GhcPs -> Maybe a,
-    collectKeys   :: a -> [AnnKey],
-    isFresh       :: Annotation -> Bool,
-    updateAnn     :: Annotation -> Annotation,
-    updateDeclAnn :: Annotation -> Annotation
-  }
-
 runGenComments :: GenComments -> Maybe [LHsDecl GhcPs] -> Maybe Anns -> Range -> Maybe (T.Text, TextEdit)
-runGenComments GenComments {..} mLocDecls mAnns range
+runGenComments GenComments{..} mLocDecls mAnns range
   | Just locDecls <- mLocDecls,
     Just anns <- mAnns,
-    [(locDecl, src, x)] <- [(locDecl, l, x) | locDecl@(L l (fromDecl -> Just x)) <- locDecls, range `isIntersectWith` l],
-    annKeys <- collectKeys x,
-    not $ null annKeys,
-    and $ maybe False isFresh . flip Map.lookup anns <$> annKeys,
-    declKey <- mkAnnKey locDecl,
-    anns' <- Map.adjust updateDeclAnn declKey $ foldr (Map.adjust updateAnn) anns annKeys,
+    [(locDecl, src)] <- [(locDecl, l) | locDecl@(L l _) <- locDecls, range `isIntersectWith` l],
     Just range' <- toRange src,
-    result <- T.strip . T.pack $ exactPrint locDecl anns' =
-    Just (title, TextEdit range' result)
+    Just (_, (anns', _), _) <- runTransformT anns (updateAnns locDecl),
+    result <- T.strip . T.pack $ exactPrint locDecl anns'
+    = Just (title, TextEdit range' result)
   | otherwise = Nothing
+
+runGenCommentsSimple :: GenCommentsSimple -> Maybe [LHsDecl GhcPs] -> Maybe Anns -> Range -> Maybe (T.Text, TextEdit)
+runGenCommentsSimple GenCommentsSimple {..} = runGenComments GenComments {
+        title = title,
+        updateAnns = updateAnns
+    }
+  where
+    updateAnns :: LHsDecl GhcPs -> TransformT Maybe ()
+    updateAnns locDecl@(L _ decl) = do
+        x <- lift $ fromDecl decl
+        let annKeys = collectKeys x
+        anns <- getAnnsT
+        when (null annKeys || not (and $ maybe False isFresh . flip Map.lookup anns <$> annKeys)) $
+            lift Nothing
+        let declKey = mkAnnKey locDecl
+            anns' = Map.adjust updateDeclAnn declKey $ foldr (Map.adjust updateAnn) anns annKeys
+        putAnnsT anns'
 
 -----------------------------------------------------------------------------
 
-genForSig :: GenComments
-genForSig = GenComments {..}
+genForSig :: GenCommentsSimple
+genForSig = GenCommentsSimple {..}
   where
     title = "Generate signature comments"
 
@@ -102,8 +109,8 @@ genForSig = GenComments {..}
 #endif
     dp = [(AnnComment comment, DP (0, 1)), (G AnnRarrow, DP (1, 2))]
 
-genForRecord :: GenComments
-genForRecord = GenComments {..}
+genForRecord :: GenCommentsSimple
+genForRecord = GenCommentsSimple {..}
   where
     title = "Generate fields comments"
 
