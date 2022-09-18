@@ -271,6 +271,8 @@ Coc is recommend since it is the only complete LSP implementation for Vim and Ne
 Follow Coc's [installation instructions](https://github.com/neoclide/coc.nvim).
 Then issue `:CocConfig` and add the following to your Coc config file.
 
+##### Minimal Example
+
 ```json
 {
   "languageserver": {
@@ -279,6 +281,32 @@ Then issue `:CocConfig` and add the following to your Coc config file.
       "args": ["--lsp"],
       "rootPatterns": ["*.cabal", "stack.yaml", "cabal.project", "package.yaml", "hie.yaml"],
       "filetypes": ["haskell", "lhaskell"]
+    }
+  }
+}
+```
+
+##### Example with Settings
+
+```json
+{
+  "languageserver": {
+    "haskell": {
+      "command": "haskell-language-server-wrapper",
+      "args": ["--lsp"],
+      "rootPatterns": [ "*.cabal", "stack.yaml", "cabal.project", "package.yaml", "hie.yaml" ],
+      "filetypes": ["haskell", "lhaskell"],
+      "settings": {
+        "haskell": {
+          "checkParents": "CheckOnSave",
+          "checkProject": true,
+          "maxCompletions": 40,
+          "formattingProvider": "ormolu",
+          "plugin": {
+            "stan": { "globalOn": true }
+          }
+        }
+      }
     }
   }
 }
