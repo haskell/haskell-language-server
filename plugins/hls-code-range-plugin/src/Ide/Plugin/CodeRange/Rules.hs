@@ -45,8 +45,7 @@ import           Development.IDE
 import           Development.IDE.Core.Rules         (toIdeResult)
 import qualified Development.IDE.Core.Shake         as Shake
 import           Development.IDE.GHC.Compat         (HieAST (..),
-                                                     HieASTs (getAsts),
-                                                     RefMap)
+                                                     HieASTs (getAsts), RefMap)
 import           Development.IDE.GHC.Compat.Util
 import           GHC.Generics                       (Generic)
 import           Ide.Plugin.CodeRange.ASTPreProcess (CustomNodeType (..),

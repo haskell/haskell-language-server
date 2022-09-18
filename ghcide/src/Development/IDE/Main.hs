@@ -64,7 +64,6 @@ import           Development.IDE.Core.Shake               (IdeState (shakeExtras
                                                            shakeSessionInit,
                                                            uses)
 import qualified Development.IDE.Core.Shake               as Shake
-import           Development.IDE.Core.Tracing             (measureMemory)
 import           Development.IDE.Graph                    (action)
 import           Development.IDE.LSP.LanguageServer       (runLanguageServer,
                                                            setupLSP)
@@ -234,7 +233,6 @@ commandP plugins =
 
 data Arguments = Arguments
     { argsProjectRoot           :: Maybe FilePath
-    , argsOTMemoryProfiling     :: Bool
     , argCommand                :: Command
     , argsLogger                :: IO Logger
     , argsRules                 :: Rules ()
@@ -255,7 +253,6 @@ data Arguments = Arguments
 defaultArguments :: Recorder (WithPriority Log) -> Logger -> Arguments
 defaultArguments recorder logger = Arguments
         { argsProjectRoot = Nothing
-        , argsOTMemoryProfiling = False
         , argCommand = LSP
         , argsLogger = pure logger
         , argsRules = mainRule (cmapWithPrio LogRules recorder) def >> action kick
@@ -438,21 +435,6 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
 
             let nfiles xs = let n = length xs in if n == 1 then "1 file" else show n ++ " files"
             putStrLn $ "\nCompleted (" ++ nfiles worked ++ " worked, " ++ nfiles failed ++ " failed)"
-
-            when argsOTMemoryProfiling $ do
-                let values = state $ shakeExtras ide
-                let consoleObserver Nothing = return $ \size -> printf "Total: %.2fMB\n" (fromIntegral @Int @Double size / 1e6)
-                    consoleObserver (Just k) = return $ \size -> printf "  - %s: %.2fKB\n" (show k) (fromIntegral @Int @Double size / 1e3)
-
-                stateContents <- atomically $ ListT.toList $ STM.listT values
-                printf "# Shake value store contents(%d):\n" (length stateContents)
-                let keys =
-                        nub $
-                            typeOf GhcSession :
-                            typeOf GhcSessionDeps :
-                            [kty | (fromKeyType -> Just (kty,_), _) <- stateContents, kty /= typeOf GhcSessionIO] ++
-                            [typeOf GhcSessionIO]
-                measureMemory logger [keys] consoleObserver values
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
         Db opts cmd -> do
