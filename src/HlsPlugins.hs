@@ -6,12 +6,12 @@ module HlsPlugins where
 import           Development.IDE.Types.Logger      (Pretty (pretty), Recorder,
                                                     WithPriority, cmapWithPrio)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
-import           Ide.Types                         (IdePlugins, PluginId)
+import           Ide.Types                         (IdePlugins,
+                                                    PluginId (PluginId))
 
 -- fixed plugins
 import           Development.IDE                   (IdeState)
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import           GHC.Exts                          (fromString)
 
 -- haskell-language-server optional plugins
 #if hls_qualifyImportedNames
@@ -123,7 +123,7 @@ import qualified Development.IDE.Plugin.CodeAction as Refactor
 data Log = forall a. (Pretty a) => Log PluginId a
 
 instance Pretty Log where
-  pretty (Log pId a) = fromString (show pId) <> ": " <> pretty a
+  pretty (Log (PluginId pId) a) = pretty pId <> ": " <> pretty a
 
 -- ---------------------------------------------------------------------
 

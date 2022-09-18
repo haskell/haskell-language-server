@@ -56,7 +56,7 @@ data Log
     | LogInvalidCommandIdentifier
 instance Pretty Log where
   pretty = \case
-    LogPluginError pId err -> pretty (show pId) <> ":" <+> prettyResponseError err
+    LogPluginError (PluginId pId) err -> pretty pId <> ":" <+> prettyResponseError err
     LogNoPluginForMethod (Some method) ->
         "No plugin enabled for " <> pretty (show method)
     LogInvalidCommandIdentifier-> "Invalid command identifier"
