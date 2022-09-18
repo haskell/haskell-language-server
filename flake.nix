@@ -8,7 +8,7 @@
   description = "haskell language server flake";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:lf-/nixpkgs/ghc-942";
     flake-compat = {
       url = "github:edolstra/flake-compat";
       flake = false;
@@ -28,7 +28,7 @@
 
     # List of hackage dependencies
     lsp = {
-      url = "github:haskell/lsp/b0f8596887088b8ab65fc1015c773f45b47234ae";
+      url = "github:haskell/lsp/1.6.0.0";
       flake = false;
     };
     lsp-test = {
