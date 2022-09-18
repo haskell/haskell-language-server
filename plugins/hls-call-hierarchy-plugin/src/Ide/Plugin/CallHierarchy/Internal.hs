@@ -179,106 +179,103 @@ deriving instance Ord Value
 -- | Render incoming calls request.
 incomingCalls :: PluginMethodHandler IdeState CallHierarchyIncomingCalls
 incomingCalls state pluginId param = pluginResponse $ do
-  calls <- liftIO $ runAction "CallHierarchy.incomingCalls" state $
-      queryCalls (param ^. L.item) Q.incomingCalls mkCallHierarchyIncomingCall
-        mergeIncomingCalls
-  case calls of
-    Just x  -> pure $ Just $ List x
-    Nothing -> throwPluginError "incomingCalls - Internal Error"
-  where
-    mkCallHierarchyIncomingCall :: Vertex -> Action (Maybe CallHierarchyIncomingCall)
-    mkCallHierarchyIncomingCall = mkCallHierarchyCall CallHierarchyIncomingCall
-
-    mergeIncomingCalls :: [CallHierarchyIncomingCall] -> [CallHierarchyIncomingCall]
-    mergeIncomingCalls = map merge
-                       . groupBy (\a b -> a ^. L.from == b ^. L.from)
-                       . sortBy (\a b -> (a ^. L.from) `compare` (b ^. L.from))
-      where
-        merge calls = let ranges = concatMap ((\(List x) -> x) . (^. L.fromRanges)) calls
-                      in  CallHierarchyIncomingCall (head calls ^. L.from) (List ranges)
+    calls <- liftIO
+        $ runAction "CallHierarchy.incomingCalls" state
+        $ queryCalls
+            (param ^. L.item)
+            Q.incomingCalls
+            mkCallHierarchyIncomingCall
+            (mergeCalls CallHierarchyIncomingCall L.from)
+    pure $ Just $ List calls
+    where
+        mkCallHierarchyIncomingCall :: Vertex -> Action (Maybe CallHierarchyIncomingCall)
+        mkCallHierarchyIncomingCall = mkCallHierarchyCall CallHierarchyIncomingCall
 
 -- Render outgoing calls request.
 outgoingCalls :: PluginMethodHandler IdeState CallHierarchyOutgoingCalls
 outgoingCalls state pluginId param = pluginResponse $ do
-  calls <- liftIO $ runAction "CallHierarchy.outgoingCalls" state $
-      queryCalls (param ^. L.item) Q.outgoingCalls mkCallHierarchyOutgoingCall
-        mergeOutgoingCalls
-  case calls of
-      Just x  -> pure $ Just $ List x
-      Nothing -> throwPluginError "outgoingCalls - Internal Error"
-  where
-    mkCallHierarchyOutgoingCall :: Vertex -> Action (Maybe CallHierarchyOutgoingCall)
-    mkCallHierarchyOutgoingCall = mkCallHierarchyCall CallHierarchyOutgoingCall
+    calls <- liftIO
+        $ runAction "CallHierarchy.outgoingCalls" state
+        $ queryCalls
+            (param ^. L.item)
+            Q.outgoingCalls
+            mkCallHierarchyOutgoingCall
+            (mergeCalls CallHierarchyOutgoingCall L.to)
+    pure $ Just $ List calls
+    where
+        mkCallHierarchyOutgoingCall :: Vertex -> Action (Maybe CallHierarchyOutgoingCall)
+        mkCallHierarchyOutgoingCall = mkCallHierarchyCall CallHierarchyOutgoingCall
 
-    mergeOutgoingCalls :: [CallHierarchyOutgoingCall] -> [CallHierarchyOutgoingCall]
-    mergeOutgoingCalls = map merge
-                       . groupBy (\a b -> a ^. L.to == b ^. L.to)
-                       . sortBy (\a b -> (a ^. L.to) `compare` (b ^. L.to))
-      where
-        merge calls = let ranges = concatMap ((\(List x) -> x) . (^. L.fromRanges)) calls
-                      in  CallHierarchyOutgoingCall (head calls ^. L.to) (List ranges)
+-- Merge calls from the same place
+mergeCalls constructor target =
+    concatMap merge
+        . groupBy (\a b -> a ^. target == b ^. target)
+        . sortBy (\a b -> (a ^. target) `compare` (b ^. target))
+    where
+        merge [] = []
+        merge calls@(call:_) =
+            let ranges = concatMap ((\(List x) -> x) . (^. L.fromRanges)) calls
+            in  [constructor (call ^. target) (List ranges)]
 
 mkCallHierarchyCall :: (CallHierarchyItem -> List Range -> a) -> Vertex -> Action (Maybe a)
 mkCallHierarchyCall mk v@Vertex{..} = do
-  let pos = Position (fromIntegral $ sl - 1) (fromIntegral $ sc - 1)
-      nfp = toNormalizedFilePath' hieSrc
-      range = mkRange (fromIntegral $ casl - 1) (fromIntegral $ casc - 1) (fromIntegral $ cael - 1) (fromIntegral $ caec - 1)
+    let pos = Position (fromIntegral $ sl - 1) (fromIntegral $ sc - 1)
+        nfp = toNormalizedFilePath' hieSrc
+        range = mkRange
+                    (fromIntegral $ casl - 1)
+                    (fromIntegral $ casc - 1)
+                    (fromIntegral $ cael - 1)
+                    (fromIntegral $ caec - 1)
 
-  prepareCallHierarchyItem nfp pos >>=
-    \case
-      [item] -> pure $ Just $ mk item (List [range])
-      _           -> do
-        ShakeExtras{withHieDb} <- getShakeExtras
-        liftIO (withHieDb (`Q.getSymbolPosition` v)) >>=
-          \case
-            (x:_) ->
-              prepareCallHierarchyItem nfp (Position (fromIntegral $ psl x - 1) (fromIntegral $ psc x - 1)) >>=
-                \case
-                  [item] -> pure $ Just $ mk item (List [range])
-                  _      -> pure Nothing
-            _     -> pure Nothing
+    prepareCallHierarchyItem nfp pos >>=
+        \case
+            [item] -> pure $ Just $ mk item (List [range])
+            _      -> do
+                ShakeExtras{withHieDb} <- getShakeExtras
+                sps <- liftIO (withHieDb (`Q.getSymbolPosition` v))
+                case sps of
+                    (x:_) -> do
+                        items <- prepareCallHierarchyItem
+                                    nfp
+                                    (Position (fromIntegral $ psl x - 1) (fromIntegral $ psc x - 1))
+                        case items of
+                            [item] -> pure $ Just $ mk item (List [range])
+                            _      -> pure Nothing
+                    _     -> pure Nothing
 
 -- | Unified queries include incoming calls and outgoing calls.
 queryCalls :: (Show a)
-  => CallHierarchyItem
-  -> (HieDb -> Symbol -> IO [Vertex])
-  -> (Vertex -> Action (Maybe a))
-  -> ([a] -> [a])
-  -> Action (Maybe [a])
+    => CallHierarchyItem
+    -> (HieDb -> Symbol -> IO [Vertex])
+    -> (Vertex -> Action (Maybe a))
+    -> ([a] -> [a])
+    -> Action [a]
 queryCalls item queryFunc makeFunc merge
-  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-    ShakeExtras{withHieDb} <- getShakeExtras
-    maySymbol <- getSymbol nfp
-    case maySymbol of
-      Nothing -> error "CallHierarchy.Impossible"
-      Just symbol -> do
-        vs <- liftIO $ withHieDb (`queryFunc` symbol)
-        items <- Just . catMaybes <$> mapM makeFunc vs
-        pure $ merge <$> items
-  | otherwise = pure Nothing
-  where
-    uri = item ^. L.uri
-    xdata = item ^. L.xdata
-    pos = item ^. (L.selectionRange . L.start)
+    | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+        ShakeExtras{withHieDb} <- getShakeExtras
+        maySymbol <- getSymbol nfp
+        case maySymbol of
+            Nothing -> pure mempty
+            Just symbol -> do
+                vs <- liftIO $ withHieDb (`queryFunc` symbol)
+                items <- catMaybes <$> mapM makeFunc vs
+                pure $ merge items
+    | otherwise = pure mempty
+    where
+        uri = item ^. L.uri
+        xdata = item ^. L.xdata
+        pos = item ^. (L.selectionRange . L.start)
 
-    getSymbol nfp =
-      case item ^. L.xdata of
-        Just xdata -> case fromJSON xdata of
-          A.Success (symbolStr :: String) ->
-            case readMaybe symbolStr of
-              Just symbol -> pure $ Just symbol
-              Nothing     -> getSymbolFromAst nfp pos
-          A.Error _ -> getSymbolFromAst nfp pos
-        Nothing -> getSymbolFromAst nfp pos
+        getSymbol nfp = case item ^. L.xdata of
+            Just xdata -> case fromJSON xdata of
+                A.Success (symbolStr :: String) -> maybe (getSymbolFromAst nfp pos) (pure . pure) $ readMaybe symbolStr
+                A.Error _ -> getSymbolFromAst nfp pos
+            Nothing -> getSymbolFromAst nfp pos -- Fallback if xdata lost, some editor(VSCode) will drop it
 
-    getSymbolFromAst :: NormalizedFilePath -> Position -> Action (Maybe Symbol)
-    getSymbolFromAst nfp pos =
-      use GetHieAst nfp >>=
-        \case
-          Nothing -> pure Nothing
-          Just (HAR _ hf _ _ _) -> do
-            case listToMaybe $ pointCommand hf pos extract of
-              Just infos -> case mkSymbol . fst3 <$> listToMaybe infos of
-                Nothing  -> pure Nothing
-                Just res -> pure res
-              Nothing -> pure Nothing
+        getSymbolFromAst :: NormalizedFilePath -> Position -> Action (Maybe Symbol)
+        getSymbolFromAst nfp pos = use GetHieAst nfp >>= \case
+            Nothing -> pure Nothing
+            Just (HAR _ hf _ _ _) -> do
+                case listToMaybe $ pointCommand hf pos extract of
+                    Just infos -> maybe (pure Nothing) pure $ mkSymbol . fst3 <$> listToMaybe infos
+                    Nothing -> pure Nothing
