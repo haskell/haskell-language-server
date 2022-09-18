@@ -14,13 +14,14 @@ extra-source-files:
   LICENSE
 
 library
-  if impl(ghc > 8.9) && impl(ghc < 9.0)
+  if impl(ghc >= 8.10) && impl(ghc < 9.0)
     buildable: True
   else
     buildable: False
   exposed-modules:    Ide.Plugin.Hectare
   build-depends:
       base                  >=4.12 && <5
+    , data-default
     , ecta-plugin           >=0.1.1.2
     , ghcide                >=1.8
     , hls-graph
