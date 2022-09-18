@@ -43,11 +43,8 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
-alternateNumberFormatId :: IsString a => a
-alternateNumberFormatId = "alternateNumberFormat"
-
-descriptor :: Recorder (WithPriority Log) -> PluginDescriptor IdeState
-descriptor recorder = (defaultPluginDescriptor alternateNumberFormatId)
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder pId = (defaultPluginDescriptor pId)
     { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler
     , pluginRules = collectLiteralsRule recorder
     }
@@ -87,10 +84,10 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
         getExtensions = map GhcExtension . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = pluginResponse $ do
+codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = pluginResponse $ do
     nfp <- getNormalizedFilePath (docId ^. L.uri)
-    CLR{..} <- requestLiterals state nfp
-    pragma <- getFirstPragma state nfp
+    CLR{..} <- requestLiterals pId state nfp
+    pragma <- getFirstPragma pId state nfp
         -- remove any invalid literals (see validTarget comment)
     let litsInRange = filter inCurrentRange literals
         -- generate alternateFormats and zip with the literal that generated the alternates
@@ -145,16 +142,16 @@ contains Range {_start, _end} x = isInsideRealSrcSpan _start x || isInsideRealSr
 isInsideRealSrcSpan :: Position -> RealSrcSpan -> Bool
 p `isInsideRealSrcSpan` r = let (Range sp ep) = realSrcSpanToRange r in sp <= p && p <= ep
 
-getFirstPragma :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
-getFirstPragma state nfp = handleMaybeM "Error: Could not get NextPragmaInfo" $ do
-      ghcSession <- liftIO $ runAction (alternateNumberFormatId <> ".GhcSession") state $ useWithStale GhcSession nfp
-      (_, fileContents) <- liftIO $ runAction (alternateNumberFormatId <> ".GetFileContents") state $ getFileContents nfp
+getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
+getFirstPragma pId state nfp = handleMaybeM "Error: Could not get NextPragmaInfo" $ do
+      ghcSession <- liftIO $ runAction (show pId <> ".GhcSession") state $ useWithStale GhcSession nfp
+      (_, fileContents) <- liftIO $ runAction (show pId <> ".GetFileContents") state $ getFileContents nfp
       case ghcSession of
         Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
         Nothing                                           -> pure Nothing
 
-requestLiterals :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
-requestLiterals state = handleMaybeM "Error: Could not Collect Literals"
+requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
+requestLiterals pId state = handleMaybeM "Error: Could not Collect Literals"
                 . liftIO
-                . runAction (alternateNumberFormatId <> ".CollectLiterals") state
+                . runAction (show pId <> ".CollectLiterals") state
                 . use CollectLiterals
