@@ -1,7 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE CPP #-}
 
 module Development.IDE.GHC.Warnings(withWarnings) where
 
@@ -49,8 +49,8 @@ attachReason Nothing d = d
 attachReason (Just wr) d = d{_code = InR <$> showReason wr}
  where
   showReason = \case
-    WarningWithFlag flag    -> showFlag flag
-    _ -> Nothing
+    WarningWithFlag flag -> showFlag flag
+    _                    -> Nothing
 #else
 attachReason :: WarnReason -> Diagnostic -> Diagnostic
 attachReason wr d = d{_code = InR <$> showReason wr}
