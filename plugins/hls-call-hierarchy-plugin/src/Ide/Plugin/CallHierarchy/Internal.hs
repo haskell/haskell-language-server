@@ -53,22 +53,21 @@ prepareCallHierarchy state _ param = pluginResponse $ do
 prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action [CallHierarchyItem]
 prepareCallHierarchyItem nfp pos = use GetHieAst nfp >>= \case
     Nothing               -> pure mempty
-    Just (HAR _ hf _ _ _) -> pure $ resolveIntoCallHierarchy hf pos nfp
+    Just (HAR _ hf _ _ _) -> pure $ prepareByAst hf pos nfp
 
-resolveIntoCallHierarchy :: HieASTs a -> Position -> NormalizedFilePath -> [CallHierarchyItem]
-resolveIntoCallHierarchy hf pos nfp =
+prepareByAst :: HieASTs a -> Position -> NormalizedFilePath -> [CallHierarchyItem]
+prepareByAst hf pos nfp =
     case listToMaybe $ pointCommand hf pos extract of
         Nothing    -> mempty
         Just infos -> mapMaybe (construct nfp hf) infos
 
-extract :: HieAST a -> [(Identifier, S.Set ContextInfo, Span)]
+extract :: HieAST a -> [(Identifier, [ContextInfo], Span)]
 extract ast = let span = nodeSpan ast
-                  infos = M.toList $ M.map identInfo (Compat.getNodeIds ast)
-              in  [ (ident, contexts, span) | (ident, contexts) <- infos ]
+                  infos = M.toList $ M.map (S.toList . identInfo) (Compat.getNodeIds ast)
+              in  [(ident, contexts, span) | (ident, contexts) <- infos]
 
 recFieldInfo, declInfo, valBindInfo, classTyDeclInfo,
-  useInfo, patternBindInfo, tyDeclInfo, matchBindInfo
-    :: [ContextInfo] -> Maybe ContextInfo
+    useInfo, patternBindInfo, tyDeclInfo, matchBindInfo :: [ContextInfo] -> Maybe ContextInfo
 recFieldInfo    ctxs = listToMaybe [ctx       | ctx@RecField{}    <- ctxs]
 declInfo        ctxs = listToMaybe [ctx       | ctx@Decl{}        <- ctxs]
 valBindInfo     ctxs = listToMaybe [ctx       | ctx@ValBind{}     <- ctxs]
@@ -78,97 +77,93 @@ patternBindInfo ctxs = listToMaybe [ctx       | ctx@PatternBind{} <- ctxs]
 tyDeclInfo      ctxs = listToMaybe [TyDecl    | TyDecl            <- ctxs]
 matchBindInfo   ctxs = listToMaybe [MatchBind | MatchBind         <- ctxs]
 
-construct :: NormalizedFilePath -> HieASTs a -> (Identifier, S.Set ContextInfo, Span) -> Maybe CallHierarchyItem
+construct :: NormalizedFilePath -> HieASTs a -> (Identifier, [ContextInfo], Span) -> Maybe CallHierarchyItem
 construct nfp hf (ident, contexts, ssp)
-  | isInternalIdentifier ident = Nothing
+    | isInternalIdentifier ident = Nothing
 
-  | Just (RecField RecFieldDecl _) <- recFieldInfo ctxList
-    -- ignored type span
-    = Just $ mkCallHierarchyItem' ident SkField ssp ssp
+    | Just (RecField RecFieldDecl _) <- recFieldInfo contexts
+        -- ignored type span
+        = Just $ mkCallHierarchyItem' ident SkField ssp ssp
 
-  | isJust (matchBindInfo ctxList) && isNothing (valBindInfo ctxList)
-    = Just $ mkCallHierarchyItem' ident SkFunction ssp ssp
+    | isJust (matchBindInfo contexts) && isNothing (valBindInfo contexts)
+        = Just $ mkCallHierarchyItem' ident SkFunction ssp ssp
 
-  | Just ctx <- valBindInfo ctxList
-    = Just $ case ctx of
-        ValBind _ _ span -> mkCallHierarchyItem' ident SkFunction (renderSpan span) ssp
-        _                -> mkCallHierarchyItem' ident skUnknown ssp ssp
+    | Just ctx <- valBindInfo contexts
+        = Just $ case ctx of
+            ValBind _ _ span -> mkCallHierarchyItem' ident SkFunction (renderSpan span) ssp
+            _                -> mkCallHierarchyItem' ident skUnknown ssp ssp
 
-  | Just ctx <- declInfo ctxList
-    = Just $ case ctx of
-        Decl ClassDec span -> mkCallHierarchyItem' ident SkInterface     (renderSpan span) ssp
-        Decl ConDec   span -> mkCallHierarchyItem' ident SkConstructor   (renderSpan span) ssp
-        Decl DataDec  span -> mkCallHierarchyItem' ident SkStruct        (renderSpan span) ssp
-        Decl FamDec   span -> mkCallHierarchyItem' ident SkFunction      (renderSpan span) ssp
-        Decl InstDec  span -> mkCallHierarchyItem' ident SkInterface     (renderSpan span) ssp
-        Decl SynDec   span -> mkCallHierarchyItem' ident SkTypeParameter (renderSpan span) ssp
-        _ -> mkCallHierarchyItem' ident skUnknown ssp ssp
+    | Just ctx <- declInfo contexts
+        = Just $ case ctx of
+            Decl ClassDec span -> mkCallHierarchyItem' ident SkInterface     (renderSpan span) ssp
+            Decl ConDec   span -> mkCallHierarchyItem' ident SkConstructor   (renderSpan span) ssp
+            Decl DataDec  span -> mkCallHierarchyItem' ident SkStruct        (renderSpan span) ssp
+            Decl FamDec   span -> mkCallHierarchyItem' ident SkFunction      (renderSpan span) ssp
+            Decl InstDec  span -> mkCallHierarchyItem' ident SkInterface     (renderSpan span) ssp
+            Decl SynDec   span -> mkCallHierarchyItem' ident SkTypeParameter (renderSpan span) ssp
+            _ -> mkCallHierarchyItem' ident skUnknown ssp ssp
 
-  | Just (ClassTyDecl span) <- classTyDeclInfo ctxList
-    = Just $ mkCallHierarchyItem' ident SkMethod (renderSpan span) ssp
+    | Just (ClassTyDecl span) <- classTyDeclInfo contexts
+        = Just $ mkCallHierarchyItem' ident SkMethod (renderSpan span) ssp
 
-  | Just (PatternBind _ _ span) <- patternBindInfo ctxList
-    = Just $ mkCallHierarchyItem' ident SkFunction (renderSpan span) ssp
+    | Just (PatternBind _ _ span) <- patternBindInfo contexts
+        = Just $ mkCallHierarchyItem' ident SkFunction (renderSpan span) ssp
 
-  | Just Use <- useInfo ctxList
-    = Just $ mkCallHierarchyItem' ident SkInterface ssp ssp
+    | Just _ <- useInfo contexts = Just $ mkCallHierarchyItem' ident SkInterface ssp ssp
 
-  | Just _ <- tyDeclInfo ctxList
-    = renderTyDecl
+    | Just _ <- tyDeclInfo contexts = renderTyDecl
 
-  | otherwise = Nothing
-  where
-    renderSpan = \case Just span -> span
-                       _         -> ssp
+    | otherwise = Nothing
+    where
+        renderSpan (Just span) = span
+        renderSpan _           = ssp
 
-    skUnknown = SkUnknown 27
+        -- https://github.com/haskell/lsp/blob/e11b7c09658610f6d815d04db08a64e7cf6b4467/lsp-types/src/Language/LSP/Types/DocumentSymbol.hs#L97
+        skUnknown = SkUnknown 27 -- 27 is the first unused number while ToJSON
 
-    mkCallHierarchyItem' = mkCallHierarchyItem nfp
+        mkCallHierarchyItem' = mkCallHierarchyItem nfp
 
-    isInternalIdentifier = \case
-      Left _     -> False
-      Right name -> isInternalName name
+        isInternalIdentifier = \case
+            Left _     -> False
+            Right name -> isInternalName name
 
-    ctxList = S.toList contexts
-
-    renderTyDecl = case ident of
-      Left _ -> Nothing
-      Right name -> case getNameBinding name (getAsts hf) of
-        Nothing -> Nothing
-        Just sp -> case resolveIntoCallHierarchy hf (realSrcSpanToRange sp ^. L.start) nfp of
-          (items) -> listToMaybe items
+        renderTyDecl = case ident of
+            Left _ -> Nothing
+            Right name -> case getNameBinding name (getAsts hf) of
+                Nothing -> Nothing
+                Just sp -> listToMaybe $ prepareByAst hf (realSrcSpanToRange sp ^. L.start) nfp
 
 mkCallHierarchyItem :: NormalizedFilePath -> Identifier -> SymbolKind -> Span -> Span -> CallHierarchyItem
 mkCallHierarchyItem nfp ident kind span selSpan =
-  CallHierarchyItem
-    (T.pack $ optimize $ identifierName ident)
-    kind
-    Nothing
-    (Just $ T.pack $ identifierToDetail ident)
-    (fromNormalizedUri $ normalizedFilePathToUri nfp)
-    (realSrcSpanToRange span)
-    (realSrcSpanToRange selSpan)
-    (toJSON . show <$> mkSymbol ident)
-  where
-    identifierToDetail :: Identifier -> String
-    identifierToDetail = \case
-      Left modName -> moduleNameString modName
-      Right name   -> (moduleNameString . moduleName . nameModule) name
+    CallHierarchyItem
+        (T.pack $ optimizeDisplay $ identifierName ident)
+        kind
+        Nothing
+        (Just $ T.pack $ identifierToDetail ident)
+        (fromNormalizedUri $ normalizedFilePathToUri nfp)
+        (realSrcSpanToRange span)
+        (realSrcSpanToRange selSpan)
+        (toJSON . show <$> mkSymbol ident)
+    where
+        identifierToDetail :: Identifier -> String
+        identifierToDetail = \case
+            Left modName -> moduleNameString modName
+            Right name   -> (moduleNameString . moduleName . nameModule) name
 
-    identifierName :: Identifier -> String
-    identifierName = \case
-      Left modName -> moduleNameString modName
-      Right name   -> occNameString $ nameOccName name
+        identifierName :: Identifier -> String
+        identifierName = \case
+            Left modName -> moduleNameString modName
+            Right name   -> occNameString $ nameOccName name
 
-    optimize :: String -> String
-    optimize name -- optimize display for DuplicateRecordFields
-        | "$sel:" == take 5 name = drop 5 name
-        | otherwise = name
+        optimizeDisplay :: String -> String
+        optimizeDisplay name -- optimize display for DuplicateRecordFields
+            | "$sel:" == take 5 name = drop 5 name
+            | otherwise = name
 
 mkSymbol :: Identifier -> Maybe Symbol
 mkSymbol = \case
-  Left _     -> Nothing
-  Right name -> Just $ Symbol (occName name) (nameModule name)
+    Left _     -> Nothing
+    Right name -> Just $ Symbol (occName name) (nameModule name)
 
 ----------------------------------------------------------------------
 -------------- Incoming calls and outgoing calls ---------------------
