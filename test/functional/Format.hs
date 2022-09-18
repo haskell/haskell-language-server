@@ -6,9 +6,9 @@ import           Control.Lens            ((^.))
 import           Control.Monad.IO.Class
 import           Data.Aeson
 import qualified Data.ByteString.Lazy    as BS
+import qualified Data.Text               as T
 import qualified Data.Text.Encoding      as T
 import qualified Data.Text.IO            as T
-import qualified Data.Text               as T
 import           Language.LSP.Test
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens as LSP
