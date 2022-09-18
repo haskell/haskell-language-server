@@ -1,6 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
@@ -10,7 +11,6 @@
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE RecursiveDo               #-}
 {-# LANGUAGE TypeFamilies              #-}
-{-# LANGUAGE CPP                       #-}
 
 -- | A Shake implementation of the compiler service.
 --
@@ -162,7 +162,7 @@ import           GHC.Stack                              (HasCallStack)
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
-import           Ide.Types                              (PluginId, IdePlugins)
+import           Ide.Types                              (IdePlugins, PluginId)
 import           Language.LSP.Diagnostics
 import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.Types
@@ -630,12 +630,9 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
     shakeDatabaseProfile <- shakeDatabaseProfileIO shakeProfileDir
 
     IdeOptions
-        { optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled
-        , optProgressStyle
+        { optProgressStyle
         , optCheckParents
         } <- getIdeOptionsIO shakeExtras
-
-    startProfilingTelemetry otProfilingEnabled logger $ state shakeExtras
 
     checkParents <- optCheckParents
 
