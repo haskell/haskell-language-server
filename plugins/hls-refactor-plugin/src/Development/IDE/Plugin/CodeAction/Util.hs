@@ -1,12 +1,5 @@
 module Development.IDE.Plugin.CodeAction.Util where
 
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Utils.Outputable
-#else
-import           Development.IDE.GHC.Util
-import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.Compat
-#endif
 import           Data.Data                         (Data)
 import qualified Data.Unique                       as U
 import           Debug.Trace
@@ -18,6 +11,13 @@ import           Text.Printf
 import           Development.IDE.GHC.Dump          (showAstDataHtml)
 import           Data.Time.Clock.POSIX             (POSIXTime, getCurrentTime,
                                                     utcTimeToPOSIXSeconds)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Utils.Outputable
+#else
+import           Development.IDE.GHC.Util
+import           Development.IDE.GHC.Compat.Util
+import           Development.IDE.GHC.Compat
+#endif
 --------------------------------------------------------------------------------
 -- Tracing exactprint terms
 

@@ -44,7 +44,7 @@ import           GHC.ByteCode.Types
 import           ByteCodeTypes
 #endif
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Types.PkgQual
+import           GHC.Types.PkgQual
 #endif
 
 -- Orphan instances for types from the GHC API.
@@ -217,8 +217,8 @@ instance NFData HomeModInfo where
 
 #if MIN_VERSION_ghc(9,3,0)
 instance NFData PkgQual where
-  rnf NoPkgQual = ()
-  rnf (ThisPkg uid) = rnf uid
+  rnf NoPkgQual      = ()
+  rnf (ThisPkg uid)  = rnf uid
   rnf (OtherPkg uid) = rnf uid
 
 instance NFData UnitId where
