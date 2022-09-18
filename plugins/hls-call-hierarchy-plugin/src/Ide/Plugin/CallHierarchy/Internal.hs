@@ -15,24 +15,18 @@ module Ide.Plugin.CallHierarchy.Internal (
 ) where
 
 import           Control.Lens                   ((^.))
-import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Data.Aeson                     as A
-import qualified Data.ByteString                as BS
-import qualified Data.HashMap.Strict            as HM
 import           Data.List                      (groupBy, sortBy)
 import qualified Data.Map                       as M
 import           Data.Maybe
 import qualified Data.Set                       as S
 import qualified Data.Text                      as T
-import qualified Data.Text.Encoding             as T
 import           Data.Tuple.Extra
 import           Development.IDE
-import           Development.IDE.Core.Compile
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat     as Compat
 import           Development.IDE.Spans.AtPoint
-import           GHC.Conc.Sync
 import           HieDb                          (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query as Q
 import           Ide.Plugin.CallHierarchy.Types
@@ -51,28 +45,21 @@ callHierarchyId = PluginId "callHierarchy"
 prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHierarchy
 prepareCallHierarchy state _ param = pluginResponse $ do
     nfp <- getNormalizedFilePath (param ^. L.textDocument ^. L.uri)
-    items <- liftIO (runAction "CallHierarchy.prepareHierarchy" state (prepareCallHierarchyItem nfp (param ^. L.position)))
-    pure (List <$> items)
+    items <- liftIO
+        $ runAction "CallHierarchy.prepareHierarchy" state
+        $ prepareCallHierarchyItem nfp (param ^. L.position)
+    pure $ List <$> pure items
 
-prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action (Maybe [CallHierarchyItem])
-prepareCallHierarchyItem = constructFromAst
+prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action [CallHierarchyItem]
+prepareCallHierarchyItem nfp pos = use GetHieAst nfp >>= \case
+    Nothing               -> pure mempty
+    Just (HAR _ hf _ _ _) -> pure $ resolveIntoCallHierarchy hf pos nfp
 
-constructFromAst :: NormalizedFilePath -> Position -> Action (Maybe [CallHierarchyItem])
-constructFromAst nfp pos =
-  use GetHieAst nfp >>=
-    \case
-      Nothing -> pure Nothing
-      Just (HAR _ hf _ _ _) -> do
-        resolveIntoCallHierarchy hf pos nfp
-
-resolveIntoCallHierarchy :: Applicative f => HieASTs a -> Position -> NormalizedFilePath -> f (Maybe [CallHierarchyItem])
+resolveIntoCallHierarchy :: HieASTs a -> Position -> NormalizedFilePath -> [CallHierarchyItem]
 resolveIntoCallHierarchy hf pos nfp =
-  case listToMaybe $ pointCommand hf pos extract of
-    Nothing    -> pure Nothing
-    Just infos ->
-      case mapMaybe (construct nfp hf) infos of
-        []  -> pure Nothing
-        res -> pure $ Just res
+    case listToMaybe $ pointCommand hf pos extract of
+        Nothing    -> mempty
+        Just infos -> mapMaybe (construct nfp hf) infos
 
 extract :: HieAST a -> [(Identifier, S.Set ContextInfo, Span)]
 extract ast = let span = nodeSpan ast
@@ -149,8 +136,7 @@ construct nfp hf (ident, contexts, ssp)
       Right name -> case getNameBinding name (getAsts hf) of
         Nothing -> Nothing
         Just sp -> case resolveIntoCallHierarchy hf (realSrcSpanToRange sp ^. L.start) nfp of
-          Just (Just items) -> listToMaybe items
-          _                 -> Nothing
+          (items) -> listToMaybe items
 
 mkCallHierarchyItem :: NormalizedFilePath -> Identifier -> SymbolKind -> Span -> Span -> CallHierarchyItem
 mkCallHierarchyItem nfp ident kind span selSpan =
@@ -245,7 +231,7 @@ mkCallHierarchyCall mk v@Vertex{..} = do
 
   prepareCallHierarchyItem nfp pos >>=
     \case
-      Just [item] -> pure $ Just $ mk item (List [range])
+      [item] -> pure $ Just $ mk item (List [range])
       _           -> do
         ShakeExtras{withHieDb} <- getShakeExtras
         liftIO (withHieDb (`Q.getSymbolPosition` v)) >>=
@@ -253,8 +239,8 @@ mkCallHierarchyCall mk v@Vertex{..} = do
             (x:_) ->
               prepareCallHierarchyItem nfp (Position (fromIntegral $ psl x - 1) (fromIntegral $ psc x - 1)) >>=
                 \case
-                  Just [item] -> pure $ Just $ mk item (List [range])
-                  _           -> pure Nothing
+                  [item] -> pure $ Just $ mk item (List [range])
+                  _      -> pure Nothing
             _     -> pure Nothing
 
 -- | Unified queries include incoming calls and outgoing calls.
