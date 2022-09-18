@@ -156,7 +156,7 @@ mkCallHierarchyItem nfp ident kind span selSpan =
             Right name   -> occNameString $ nameOccName name
 
         optimizeDisplay :: String -> String
-        optimizeDisplay name -- optimize display for DuplicateRecordFields
+        optimizeDisplay name -- Optimize display for DuplicateRecordFields
             | "$sel:" == take 5 name = drop 5 name
             | otherwise = name
 
@@ -191,7 +191,7 @@ incomingCalls state pluginId param = pluginResponse $ do
         mkCallHierarchyIncomingCall :: Vertex -> Action (Maybe CallHierarchyIncomingCall)
         mkCallHierarchyIncomingCall = mkCallHierarchyCall CallHierarchyIncomingCall
 
--- Render outgoing calls request.
+-- | Render outgoing calls request.
 outgoingCalls :: PluginMethodHandler IdeState CallHierarchyOutgoingCalls
 outgoingCalls state pluginId param = pluginResponse $ do
     calls <- liftIO
@@ -206,7 +206,7 @@ outgoingCalls state pluginId param = pluginResponse $ do
         mkCallHierarchyOutgoingCall :: Vertex -> Action (Maybe CallHierarchyOutgoingCall)
         mkCallHierarchyOutgoingCall = mkCallHierarchyCall CallHierarchyOutgoingCall
 
--- Merge calls from the same place
+-- | Merge calls from the same place
 mergeCalls constructor target =
     concatMap merge
         . groupBy (\a b -> a ^. target == b ^. target)

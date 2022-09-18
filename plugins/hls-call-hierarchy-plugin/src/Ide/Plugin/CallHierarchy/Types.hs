@@ -13,14 +13,14 @@ data Vertex = Vertex {
   mod    :: String
 , occ    :: String
 , hieSrc :: FilePath
-, sl     :: Int -- start line
-, sc     :: Int -- start character
-, el     :: Int -- end line
-, ec     :: Int -- end character
-, casl   :: Int -- sl for call appear
-, casc   :: Int -- sc for call appear
-, cael   :: Int -- el for call appear
-, caec   :: Int -- ec for call appear
+, sl     :: Int -- ^ start line
+, sc     :: Int -- ^ start character
+, el     :: Int -- ^ end line
+, ec     :: Int -- ^ end character
+, casl   :: Int -- ^ sl for call appear
+, casc   :: Int -- ^ sc for call appear
+, cael   :: Int -- ^ el for call appear
+, caec   :: Int -- ^ ec for call appear
 } deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
 instance ToRow Vertex where
