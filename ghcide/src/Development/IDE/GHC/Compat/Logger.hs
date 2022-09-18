@@ -25,7 +25,7 @@ import           DynFlags
 import           Outputable                            (queryQual)
 #endif
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Types.Error
+import           GHC.Types.Error
 #endif
 
 putLogHook :: Logger -> HscEnv -> HscEnv
