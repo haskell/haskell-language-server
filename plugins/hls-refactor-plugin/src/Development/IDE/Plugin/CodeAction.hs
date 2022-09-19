@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP   #-}
 {-# LANGUAGE GADTs #-}
 
 module Development.IDE.Plugin.CodeAction
@@ -19,9 +20,9 @@ import           Control.Arrow                                     (second,
                                                                     (&&&),
                                                                     (>>>))
 import           Control.Concurrent.STM.Stats                      (atomically)
+import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
-import           Control.Monad.Extra
 import           Data.Aeson
 import           Data.Char
 import qualified Data.DList                                        as DL
@@ -39,50 +40,52 @@ import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Utf16.Rope                              as Rope
 import           Data.Tuple.Extra                                  (fst3)
-import           Development.IDE.Types.Logger                      hiding (group)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
+import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
-import qualified Development.IDE.GHC.ExactPrint                   as E
+import qualified Development.IDE.GHC.ExactPrint                    as E
 import           Development.IDE.GHC.Util                          (printOutputable,
                                                                     printRdrName)
-import           Development.IDE.Core.Shake                   hiding (Log)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
-import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
+import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger                      hiding
+                                                                   (group)
 import           Development.IDE.Types.Options
+import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
-import           Language.LSP.Types                                (ApplyWorkspaceEditParams(..), CodeAction (..),
+import           Language.LSP.Types                                (ApplyWorkspaceEditParams (..),
+                                                                    CodeAction (..),
                                                                     CodeActionContext (CodeActionContext, _diagnostics),
                                                                     CodeActionKind (CodeActionQuickFix, CodeActionUnknown),
                                                                     CodeActionParams (CodeActionParams),
                                                                     Command,
                                                                     Diagnostic (..),
-                                                                    MessageType (..),
-                                                                    ShowMessageParams (..),
                                                                     List (..),
+                                                                    MessageType (..),
                                                                     ResponseError,
                                                                     SMethod (..),
+                                                                    ShowMessageParams (..),
                                                                     TextDocumentIdentifier (TextDocumentIdentifier),
                                                                     TextEdit (TextEdit, _range),
                                                                     UInt,
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InR),
                                                                     uriToFilePath)
-import           GHC.Exts                                           (fromList)
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import           Text.Regex.TDFA                                   (mrAfter,
@@ -135,13 +138,13 @@ iePluginDescriptor recorder plId =
             wrap suggestExportUnusedTopBinding
           , wrap suggestModuleTypo
           , wrap suggestFixConstructorImport
-          , wrap suggestNewImport
 #if !MIN_VERSION_ghc(9,3,0)
           , wrap suggestExtendImport
           , wrap suggestImportDisambiguation
           , wrap suggestNewOrExtendImportForClassMethod
           , wrap suggestHideShadow
 #endif
+          , wrap suggestNewImport
           ]
           plId
    in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler STextDocumentCodeAction codeAction }
