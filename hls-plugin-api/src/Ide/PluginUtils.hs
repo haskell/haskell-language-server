@@ -32,6 +32,7 @@ module Ide.PluginUtils
     handleMaybe,
     handleMaybeM,
     throwPluginError,
+    unescape,
     )
 where
 
@@ -43,10 +44,12 @@ import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
 import           Data.Bifunctor                  (Bifunctor (first))
+import           Data.Char                       (isPrint, showLitChar)
+import           Data.Functor                    (void)
 import qualified Data.HashMap.Strict             as H
-import           Data.List                       (find)
 import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
+import           Data.Void                       (Void)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Ide.Types
@@ -57,6 +60,9 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
+import qualified Text.Megaparsec                 as P
+import qualified Text.Megaparsec.Char            as P
+import qualified Text.Megaparsec.Char.Lexer      as P
 
 -- ---------------------------------------------------------------------
 
@@ -255,3 +261,34 @@ pluginResponse :: Monad m => ExceptT String m a -> m (Either ResponseError a)
 pluginResponse =
   fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
     . runExceptT
+
+-- ---------------------------------------------------------------------
+
+type TextParser = P.Parsec Void T.Text
+
+-- | Unescape printable escape sequences within double quotes.
+-- This is useful if you have to call 'show' indirectly, and it escapes some characters which you would prefer to
+-- display as is.
+unescape :: T.Text -> T.Text
+unescape input =
+    case P.runParser escapedTextParser "inline" input of
+        Left _     -> input
+        Right strs -> T.pack strs
+
+-- | Parser for a string that contains double quotes. Returns unescaped string.
+escapedTextParser :: TextParser String
+escapedTextParser = concat <$> P.many (outsideStringLiteral P.<|> stringLiteral)
+  where
+    outsideStringLiteral :: TextParser String
+    outsideStringLiteral = P.someTill (P.anySingleBut '"') (P.lookAhead (void (P.char '"') P.<|> P.eof))
+
+    stringLiteral :: TextParser String
+    stringLiteral = do
+        inside <- P.char '"' >> P.manyTill P.charLiteral (P.char '"')
+        let f '"' = "\\\"" -- double quote should still be escaped
+            -- Despite the docs, 'showLitChar' and 'showLitString' from 'Data.Char' DOES ESCAPE unicode printable
+            -- characters. So we need to call 'isPrint' from 'Data.Char' manually.
+            f ch  = if isPrint ch then [ch] else showLitChar ch ""
+            inside' = concatMap f inside
+
+        pure $ "\"" <> inside' <> "\""

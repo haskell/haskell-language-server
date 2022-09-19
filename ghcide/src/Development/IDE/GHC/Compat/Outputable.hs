@@ -79,9 +79,9 @@ import qualified Outputable                      as Out
 import           SrcLoc
 #endif
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Utils.Logger
-import GHC.Driver.Config.Diagnostic
-import Data.Maybe
+import           Data.Maybe
+import           GHC.Driver.Config.Diagnostic
+import           GHC.Utils.Logger
 #endif
 
 -- | A compatible function to print `Outputable` instances

@@ -48,7 +48,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-08-29T06:53:13Z
+index-state: 2022-09-14T16:53:13Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
@@ -65,40 +65,16 @@ constraints:
 -- This is benign and won't affect our ability to release to Hackage,
 -- because we only depend on `ekg-json` when a non-default flag
 -- is turned on.
+-- DELETE MARKER FOR CI
+-- centos7 has an old version of git which cabal doesn't
+-- support. We delete these lines in gitlab ci to workaround
+-- this issue, as this is not necessary to build our binaries.
 source-repository-package
   type:git
   location: https://github.com/pepeiborra/ekg-json
   tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
   -- https://github.com/tibbe/ekg-json/pull/12
-
-source-repository-package
-  type:git
-  location: https://github.com/wz1000/hiedb
-  tag: 67b92df2359558091df9102db5b701327308b930
-
-source-repository-package
-  type:git
-  location: https://github.com/wz1000/hie-bios
-  tag: aa73d3d2eb89df0003d2468a105e326d71b62cc7
-
--- Remove me when a new version of lsp is released
-source-repository-package
-  type:git
-  location: https://github.com/haskell/lsp
-  subdir: lsp
-  tag: b0f8596887088b8ab65fc1015c773f45b47234ae
-
-source-repository-package
-  type:git
-  location: https://github.com/haskell/lsp
-  subdir: lsp-types
-  tag: b0f8596887088b8ab65fc1015c773f45b47234ae
-
-source-repository-package
-  type:git
-  location: https://github.com/haskell/lsp
-  subdir: lsp-test
-  tag: b0f8596887088b8ab65fc1015c773f45b47234ae
+-- END DELETE
 
 allow-newer:
   -- ghc-9.4
@@ -117,16 +93,9 @@ allow-newer:
   ekg-json:base,
   ghc-paths:Cabal,
   haddock-library:base,
-  hie-bios:aeson,
-  hie-bios:ghc,
   monoid-extras:base,
   monoid-subclasses:vector,
   svg-builder:base,
   uuid:time,
   vector-space:base,
-
-  -- ghc-9.2
-  ----------
-  hiedb:base,
-
-  ekg-wai:time
+  ekg-wai:time,

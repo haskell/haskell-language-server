@@ -389,7 +389,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
   | otherwise = []
   where
     L _ HsModule {hsmodImports} = astA ps
- 
+
     suggests identifier modName s
       | Just tcM <- mTcM,
         Just har <- mHar,
@@ -458,6 +458,12 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
         = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
     | otherwise = []
 
+
+-- Note [Removing imports is preferred]
+-- It's good to prefer the remove imports code action because an unused import
+-- is likely to be removed and less likely the warning will be disabled.
+-- Therefore actions to remove a single or all redundant imports should be
+-- preferred, so that the client can prioritize them higher.
 caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [Command |? CodeAction]
 caRemoveRedundantImports m contents digs ctxDigs uri
   | Just pm <- m,
@@ -481,7 +487,8 @@ caRemoveRedundantImports m contents digs ctxDigs uri
         _diagnostics = Nothing
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
-        _isPreferred = Nothing
+        -- See Note [Removing imports is preferred]
+        _isPreferred = Just True
         _command = Nothing
         _disabled = Nothing
         _xdata = Nothing
@@ -520,7 +527,8 @@ caRemoveInvalidExports m contents digs ctxDigs uri
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
-        _isPreferred = Nothing
+        -- See Note [Removing imports is preferred]
+        _isPreferred = Just True
         _disabled = Nothing
         _xdata = Nothing
         _changeAnnotations = Nothing
@@ -534,7 +542,8 @@ caRemoveInvalidExports m contents digs ctxDigs uri
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
-        _isPreferred = Nothing
+        -- See Note [Removing imports is preferred]
+        _isPreferred = Just True
         _disabled = Nothing
         _xdata = Nothing
         _changeAnnotations = Nothing

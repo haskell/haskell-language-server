@@ -52,11 +52,11 @@ module Development.IDE.GHC.Compat.Units (
     showSDocForUser',
     ) where
 
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Map.Strict as Map
-import Control.Monad
+import           Control.Monad
+import qualified Data.List.NonEmpty              as NE
+import qualified Data.Map.Strict                 as Map
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Unit.Home.ModInfo
+import           GHC.Unit.Home.ModInfo
 #endif
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
