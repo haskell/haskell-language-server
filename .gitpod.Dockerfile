@@ -13,6 +13,7 @@ RUN sudo install-packages build-essential curl libffi-dev libffi7 libgmp-dev lib
     ghcup install ghc 9.0.2 && \
     ghcup install ghc 9.2.3 && \
     ghcup install ghc 9.2.4 --set && \
+    ghcup install ghc 9.4.2 && \
     ghcup install hls --set && \
     ghcup install cabal --set && \
     ghcup install stack --set && \
