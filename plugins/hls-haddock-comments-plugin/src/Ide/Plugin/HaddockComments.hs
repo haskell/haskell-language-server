@@ -15,10 +15,10 @@ import qualified Data.Map                              as Map
 import qualified Data.Text                             as T
 import           Development.IDE                       hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.ExactPrint        (GetAnnotatedParsedSource (..))
-import qualified Development.IDE.GHC.ExactPrint                   as E
+import qualified Development.IDE.GHC.ExactPrint        as E
+import           Development.IDE.Plugin.CodeAction
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs)

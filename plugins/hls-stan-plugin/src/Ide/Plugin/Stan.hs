@@ -7,15 +7,15 @@ import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad.Trans.Maybe      (MaybeT (MaybeT), runMaybeT)
 import           Data.Default
 import           Data.Foldable                  (toList)
-import qualified Data.HashMap.Strict            as HM
 import           Data.Hashable                  (Hashable)
+import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map                       as Map
 import           Data.Maybe                     (fromJust, mapMaybe)
 import qualified Data.Text                      as T
 import           Development.IDE
-import           Development.IDE.Core.RuleTypes (HieAstResult (..))
 import           Development.IDE.Core.Rules     (getHieFile,
                                                  getSourceFileSource)
+import           Development.IDE.Core.RuleTypes (HieAstResult (..))
 import qualified Development.IDE.Core.Shake     as Shake
 import           Development.IDE.GHC.Compat     (HieASTs (HieASTs),
                                                  RealSrcSpan (..), mkHieFile',

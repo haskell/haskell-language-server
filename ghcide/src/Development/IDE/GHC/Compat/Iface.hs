@@ -8,7 +8,7 @@ module Development.IDE.GHC.Compat.Iface (
 
 import           GHC
 #if MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Session (targetProfile)
+import           GHC.Driver.Session                    (targetProfile)
 #endif
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Iface.Load                        as Iface
