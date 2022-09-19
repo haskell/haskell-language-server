@@ -52,6 +52,10 @@ testTree =
                     )
             ],
 
+        -- TODO: Some more tests can be added on strange cases like
+        -- 1. lots of blank lines in between type signature and the body
+        -- 2. lots of blank lines in the function itself
+        -- etc.
         testGroup "findFoldingRanges" $
             let check :: CodeRange -> [FoldingRange] -> Assertion
                 check codeRange = (findFoldingRanges codeRange @?=)
@@ -88,7 +92,7 @@ testTree =
                 -- Single line returns [] because single line ranges need not be folded
                 testCase "Test Single Line" $ check
                     (mkCodeRange (Position 1 0) (Position 1 15) [] CodeKindRegion)
-                    [],
+                    [FoldingRange 1 (Just 0) 1 (Just 15) (Just FoldingRangeRegion)],
 
                 -- MultiLine imports
                 testCase "MultiLine Imports" $ check
@@ -110,6 +114,6 @@ testTree =
             -- If a range has the same start and end line it need not be folded so Nothing is expected
             testCase "Test Same Start Line" $ check
                 (mkCodeRange (Position 1 1) (Position 1 10) [] CodeKindRegion)
-                Nothing
+                (Just (FoldingRange 1 (Just 1) 1 (Just 10) (Just FoldingRangeRegion)))
         ]
     ]
