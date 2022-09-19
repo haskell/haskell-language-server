@@ -171,9 +171,7 @@ createFoldingRange (CodeRange (Range (Position lineStart charStart) (Position li
     -- because it is already single line, so omiting it.
     if lineStart == lineEnd
         then Nothing
-    else case frk of
-        Just _  -> Just (FoldingRange lineStart (Just charStart) lineEnd (Just charEnd) frk)
-        Nothing -> Nothing
+    else Just (FoldingRange lineStart (Just charStart) lineEnd (Just charEnd) (Just frk))
 
 -- | Removes all small foldings that start from the same line.
 --

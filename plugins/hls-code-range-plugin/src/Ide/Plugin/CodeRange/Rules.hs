@@ -193,9 +193,8 @@ handleError recorder action' = do
         Right value -> pure $ toIdeResult (Right value)
 
 -- | Maps type CodeRangeKind to FoldingRangeKind
-crkToFrk :: CodeRangeKind -> Maybe FoldingRangeKind
+crkToFrk :: CodeRangeKind -> FoldingRangeKind
 crkToFrk crk = case crk of
-        CodeKindComment -> Just FoldingRangeComment
-        CodeKindImports -> Just FoldingRangeImports
-        CodeKindRegion  -> Just FoldingRangeRegion
-        _               -> Nothing
+        CodeKindComment -> FoldingRangeComment
+        CodeKindImports -> FoldingRangeImports
+        CodeKindRegion  -> FoldingRangeRegion
