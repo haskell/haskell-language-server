@@ -59,7 +59,8 @@ import           GHC.Plugins                              (Depth (AllTheWay),
 #endif
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
-                                                           IdePlugins(..), PluginId)
+                                                           IdePlugins (..),
+                                                           PluginId)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
@@ -516,7 +517,6 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
                              PrefixCon{} -> Just []
                              _           -> Nothing
 
-        extract ConDeclField{..}
             -- NOTE: 'cd_fld_names' is grouped so that the fields
             -- sharing the same type declaration to fit in the same group; e.g.
             --
@@ -527,8 +527,10 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
             -- is encoded as @[[arg1, arg2], [arg3], [arg4]]@
             -- Hence, we must concat nested arguments into one to get all the fields.
 #if MIN_VERSION_ghc(9,3,0)
+        extract ConDeclField{..}
             = map (foLabel . unLoc) cd_fld_names
 #else
+        extract ConDeclField{..}
             = map (rdrNameFieldOcc . unLoc) cd_fld_names
 #endif
         -- XConDeclField

@@ -19,9 +19,9 @@ import           Control.Arrow                                     (second,
                                                                     (&&&),
                                                                     (>>>))
 import           Control.Concurrent.STM.Stats                      (atomically)
+import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
-import           Control.Monad.Extra
 import           Data.Aeson
 import           Data.Char
 import qualified Data.DList                                        as DL
@@ -39,50 +39,52 @@ import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Utf16.Rope                              as Rope
 import           Data.Tuple.Extra                                  (fst3)
-import           Development.IDE.Types.Logger                      hiding (group)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
+import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
-import qualified Development.IDE.GHC.ExactPrint                   as E
+import qualified Development.IDE.GHC.ExactPrint                    as E
 import           Development.IDE.GHC.Util                          (printOutputable,
                                                                     printRdrName)
-import           Development.IDE.Core.Shake                   hiding (Log)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
-import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
+import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger                      hiding
+                                                                   (group)
 import           Development.IDE.Types.Options
+import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
-import           Language.LSP.Types                                (ApplyWorkspaceEditParams(..), CodeAction (..),
+import           Language.LSP.Types                                (ApplyWorkspaceEditParams (..),
+                                                                    CodeAction (..),
                                                                     CodeActionContext (CodeActionContext, _diagnostics),
                                                                     CodeActionKind (CodeActionQuickFix, CodeActionUnknown),
                                                                     CodeActionParams (CodeActionParams),
                                                                     Command,
                                                                     Diagnostic (..),
-                                                                    MessageType (..),
-                                                                    ShowMessageParams (..),
                                                                     List (..),
+                                                                    MessageType (..),
                                                                     ResponseError,
                                                                     SMethod (..),
+                                                                    ShowMessageParams (..),
                                                                     TextDocumentIdentifier (TextDocumentIdentifier),
                                                                     TextEdit (TextEdit, _range),
                                                                     UInt,
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InR),
                                                                     uriToFilePath)
-import           GHC.Exts                                           (fromList)
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import           Text.Regex.TDFA                                   (mrAfter,
@@ -389,7 +391,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
   | otherwise = []
   where
     L _ HsModule {hsmodImports} = astA ps
- 
+
     suggests identifier modName s
       | Just tcM <- mTcM,
         Just har <- mHar,
@@ -458,6 +460,12 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
         = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
     | otherwise = []
 
+
+-- Note [Removing imports is preferred]
+-- It's good to prefer the remove imports code action because an unused import
+-- is likely to be removed and less likely the warning will be disabled.
+-- Therefore actions to remove a single or all redundant imports should be
+-- preferred, so that the client can prioritize them higher.
 caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [Command |? CodeAction]
 caRemoveRedundantImports m contents digs ctxDigs uri
   | Just pm <- m,
@@ -481,7 +489,8 @@ caRemoveRedundantImports m contents digs ctxDigs uri
         _diagnostics = Nothing
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
-        _isPreferred = Nothing
+        -- See Note [Removing imports is preferred]
+        _isPreferred = Just True
         _command = Nothing
         _disabled = Nothing
         _xdata = Nothing
@@ -520,7 +529,8 @@ caRemoveInvalidExports m contents digs ctxDigs uri
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
-        _isPreferred = Nothing
+        -- See Note [Removing imports is preferred]
+        _isPreferred = Just True
         _disabled = Nothing
         _xdata = Nothing
         _changeAnnotations = Nothing
@@ -534,7 +544,8 @@ caRemoveInvalidExports m contents digs ctxDigs uri
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
-        _isPreferred = Nothing
+        -- See Note [Removing imports is preferred]
+        _isPreferred = Just True
         _disabled = Nothing
         _xdata = Nothing
         _changeAnnotations = Nothing

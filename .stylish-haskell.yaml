@@ -57,6 +57,7 @@ newline: lf
 
 language_extensions:
   - BangPatterns
+  - CPP
   - DataKinds
   - DeriveFunctor
   - DeriveGeneric
