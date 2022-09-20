@@ -4,6 +4,7 @@
 {-# LANGUAGE LambdaCase       #-}
 {-# LANGUAGE TypeFamilies     #-}
 {-# LANGUAGE ViewPatterns     #-}
+{-# LANGUAGE BangPatterns     #-}
 
 module Ide.Plugin.Class.Types where
 
@@ -45,7 +46,7 @@ data GetInstanceBindTypeSigs = GetInstanceBindTypeSigs
 
 data InstanceBindTypeSig = InstanceBindTypeSig
     { bindName     :: Name
-    , bindRendered :: T.Text
+    , bindRendered :: !T.Text
     , bindDefSpan  :: Maybe SrcSpan
     -- ^SrcSpan for the bind definition
     }
