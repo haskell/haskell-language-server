@@ -8,8 +8,7 @@ module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 import           Control.Lens                    ((^.))
 import           Control.Monad.Except            (ExceptT, MonadIO, liftIO)
 import qualified Data.HashMap.Strict             as HashMap
-import           Data.String                     (IsString)
-import           Data.Text                       (Text)
+import           Data.Text                       (Text, unpack)
 import qualified Data.Text                       as T
 import           Development.IDE                 (GetParsedModule (GetParsedModule),
                                                   GhcSession (GhcSession),
@@ -143,15 +142,15 @@ isInsideRealSrcSpan :: Position -> RealSrcSpan -> Bool
 p `isInsideRealSrcSpan` r = let (Range sp ep) = realSrcSpanToRange r in sp <= p && p <= ep
 
 getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
-getFirstPragma pId state nfp = handleMaybeM "Could not get NextPragmaInfo" $ do
-      ghcSession <- liftIO $ runAction (show pId <> ".GhcSession") state $ useWithStale GhcSession nfp
-      (_, fileContents) <- liftIO $ runAction (show pId <> ".GetFileContents") state $ getFileContents nfp
+getFirstPragma (PluginId pId) state nfp = handleMaybeM "Could not get NextPragmaInfo" $ do
+      ghcSession <- liftIO $ runAction (unpack pId <> ".GhcSession") state $ useWithStale GhcSession nfp
+      (_, fileContents) <- liftIO $ runAction (unpack pId <> ".GetFileContents") state $ getFileContents nfp
       case ghcSession of
         Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
         Nothing                                           -> pure Nothing
 
 requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
-requestLiterals pId state = handleMaybeM "Could not Collect Literals"
+requestLiterals (PluginId pId) state = handleMaybeM "Could not Collect Literals"
                 . liftIO
-                . runAction (show pId <> ".CollectLiterals") state
+                . runAction (unpack pId <> ".CollectLiterals") state
                 . use CollectLiterals
