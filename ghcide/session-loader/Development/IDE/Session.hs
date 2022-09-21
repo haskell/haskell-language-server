@@ -1,7 +1,7 @@
+{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE TypeFamilies              #-}
-{-# LANGUAGE CPP                       #-}
 
 {-|
 The logic for setting up a ghcide session by tapping into hie-bios.
@@ -67,15 +67,16 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger         (Pretty (pretty),
                                                        Priority (Debug, Error, Info, Warning),
                                                        Recorder, WithPriority,
-                                                       logWith, nest, vcat,
-                                                       viaShow, (<+>),
-                                                       toCologActionWithPrio, cmapWithPrio)
+                                                       cmapWithPrio, logWith,
+                                                       nest,
+                                                       toCologActionWithPrio,
+                                                       vcat, viaShow, (<+>))
 import           Development.IDE.Types.Options
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
-import qualified HIE.Bios.Types                       as HieBios
 import           HIE.Bios.Environment                 hiding (getCacheDir)
 import           HIE.Bios.Types                       hiding (Log)
+import qualified HIE.Bios.Types                       as HieBios
 import           Hie.Implicit.Cradle                  (loadImplicitHieCradle)
 import           Language.LSP.Server
 import           Language.LSP.Types
@@ -90,6 +91,8 @@ import           Data.Void
 import           Control.Concurrent.STM.Stats         (atomically, modifyTVar',
                                                        readTVar, writeTVar)
 import           Control.Concurrent.STM.TQueue
+import           Control.DeepSeq
+import           Control.Exception                    (evaluate)
 import           Control.Monad.IO.Unlift              (MonadUnliftIO)
 import           Data.Foldable                        (for_)
 import           Data.HashMap.Strict                  (HashMap)
@@ -103,9 +106,6 @@ import           HieDb.Types
 import           HieDb.Utils
 import qualified System.Random                        as Random
 import           System.Random                        (RandomGen)
-import Control.Monad.IO.Unlift (MonadUnliftIO)
-import Control.Exception (evaluate)
-import Control.DeepSeq
 
 data Log
   = LogSettingInitialDynFlags
