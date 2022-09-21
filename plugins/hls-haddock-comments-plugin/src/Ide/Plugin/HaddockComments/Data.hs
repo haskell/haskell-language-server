@@ -25,7 +25,7 @@ import           Language.Haskell.GHC.ExactPrint.Utils (mkComment)
 genForDataDecl :: GenComments
 genForDataDecl =
     GenComments {
-        title = "Generate fields comments",
+        title = "Generate haddock comments",
         updateAnns = updateDataAnns
     }
 
