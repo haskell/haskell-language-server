@@ -216,7 +216,8 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
             let msg e pid = "Exception in plugin " <> T.pack (show pid) <> " while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
                 handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
             es <- runConcurrently msg (show m) handlers ide params
-            let (errs,succs) = partitionEithers $ toList $ NE.zipWith (\(pId,_) -> first (pId,)) handlers es
+
+            let (errs,succs) = partitionEithers $ toList $ join $ NE.zipWith (\(pId,_) -> fmap (first (pId,))) handlers es
             unless (null errs) $ forM_ errs $ \(pId, err) ->
                 logWith recorder Warning $ LogPluginError pId err
             case nonEmpty succs of
@@ -260,8 +261,8 @@ runConcurrently
   -- ^ Enabled plugin actions that we are allowed to run
   -> a
   -> b
-  -> m (NonEmpty (Either ResponseError d))
-runConcurrently msg method fs a b = fmap join $ forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString method) $ do
+  -> m (NonEmpty(NonEmpty (Either ResponseError d)))
+runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString method) $ do
   f a b
      `catchAny` (\e -> pure $ pure $ Left $ ResponseError InternalError (msg e pid) Nothing)
 
