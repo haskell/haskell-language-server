@@ -88,7 +88,8 @@ getFoldingRanges :: NormalizedFilePath -> ExceptT String IdeAction [FoldingRange
 getFoldingRanges file = do
     (codeRange, _) <- maybeToExceptT "fail to get code range" $ useE GetCodeRange file
 
-    pure $ findFoldingRanges codeRange
+    -- removing first node because it folds the entire file
+    pure $ drop 1 $ findFoldingRanges codeRange
 
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do
@@ -179,7 +180,6 @@ createFoldingRange :: CodeRange -> Maybe FoldingRange
 createFoldingRange (CodeRange (Range (Position lineStart charStart) (Position lineEnd charEnd)) _ ck) = do
     -- Type conversion of codeRangeKind to FoldingRangeKind
     let frk = crkToFrk ck
-
     Just (FoldingRange lineStart (Just charStart) lineEnd (Just charEnd) (Just frk))
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
