@@ -91,11 +91,6 @@ import           HscTypes             as Env
 import           Module
 #endif
 
-#if MIN_VERSION_ghc(9,3,0)
-hsc_EPS :: HscEnv -> UnitEnv
-hsc_EPS = hsc_unit_env
-#endif
-
 #if MIN_VERSION_ghc(9,0,0)
 #if !MIN_VERSION_ghc(9,2,0)
 import qualified Data.Set             as Set
@@ -103,6 +98,11 @@ import qualified Data.Set             as Set
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
 import           Data.IORef
+#endif
+
+#if MIN_VERSION_ghc(9,3,0)
+hsc_EPS :: HscEnv -> UnitEnv
+hsc_EPS = hsc_unit_env
 #endif
 
 #if !MIN_VERSION_ghc(9,2,0)

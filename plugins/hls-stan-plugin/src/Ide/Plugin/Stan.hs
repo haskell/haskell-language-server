@@ -5,25 +5,14 @@ import           Control.Monad                  (void)
 import           Control.Monad.IO.Class         (liftIO)
 import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad.Trans.Maybe      (MaybeT (MaybeT), runMaybeT)
+import           Data.Default
 import           Data.Foldable                  (toList)
 import           Data.Hashable                  (Hashable)
 import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map                       as Map
 import           Data.Maybe                     (fromJust, mapMaybe)
 import qualified Data.Text                      as T
-import           Development.IDE                (Action, FileDiagnostic,
-                                                 GetHieAst (..),
-                                                 GetModSummaryWithoutTimestamps (..),
-                                                 GhcSession (..), IdeState,
-                                                 NormalizedFilePath,
-                                                 Pretty (..), Recorder,
-                                                 RuleResult, Rules,
-                                                 ShowDiagnostic (..),
-                                                 TypeCheck (..), WithPriority,
-                                                 action, cmapWithPrio, define,
-                                                 getFilesOfInterestUntracked,
-                                                 hscEnv, msrModSummary,
-                                                 tmrTypechecked, use, uses)
+import           Development.IDE
 import           Development.IDE.Core.Rules     (getHieFile,
                                                  getSourceFileSource)
 import           Development.IDE.Core.RuleTypes (HieAstResult (..))
@@ -38,9 +27,11 @@ import           Development.IDE.GHC.Compat     (HieASTs (HieASTs),
 import           Development.IDE.GHC.Error      (realSrcSpanToRange)
 import           GHC.Generics                   (Generic)
 import           HieTypes                       (HieASTs, HieFile)
+import           Ide.Plugin.Config
 import           Ide.Types                      (PluginDescriptor (..),
                                                  PluginId,
-                                                 defaultPluginDescriptor)
+                                                 defaultPluginDescriptor,
+                                                 pluginEnabledConfig)
 import qualified Language.LSP.Types             as LSP
 import           Stan.Analysis                  (Analysis (..), runAnalysis)
 import           Stan.Category                  (Category (..))
@@ -50,7 +41,8 @@ import           Stan.Inspection.All            (inspectionsIds, inspectionsMap)
 import           Stan.Observation               (Observation (..))
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId) {pluginRules = rules recorder}
+descriptor recorder plId = (defaultPluginDescriptor plId)
+    {pluginRules = rules recorder plId}
 
 newtype Log = LogShake Shake.Log deriving (Show)
 
@@ -67,18 +59,21 @@ instance NFData GetStanDiagnostics
 
 type instance RuleResult GetStanDiagnostics = ()
 
-rules :: Recorder (WithPriority Log) -> Rules ()
-rules recorder = do
+rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
+rules recorder plId = do
   define (cmapWithPrio LogShake recorder) $
     \GetStanDiagnostics file -> do
-      maybeHie <- getHieFile file
-      case maybeHie of
-        Nothing -> return ([], Nothing)
-        Just hie -> do
-          let enabledInspections = HM.fromList [(LSP.fromNormalizedFilePath file, inspectionsIds)]
-          -- This should use Cabal config for extensions and Stan config for inspection preferences is the future
-          let analysis = runAnalysis Map.empty enabledInspections [] [hie]
-          return (analysisToDiagnostics file analysis, Just ())
+      config <- getClientConfigAction def
+      if pluginEnabledConfig plcDiagnosticsOn plId config then do
+          maybeHie <- getHieFile file
+          case maybeHie of
+            Nothing -> return ([], Nothing)
+            Just hie -> do
+              let enabledInspections = HM.fromList [(LSP.fromNormalizedFilePath file, inspectionsIds)]
+              -- This should use Cabal config for extensions and Stan config for inspection preferences is the future
+              let analysis = runAnalysis Map.empty enabledInspections [] [hie]
+              return (analysisToDiagnostics file analysis, Just ())
+      else return ([], Nothing)
 
   action $ do
     files <- getFilesOfInterestUntracked
@@ -87,7 +82,7 @@ rules recorder = do
     analysisToDiagnostics :: NormalizedFilePath -> Analysis -> [FileDiagnostic]
     analysisToDiagnostics file = mapMaybe (observationToDianostic file) . toList . analysisObservations
     observationToDianostic :: NormalizedFilePath -> Observation -> Maybe FileDiagnostic
-    observationToDianostic file (Observation {observationSrcSpan, observationInspectionId}) =
+    observationToDianostic file Observation {observationSrcSpan, observationInspectionId} =
       do
         inspection <- HM.lookup observationInspectionId inspectionsMap
         let
@@ -109,7 +104,7 @@ rules recorder = do
         return ( file,
           ShowDiag,
           LSP.Diagnostic
-            { _range = realSrcSpanToRange $ observationSrcSpan,
+            { _range = realSrcSpanToRange observationSrcSpan,
               _severity = Just LSP.DsHint,
               _code = Just (LSP.InR $ unId (inspectionId inspection)),
               _source = Just "stan",

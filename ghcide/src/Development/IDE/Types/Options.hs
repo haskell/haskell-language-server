@@ -43,9 +43,6 @@ data IdeOptions = IdeOptions
     -- ^ File extensions to search for code, defaults to Haskell sources (including @.hs@)
   , optShakeProfiling     :: Maybe FilePath
     -- ^ Set to 'Just' to create a directory of profiling reports.
-  , optOTMemoryProfiling  :: IdeOTMemoryProfiling
-    -- ^ Whether to record profiling information with OpenTelemetry. You must
-    --   also enable the -l RTS flag for this to have any effect
   , optTesting            :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
   , optReportProgress     :: IdeReportProgress
@@ -123,7 +120,6 @@ defaultIdeOptions session = IdeOptions
     ,optPkgLocationOpts = defaultIdePkgLocationOptions
     ,optShakeOptions = shakeOptions
     ,optShakeProfiling = Nothing
-    ,optOTMemoryProfiling = IdeOTMemoryProfiling False
     ,optReportProgress = IdeReportProgress False
     ,optLanguageSyntax = "haskell"
     ,optNewColonConvention = False

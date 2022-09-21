@@ -24,12 +24,12 @@ import qualified GHC.Driver.Env                    as Env
 import           GHC.Driver.Plugins                (Plugin (..),
                                                     PluginWithArgs (..),
                                                     StaticPlugin (..),
-#if MIN_VERSION_ghc(9,3,0)
-                                                    staticPlugins,
-                                                    ParsedResult(..),
-                                                    PsMessages(..),
-#endif
                                                     defaultPlugin, withPlugins)
+#if MIN_VERSION_ghc(9,3,0)
+import           GHC.Driver.Plugins                (ParsedResult (..),
+                                                    PsMessages (..),
+                                                    staticPlugins)
+#endif
 import qualified GHC.Runtime.Loader                as Loader
 #elif MIN_VERSION_ghc(8,8,0)
 import qualified DynamicLoading                    as Loader
@@ -48,11 +48,10 @@ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed = do
   -- Apply parsedResultAction of plugins
   let applyPluginAction p opts = parsedResultAction p opts ms
 #if MIN_VERSION_ghc(9,3,0)
-  fmap (hpm_module . parsedResultModule) $
+  fmap (hpm_module . parsedResultModule) $ runHsc env $ withPlugins
 #else
-  fmap hpm_module $
+  fmap hpm_module $ runHsc env $ withPlugins
 #endif
-    runHsc env $ withPlugins
 #if MIN_VERSION_ghc(9,3,0)
       (Env.hsc_plugins env)
 #elif MIN_VERSION_ghc(9,2,0)

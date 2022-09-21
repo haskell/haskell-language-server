@@ -144,7 +144,6 @@ main = withTelemetryLogger $ \telemetryLogger -> do
             let defOptions = IDEMain.argsIdeOptions arguments config sessionLoader
             in defOptions
                 { optShakeProfiling = argsShakeProfiling
-                , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
                 , optCheckParents = pure $ checkParents config
                 , optCheckProject = pure $ checkProject config
                 , optRunSubset = not argsConservativeChangeTracking

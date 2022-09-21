@@ -12,6 +12,23 @@
         "url": "https://hackage.haskell.org/package/aeson-1.5.2.0/aeson-1.5.2.0.tar.gz"
       }
     },
+    "all-cabal-hashes-unpacked": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1663164766,
+        "narHash": "sha256-7ypfdEzJwfaQMQx9HV8B+r9BV7bN6iIO0lWhDy+8+0k=",
+        "owner": "commercialhaskell",
+        "repo": "all-cabal-hashes",
+        "rev": "ed701f5e64ece3e57efa4227243f9fb64f935253",
+        "type": "github"
+      },
+      "original": {
+        "owner": "commercialhaskell",
+        "ref": "current-hackage",
+        "repo": "all-cabal-hashes",
+        "type": "github"
+      }
+    },
     "brittany-01312": {
       "flake": false,
       "locked": {
@@ -54,11 +71,11 @@
     },
     "flake-utils": {
       "locked": {
-        "lastModified": 1656928814,
-        "narHash": "sha256-RIFfgBuKz6Hp89yRr7+NR5tzIAbn52h8vT6vXkYjZoM=",
+        "lastModified": 1659877975,
+        "narHash": "sha256-zllb8aq3YO3h8B/U0/J1WBgAL8EX5yWf5pMj3G0NAmc=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "7e2a3b3dfd9af950a856d66b0a7d01e3c18aa249",
+        "rev": "c0e246b9b83f637f4681389ecabcb2681b4f3af0",
         "type": "github"
       },
       "original": {
@@ -69,11 +86,11 @@
     },
     "flake-utils_2": {
       "locked": {
-        "lastModified": 1656928814,
-        "narHash": "sha256-RIFfgBuKz6Hp89yRr7+NR5tzIAbn52h8vT6vXkYjZoM=",
+        "lastModified": 1659877975,
+        "narHash": "sha256-zllb8aq3YO3h8B/U0/J1WBgAL8EX5yWf5pMj3G0NAmc=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "7e2a3b3dfd9af950a856d66b0a7d01e3c18aa249",
+        "rev": "c0e246b9b83f637f4681389ecabcb2681b4f3af0",
         "type": "github"
       },
       "original": {
@@ -133,11 +150,11 @@
     "gitignore": {
       "flake": false,
       "locked": {
-        "lastModified": 1657706534,
-        "narHash": "sha256-5jIzNHKtDu06mA325K/5CshUVb5r7sSmnRiula6Gr7o=",
+        "lastModified": 1660459072,
+        "narHash": "sha256-8DFJjXG8zqoONA1vXtgeKXy68KdJL5UaXR8NtVMUbx8=",
         "owner": "hercules-ci",
         "repo": "gitignore.nix",
-        "rev": "f840a659d57e53fa751a9248b17149fd0cf2a221",
+        "rev": "a20de23b925fd8264fd7fad6454652e142fd7f73",
         "type": "github"
       },
       "original": {
@@ -149,13 +166,13 @@
     "hie-bios": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-5RqspT27rb/tMBwrKr4VfSSbq0+c0LMNuaKlTun0Kkk=",
+        "narHash": "sha256-KLAg++tO9lCOn7R/cSN2wLbrhpeBOOmeTEh7auIbUNk=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hie-bios-0.9.1/hie-bios-0.9.1.tar.gz"
+        "url": "https://hackage.haskell.org/package/hie-bios-0.11.0/hie-bios-0.11.0.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hie-bios-0.9.1/hie-bios-0.9.1.tar.gz"
+        "url": "https://hackage.haskell.org/package/hie-bios-0.11.0/hie-bios-0.11.0.tar.gz"
       }
     },
     "hlint": {
@@ -197,13 +214,18 @@
     "lsp": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-+rkFYvSAI1hyFxPkgWZReyM2P6irVDpGVUGK8mcfEJE=",
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-1.5.0.0/lsp-1.5.0.0.tar.gz"
+        "lastModified": 1662291729,
+        "narHash": "sha256-KlL38v/75G9zrW7+IiUeiCxFfLJGm/EdFeWQRUikab8=",
+        "owner": "haskell",
+        "repo": "lsp",
+        "rev": "b0f8596887088b8ab65fc1015c773f45b47234ae",
+        "type": "github"
       },
       "original": {
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-1.5.0.0/lsp-1.5.0.0.tar.gz"
+        "owner": "haskell",
+        "repo": "lsp",
+        "rev": "b0f8596887088b8ab65fc1015c773f45b47234ae",
+        "type": "github"
       }
     },
     "lsp-test": {
@@ -216,18 +238,6 @@
       "original": {
         "type": "tarball",
         "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.3/lsp-test-0.14.0.3.tar.gz"
-      }
-    },
-    "lsp-types": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-q4XTvIvsLvISjgedpRktJbWsWHSRIQbOx2Z/2u+3s50=",
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-types-1.5.0.0/lsp-types-1.5.0.0.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-types-1.5.0.0/lsp-types-1.5.0.0.tar.gz"
       }
     },
     "myst-parser": {
@@ -249,11 +259,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1659782844,
-        "narHash": "sha256-tM/qhHFE61puBxh9ebP3BIG1fkRAT4rHqD3jCM0HXGY=",
+        "lastModified": 1663112159,
+        "narHash": "sha256-31rjPhB6Hj1QoqLvFSULFf9Z/6z05vR0KrLGYvr9w0M=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "c85e56bb060291eac3fb3c75d4e0e64f6836fcfe",
+        "rev": "78bce1608960b994405f3696ba086ba1d63654e9",
         "type": "github"
       },
       "original": {
@@ -265,11 +275,11 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1657888067,
-        "narHash": "sha256-GnwJoFBTPfW3+mz7QEeJEEQ9OMHZOiIJ/qDhZxrlKh8=",
+        "lastModified": 1663165252,
+        "narHash": "sha256-H9OiflDQy1vLu1w5yz46qWfGdcFBpS8VnPRLP0bsiZE=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "65fae659e31098ca4ac825a6fef26d890aaf3f4e",
+        "rev": "bde85b0815144b77763732e0f32918017480e6b5",
         "type": "github"
       },
       "original": {
@@ -284,11 +294,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1657626303,
-        "narHash": "sha256-O/JJ0hSBCmlx0oP8QGAlRrWn0BvlC5cj7/EZ0CCWHTU=",
+        "lastModified": 1662879385,
+        "narHash": "sha256-ZmiyHn0uPH4xHYcOhY0e0sPtfyM6jCF/shmVq2aTOLc=",
         "owner": "nix-community",
         "repo": "poetry2nix",
-        "rev": "920ba682377d5c0d87945c5eb6141ab8447ca509",
+        "rev": "4f8d61cd936f853242a4ce1fd476f5488c288c26",
         "type": "github"
       },
       "original": {
@@ -325,6 +335,7 @@
     "root": {
       "inputs": {
         "aeson-1520": "aeson-1520",
+        "all-cabal-hashes-unpacked": "all-cabal-hashes-unpacked",
         "brittany-01312": "brittany-01312",
         "constraints-extras": "constraints-extras",
         "flake-compat": "flake-compat",
@@ -340,7 +351,6 @@
         "implicit-hie-cradle": "implicit-hie-cradle",
         "lsp": "lsp",
         "lsp-test": "lsp-test",
-        "lsp-types": "lsp-types",
         "myst-parser": "myst-parser",
         "nixpkgs": "nixpkgs",
         "poetry2nix": "poetry2nix",
