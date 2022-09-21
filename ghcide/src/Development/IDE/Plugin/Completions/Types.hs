@@ -11,7 +11,8 @@ import           Control.DeepSeq
 import qualified Data.Map                     as Map
 import qualified Data.Text                    as T
 
-import           Data.Aeson                   (FromJSON, ToJSON)
+import           Data.Aeson
+import           Data.Aeson.Types
 import           Data.Hashable                (Hashable)
 import           Data.Text                    (Text)
 import           Data.Typeable                (Typeable)
@@ -27,6 +28,7 @@ import           Ide.Types                    (PluginId)
 import           Language.LSP.Server          (MonadLsp)
 import           Language.LSP.Types           (CompletionItemKind (..), Uri)
 import qualified Language.LSP.Types           as J
+import qualified GHC.Types.Name.Occurrence as Occ
 
 -- | Produce completions info for a file
 type instance RuleResult LocalCompletions = CachedCompletions
@@ -95,13 +97,13 @@ data CompItem = CI
   { compKind            :: CompletionItemKind
   , insertText          :: T.Text         -- ^ Snippet for the completion
   , provenance          :: Provenance     -- ^ From where this item is imported from.
-  , typeText            :: Maybe T.Text   -- ^ Available type information.
   , label               :: T.Text         -- ^ Label to display to the user.
   , isInfix             :: Maybe Backtick -- ^ Did the completion happen
                                    -- in the context of an infix notation.
-  , docs                :: SpanDoc        -- ^ Available documentation.
   , isTypeCompl         :: Bool
   , additionalTextEdits :: Maybe ExtendImport
+  , nameDetails         :: Maybe NameDetails
+  , isLocalCompletion   :: Bool
   }
   deriving (Eq, Show)
 
@@ -158,3 +160,42 @@ data PosPrefixInfo = PosPrefixInfo
   , cursorPos   :: !J.Position
     -- ^ The cursor position
   } deriving (Show,Eq)
+
+data NameDetails
+  = NameDetails Module OccName
+  deriving (Eq)
+
+nsJSON :: NameSpace -> Value
+nsJSON ns
+  | isVarNameSpace ns = String "v"
+  | isDataConNameSpace ns = String "c"
+  | isTcClsNameSpace ns  = String "t"
+  | isTvNameSpace ns = String "z"
+  | otherwise = error "namespace not recognized"
+
+parseNs :: Value -> Parser NameSpace
+parseNs (String "v") = pure Occ.varName
+parseNs (String "c") = pure dataName
+parseNs (String "t") = pure tcClsName
+parseNs (String "z") = pure tvName
+parseNs _ = mempty
+
+instance FromJSON NameDetails where
+  parseJSON v@(Array _)
+    = do
+      [modname,modid,namesp,occname] <- parseJSON v
+      mn  <- parseJSON modname
+      mid <- parseJSON modid
+      ns <- parseNs namesp
+      occn <- parseJSON occname
+      pure $ NameDetails (mkModule (stringToUnit mid) (mkModuleName mn)) (mkOccName ns occn)
+  parseJSON _ = mempty
+instance ToJSON NameDetails where
+  toJSON (NameDetails mdl occ) = toJSON [toJSON mname,toJSON mid,nsJSON ns,toJSON occs]
+    where
+      mname = moduleNameString $ moduleName mdl
+      mid = unitIdString $ moduleUnitId mdl
+      ns = occNameSpace occ
+      occs = occNameString occ
+instance Show NameDetails where
+  show = show . toJSON

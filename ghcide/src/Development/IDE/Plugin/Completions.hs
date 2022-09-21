@@ -10,28 +10,28 @@ module Development.IDE.Plugin.Completions
 
 import           Control.Concurrent.Async                 (concurrently)
 import           Control.Concurrent.STM.Stats             (readTVarIO)
-import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Maybe
+import           Control.Lens                            ((&), (.~))
 import           Data.Aeson
 import qualified Data.HashMap.Strict                      as Map
 import qualified Data.HashSet                             as Set
-import           Data.List                                (find)
 import           Data.Maybe
 import qualified Data.Text                                as T
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.Compile
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service             hiding (Log, LogShake)
 import           Development.IDE.Core.Shake               hiding (Log)
 import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error                (rangeToSrcSpan)
 import           Development.IDE.GHC.Util                 (printOutputable)
 import           Development.IDE.Graph
+import           Development.IDE.Spans.Common
+import           Development.IDE.Spans.Documentation
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageExports),
+import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageExports, envVisibleModuleNames),
                                                            hscEnv)
 import qualified Development.IDE.Types.KnownTargets       as KT
 import           Development.IDE.Types.Location
@@ -39,11 +39,11 @@ import           Development.IDE.Types.Logger             (Pretty (pretty),
                                                            Recorder,
                                                            WithPriority,
                                                            cmapWithPrio)
-import           GHC.Exts                                 (fromList, toList)
 import           Ide.Plugin.Config                        (Config)
 import           Ide.Types
 import qualified Language.LSP.Server                      as LSP
 import           Language.LSP.Types
+import qualified Language.LSP.Types.Lens         as J
 import qualified Language.LSP.VFS                         as VFS
 import           Numeric.Natural
 import           Text.Fuzzy.Parallel                      (Scored (..))
@@ -64,9 +64,11 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions recorder
   , pluginHandlers = mkPluginHandler STextDocumentCompletion getCompletionsLSP
+                  <> mkPluginHandler SCompletionItemResolve resolveCompletion
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   , pluginPriority = ghcideCompletionsPluginPriority
   }
+
 
 produceCompletions :: Recorder (WithPriority Log) -> Rules ()
 produceCompletions recorder = do
@@ -92,8 +94,9 @@ produceCompletions recorder = do
               (global, inScope) <- liftIO $ tcRnImportDecls env (dropListFromImportDecl <$> msrImports) `concurrently` tcRnImportDecls env msrImports
               case (global, inScope) of
                   ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
+                      visibleMods <- liftIO $ fmap (fromMaybe []) $ envVisibleModuleNames sess
                       let uri = fromNormalizedUri $ normalizedFilePathToUri file
-                      cdata <- liftIO $ cacheDataProducer uri sess (ms_mod msrModSummary) globalEnv inScopeEnv msrImports
+                      let cdata = cacheDataProducer uri visibleMods (ms_mod msrModSummary) globalEnv inScopeEnv msrImports
                       return ([], Just cdata)
                   (_diag, _) ->
                       return ([], Nothing)
@@ -108,6 +111,44 @@ dropListFromImportDecl iDecl = let
         _               -> d
     f x = x
     in f <$> iDecl
+
+resolveCompletion :: IdeState -> PluginId -> CompletionItem -> LSP.LspM Config (Either ResponseError CompletionItem)
+resolveCompletion ide _ comp@CompletionItem{_detail,_documentation,_xdata}
+  | Just resolveData <- _xdata
+  , Success (uri, NameDetails mod occ) <- fromJSON resolveData
+  , Just file <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+    mdkm <- liftIO $ runAction "Completion resolve" ide $ use GetDocMap file
+    case mdkm of
+      Nothing -> pure (Right comp)
+      Just (DKMap dm km) -> liftIO $ runAction "Completion resolve" ide $ do
+        let nc = ideNc $ shakeExtras ide
+#if MIN_VERSION_ghc(9,3,0)
+        name <- liftIO $ lookupNameCache nc mod occ
+#else
+        name <- liftIO $ upNameCache nc (lookupNameCache mod occ)
+#endif
+        (ms,_) <- useWithStale_ GetModSummaryWithoutTimestamps file
+        (sess,_) <- useWithStale_ GhcSessionDeps file
+        let cur_mod = ms_mod $ msrModSummary ms
+        doc <- case lookupNameEnv dm name of
+          Just doc -> pure $ spanDocToMarkdown doc
+          Nothing -> liftIO $ spanDocToMarkdown <$> getDocumentationTryGhc (hscEnv sess) cur_mod name
+        typ <- case lookupNameEnv km name of
+          Just ty -> pure (safeTyThingType ty)
+          Nothing -> do
+            (safeTyThingType =<<) <$> liftIO (lookupName (hscEnv sess) cur_mod name)
+        let det1 = case typ of
+              Just ty -> Just (":: " <> printOutputable ty <> "\n")
+              Nothing -> Nothing
+            doc1 = case _documentation of
+              Just (CompletionDocMarkup (MarkupContent MkMarkdown old)) ->
+                CompletionDocMarkup $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator (old:doc)
+              _ -> CompletionDocMarkup $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator doc
+        pure (Right $ comp & J.detail .~ (det1 <> _detail)
+                           & J.documentation .~ Just doc1
+                           )
+
+resolveCompletion _ _ comp = pure (Right comp)
 
 -- | Generate code actions.
 getCompletionsLSP
@@ -166,8 +207,7 @@ getCompletionsLSP ide plId
                 let clientCaps = clientCapabilities $ shakeExtras ide
                     plugins = idePlugins $ shakeExtras ide
                 config <- getCompletionsConfig plId
-
-                allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports
+                allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports uri
                 pure $ InL (List $ orderedCompletions allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])

@@ -58,7 +58,7 @@ import           System.Posix.Signals
 #endif
 import           Control.Applicative             ((<|>))
 import           Control.Arrow                   ((&&&))
-import           Control.Lens                    ((^.))
+import           Control.Lens                    ((^.), (.~))
 import           Data.Aeson                      hiding (defaultOptions)
 import qualified Data.Default
 import           Data.Dependent.Map              (DMap)
@@ -89,6 +89,7 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities (ClientCapabilities (ClientCapabilities),
                                                   TextDocumentClientCapabilities (_codeAction, _documentSymbol))
+import qualified Language.LSP.Types.Lens         as J
 import           Language.LSP.Types.Lens         as J (HasChildren (children),
                                                        HasCommand (command),
                                                        HasContents (contents),
@@ -395,6 +396,9 @@ instance PluginMethod Request TextDocumentDocumentSymbol where
     where
       uri = msgParams ^. J.textDocument . J.uri
 
+instance PluginMethod Request CompletionItemResolve where
+  pluginEnabled _ msgParams pluginDesc config = pluginEnabledConfig plcCompletionOn (pluginId pluginDesc) config
+
 instance PluginMethod Request TextDocumentCompletion where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcCompletionOn (pluginId pluginDesc) config
@@ -496,6 +500,18 @@ instance PluginRequestMethod TextDocumentDocumentSymbol where
             name' = ds ^. name
             si = SymbolInformation name' (ds ^. kind) Nothing (ds ^. deprecated) loc parent
         in [si] <> children'
+
+instance PluginRequestMethod CompletionItemResolve where
+  -- resolving completions can only change the detail, additionalTextEdit or documentation fields
+  combineResponses _ _ _ _ (x :| xs) = go x xs
+    where go :: CompletionItem -> [CompletionItem] -> CompletionItem
+          go !comp [] = comp
+          go !comp1 (comp2:xs)
+            = go (comp1
+                 & J.detail              .~ comp1 ^. J.detail <> comp2 ^. J.detail
+                 & J.documentation       .~ ((comp1 ^. J.documentation) <|> (comp2 ^. J.documentation)) -- difficult to write generic concatentation for docs
+                 & J.additionalTextEdits .~ comp1 ^. J.additionalTextEdits <> comp2 ^. J.additionalTextEdits)
+                 xs
 
 instance PluginRequestMethod TextDocumentCompletion where
   combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
@@ -833,6 +849,7 @@ instance HasTracing WorkspaceSymbolParams where
   traceWithSpan sp (WorkspaceSymbolParams _ _ query) = setTag sp "query" (encodeUtf8 query)
 instance HasTracing CallHierarchyIncomingCallsParams
 instance HasTracing CallHierarchyOutgoingCallsParams
+instance HasTracing CompletionItem
 
 -- ---------------------------------------------------------------------
 

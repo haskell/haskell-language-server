@@ -28,7 +28,6 @@ import qualified Text.Fuzzy.Parallel                      as Fuzzy
 
 import           Control.Monad
 import           Data.Aeson                               (ToJSON (toJSON))
-import           Data.Either                              (fromRight)
 import           Data.Function                            (on)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
@@ -153,16 +152,12 @@ getCContext pos pm
           | otherwise = Nothing
         importInline _ _ = Nothing
 
-occNameToComKind :: Maybe T.Text -> OccName -> CompletionItemKind
-occNameToComKind ty oc
+occNameToComKind :: OccName -> CompletionItemKind
+occNameToComKind oc
   | isVarOcc  oc = case occNameString oc of
                      i:_ | isUpper i -> CiConstructor
                      _               -> CiFunction
-  | isTcOcc   oc = case ty of
-                     Just t
-                       | "Constraint" `T.isSuffixOf` t
-                       -> CiInterface
-                     _ -> CiStruct
+  | isTcOcc   oc = CiStruct
   | isDataOcc oc = CiConstructor
   | otherwise    = CiVariable
 
@@ -171,19 +166,19 @@ showModName :: ModuleName -> T.Text
 showModName = T.pack . moduleNameString
 
 mkCompl :: Maybe PluginId -- ^ Plugin to use for the extend import command
-        -> IdeOptions -> CompItem -> CompletionItem
+        -> IdeOptions -> Uri -> CompItem -> CompletionItem
 mkCompl
   pId
   IdeOptions {..}
+  uri
   CI
     { compKind,
       isInfix,
       insertText,
       provenance,
-      typeText,
       label,
-      docs,
-      additionalTextEdits
+      additionalTextEdits,
+      nameDetails
     } = do
   let mbCommand = mkAdditionalEditsCommand pId =<< additionalTextEdits
   let ci = CompletionItem
@@ -191,11 +186,10 @@ mkCompl
                   _kind = kind,
                   _tags = Nothing,
                   _detail =
-                      case (typeText, provenance) of
-                          (Just t,_) | not(T.null t) -> Just $ colon <> t
-                          (_, ImportedFrom mod)      -> Just $ "from " <> mod
-                          (_, DefinedIn mod)         -> Just $ "from " <> mod
-                          _                          -> Nothing,
+                      case provenance of
+                          ImportedFrom mod      -> Just $ "from " <> mod
+                          DefinedIn mod         -> Just $ "from " <> mod
+                          _                     -> Nothing,
                   _documentation = documentation,
                   _deprecated = Nothing,
                   _preselect = Nothing,
@@ -208,16 +202,15 @@ mkCompl
                   _additionalTextEdits = Nothing,
                   _commitCharacters = Nothing,
                   _command = mbCommand,
-                  _xdata = Nothing}
+                  _xdata = toJSON <$> fmap (uri,) nameDetails}
   removeSnippetsWhen (isJust isInfix) ci
 
   where kind = Just compKind
-        docs' = imported : spanDocToMarkdown docs
+        docs' = [imported]
         imported = case provenance of
           Local pos  -> "*Defined at " <> pprLineCol (srcSpanStart pos) <> " in this module*\n"
           ImportedFrom mod -> "*Imported from '" <> mod <> "'*\n"
           DefinedIn mod -> "*Defined in '" <> mod <> "'*\n"
-        colon = if optNewColonConvention then ": " else ":: "
         documentation = Just $ CompletionDocMarkup $
                         MarkupContent MkMarkdown $
                         T.intercalate sectionSeparator docs'
@@ -231,22 +224,19 @@ mkAdditionalEditsCommand :: Maybe PluginId -> ExtendImport -> Maybe Command
 mkAdditionalEditsCommand (Just pId) edits = Just $ mkLspCommand pId (CommandId extendImportCommandId) "extend import" (Just [toJSON edits])
 mkAdditionalEditsCommand _ _ = Nothing
 
-mkNameCompItem :: Uri -> Maybe T.Text -> OccName -> Provenance -> Maybe Type -> Maybe Backtick -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem
-mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp = CI {..}
+mkNameCompItem :: Uri -> Maybe T.Text -> OccName -> Provenance -> Maybe Backtick -> Maybe (LImportDecl GhcPs) -> Maybe Module -> CompItem
+mkNameCompItem doc thingParent origName provenance isInfix !imp mod = CI {..}
   where
-    compKind = occNameToComKind typeText origName
+    isLocalCompletion = True
+    nameDetails = NameDetails <$> mod <*> pure origName
+    compKind = occNameToComKind origName
     isTypeCompl = isTcOcc origName
     label = stripPrefix $ printOutputable origName
     insertText = case isInfix of
-            Nothing -> case getArgText <$> thingType of
-                            Nothing      -> label
-                            Just argText -> if T.null argText then label else label <> " " <> argText
+            Nothing -> label
             Just LeftSide -> label <> "`"
 
             Just Surrounded -> label
-    typeText
-          | Just t <- thingType = Just . stripForall $ printOutputable t
-          | otherwise = Nothing
     additionalTextEdits =
       imp <&> \x ->
         ExtendImport
@@ -256,44 +246,6 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
             importQual = getImportQual x,
             newThing = printOutputable origName
           }
-
-    stripForall :: T.Text -> T.Text
-    stripForall t
-      | T.isPrefixOf "forall" t =
-        -- We drop 2 to remove the '.' and the space after it
-        T.drop 2 (T.dropWhile (/= '.') t)
-      | otherwise               = t
-
-    getArgText :: Type -> T.Text
-    getArgText typ = argText
-      where
-        argTypes = getArgs typ
-        argText :: T.Text
-        argText = mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
-        snippet :: Int -> Type -> T.Text
-        snippet i t = case t of
-            (TyVarTy _)     -> noParensSnippet
-            (LitTy _)       -> noParensSnippet
-            (TyConApp _ []) -> noParensSnippet
-            _               -> snippetText i ("(" <> showForSnippet t <> ")")
-            where
-                noParensSnippet = snippetText i (showForSnippet t)
-                snippetText i t = "${" <> T.pack (show i) <> ":" <> t <> "}"
-        getArgs :: Type -> [Type]
-        getArgs t
-          | isPredTy t = []
-          | isDictTy t = []
-          | isForAllTy t = getArgs $ snd (splitForAllTyCoVars t)
-          | isFunTy t =
-            let (args, ret) = splitFunTys t
-              in if isForAllTy ret
-                  then getArgs ret
-                  else Prelude.filter (not . isDictTy) $ map scaledThing args
-          | isPiTy t = getArgs $ snd (splitPiTys t)
-          | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
-          = getArgs t
-          | otherwise = []
-
 
 showForSnippet :: Outputable a => a -> T.Text
 #if MIN_VERSION_ghc(9,2,0)
@@ -333,13 +285,11 @@ mkExtCompl label =
 
 fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
 fromIdentInfo doc IdentInfo{..} q = CI
-  { compKind= occNameToComKind Nothing name
+  { compKind= occNameToComKind name
   , insertText=rendered
   , provenance = DefinedIn moduleNameText
-  , typeText=Nothing
   , label=rendered
   , isInfix=Nothing
-  , docs=emptySpanDoc
   , isTypeCompl= not isDatacon && isUpper (T.head rendered)
   , additionalTextEdits= Just $
         ExtendImport
@@ -349,13 +299,13 @@ fromIdentInfo doc IdentInfo{..} q = CI
             importQual = q,
             newThing = rendered
           }
+  , nameDetails = Nothing
+  , isLocalCompletion = False
   }
 
-cacheDataProducer :: Uri -> HscEnvEq -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> IO CachedCompletions
-cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
-  let
-      packageState = hscEnv env
-      curModName = moduleName curMod
+cacheDataProducer :: Uri -> [ModuleName] -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> CachedCompletions
+cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
+  let curModName = moduleName curMod
       curModNameText = printOutputable curModName
 
       importMap = Map.fromList [ (l, imp) | imp@(L (locA -> (RealSrcSpan l _)) _) <- limports ]
@@ -374,26 +324,28 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
 
       rdrElts = globalRdrEnvElts globalEnv
 
-      foldMapM :: (Foldable f, Monad m, Monoid b) => (a -> m b) -> f a -> m b
-      foldMapM f xs = foldr step return xs mempty where
-        step x r z = f x >>= \y -> r $! z `mappend` y
+      -- construct a map from Parents(type) to their fields
+      fieldMap = Map.fromListWith (++) $ flip mapMaybe rdrElts $ \elt -> do
+        flbl <- greFieldLabel elt
+        par <- greParent_maybe elt
+        Just (par,[flbl])
 
-      getCompls :: [GlobalRdrElt] -> IO ([CompItem],QualCompls)
-      getCompls = foldMapM getComplsForOne
+      getCompls :: [GlobalRdrElt] -> ([CompItem],QualCompls)
+      getCompls = foldMap getComplsForOne
 
-      getComplsForOne :: GlobalRdrElt -> IO ([CompItem],QualCompls)
+      getComplsForOne :: GlobalRdrElt -> ([CompItem],QualCompls)
       getComplsForOne (GRE n par True _) =
-          (, mempty) <$> toCompItem par curMod curModNameText n Nothing
+          (toCompItem par curMod curModNameText n Nothing, mempty)
       getComplsForOne (GRE n par False prov) =
-        flip foldMapM (map is_decl prov) $ \spec -> do
+        flip foldMap (map is_decl prov) $ \spec ->
           let originalImportDecl = do
                 -- we don't want to extend import if it's already in scope
                 guard . null $ lookupGRE_Name inScopeEnv n
                 -- or if it doesn't have a real location
                 loc <- realSpan $ is_dloc spec
                 Map.lookup loc importMap
-          compItem <- toCompItem par curMod (printOutputable $ is_mod spec) n originalImportDecl
-          let unqual
+              compItem = toCompItem par curMod (printOutputable $ is_mod spec) n originalImportDecl
+              unqual
                 | is_qual spec = []
                 | otherwise = compItem
               qual
@@ -401,38 +353,34 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
                 | otherwise = Map.fromList [(asMod,compItem),(origMod,compItem)]
               asMod = showModName (is_as spec)
               origMod = showModName (is_mod spec)
-          return (unqual,QualCompls qual)
+          in (unqual,QualCompls qual)
 
-      toCompItem :: Parent -> Module -> T.Text -> Name -> Maybe (LImportDecl GhcPs) -> IO [CompItem]
-      toCompItem par m mn n imp' = do
-        docs <- getDocumentationTryGhc packageState curMod n
+      toCompItem :: Parent -> Module -> T.Text -> Name -> Maybe (LImportDecl GhcPs) -> [CompItem]
+      toCompItem par m mn n imp' =
+        -- docs <- getDocumentationTryGhc packageState curMod n
         let (mbParent, originName) = case par of
                             NoParent -> (Nothing, nameOccName n)
                             ParentIs n' -> (Just . T.pack $ printName n', nameOccName n)
 #if !MIN_VERSION_ghc(9,2,0)
                             FldParent n' lbl -> (Just . T.pack $ printName n', maybe (nameOccName n) mkVarOccFS lbl)
 #endif
-        tys <- catchSrcErrors (hsc_dflags packageState) "completion" $ do
-                name' <- lookupName packageState m n
-                return ( name' >>= safeTyThingType
-                       , guard (isJust mbParent) >> name' >>= safeTyThingForRecord
-                       )
-        let (ty, record_ty) = fromRight (Nothing, Nothing) tys
-
-        let recordCompls = case record_ty of
-                Just (ctxStr, flds) | not (null flds) ->
-                    [mkRecordSnippetCompItem uri mbParent ctxStr flds (ImportedFrom mn) docs imp']
+            recordCompls = case par of
+                ParentIs parent
+                  | isDataConName n
+                  , Just flds <- Map.lookup parent fieldMap
+                  , not (null flds) ->
+                    [mkRecordSnippetCompItem uri mbParent (printOutputable originName) (map (T.pack . unpackFS . flLabel) flds) (ImportedFrom mn) imp']
                 _ -> []
 
-        return $ mkNameCompItem uri mbParent originName (ImportedFrom mn) ty Nothing docs imp'
-               : recordCompls
+        in mkNameCompItem uri mbParent originName (ImportedFrom mn) Nothing imp' (nameModule_maybe n)
+           : recordCompls
 
-  (unquals,quals) <- getCompls rdrElts
+      (unquals,quals) = getCompls rdrElts
 
-  -- The list of all importable Modules from all packages
-  moduleNames <- maybe [] (map showModName) <$> envVisibleModuleNames env
+      -- The list of all importable Modules from all packages
+      moduleNames = map showModName visibleMods
 
-  return $ CC
+  in CC
     { allModNamesAsNS = allModNamesAsNS
     , unqualCompls = unquals
     , qualCompls = quals
@@ -478,9 +426,9 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
             TyClD _ x ->
                 let generalCompls = [mkComp id cl (Just $ showForSnippet $ tyClDeclLName x)
                         | id <- listify (\(_ :: LIdP GhcPs) -> True) x
-                        , let cl = occNameToComKind Nothing (rdrNameOcc $ unLoc id)]
+                        , let cl = occNameToComKind (rdrNameOcc $ unLoc id)]
                     -- here we only have to look at the outermost type
-                    recordCompls = findRecordCompl uri pm (Local pos) x
+                    recordCompls = findRecordCompl uri (Local pos) x
                 in
                    -- the constructors and snippets will be duplicated here giving the user 2 choices.
                    generalCompls ++ recordCompls
@@ -494,27 +442,22 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
         ]
 
     mkLocalComp pos n ctyp ty =
-        CI ctyp pn (Local pos) ensureTypeText pn Nothing doc (ctyp `elem` [CiStruct, CiInterface]) Nothing
+        CI ctyp pn (Local pos) pn Nothing (ctyp `elem` [CiStruct, CiInterface]) Nothing (Just $ NameDetails (ms_mod $ pm_mod_summary pm) occ) True
       where
-        -- when sorting completions, we use the presence of typeText
-        -- to tell local completions and global completions apart
-        -- instead of using the empty string here, we should probably introduce a new field...
-        ensureTypeText = Just $ fromMaybe "" ty
+        occ = rdrNameOcc $ unLoc n
         pn = showForSnippet n
-        doc = SpanDocText (getDocumentation [pm] $ reLoc n) (SpanDocUris Nothing Nothing)
 
-findRecordCompl :: Uri -> ParsedModule -> Provenance -> TyClDecl GhcPs -> [CompItem]
-findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
+findRecordCompl :: Uri -> Provenance -> TyClDecl GhcPs -> [CompItem]
+findRecordCompl uri mn DataDecl {tcdLName, tcdDataDefn} = result
     where
         result = [mkRecordSnippetCompItem uri (Just $ printOutputable $ unLoc tcdLName)
-                        (printOutputable . unLoc $ con_name) field_labels mn doc Nothing
+                        (printOutputable . unLoc $ con_name) field_labels mn Nothing
                  | ConDeclH98{..} <- unLoc <$> dd_cons tcdDataDefn
                  , Just  con_details <- [getFlds con_args]
                  , let field_names = concatMap extract con_details
                  , let field_labels = printOutputable <$> field_names
                  , (not . List.null) field_labels
                  ]
-        doc = SpanDocText (getDocumentation [pmod] $ reLoc tcdLName) (SpanDocUris Nothing Nothing)
 
         getFlds conArg = case conArg of
                              RecCon rec  -> Just $ unLoc <$> unLoc rec
@@ -539,7 +482,7 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
 #endif
         -- XConDeclField
         extract _ = []
-findRecordCompl _ _ _ _ = []
+findRecordCompl _ _ _ = []
 
 toggleSnippets :: ClientCapabilities -> CompletionsConfig -> CompletionItem -> CompletionItem
 toggleSnippets ClientCapabilities {_textDocument} CompletionsConfig{..} =
@@ -574,9 +517,10 @@ getCompletions
     -> ClientCapabilities
     -> CompletionsConfig
     -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
+    -> Uri
     -> IO [Scored CompletionItem]
 getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
-               maybe_parsed maybe_ast_res (localBindings, bmapping) prefixInfo caps config moduleExportsMap = do
+               maybe_parsed maybe_ast_res (localBindings, bmapping) prefixInfo caps config moduleExportsMap uri = do
   let PosPrefixInfo { fullLine, prefixScope, prefixText } = prefixInfo
       enteredQual = if T.null prefixScope then "" else prefixScope <> "."
       fullPrefix  = enteredQual <> prefixText
@@ -641,10 +585,8 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
                 { compKind = CiField
                 , insertText = label
                 , provenance = DefinedIn recname
-                , typeText = Nothing
                 , label = label
                 , isInfix = Nothing
-                , docs = emptySpanDoc
                 , isTypeCompl = False
                 , additionalTextEdits = Nothing
                 })
@@ -667,13 +609,14 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
           endLoc = upperRange oldPos
           localCompls = map (uncurry localBindsToCompItem) $ getFuzzyScope localBindings startLoc endLoc
           localBindsToCompItem :: Name -> Maybe Type -> CompItem
-          localBindsToCompItem name typ = CI ctyp pn thisModName ty pn Nothing emptySpanDoc (not $ isValOcc occ) Nothing
+          localBindsToCompItem name typ = CI ctyp pn thisModName pn Nothing (not $ isValOcc occ) Nothing dets True
             where
               occ = nameOccName name
-              ctyp = occNameToComKind Nothing occ
+              ctyp = occNameToComKind occ
               pn = showForSnippet name
               ty = showForSnippet <$> typ
               thisModName = Local $ nameSrcSpan name
+              dets = NameDetails <$> (nameModule_maybe name) <*> pure (nameOccName name)
 
           -- When record-dot-syntax completions are available, we return them exclusively.
           -- They are only available when we write i.e. `myrecord.` with OverloadedRecordDot enabled.
@@ -715,7 +658,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
     | otherwise -> do
         -- assumes that nubOrdBy is stable
         let uniqueFiltCompls = nubOrdBy (uniqueCompl `on` snd . Fuzzy.original) filtCompls
-        let compls = (fmap.fmap.fmap) (mkCompl pId ideOpts) uniqueFiltCompls
+        let compls = (fmap.fmap.fmap) (mkCompl pId ideOpts uri) uniqueFiltCompls
             pId = lookupCommandProvider plugins (CommandId extendImportCommandId)
         return $
           (fmap.fmap) snd $
@@ -749,15 +692,13 @@ uniqueCompl candidate unique =
     EQ ->
       -- preserve completions for duplicate record fields where the only difference is in the type
       -- remove redundant completions with less type info than the previous
-      if (typeText candidate == typeText unique && isLocalCompletion unique)
+      if (isLocalCompletion unique)
         -- filter global completions when we already have a local one
         || not(isLocalCompletion candidate) && isLocalCompletion unique
         then EQ
         else compare (importedFrom candidate, insertText candidate) (importedFrom unique, insertText unique)
     other -> other
   where
-      isLocalCompletion ci = isJust(typeText ci)
-
       importedFrom :: CompItem -> T.Text
       importedFrom (provenance -> ImportedFrom m) = m
       importedFrom (provenance -> DefinedIn m)    = m
@@ -854,26 +795,15 @@ prefixes =
   ]
 
 
-safeTyThingForRecord :: TyThing -> Maybe (T.Text, [T.Text])
-safeTyThingForRecord (AnId _) = Nothing
-safeTyThingForRecord (AConLike dc) =
-    let ctxStr = printOutputable . occName . conLikeName $ dc
-        field_names = T.pack . unpackFS . flLabel <$> conLikeFieldLabels dc
-    in
-        Just (ctxStr, field_names)
-safeTyThingForRecord _ = Nothing
-
-mkRecordSnippetCompItem :: Uri -> Maybe T.Text -> T.Text -> [T.Text] -> Provenance -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem
-mkRecordSnippetCompItem uri parent ctxStr compl importedFrom docs imp = r
+mkRecordSnippetCompItem :: Uri -> Maybe T.Text -> T.Text -> [T.Text] -> Provenance -> Maybe (LImportDecl GhcPs) -> CompItem
+mkRecordSnippetCompItem uri parent ctxStr compl importedFrom imp = r
   where
       r  = CI {
             compKind = CiSnippet
           , insertText = buildSnippet
           , provenance = importedFrom
-          , typeText = Nothing
           , label = ctxStr
           , isInfix = Nothing
-          , docs = docs
           , isTypeCompl = False
           , additionalTextEdits = imp <&> \x ->
             ExtendImport
@@ -883,6 +813,8 @@ mkRecordSnippetCompItem uri parent ctxStr compl importedFrom docs imp = r
                   importQual = getImportQual x,
                   newThing = ctxStr
                 }
+          , nameDetails = Nothing
+          , isLocalCompletion = True
           }
 
       placeholder_pairs = zip compl ([1..]::[Int])
