@@ -2,7 +2,7 @@ cabal-version:      2.4
 name:               hls-code-range-plugin
 version:            1.0.0.0
 synopsis:
-  HLS Plugin to support smart selection range
+  HLS Plugin to support smart selection range and Folding range
 
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>

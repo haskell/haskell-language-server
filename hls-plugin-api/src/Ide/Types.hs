@@ -429,6 +429,13 @@ instance PluginMethod Request TextDocumentSelectionRange where
       uri = msgParams ^. J.textDocument . J.uri
       pid = pluginId pluginDesc
 
+instance PluginMethod Request TextDocumentFoldingRange where
+  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcFoldingRangeOn pid conf
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+      pid = pluginId pluginDesc
+
 instance PluginMethod Request CallHierarchyIncomingCalls where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'
   pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn pid conf
@@ -528,6 +535,9 @@ instance PluginRequestMethod TextDocumentPrepareCallHierarchy where
 
 instance PluginRequestMethod TextDocumentSelectionRange where
   combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod TextDocumentFoldingRange where
+  combineResponses _ _ _ _ x = sconcat x
 
 instance PluginRequestMethod CallHierarchyIncomingCalls where
 
