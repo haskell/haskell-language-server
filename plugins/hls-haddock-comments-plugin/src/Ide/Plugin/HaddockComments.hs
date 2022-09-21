@@ -109,30 +109,6 @@ genForSig = GenCommentsSimple {..}
 #endif
     dp = [(AnnComment comment, DP (0, 1)), (G AnnRarrow, DP (1, 2))]
 
-genForRecord :: GenCommentsSimple
-genForRecord = GenCommentsSimple {..}
-  where
-    title = "Generate fields comments"
-
-    fromDecl (TyClD _ DataDecl {tcdDataDefn = HsDataDefn {dd_cons = cons}}) =
-      Just [x | (L _ ConDeclH98 {con_args = x}) <- cons]
-    fromDecl _ = Nothing
-
-    updateAnn x = x {annEntryDelta = DP (1, 2), annPriorComments = [(comment, DP (1, 2))]}
-    updateDeclAnn = cleanPriorComments
-
-    isFresh Ann {annPriorComments} = null annPriorComments
-
-    collectKeys = keyFromCon
-
-#if MIN_VERSION_ghc(9,2,0)
-    comment = mkComment "-- | " (spanAsAnchor noSrcSpan)
-#elif MIN_VERSION_ghc(9,0,0)
-    comment = mkComment "-- | " badRealSrcSpan
-#else
-    comment = mkComment "-- | " noSrcSpan
-#endif
-
 -----------------------------------------------------------------------------
 
 toAction :: T.Text -> Uri -> TextEdit -> CodeAction
@@ -182,8 +158,5 @@ keyFromTyVar dep (L _ (HsKindSig _ x _)) = keyFromTyVar dep x
 keyFromTyVar dep (L _ (HsParTy _ x)) = keyFromTyVar (succ dep) x
 keyFromTyVar dep (L _ (HsBangTy _ _ x)) = keyFromTyVar dep x
 keyFromTyVar _ _ = []
-
-keyFromCon :: [HsConDeclDetails GhcPs] -> [AnnKey]
-keyFromCon cons = mconcat [mkAnnKey <$> xs | (RecCon (L _ xs)) <- cons]
 
 -----------------------------------------------------------------------------
