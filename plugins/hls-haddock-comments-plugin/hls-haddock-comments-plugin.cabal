@@ -18,6 +18,10 @@ extra-source-files:
   test/testdata/*.hs
 
 library
+  if impl(ghc >= 9.2)
+    buildable: False
+  else
+    buildable: True
   exposed-modules:
     Ide.Plugin.HaddockComments
     Ide.Plugin.HaddockComments.Data
@@ -31,7 +35,7 @@ library
     , base                  >=4.12 && <5
     , containers
     , ghc
-    , ghc-exactprint
+    , ghc-exactprint        < 1
     , ghcide                ^>=1.8
     , hls-plugin-api        ^>=1.5
     , hls-refactor-plugin
