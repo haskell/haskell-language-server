@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -82,7 +83,12 @@ notSeperatedByLineEnding (L (RealSrcSpan x _) _) (L (RealSrcSpan y _) _) =
 notSeperatedByLineEnding _ _ = False
 
 emptyPriorHaddockComment :: Comment
-emptyPriorHaddockComment = mkComment "-- |" noSrcSpan
+emptyPriorHaddockComment = mkComment "-- |"
+#if MIN_VERSION_ghc(9,0,0)
+    badRealSrcSpan
+#else
+    noSrcSpan
+#endif
 
 hasHaddock :: Data a => Anns -> Located a -> Maybe Bool
 hasHaddock anns node = fmap annHasHaddock (anns Map.!? key)
