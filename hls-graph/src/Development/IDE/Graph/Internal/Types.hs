@@ -114,7 +114,7 @@ newKey k = unsafePerformIO $ do
 lookupKeyValue :: Key -> KeyValue
 lookupKeyValue (UnsafeMkKey x) = unsafePerformIO $ do
   KeyMap _ im _ <- readIORef keyMap
-  pure $! fromJust (IM.lookup x im)
+  pure $! im IM.! x
 
 {-# NOINLINE lookupKeyValue #-}
 
