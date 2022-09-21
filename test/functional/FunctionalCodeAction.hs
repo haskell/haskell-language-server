@@ -18,6 +18,7 @@ import qualified Language.LSP.Types.Lens as L
 import           Test.Hls
 import           Test.Hspec.Expectations
 
+import           Development.IDE.Test    (configureCheckProject)
 import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
@@ -52,6 +53,7 @@ renameTests = testGroup "rename suggestions" [
 
     , testCase "doesn't give both documentChanges and changes"
         $ runSession hlsCommand noLiteralCaps "test/testdata" $ do
+            configureCheckProject False
             doc <- openDoc "CodeActionRename.hs" "haskell"
 
             _ <- waitForDiagnosticsFromSource doc "typecheck"

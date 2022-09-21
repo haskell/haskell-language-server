@@ -523,6 +523,7 @@ test-suite func-test
     , lens
     , lens-aeson
     , ghcide
+    , ghcide-test-utils
     , hls-test-utils ^>=1.4
     , lsp-types
     , aeson

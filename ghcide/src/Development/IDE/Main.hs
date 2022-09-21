@@ -143,7 +143,6 @@ import           System.IO                                (BufferMode (LineBuffe
 import           System.Random                            (newStdGen)
 import           System.Time.Extra                        (Seconds, offsetTime,
                                                            showDuration)
-import           Text.Printf                              (printf)
 
 data Log
   = LogHeapStats !HeapStats.Log

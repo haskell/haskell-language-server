@@ -8,7 +8,7 @@ import           System.FilePath
 import           Test.Hls
 
 plugin :: PluginDescriptor IdeState
-plugin = descriptor mempty
+plugin = descriptor mempty "explicit-fixity"
 
 main :: IO ()
 main = defaultTestRunner tests
