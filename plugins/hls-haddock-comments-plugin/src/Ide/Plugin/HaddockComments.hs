@@ -50,7 +50,6 @@ codeActionProvider ideState _pId (CodeActionParams _ _ (TextDocumentIdentifier u
 genList :: [Maybe [LHsDecl GhcPs] -> Maybe Anns -> Range -> Maybe (T.Text, TextEdit)]
 genList =
   [ runGenCommentsSimple genForSig,
-    -- runGenCommentsSimple genForRecord
     runGenComments genForDataDecl
   ]
 
