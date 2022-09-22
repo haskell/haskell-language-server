@@ -13,7 +13,7 @@ descriptor pluginId = (defaultPluginDescriptor pluginId)
   -- This plugin is opt-in
   , pluginConfigDescriptor = defaultConfigDescriptor {
     configHasDiagnostics = True,
-    configInitialGenericConfig = Just def {
+    configInitialGenericConfig = def {
         plcGlobalOn = False
     }
   }
