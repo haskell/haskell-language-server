@@ -20,6 +20,10 @@ extra-source-files:
   test/testdata/selection-range/*.yaml
   test/testdata/selection-range/*.txt
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 library
   exposed-modules:
     Ide.Plugin.CodeRange
