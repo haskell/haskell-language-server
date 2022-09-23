@@ -106,6 +106,7 @@ bindist-ghc:
 	$(SED) \
 		-e "s/@@EXE_NAME@@/haskell-language-server-$(GHC_VERSION)/" \
 		-e "s/@@GHC_VERSION@@/$(GHC_VERSION)/" \
+		-e "s/@@BOOT_PKGS@@/$(shell ghc-pkg-$(GHC_VERSION) --global list --simple-output)/" \
 		-e "s/@@ABI_HASHES@@/$(shell for dep in `ghc-pkg-$(GHC_VERSION) --global list --simple-output` ; do printf "%s:" "$$dep" && ghc-pkg-$(GHC_VERSION) field $$dep abi --simple-output ; done | tr '\n' ' ' | xargs)/" \
 		bindist/wrapper.in > "$(BINDIST_OUT_DIR)/haskell-language-server-$(GHC_VERSION).in"
 	$(CHMOD_X) "$(BINDIST_OUT_DIR)/haskell-language-server-$(GHC_VERSION).in"
