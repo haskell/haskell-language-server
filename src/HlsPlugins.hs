@@ -6,7 +6,8 @@ module HlsPlugins where
 import           Development.IDE.Types.Logger      (Pretty (pretty), Recorder,
                                                     WithPriority, cmapWithPrio)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
-import           Ide.Types                         (IdePlugins)
+import           Ide.Types                         (IdePlugins,
+                                                    PluginId (PluginId))
 
 -- fixed plugins
 import           Development.IDE                   (IdeState)
@@ -119,10 +120,10 @@ import qualified Ide.Plugin.Brittany               as Brittany
 import qualified Development.IDE.Plugin.CodeAction as Refactor
 #endif
 
-data Log = forall a. (Pretty a) => Log a
+data Log = forall a. (Pretty a) => Log PluginId a
 
 instance Pretty Log where
-  pretty (Log a) = pretty a
+  pretty (Log (PluginId pId) a) = pretty pId <> ": " <> pretty a
 
 -- ---------------------------------------------------------------------
 
@@ -134,8 +135,8 @@ instance Pretty Log where
 idePlugins :: Recorder (WithPriority Log) -> IdePlugins IdeState
 idePlugins recorder = pluginDescToIdePlugins allPlugins
   where
-    pluginRecorder :: forall log. (Pretty log) => Recorder (WithPriority log)
-    pluginRecorder = cmapWithPrio Log recorder
+    pluginRecorder :: forall log. (Pretty log) => PluginId -> Recorder (WithPriority log)
+    pluginRecorder pluginId = cmapWithPrio (Log pluginId) recorder
     allPlugins =
 #if hls_pragmas
       Pragmas.descriptor  "pragmas" :
@@ -144,10 +145,10 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       Floskell.descriptor "floskell" :
 #endif
 #if hls_fourmolu
-      Fourmolu.descriptor pluginRecorder "fourmolu" :
+      let pId = "fourmolu" in Fourmolu.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_tactic
-      Tactic.descriptor pluginRecorder "tactics" :
+      let pId = "tactics" in Tactic.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_ormolu
       Ormolu.descriptor   "ormolu" :
@@ -156,7 +157,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       StylishHaskell.descriptor "stylish-haskell" :
 #endif
 #if hls_rename
-      Rename.descriptor pluginRecorder "rename" :
+      let pId = "rename" in Rename.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_retrie
       Retrie.descriptor "retrie" :
@@ -168,40 +169,40 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       CallHierarchy.descriptor :
 #endif
 #if hls_class
-      Class.descriptor pluginRecorder "class" :
+      let pId = "class" in Class.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_haddockComments
-      HaddockComments.descriptor pluginRecorder "haddockComments" :
+      let pId = "haddockComments" in HaddockComments.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_eval
-      Eval.descriptor pluginRecorder "eval" :
+      let pId = "eval" in Eval.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_importLens
-      ExplicitImports.descriptor pluginRecorder "importLens" :
+      let pId = "importLens" in ExplicitImports.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_qualifyImportedNames
       QualifyImportedNames.descriptor "qualifyImportedNames" :
 #endif
 #if hls_refineImports
-      RefineImports.descriptor pluginRecorder "refineImports" :
+      let pId = "refineImports" in RefineImports.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_moduleName
-      ModuleName.descriptor pluginRecorder "moduleName" :
+      let pId = "moduleName" in ModuleName.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_hlint
-      Hlint.descriptor pluginRecorder "hlint" :
+      let pId = "hlint" in Hlint.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_stan
-      Stan.descriptor pluginRecorder "stan" :
+      let pId = "stan" in Stan.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_splice
       Splice.descriptor "splice" :
 #endif
 #if hls_alternateNumberFormat
-      AlternateNumberFormat.descriptor pluginRecorder :
+      let pId = "alternateNumberFormat" in AlternateNumberFormat.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_codeRange
-      CodeRange.descriptor pluginRecorder "codeRange" :
+      let pId = "codeRange" in CodeRange.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_changeTypeSignature
       ChangeTypeSignature.descriptor :
@@ -210,14 +211,14 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       GADT.descriptor "gadt" :
 #endif
 #if hls_refactor
-      Refactor.iePluginDescriptor pluginRecorder "ghcide-code-actions-imports-exports" :
-      Refactor.typeSigsPluginDescriptor pluginRecorder "ghcide-code-actions-type-signatures" :
-      Refactor.bindingsPluginDescriptor pluginRecorder "ghcide-code-actions-bindings" :
-      Refactor.fillHolePluginDescriptor pluginRecorder "ghcide-code-actions-fill-holes" :
-      Refactor.extendImportPluginDescriptor pluginRecorder "ghcide-extend-import-action" :
+      let pId = "ghcide-code-actions-imports-exports" in Refactor.iePluginDescriptor (pluginRecorder pId) pId :
+      let pId = "ghcide-code-actions-type-signatures" in Refactor.typeSigsPluginDescriptor (pluginRecorder     pId) pId :
+      let pId = "ghcide-code-actions-bindings" in Refactor.bindingsPluginDescriptor (pluginRecorder pId) pId :
+      let pId = "ghcide-code-actions-fill-holes" in Refactor.fillHolePluginDescriptor (pluginRecorder pId) pId :
+      let pId = "ghcide-extend-import-action" in Refactor.extendImportPluginDescriptor (pluginRecorder pId) pId :
 #endif
-      GhcIde.descriptors pluginRecorder
+      GhcIde.descriptors (pluginRecorder "ghcide")
 #if explicitFixity
-      ++ [ExplicitFixity.descriptor pluginRecorder]
+      ++ [let pId = "explicit-fixity" in ExplicitFixity.descriptor (pluginRecorder pId) pId]
 #endif
 

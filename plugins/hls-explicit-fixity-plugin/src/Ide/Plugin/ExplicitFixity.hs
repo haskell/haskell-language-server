@@ -36,11 +36,8 @@ import           Ide.PluginUtils                      (getNormalizedFilePath,
 import           Ide.Types                            hiding (pluginId)
 import           Language.LSP.Types
 
-pluginId :: PluginId
-pluginId = "explicitFixity"
-
-descriptor :: Recorder (WithPriority Log) -> PluginDescriptor IdeState
-descriptor recorder = (defaultPluginDescriptor pluginId)
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder pluginId = (defaultPluginDescriptor pluginId)
     { pluginRules = fixityRule recorder
     , pluginHandlers = mkPluginHandler STextDocumentHover hover
     -- Make this plugin has a lower priority than ghcide's plugin to ensure
@@ -51,7 +48,7 @@ descriptor recorder = (defaultPluginDescriptor pluginId)
 hover :: PluginMethodHandler IdeState TextDocumentHover
 hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
-    fixityTrees <- handleMaybeM "ExplicitFixity: Unable to get fixity"
+    fixityTrees <- handleMaybeM "Unable to get fixity"
         $ liftIO
         $ runAction "ExplicitFixity.GetFixity" state
         $ use GetFixity nfp

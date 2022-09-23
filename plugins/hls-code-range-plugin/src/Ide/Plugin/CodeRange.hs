@@ -1,5 +1,6 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Ide.Plugin.CodeRange (
     descriptor
@@ -7,6 +8,8 @@ module Ide.Plugin.CodeRange (
 
     -- * Internal
     , findPosition
+    , findFoldingRanges
+    , createFoldingRange
     ) where
 
 import           Control.Monad.Except                 (ExceptT (ExceptT),
@@ -33,7 +36,7 @@ import           Development.IDE.Core.PositionMapping (PositionMapping,
 import           Development.IDE.Types.Logger         (Pretty (..))
 import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
-                                                       codeRangeRule)
+                                                       codeRangeRule, crkToFrk)
 import qualified Ide.Plugin.CodeRange.Rules           as Rules (Log)
 import           Ide.PluginUtils                      (pluginResponse,
                                                        positionInRange)
@@ -42,12 +45,14 @@ import           Ide.Types                            (PluginDescriptor (pluginH
                                                        defaultPluginDescriptor,
                                                        mkPluginHandler)
 import           Language.LSP.Server                  (LspM)
-import           Language.LSP.Types                   (List (List),
+import           Language.LSP.Types                   (FoldingRange (..),
+                                                       FoldingRangeParams (..),
+                                                       List (List),
                                                        NormalizedFilePath,
                                                        Position (..),
                                                        Range (_start),
                                                        ResponseError,
-                                                       SMethod (STextDocumentSelectionRange),
+                                                       SMethod (STextDocumentFoldingRange, STextDocumentSelectionRange),
                                                        SelectionRange (..),
                                                        SelectionRangeParams (..),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
@@ -57,8 +62,7 @@ import           Prelude                              hiding (log, span)
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentSelectionRange selectionRangeHandler
-    -- TODO @sloorush add folding range
-    -- <> mkPluginHandler STextDocumentFoldingRange foldingRangeHandler
+    <> mkPluginHandler STextDocumentFoldingRange foldingRangeHandler
     , pluginRules = codeRangeRule (cmapWithPrio LogRules recorder)
     }
 
@@ -67,6 +71,25 @@ data Log = LogRules Rules.Log
 instance Pretty Log where
     pretty log = case log of
         LogRules codeRangeLog -> pretty codeRangeLog
+
+foldingRangeHandler :: IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError (List FoldingRange))
+foldingRangeHandler ide _ FoldingRangeParams{..} = do
+    pluginResponse $ do
+        filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
+                toNormalizedFilePath' <$> uriToFilePath' uri
+        foldingRanges <- ExceptT . liftIO . runIdeAction "FoldingRange" (shakeExtras ide) . runExceptT $
+            getFoldingRanges filePath
+        pure . List $ foldingRanges
+    where
+        uri :: Uri
+        TextDocumentIdentifier uri = _textDocument
+
+getFoldingRanges :: NormalizedFilePath -> ExceptT String IdeAction [FoldingRange]
+getFoldingRanges file = do
+    (codeRange, _) <- maybeToExceptT "fail to get code range" $ useE GetCodeRange file
+
+    -- removing first node because it folds the entire file
+    pure $ drop 1 $ findFoldingRanges codeRange
 
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do
@@ -125,6 +148,39 @@ findPosition pos root = go Nothing root
             let (left, right) = V.splitAt (V.length v `div` 2) v
             startOfRight <- _start . _codeRange_range <$> V.headM right
             if pos < startOfRight then binarySearchPos left else binarySearchPos right
+
+-- | Traverses through the code range and it children to a folding ranges.
+--
+-- It starts with the root node, converts that into a folding range then moves towards the children.
+-- It converts each child of each root node and parses it to folding range and moves to its children.
+--
+-- Two cases to that are assumed to be taken care on the client side are:
+--
+--      1. When a folding range starts and ends on the same line, it is upto the client if it wants to
+--      fold a single line folding or not.
+--
+--      2. As we are converting nodes of the ast into folding ranges, there are multiple nodes starting from a single line.
+--      A single line of code doesn't mean a single node in AST, so this function removes all the nodes that have a duplicate
+--      start line, ie. they start from the same line.
+--      Eg. A multi-line function that also has a multi-line if statement starting from the same line should have the folding
+--      according to the function.
+--
+-- We think the client can handle this, if not we could change to remove these in future
+--
+-- Discussion reference: https://github.com/haskell/haskell-language-server/pull/3058#discussion_r973737211
+findFoldingRanges :: CodeRange -> [FoldingRange]
+findFoldingRanges r@(CodeRange _ children _) =
+    let frChildren :: [FoldingRange] = concat $ V.toList $ fmap findFoldingRanges children
+    in case createFoldingRange r of
+        Just x  -> x:frChildren
+        Nothing -> frChildren
+
+-- | Parses code range to folding range
+createFoldingRange :: CodeRange -> Maybe FoldingRange
+createFoldingRange (CodeRange (Range (Position lineStart charStart) (Position lineEnd charEnd)) _ ck) = do
+    -- Type conversion of codeRangeKind to FoldingRangeKind
+    let frk = crkToFrk ck
+    Just (FoldingRange lineStart (Just charStart) lineEnd (Just charEnd) (Just frk))
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange
