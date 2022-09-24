@@ -109,8 +109,8 @@ addHaddockCommentsToList usePrevNodeAsAnchor outerLoc seperator nodes =
             modifyAnnsT $
                 let updateCurrent :: Annotation -> Annotation
                     updateCurrent ann = ann {
-                            -- If there exists non-haddock comments, we simply inherit it's delta pos, and move existing
-                            -- comments two lines below (to seperate them from our newly added haddock comments)
+                            -- If there exist non-haddock comments, we simply inherit the first one's delta pos,
+                            -- and move them two lines below, to seperate them from our newly added haddock comments
                             -- Otherwise, inherit the node's entry delta pos.
                             annPriorComments = case annPriorComments ann of
                                 (c, dp) : rem -> (emptyPriorHaddockComment, dp) : (c, DP (2,0)) : rem
