@@ -55,7 +55,10 @@ addHaddockCommentsToList usePrevNodeAsAnchor outerLoc seperator nodes =
     --     https://hackage.haskell.org/package/ghc-exactprint-0.6.4/docs/Language-Haskell-GHC-ExactPrint-Delta.html
     -- The important part is that for DP(r,c), if r is zero, c is the offset start from the end of the previous node.
     -- However, if r is greater than zero, c is the offset start from the 'anchor'.
-    -- Generally speaking, the 'anchor' is the node that "enclose"
+    -- Generally speaking, the 'anchor' is the node that "enclose" the current node. But it's not always the case.
+    --     Sometimes 'anchor' is just the previous node. It depends on the the syntactic structure.
+    --     For constructors, the anchor is the previous node (if there is any).
+    --     For record fields, the anchor is always the constructor they belong to.
     for_ (zip nodes (Nothing: fmap Just nodes)) $ \(node, prevNode) -> do
         addHaddockCommentToCurrentNode <- fmap (not . fromMaybe True . flip hasHaddock node) getAnnsT
         -- We don't add new haddock comments to nodes with existing ones.
