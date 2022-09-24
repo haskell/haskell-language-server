@@ -29,7 +29,8 @@ import           GHC.Generics                   (Generic)
 import           HieTypes                       (HieASTs, HieFile)
 import           Ide.Plugin.Config
 import           Ide.Types                      (PluginDescriptor (..),
-                                                 PluginId,
+                                                 PluginId, configHasDiagnostics,
+                                                 defaultConfigDescriptor,
                                                  defaultPluginDescriptor,
                                                  pluginEnabledConfig)
 import qualified Language.LSP.Types             as LSP
@@ -42,7 +43,11 @@ import           Stan.Observation               (Observation (..))
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
-    {pluginRules = rules recorder plId}
+  { pluginRules = rules recorder plId
+  , pluginConfigDescriptor = defaultConfigDescriptor
+      { configHasDiagnostics = True
+      }
+    }
 
 newtype Log = LogShake Shake.Log deriving (Show)
 
