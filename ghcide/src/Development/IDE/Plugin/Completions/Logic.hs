@@ -21,7 +21,8 @@ import           Data.List.Extra                          as List hiding
 import qualified Data.Map                                 as Map
 
 import           Data.Maybe                               (catMaybes, fromMaybe,
-                                                           isJust, mapMaybe, listToMaybe)
+                                                           isJust, listToMaybe,
+                                                           mapMaybe)
 import qualified Data.Text                                as T
 import qualified Text.Fuzzy.Parallel                      as Fuzzy
 
@@ -637,7 +638,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
               -- Completions can return more information that just the completion itself, but it will
               -- require more than what GHC currently gives us in the HieAST, since it only gives the Type
               -- of the fields, not where they are defined, etc. So for now the extra fields remain empty.
-              -- Also: additionalTextEdits is a todo, since we may want to import the record. It requires a way 
+              -- Also: additionalTextEdits is a todo, since we may want to import the record. It requires a way
               -- to get the record's module, which isn't included in the type information used to get the fields.
               dotFieldSelectorToCompl :: T.Text -> T.Text -> (Bool, CompItem)
               dotFieldSelectorToCompl recname label = (True, CI
@@ -678,7 +679,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
               ty = showForSnippet <$> typ
               thisModName = Local $ nameSrcSpan name
 
-          -- When record-dot-syntax completions are available, we return them exclusively. 
+          -- When record-dot-syntax completions are available, we return them exclusively.
           -- They are only available when we write i.e. `myrecord.` with OverloadedRecordDot enabled.
           -- Anything that isn't a field is invalid, so those completion don't make sense.
           compls
@@ -741,6 +742,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
             (isQual, CompletionItem{_label,_detail}) -> do
               let isLocal = maybe False (":" `T.isPrefixOf`) _detail
               (Down isQual, Down score, Down isLocal, _label, _detail)
+
 
 
 
