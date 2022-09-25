@@ -24,4 +24,5 @@ x = MyRecord1 { a = "Hello", b = 12, c = MyChild { z = "there" } }
 
 y = x.a ++ show x.b 
 
+y2 = x.c.z 
 

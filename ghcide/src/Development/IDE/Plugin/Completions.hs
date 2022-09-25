@@ -151,24 +151,23 @@ getCompletionsLSP ide plId
 #endif
             ms <- fmap fst <$> useWithStaleFast GetModSummaryWithoutTimestamps npath
             astres <- case ms of
-              Just ms' -> if uses_overloaded_record_dot ms'
-                then useWithStaleFast GetHieAst npath
-                else return Nothing
-              Nothing -> return Nothing
+              Just ms' | uses_overloaded_record_dot ms'
+                ->  useWithStaleFast GetHieAst npath
+              _ -> return Nothing
 
             pure (opts, fmap (,pm,binds) compls, moduleExports, astres)
         case compls of
           Just (cci', parsedMod, bindMap) -> do
-            pfix <- getCompletionPrefix position cnts
+            let pfix = getCompletionPrefix position cnts
             case (pfix, completionContext) of
-              (Just (PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
+              ((PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
                 -> return (InL $ List [])
-              (Just pfix', _) -> do
+              (_, _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
                     plugins = idePlugins $ shakeExtras ide
                 config <- getCompletionsConfig plId
 
-                allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix' clientCaps config moduleExports
+                allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports
                 pure $ InL (List $ orderedCompletions allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])

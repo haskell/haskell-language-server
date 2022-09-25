@@ -139,7 +139,6 @@ instance Semigroup CachedCompletions where
         CC (a<>a') (b<>b') (c<>c') (d<>d') (e<>e')
 
 
--- moved here from Language.LSP.VFS
 -- | Describes the line at the current cursor position
 data PosPrefixInfo = PosPrefixInfo
   { fullLine    :: !T.Text

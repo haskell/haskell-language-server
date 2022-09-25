@@ -94,11 +94,20 @@ tests = testGroup "completions" [
 
             compls <- getCompletions doc (Position 25 6)
             item <- getCompletionByLabel "a" compls
+
             liftIO $ do
                 item ^. label @?= "a"
-                --item ^. detail @?= Just "Data.List"  TODO
-                --item ^. kind @?= Just CiModule
-            liftIO $ length compls @?= 6
+        , testCase "shows field selectors for nested field" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+            doc <- openDoc "RecordDotSyntax.hs" "haskell"
+
+            let te = TextEdit (Range (Position 27 0) (Position 27 8)) "z2 = x.c.z"
+            _ <- applyEdit doc te
+
+            compls <- getCompletions doc (Position 27 9)
+            item <- getCompletionByLabel "z" compls
+
+            liftIO $ do
+                item ^. label @?= "z"
         ]
 
      -- See https://github.com/haskell/haskell-ide-engine/issues/903

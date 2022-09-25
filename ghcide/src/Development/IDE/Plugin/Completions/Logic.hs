@@ -21,7 +21,7 @@ import           Data.List.Extra                          as List hiding
 import qualified Data.Map                                 as Map
 
 import           Data.Maybe                               (catMaybes, fromMaybe,
-                                                           isJust, mapMaybe)
+                                                           isJust, mapMaybe, listToMaybe)
 import qualified Data.Text                                as T
 import qualified Text.Fuzzy.Parallel                      as Fuzzy
 
@@ -617,8 +617,10 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
               in getCContext lpos pm <|> getCContext hpos pm
 
 
-          -- we need the hieast to be fresh
-          -- not fresh, hasfield won't have a chance. it would to another larger change to ghc IfaceTyCon to contain record fields
+          -- We need the hieast to be "fresh". We can't get types from "stale" hie files, so hasfield won't work,
+          -- since it gets the record fields from the types.
+          -- Perhaps this could be fixed with a refactor to GHC's IfaceTyCon, to have it also contain record fields.
+          -- Requiring fresh hieast is fine for normal workflows, because it is generated while the user edits.
           recordDotSyntaxCompls :: [(Bool, CompItem)]
           recordDotSyntaxCompls = case maybe_ast_res of
             Just (HAR {hieAst = hieast, hieKind = HieFresh},_) -> concat $ pointCommand hieast (completionPrefixPos prefixInfo) nodeCompletions
@@ -632,8 +634,12 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
               getSels :: GHC.TyCon -> [T.Text]
               getSels tycon = let f fieldLabel = printOutputable fieldLabel
                               in map f $ tyConFieldLabels tycon
+              -- Completions can return more information that just the completion itself, but it will
+              -- require more than what GHC currently gives us in the HieAST, since it only gives the Type
+              -- of the fields, not where they are defined, etc. So for now the extra fields remain empty.
+              -- Also: additionalTextEdits is a todo, since we may want to import the record. It requires a way 
+              -- to get the record's module, which isn't included in the type information used to get the fields.
               dotFieldSelectorToCompl :: T.Text -> T.Text -> (Bool, CompItem)
-              --dotFieldSelectorToCompl label = (True, CI CiVariable label (ImportedFrom T.empty) Nothing label Nothing emptySpanDoc False Nothing)
               dotFieldSelectorToCompl recname label = (True, CI
                 { compKind = CiField
                 , insertText = label
@@ -672,11 +678,14 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
               ty = showForSnippet <$> typ
               thisModName = Local $ nameSrcSpan name
 
+          -- When record-dot-syntax completions are available, we return them exclusively. 
+          -- They are only available when we write i.e. `myrecord.` with OverloadedRecordDot enabled.
+          -- Anything that isn't a field is invalid, so those completion don't make sense.
           compls
-            | T.null prefixScope = map (notQual,) localCompls ++ map (qual,) unqualCompls ++ ((notQual,) . ($ Nothing) <$> anyQualCompls)
+            | T.null prefixScope = map (notQual,) localCompls ++ map (qual,) unqualCompls ++ map (\compl -> (notQual, compl Nothing)) anyQualCompls
             | not $ null recordDotSyntaxCompls = recordDotSyntaxCompls
             | otherwise = ((qual,) <$> Map.findWithDefault [] prefixScope (getQualCompls qualCompls))
-                 ++ ((notQual,) . ($ Just prefixScope) <$> anyQualCompls)
+                 ++ map (\compl -> (notQual, compl (Just prefixScope))) anyQualCompls
 
       filtListWith f list =
         [ fmap f label
@@ -932,19 +941,18 @@ mergeListsBy cmp all_lists = merge_lists all_lists
         [xs]   -> xs
         lists' -> merge_lists lists'
 
-
-getCompletionPrefix :: (Monad m) => Position -> VFS.VirtualFile -> m (Maybe PosPrefixInfo)
+-- |From the given cursor position, gets the prefix module or record for autocompletion
+getCompletionPrefix :: Position -> VFS.VirtualFile -> PosPrefixInfo
 getCompletionPrefix pos@(Position l c) (VFS.VirtualFile _ _ ropetext) =
-      return $ Just $ fromMaybe (PosPrefixInfo "" "" "" pos) $ do -- Maybe monad
-        let headMaybe []    = Nothing
-            headMaybe (x:_) = Just x
-            lastMaybe []     = Nothing
-            lastMaybe [x]    = Just x
-            lastMaybe (_:xs) = lastMaybe xs
+      fromMaybe (PosPrefixInfo "" "" "" pos) $ do -- Maybe monad
+        let headMaybe = listToMaybe
+            lastMaybe = headMaybe . reverse
 
+        -- grab the entire line the cursor is at
         curLine <- headMaybe $ T.lines $ Rope.toText
                              $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) ropetext
         let beforePos = T.take (fromIntegral c) curLine
+        -- the word getting typed, after previous space and before cursor
         curWord <-
             if | T.null beforePos        -> Just ""
                | T.last beforePos == ' ' -> Just "" -- don't count abc as the curword in 'abc '
