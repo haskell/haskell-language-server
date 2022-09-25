@@ -190,8 +190,6 @@ data Command
     | Db {hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
      -- ^ Run a command in the hiedb
     | LSP   -- ^ Run the LSP server
-    | PrintExtensionSchema
-    | PrintDefaultConfig
     | Custom {ideCommand :: IdeCommand IdeState} -- ^ User defined
     deriving Show
 
@@ -208,8 +206,6 @@ commandP plugins =
     hsubparser(command "typecheck" (info (Check <$> fileCmd) fileInfo)
             <> command "hiedb" (info (Db <$> HieDb.optParser "" True <*> HieDb.cmdParser) hieInfo)
             <> command "lsp" (info (pure LSP) lspInfo)
-            <> command "vscode-extension-schema" extensionSchemaCommand
-            <> command "generate-default-config" generateDefaultConfigCommand
             <> pluginCommands
             )
   where
@@ -217,12 +213,6 @@ commandP plugins =
     lspInfo = fullDesc <> progDesc "Start talking to an LSP client"
     fileInfo = fullDesc <> progDesc "Used as a test bed to check your IDE will work"
     hieInfo = fullDesc <> progDesc "Query .hie files"
-    extensionSchemaCommand =
-        info (pure PrintExtensionSchema)
-             (fullDesc <> progDesc "Print generic config schema for plugins (used in the package.json of haskell vscode extension)")
-    generateDefaultConfigCommand =
-        info (pure PrintDefaultConfig)
-             (fullDesc <> progDesc "Print config supported by the server with default values")
 
     pluginCommands = mconcat
         [ command (T.unpack pId) (Custom <$> p)
@@ -330,10 +320,6 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
     numProcessors <- getNumProcessors
 
     case argCommand of
-        PrintExtensionSchema ->
-            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema argsHlsPlugins
-        PrintDefaultConfig ->
-            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig argsHlsPlugins
         LSP -> withNumCapabilities (maybe (numProcessors `div` 2) fromIntegral argsThreads) $ do
             t <- offsetTime
             log Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
