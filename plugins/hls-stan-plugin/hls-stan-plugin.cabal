@@ -16,11 +16,14 @@ extra-source-files:
   LICENSE
   test/testdata/*.hs
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 flag pedantic
   description: Enable -Werror
   default:     False
   manual:      True
-
 
 library
   if impl(ghc < 8.8) || impl(ghc >= 9.0)
