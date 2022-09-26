@@ -19,6 +19,10 @@ extra-source-files:
   test/golden/*.hs
   test/golden/*.yaml
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 flag pedantic
   description: Enable -Werror
   default:     False

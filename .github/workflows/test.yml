@@ -22,7 +22,7 @@ jobs:
       should_skip_ghcide: ${{ steps.skip_ghcide_check.outputs.should_skip }}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v4.0.0
+        uses: fkirc/skip-duplicate-actions@v5.1.0
         with:
           cancel_others: false
           paths_ignore: '[ "**/docs/**"
@@ -39,7 +39,7 @@ jobs:
                          ]'
       # If we only change ghcide downstream packages we have not test ghcide itself
       - id: skip_ghcide_check
-        uses: fkirc/skip-duplicate-actions@v4.0.0
+        uses: fkirc/skip-duplicate-actions@v5.1.0
         with:
           cancel_others: false
           paths_ignore: '[ "hls-test-utils/**"
