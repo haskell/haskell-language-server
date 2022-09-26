@@ -26,7 +26,10 @@ library
     buildable: False
   else
     buildable: True
-  exposed-modules:    Ide.Plugin.HaddockComments
+  exposed-modules:
+    Ide.Plugin.HaddockComments
+    Ide.Plugin.HaddockComments.Data
+    Ide.Plugin.HaddockComments.Prelude
   hs-source-dirs:     src
   ghc-options:
     -Wall -Wno-name-shadowing -Wredundant-constraints
@@ -43,6 +46,8 @@ library
     , lsp-types
     , text
     , unordered-containers
+    , transformers
+    , mtl
 
   default-language:   Haskell2010
   default-extensions:
