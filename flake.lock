@@ -84,21 +84,6 @@
         "type": "github"
       }
     },
-    "flake-utils_2": {
-      "locked": {
-        "lastModified": 1659877975,
-        "narHash": "sha256-zllb8aq3YO3h8B/U0/J1WBgAL8EX5yWf5pMj3G0NAmc=",
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "rev": "c0e246b9b83f637f4681389ecabcb2681b4f3af0",
-        "type": "github"
-      },
-      "original": {
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "type": "github"
-      }
-    },
     "fourmolu": {
       "flake": false,
       "locked": {
@@ -240,23 +225,6 @@
         "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.3/lsp-test-0.14.0.3.tar.gz"
       }
     },
-    "myst-parser": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1650933355,
-        "narHash": "sha256-Osd3urvH1bn9w/6sAMyLKHO7gxuYePpGJ9y8ReBfp4E=",
-        "owner": "smunix",
-        "repo": "MyST-Parser",
-        "rev": "57d0d78169a0e157406c35df951bdffdf94b4f9b",
-        "type": "github"
-      },
-      "original": {
-        "owner": "smunix",
-        "ref": "fix.hls-docutils",
-        "repo": "MyST-Parser",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1663112159,
@@ -270,41 +238,6 @@
         "owner": "NixOS",
         "ref": "nixpkgs-unstable",
         "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1663165252,
-        "narHash": "sha256-H9OiflDQy1vLu1w5yz46qWfGdcFBpS8VnPRLP0bsiZE=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "bde85b0815144b77763732e0f32918017480e6b5",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "poetry2nix": {
-      "inputs": {
-        "flake-utils": "flake-utils_2",
-        "nixpkgs": "nixpkgs_2"
-      },
-      "locked": {
-        "lastModified": 1662879385,
-        "narHash": "sha256-ZmiyHn0uPH4xHYcOhY0e0sPtfyM6jCF/shmVq2aTOLc=",
-        "owner": "nix-community",
-        "repo": "poetry2nix",
-        "rev": "4f8d61cd936f853242a4ce1fd476f5488c288c26",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "ref": "master",
-        "repo": "poetry2nix",
         "type": "github"
       }
     },
@@ -351,30 +284,10 @@
         "implicit-hie-cradle": "implicit-hie-cradle",
         "lsp": "lsp",
         "lsp-test": "lsp-test",
-        "myst-parser": "myst-parser",
         "nixpkgs": "nixpkgs",
-        "poetry2nix": "poetry2nix",
         "ptr-poker": "ptr-poker",
         "retrie": "retrie",
-        "sphinx_rtd_theme": "sphinx_rtd_theme",
         "stylish-haskell": "stylish-haskell"
-      }
-    },
-    "sphinx_rtd_theme": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1628276861,
-        "narHash": "sha256-fzqi0QfDSiN8YXtAiWXIoOlyHZQI4V32uOKZjPfWeWY=",
-        "owner": "readthedocs",
-        "repo": "sphinx_rtd_theme",
-        "rev": "34f81daaf52466366c80003db293d50075c1b896",
-        "type": "github"
-      },
-      "original": {
-        "owner": "readthedocs",
-        "repo": "sphinx_rtd_theme",
-        "rev": "34f81daaf52466366c80003db293d50075c1b896",
-        "type": "github"
       }
     },
     "stylish-haskell": {
