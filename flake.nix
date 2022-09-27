@@ -91,16 +91,6 @@
       url = "https://hackage.haskell.org/package/hie-bios-0.11.0/hie-bios-0.11.0.tar.gz";
       flake = false;
     };
-    myst-parser = {
-      url = "github:smunix/MyST-Parser?ref=fix.hls-docutils";
-      flake = false;
-    };
-    # For https://github.com/readthedocs/sphinx_rtd_theme/pull/1185, otherwise lists are broken locally
-    sphinx_rtd_theme = {
-      url = "github:readthedocs/sphinx_rtd_theme?rev=34f81daaf52466366c80003db293d50075c1b896";
-      flake = false;
-    };
-    poetry2nix.url = "github:nix-community/poetry2nix/master";
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, all-cabal-hashes-unpacked, ... }:
@@ -221,7 +211,7 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ self.overlays.default inputs.poetry2nix.overlay ];
+          overlays = [ self.overlays.default ];
           config = { allowBroken = true; };
         };
 
@@ -246,26 +236,7 @@
         ghc942 = supportedGHCs.ghc942;
         ghcDefault = supportedGHCs.default;
 
-        # For markdown support
-        myst-parser = pkgs.poetry2nix.mkPoetryEnv {
-          projectDir = inputs.myst-parser;
-          python = pkgs.python39;
-          overrides = [
-            pkgs.poetry2nix.defaultPoetryOverrides
-          ];
-        };
-        sphinx_rtd_theme = pkgs.poetry2nix.mkPoetryEnv {
-          projectDir = inputs.sphinx_rtd_theme;
-          python = pkgs.python39;
-          overrides = [
-            pkgs.poetry2nix.defaultPoetryOverrides
-            (self: super: {
-              # The RTD theme doesn't work with newer docutils
-              docutils = pkgs.python3Packages.callPackage ./docutils.nix {};
-            })
-          ];
-        };
-        pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx myst-parser sphinx_rtd_theme ps.pip]);
+        pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx ps.myst-parser ps.sphinx_rtd_theme ps.pip]);
 
         docs = pkgs.stdenv.mkDerivation {
           name = "hls-docs";
