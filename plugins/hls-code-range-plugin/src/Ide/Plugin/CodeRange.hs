@@ -15,21 +15,22 @@ module Ide.Plugin.CodeRange (
 import           Control.Monad.Except                 (ExceptT (ExceptT),
                                                        runExceptT)
 import           Control.Monad.IO.Class               (liftIO)
+import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        maybeToExceptT)
 import           Data.Either.Extra                    (maybeToEither)
 import           Data.Maybe                           (fromMaybe)
 import           Data.Vector                          (Vector)
 import qualified Data.Vector                          as V
-import           Development.IDE                      (IdeAction,
+import           Development.IDE                      (Action, IdeAction,
                                                        IdeState (shakeExtras),
                                                        Range (Range), Recorder,
                                                        WithPriority,
-                                                       cmapWithPrio,
+                                                       cmapWithPrio, runAction,
                                                        runIdeAction,
                                                        toNormalizedFilePath',
-                                                       uriToFilePath')
-import           Development.IDE.Core.Actions         (useE)
+                                                       uriToFilePath', use,
+                                                       useWithStaleFast)
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentPosition,
                                                        toCurrentRange)
@@ -77,19 +78,18 @@ foldingRangeHandler ide _ FoldingRangeParams{..} = do
     pluginResponse $ do
         filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
                 toNormalizedFilePath' <$> uriToFilePath' uri
-        foldingRanges <- ExceptT . liftIO . runIdeAction "FoldingRange" (shakeExtras ide) . runExceptT $
+        foldingRanges <- liftIO . runAction "FoldingRange" ide $
             getFoldingRanges filePath
         pure . List $ foldingRanges
     where
         uri :: Uri
         TextDocumentIdentifier uri = _textDocument
 
-getFoldingRanges :: NormalizedFilePath -> ExceptT String IdeAction [FoldingRange]
+getFoldingRanges :: NormalizedFilePath -> Action [FoldingRange]
 getFoldingRanges file = do
-    (codeRange, _) <- maybeToExceptT "fail to get code range" $ useE GetCodeRange file
-
-    -- removing first node because it folds the entire file
-    pure $ drop 1 $ findFoldingRanges codeRange
+    codeRange <- use GetCodeRange file
+    -- removing the first node because it folds the entire file
+    pure $ maybe [] (drop 1 . findFoldingRanges) codeRange
 
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do
@@ -108,19 +108,21 @@ selectionRangeHandler ide _ SelectionRangeParams{..} = do
 
 getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT String IdeAction [SelectionRange]
 getSelectionRanges file positions = do
-    (codeRange, positionMapping) <- maybeToExceptT "fail to get code range" $ useE GetCodeRange file
-    -- 'positionMapping' should be appied to the input before using them
-    positions' <- maybeToExceptT "fail to apply position mapping to input positions" . MaybeT . pure $
-        traverse (fromCurrentPosition positionMapping) positions
+    codeRangeResult <- lift $ useWithStaleFast GetCodeRange file
+    flip (maybe (pure [])) codeRangeResult $ \(codeRange, positionMapping) -> do
+        -- 'positionMapping' should be appied to the input before using them
+        positions' <- maybeToExceptT "fail to apply position mapping to input positions" . MaybeT . pure $
+            traverse (fromCurrentPosition positionMapping) positions
 
-    let selectionRanges = flip fmap positions' $ \pos ->
-            -- We need a default selection range if the lookup fails, so that other positions can still have valid results.
-            let defaultSelectionRange = SelectionRange (Range pos pos) Nothing
-             in fromMaybe defaultSelectionRange . findPosition pos $ codeRange
+        let selectionRanges = flip fmap positions' $ \pos ->
+                -- We need a default selection range if the lookup fails,
+                -- so that other positions can still have valid results.
+                let defaultSelectionRange = SelectionRange (Range pos pos) Nothing
+                 in fromMaybe defaultSelectionRange . findPosition pos $ codeRange
 
-    -- 'positionMapping' should be applied to the output ranges before returning them
-    maybeToExceptT "fail to apply position mapping to output positions" . MaybeT . pure $
-         traverse (toCurrentSelectionRange positionMapping) selectionRanges
+        -- 'positionMapping' should be applied to the output ranges before returning them
+        maybeToExceptT "fail to apply position mapping to output positions" . MaybeT . pure $
+             traverse (toCurrentSelectionRange positionMapping) selectionRanges
 
 -- | Find 'Position' in 'CodeRange'. This can fail, if the given position is not covered by the 'CodeRange'.
 findPosition :: Position -> CodeRange -> Maybe SelectionRange

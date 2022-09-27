@@ -2,3 +2,4 @@ cradle:
   direct:
     arguments:
       - "Function"
+      - "Empty"

@@ -188,7 +188,7 @@ handleError recorder action' = do
     valueEither <- runExceptT action'
     case valueEither of
         Left msg -> do
-            logWith recorder Error msg
+            logWith recorder Warning msg
             pure $ toIdeResult (Left [])
         Right value -> pure $ toIdeResult (Right value)
 
