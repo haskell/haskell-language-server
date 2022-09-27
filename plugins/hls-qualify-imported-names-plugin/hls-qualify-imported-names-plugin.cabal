@@ -17,6 +17,10 @@ extra-source-files:
   test/data/*.hs
   test/data/*.yaml
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 library
   exposed-modules:    Ide.Plugin.QualifyImportedNames
   hs-source-dirs:     src

@@ -10,16 +10,18 @@ module Development.IDE.Plugin.Completions.Logic (
 , localCompletionsForParsedModule
 , getCompletions
 , fromIdentInfo
+, getCompletionPrefix
 ) where
 
 import           Control.Applicative
-import           Data.Char                                (isUpper)
+import           Data.Char                                (isAlphaNum, isUpper)
 import           Data.Generics
 import           Data.List.Extra                          as List hiding
                                                                   (stripPrefix)
 import qualified Data.Map                                 as Map
 
-import           Data.Maybe                               (fromMaybe, isJust,
+import           Data.Maybe                               (catMaybes, fromMaybe,
+                                                           isJust, listToMaybe,
                                                            mapMaybe)
 import qualified Data.Text                                as T
 import qualified Text.Fuzzy.Parallel                      as Fuzzy
@@ -30,6 +32,7 @@ import           Data.Either                              (fromRight)
 import           Data.Function                            (on)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
+
 import qualified Data.HashSet                             as HashSet
 import           Data.Monoid                              (First (..))
 import           Data.Ord                                 (Down (Down))
@@ -66,6 +69,11 @@ import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
+
+import qualified Data.Text.Utf16.Rope                     as Rope
+import           Development.IDE
+
+import           Development.IDE.Spans.AtPoint            (pointCommand)
 
 -- Chunk size used for parallelizing fuzzy matching
 chunkSize :: Int
@@ -564,20 +572,21 @@ getCompletions
     -> IdeOptions
     -> CachedCompletions
     -> Maybe (ParsedModule, PositionMapping)
+    -> Maybe (HieAstResult, PositionMapping)
     -> (Bindings, PositionMapping)
-    -> VFS.PosPrefixInfo
+    -> PosPrefixInfo
     -> ClientCapabilities
     -> CompletionsConfig
     -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
     -> IO [Scored CompletionItem]
 getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
-               maybe_parsed (localBindings, bmapping) prefixInfo caps config moduleExportsMap = do
-  let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
-      enteredQual = if T.null prefixModule then "" else prefixModule <> "."
+               maybe_parsed maybe_ast_res (localBindings, bmapping) prefixInfo caps config moduleExportsMap = do
+  let PosPrefixInfo { fullLine, prefixScope, prefixText } = prefixInfo
+      enteredQual = if T.null prefixScope then "" else prefixScope <> "."
       fullPrefix  = enteredQual <> prefixText
 
       -- Boolean labels to tag suggestions as qualified (or not)
-      qual = not(T.null prefixModule)
+      qual = not(T.null prefixScope)
       notQual = False
 
       {- correct the position by moving 'foo :: Int -> String ->    '
@@ -585,7 +594,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
           to                             'foo :: Int -> String ->    '
                                                               ^
       -}
-      pos = VFS.cursorPos prefixInfo
+      pos = cursorPos prefixInfo
 
       maxC = maxCompletions config
 
@@ -608,6 +617,42 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
                   hpos = upperRange position'
               in getCContext lpos pm <|> getCContext hpos pm
 
+
+          -- We need the hieast to be "fresh". We can't get types from "stale" hie files, so hasfield won't work,
+          -- since it gets the record fields from the types.
+          -- Perhaps this could be fixed with a refactor to GHC's IfaceTyCon, to have it also contain record fields.
+          -- Requiring fresh hieast is fine for normal workflows, because it is generated while the user edits.
+          recordDotSyntaxCompls :: [(Bool, CompItem)]
+          recordDotSyntaxCompls = case maybe_ast_res of
+            Just (HAR {hieAst = hieast, hieKind = HieFresh},_) -> concat $ pointCommand hieast (completionPrefixPos prefixInfo) nodeCompletions
+            _ -> []
+            where
+              nodeCompletions :: HieAST Type -> [(Bool, CompItem)]
+              nodeCompletions node = concatMap g (nodeType $ nodeInfo node)
+              g :: Type -> [(Bool, CompItem)]
+              g (TyConApp theTyCon _) = map (dotFieldSelectorToCompl (printOutputable $ GHC.tyConName theTyCon)) $ getSels theTyCon
+              g _ = []
+              getSels :: GHC.TyCon -> [T.Text]
+              getSels tycon = let f fieldLabel = printOutputable fieldLabel
+                              in map f $ tyConFieldLabels tycon
+              -- Completions can return more information that just the completion itself, but it will
+              -- require more than what GHC currently gives us in the HieAST, since it only gives the Type
+              -- of the fields, not where they are defined, etc. So for now the extra fields remain empty.
+              -- Also: additionalTextEdits is a todo, since we may want to import the record. It requires a way
+              -- to get the record's module, which isn't included in the type information used to get the fields.
+              dotFieldSelectorToCompl :: T.Text -> T.Text -> (Bool, CompItem)
+              dotFieldSelectorToCompl recname label = (True, CI
+                { compKind = CiField
+                , insertText = label
+                , provenance = DefinedIn recname
+                , typeText = Nothing
+                , label = label
+                , isInfix = Nothing
+                , docs = emptySpanDoc
+                , isTypeCompl = False
+                , additionalTextEdits = Nothing
+                })
+
           -- completions specific to the current context
           ctxCompls' = case mcc of
                         Nothing           -> compls
@@ -618,10 +663,10 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
           ctxCompls = (fmap.fmap) (\comp -> toggleAutoExtend config $ comp { isInfix = infixCompls }) ctxCompls'
 
           infixCompls :: Maybe Backtick
-          infixCompls = isUsedAsInfix fullLine prefixModule prefixText pos
+          infixCompls = isUsedAsInfix fullLine prefixScope prefixText pos
 
           PositionMapping bDelta = bmapping
-          oldPos = fromDelta bDelta $ VFS.cursorPos prefixInfo
+          oldPos = fromDelta bDelta $ cursorPos prefixInfo
           startLoc = lowerRange oldPos
           endLoc = upperRange oldPos
           localCompls = map (uncurry localBindsToCompItem) $ getFuzzyScope localBindings startLoc endLoc
@@ -634,10 +679,14 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
               ty = showForSnippet <$> typ
               thisModName = Local $ nameSrcSpan name
 
-          compls = if T.null prefixModule
-            then map (notQual,) localCompls ++ map (qual,) unqualCompls ++ ((notQual,) . ($Nothing) <$> anyQualCompls)
-            else ((qual,) <$> Map.findWithDefault [] prefixModule (getQualCompls qualCompls))
-                 ++ ((notQual,) . ($ Just prefixModule) <$> anyQualCompls)
+          -- When record-dot-syntax completions are available, we return them exclusively.
+          -- They are only available when we write i.e. `myrecord.` with OverloadedRecordDot enabled.
+          -- Anything that isn't a field is invalid, so those completion don't make sense.
+          compls
+            | T.null prefixScope = map (notQual,) localCompls ++ map (qual,) unqualCompls ++ map (\compl -> (notQual, compl Nothing)) anyQualCompls
+            | not $ null recordDotSyntaxCompls = recordDotSyntaxCompls
+            | otherwise = ((qual,) <$> Map.findWithDefault [] prefixScope (getQualCompls qualCompls))
+                 ++ map (\compl -> (notQual, compl (Just prefixScope))) anyQualCompls
 
       filtListWith f list =
         [ fmap f label
@@ -648,7 +697,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
       filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
       filterModuleExports moduleName = filtListWith $ mkModuleFunctionImport moduleName
       filtKeywordCompls
-          | T.null prefixModule = filtListWith mkExtCompl (optKeywords ideOpts)
+          | T.null prefixScope = filtListWith mkExtCompl (optKeywords ideOpts)
           | otherwise = []
 
   if
@@ -693,6 +742,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
             (isQual, CompletionItem{_label,_detail}) -> do
               let isLocal = maybe False (":" `T.isPrefixOf`) _detail
               (Down isQual, Down score, Down isLocal, _label, _detail)
+
 
 
 
@@ -892,3 +942,32 @@ mergeListsBy cmp all_lists = merge_lists all_lists
         []     -> []
         [xs]   -> xs
         lists' -> merge_lists lists'
+
+-- |From the given cursor position, gets the prefix module or record for autocompletion
+getCompletionPrefix :: Position -> VFS.VirtualFile -> PosPrefixInfo
+getCompletionPrefix pos@(Position l c) (VFS.VirtualFile _ _ ropetext) =
+      fromMaybe (PosPrefixInfo "" "" "" pos) $ do -- Maybe monad
+        let headMaybe = listToMaybe
+            lastMaybe = headMaybe . reverse
+
+        -- grab the entire line the cursor is at
+        curLine <- headMaybe $ T.lines $ Rope.toText
+                             $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) ropetext
+        let beforePos = T.take (fromIntegral c) curLine
+        -- the word getting typed, after previous space and before cursor
+        curWord <-
+            if | T.null beforePos        -> Just ""
+               | T.last beforePos == ' ' -> Just "" -- don't count abc as the curword in 'abc '
+               | otherwise               -> lastMaybe (T.words beforePos)
+
+        let parts = T.split (=='.')
+                      $ T.takeWhileEnd (\x -> isAlphaNum x || x `elem` ("._'"::String)) curWord
+        case reverse parts of
+          [] -> Nothing
+          (x:xs) -> do
+            let modParts = reverse $ filter (not .T.null) xs
+                modName = T.intercalate "." modParts
+            return $ PosPrefixInfo { fullLine = curLine, prefixScope = modName, prefixText = x, cursorPos = pos }
+
+completionPrefixPos :: PosPrefixInfo -> Position
+completionPrefixPos PosPrefixInfo { cursorPos = Position ln co, prefixText = str} = Position ln (co - (fromInteger . toInteger . T.length $ str) - 1)

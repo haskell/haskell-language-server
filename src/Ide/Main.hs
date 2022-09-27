@@ -12,12 +12,13 @@ module Ide.Main(defaultMain, runLspMode, Log(..)) where
 
 import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
-import qualified Data.ByteString.Lazy.Char8    as LBS
 import           Data.Coerce                   (coerce)
 import           Data.Default
 import           Data.List                     (sort)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
+import           Data.Text.Lazy.Encoding       (decodeUtf8)
+import qualified Data.Text.Lazy.IO             as LT
 import           Development.IDE.Core.Rules    hiding (Log, logToPriority)
 import           Development.IDE.Core.Tracing  (withTelemetryLogger)
 import           Development.IDE.Main          (isLSP)
@@ -96,10 +97,9 @@ defaultMain recorder args idePlugins = do
             runLspMode recorder ghcideArgs idePlugins
 
         VSCodeExtensionSchemaMode -> do
-          LBS.putStrLn $ A.encodePretty $ pluginsToVSCodeExtensionSchema idePlugins
-
+          LT.putStrLn $ decodeUtf8 $ encodePrettySorted $ pluginsToVSCodeExtensionSchema idePlugins
         DefaultConfigurationMode -> do
-          LBS.putStrLn $ A.encodePretty $ pluginsToDefaultConfig idePlugins
+          LT.putStrLn $ decodeUtf8 $ encodePrettySorted $ pluginsToDefaultConfig idePlugins
         PrintLibDir -> do
           d <- getCurrentDirectory
           let initialFp = d </> "a"
@@ -107,6 +107,10 @@ defaultMain recorder args idePlugins = do
           cradle <- Session.loadCradle def hieYaml d
           (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
           putStr libdir
+  where
+    encodePrettySorted = A.encodePretty' A.defConfig
+      { A.confCompare = compare
+      }
 
 -- ---------------------------------------------------------------------
 

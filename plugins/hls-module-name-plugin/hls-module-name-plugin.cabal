@@ -19,6 +19,10 @@ extra-source-files:
   test/testdata/**/*.cabal
   test/testdata/**/*.project
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 library
   buildable: True
   exposed-modules:  Ide.Plugin.ModuleName

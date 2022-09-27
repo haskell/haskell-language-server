@@ -18,6 +18,10 @@ extra-source-files:
   test/testdata/*.txt
   test/testdata/*.yaml
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 library
   buildable: True
   exposed-modules:  Ide.Plugin.ChangeTypeSignature
