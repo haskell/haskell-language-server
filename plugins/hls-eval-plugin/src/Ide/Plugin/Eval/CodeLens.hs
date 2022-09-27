@@ -53,6 +53,8 @@ import           Development.IDE.Core.RuleTypes               (LinkableResult (l
                                                                NeedsCompilation (NeedsCompilation),
                                                                TypeCheck (..),
                                                                tmrTypechecked)
+import           Development.IDE.Core.Shake                   (useWithStale_, useNoFile_,
+                                                               use_, uses_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import           Development.IDE.GHC.Compat.Util              (GhcException,
@@ -60,7 +62,7 @@ import           Development.IDE.GHC.Compat.Util              (GhcException,
 import           Development.IDE.GHC.Util                     (evalGhcEnv,
                                                                modifyDynFlags,
                                                                printOutputable)
-import           Development.IDE.Import.DependencyInformation (reachableModules)
+import           Development.IDE.Import.DependencyInformation (transitiveDeps, transitiveModuleDeps)
 import           Development.IDE.Types.Location               (toNormalizedFilePath',
                                                                uriToFilePath')
 import           GHC                                          (ClsInst,
@@ -80,7 +82,7 @@ import           GHC                                          (ClsInst,
                                                                typeKind)
 
 
-import           Development.IDE.Core.RuleTypes               (GetDependencyInformation (GetDependencyInformation),
+import           Development.IDE.Core.RuleTypes               (GetModuleGraph (GetModuleGraph),
                                                                GetLinkable (GetLinkable),
                                                                GetModSummary (GetModSummary),
                                                                GhcSessionDeps (GhcSessionDeps),
@@ -251,8 +253,16 @@ initialiseSessionForEval needs_quickcheck st nfp = do
     ms <- msrModSummary <$> useE GetModSummary nfp
     deps_hsc <- hscEnv <$> useE GhcSessionDeps nfp
 
+<<<<<<< HEAD
     linkables_needed <- reachableModules <$> useE GetDependencyInformation nfp
     linkables <- usesE GetLinkable linkables_needed
+||||||| parent of 075c8d398 (Remove GetDependencyInformation in favour of GetModuleGraph.)
+    linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
+    linkables <- uses_ GetLinkable linkables_needed
+=======
+    linkables_needed <- transitiveDeps <$> useNoFile_ GetModuleGraph <*> pure nfp
+    linkables <- uses_ GetLinkable (nfp : maybe [] transitiveModuleDeps linkables_needed)
+>>>>>>> 075c8d398 (Remove GetDependencyInformation in favour of GetModuleGraph.)
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
     -- However, the eval plugin (setContext specifically) requires the rdr_env

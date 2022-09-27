@@ -23,7 +23,6 @@ module Development.IDE.Core.Rules(
     defineEarlyCutOffNoFile,
     mainRule,
     RulesConfig(..),
-    getDependencies,
     getParsedModule,
     getParsedModuleWithComments,
     getClientConfigAction,
@@ -34,7 +33,6 @@ module Development.IDE.Core.Rules(
     getParsedModuleRule,
     getParsedModuleWithCommentsRule,
     getLocatedImportsRule,
-    getDependencyInformationRule,
     reportImportCyclesRule,
     typeCheckRule,
     getDocMapRule,
@@ -68,6 +66,7 @@ import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception.Safe
+import           Control.Exception                            (evaluate)
 import           Control.Monad.Extra
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -90,6 +89,7 @@ import           Control.Concurrent.STM.TVar
 import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
 import           Data.List
+import           Data.List.Extra                              (nubOrdOn)
 import qualified Data.Map                                     as M
 import           Data.Maybe
 import           Data.Proxy
@@ -160,6 +160,7 @@ import qualified Development.IDE.Types.Shake as Shake
 import           Development.IDE.GHC.CoreFile
 import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)
 import Control.Monad.IO.Unlift
+import qualified Data.IntMap as IM
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Unit.Module.Graph
 import GHC.Unit.Env
@@ -167,6 +168,7 @@ import GHC.Unit.Env
 #if MIN_VERSION_ghc(9,5,0)
 import GHC.Unit.Home.ModInfo
 #endif
+import GHC (mgModSummaries)
 
 data Log
   = LogShake Shake.Log
@@ -212,12 +214,6 @@ toIdeResult = either (, Nothing) (([],) . Just)
 ------------------------------------------------------------
 -- Exposed API
 ------------------------------------------------------------
--- | Get all transitive file dependencies of a given module.
--- Does not include the file itself.
-getDependencies :: NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
-getDependencies file =
-    fmap transitiveModuleDeps . (`transitiveDeps` file) <$> use_ GetDependencyInformation file
-
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
     (_, msource) <- getFileContents nfp
@@ -422,17 +418,17 @@ type RawDepM a = StateT (RawDependencyInformation, IntMap ArtifactsLocation) Act
 execRawDepM :: Monad m => StateT (RawDependencyInformation, IntMap a1) m a2 -> m (RawDependencyInformation, IntMap a1)
 execRawDepM act =
     execStateT act
-        ( RawDependencyInformation IntMap.empty emptyPathIdMap IntMap.empty IntMap.empty
+        ( RawDependencyInformation IntMap.empty emptyPathIdMap IntMap.empty
         , IntMap.empty
         )
 
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
-rawDependencyInformation :: [NormalizedFilePath] -> Action RawDependencyInformation
+rawDependencyInformation :: [NormalizedFilePath] -> Action (RawDependencyInformation, BootIdMap)
 rawDependencyInformation fs = do
     (rdi, ss) <- execRawDepM (goPlural fs)
     let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
-    return (rdi { rawBootMap = bm })
+    return (rdi, bm)
   where
     goPlural ff = do
         mss <- lift $ (fmap.fmap) msrModSummary <$> uses GetModSummaryWithoutTimestamps ff
@@ -451,9 +447,9 @@ rawDependencyInformation fs = do
           fId <- getFreshFid al
           -- Record this module and its location
           whenJust msum $ \ms ->
-            modifyRawDepInfo (\rd -> rd { rawModuleNameMap = IntMap.insert (getFilePathId fId)
-                                                                           (ShowableModuleName (moduleName $ ms_mod ms))
-                                                                           (rawModuleNameMap rd)})
+            modifyRawDepInfo (\rd -> rd { rawModuleMap = IntMap.insert (getFilePathId fId)
+                                                                           (ShowableModule $ ms_mod ms)
+                                                                           (rawModuleMap rd)})
           -- Adding an edge to the bootmap so we can make sure to
           -- insert boot nodes before the real files.
           addBootMap al fId
@@ -525,16 +521,10 @@ rawDependencyInformation fs = do
     dropBootSuffix :: FilePath -> FilePath
     dropBootSuffix hs_src = reverse . drop (length @[] "-boot") . reverse $ hs_src
 
-getDependencyInformationRule :: Recorder (WithPriority Log) -> Rules ()
-getDependencyInformationRule recorder =
-    define (cmapWithPrio LogShake recorder) $ \GetDependencyInformation file -> do
-       rawDepInfo <- rawDependencyInformation [file]
-       pure ([], Just $ processDependencyInformation rawDepInfo)
-
 reportImportCyclesRule :: Recorder (WithPriority Log) -> Rules ()
 reportImportCyclesRule recorder =
     define (cmapWithPrio LogShake recorder) $ \ReportImportCycles file -> fmap (\errs -> if null errs then ([], Just ()) else (errs, Nothing)) $ do
-        DependencyInformation{..} <- use_ GetDependencyInformation file
+        DependencyInformation{..} <- useNoFile_ GetModuleGraph
         let fileId = pathToId depPathIdMap file
         case IntMap.lookup (getFilePathId fileId) depErrorNodes of
             Nothing -> pure []
@@ -683,8 +673,34 @@ knownFilesRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorde
 getModuleGraphRule :: Recorder (WithPriority Log) -> Rules ()
 getModuleGraphRule recorder = defineNoFile (cmapWithPrio LogShake recorder) $ \GetModuleGraph -> do
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
-  rawDepInfo <- rawDependencyInformation (HashSet.toList fs)
-  pure $ processDependencyInformation rawDepInfo
+  dependencyInfoForFiles (HashSet.toList fs)
+
+dependencyInfoForFiles :: [NormalizedFilePath] -> Action DependencyInformation
+dependencyInfoForFiles fs = do
+  (rawDepInfo, bm) <- rawDependencyInformation fs
+  let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
+  mss <- map (fmap msrModSummary) <$> uses GetModSummaryWithoutTimestamps all_fs
+#if MIN_VERSION_ghc(9,3,0)
+  let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
+      nodeKeys = IM.fromList $ catMaybes $ zipWith (\fi mms -> (getFilePathId fi,) . NodeKey_Module . msKey <$> mms) _all_ids mss
+      mns = catMaybes $ zipWith go mss deps
+      go (Just ms) (Just (Right (ModuleImports xs))) = Just $ ModuleNode this_dep_keys ms
+        where this_dep_ids = mapMaybe snd xs
+              this_dep_keys = mapMaybe (\fi -> IM.lookup (getFilePathId fi) nodeKeys) this_dep_ids
+      go (Just ms) _ = Just $ ModuleNode [] ms
+      go _ _ = Nothing
+      mg = mkModuleGraph mns
+#else
+  let mg = mkModuleGraph $
+#if MIN_VERSION_ghc(9,2,0)
+        -- We don't do any instantiation for backpack at this point of time, so it is OK to use
+        -- 'extendModSummaryNoDeps'.
+        -- This may have to change in the future.
+          map extendModSummaryNoDeps $
+#endif
+          (catMaybes mss)
+#endif
+  pure $ processDependencyInformation rawDepInfo bm mg
 
 -- This is factored out so it can be directly called from the GetModIface
 -- rule. Directly calling this rule means that on the initial load we can
@@ -754,11 +770,11 @@ loadGhcSession recorder ghcSessionDepsConfig = do
         ghcSessionDepsDefinition fullModSummary ghcSessionDepsConfig env file
 
 newtype GhcSessionDepsConfig = GhcSessionDepsConfig
-    { checkForImportCycles :: Bool
+    { fullModuleGraph :: Bool
     }
 instance Default GhcSessionDepsConfig where
   def = GhcSessionDepsConfig
-    { checkForImportCycles = True
+    { fullModuleGraph = True
     }
 
 -- | Note [GhcSessionDeps]
@@ -777,7 +793,7 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
     case mbdeps of
         Nothing -> return Nothing
         Just deps -> do
-            when checkForImportCycles $ void $ uses_ ReportImportCycles deps
+            when fullModuleGraph $ void $ uses_ ReportImportCycles deps
             ms <- msrModSummary <$> if fullModSummary
                 then use_ GetModSummary file
                 else use_ GetModSummaryWithoutTimestamps file
@@ -785,19 +801,33 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
             let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
+            mg <- do
+              if fullModuleGraph
+              then depModuleGraph <$> useNoFile_ GetModuleGraph
+              else do
+                let mgs = map hsc_mod_graph depSessions
 #if MIN_VERSION_ghc(9,3,0)
-            -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
-            -- also points to all the direct descendants of the current module. To get the keys for the descendants
-            -- we must get their `ModSummary`s
-            !final_deps <- do
-              dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
-             -- Don't want to retain references to the entire ModSummary when just the key will do
-              return $!! map (NodeKey_Module . msKey) dep_mss
-            let moduleNode = (ms, final_deps)
+                -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
+                -- also points to all the direct descendants of the current module. To get the keys for the descendants
+                -- we must get their `ModSummary`s
+                !final_deps <- do
+                  dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
+                  return $!! map (NodeKey_Module . msKey) dep_mss
+                let module_graph_nodes =
+                      nubOrdOn mkNodeKey (ModuleNode final_deps ms : concatMap mgModSummaries' mgs)
 #else
-            let moduleNode = ms
+                let module_graph_nodes =
+#if MIN_VERSION_ghc(9,2,0)
+                      -- We don't do any instantiation for backpack at this point of time, so it is OK to use
+                      -- 'extendModSummaryNoDeps'.
+                      -- This may have to change in the future.
+                      map extendModSummaryNoDeps $
 #endif
-            session' <- liftIO $ mergeEnvs hsc moduleNode inLoadOrder depSessions
+                      nubOrdOn ms_mod (ms : concatMap mgModSummaries mgs)
+#endif
+                liftIO $ evaluate $ liftRnf rwhnf module_graph_nodes
+                return $ mkModuleGraph module_graph_nodes
+            session' <- liftIO $ mergeEnvs hsc mg ms inLoadOrder depSessions
 
             -- Here we avoid a call to to `newHscEnvEqWithImportPaths`, which creates a new
             -- ExportsMap when it is called. We only need to create the ExportsMap once per
@@ -1201,8 +1231,16 @@ newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (Mod
 instance IsIdeGlobal CompiledLinkables
 
 data RulesConfig = RulesConfig
-    { -- | Disable import cycle checking for improved performance in large codebases
-      checkForImportCycles :: Bool
+    { -- | Share the computation for the entire module graph
+      -- We usually compute the full module graph for the project
+      -- and share it for all files.
+      -- However, in large projects it might not be desirable to wait
+      -- for computing the entire module graph before starting to
+      -- typecheck a particular file.
+      -- Disabling this drastically decreases sharing and is likely to
+      -- increase memory usage if you have multiple files open
+      -- Disabling this also disables checking for import cycles
+      fullModuleGraph :: Bool
     -- | Disable TH for improved performance in large codebases
     , enableTemplateHaskell :: Bool
     -- | Warning to show when TH is not supported by the current HLS binary
@@ -1236,11 +1274,10 @@ mainRule recorder RulesConfig{..} = do
     getParsedModuleRule recorder
     getParsedModuleWithCommentsRule recorder
     getLocatedImportsRule recorder
-    getDependencyInformationRule recorder
     reportImportCyclesRule recorder
     typeCheckRule recorder
     getDocMapRule recorder
-    loadGhcSession recorder def{checkForImportCycles}
+    loadGhcSession recorder def{fullModuleGraph}
     getModIfaceFromDiskRule recorder
     getModIfaceFromDiskAndIndexRule recorder
     getModIfaceRule recorder

@@ -10,8 +10,9 @@ module Development.IDE.Import.DependencyInformation
   , TransitiveDependencies(..)
   , FilePathId(..)
   , NamedModuleDep(..)
-  , ShowableModuleName(..)
-  , PathIdMap
+  , ShowableModule(..)
+  , ShowableModuleEnv(..)
+  , PathIdMap (..)
   , emptyPathIdMap
   , getPathId
   , lookupPathToId
@@ -23,7 +24,7 @@ module Development.IDE.Import.DependencyInformation
   , transitiveDeps
   , transitiveReverseDependencies
   , immediateReverseDependencies
-
+  , lookupModuleFile
   , BootIdMap
   , insertBootId
   ) where
@@ -53,6 +54,7 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 
 import           GHC
+import Development.IDE.GHC.Compat
 
 -- | The imports for a given module.
 newtype ModuleImports = ModuleImports
@@ -128,15 +130,14 @@ data RawDependencyInformation = RawDependencyInformation
     -- corresponding hs file. It is used when topologically sorting as we
     -- need to add edges between .hs-boot and .hs so that the .hs files
     -- appear later in the sort.
-    , rawBootMap   :: !BootIdMap
-    , rawModuleNameMap :: !(FilePathIdMap ShowableModuleName)
+    , rawModuleMap :: !(FilePathIdMap ShowableModule)
     } deriving Show
 
 data DependencyInformation =
   DependencyInformation
     { depErrorNodes        :: !(FilePathIdMap (NonEmpty NodeError))
     -- ^ Nodes that cannot be processed correctly.
-    , depModuleNames       :: !(FilePathIdMap ShowableModuleName)
+    , depModules       :: !(FilePathIdMap ShowableModule)
     , depModuleDeps        :: !(FilePathIdMap FilePathIdSet)
     -- ^ For a non-error node, this contains the set of module immediate dependencies
     -- in the same package.
@@ -146,13 +147,24 @@ data DependencyInformation =
     -- ^ Map from FilePath to FilePathId
     , depBootMap           :: !BootIdMap
     -- ^ Map from hs-boot file to the corresponding hs file
+    , depModuleFiles       :: !(ShowableModuleEnv FilePathId)
+    -- ^ Map from Module to the corresponding non-boot hs file
+    , depModuleGraph       :: !ModuleGraph
     } deriving (Show, Generic)
 
-newtype ShowableModuleName =
-  ShowableModuleName {showableModuleName :: ModuleName}
+newtype ShowableModule =
+  ShowableModule {showableModule :: Module}
   deriving NFData
 
-instance Show ShowableModuleName where show = moduleNameString . showableModuleName
+newtype ShowableModuleEnv a =
+  ShowableModuleEnv {showableModuleEnv :: ModuleEnv a}
+
+instance Show a => Show (ShowableModuleEnv a) where
+  show (ShowableModuleEnv x) = show (moduleEnvToList x)
+instance NFData a => NFData (ShowableModuleEnv a) where
+  rnf = rwhnf
+
+instance Show ShowableModule where show = moduleNameString . moduleName . showableModule
 
 reachableModules :: DependencyInformation -> [NormalizedFilePath]
 reachableModules DependencyInformation{..} =
@@ -215,15 +227,17 @@ instance Semigroup NodeResult where
    SuccessNode _ <> ErrorNode errs   = ErrorNode errs
    SuccessNode a <> SuccessNode _    = SuccessNode a
 
-processDependencyInformation :: RawDependencyInformation -> DependencyInformation
-processDependencyInformation RawDependencyInformation{..} =
+processDependencyInformation :: RawDependencyInformation -> BootIdMap -> ModuleGraph -> DependencyInformation
+processDependencyInformation RawDependencyInformation{..} rawBootMap mg =
   DependencyInformation
     { depErrorNodes = IntMap.fromList errorNodes
     , depModuleDeps = moduleDeps
     , depReverseModuleDeps = reverseModuleDeps
-    , depModuleNames = rawModuleNameMap
+    , depModules = rawModuleMap
     , depPathIdMap = rawPathIdMap
     , depBootMap = rawBootMap
+    , depModuleFiles = ShowableModuleEnv reverseModuleMap
+    , depModuleGraph = mg
     }
   where resultGraph = buildResultGraph rawImports
         (errorNodes, successNodes) = partitionNodeResults $ IntMap.toList resultGraph
@@ -240,6 +254,7 @@ processDependencyInformation RawDependencyInformation{..} =
           foldr (\(p, cs) res ->
             let new = IntMap.fromList (map (, IntSet.singleton (coerce p)) (coerce cs))
             in IntMap.unionWith IntSet.union new res ) IntMap.empty successEdges
+        reverseModuleMap = mkModuleEnv $ map (\(i,sm) -> (showableModule sm, FilePathId i)) $ IntMap.toList rawModuleMap
 
 
 -- | Given a dependency graph, buildResultGraph detects and propagates errors in that graph as follows:
@@ -350,6 +365,10 @@ transitiveDeps DependencyInformation{..} file = do
     boot_edge f = [getFilePathId f' | Just f' <- [IntMap.lookup f depBootMap]]
 
     vs = topSort g
+
+lookupModuleFile :: Module -> DependencyInformation -> Maybe NormalizedFilePath
+lookupModuleFile mod DependencyInformation{..}
+  = idToPath depPathIdMap <$> lookupModuleEnv (showableModuleEnv depModuleFiles) mod
 
 newtype TransitiveDependencies = TransitiveDependencies
   { transitiveModuleDeps :: [NormalizedFilePath]
