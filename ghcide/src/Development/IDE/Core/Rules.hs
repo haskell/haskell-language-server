@@ -34,7 +34,6 @@ module Development.IDE.Core.Rules(
     getParsedModuleRule,
     getParsedModuleWithCommentsRule,
     getLocatedImportsRule,
-    getDependencyInformationRule,
     reportImportCyclesRule,
     typeCheckRule,
     getDocMapRule,
@@ -209,7 +208,7 @@ toIdeResult = either (, Nothing) (([],) . Just)
 -- Does not include the file itself.
 getDependencies :: NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
 getDependencies file =
-    fmap transitiveModuleDeps . (`transitiveDeps` file) <$> use_ GetDependencyInformation file
+    fmap transitiveModuleDeps . (`transitiveDeps` file) <$> useNoFile_ GetModuleGraph
 
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
@@ -521,16 +520,10 @@ rawDependencyInformation fs = do
     dropBootSuffix :: FilePath -> FilePath
     dropBootSuffix hs_src = reverse . drop (length @[] "-boot") . reverse $ hs_src
 
-getDependencyInformationRule :: Recorder (WithPriority Log) -> Rules ()
-getDependencyInformationRule recorder =
-    define (cmapWithPrio LogShake recorder) $ \GetDependencyInformation file -> do
-       rawDepInfo <- rawDependencyInformation [file]
-       pure ([], Just $ processDependencyInformation rawDepInfo)
-
 reportImportCyclesRule :: Recorder (WithPriority Log) -> Rules ()
 reportImportCyclesRule recorder =
     define (cmapWithPrio LogShake recorder) $ \ReportImportCycles file -> fmap (\errs -> if null errs then ([], Just ()) else (errs, Nothing)) $ do
-        DependencyInformation{..} <- use_ GetDependencyInformation file
+        DependencyInformation{..} <- useNoFile_ GetModuleGraph
         let fileId = pathToId depPathIdMap file
         case IntMap.lookup (getFilePathId fileId) depErrorNodes of
             Nothing -> pure []
@@ -1224,7 +1217,6 @@ mainRule recorder RulesConfig{..} = do
     getParsedModuleRule recorder
     getParsedModuleWithCommentsRule recorder
     getLocatedImportsRule recorder
-    getDependencyInformationRule recorder
     reportImportCyclesRule recorder
     typeCheckRule recorder
     getDocMapRule recorder

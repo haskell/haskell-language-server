@@ -49,7 +49,7 @@ import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
 import           Data.Time                                    (getCurrentTime)
 import           Data.Typeable                                (Typeable)
-import           Development.IDE                              (GetDependencyInformation (..),
+import           Development.IDE                              (GetModuleGraph (..),
                                                                GetLinkable (..),
                                                                GetModSummary (..),
                                                                GhcSessionIO (..),
@@ -326,7 +326,7 @@ runEvalCmd plId st EvalParams{..} =
             -- This can be optimised to only get the linkables for the symbols depended on by
             -- the statement we are parsing
             lbs <- liftIO $ runAction "eval: GetLinkables" st $ do
-              linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
+              linkables_needed <- reachableModules <$> useNoFile_ GetModuleGraph
               uses_ GetLinkable (filter (/= nfp) linkables_needed) -- We don't need the linkable for the current module
             let hscEnv'' = hscEnv' { hsc_HPT  = addListToHpt (hsc_HPT hscEnv') [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] }
 
