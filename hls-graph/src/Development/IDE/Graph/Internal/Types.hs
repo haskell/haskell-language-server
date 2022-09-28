@@ -25,6 +25,8 @@ import qualified Data.HashMap.Strict           as Map
 import           Data.HashSet                  (HashSet, member)
 import qualified Data.IntMap                   as IM
 import qualified Data.HashSet                  as Set
+import qualified Data.Text                     as T
+import           Data.Text                     (Text)
 import           Data.IORef
 import           Data.List                     (intercalate)
 import           Data.Maybe
@@ -86,11 +88,11 @@ newtype Step = Step Int
 ---------------------------------------------------------------------
 -- Keys
 
-data KeyValue = forall a . (Typeable a, Hashable a, Show a) => KeyValue a
+data KeyValue = forall a . (Typeable a, Hashable a, Show a) => KeyValue a Text
 
 newtype Key = UnsafeMkKey Int
 
-pattern Key a <- (lookupKeyValue -> KeyValue a)
+pattern Key a <- (lookupKeyValue -> KeyValue a _)
 
 data KeyMap = KeyMap !(Map.HashMap KeyValue Key) !(IM.IntMap KeyValue) {-# UNPACK #-} !Int
 
@@ -101,7 +103,7 @@ keyMap = unsafePerformIO $ newIORef (KeyMap Map.empty IM.empty 0)
 
 newKey :: (Typeable a, Hashable a, Show a) => a -> Key
 newKey k = unsafePerformIO $ do
-  let !newKey = KeyValue k
+  let !newKey = KeyValue k (T.pack (show k))
   atomicModifyIORef' keyMap $ \km@(KeyMap hm im n) ->
     let new_key = Map.lookup newKey hm
     in case new_key of
@@ -126,11 +128,14 @@ instance Show Key where
   show (Key x) = show x
 
 instance Eq KeyValue where
-    KeyValue a == KeyValue b = Just a == cast b
+    KeyValue a _ == KeyValue b _ = Just a == cast b
 instance Hashable KeyValue where
-    hashWithSalt i (KeyValue x) = hashWithSalt i (typeOf x, x)
+    hashWithSalt i (KeyValue x _) = hashWithSalt i (typeOf x, x)
 instance Show KeyValue where
-    show (KeyValue x) = show x
+    show (KeyValue x t) = T.unpack t
+
+renderKey :: Key -> Text
+renderKey (lookupKeyValue -> KeyValue _ t) = t
 
 newtype Value = Value Dynamic
 
