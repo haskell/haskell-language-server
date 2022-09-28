@@ -284,24 +284,26 @@ mkExtCompl label =
 
 
 fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
-fromIdentInfo doc IdentInfo{..} q = CI
+fromIdentInfo doc id@IdentInfo{..} q = CI
   { compKind= occNameToComKind name
-  , insertText=rendered
-  , provenance = DefinedIn moduleNameText
-  , label=rendered
+  , insertText=rend
+  , provenance = DefinedIn mod
+  , label=rend
   , isInfix=Nothing
-  , isTypeCompl= not isDatacon && isUpper (T.head rendered)
+  , isTypeCompl= not (isDatacon id) && isUpper (T.head rend)
   , additionalTextEdits= Just $
         ExtendImport
           { doc,
-            thingParent = parent,
-            importName = moduleNameText,
+            thingParent = occNameText <$> parent,
+            importName = mod,
             importQual = q,
-            newThing = rendered
+            newThing = rend
           }
   , nameDetails = Nothing
   , isLocalCompletion = False
   }
+  where rend = rendered id
+        mod = moduleNameText id
 
 cacheDataProducer :: Uri -> [ModuleName] -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> CachedCompletions
 cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =

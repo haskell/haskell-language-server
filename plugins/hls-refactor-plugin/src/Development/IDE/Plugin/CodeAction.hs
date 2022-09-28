@@ -37,6 +37,7 @@ import           Data.Maybe
 import           Data.Ord                                          (comparing)
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
+import qualified Data.Text.Encoding                                as T
 import qualified Data.Text.Utf16.Rope                              as Rope
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
@@ -1073,11 +1074,9 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
             -- fallback to using GHC suggestion even though it is not always correct
           | otherwise
           = Just IdentInfo
-                { name = mkVarOcc $ T.unpack binding
-                , rendered = binding
+                { name = mkVarOccFS $ mkFastStringByteString $ T.encodeUtf8 binding
                 , parent = Nothing
-                , isDatacon = False
-                , moduleNameText = mod}
+                , identModuleName  = mkModuleNameFS $ mkFastStringByteString $ T.encodeUtf8 mod}
 #endif
 
 data HidingMode
@@ -1477,18 +1476,18 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
         _message
         "‘([^’]*)’ is not a \\(visible\\) method of class ‘([^’]*)’",
     idents <-
-      maybe [] (Set.toList . Set.filter (\x -> parent x == Just className)) $
+      maybe [] (Set.toList . Set.filter (\x -> fmap occNameText (parent x) == Just className)) $
         Map.lookup methodName $ getExportsMap packageExportsMap =
     mconcat $ suggest <$> idents
   | otherwise = []
   where
-    suggest identInfo@IdentInfo {moduleNameText}
+    suggest identInfo
       | importStyle <- NE.toList $ importStyles identInfo,
-        mImportDecl <- findImportDeclByModuleName (hsmodImports . unLoc . astA $ ps) (T.unpack moduleNameText) =
+        mImportDecl <- findImportDeclByModuleName (hsmodImports . unLoc . astA $ ps) (T.unpack moduleText) =
         case mImportDecl of
           -- extend
           Just decl ->
-            [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleNameText,
+            [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleText,
                 quickFixImportKind' "extend" style,
                 [Right $ uncurry extendImport (unImportStyle style) decl]
               )
@@ -1499,12 +1498,13 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
             | Just (range, indent) <- newImportInsertRange ps fileContents
             ->
              (\(kind, unNewImport -> x) -> (x, kind, [Left $ TextEdit range (x <> "\n" <> T.replicate indent " ")])) <$>
-            [ (quickFixImportKind' "new" style, newUnqualImport moduleNameText rendered False)
+            [ (quickFixImportKind' "new" style, newUnqualImport moduleText rendered False)
               | style <- importStyle,
                 let rendered = renderImportStyle style
             ]
-              <> [(quickFixImportKind "new.all", newImportAll moduleNameText)]
+              <> [(quickFixImportKind "new.all", newImportAll moduleText)]
             | otherwise -> []
+        where moduleText = moduleNameText identInfo
 #endif
 
 suggestNewImport :: ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
@@ -2098,16 +2098,18 @@ data ImportStyle
   deriving Show
 
 importStyles :: IdentInfo -> NonEmpty ImportStyle
-importStyles IdentInfo {parent, rendered, isDatacon}
-  | Just p <- parent
+importStyles i@IdentInfo {parent}
+  | Just p <- pr
     -- Constructors always have to be imported via their parent data type, but
     -- methods and associated type/data families can also be imported as
     -- top-level exports.
-  = ImportViaParent rendered p
-      :| [ImportTopLevel rendered | not isDatacon]
+  = ImportViaParent rend p
+      :| [ImportTopLevel rend | not (isDatacon i)]
       <> [ImportAllConstructors p]
   | otherwise
-  = ImportTopLevel rendered :| []
+  = ImportTopLevel rend :| []
+  where rend = rendered i
+        pr = occNameText <$> parent
 
 -- | Used for adding new imports
 renderImportStyle :: ImportStyle -> T.Text
