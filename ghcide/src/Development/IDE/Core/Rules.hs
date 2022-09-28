@@ -14,6 +14,10 @@ module Development.IDE.Core.Rules(
     IdeState, GetParsedModule(..), TransitiveDependencies(..),
     Priority(..), GhcSessionIO(..), GetClientSettings(..),
     -- * Functions
+    --
+    --
+    --
+    -- 
     priorityTypeCheck,
     priorityGenerateCore,
     priorityFilesOfInterest,
@@ -23,7 +27,6 @@ module Development.IDE.Core.Rules(
     defineEarlyCutOffNoFile,
     mainRule,
     RulesConfig(..),
-    getDependencies,
     getParsedModule,
     getParsedModuleWithComments,
     getClientConfigAction,
@@ -155,6 +158,7 @@ import qualified Development.IDE.Types.Shake as Shake
 import           Development.IDE.GHC.CoreFile
 import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Control.Monad.IO.Unlift
+import qualified Data.IntMap as IM
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Unit.Module.Graph
 import GHC.Unit.Env
@@ -204,12 +208,6 @@ toIdeResult = either (, Nothing) (([],) . Just)
 ------------------------------------------------------------
 -- Exposed API
 ------------------------------------------------------------
--- | Get all transitive file dependencies of a given module.
--- Does not include the file itself.
-getDependencies :: NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
-getDependencies file =
-    fmap transitiveModuleDeps . (`transitiveDeps` file) <$> useNoFile_ GetModuleGraph
-
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
     (_, msource) <- getFileContents nfp
@@ -417,17 +415,17 @@ type RawDepM a = StateT (RawDependencyInformation, IntMap ArtifactsLocation) Act
 execRawDepM :: Monad m => StateT (RawDependencyInformation, IntMap a1) m a2 -> m (RawDependencyInformation, IntMap a1)
 execRawDepM act =
     execStateT act
-        ( RawDependencyInformation IntMap.empty emptyPathIdMap IntMap.empty IntMap.empty
+        ( RawDependencyInformation IntMap.empty emptyPathIdMap IntMap.empty
         , IntMap.empty
         )
 
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
-rawDependencyInformation :: [NormalizedFilePath] -> Action RawDependencyInformation
+rawDependencyInformation :: [NormalizedFilePath] -> Action (RawDependencyInformation, BootIdMap)
 rawDependencyInformation fs = do
     (rdi, ss) <- execRawDepM (goPlural fs)
     let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
-    return (rdi { rawBootMap = bm })
+    return (rdi, bm)
   where
     goPlural ff = do
         mss <- lift $ (fmap.fmap) msrModSummary <$> uses GetModSummaryWithoutTimestamps ff
@@ -446,9 +444,9 @@ rawDependencyInformation fs = do
           fId <- getFreshFid al
           -- Record this module and its location
           whenJust msum $ \ms ->
-            modifyRawDepInfo (\rd -> rd { rawModuleNameMap = IntMap.insert (getFilePathId fId)
-                                                                           (ShowableModuleName (moduleName $ ms_mod ms))
-                                                                           (rawModuleNameMap rd)})
+            modifyRawDepInfo (\rd -> rd { rawModuleMap = IntMap.insert (getFilePathId fId)
+                                                                           (ShowableModule $ ms_mod ms)
+                                                                           (rawModuleMap rd)})
           -- Adding an edge to the bootmap so we can make sure to
           -- insert boot nodes before the real files.
           addBootMap al fId
@@ -670,8 +668,30 @@ knownFilesRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorde
 getModuleGraphRule :: Recorder (WithPriority Log) -> Rules ()
 getModuleGraphRule recorder = defineNoFile (cmapWithPrio LogShake recorder) $ \GetModuleGraph -> do
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
-  rawDepInfo <- rawDependencyInformation (HashSet.toList fs)
-  pure $ processDependencyInformation rawDepInfo
+  (rawDepInfo, bm) <- rawDependencyInformation (HashSet.toList fs)
+  let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
+  mss <- map (fmap msrModSummary) <$> uses GetModSummaryWithoutTimestamps all_fs
+#if MIN_VERSION_ghc(9,3,0)
+  let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
+      nodeKeys = IM.fromList $ catMaybes $ zipWith (\fi mms -> (getFilePathId fi,) . NodeKey_Module . msKey <$> mms) _all_ids mss
+      mns = catMaybes $ zipWith go mss deps
+      go (Just ms) (Just (Right (ModuleImports xs))) = Just $ ModuleNode this_dep_keys ms
+        where this_dep_ids = mapMaybe snd xs
+              this_dep_keys = mapMaybe (\fi -> IM.lookup (getFilePathId fi) nodeKeys) this_dep_ids
+      go (Just ms) _ = Just $ ModuleNode [] ms
+      go _ _ = Nothing
+      mg = mkModuleGraph mns
+#else
+  let mg = mkModuleGraph $
+#if MIN_VERSION_ghc(9,2,0)
+        -- We don't do any instantiation for backpack at this point of time, so it is OK to use
+        -- 'extendModSummaryNoDeps'.
+        -- This may have to change in the future.
+          map extendModSummaryNoDeps $
+#endif
+          (catMaybes mss)
+#endif
+  pure $ processDependencyInformation rawDepInfo bm mg
 
 -- This is factored out so it can be directly called from the GetModIface
 -- rule. Directly calling this rule means that on the initial load we can
@@ -773,19 +793,8 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
             let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails Nothing) ifaces
-#if MIN_VERSION_ghc(9,3,0)
-            -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
-            -- also points to all the direct descendents of the current module. To get the keys for the descendents
-            -- we must get their `ModSummary`s
-            !final_deps <- do
-              dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
-             -- Don't want to retain references to the entire ModSummary when just the key will do
-              return $!! map (NodeKey_Module . msKey) dep_mss
-            let moduleNode = (ms, final_deps)
-#else
-            let moduleNode = ms
-#endif
-            session' <- liftIO $ mergeEnvs hsc moduleNode inLoadOrder depSessions
+            mg <- depModuleGraph <$> useNoFile_ GetModuleGraph
+            session' <- liftIO $ mergeEnvs hsc mg ms inLoadOrder depSessions
 
             Just <$> liftIO (newHscEnvEqWithImportPaths (envImportPaths env) session' [])
 
