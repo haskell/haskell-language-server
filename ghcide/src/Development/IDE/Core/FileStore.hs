@@ -55,7 +55,6 @@ import qualified Development.IDE.Types.Logger                 as L
 
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
-import qualified Data.HashSet                                 as HSet
 import           Data.List                                    (foldl')
 import qualified Data.Text                                    as Text
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
@@ -256,7 +255,7 @@ setSomethingModified vfs state keys reason = do
     atomically $ do
         writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
         modifyTVar' (dirtyKeys $ shakeExtras state) $ \x ->
-            foldl' (flip HSet.insert) x keys
+            foldl' (flip insertKeySet) x keys
     void $ restartShakeSession (shakeExtras state) vfs reason []
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
