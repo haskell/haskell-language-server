@@ -3,6 +3,10 @@
 exedir="@@EXE_DIR@@"
 executablename="@@EXE_NAME@@"
 GHC_VERSION="@@GHC_VERSION@@"
+
+# This space separated list contains the names and versions of the boot libraries used to compile hls.
+BOOT_PKGS="@@BOOT_PKGS@@"
+# This space separated list contains the ABI hashes of the pkgs in BOOT_PKGS at compiletime.
 ABI_HASHES="@@ABI_HASHES@@"
 
 debug_msg() {
@@ -62,7 +66,7 @@ check_ghc() {
 
 	# check version
 	if [ "${check_ghc_ver}" = "${GHC_VERSION}" ] ; then
-		# check ABI
+		# check for all packages listed in BOOT_PKGS that they are present with the same ABI hash as at hls-compiletime to prevent linking issues.
 		if "${GHC_PKG}" --version >/dev/null ; then
 			:
 		elif "${GHC_PKG}-${GHC_VERSION}" --version >/dev/null ; then
@@ -73,7 +77,7 @@ check_ghc() {
 			return 1
 		fi
 		PKGCONF="${check_ghc_libdir}/package.conf.d"
-		MY_ABI_HASHES="$(for dep in $("${GHC_PKG}" --global --global-package-db "$PKGCONF" list --simple-output) ; do printf "%s:" "${dep}" && "${GHC_PKG}" --global --global-package-db "$PKGCONF" field "${dep}" abi --simple-output ; done | tr '\n' ' ' | xargs)"
+		MY_ABI_HASHES="$(for dep in ${BOOT_PKGS} ; do printf "%s:" "${dep}" && "${GHC_PKG}" --global --global-package-db "$PKGCONF" field "${dep}" abi --simple-output ; done | tr '\n' ' ' | xargs)"
 		if [ "${ABI_HASHES}" != "${MY_ABI_HASHES}" ] ; then
 			err_abi "${MY_ABI_HASHES}"
 			return 3
