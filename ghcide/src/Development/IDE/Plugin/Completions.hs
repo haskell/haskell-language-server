@@ -180,7 +180,7 @@ getCompletionsLSP ide plId
             let exportsMap = fromMaybe mempty packageExportsMap <> projectExportsMap
 
             let moduleExports = getModuleExportsMap exportsMap
-                exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap $ exportsMap
+                exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . occEnvElts . getExportsMap $ exportsMap
                 exportsCompls = mempty{anyQualCompls = exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls <> Just lModules
 
