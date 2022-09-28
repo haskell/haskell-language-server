@@ -82,6 +82,7 @@ library
     , transformers
     , unliftio
     , unordered-containers
+    , text
 
   if flag(embed-files)
         cpp-options: -DFILE_EMBED

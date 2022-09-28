@@ -4,7 +4,7 @@ module Development.IDE.Graph(
     Rules,
     Action, action,
     Key(.., Key),
-    newKey,
+    newKey, renderKey,
     actionFinally, actionBracket, actionCatch, actionFork,
     -- * Configuration
     ShakeOptions(shakeAllowRedefineRules, shakeExtra),
