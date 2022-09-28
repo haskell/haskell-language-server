@@ -21,7 +21,7 @@ module Development.IDE.Types.Exports
     updateExportsMapMg
     ) where
 
-import           Control.DeepSeq             (NFData (..))
+import           Control.DeepSeq             (NFData (..), force, ($!!))
 import           Control.Monad
 import           Data.Bifunctor              (Bifunctor (second))
 import           Data.Char                   (isUpper)
@@ -44,6 +44,9 @@ data ExportsMap = ExportsMap
     { getExportsMap       :: !(OccEnv (HashSet IdentInfo))
     , getModuleExportsMap :: !(ModuleNameEnv (HashSet IdentInfo))
     }
+
+instance NFData ExportsMap where
+  rnf (ExportsMap a b) = foldOccEnv (\a b -> rnf a `seq` b) (seqEltsUFM rnf b) a
 
 instance Show ExportsMap where
   show (ExportsMap occs mods) =
@@ -154,7 +157,7 @@ createExportsMap :: [ModIface] -> ExportsMap
 createExportsMap modIface = do
   let exportList = concatMap doOne modIface
   let exportsMap = mkOccEnv_C (<>) $ map (\(a,_,c) -> (a, c)) exportList
-  ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
+  force $ ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList -- UFM is lazy, so need to seq
   where
     doOne modIFace = do
       let getModDetails = unpackAvail $ moduleName $ mi_module modIFace
@@ -164,7 +167,7 @@ createExportsMapMg :: [ModGuts] -> ExportsMap
 createExportsMapMg modGuts = do
   let exportList = concatMap doOne modGuts
   let exportsMap = mkOccEnv_C (<>) $ map (\(a,_,c) -> (a, c)) exportList
-  ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
+  force $ ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList -- UFM is lazy, so need to seq
   where
     doOne mi = do
       let getModuleName = moduleName $ mg_module mi
@@ -188,7 +191,7 @@ createExportsMapHieDb withHieDb = do
         fmap (unwrap mn) <$> withHieDb (\hieDb -> getExportsForModule hieDb mn)
     let idents = concat idents'
     let exportsMap = mkOccEnv_C (<>) (keyWith name idents)
-    return $! ExportsMap exportsMap $ buildModuleExportMap (keyWith identModuleName idents)
+    return $!! ExportsMap exportsMap $ buildModuleExportMap (keyWith identModuleName idents) -- UFM is lazy so need to seq
   where
     unwrap m ExportRow{..} = IdentInfo exportName exportParent m
     keyWith f xs = [(f x, Set.singleton x) | x <- xs]
