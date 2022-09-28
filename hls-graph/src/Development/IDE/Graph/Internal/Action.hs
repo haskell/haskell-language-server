@@ -26,7 +26,6 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Reader
 import           Data.Foldable                           (toList)
 import           Data.Functor.Identity
-import qualified Data.HashSet                         as HSet
 import           Data.IORef
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Database
@@ -122,7 +121,7 @@ apply ks = do
     stack <- Action $ asks actionStack
     (is, vs) <- liftIO $ build db stack ks
     ref <- Action $ asks actionDeps
-    liftIO $ modifyIORef ref (ResultDeps (HSet.fromList $ toList is) <>)
+    liftIO $ modifyIORef ref (ResultDeps (fromListKeySet $ toList is) <>)
     pure vs
 
 -- | Evaluate a list of keys without recording any dependencies.

@@ -20,11 +20,13 @@ import           Control.Monad.Trans.Reader
 import           Data.Aeson                    (FromJSON, ToJSON)
 import           Data.Bifunctor                (second)
 import qualified Data.ByteString               as BS
+import           Data.Coerce
 import           Data.Dynamic
 import qualified Data.HashMap.Strict           as Map
-import           Data.HashSet                  (HashSet, member)
-import qualified Data.IntMap                   as IM
-import qualified Data.HashSet                  as Set
+import qualified Data.IntMap.Strict            as IM
+import           Data.IntMap                   (IntMap)
+import qualified Data.IntSet                   as IS
+import           Data.IntSet                   (IntSet)
 import qualified Data.Text                     as T
 import           Data.Text                     (Text)
 import           Data.IORef
@@ -88,34 +90,34 @@ newtype Step = Step Int
 ---------------------------------------------------------------------
 -- Keys
 
-data KeyValue = forall a . (Typeable a, Hashable a, Show a) => KeyValue a Text
+data KeyValue = forall a . (Eq a, Typeable a, Hashable a, Show a) => KeyValue a Text
 
 newtype Key = UnsafeMkKey Int
 
 pattern Key a <- (lookupKeyValue -> KeyValue a _)
 
-data KeyMap = KeyMap !(Map.HashMap KeyValue Key) !(IM.IntMap KeyValue) {-# UNPACK #-} !Int
+data GlobalKeyValueMap = GlobalKeyValueMap !(Map.HashMap KeyValue Key) !(IntMap KeyValue) {-# UNPACK #-} !Int
 
-keyMap :: IORef KeyMap
-keyMap = unsafePerformIO $ newIORef (KeyMap Map.empty IM.empty 0)
+keyMap :: IORef GlobalKeyValueMap
+keyMap = unsafePerformIO $ newIORef (GlobalKeyValueMap Map.empty IM.empty 0)
 
 {-# NOINLINE keyMap #-}
 
-newKey :: (Typeable a, Hashable a, Show a) => a -> Key
+newKey :: (Eq a, Typeable a, Hashable a, Show a) => a -> Key
 newKey k = unsafePerformIO $ do
   let !newKey = KeyValue k (T.pack (show k))
-  atomicModifyIORef' keyMap $ \km@(KeyMap hm im n) ->
+  atomicModifyIORef' keyMap $ \km@(GlobalKeyValueMap hm im n) ->
     let new_key = Map.lookup newKey hm
     in case new_key of
           Just v  -> (km, v)
           Nothing ->
             let !new_index = UnsafeMkKey n
-            in (KeyMap (Map.insert newKey new_index hm) (IM.insert n newKey im) (n+1), new_index)
+            in (GlobalKeyValueMap (Map.insert newKey new_index hm) (IM.insert n newKey im) (n+1), new_index)
 {-# NOINLINE newKey #-}
 
 lookupKeyValue :: Key -> KeyValue
 lookupKeyValue (UnsafeMkKey x) = unsafePerformIO $ do
-  KeyMap _ im _ <- readIORef keyMap
+  GlobalKeyValueMap _ im _ <- readIORef keyMap
   pure $! im IM.! x
 
 {-# NOINLINE lookupKeyValue #-}
@@ -137,14 +139,88 @@ instance Show KeyValue where
 renderKey :: Key -> Text
 renderKey (lookupKeyValue -> KeyValue _ t) = t
 
+newtype KeySet = KeySet IntSet
+  deriving (Eq, Ord, Semigroup, Monoid)
+
+instance Show KeySet where
+  showsPrec p (KeySet is)= showParen (p > 10) $
+      showString "fromList " . shows ks
+    where ks = coerce (IS.toList is) :: [Key]
+
+insertKeySet :: Key -> KeySet -> KeySet
+insertKeySet = coerce IS.insert
+
+memberKeySet :: Key -> KeySet -> Bool
+memberKeySet = coerce IS.member
+
+toListKeySet :: KeySet -> [Key]
+toListKeySet = coerce IS.toList
+
+nullKeySet :: KeySet -> Bool
+nullKeySet = coerce IS.null
+
+differenceKeySet :: KeySet -> KeySet -> KeySet
+differenceKeySet = coerce IS.difference
+
+deleteKeySet :: Key -> KeySet -> KeySet
+deleteKeySet = coerce IS.delete
+
+fromListKeySet :: [Key] -> KeySet
+fromListKeySet = coerce IS.fromList
+
+singletonKeySet :: Key -> KeySet
+singletonKeySet = coerce IS.singleton
+
+filterKeySet :: (Key -> Bool) -> KeySet -> KeySet
+filterKeySet = coerce IS.filter
+
+lengthKeySet :: KeySet -> Int
+lengthKeySet = coerce IS.size
+
+newtype KeyMap a = KeyMap (IntMap a)
+  deriving (Eq, Ord, Semigroup, Monoid)
+
+instance Show a => Show (KeyMap a) where
+  showsPrec p (KeyMap im)= showParen (p > 10) $
+      showString "fromList " . shows ks
+    where ks = coerce (IM.toList im) :: [(Key,a)]
+
+mapKeyMap :: (a -> b) -> KeyMap a -> KeyMap b
+mapKeyMap f (KeyMap m) = KeyMap (IM.map f m)
+
+insertKeyMap :: Key -> a -> KeyMap a -> KeyMap a
+insertKeyMap (UnsafeMkKey k) v (KeyMap m) = KeyMap (IM.insert k v m)
+
+lookupKeyMap :: Key -> KeyMap a -> Maybe a
+lookupKeyMap (UnsafeMkKey k) (KeyMap m) = IM.lookup k m
+
+lookupDefaultKeyMap :: a -> Key -> KeyMap a -> a
+lookupDefaultKeyMap a (UnsafeMkKey k) (KeyMap m) = IM.findWithDefault a k m
+
+fromListKeyMap :: [(Key,a)] -> KeyMap a
+fromListKeyMap xs = KeyMap (IM.fromList (coerce xs))
+
+fromListWithKeyMap :: (a -> a -> a) -> [(Key,a)] -> KeyMap a
+fromListWithKeyMap f xs = KeyMap (IM.fromListWith f (coerce xs))
+
+toListKeyMap :: KeyMap a -> [(Key,a)]
+toListKeyMap (KeyMap m) = coerce (IM.toList m)
+
+elemsKeyMap :: KeyMap a -> [a]
+elemsKeyMap (KeyMap m) = IM.elems m
+
+restrictKeysKeyMap :: KeyMap a -> KeySet -> KeyMap a
+restrictKeysKeyMap (KeyMap m) (KeySet s) = KeyMap (IM.restrictKeys m s)
+
+
 newtype Value = Value Dynamic
 
 data KeyDetails = KeyDetails {
     keyStatus      :: !Status,
-    keyReverseDeps :: !(HashSet Key)
+    keyReverseDeps :: !KeySet
     }
 
-onKeyReverseDeps :: (HashSet Key -> HashSet Key) -> KeyDetails -> KeyDetails
+onKeyReverseDeps :: (KeySet -> KeySet) -> KeyDetails -> KeyDetails
 onKeyReverseDeps f it@KeyDetails{..} =
     it{keyReverseDeps = f keyReverseDeps}
 
@@ -191,15 +267,15 @@ data Result = Result {
     resultData      :: !BS.ByteString
     }
 
-data ResultDeps = UnknownDeps | AlwaysRerunDeps !(HashSet Key) | ResultDeps !(HashSet Key)
+data ResultDeps = UnknownDeps | AlwaysRerunDeps !KeySet | ResultDeps !KeySet
   deriving (Eq, Show)
 
-getResultDepsDefault :: (HashSet Key) -> ResultDeps -> (HashSet Key)
+getResultDepsDefault :: KeySet -> ResultDeps -> KeySet
 getResultDepsDefault _ (ResultDeps ids)      = ids
 getResultDepsDefault _ (AlwaysRerunDeps ids) = ids
 getResultDepsDefault def UnknownDeps         = def
 
-mapResultDeps :: (HashSet Key -> HashSet Key) -> ResultDeps -> ResultDeps
+mapResultDeps :: (KeySet -> KeySet) -> ResultDeps -> ResultDeps
 mapResultDeps f (ResultDeps ids)      = ResultDeps $ f ids
 mapResultDeps f (AlwaysRerunDeps ids) = AlwaysRerunDeps $ f ids
 mapResultDeps _ UnknownDeps           = UnknownDeps
@@ -273,7 +349,7 @@ fromGraphException x = do
 ---------------------------------------------------------------------
 -- CALL STACK
 
-data Stack = Stack [Key] !(HashSet Key)
+data Stack = Stack [Key] !KeySet
 
 instance Show Stack where
     show (Stack kk _) = "Stack: " <> intercalate " -> " (map show kk)
@@ -288,12 +364,12 @@ instance Exception StackException where
 
 addStack :: Key -> Stack -> Either StackException Stack
 addStack k (Stack ks is)
-    | k `member` is = Left $ StackException stack2
+    | k `memberKeySet` is = Left $ StackException stack2
     | otherwise = Right stack2
-    where stack2 = Stack (k:ks) (Set.insert k is)
+    where stack2 = Stack (k:ks) (insertKeySet k is)
 
 memberStack :: Key -> Stack -> Bool
-memberStack k (Stack _ ks) = k `member` ks
+memberStack k (Stack _ ks) = k `memberKeySet` ks
 
 emptyStack :: Stack
 emptyStack = Stack [] mempty
