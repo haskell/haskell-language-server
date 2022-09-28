@@ -8,27 +8,31 @@ module Development.IDE.Types.Exports
     rendered,
     moduleNameText,
     occNameText,
+    renderOcc,
+    mkTypeOcc,
+    mkVarOrDataOcc,
     isDatacon,
     createExportsMap,
     createExportsMapMg,
-    createExportsMapTc,
     buildModuleExportMapFrom,
     createExportsMapHieDb,
     size,
+    exportsMapSize,
     updateExportsMapMg
     ) where
 
 import           Control.DeepSeq             (NFData (..))
 import           Control.Monad
 import           Data.Bifunctor              (Bifunctor (second))
+import           Data.Char                   (isUpper)
 import           Data.Hashable               (Hashable)
 import           Data.HashMap.Strict         (HashMap, elems)
 import qualified Data.HashMap.Strict         as Map
 import           Data.HashSet                (HashSet)
 import qualified Data.HashSet                as Set
 import           Data.List                   (foldl', isSuffixOf)
-import           Data.Text                   (Text, pack)
-import           Data.Text.Encoding          (decodeUtf8)
+import           Data.Text                   (Text, uncons)
+import           Data.Text.Encoding          (decodeUtf8, encodeUtf8)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
 import           Development.IDE.GHC.Util
@@ -37,52 +41,72 @@ import           HieDb
 
 
 data ExportsMap = ExportsMap
-    { getExportsMap       :: !(HashMap IdentifierText (HashSet IdentInfo))
-    , getModuleExportsMap :: !(HashMap ModuleNameText (HashSet IdentInfo))
+    { getExportsMap       :: !(OccEnv (HashSet IdentInfo))
+    , getModuleExportsMap :: !(ModuleNameEnv (HashSet IdentInfo))
     }
-    deriving (Show)
 
-deleteEntriesForModule :: ModuleNameText -> ExportsMap -> ExportsMap
-deleteEntriesForModule m em = ExportsMap
-    { getExportsMap =
-        let moduleIds = Map.lookupDefault mempty m (getModuleExportsMap em)
-        in deleteAll
-            (rendered <$> Set.toList moduleIds)
-            (getExportsMap em)
-    , getModuleExportsMap = Map.delete m (getModuleExportsMap em)
-    }
-    where
-        deleteAll keys map = foldr Map.delete map keys
+instance Show ExportsMap where
+  show (ExportsMap occs mods) =
+    unwords [ "ExportsMap { getExportsMap ="
+            , printWithoutUniques $ mapOccEnv (text . show) occs
+            , "getModuleExportsMap ="
+            , printWithoutUniques $ mapUFM (text . show) mods
+            , "}"
+            ]
+
+-- | `updateExportsMap old new` results in an export map containing
+-- the union of old and new, but with all the module entries new overriding
+-- those in old.
+updateExportsMap :: ExportsMap -> ExportsMap -> ExportsMap
+updateExportsMap old new = ExportsMap
+  { getExportsMap = delListFromOccEnv (getExportsMap old) old_occs `plusOccEnv` getExportsMap new -- plusOccEnv is right biased
+  , getModuleExportsMap = (getModuleExportsMap old) `plusUFM` (getModuleExportsMap new) -- plusUFM is right biased
+  }
+  where old_occs = concat [map name $ Set.toList (lookupWithDefaultUFM_Directly (getModuleExportsMap old) mempty m_uniq)
+                          | m_uniq <- nonDetKeysUFM (getModuleExportsMap new)]
 
 size :: ExportsMap -> Int
-size = sum . map length . elems . getExportsMap
+size = sum . map (Set.size) . occEnvElts . getExportsMap
+
+mkVarOrDataOcc :: Text -> OccName
+mkVarOrDataOcc t = mkOcc $ mkFastStringByteString $ encodeUtf8 t
+  where
+    mkOcc
+      | Just (c,_) <- uncons t
+      , c == ':' || isUpper c = mkDataOccFS
+      | otherwise = mkVarOccFS
+
+mkTypeOcc :: Text -> OccName
+mkTypeOcc t = mkTcOccFS $ mkFastStringByteString $ encodeUtf8 t
+
+exportsMapSize :: ExportsMap -> Int
+exportsMapSize = foldOccEnv (\_ x -> x+1) 0 . getExportsMap
 
 instance Semigroup ExportsMap where
-  ExportsMap a b <> ExportsMap c d = ExportsMap (Map.unionWith (<>) a c) (Map.unionWith (<>) b d)
+  ExportsMap a b <> ExportsMap c d = ExportsMap (plusOccEnv_C (<>) a c) (plusUFM_C (<>) b d)
 
 instance Monoid ExportsMap where
-  mempty = ExportsMap Map.empty Map.empty
+  mempty = ExportsMap emptyOccEnv emptyUFM
 
-type IdentifierText = Text
-type ModuleNameText = Text
-
-
-rendered :: IdentInfo -> IdentifierText
+rendered :: IdentInfo -> Text
 rendered = occNameText . name
 
 -- | Render an identifier as imported or exported style.
 -- TODO: pattern synonymoccNameText :: OccName -> Text
-occNameText :: OccName -> IdentifierText
+occNameText :: OccName -> Text
 occNameText name
-  | isTcOcc name && isSymOcc name = "type " <> renderOcc
-  | otherwise = renderOcc
+  | isTcOcc name && isSymOcc name = "type " <> renderedOcc
+  | otherwise = renderedOcc
   where
-    renderOcc = decodeUtf8 . bytesFS . occNameFS $ name
+    renderedOcc = renderOcc name
 
-moduleNameText :: IdentInfo -> ModuleNameText
+renderOcc :: OccName -> Text
+renderOcc = decodeUtf8 . bytesFS . occNameFS
+
+moduleNameText :: IdentInfo -> Text
 moduleNameText = moduleNameText' . identModuleName
 
-moduleNameText' :: ModuleName -> ModuleNameText
+moduleNameText' :: ModuleName -> Text
 moduleNameText' = decodeUtf8 . bytesFS . moduleNameFS
 
 data IdentInfo = IdentInfo
@@ -129,39 +153,27 @@ mkIdentInfos mod (AvailTC _ nn flds)
 createExportsMap :: [ModIface] -> ExportsMap
 createExportsMap modIface = do
   let exportList = concatMap doOne modIface
-  let exportsMap = Map.fromListWith (<>) $ map (\(a,_,c) -> (a, c)) exportList
+  let exportsMap = mkOccEnv_C (<>) $ map (\(a,_,c) -> (a, c)) exportList
   ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
   where
     doOne modIFace = do
       let getModDetails = unpackAvail $ moduleName $ mi_module modIFace
-      concatMap (fmap (second Set.fromList) . getModDetails) (mi_exports modIFace)
+      concatMap (getModDetails) (mi_exports modIFace)
 
 createExportsMapMg :: [ModGuts] -> ExportsMap
 createExportsMapMg modGuts = do
   let exportList = concatMap doOne modGuts
-  let exportsMap = Map.fromListWith (<>) $ map (\(a,_,c) -> (a, c)) exportList
+  let exportsMap = mkOccEnv_C (<>) $ map (\(a,_,c) -> (a, c)) exportList
   ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
   where
     doOne mi = do
       let getModuleName = moduleName $ mg_module mi
-      concatMap (fmap (second Set.fromList) . unpackAvail getModuleName) (mg_exports mi)
+      concatMap (unpackAvail getModuleName) (mg_exports mi)
 
 updateExportsMapMg :: [ModGuts] -> ExportsMap -> ExportsMap
-updateExportsMapMg modGuts old = old' <> new
+updateExportsMapMg modGuts old = updateExportsMap old new
     where
         new = createExportsMapMg modGuts
-        old' = deleteAll old (Map.keys $ getModuleExportsMap new)
-        deleteAll = foldl' (flip deleteEntriesForModule)
-
-createExportsMapTc :: [TcGblEnv] -> ExportsMap
-createExportsMapTc modIface = do
-  let exportList = concatMap doOne modIface
-  let exportsMap = Map.fromListWith (<>) $ map (\(a,_,c) -> (a, c)) exportList
-  ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
-  where
-    doOne mi = do
-      let getModuleName = moduleName $ tcg_mod mi
-      concatMap (fmap (second Set.fromList) . unpackAvail getModuleName) (tcg_exports mi)
 
 nonInternalModules :: ModuleName -> Bool
 nonInternalModules = not . (".Internal" `isSuffixOf`) . moduleNameString
@@ -171,44 +183,44 @@ type WithHieDb = forall a. (HieDb -> IO a) -> IO a
 createExportsMapHieDb :: WithHieDb -> IO ExportsMap
 createExportsMapHieDb withHieDb = do
     mods <- withHieDb getAllIndexedMods
-    idents <- forM (filter (nonInternalModules . modInfoName . hieModInfo) mods) $ \m -> do
+    idents' <- forM (filter (nonInternalModules . modInfoName . hieModInfo) mods) $ \m -> do
         let mn = modInfoName $ hieModInfo m
-        fmap (wrap . unwrap mn) <$> withHieDb (\hieDb -> getExportsForModule hieDb mn)
-    let exportsMap = Map.fromListWith (<>) (concat idents)
-    return $! ExportsMap exportsMap $ buildModuleExportMap (concat idents)
+        fmap (unwrap mn) <$> withHieDb (\hieDb -> getExportsForModule hieDb mn)
+    let idents = concat idents'
+    let exportsMap = mkOccEnv_C (<>) (keyWith name idents)
+    return $! ExportsMap exportsMap $ buildModuleExportMap (keyWith identModuleName idents)
   where
-    wrap identInfo = (rendered identInfo, Set.fromList [identInfo])
-    -- unwrap :: ExportRow -> IdentInfo
     unwrap m ExportRow{..} = IdentInfo exportName exportParent m
+    keyWith f xs = [(f x, Set.singleton x) | x <- xs]
 
-unpackAvail :: ModuleName -> IfaceExport -> [(Text, Text, [IdentInfo])]
+unpackAvail :: ModuleName -> IfaceExport -> [(OccName, ModuleName, HashSet IdentInfo)]
 unpackAvail mn
   | nonInternalModules mn = map f . mkIdentInfos mn
   | otherwise = const []
   where
-    f id@IdentInfo {..} = (printOutputable name, moduleNameText id,[id])
+    f id@IdentInfo {..} = (name, mn, Set.singleton id)
 
 
-identInfoToKeyVal :: IdentInfo -> (ModuleNameText, IdentInfo)
+identInfoToKeyVal :: IdentInfo -> (ModuleName, IdentInfo)
 identInfoToKeyVal identInfo =
-  (moduleNameText identInfo, identInfo)
+  (identModuleName identInfo, identInfo)
 
-buildModuleExportMap:: [(Text, HashSet IdentInfo)] -> Map.HashMap ModuleNameText (HashSet IdentInfo)
+buildModuleExportMap:: [(ModuleName, HashSet IdentInfo)] -> ModuleNameEnv (HashSet IdentInfo)
 buildModuleExportMap exportsMap = do
   let lst = concatMap (Set.toList. snd) exportsMap
   let lstThree = map identInfoToKeyVal lst
   sortAndGroup lstThree
 
-buildModuleExportMapFrom:: [ModIface] -> Map.HashMap Text (HashSet IdentInfo)
+buildModuleExportMapFrom:: [ModIface] -> ModuleNameEnv (HashSet IdentInfo)
 buildModuleExportMapFrom modIfaces = do
   let exports = map extractModuleExports modIfaces
-  Map.fromListWith (<>) exports
+  listToUFM_C (<>) exports
 
-extractModuleExports :: ModIface -> (Text, HashSet IdentInfo)
+extractModuleExports :: ModIface -> (ModuleName, HashSet IdentInfo)
 extractModuleExports modIFace = do
   let modName = moduleName $ mi_module modIFace
   let functionSet = Set.fromList $ concatMap (mkIdentInfos modName) $ mi_exports modIFace
-  (moduleNameText' modName, functionSet)
+  (modName, functionSet)
 
-sortAndGroup :: [(ModuleNameText, IdentInfo)] -> Map.HashMap ModuleNameText (HashSet IdentInfo)
-sortAndGroup assocs = Map.fromListWith (<>) [(k, Set.fromList [v]) | (k, v) <- assocs]
+sortAndGroup :: [(ModuleName, IdentInfo)] -> ModuleNameEnv (HashSet IdentInfo)
+sortAndGroup assocs = listToUFM_C (<>) [(k, Set.fromList [v]) | (k, v) <- assocs]
