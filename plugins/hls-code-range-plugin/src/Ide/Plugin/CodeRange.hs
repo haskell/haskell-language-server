@@ -13,9 +13,8 @@ module Ide.Plugin.CodeRange (
     ) where
 
 import           Control.Monad.Except                 (ExceptT (ExceptT),
-                                                       runExceptT)
+                                                       mapExceptT)
 import           Control.Monad.IO.Class               (liftIO)
-import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        maybeToExceptT)
 import           Data.Either.Extra                    (maybeToEither)
@@ -45,7 +44,7 @@ import           Ide.Types                            (PluginDescriptor (pluginH
                                                        PluginId,
                                                        defaultPluginDescriptor,
                                                        mkPluginHandler)
-import           Language.LSP.Server                  (LspM)
+import           Language.LSP.Server                  (LspM, LspT)
 import           Language.LSP.Types                   (FoldingRange (..),
                                                        FoldingRangeParams (..),
                                                        List (List),
@@ -86,19 +85,14 @@ foldingRangeHandler ide _ FoldingRangeParams{..} = do
         TextDocumentIdentifier uri = _textDocument
 
 getFoldingRanges :: NormalizedFilePath -> Action [FoldingRange]
-getFoldingRanges file = do
-    codeRange <- use GetCodeRange file
-    -- removing the first node because it folds the entire file
-    pure $ maybe [] (drop 1 . findFoldingRanges) codeRange
+getFoldingRanges file = fmap (maybe [] findFoldingRanges) $ use GetCodeRange file
 
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do
     pluginResponse $ do
         filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
                 toNormalizedFilePath' <$> uriToFilePath' uri
-        selectionRanges <- ExceptT . liftIO . runIdeAction "SelectionRange" (shakeExtras ide) . runExceptT $
-            getSelectionRanges filePath positions
-        pure . List $ selectionRanges
+        fmap List . mapExceptT runIdeAction' . getSelectionRanges filePath $ positions
   where
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument
@@ -106,23 +100,40 @@ selectionRangeHandler ide _ SelectionRangeParams{..} = do
     positions :: [Position]
     List positions = _positions
 
-getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT String IdeAction [SelectionRange]
+    runIdeAction' :: IdeAction (Either SelectionRangeError [SelectionRange]) -> LspT c IO (Either String [SelectionRange])
+    runIdeAction' action = do
+        result <- liftIO $ runIdeAction "SelectionRange" (shakeExtras ide) action
+        pure $ case result of
+            Left err   -> maybe (Right []) Left (showError err)
+            Right list -> Right list
+
+    showError :: SelectionRangeError -> Maybe String
+    -- This might happen if the HieAst is not ready, so we give it a default value instead of throwing an error
+    showError SelectionRangeBadDependency = Nothing
+    showError SelectionRangeInputPositionMappingFailure = Just "failed to apply position mapping to input positions"
+    showError SelectionRangeOutputPositionMappingFailure = Just "failed to apply position mapping to output positions"
+
+data SelectionRangeError = SelectionRangeBadDependency
+                         | SelectionRangeInputPositionMappingFailure
+                         | SelectionRangeOutputPositionMappingFailure
+
+getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT SelectionRangeError IdeAction [SelectionRange]
 getSelectionRanges file positions = do
-    codeRangeResult <- lift $ useWithStaleFast GetCodeRange file
-    flip (maybe (pure [])) codeRangeResult $ \(codeRange, positionMapping) -> do
-        -- 'positionMapping' should be appied to the input before using them
-        positions' <- maybeToExceptT "fail to apply position mapping to input positions" . MaybeT . pure $
-            traverse (fromCurrentPosition positionMapping) positions
+    (codeRange, positionMapping) <- maybeToExceptT SelectionRangeBadDependency . MaybeT $
+        useWithStaleFast GetCodeRange file
+    -- 'positionMapping' should be appied to the input before using them
+    positions' <- maybeToExceptT SelectionRangeInputPositionMappingFailure . MaybeT . pure $
+        traverse (fromCurrentPosition positionMapping) positions
 
-        let selectionRanges = flip fmap positions' $ \pos ->
-                -- We need a default selection range if the lookup fails,
-                -- so that other positions can still have valid results.
-                let defaultSelectionRange = SelectionRange (Range pos pos) Nothing
-                 in fromMaybe defaultSelectionRange . findPosition pos $ codeRange
+    let selectionRanges = flip fmap positions' $ \pos ->
+            -- We need a default selection range if the lookup fails,
+            -- so that other positions can still have valid results.
+            let defaultSelectionRange = SelectionRange (Range pos pos) Nothing
+             in fromMaybe defaultSelectionRange . findPosition pos $ codeRange
 
-        -- 'positionMapping' should be applied to the output ranges before returning them
-        maybeToExceptT "fail to apply position mapping to output positions" . MaybeT . pure $
-             traverse (toCurrentSelectionRange positionMapping) selectionRanges
+    -- 'positionMapping' should be applied to the output ranges before returning them
+    maybeToExceptT SelectionRangeOutputPositionMappingFailure . MaybeT . pure $
+         traverse (toCurrentSelectionRange positionMapping) selectionRanges
 
 -- | Find 'Position' in 'CodeRange'. This can fail, if the given position is not covered by the 'CodeRange'.
 findPosition :: Position -> CodeRange -> Maybe SelectionRange
@@ -171,8 +182,13 @@ findPosition pos root = go Nothing root
 --
 -- Discussion reference: https://github.com/haskell/haskell-language-server/pull/3058#discussion_r973737211
 findFoldingRanges :: CodeRange -> [FoldingRange]
-findFoldingRanges r@(CodeRange _ children _) =
-    let frChildren :: [FoldingRange] = concat $ V.toList $ fmap findFoldingRanges children
+findFoldingRanges codeRange =
+    -- removing the first node because it folds the entire file
+    drop 1 $ findFoldingRangesRec codeRange
+
+findFoldingRangesRec :: CodeRange -> [FoldingRange]
+findFoldingRangesRec r@(CodeRange _ children _) =
+    let frChildren :: [FoldingRange] = concat $ V.toList $ fmap findFoldingRangesRec children
     in case createFoldingRange r of
         Just x  -> x:frChildren
         Nothing -> frChildren
