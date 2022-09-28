@@ -5,6 +5,10 @@ module Development.IDE.Types.Exports
 (
     IdentInfo(..),
     ExportsMap(..),
+    rendered,
+    moduleNameText,
+    occNameText,
+    isDatacon,
     createExportsMap,
     createExportsMapMg,
     createExportsMapTc,
@@ -24,6 +28,7 @@ import           Data.HashSet                (HashSet)
 import qualified Data.HashSet                as Set
 import           Data.List                   (foldl', isSuffixOf)
 import           Data.Text                   (Text, pack)
+import           Data.Text.Encoding          (decodeUtf8)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
 import           Development.IDE.GHC.Util
@@ -61,55 +66,63 @@ instance Monoid ExportsMap where
 type IdentifierText = Text
 type ModuleNameText = Text
 
+
+rendered :: IdentInfo -> IdentifierText
+rendered = occNameText . name
+
+-- | Render an identifier as imported or exported style.
+-- TODO: pattern synonymoccNameText :: OccName -> Text
+occNameText :: OccName -> IdentifierText
+occNameText name
+  | isTcOcc name && isSymOcc name = "type " <> renderOcc
+  | otherwise = renderOcc
+  where
+    renderOcc = decodeUtf8 . bytesFS . occNameFS $ name
+
+moduleNameText :: IdentInfo -> ModuleNameText
+moduleNameText = moduleNameText' . identModuleName
+
+moduleNameText' :: ModuleName -> ModuleNameText
+moduleNameText' = decodeUtf8 . bytesFS . moduleNameFS
+
 data IdentInfo = IdentInfo
-    { name           :: !OccName
-    , rendered       :: Text
-    , parent         :: !(Maybe Text)
-    , isDatacon      :: !Bool
-    , moduleNameText :: !Text
+    { name            :: !OccName
+    , parent          :: !(Maybe OccName)
+    , identModuleName :: !ModuleName
     }
     deriving (Generic, Show)
     deriving anyclass Hashable
 
+isDatacon :: IdentInfo -> Bool
+isDatacon = isDataOcc . name
+
 instance Eq IdentInfo where
     a == b = name a == name b
           && parent a == parent b
-          && isDatacon a == isDatacon b
-          && moduleNameText a == moduleNameText b
+          && identModuleName a == identModuleName b
 
 instance NFData IdentInfo where
     rnf IdentInfo{..} =
         -- deliberately skip the rendered field
-        rnf name `seq` rnf parent `seq` rnf isDatacon `seq` rnf moduleNameText
+        rnf name `seq` rnf parent `seq` rnf identModuleName
 
--- | Render an identifier as imported or exported style.
--- TODO: pattern synonym
-renderIEWrapped :: Name -> Text
-renderIEWrapped n
-  | isTcOcc occ && isSymOcc occ = "type " <> pack (printName n)
-  | otherwise = pack $ printName n
-  where
-    occ = occName n
-
-mkIdentInfos :: Text -> AvailInfo -> [IdentInfo]
+mkIdentInfos :: ModuleName -> AvailInfo -> [IdentInfo]
 mkIdentInfos mod (AvailName n) =
-    [IdentInfo (nameOccName n) (renderIEWrapped n) Nothing (isDataConName n) mod]
+    [IdentInfo (nameOccName n) Nothing mod]
 mkIdentInfos mod (AvailFL fl) =
-    [IdentInfo (nameOccName n) (renderIEWrapped n) Nothing (isDataConName n) mod]
+    [IdentInfo (nameOccName n) Nothing mod]
     where
       n = flSelector fl
 mkIdentInfos mod (AvailTC parent (n:nn) flds)
     -- Following the GHC convention that parent == n if parent is exported
     | n == parent
-    = [ IdentInfo (nameOccName n) (renderIEWrapped n) (Just $! parentP) (isDataConName n) mod
+    = [ IdentInfo (nameOccName n) (Just $! nameOccName parent) mod
         | n <- nn ++ map flSelector flds
       ] ++
-      [ IdentInfo (nameOccName n) (renderIEWrapped n) Nothing (isDataConName n) mod]
-    where
-        parentP = pack $ printName parent
+      [ IdentInfo (nameOccName n) Nothing mod]
 
 mkIdentInfos mod (AvailTC _ nn flds)
-    = [ IdentInfo (nameOccName n) (renderIEWrapped n) Nothing (isDataConName n) mod
+    = [ IdentInfo (nameOccName n) Nothing mod
         | n <- nn ++ map flSelector flds
       ]
 
@@ -160,25 +173,20 @@ createExportsMapHieDb withHieDb = do
     mods <- withHieDb getAllIndexedMods
     idents <- forM (filter (nonInternalModules . modInfoName . hieModInfo) mods) $ \m -> do
         let mn = modInfoName $ hieModInfo m
-            mText = pack $ moduleNameString mn
-        fmap (wrap . unwrap mText) <$> withHieDb (\hieDb -> getExportsForModule hieDb mn)
+        fmap (wrap . unwrap mn) <$> withHieDb (\hieDb -> getExportsForModule hieDb mn)
     let exportsMap = Map.fromListWith (<>) (concat idents)
-    return $ ExportsMap exportsMap $ buildModuleExportMap (concat idents)
+    return $! ExportsMap exportsMap $ buildModuleExportMap (concat idents)
   where
     wrap identInfo = (rendered identInfo, Set.fromList [identInfo])
     -- unwrap :: ExportRow -> IdentInfo
-    unwrap m ExportRow{..} = IdentInfo exportName n p exportIsDatacon m
-      where
-          n = pack (occNameString exportName)
-          p = pack . occNameString <$> exportParent
+    unwrap m ExportRow{..} = IdentInfo exportName exportParent m
 
 unpackAvail :: ModuleName -> IfaceExport -> [(Text, Text, [IdentInfo])]
 unpackAvail mn
-  | nonInternalModules mn = map f . mkIdentInfos mod
+  | nonInternalModules mn = map f . mkIdentInfos mn
   | otherwise = const []
   where
-    !mod = pack $ moduleNameString mn
-    f id@IdentInfo {..} = (printOutputable name, moduleNameText,[id])
+    f id@IdentInfo {..} = (printOutputable name, moduleNameText id,[id])
 
 
 identInfoToKeyVal :: IdentInfo -> (ModuleNameText, IdentInfo)
@@ -198,9 +206,9 @@ buildModuleExportMapFrom modIfaces = do
 
 extractModuleExports :: ModIface -> (Text, HashSet IdentInfo)
 extractModuleExports modIFace = do
-  let modName = pack $ moduleNameString $ moduleName $ mi_module modIFace
+  let modName = moduleName $ mi_module modIFace
   let functionSet = Set.fromList $ concatMap (mkIdentInfos modName) $ mi_exports modIFace
-  (modName, functionSet)
+  (moduleNameText' modName, functionSet)
 
 sortAndGroup :: [(ModuleNameText, IdentInfo)] -> Map.HashMap ModuleNameText (HashSet IdentInfo)
 sortAndGroup assocs = Map.fromListWith (<>) [(k, Set.fromList [v]) | (k, v) <- assocs]

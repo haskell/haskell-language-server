@@ -43,6 +43,8 @@ module Development.IDE.GHC.Compat(
 #endif
 
     FastStringCompat,
+    bytesFS,
+    mkFastStringByteString,
     nodeInfo',
     getNodeIds,
     sourceNodeInfo,
@@ -206,6 +208,7 @@ import           VarEnv                                (emptyInScopeSet,
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
+import           GHC.Data.FastString
 import           GHC.Core
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                    hiding (ExposePackage)
@@ -224,6 +227,7 @@ import           GHC.Iface.Make                        (mkIfaceExports)
 import qualified GHC.SysTools.Tasks                    as SysTools
 import qualified GHC.Types.Avail                       as Avail
 #else
+import           FastString
 import qualified Avail
 import           DynFlags                              hiding (ExposePackage)
 import           HscTypes
