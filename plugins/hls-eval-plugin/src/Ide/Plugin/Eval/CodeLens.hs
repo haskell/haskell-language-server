@@ -61,7 +61,7 @@ import           Development.IDE.GHC.Compat.Util              (GhcException,
 import           Development.IDE.GHC.Util                     (evalGhcEnv,
                                                                modifyDynFlags,
                                                                printOutputable)
-import           Development.IDE.Import.DependencyInformation (reachableModules)
+import           Development.IDE.Import.DependencyInformation (transitiveDeps, transitiveModuleDeps)
 import           Development.IDE.Types.Location               (toNormalizedFilePath',
                                                                uriToFilePath')
 import           GHC                                          (ClsInst,
@@ -251,8 +251,8 @@ initialiseSessionForEval needs_quickcheck st nfp = do
     ms <- msrModSummary <$> use_ GetModSummary nfp
     deps_hsc <- hscEnv <$> use_ GhcSessionDeps nfp
 
-    linkables_needed <- reachableModules <$> useNoFile_ GetModuleGraph
-    linkables <- uses_ GetLinkable linkables_needed
+    linkables_needed <- transitiveDeps <$> useNoFile_ GetModuleGraph <*> pure nfp
+    linkables <- uses_ GetLinkable (maybe [] transitiveModuleDeps linkables_needed)
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
     -- However, the eval plugin (setContext specifically) requires the rdr_env

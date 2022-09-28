@@ -136,6 +136,7 @@ import           GHC                               (Anchor (anchor),
 import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
+import Development.IDE.Import.DependencyInformation
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
@@ -1045,25 +1046,19 @@ handleGenerationErrors' dflags source action =
 -- Add the current ModSummary to the graph, along with the
 -- HomeModInfo's of all direct dependencies (by induction hypothesis all
 -- transitive dependencies will be contained in envs)
+mergeEnvs :: HscEnv -> ModuleGraph -> ModSummary -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
+mergeEnvs env mg ms extraMods envs = do
 #if MIN_VERSION_ghc(9,3,0)
-mergeEnvs :: HscEnv -> (ModSummary, [NodeKey]) -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
-mergeEnvs env (ms, deps) extraMods envs = do
     let im  = Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms) (moduleName (ms_mod ms))
         ifr = InstalledFound (ms_location ms) im
         curFinderCache = Compat.extendInstalledModuleEnv Compat.emptyInstalledModuleEnv im ifr
-        -- Very important to force this as otherwise the hsc_mod_graph field is not
-        -- forced and ends up retaining a reference to all the old hsc_envs we have merged to get
-        -- this new one, which in turn leads to the EPS referencing the HPT.
-        module_graph_nodes =
-          nubOrdOn mkNodeKey (ModuleNode deps ms : concatMap (mgModSummaries' . hsc_mod_graph) envs)
-
     newFinderCache <- concatFC curFinderCache (map hsc_FC envs)
-    liftRnf rwhnf module_graph_nodes `seq` (return $ loadModulesHome extraMods $
+    return $! loadModulesHome extraMods $
       let newHug = foldl' mergeHUG (hsc_HUG env) (map hsc_HUG envs) in
       (hscUpdateHUG (const newHug) env){
           hsc_FC = newFinderCache,
-          hsc_mod_graph = mkModuleGraph module_graph_nodes
-      })
+          hsc_mod_graph = mg
+      }
 
     where
         mergeHUG (UnitEnvGraph a) (UnitEnvGraph b) = UnitEnvGraph $ Map.unionWith mergeHUE a b
@@ -1082,30 +1077,16 @@ mergeEnvs env (ms, deps) extraMods envs = do
           pure $ FinderCache fcModules' fcFiles'
 
 #else
-mergeEnvs :: HscEnv -> ModSummary -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
-mergeEnvs env ms extraMods envs = do
     prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
     let im  = Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms) (moduleName (ms_mod ms))
         ifr = InstalledFound (ms_location ms) im
-        -- Very important to force this as otherwise the hsc_mod_graph field is not
-        -- forced and ends up retaining a reference to all the old hsc_envs we have merged to get
-        -- this new one, which in turn leads to the EPS referencing the HPT.
-        module_graph_nodes =
-#if MIN_VERSION_ghc(9,2,0)
-        -- We don't do any instantiation for backpack at this point of time, so it is OK to use
-        -- 'extendModSummaryNoDeps'.
-        -- This may have to change in the future.
-          map extendModSummaryNoDeps $
-#endif
-          nubOrdOn ms_mod (ms : concatMap (mgModSummaries . hsc_mod_graph) envs)
-
     newFinderCache <- newIORef $! Compat.extendInstalledModuleEnv prevFinderCache im ifr
-    liftRnf rwhnf module_graph_nodes `seq` (return $ loadModulesHome extraMods $
+    return $! loadModulesHome extraMods $
       env{
           hsc_HPT = foldMapBy mergeUDFM emptyUDFM hsc_HPT envs,
           hsc_FC = newFinderCache,
-          hsc_mod_graph = mkModuleGraph module_graph_nodes
-      })
+          hsc_mod_graph = mg
+      }
 
     where
         mergeUDFM = plusUDFM_C combineModules
@@ -1504,8 +1485,8 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
              let runtime_deps
                    | not (mi_used_th iface) = emptyModuleEnv
                    | otherwise = parseRuntimeDeps (md_anns details)
-             -- Perform the fine grained recompilation check for TH
-             maybe_recomp <- checkLinkableDependencies get_linkable_hashes (hsc_mod_graph sessionWithMsDynFlags) runtime_deps
+             -- Peform the fine grained recompilation check for TH
+             maybe_recomp <- checkLinkableDependencies session get_linkable_hashes runtime_deps
              case maybe_recomp of
                Just msg -> do_regenerate msg
                Nothing
@@ -1542,13 +1523,21 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
 -- See Note [Recompilation avoidance in the presence of TH]
-checkLinkableDependencies :: MonadIO m => ([NormalizedFilePath] -> m [BS.ByteString]) -> ModuleGraph -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
-checkLinkableDependencies get_linkable_hashes graph runtime_deps = do
-  let hs_files = mapM go (moduleEnvToList runtime_deps)
-      go (mod, hash) = do
-        ms <- mgLookupModule graph mod
-        let hs = fromJust $ ml_hs_file $ ms_location ms
-        pure (toNormalizedFilePath' hs, hash)
+checkLinkableDependencies :: MonadIO m => HscEnv -> ([NormalizedFilePath] -> m [BS.ByteString]) -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
+checkLinkableDependencies hsc_env get_linkable_hashes runtime_deps = do
+#if MIN_VERSION_ghc(9,3,0)
+  moduleLocs <- liftIO $ readIORef (fcModuleCache $ hsc_FC hsc_env)
+#else
+  moduleLocs <- liftIO $ readIORef (hsc_FC hsc_env)
+#endif
+  let go (mod, hash) = do
+        ifr <- lookupInstalledModuleEnv moduleLocs $ Compat.installedModule (toUnitId $ moduleUnit mod) (moduleName mod)
+        case ifr of
+          InstalledFound loc _ -> do
+            hs <- ml_hs_file loc
+            pure (toNormalizedFilePath' hs,hash)
+          _ -> Nothing
+      hs_files = mapM go (moduleEnvToList runtime_deps)
   case hs_files of
     Nothing -> error "invalid module graph"
     Just fs -> do
