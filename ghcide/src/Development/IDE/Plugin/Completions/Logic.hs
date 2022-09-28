@@ -529,7 +529,7 @@ getCompletions
     -> PosPrefixInfo
     -> ClientCapabilities
     -> CompletionsConfig
-    -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
+    -> ModuleNameEnv (HashSet.HashSet IdentInfo)
     -> Uri
     -> IO [Scored CompletionItem]
 getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
@@ -661,10 +661,10 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
       && (List.length (words (T.unpack fullLine)) >= 2)
       && "(" `isInfixOf` T.unpack fullLine
     -> do
-      let moduleName = T.pack $ words (T.unpack fullLine) !! 1
-          funcs = HM.lookupDefault HashSet.empty moduleName moduleExportsMap
-          funs = map (show . name) $ HashSet.toList funcs
-      return $ filterModuleExports moduleName $ map T.pack funs
+      let moduleName = words (T.unpack fullLine) !! 1
+          funcs = lookupWithDefaultUFM moduleExportsMap HashSet.empty $ mkModuleName moduleName
+          funs = map (renderOcc . name) $ HashSet.toList funcs
+      return $ filterModuleExports (T.pack moduleName) funs
     | "import " `T.isPrefixOf` fullLine
     -> return filtImportCompls
     -- we leave this condition here to avoid duplications and return empty list
