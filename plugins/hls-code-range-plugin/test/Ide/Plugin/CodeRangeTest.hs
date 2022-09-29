@@ -66,38 +66,37 @@ testTree =
                 -- General test
                 testCase "Test General Code Block" $ check
                     (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindRegion)
-                    [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion)],
+                    [],
 
                 -- Tests for code kind
                 testCase "Test Code Kind Region" $ check
-                    (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindRegion)
-                    [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion)],
+                    (mkCodeRange (Position 1 1) (Position 5 10) [
+                        mkCodeRange (Position 1 2) (Position 3 6) [] CodeKindRegion
+                    ] CodeKindRegion)
+                    [FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeRegion)],
                 testCase "Test Code Kind Comment" $ check
-                    (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindComment)
-                    [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeComment)],
+                    (mkCodeRange (Position 1 1) (Position 5 10) [
+                        mkCodeRange (Position 1 2) (Position 3 6) [] CodeKindComment
+                    ] CodeKindRegion)
+                    [FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeComment)],
                 testCase "Test Code Kind Import" $ check
-                    (mkCodeRange (Position 1 1) (Position 5 10) [] CodeKindImports)
-                    [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeImports)],
+                    (mkCodeRange (Position 1 1) (Position 5 10) [
+                        mkCodeRange (Position 1 2) (Position 3 6) [] CodeKindImports
+                    ] CodeKindRegion)
+                    [FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeImports)],
 
                 -- Test for Code Portions with children
                 testCase "Test Children" $ check
                     (mkCodeRange (Position 1 1) (Position 5 10) [
-                        mkCodeRange (Position 1 2) (Position 3 6) [] CodeKindRegion,
+                        mkCodeRange (Position 1 2) (Position 3 6) [
+                            mkCodeRange (Position 1 3) (Position 1 5) [] CodeKindRegion
+                        ] CodeKindRegion,
                         mkCodeRange (Position 3 7) (Position 5 10) [] CodeKindRegion
                     ] CodeKindRegion)
-                    [FoldingRange 1 (Just 1) 5 (Just 10) (Just FoldingRangeRegion),
-                        FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeRegion),
-                        FoldingRange 3 (Just 7) 5 (Just 10) (Just FoldingRangeRegion)],
-
-                -- Single line returns [] because single line ranges need not be folded
-                testCase "Test Single Line" $ check
-                    (mkCodeRange (Position 1 0) (Position 1 15) [] CodeKindRegion)
-                    [FoldingRange 1 (Just 0) 1 (Just 15) (Just FoldingRangeRegion)],
-
-                -- MultiLine imports
-                testCase "MultiLine Imports" $ check
-                    (mkCodeRange (Position 1 0) (Position 5 15) [] CodeKindImports)
-                    [FoldingRange 1 (Just 0) 5 (Just 15) (Just FoldingRangeImports)]
+                    [ FoldingRange 1 (Just 2) 3 (Just 6) (Just FoldingRangeRegion),
+                        FoldingRange 1 (Just 3) 1 (Just 5) (Just FoldingRangeRegion),
+                        FoldingRange 3 (Just 7) 5 (Just 10) (Just FoldingRangeRegion)
+                    ]
             ],
 
         testGroup "createFoldingRange" $
