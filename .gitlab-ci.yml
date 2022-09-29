@@ -200,7 +200,7 @@ tar-x86_64-linux-ubuntu18.04:
     TARBALL_EXT: tar.xz
   before_script:
     - apt update
-    - apt install -y make tar xz-utils
+    - apt install -y make tar xz-utils curl
 
 test-x86_64-linux-ubuntu18.04:
   extends:
@@ -209,7 +209,7 @@ test-x86_64-linux-ubuntu18.04:
   needs: ["tar-x86_64-linux-ubuntu18.04"]
   before_script:
     - apt update
-    - apt install -y tree patchelf make
+    - apt install -y tree patchelf make curl build-essential
 
 
 ###########################
@@ -239,7 +239,7 @@ tar-x86_64-linux-ubuntu20.04:
     TARBALL_EXT: tar.xz
   before_script:
     - apt update
-    - apt install -y make tar xz-utils
+    - apt install -y make tar xz-utils curl
 
 test-x86_64-linux-ubuntu20.04:
   extends:
@@ -248,7 +248,7 @@ test-x86_64-linux-ubuntu20.04:
   needs: ["tar-x86_64-linux-ubuntu20.04"]
   before_script:
     - apt update
-    - apt install -y tree patchelf make
+    - apt install -y tree patchelf make curl build-essential
 
 
 ######################
