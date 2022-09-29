@@ -49,8 +49,8 @@ Sometimes a plugin will be supported in the pre-built binaries but not in a HLS 
 | Plugin                              | Unsupported GHC versions |
 |-------------------------------------|--------------------------|
 | `hls-alternate-number-plugin`       |                          |
-| `hls-brittany-plugin`               | 9.2, 9.4                 |
-| `hls-code-ragne-plugin`             | 9.4                      |
+| `hls-brittany-plugin`               | 9.0.2, 9.2, 9.4          |
+| `hls-code-range-plugin`             | 9.4                      |
 | `hls-call-hierarchy-plugin`         |                          |
 | `hls-class-plugin`                  | 9.4                      |
 | `hls-eval-plugin`                   | 9.4                      |

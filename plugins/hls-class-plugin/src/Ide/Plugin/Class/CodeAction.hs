@@ -190,7 +190,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                 . liftIO
                 . runAction "classplugin.findClassFromIdentifier.TypeCheck" state
                 $ useWithStale TypeCheck docPath
-            handleMaybeM "Error in TcEnv"
+            handleMaybeM "TcEnv"
                 . liftIO
                 . fmap snd
                 . initTcWithGbl hscenv thisMod ghostSpan $ do

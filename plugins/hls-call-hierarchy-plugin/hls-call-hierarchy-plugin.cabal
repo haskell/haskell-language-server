@@ -15,6 +15,10 @@ extra-source-files:
   LICENSE
   test/testdata/*.hs
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 library
   buildable: True
   exposed-modules:    Ide.Plugin.CallHierarchy
@@ -27,10 +31,8 @@ library
   build-depends:
     , aeson
     , base                  >=4.12 && <5
-    , bytestring
     , containers
     , extra
-    , ghc
     , ghcide                ^>= 1.8
     , hiedb
     , hls-plugin-api        ^>= 1.5
