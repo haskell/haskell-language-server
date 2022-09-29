@@ -1,6 +1,7 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 
 module Ide.Plugin.CodeRange (
     descriptor
@@ -33,7 +34,9 @@ import           Development.IDE                      (Action, IdeAction,
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentPosition,
                                                        toCurrentRange)
-import           Development.IDE.Types.Logger         (Pretty (..))
+import           Development.IDE.Types.Logger         (Pretty (..),
+                                                       Priority (Warning),
+                                                       logWith)
 import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
                                                        codeRangeRule, crkToFrk)
@@ -61,34 +64,50 @@ import           Prelude                              hiding (log, span)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
-    { pluginHandlers = mkPluginHandler STextDocumentSelectionRange selectionRangeHandler
-    <> mkPluginHandler STextDocumentFoldingRange foldingRangeHandler
+    { pluginHandlers = mkPluginHandler STextDocumentSelectionRange (selectionRangeHandler recorder)
+    <> mkPluginHandler STextDocumentFoldingRange (foldingRangeHandler recorder)
     , pluginRules = codeRangeRule (cmapWithPrio LogRules recorder)
     }
 
 data Log = LogRules Rules.Log
+         | forall rule. Show rule => LogBadDependency rule
 
 instance Pretty Log where
     pretty log = case log of
         LogRules codeRangeLog -> pretty codeRangeLog
+        LogBadDependency rule -> pretty $ "bad dependency: " <> show rule
 
-foldingRangeHandler :: IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError (List FoldingRange))
-foldingRangeHandler ide _ FoldingRangeParams{..} = do
+foldingRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError (List FoldingRange))
+foldingRangeHandler recorder ide _ FoldingRangeParams{..} = do
     pluginResponse $ do
         filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
                 toNormalizedFilePath' <$> uriToFilePath' uri
-        foldingRanges <- liftIO . runAction "FoldingRange" ide $
+        foldingRanges <- mapExceptT runAction' $
             getFoldingRanges filePath
         pure . List $ foldingRanges
-    where
-        uri :: Uri
-        TextDocumentIdentifier uri = _textDocument
+  where
+    uri :: Uri
+    TextDocumentIdentifier uri = _textDocument
 
-getFoldingRanges :: NormalizedFilePath -> Action [FoldingRange]
-getFoldingRanges file = fmap (maybe [] findFoldingRanges) $ use GetCodeRange file
+    runAction' :: Action (Either FoldingRangeError [FoldingRange]) -> LspT c IO (Either String [FoldingRange])
+    runAction' action = do
+        result <- liftIO $ runAction "FoldingRange" ide action
+        case result of
+            Left err -> case err of
+                FoldingRangeBadDependency rule -> do
+                    logWith recorder Warning $ LogBadDependency rule
+                    pure $ Right []
+            Right list -> pure $ Right list
 
-selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
-selectionRangeHandler ide _ SelectionRangeParams{..} = do
+data FoldingRangeError = forall rule. Show rule => FoldingRangeBadDependency rule
+
+getFoldingRanges :: NormalizedFilePath -> ExceptT FoldingRangeError Action [FoldingRange]
+getFoldingRanges file = do
+    codeRange <- maybeToExceptT (FoldingRangeBadDependency GetCodeRange) . MaybeT $ use GetCodeRange file
+    pure $ findFoldingRanges codeRange
+
+selectionRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
+selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
     pluginResponse $ do
         filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
                 toNormalizedFilePath' <$> uriToFilePath' uri
@@ -103,23 +122,26 @@ selectionRangeHandler ide _ SelectionRangeParams{..} = do
     runIdeAction' :: IdeAction (Either SelectionRangeError [SelectionRange]) -> LspT c IO (Either String [SelectionRange])
     runIdeAction' action = do
         result <- liftIO $ runIdeAction "SelectionRange" (shakeExtras ide) action
-        pure $ case result of
-            Left err   -> maybe (Right []) Left (showError err)
-            Right list -> Right list
+        case result of
+            Left err   -> case err of
+                SelectionRangeBadDependency rule -> do
+                    logWith recorder Warning $ LogBadDependency rule
+                    -- This might happen if the HieAst is not ready,
+                    -- so we give it a default value instead of throwing an error
+                    pure $ Right []
+                SelectionRangeInputPositionMappingFailure -> pure $
+                    Left "failed to apply position mapping to input positions"
+                SelectionRangeOutputPositionMappingFailure -> pure $
+                    Left "failed to apply position mapping to output positions"
+            Right list -> pure $ Right list
 
-    showError :: SelectionRangeError -> Maybe String
-    -- This might happen if the HieAst is not ready, so we give it a default value instead of throwing an error
-    showError SelectionRangeBadDependency = Nothing
-    showError SelectionRangeInputPositionMappingFailure = Just "failed to apply position mapping to input positions"
-    showError SelectionRangeOutputPositionMappingFailure = Just "failed to apply position mapping to output positions"
-
-data SelectionRangeError = SelectionRangeBadDependency
+data SelectionRangeError = forall rule. Show rule => SelectionRangeBadDependency rule
                          | SelectionRangeInputPositionMappingFailure
                          | SelectionRangeOutputPositionMappingFailure
 
 getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT SelectionRangeError IdeAction [SelectionRange]
 getSelectionRanges file positions = do
-    (codeRange, positionMapping) <- maybeToExceptT SelectionRangeBadDependency . MaybeT $
+    (codeRange, positionMapping) <- maybeToExceptT (SelectionRangeBadDependency GetCodeRange) . MaybeT $
         useWithStaleFast GetCodeRange file
     -- 'positionMapping' should be appied to the input before using them
     positions' <- maybeToExceptT SelectionRangeInputPositionMappingFailure . MaybeT . pure $
