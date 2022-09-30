@@ -38,7 +38,7 @@ case "$(uname -s)" in
 				export PATH="$CI_PROJECT_DIR/.brew/opt/llvm@14/bin:$PATH"
         export LDFLAGS="-L$CI_PROJECT_DIR/.brew/opt/llvm@14/lib"
         export CPPFLAGS="-I$CI_PROJECT_DIR/.brew/opt/llvm@14/include"
-        export CC="-I$CI_PROJECT_DIR/.brew/opt/llvm@14/bin/clang"
+        export CC="$CI_PROJECT_DIR/.brew/opt/llvm@14/bin/clang"
 				ls "$CI_PROJECT_DIR/.brew/opt/llvm@14/bin"
 				which cc
 				file $(which cc)
