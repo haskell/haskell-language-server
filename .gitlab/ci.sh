@@ -40,6 +40,11 @@ case "$(uname -s)" in
         export CPPFLAGS="-I$CI_PROJECT_DIR/.brew/opt/llvm@14/include"
         export CC="-I$CI_PROJECT_DIR/.brew/opt/llvm@14/bin/clang"
 				ls "$CI_PROJECT_DIR/.brew/opt/llvm@14/bin"
+				which cc
+				file $(which cc)
+				echo "int main() { return 0; }" > test.c
+				cc test.c
+				./a.out
 				curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | arch -arm64 /bin/bash
 				cat $GHCUP_INSTALL_BASE_PREFIX/.ghcup/logs
 				export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
