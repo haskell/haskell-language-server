@@ -1,5 +1,11 @@
 # Changelog for haskell-language-server
 
+## 1.8.0.1
+
+- Make stan plugin respect configuration and allow it to be disabled (#3157)
+- Include 9.0.2 binaries for aarch64-darwin
+- Generate bindists for ubuntu 18.04 and 20.04
+
 ## 1.8.0.0
 
 - Binaries for GHC 9.2.3 and GHC 9.2.4
