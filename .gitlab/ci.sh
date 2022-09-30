@@ -40,15 +40,10 @@ case "$(uname -s)" in
         export CPPFLAGS="-I$CI_PROJECT_DIR/.brew/opt/llvm@14/include"
         export CC="$CI_PROJECT_DIR/.brew/opt/llvm@14/bin/clang"
 				ls "$CI_PROJECT_DIR/.brew/opt/llvm@14/bin"
-				which cc
-				file $(which cc)
-				cc --version
-				echo "#include <stdio.h>\nint main() { printf(\"cc working!\"); return 0; }" > test.c
-				cc test.c
 				which $CC
 				file $(which $CC)
 				$CC --version
-				echo "#include <stdio.h>\nint main() { printf(\"$CC working!\"); return 0; }" > test.c
+				echo "int main() { return 0; }" > test.c
 				$CC test.c
 				./a.out
 				{curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | arch -arm64 /bin/bash} || cat $GHCUP_INSTALL_BASE_PREFIX/.ghcup/logs
