@@ -45,8 +45,7 @@ case "$(uname -s)" in
 				echo "int main() { return 0; }" > test.c
 				cc test.c
 				./a.out
-				curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | arch -arm64 /bin/bash
-				cat $GHCUP_INSTALL_BASE_PREFIX/.ghcup/logs
+				{curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | arch -arm64 /bin/bash} || cat $GHCUP_INSTALL_BASE_PREFIX/.ghcup/logs
 				export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
 				;;
 			*)
