@@ -36,6 +36,8 @@ case "$(uname -s)" in
 		case "$(/usr/bin/arch)" in
 			aarch64|arm64|armv8l)
 				export PATH="$CI_PROJECT_DIR/.brew/opt/llvm@14/bin:$PATH"
+        export LDFLAGS= "-L$CI_PROJECT_DIR/.brew/opt/llvm@14/lib"
+        export CPPFLAGS="-I$CI_PROJECT_DIR/.brew/opt/llvm@14/include"
 				ls "$CI_PROJECT_DIR/.brew/opt/llvm@14/bin"
 				curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | arch -arm64 /bin/bash
 				export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
