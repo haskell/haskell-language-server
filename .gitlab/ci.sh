@@ -35,7 +35,7 @@ case "$(uname -s)" in
 	"Darwin"|"darwin")
 		case "$(/usr/bin/arch)" in
 			aarch64|arm64|armv8l)
-				export PATH="$CI_PROJECT_DIR/.brew/opt/llvm@14/bin:$PATH"
+				export PATH="$PATH:$CI_PROJECT_DIR/.brew/opt/llvm@14/bin"
         export LDFLAGS="-L$CI_PROJECT_DIR/.brew/opt/llvm@14/lib"
         export CPPFLAGS="-I$CI_PROJECT_DIR/.brew/opt/llvm@14/include"
         export CC="$CI_PROJECT_DIR/.brew/opt/llvm@14/bin/clang"
