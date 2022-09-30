@@ -17,3 +17,5 @@ export HOMEBREW_TEMP=/private/tmp/.brew_tmp
 # update and install packages
 brew update
 brew install ${1+"$@"}
+# Need llvm 14
+brew link llvm@14
