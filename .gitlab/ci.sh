@@ -41,6 +41,7 @@ case "$(uname -s)" in
         export CC="-I$CI_PROJECT_DIR/.brew/opt/llvm@14/bin/clang"
 				ls "$CI_PROJECT_DIR/.brew/opt/llvm@14/bin"
 				curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | arch -arm64 /bin/bash
+				cat $GHCUP_INSTALL_BASE_PREFIX/.ghcup/logs
 				export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
 				;;
 			*)
