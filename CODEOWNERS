@@ -2,8 +2,8 @@
 /ghcide @pepeiborra
 /ghcide/session-loader @pepeiborra @fendor
 /hls-graph @pepeiborra
-/hls-plugin-api @jneira @berberman
-/hls-test-utils @jneira
+/hls-plugin-api @berberman
+/hls-test-utils
 /hie-compat
 
 # Plugins
@@ -16,8 +16,8 @@
 /plugins/hls-floskell-plugin @Ailrun
 /plugins/hls-fourmolu-plugin @georgefst
 /plugins/hls-gadt-plugin @July541
-/plugins/hls-haddock-comments-plugin @berberman
-/plugins/hls-hlint-plugin @jneira @eddiemundo
+/plugins/hls-haddock-comments-plugin @berberman @kokobd
+/plugins/hls-hlint-plugin @eddiemundo
 /plugins/hls-module-name-plugin
 /plugins/hls-ormolu-plugin @georgefst
 /plugins/hls-pragmas-plugin @berberman @Ailrun @eddiemundo
@@ -35,14 +35,14 @@
 /shake-bench @pepeiborra
 
 # Docs
-/docs @michaelpj @jneira
+/docs @michaelpj
 
 # CI
-/.circleci @jneira @Anton-Latukha
-/.github @jneira @Anton-Latukha @Ailrun
-/.gitlab @jneira @hasufell
+/.circleci @Anton-Latukha
+/.github @Anton-Latukha @Ailrun
+/.gitlab @hasufell
 
 # Build
 *.nix @berberman @michaelpj @guibou
-*.project @jneira
+*.project
 .gitpod.* @kokobd

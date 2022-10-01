@@ -66,6 +66,10 @@ getArguments exeName plugins = execParser opts
     opts = info ((
       VersionMode <$> printVersionParser exeName
       <|> probeToolsParser exeName
+      <|> hsubparser
+        (  command "vscode-extension-schema" extensionSchemaCommand
+        <> command "generate-default-config" generateDefaultConfigCommand
+        )
       <|> listPluginsParser
       <|> BiosMode <$> biosParser
       <|> Ghcide <$> arguments plugins
@@ -75,6 +79,13 @@ getArguments exeName plugins = execParser opts
       ( fullDesc
      <> progDesc "Used as a test bed to check your IDE Client will work"
      <> header (exeName ++ " - GHC Haskell LSP server"))
+
+    extensionSchemaCommand =
+        info (pure VSCodeExtensionSchemaMode)
+             (fullDesc <> progDesc "Print generic config schema for plugins (used in the package.json of haskell vscode extension)")
+    generateDefaultConfigCommand =
+        info (pure DefaultConfigurationMode)
+             (fullDesc <> progDesc "Print config supported by the server with default values")
 
 printVersionParser :: String -> Parser PrintVersion
 printVersionParser exeName =

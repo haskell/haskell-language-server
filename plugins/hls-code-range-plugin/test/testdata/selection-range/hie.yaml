@@ -3,3 +3,4 @@ cradle:
     arguments:
       - "Import"
       - "Function"
+      - "Empty"

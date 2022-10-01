@@ -26,6 +26,7 @@ import           Ide.PluginUtils              (getClientConfig, usePropertyLsp)
 import           Ide.Types                    (PluginId)
 import           Language.LSP.Server          (MonadLsp)
 import           Language.LSP.Types           (CompletionItemKind (..), Uri)
+import qualified Language.LSP.Types           as J
 
 -- | Produce completions info for a file
 type instance RuleResult LocalCompletions = CachedCompletions
@@ -136,3 +137,24 @@ instance Monoid CachedCompletions where
 instance Semigroup CachedCompletions where
     CC a b c d e <> CC a' b' c' d' e' =
         CC (a<>a') (b<>b') (c<>c') (d<>d') (e<>e')
+
+
+-- | Describes the line at the current cursor position
+data PosPrefixInfo = PosPrefixInfo
+  { fullLine    :: !T.Text
+    -- ^ The full contents of the line the cursor is at
+
+  , prefixScope :: !T.Text
+    -- ^ If any, the module name that was typed right before the cursor position.
+    --  For example, if the user has typed "Data.Maybe.from", then this property
+    --  will be "Data.Maybe"
+    -- If OverloadedRecordDot is enabled, "Shape.rect.width" will be
+    -- "Shape.rect"
+
+  , prefixText  :: !T.Text
+    -- ^ The word right before the cursor position, after removing the module part.
+    -- For example if the user has typed "Data.Maybe.from",
+    -- then this property will be "from"
+  , cursorPos   :: !J.Position
+    -- ^ The cursor position
+  } deriving (Show,Eq)
