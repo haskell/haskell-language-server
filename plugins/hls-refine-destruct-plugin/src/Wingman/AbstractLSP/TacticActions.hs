@@ -28,6 +28,9 @@ import Wingman.Range
 import Wingman.Types
 import GHC (SrcSpanAnn'(SrcSpanAnn))
 import Debug.Trace (traceShowM)
+import Language.Haskell.GHC.ExactPrint (makeDeltaAst')
+import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
+import Language.Haskell.GHC.ExactPrint.Parsers (parseExpr)
 
 
 ------------------------------------------------------------------------------
@@ -64,7 +67,8 @@ makeTacticInteraction cmd =
               $ ErrorMessages
               $ pure
               $ mkUserFacingMessage err
-          Right rtr ->
+          Right rtr -> do
+            -- traceShowM rtr
             case rtr_extract rtr of
               L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
                 pure
@@ -135,16 +139,13 @@ graftHole span (rtr)
             $ unLoc
             $ rtr_extract rtr
 graftHole span (rtr)
-  = graft span
-  $ rtr_extract rtr
-
+  = graft span (rtr_extract rtr)
 
 ------------------------------------------------------------------------------
 -- | Keep a fixity if one was present in the 'HsMatchContext'.
 matchContextFixity :: HsMatchContext p -> Maybe LexicalFixity
 matchContextFixity (FunRhs _ l _) = Just l
 matchContextFixity _ = Nothing
-
 
 ------------------------------------------------------------------------------
 -- | Helper function to route 'mergeFunBindMatches' into the right place in an

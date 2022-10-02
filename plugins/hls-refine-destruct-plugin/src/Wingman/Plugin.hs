@@ -24,8 +24,8 @@ instance Pretty Log where
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId
   = installInteractions
-      ( [emptyCaseInteraction]
-      -- : fmap makeTacticInteraction [minBound .. maxBound]
+      ( emptyCaseInteraction
+      : fmap makeTacticInteraction [minBound .. maxBound]
       )
   $ (defaultPluginDescriptor plId)
       { pluginRules = wingmanRules (cmapWithPrio LogWingmanLanguageServer recorder) plId

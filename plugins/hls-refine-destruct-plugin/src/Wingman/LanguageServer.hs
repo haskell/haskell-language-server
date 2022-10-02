@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeFamilies      #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Wingman.LanguageServer where
 
@@ -51,9 +52,10 @@ import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Range
-import           Wingman.Types
+import           Wingman.Types hiding (traceShowId)
 import GHC (EpAnn(..), SrcSpanAnn' (..), SrcSpan (RealSrcSpan))
-import Debug.Trace
+import GHC.IO (unsafePerformIO)
+import Debug.Trace (traceShowId)
 
 
 newtype Log
@@ -274,20 +276,16 @@ getSpanAndTypeAtHole
     -> Tracked age (HieASTs Type)
     -> Maybe (Tracked age RealSrcSpan, Type)
 getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
-  join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \(HiePath fs) ast ->
+  join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \(HiePath fs) ast -> do
     case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range) ast of
       Nothing -> Nothing
       Just ast' -> do
+        -- !_ <- Just $ unsafePerformIO $ putStrLn $ unsafeRender ast'
         let info = nodeInfo ast'
         ty <- listToMaybe $ nodeType info
         guard $ (NodeAnnotation "HsUnboundVar" "HsExpr") `S.member` nodeAnnotations info
+        -- TODO filter that this is actually a hole (new GHC api removed identifier info)
         -- Ensure we're actually looking at a hole here
-        occ <- (either (const Nothing) (Just . occName) =<<)
-             . listToMaybe
-             . S.toList
-             . M.keysSet
-             $ nodeIdentifiers info
-        guard $ isHole occ
         pure (unsafeCopyAge r $ nodeSpan ast', ty)
 
 

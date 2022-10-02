@@ -18,6 +18,7 @@ spec = do
     destructTest "a"     6 18 "DestructPun"
     destructTest "fp"   31 14 "DestructCthulhu"
     destructTest "t"     6 10 "DestructInt"
+    destructTest "t"     8 6 "DestructIntNotTopLevel"
 
   describe "layout" $ do
     destructTest "b"  4  3 "LayoutBind"

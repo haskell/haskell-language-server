@@ -10,6 +10,8 @@ import Development.IDE.GHC.Compat
 import GHC.Exts (Any)
 import Type.Reflection
 import Unsafe.Coerce (unsafeCoerce)
+import Debug.Trace (trace)
+import Wingman.Debug
 
 
 ------------------------------------------------------------------------------
@@ -21,13 +23,13 @@ everythingContaining
     => SrcSpan
     -> GenericQ r
     -> GenericQ r
-everythingContaining dst f = go
-  where
-    go :: GenericQ r
-    go x =
-      case genericIsSubspan dst x of
-        Just False -> mempty
-        _ -> foldl' (<>) (f x) (gmapQ go x)
+everythingContaining dst f = everything (<>) f
+  -- where
+  --   go :: GenericQ r
+  --   go x =
+  --     -- case genericIsSubspan dst x of
+  --     --   Just False -> mempty
+  --       _ -> foldl' (<>) (f x) (gmapQ go x)
 
 
 ------------------------------------------------------------------------------
@@ -55,14 +57,14 @@ mkQ1 :: forall a r f
      -> (forall b. f b -> r)  -- ^ Polymorphic match
      -> a
      -> r
-mkQ1 proxy r br a =
-    case l_con == a_con && sameTypeModuloLastApp @a @(f ()) of
-      -- We have proven that the two values share the same constructor, and
-      -- that they have the same type if you ignore the final application.
-      -- Therefore, it is safe to coerce @a@ to @f b@, since @br@ is universal
-      -- over @b@ and can't inspect it.
-      True  -> br $ unsafeCoerce @_ @(f Any) a
-      False -> r
+mkQ1 proxy r br a = undefined
+    -- case l_con == a_con && sameTypeModuloLastApp @a @(f ()) of
+    --   -- We have proven that the two values share the same constructor, and
+    --   -- that they have the same type if you ignore the final application.
+    --   -- Therefore, it is safe to coerce @a@ to @f b@, since @br@ is universal
+    --   -- over @b@ and can't inspect it.
+    --   True  -> br $ unsafeCoerce @_ @(f Any) a
+    --   False -> r
   where
     l_con = toConstr proxy
     a_con = toConstr a

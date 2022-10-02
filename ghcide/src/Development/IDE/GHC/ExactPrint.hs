@@ -109,6 +109,7 @@ import GHC.IO
 import Development.IDE.GHC.Util
 import Control.Exception
 import Control.DeepSeq
+import GHC (realSrcSpan)
 #endif
 
 ------------------------------------------------------------------------------
@@ -203,8 +204,11 @@ transform dflags ccs uri f a = do
     let src = printA a
     -- traceShowM src
     a' <- transformA a $ fmap (\ ast -> trace "" $ ast) <$> runGraft f dflags
-    -- traceM $ unsafeRender' $ ppr $ makeDeltaAst $ astA a'
+    -- traceM $ exactPrint $ astA a'
+    -- traceM $ exactPrint $ makeDeltaAst $ astA a'
     -- traceM $ showAst $ trimA a'
+    -- traceM $ showAst $ makeDeltaAst $ astA a'
+    -- traceM $ showAst $ makeDeltaAst $ astA a'
     a'' <- transformA a' (pure . makeDeltaAst)
     -- traceM $ unsafeRender' $ ppr $ makeDeltaAst $ astA a''
     -- traceM $ showAstA $ trimA $ a'
@@ -270,7 +274,7 @@ needsParensSpace _               = mempty
 -}
 graft' ::
     forall ast a l.
-    (Data a, Typeable l, ASTElement l ast) =>
+    (Data a, Data l, Typeable l, ASTElement l ast, ExactPrint ast) =>
     -- | Do we need to insert a space before this grafting? In do blocks, the
     -- answer is no, or we will break layout. But in function applications,
     -- the answer is yes, or the function call won't get its argument. Yikes!
@@ -281,7 +285,9 @@ graft' ::
     LocatedAn l ast ->
     Graft (Either String) a
 graft' needs_space dst val = Graft $ \dflags a -> do
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,2,1)
+    L src' val' <- annotate dflags needs_space val
+#elif MIN_VERSION_ghc(9,2,0)
     val' <- annotate dflags needs_space val
 #else
     (anns, val') <- annotate dflags needs_space val
@@ -292,7 +298,7 @@ graft' needs_space dst val = Graft $ \dflags a -> do
             ( mkT $
                 \case
                     (L src _ :: LocatedAn l ast)
-                        | locA src `eqSrcSpan` dst -> val'
+                        | locA src `eqSrcSpan` dst -> L src (makeDeltaAst val')
                     l                         -> l
             )
             a
@@ -389,7 +395,7 @@ graftExprWithM dst trans = Graft $ \dflags a -> fmap (\a -> trace "" a) $ do
 
 graftWithM ::
     forall ast m a l.
-    (Fail.MonadFail m, Data a, Typeable l, ASTElement l ast) =>
+    (Fail.MonadFail m, Data a, Data l, ASTElement l ast) =>
     SrcSpan ->
     (LocatedAn l ast -> TransformT m (Maybe (LocatedAn l ast))) ->
     Graft m a
@@ -508,7 +514,7 @@ class (Data ast, Typeable l, Outputable l, Outputable ast) => ASTElement l ast |
     -}
     graft ::
         forall a.
-        (Data a) =>
+        (Data a, Data l, ExactPrint ast) =>
         SrcSpan ->
         LocatedAn l ast ->
         Graft (Either String) a
@@ -564,7 +570,7 @@ fixAnns ParsedModule {..} =
 
 -- | Given an 'LHSExpr', compute its exactprint annotations.
 --   Note that this function will throw away any existing annotations (and format)
-annotate :: (ASTElement l ast, Outputable l)
+annotate :: (Data l, ASTElement l ast, Outputable l)
 #if MIN_VERSION_ghc(9,2,0)
     => DynFlags -> Bool -> LocatedAn l ast -> TransformT (Either String) (LocatedAn l ast)
 #else
@@ -572,8 +578,13 @@ annotate :: (ASTElement l ast, Outputable l)
 #endif
 annotate dflags needs_space ast = do
     uniq <- show <$> uniqueSrcSpanT
+    -- traceM $ gshow ast
     let rendered = render dflags ast
-#if MIN_VERSION_ghc(9,2,0)
+    traceM rendered
+#if MIN_VERSION_ghc(9,2,1)
+    expr' <- lift $ mapLeft show $ parseAST dflags uniq rendered
+    pure expr'
+#elif MIN_VERSION_ghc(9,2,0)
     expr' <- lift $ mapLeft show $ parseAST dflags uniq rendered
     pure expr'
 #else
@@ -646,8 +657,13 @@ parenthesize = parenthesizeHsExpr appPrec
 
 -- | Equality on SrcSpan's.
 -- Ignores the (Maybe BufSpan) field of SrcSpan's.
+#if MIN_VERSION_ghc(9,2,0)
+eqSrcSpan :: SrcSpan -> SrcSpan -> Bool
+eqSrcSpan (realSrcSpan -> l) (realSrcSpan -> r) = containsSpan l r && containsSpan r l
+#else
 eqSrcSpan :: SrcSpan -> SrcSpan -> Bool
 eqSrcSpan l r = leftmost_smallest l r == EQ
+#endif
 
 -- | Equality on SrcSpan's.
 -- Ignores the (Maybe BufSpan) field of SrcSpan's.
