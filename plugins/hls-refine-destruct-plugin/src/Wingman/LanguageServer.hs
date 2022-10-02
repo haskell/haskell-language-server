@@ -55,7 +55,7 @@ import           Wingman.Range
 import           Wingman.Types hiding (traceShowId)
 import GHC (EpAnn(..), SrcSpanAnn' (..), SrcSpan (RealSrcSpan))
 import GHC.IO (unsafePerformIO)
-import Debug.Trace (traceShowId)
+import Debug.Trace (traceShowId, traceShowM)
 
 
 newtype Log

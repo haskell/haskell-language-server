@@ -110,6 +110,7 @@ import Development.IDE.GHC.Util
 import Control.Exception
 import Control.DeepSeq
 import GHC (realSrcSpan)
+import GHC (LocatedL)
 #endif
 
 ------------------------------------------------------------------------------
@@ -205,7 +206,7 @@ transform dflags ccs uri f a = do
     -- traceShowM src
     a' <- transformA a $ fmap (\ ast -> trace "" $ ast) <$> runGraft f dflags
     -- traceM $ exactPrint $ astA a'
-    -- traceM $ exactPrint $ makeDeltaAst $ astA a'
+    traceM $ exactPrint $ makeDeltaAst $ astA a'
     -- traceM $ showAst $ trimA a'
     -- traceM $ showAst $ makeDeltaAst $ astA a'
     -- traceM $ showAst $ makeDeltaAst $ astA a'
@@ -428,15 +429,15 @@ graftWithM dst trans = Graft $ \dflags a -> do
 -- | Run the given transformation only on the smallest node in the tree that
 -- contains the 'SrcSpan'.
 genericGraftWithSmallestM ::
-    forall m a ast.
+    forall m a ast l.
     (Monad m, Data a, Typeable ast) =>
     -- | The type of nodes we'd like to consider when finding the smallest.
-    Proxy (Located ast) ->
+    Proxy (LocatedL ast) ->
     SrcSpan ->
     (DynFlags -> ast -> GenericM (TransformT m)) ->
     Graft m a
 genericGraftWithSmallestM proxy dst trans = Graft $ \dflags ->
-    smallestM (genericIsSubspan proxy dst) (trans dflags)
+    smallestM (genericIsSubspanL proxy dst) (trans dflags)
 
 -- | Run the given transformation only on the largest node in the tree that
 -- contains the 'SrcSpan'.

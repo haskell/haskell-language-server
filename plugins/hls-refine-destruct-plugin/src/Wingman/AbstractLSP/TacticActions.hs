@@ -31,6 +31,7 @@ import Debug.Trace (traceShowM)
 import Language.Haskell.GHC.ExactPrint (makeDeltaAst')
 import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
 import Language.Haskell.GHC.ExactPrint.Parsers (parseExpr)
+import GHC.Hs (LocatedL)
 
 
 ------------------------------------------------------------------------------
@@ -117,13 +118,15 @@ graftHole
     -> Graft (Either String) ParsedSource
 graftHole span (rtr)
   | _jIsTopHole (rtr_jdg rtr)
-      = genericGraftWithSmallestM
-            (Proxy @(Located [LMatch GhcPs (LHsExpr GhcPs)])) span
+      = trace "top_hole" $ genericGraftWithSmallestM
+            (Proxy @(LocatedL [LMatch GhcPs (LHsExpr GhcPs)])) span
       $ \dflags matches -> do
-          -- traceShowM $ "matches: " <> unsafeRender matches
+          traceShowM $ "matches: " <> unsafeRender matches
           everywhereM'
             $ mkBindListT $ \ix ->
+              trace "bind_list"
               graftDecl dflags span ix $ \name pats ->
+              trace "graft_decl"
               splitToDecl
                 (case not $ jNeedsToBindArgs (rtr_jdg rtr) of
                    -- If the user has explicitly bound arguments, use the
@@ -135,6 +138,7 @@ graftHole span (rtr)
                 )
                 (occName name)
             $ iterateSplit
+            $ traceShowId
             $ mkFirstAgda (fmap unXPat pats)
             $ unLoc
             $ rtr_extract rtr
@@ -159,7 +163,8 @@ graftDecl
     -> TransformT (Either String) [LMatch GhcPs (LHsExpr GhcPs)]
 graftDecl dflags dst ix make_decl (L (SrcSpanAnn _ src) (AMatch (FunRhs (L _ name) _ _) pats _))
   | dst `isSubspanOf` src = do
-      L _ dec <- annotateDecl dflags $ make_decl name pats
+      -- L _ dec <- annotateDecl dflags $ make_decl name pats
+      L _ dec <- pure $ make_decl name pats
       case dec of
         ValD _ FunBind{ fun_matches = MG { mg_alts = L _ alts@(first_match : _)}
                       } -> do
