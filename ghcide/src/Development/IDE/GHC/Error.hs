@@ -24,6 +24,7 @@ module Development.IDE.GHC.Error
   , zeroSpan
   , realSpan
   , isInsideSrcSpan
+  , spanContainsRange
   , noSpan
 
   -- * utilities working with severities
@@ -118,6 +119,9 @@ isInsideSrcSpan :: Position -> SrcSpan -> Bool
 p `isInsideSrcSpan` r = case srcSpanToRange r of
   Just (Range sp ep) -> sp <= p && p <= ep
   _                  -> False
+
+spanContainsRange :: SrcSpan -> Range -> Bool
+spanContainsRange srcSpan Range {..} = _start `isInsideSrcSpan` srcSpan && _end `isInsideSrcSpan` srcSpan
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).

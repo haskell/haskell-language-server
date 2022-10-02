@@ -20,6 +20,10 @@ module Development.IDE.GHC.ExactPrint
       transform,
       transformM,
       ExactPrint(..),
+#if MIN_VERSION_ghc(9,2,1)
+      modifySmallestDeclWithM,
+      modifyMgMatchesT,
+#endif
 #if !MIN_VERSION_ghc(9,2,0)
       Anns,
       Annotate,
@@ -29,10 +33,7 @@ module Development.IDE.GHC.ExactPrint
       addParensToCtxt,
       modifyAnns,
       removeComma,
-      modifySmallestDeclWithM,
-      modifyMgMatchesT,
       -- * Helper function
-      spanContainsRange,
       eqSrcSpan,
       epl,
       epAnn,
@@ -106,6 +107,7 @@ import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           DeltaPos (SameLine),
                                                           EpaLocation (EpaDelta))
 import Data.Maybe (fromMaybe)
+import Development.IDE.GHC.Error (isInsideSrcSpan)
 #endif
 
 ------------------------------------------------------------------------------
@@ -434,31 +436,38 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
             | otherwise = DL.singleton (L src e) <> go rest
     modifyDeclsT (pure . DL.toList . go) a
 
+#if MIN_VERSION_ghc(9,2,1)
+-- | Replace the smallest declaration whose SrcSpan satisfies the given condition with a new
+-- list of declarations.
+--
+-- For example, if you would like to move a where-clause-defined variable to the same
+-- level as its parent HsDecl, you could use this function.
 modifySmallestDeclWithM ::
-    forall a.
-    (HasDecls a) =>
-    (SrcSpan -> Bool) ->
-    (LHsDecl GhcPs -> TransformT (Either String) (Maybe [LHsDecl GhcPs])) ->
-    a ->
-    TransformT (Either String) a
+  forall a.
+  (HasDecls a) =>
+  (SrcSpan -> Bool) ->
+  (LHsDecl GhcPs -> TransformT (Either String) [LHsDecl GhcPs]) ->
+  a ->
+  TransformT (Either String) a
 modifySmallestDeclWithM validSpan f a = do
-    let modifyMatchingDecl [] = pure DL.empty
-        modifyMatchingDecl (e@(L src _) : rest)
-            | validSpan $ locA src = do
-                decs' <- fromMaybe [e] <$> f e
-                pure $ DL.fromList decs' <> DL.fromList rest
-            | otherwise = (DL.singleton e <>) <$> modifyMatchingDecl rest
-    modifyDeclsT (fmap DL.toList . modifyMatchingDecl) a
+  let modifyMatchingDecl [] = pure DL.empty
+      modifyMatchingDecl (e@(L src _) : rest)
+        | validSpan $ locA src = do
+            decs' <- f e
+            pure $ DL.fromList decs' <> DL.fromList rest
+        | otherwise = (DL.singleton e <>) <$> modifyMatchingDecl rest
+  modifyDeclsT (fmap DL.toList . modifyMatchingDecl) a
 
+-- | Modify the each LMatch in a MatchGroup
 modifyMgMatchesT ::
   Monad m =>
-  MatchGroup GhcPs (LHsExpr GhcPs)
-  -> (LMatch GhcPs (LHsExpr GhcPs) -> TransformT m (LMatch GhcPs (LHsExpr GhcPs)))
-  -> TransformT m (MatchGroup GhcPs (LHsExpr GhcPs))
+  MatchGroup GhcPs (LHsExpr GhcPs) ->
+  (LMatch GhcPs (LHsExpr GhcPs) -> TransformT m (LMatch GhcPs (LHsExpr GhcPs))) ->
+  TransformT m (MatchGroup GhcPs (LHsExpr GhcPs))
 modifyMgMatchesT (MG xMg (L locMatches matches) originMg) f = do
-    matches' <- forM matches f
-    let decl' = (MG xMg (L locMatches matches') originMg)
-    pure decl'
+  matches' <- mapM f matches
+  pure $ MG xMg (L locMatches matches') originMg
+#endif
 
 graftSmallestDeclsWithM ::
     forall a.
@@ -653,13 +662,6 @@ eqSrcSpanA l r = leftmost_smallest l r == EQ
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-
-spanContainsRange :: SrcSpan -> Range -> Bool
-spanContainsRange srcSpan Range {..} =
-  srcSpan `spans` positionToTuple _start && srcSpan `spans` positionToTuple _end
-  where
-    positionToTuple :: Position -> (Int, Int)
-    positionToTuple (Position l c) = (fromIntegral l + 1, fromIntegral c)
 
 addParensToCtxt :: Maybe EpaLocation -> AnnContext -> AnnContext
 addParensToCtxt close_dp = addOpen . addClose

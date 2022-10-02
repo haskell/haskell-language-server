@@ -87,16 +87,12 @@ descriptor pluginId = (defaultPluginDescriptor pluginId) {
     ]
 }
 
-isRangeWithinSrcSpan :: Range -> SrcSpan -> Bool
-isRangeWithinSrcSpan (Range start end) srcSpan =
-  isInsideSrcSpan start srcSpan && isInsideSrcSpan end srcSpan
-
 findLImportDeclAt :: Range -> ParsedModule -> Maybe (LImportDecl GhcPs)
 findLImportDeclAt range parsedModule
   | ParsedModule {..} <- parsedModule
   , L _ hsModule <- pm_parsed_source
   , locatedImportDecls <- hsmodImports hsModule =
-      find (\ (L (locA -> srcSpan) _) -> isRangeWithinSrcSpan range srcSpan) locatedImportDecls
+      find (\ (L (locA -> srcSpan) _) -> srcSpan `spanContainsRange` range) locatedImportDecls
 
 makeCodeActions :: Uri -> [TextEdit] -> [a |? CodeAction]
 makeCodeActions uri textEdits = [InR CodeAction {..} | not (null textEdits)]

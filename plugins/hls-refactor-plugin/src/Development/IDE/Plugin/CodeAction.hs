@@ -99,6 +99,7 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     LocatedA, spans)
 import Language.Haskell.GHC.ExactPrint (runTransformFromT, noAnnSrcSpanDP1, runTransform, runTransformT)
 import GHC.Types.SrcLoc (generatedSrcSpan)
+import Debug.Trace (trace)
 
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
@@ -917,7 +918,7 @@ suggestAddArgument parsedModule Diagnostic {_message, _range}
 addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> [(T.Text, [TextEdit])]
 addArgumentAction (ParsedModule _ parsedSource _ _) range name _typ =
   do
-    let addArgToMatch = \(L locMatch (Match xMatch ctxMatch pats rhs)) -> do
+    let addArgToMatch (L locMatch (Match xMatch ctxMatch pats rhs)) = do
           let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
           let newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
           pure $ L locMatch (Match xMatch ctxMatch (pats <> [newPat]) rhs)
@@ -925,13 +926,13 @@ addArgumentAction (ParsedModule _ parsedSource _ _) range name _typ =
           (L locDecl (ValD xVal (FunBind xFunBind idFunBind mg coreFunBind))) -> do
             mg' <- modifyMgMatchesT mg addArgToMatch
             let decl' = L locDecl (ValD xVal (FunBind xFunBind idFunBind mg' coreFunBind))
-            pure $ Just [decl']
-          _ -> pure Nothing
+            pure [decl']
+          decl -> pure [decl]
     case runTransformT $ modifySmallestDeclWithM (`spanContainsRange` range) insertArg (makeDeltaAst parsedSource) of
-      Left err -> error $ "Error when inserting argument: " <> err
+      Left err -> trace ("Error when inserting argument: " <> err) []
       Right (newSource, _, _) ->
         let diff = makeDiffTextEdit (T.pack $ exactPrint parsedSource) (T.pack $ exactPrint newSource)
-         in [("Add argument ‘" <> name <> "’ to function", fromLspList $ diff)]
+         in [("Add argument ‘" <> name <> "’ to function", fromLspList diff)]
 
 fromLspList :: List a -> [a]
 fromLspList (List a) = a
