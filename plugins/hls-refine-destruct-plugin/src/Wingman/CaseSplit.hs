@@ -5,15 +5,20 @@ module Wingman.CaseSplit
   ) where
 
 import           Data.Bool (bool)
-import           Data.Data
-import           Data.Generics
+import           Data.Data hiding (Prefix, Infix)
+import           Data.Generics hiding (Prefix, Infix)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           GHC.Exts (IsString (fromString))
-import           GHC.SourceGen (funBindsWithFixity, match, wildP)
+import           GHC.SourceGen
 import           Wingman.GHC
 import           Wingman.Types
+import GHC.SourceGen.Binds
+import GHC.SourceGen.Name
+import Development.IDE.GHC.ExactPrint (annotateDecl)
+import Language.Haskell.GHC.ExactPrint (runTransformT)
+import Data.Either (fromRight)
 
 
 
@@ -74,7 +79,7 @@ containsVar name = everything (||) $
 rewriteVarPat :: Data a => RdrName -> Pat GhcPs -> a -> a
 rewriteVarPat name rep = everywhere $
   mkT (\case
-    VarPat _ (L _ var) | eqRdrName name var -> rep
+    VarPat xVarPat (L _ var) | eqRdrName name var -> rep
     (x :: Pat GhcPs)                        -> x
       )
   `extT` \case
@@ -87,17 +92,17 @@ rewriteVarPat name rep = everywhere $
 ------------------------------------------------------------------------------
 -- | Construct an 'HsDecl' from a set of 'AgdaMatch'es.
 splitToDecl
-    :: Maybe LexicalFixity
+    :: DynFlags -> Maybe LexicalFixity
     -> OccName  -- ^ The name of the function
     -> [AgdaMatch]
     -> LHsDecl GhcPs
-splitToDecl fixity name ams = do
-  traceX "fixity" fixity $
-    noLocA $
-      funBindsWithFixity fixity (fromString . occNameString . occName $ name) $ do
-        AgdaMatch pats body <- ams
-        pure $ match pats body
-
+splitToDecl dflags fixity name ams = do
+  let res = traceX "fixity" fixity $
+        noLocA $
+          funBindsWithFixity fixity (fromString . occNameString . occName $ name) $ do
+            AgdaMatch pats body <- ams
+            pure $ match pats body
+    in trace "split_to_decl" $ trace (show $ unLoc res) $ either error (\(a,b,c) -> a) $ runTransformT $ annotateDecl dflags res
 
 ------------------------------------------------------------------------------
 -- | Sometimes 'agdaSplit' exposes another opportunity to do 'agdaSplit'. This

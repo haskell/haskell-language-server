@@ -206,7 +206,7 @@ transform dflags ccs uri f a = do
     -- traceShowM src
     a' <- transformA a $ fmap (\ ast -> trace "" $ ast) <$> runGraft f dflags
     -- traceM $ exactPrint $ astA a'
-    traceM $ exactPrint $ makeDeltaAst $ astA a'
+    -- traceM $ exactPrint $ makeDeltaAst $ astA a'
     -- traceM $ showAst $ trimA a'
     -- traceM $ showAst $ makeDeltaAst $ astA a'
     -- traceM $ showAst $ makeDeltaAst $ astA a'
@@ -612,12 +612,13 @@ annotateDecl dflags
     alts' <- for alts $ \alt -> do
       uniq <- show <$> uniqueSrcSpanT
       let rendered = render dflags $ set_matches [alt]
+      -- traceM rendered
       lift (mapLeft show $ parseDecl dflags uniq rendered) >>= \case
         (L _ (ValD _ FunBind { fun_matches = MG { mg_alts = L _ [alt']}}))
            -> pure alt'
         _ ->  lift $ Left "annotateDecl: didn't parse a single FunBind match"
 
-    pure $ L src $ set_matches alts'
+    pure $ L src $ set_matches $ makeDeltaAst <$> alts'
 #else
     (anns', alts') <- fmap unzip $ for alts $ \alt -> do
       uniq <- show <$> uniqueSrcSpanT

@@ -128,6 +128,7 @@ graftHole span (rtr)
               graftDecl dflags span ix $ \name pats ->
               trace "graft_decl"
               splitToDecl
+                dflags
                 (case not $ jNeedsToBindArgs (rtr_jdg rtr) of
                    -- If the user has explicitly bound arguments, use the
                    -- fixity they wrote.
@@ -163,8 +164,10 @@ graftDecl
     -> TransformT (Either String) [LMatch GhcPs (LHsExpr GhcPs)]
 graftDecl dflags dst ix make_decl (L (SrcSpanAnn _ src) (AMatch (FunRhs (L _ name) _ _) pats _))
   | dst `isSubspanOf` src = do
-      -- L _ dec <- annotateDecl dflags $ make_decl name pats
-      L _ dec <- pure $ make_decl name pats
+      L _ dec <- annotateDecl dflags $ make_decl name pats
+      -- traceM $ show dec
+      -- traceM $ showAst dec
+      -- L _ dec <- pure $ make_decl name pats
       case dec of
         ValD _ FunBind{ fun_matches = MG { mg_alts = L _ alts@(first_match : _)}
                       } -> do
