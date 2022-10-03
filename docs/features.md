@@ -22,7 +22,7 @@ Many of these are standard LSP features, but a lot of special features are provi
 | [Rename](#rename)                                   | `textDocument/rename`                                                                             |
 
 The individual sections below also identify which [HLS plugin](./what-is-hls.md#hls-plugins) is responsible for providing the given functionality, which is useful if you want to raise an issue report or contribute!
-Additionally, not all plugins are supported on all versions of GHC, see the [GHC version support page](supported-versions.md) for details.
+Additionally, not all plugins are supported on all versions of GHC, see the [plugin support page](./support/plugin-support.md) for details.
 
 ## Diagnostics
 
