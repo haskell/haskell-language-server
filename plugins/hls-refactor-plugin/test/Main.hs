@@ -56,11 +56,13 @@ import           Text.Regex.TDFA                          ((=~))
 
 import           Development.IDE.Plugin.CodeAction        (bindingsPluginDescriptor,
                                                            matchRegExMultipleImports)
+import Extract
 import           Test.Hls
 
 import           Control.Applicative                      (liftA2)
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
+import Debug.Trace (traceM, traceShowM)
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -313,6 +315,8 @@ codeActionTests = testGroup "code actions"
   , fillTypedHoleTests
   , addSigActionTests
   , insertNewDefinitionTests
+  , addFunctionArgumentTests
+  , extractTests
   , deleteUnusedDefinitionTests
   , addInstanceConstraintTests
   , addFunctionConstraintTests

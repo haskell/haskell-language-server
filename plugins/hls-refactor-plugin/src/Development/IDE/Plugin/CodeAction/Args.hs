@@ -55,7 +55,7 @@ type GhcideCodeAction = ExceptT ResponseError (ReaderT CodeActionArgs IO) Ghcide
 
 {-# ANN runGhcideCodeAction ("HLint: ignore Move guards forward" :: String) #-}
 runGhcideCodeAction :: LSP.MonadLsp Config m => IdeState -> MessageParams TextDocumentCodeAction -> GhcideCodeAction -> m GhcideCodeActionResult
-runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext {_diagnostics = List diags}) codeAction = do
+runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) (Just -> caaRange) CodeActionContext {_diagnostics = List diags}) codeAction = do
   let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
       runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure mbFile) >>= MaybeT . use key
   caaGhcSession <- onceIO $ runRule GhcSession
@@ -85,10 +85,10 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
   results <- liftIO $
 
       sequence
-        [ runReaderT (runExceptT codeAction) caa
-          | caaDiagnostic <- diags,
+        ([ runReaderT (runExceptT codeAction) caa
+          | (Just -> caaDiagnostic) <- diags,
             let caa = CodeActionArgs {..}
-        ]
+        ] <> [let caaDiagnostic = Nothing in runReaderT (runExceptT codeAction) CodeActionArgs{..}])
   let (errs, successes) = partitionEithers results
   pure $ concat successes
 
@@ -101,7 +101,9 @@ mkGhcideCAPlugin codeAction plId =
   (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentCodeAction $
         \state _ params@(CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext {_diagnostics = List diags}) -> do
+          -- traceM "pre-runAction"
           results <- runGhcideCodeAction state params codeAction
+          -- traceM "post-runAction"
           pure $
             Right $
               List
@@ -163,7 +165,8 @@ data CodeActionArgs = CodeActionArgs
     caaHar          :: IO (Maybe HieAstResult),
     caaBindings     :: IO (Maybe Bindings),
     caaGblSigs      :: IO (Maybe GlobalBindingTypeSigsResult),
-    caaDiagnostic   :: Diagnostic
+    caaDiagnostic   :: Maybe Diagnostic,
+    caaRange        :: Maybe Range
   }
 
 -- | There's no concurrency in each provider,
@@ -251,7 +254,10 @@ instance ToCodeAction r => ToCodeAction (IdeOptions -> r) where
   toCodeAction = toCodeAction3 caaIdeOptions
 
 instance ToCodeAction r => ToCodeAction (Diagnostic -> r) where
-  toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaDiagnostic = x} -> flip runReaderT caa . runExceptT . toCodeAction $ f x
+  toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaDiagnostic = x} -> flip runReaderT caa . runExceptT . toCodeAction $ f <$> x
+
+instance ToCodeAction r => ToCodeAction (Range -> r) where
+  toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaRange = x} -> flip runReaderT caa . runExceptT . toCodeAction $ f <$> x
 
 instance ToCodeAction r => ToCodeAction (Maybe ParsedModule -> r) where
   toCodeAction = toCodeAction1 caaParsedModule

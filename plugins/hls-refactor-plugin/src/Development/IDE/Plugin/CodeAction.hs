@@ -11,7 +11,8 @@ module Development.IDE.Plugin.CodeAction
     fillHolePluginDescriptor,
     extendImportPluginDescriptor,
     -- * For testing
-    matchRegExMultipleImports
+    matchRegExMultipleImports,
+    extractCodePluginDescriptor
     ) where
 
 import           Control.Applicative                               ((<|>))
@@ -54,6 +55,8 @@ import           Development.IDE.GHC.Util                          (printOutputa
                                                                     printRdrName)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
+import           Development.IDE.Plugin.CodeAction.Util
+import           Development.IDE.Plugin.CodeAction.Extract
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
 import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.Completions.Types
@@ -116,7 +119,8 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     TrailingAnn (..),
                                                                     addTrailingAnnToA,
                                                                     emptyComments,
-                                                                    noAnn)
+                                                                    noAnn,
+                                                                    LocatedA, spans)
 import           GHC.Hs                                            (IsUnicodeSyntax (..))
 import           Language.Haskell.GHC.ExactPrint.Transform         (d1)
 
@@ -203,6 +207,13 @@ extendImportPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> Plu
 extendImportPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor plId)
   { pluginCommands = [extendImportCommand] }
 
+-- | Add the ability for a plugin to call GetAnnotatedParsedSource
+extractCodePluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
+extractCodePluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
+  mkGhcideCAsPlugin [
+    wrap suggestExtractFunction
+    ]
+    plId
 
 -- | Add the ability for a plugin to call GetAnnotatedParsedSource
 mkExactprintPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginDescriptor a -> PluginDescriptor a
@@ -1073,10 +1084,8 @@ addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
         insertArg n (a:as) = a : insertArg (n - 1) as
         lsigTy' = hsTypeFromFunTypeAsList (insertArg loc args, res)
     in L annHsSig (HsSig xHsSig tyVarBndrs lsigTy')
-
-fromLspList :: List a -> [a]
-fromLspList (List a) = a
 #endif
+
 
 suggestFillTypeWildcard :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillTypeWildcard Diagnostic{_range=_range,..}
@@ -2096,24 +2105,6 @@ splitTextAtPosition (Position (fromIntegral -> row) (fromIntegral -> col)) x
     , (preCol, postCol) <- T.splitAt col mid
         = (T.intercalate "\n" $ preRow ++ [preCol], T.intercalate "\n" $ postCol : postRow)
     | otherwise = (x, T.empty)
-
--- | Returns [start .. end[
-textInRange :: Range -> T.Text -> T.Text
-textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCol)) (Position (fromIntegral -> endRow) (fromIntegral -> endCol))) text =
-    case compare startRow endRow of
-      LT ->
-        let (linesInRangeBeforeEndLine, endLineAndFurtherLines) = splitAt (endRow - startRow) linesBeginningWithStartLine
-            (textInRangeInFirstLine, linesBetween) = case linesInRangeBeforeEndLine of
-              [] -> ("", [])
-              firstLine:linesInBetween -> (T.drop startCol firstLine, linesInBetween)
-            maybeTextInRangeInEndLine = T.take endCol <$> listToMaybe endLineAndFurtherLines
-        in T.intercalate "\n" (textInRangeInFirstLine : linesBetween ++ maybeToList maybeTextInRangeInEndLine)
-      EQ ->
-        let line = fromMaybe "" (listToMaybe linesBeginningWithStartLine)
-        in T.take (endCol - startCol) (T.drop startCol line)
-      GT -> ""
-    where
-      linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
 
 -- | Returns the ranges for a binding in an import declaration
 rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
