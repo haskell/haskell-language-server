@@ -50,6 +50,7 @@ import           Text.Fuzzy.Parallel                      (Scored (..))
 
 import qualified GHC.LanguageExtensions                   as LangExt
 import           Language.LSP.Types
+import Debug.Trace
 
 data Log = LogShake Shake.Log deriving Show
 
@@ -116,27 +117,21 @@ resolveCompletion :: IdeState -> PluginId -> CompletionItem -> LSP.LspM Config (
 resolveCompletion ide _ comp@CompletionItem{_detail,_documentation,_xdata}
   | Just resolveData <- _xdata
   , Success (uri, NameDetails mod occ) <- fromJSON resolveData
-  , Just file <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-    mdkm <- liftIO $ runAction "Completion resolve" ide $ use GetDocMap file
-    case mdkm of
-      Nothing -> pure (Right comp)
-      Just (DKMap dm km) -> liftIO $ runAction "Completion resolve" ide $ do
-        let nc = ideNc $ shakeExtras ide
+  , Just file <- uriToNormalizedFilePath $ toNormalizedUri uri = liftIO $ runIdeAction "Completion resolve" (shakeExtras ide) $ do
+    (_, msess) <- useWithStaleFast GhcSessionDeps file
+    let nc = ideNc $ shakeExtras ide
 #if MIN_VERSION_ghc(9,3,0)
-        name <- liftIO $ lookupNameCache nc mod occ
+    name <- liftIO $ lookupNameCache nc mod occ
 #else
-        name <- liftIO $ upNameCache nc (lookupNameCache mod occ)
+    name <- liftIO $ upNameCache nc (lookupNameCache mod occ)
 #endif
-        (ms,_) <- useWithStale_ GetModSummaryWithoutTimestamps file
-        (sess,_) <- useWithStale_ GhcSessionDeps file
-        let cur_mod = ms_mod $ msrModSummary ms
-        doc <- case lookupNameEnv dm name of
-          Just doc -> pure $ spanDocToMarkdown doc
-          Nothing -> liftIO $ spanDocToMarkdown <$> getDocumentationTryGhc (hscEnv sess) cur_mod name
+    docFrom <- case lookupNameEnv dm name of
+      Just doc -> pure $ spanDocToMarkdown doc
+      Nothing -> liftIO $ spanDocToMarkdown <$> getDocumentationTryGhc (hscEnv sess) name
         typ <- case lookupNameEnv km name of
           Just ty -> pure (safeTyThingType ty)
           Nothing -> do
-            (safeTyThingType =<<) <$> liftIO (lookupName (hscEnv sess) cur_mod name)
+            (safeTyThingType =<<) <$> liftIO (lookupName (hscEnv sess) name)
         let det1 = case typ of
               Just ty -> Just (":: " <> printOutputable ty <> "\n")
               Nothing -> Nothing

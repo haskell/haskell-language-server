@@ -26,8 +26,6 @@ import           Control.Monad
 import           Data.Bifunctor              (Bifunctor (second))
 import           Data.Char                   (isUpper)
 import           Data.Hashable               (Hashable)
-import           Data.HashMap.Strict         (HashMap, elems)
-import qualified Data.HashMap.Strict         as Map
 import           Data.HashSet                (HashSet)
 import qualified Data.HashSet                as Set
 import           Data.List                   (foldl', isSuffixOf)
@@ -130,7 +128,6 @@ instance Eq IdentInfo where
 
 instance NFData IdentInfo where
     rnf IdentInfo{..} =
-        -- deliberately skip the rendered field
         rnf name `seq` rnf parent `seq` rnf identModuleName
 
 mkIdentInfos :: ModuleName -> AvailInfo -> [IdentInfo]
@@ -203,7 +200,6 @@ unpackAvail mn
   where
     f id@IdentInfo {..} = (name, mn, Set.singleton id)
 
-
 identInfoToKeyVal :: IdentInfo -> (ModuleName, IdentInfo)
 identInfoToKeyVal identInfo =
   (identModuleName identInfo, identInfo)
@@ -222,7 +218,7 @@ buildModuleExportMapFrom modIfaces = do
 extractModuleExports :: ModIface -> (ModuleName, HashSet IdentInfo)
 extractModuleExports modIFace = do
   let modName = moduleName $ mi_module modIFace
-  let functionSet = Set.fromList $ concatMap (mkIdentInfos modName) $ mi_exports modIFace
+  let !functionSet = Set.fromList $ concatMap (mkIdentInfos modName) $ mi_exports modIFace
   (modName, functionSet)
 
 sortAndGroup :: [(ModuleName, IdentInfo)] -> ModuleNameEnv (HashSet IdentInfo)

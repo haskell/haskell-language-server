@@ -36,6 +36,12 @@ module Development.IDE.GHC.Compat.Core (
     maxRefHoleFits,
     maxValidHoleFits,
     setOutputFile,
+    lookupType,
+    needWiredInHomeIface,
+    loadWiredInHomeIface,
+    loadSysInterface,
+    importDecl,
+#if MIN_VERSION_ghc(8,8,0)
     CommandLineOption,
 #if !MIN_VERSION_ghc(9,2,0)
     staticPlugins,

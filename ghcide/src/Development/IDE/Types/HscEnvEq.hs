@@ -93,8 +93,8 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
                 return $ case modIface of
                     Maybes.Failed    _r -> Nothing
                     Maybes.Succeeded mi -> Just mi
-        modIfaces <- mapMaybeM doOne modules
-        return $ createExportsMap modIfaces
+        -- modIfaces <- mapMaybeM doOne modules
+        return mempty -- $ createExportsMap modIfaces
 
     -- similar to envPackageExports, evaluated lazily
     envVisibleModuleNames <- onceAsync $

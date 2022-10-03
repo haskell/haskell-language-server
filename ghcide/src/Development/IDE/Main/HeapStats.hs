@@ -39,7 +39,7 @@ instance Pretty Log where
 
 -- | Interval at which to report the latest heap statistics.
 heapStatsInterval :: Int
-heapStatsInterval = 60_000_000 -- 60s
+heapStatsInterval = 10_000_000 -- 60s
 
 -- | Report the live bytes and heap size at the last major collection.
 logHeapStats :: Recorder (WithPriority Log) -> IO ()
