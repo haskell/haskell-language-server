@@ -21,6 +21,9 @@ For a full example see the "Ide.Plugin.Eval.Tutorial" module.
 module Ide.Plugin.Eval.CodeLens (
     codeLens,
     evalCommand,
+    runGetSession,
+    setupDynFlagsForGHCiLike,
+    evals,
 ) where
 
 import           Control.Applicative                          (Alternative ((<|>)))

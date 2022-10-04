@@ -120,6 +120,10 @@ import qualified Ide.Plugin.Brittany               as Brittany
 import qualified Development.IDE.Plugin.CodeAction as Refactor
 #endif
 
+#if hls_diagrams
+import qualified Ide.Plugin.Diagrams               as Diagrams
+#endif
+
 data Log = forall a. (Pretty a) => Log PluginId a
 
 instance Pretty Log where
@@ -216,6 +220,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "ghcide-code-actions-bindings" in Refactor.bindingsPluginDescriptor (pluginRecorder pId) pId :
       let pId = "ghcide-code-actions-fill-holes" in Refactor.fillHolePluginDescriptor (pluginRecorder pId) pId :
       let pId = "ghcide-extend-import-action" in Refactor.extendImportPluginDescriptor (pluginRecorder pId) pId :
+#endif
+#if hls_diagrams
+      let pId = "diagrams" in Diagrams.descriptor (pluginRecorder pId) pId :
 #endif
       GhcIde.descriptors (pluginRecorder "ghcide")
 #if explicitFixity

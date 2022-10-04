@@ -44,17 +44,17 @@ library
   exposed-modules:
     Ide.Plugin.Eval
     Ide.Plugin.Eval.Types
+    Ide.Plugin.Eval.Rules
+    Ide.Plugin.Eval.CodeLens
+    Ide.Plugin.Eval.Util
 
   hs-source-dirs:     src
   other-modules:
     Ide.Plugin.Eval.Code
-    Ide.Plugin.Eval.CodeLens
     Ide.Plugin.Eval.Config
     Ide.Plugin.Eval.GHC
     Ide.Plugin.Eval.Parse.Comments
     Ide.Plugin.Eval.Parse.Option
-    Ide.Plugin.Eval.Rules
-    Ide.Plugin.Eval.Util
 
   build-depends:
     , aeson

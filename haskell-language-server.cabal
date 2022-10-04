@@ -195,6 +195,11 @@ flag refactor
   default:     True
   manual:      True
 
+flag diagrams
+  description: Enable diagrams plugin
+  default:     True
+  manual:      True
+
 flag dynamic
   description: Build with the dyn rts
   default:     True
@@ -271,7 +276,7 @@ common splice
     cpp-options: -Dhls_splice
 
 common alternateNumberFormat
-  if flag(alternateNumberFormat) 
+  if flag(alternateNumberFormat)
     build-depends: hls-alternate-number-format-plugin ^>= 1.2
     cpp-options: -Dhls_alternateNumberFormat
 
@@ -332,6 +337,11 @@ common refactor
     build-depends: hls-refactor-plugin ^>= 1.0
     cpp-options: -Dhls_refactor
 
+common diagrams
+  if flag(diagrams)
+    build-depends: hls-diagrams-plugin >= 1.0
+    cpp-options: -Dhls_diagrams
+
 library
   import:           common-deps
                     -- configuration
@@ -364,6 +374,7 @@ library
                   , stylishHaskell
                   , brittany
                   , refactor
+                  , diagrams
 
   exposed-modules:
     Ide.Arguments

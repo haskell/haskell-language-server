@@ -1,0 +1,72 @@
+cabal-version:      3.0
+name:               hls-diagrams-plugin
+version:            1.0
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Edsko de Vries
+maintainer:         edsko@well-typed.com
+category:           Development
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+
+common lang
+  ghc-options:
+      -Wall
+      -Wredundant-constraints
+  build-depends:
+      base >= 4.12.0.0
+  default-language:
+      Haskell2010
+  default-extensions:
+      DataKinds
+      DeriveAnyClass
+      DeriveGeneric
+      DerivingStrategies
+      DuplicateRecordFields
+      EmptyDataDeriving
+      FlexibleInstances
+      GeneralizedNewtypeDeriving
+      InstanceSigs
+      LambdaCase
+      MultiParamTypeClasses
+      NamedFieldPuns
+      RankNTypes
+      RecordWildCards
+      ScopedTypeVariables
+      StandaloneDeriving
+      TupleSections
+      TypeFamilies
+      UndecidableInstances
+
+library
+  import:
+      lang
+  exposed-modules:
+      Ide.Plugin.Diagrams
+  other-modules:
+      Ide.Plugin.Diagrams.CatchErrors
+  hs-source-dirs:
+      src
+  build-depends:
+      containers
+    , deepseq
+    , exceptions
+    , ghc
+    , ghc-boot-th
+    , ghcide
+    , hashable
+    , hls-eval-plugin
+    , hls-plugin-api
+    , lsp
+    , lsp-types
+    , mmorph
+    , mtl
+    , temporary
+    , text
+    , time
+    , unliftio-core
+
+      -- Only necessary for the example
+      -- TODO: Remove
+    , diagrams-svg
+    , diagrams-lib

@@ -60,6 +60,7 @@ module Development.IDE.Core.Rules(
     GhcSessionDepsConfig(..),
     Log(..),
     DisplayTHWarning(..),
+    currentLinkables,
     ) where
 
 #if !MIN_VERSION_ghc(8,8,0)
@@ -159,6 +160,7 @@ import qualified Development.IDE.Types.Shake as Shake
 import           Development.IDE.GHC.CoreFile
 import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Control.Monad.IO.Unlift
+import Debug.Trace
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Unit.Module.Graph
 import GHC.Unit.Env
