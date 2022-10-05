@@ -95,6 +95,65 @@ import           GHC                                          (ClsInst,
                                                                pprInstance,
                                                                setTargets,
                                                                typeKind)
+import GHC.Driver.Flags
+import GHC.Unit.Finder
+
+import GHC.Driver.Main
+import GHC.Unit.Home.ModInfo
+import GHC.Driver.Ppr
+
+import           Control.Applicative             (Alternative ((<|>)))
+import           Control.Arrow                   (second, (>>>))
+import           Control.Exception               (try)
+import qualified Control.Exception               as E
+import           Control.Lens                    (_1, _3, ix, (%~), (<&>), (^.))
+import           Control.Monad                   (guard, void, when)
+import           Control.Monad.IO.Class          (MonadIO (liftIO))
+import           Control.Monad.Trans             (lift)
+import           Control.Monad.Trans.Except      (ExceptT (..))
+import           Data.Aeson                      (toJSON)
+import           Data.Char                       (isSpace)
+import           Data.Default
+import qualified Data.HashMap.Strict             as HashMap
+import           Data.List                       (dropWhileEnd, find,
+                                                  intercalate, intersperse)
+import           Data.Maybe                      (catMaybes, fromMaybe)
+import           Data.String                     (IsString)
+import           Data.Text                       (Text)
+import qualified Data.Text                       as T
+import           Data.Typeable                   (Typeable)
+import           Development.IDE                 (modifyDynFlags, GetModSummary (..), HscEnvEq(..), GhcSessionDeps(..),
+                                                  GetDependencyInformation (..),
+                                                  GetLinkable (..),
+                                                  GhcSessionIO (..), IdeState,
+                                                  ModSummaryResult (..),
+                                                  NeedsCompilation (NeedsCompilation),
+                                                  VFSModified (..), evalGhcEnv,
+                                                  hscEnvWithImportPaths,
+                                                  printOutputable, runAction,
+                                                  linkableHomeMod,
+                                                  toNormalizedFilePath',
+                                                  uriToFilePath', useNoFile_,
+                                                  useWithStale_, use_, uses_)
+import           Development.IDE.Core.Rules      (GhcSessionDepsConfig (..),
+                                                  ghcSessionDepsDefinition)
+import           Development.IDE.Import.DependencyInformation ( reachableModules )
+import           Development.IDE.GHC.Compat      hiding (typeKind, unitState)
+import qualified Development.IDE.GHC.Compat      as Compat
+import qualified Development.IDE.GHC.Compat      as SrcLoc
+import           Development.IDE.GHC.Compat.Util (GhcException)
+import           Development.IDE.Types.Options
+import           GHC                             (ClsInst,
+                                                  ExecOptions (execLineNumber, execSourceFile),
+                                                  FamInst, GhcMonad,
+                                                  NamedThing (getName),
+                                                  defaultFixity, execOptions,
+                                                  exprType, getInfo,
+                                                  getInteractiveDynFlags,
+                                                  isImport, isStmt,
+                                                  parseName, pprFamInst,
+                                                  pprInstance,
+                                                  typeKind)
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC                                          (Fixity)
 #endif
@@ -123,6 +182,17 @@ import           Ide.Plugin.Eval.GHC                          (addImport,
 import           Ide.Plugin.Eval.Parse.Comments               (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option                 (parseSetFlags)
 import           Ide.Plugin.Eval.Rules                        (queueForEvaluation)
+import           Ide.Plugin.Eval.Code            (Statement, asStatements,
+                                                  myExecStmt,
+                                                  propSetup, resultRange,
+                                                  testCheck, testRanges)
+import           Ide.Plugin.Eval.Config          (EvalConfig (..),
+                                                  getEvalConfig)
+import           Ide.Plugin.Eval.GHC             (addImport, addPackages,
+                                                  hasPackage, showDynFlags)
+import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
+import           Ide.Plugin.Eval.Parse.Option    (parseSetFlags)
+import           Ide.Plugin.Eval.Rules           (queueForEvaluation)
 import           Ide.Plugin.Eval.Types
 import           Ide.Plugin.Eval.Util                         (gStrictTry,
                                                                isLiterate,
@@ -232,26 +302,30 @@ runEvalCmd plId st EvalParams{..} =
             let nfp = toNormalizedFilePath' fp
             mdlText <- moduleText _uri
 
-            -- enable codegen
+            -- enable codegen for the module which we need to evaluate.
             liftIO $ queueForEvaluation st nfp
             liftIO $ setSomethingModified VFSUnmodified st [toKey NeedsCompilation nfp] "Eval"
 
-            session <- runGetSession st nfp
+            final_hscEnv <- liftIO $ initialiseSessionForEval st nfp
 
-            ms <- fmap msrModSummary $
-                liftIO $
-                    runAction "runEvalCmd.getModSummary" st $
-                        use_ GetModSummary nfp
+            evalCfg <- lift $ getEvalConfig plId
 
-            now <- liftIO getCurrentTime
+            edits <-
+                perf "edits" $
+                    liftIO $
+                        evalGhcEnv final_hscEnv $ do
+                            runTests evalCfg (st, fp) tests
 
-            let modName = moduleName $ ms_mod ms
-                thisModuleTarget =
-                    Target
-                        (TargetFile fp Nothing)
-                        False
-                        (Just (textToStringBuffer mdlText, now))
+            let workspaceEditsMap = HashMap.fromList [(_uri, List $ addFinalReturn mdlText edits)]
+            let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
 
+            return workspaceEdits
+     in perf "evalCmd" $
+            withIndefiniteProgress "Evaluating" Cancellable $
+                response' cmd
+
+-- Old code
+{-
             -- Setup environment for evaluation
             hscEnv' <- ExceptT $ fmap join $ liftIO . gStrictTry . evalGhcEnv session $ do
                 env <- getSession
@@ -323,32 +397,36 @@ runEvalCmd plId st EvalParams{..} =
                         -- Evaluation takes place 'inside' the module
                         setContext [Compat.IIModule modName]
                         Right <$> getSession
-            evalCfg <- lift $ getEvalConfig plId
+                        -}
 
-            -- Get linkables for all modules below us
-            -- This can be optimised to only get the linkables for the symbols depended on by
-            -- the statement we are parsing
-            lbs <- liftIO $ runAction "eval: GetLinkables" st $ do
-              linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
-              uses_ GetLinkable (filter (/= nfp) linkables_needed) -- We don't need the linkable for the current module
-            let hscEnv'' = hscEnv' { hsc_HPT  = addListToHpt (hsc_HPT hscEnv') [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] }
+-- | Create an HscEnv which is suitable for performing interactive evaluation.
+-- All necessary home modules will have linkables and the current module will
+-- also be loaded into the environment.
+--
+-- The interactive context and interactive dynamic flags are also set appropiately.
+initialiseSessionForEval :: IdeState -> NormalizedFilePath -> IO HscEnv
+initialiseSessionForEval st nfp = do
+  (ms, env1) <- runAction "runEvalCmd" st $ do
 
-            edits <-
-                perf "edits" $
-                    liftIO $
-                        evalGhcEnv hscEnv'' $
-                            runTests
-                                evalCfg
-                                (st, fp)
-                                tests
+    ms <- msrModSummary <$> use_ GetModSummary nfp
+    deps_hsc <- hscEnv <$> use_ GhcSessionDeps nfp
 
-            let workspaceEditsMap = HashMap.fromList [(_uri, List $ addFinalReturn mdlText edits)]
-            let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
-
-            return workspaceEdits
-     in perf "evalCmd" $
-            withIndefiniteProgress "Evaluating" Cancellable $
-                response' cmd
+    linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
+    linkables <- uses_ GetLinkable linkables_needed
+    let linkable_hsc = deps_hsc { hsc_HPT  = addListToHpt (hsc_HPT deps_hsc) [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- linkables, let hm = linkableHomeMod lb] }
+    -- MP: Probably not right with MHU (9.4)
+    _ <- liftIO $ addHomeModuleToFinder linkable_hsc (moduleName (ms_mod ms)) (ms_location ms)
+    return (ms, linkable_hsc)
+  -- Bit awkward we need to use evalGhcEnv here but setContext requires to run
+  -- in the Ghc monad
+  env2 <- evalGhcEnv env1 $ do
+            setContext [Compat.IIModule (moduleName (ms_mod ms))]
+            let df = flip xopt_set    LangExt.ExtendedDefaultRules
+                   . flip xopt_unset  LangExt.MonomorphismRestriction
+                   $ ms_hspp_opts ms
+            modifyDynFlags (const df)
+            getSession
+  return env2
 
 addFinalReturn :: Text -> [TextEdit] -> [TextEdit]
 addFinalReturn mdlText edits
@@ -379,6 +457,12 @@ testsBySection sections =
     ]
 
 type TEnv = (IdeState, String)
+-- |GHC declarations required for expression evaluation
+evalSetup :: Ghc ()
+evalSetup = do
+    preludeAsP <- parseImportDecl "import qualified Prelude as P"
+    context <- getContext
+    setContext (IIDecl preludeAsP : context)
 
 runTests :: EvalConfig -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
 runTests EvalConfig{..} e@(_st, _) tests = do
@@ -392,7 +476,6 @@ runTests EvalConfig{..} e@(_st, _) tests = do
     processTest e@(st, fp) df (section, test) = do
         let dbg = logWith st
         let pad = pad_ $ (if isLiterate fp then ("> " `T.append`) else id) $ padPrefix (sectionFormat section)
-
         rs <- runTest e df test
         dbg "TEST RESULTS" rs
 
@@ -564,22 +647,6 @@ prettyWarn :: Warn -> String
 prettyWarn Warn{..} =
     T.unpack (printOutputable $ SrcLoc.getLoc warnMsg) <> ": warning:\n"
     <> "    " <> SrcLoc.unLoc warnMsg
-
-runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnv
-runGetSession st nfp = liftIO $ runAction "eval" st $ do
-    -- Create a new GHC Session rather than reusing an existing one
-    -- to avoid interfering with ghcide
-    -- UPDATE: I suspect that this doesn't really work, we always get the same Session
-    --         we probably cache hscEnvs in the Session state
-    IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
-    let fp = fromNormalizedFilePath nfp
-    ((_, res),_) <- liftIO $ loadSessionFun fp
-    let env = fromMaybe (error $ "Unknown file: " <> fp) res
-        ghcSessionDepsConfig = def
-            { checkForImportCycles = False
-            }
-    res <- fmap hscEnvWithImportPaths <$> ghcSessionDepsDefinition True ghcSessionDepsConfig env nfp
-    return $ fromMaybe (error $ "Unable to load file: " <> fp) res
 
 needsQuickCheck :: [(Section, Test)] -> Bool
 needsQuickCheck = any (isProperty . snd)
@@ -761,22 +828,3 @@ parseGhciLikeCmd input = do
     (':', rest) <- T.uncons $ T.stripStart input
     pure $ second T.strip $ T.break isSpace rest
 
-setupDynFlagsForGHCiLike :: HscEnv -> DynFlags -> IO DynFlags
-setupDynFlagsForGHCiLike env dflags = do
-    let dflags3 = setInterpreterLinkerOptions dflags
-        platform = targetPlatform dflags3
-        evalWays = Compat.hostFullWays
-        dflags3a = setWays evalWays dflags3
-        dflags3b =
-            foldl gopt_set dflags3a $
-                concatMap (Compat.wayGeneralFlags platform) evalWays
-        dflags3c =
-            foldl gopt_unset dflags3b $
-                concatMap (Compat.wayUnsetGeneralFlags platform) evalWays
-        dflags4 =
-            dflags3c
-                `gopt_set` Opt_ImplicitImportQualified
-                `gopt_set` Opt_IgnoreOptimChanges
-                `gopt_set` Opt_IgnoreHpcChanges
-                `gopt_unset` Opt_DiagnosticsShowCaret
-    Compat.hsc_dflags <$> Compat.initializePlugins (Compat.hscSetFlags dflags4 env)
