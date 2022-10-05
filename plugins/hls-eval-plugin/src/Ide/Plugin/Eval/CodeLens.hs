@@ -69,7 +69,8 @@ import           Development.IDE                              (GetDependencyInfo
                                                                useWithStale_,
                                                                use_, uses_)
 import           Development.IDE.Core.Rules                   (GhcSessionDepsConfig (..),
-                                                               ghcSessionDepsDefinition)
+                                                               ghcSessionDepsDefinition,
+                                                               currentLinkables)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import qualified Development.IDE.GHC.Compat                   as Compat
@@ -413,6 +414,10 @@ initialiseSessionForEval st nfp = do
     linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
     linkables <- uses_ GetLinkable linkables_needed
     let linkable_hsc = loadModulesHome (map linkableHomeMod linkables) deps_hsc
+
+    -- unload old versions
+    keep_lbls <- currentLinkables
+    liftIO $ unload linkable_hsc $ map (\(mod, time) -> LM time mod []) $ moduleEnvToList keep_lbls
     return (ms, linkable_hsc)
   -- Bit awkward we need to use evalGhcEnv here but setContext requires to run
   -- in the Ghc monad
@@ -424,6 +429,7 @@ initialiseSessionForEval st nfp = do
                         useColor = Never
                       , canUseColor = False }
             modifyDynFlags (const df)
+            void $ addPackages ["QuickCheck"]
             getSession
   return env2
 
