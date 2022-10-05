@@ -30,7 +30,7 @@ The official Haskell language server (LSP) implementation. Consult the [project 
 
 - [Features](https://haskell-language-server.readthedocs.io/en/latest/features.html)
 - [Installation](https://haskell-language-server.readthedocs.io/en/latest/installation.html)
-- [Supported GHC Versions](https://haskell-language-server.readthedocs.io/en/latest/supported-versions.html)
+- [Supported GHC Versions](https://haskell-language-server.readthedocs.io/en/latest/support/ghc-version-support.html)
 - [Configuration](https://haskell-language-server.readthedocs.io/en/latest/configuration.html)
 - [Troubleshooting](https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html)
 - [Contributing](https://haskell-language-server.readthedocs.io/en/latest/contributing/index.html)
