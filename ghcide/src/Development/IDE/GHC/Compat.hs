@@ -104,6 +104,7 @@ module Development.IDE.GHC.Compat(
     icInteractiveModule,
     HomePackageTable,
     lookupHpt,
+    loadModulesHome,
 #if MIN_VERSION_ghc(9,3,0)
     Dependencies(dep_direct_mods),
 #else
@@ -652,4 +653,27 @@ combineRealSrcSpans span1 span2
     (line_end, col_end)     = max (srcSpanEndLine span1, srcSpanEndCol span1)
                                   (srcSpanEndLine span2, srcSpanEndCol span2)
     file = srcSpanFile span1
+#endif
+
+-- | Load modules, quickly. Input doesn't need to be desugared.
+-- A module must be loaded before dependent modules can be typechecked.
+-- This variant of loadModuleHome will *never* cause recompilation, it just
+-- modifies the session.
+-- The order modules are loaded is important when there are hs-boot files.
+-- In particular you should make sure to load the .hs version of a file after the
+-- .hs-boot version.
+loadModulesHome
+    :: [HomeModInfo]
+    -> HscEnv
+    -> HscEnv
+loadModulesHome mod_infos e =
+#if MIN_VERSION_ghc(9,3,0)
+  hscUpdateHUG (\hug -> foldl' (flip addHomeModInfoToHug) hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
+#else
+  let !new_modules = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
+  in e { hsc_HPT = new_modules
+       , hsc_type_env_var = Nothing
+       }
+    where
+      mod_name = moduleName . mi_module . hm_iface
 #endif

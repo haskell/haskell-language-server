@@ -20,6 +20,13 @@ module Development.IDE.GHC.Compat.Outputable (
 #if MIN_VERSION_ghc(9,3,0)
     DiagnosticReason(..),
     renderDiagnosticMessageWithHints,
+    pprMsgEnvelopeBagWithLoc,
+    Error.getMessages,
+    renderWithContext,
+    defaultSDocContext,
+    errMsgDiagnostic,
+    unDecorated,
+    diagnosticMessage,
 #else
     pprWarning,
     pprError,
@@ -29,6 +36,7 @@ module Development.IDE.GHC.Compat.Outputable (
     MsgEnvelope,
     ErrMsg,
     WarnMsg,
+    SourceError(..),
     errMsgSpan,
     errMsgSeverity,
     formatErrorWithQual,
