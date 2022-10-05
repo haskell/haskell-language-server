@@ -167,7 +167,6 @@ import           GHC.Types.SrcLoc                             (UnhelpfulSpanReas
 #endif
 import           Ide.Plugin.Eval.Code                         (Statement,
                                                                asStatements,
-                                                               evalSetup,
                                                                myExecStmt,
                                                                propSetup,
                                                                resultRange,
@@ -413,9 +412,7 @@ initialiseSessionForEval st nfp = do
 
     linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
     linkables <- uses_ GetLinkable linkables_needed
-    let linkable_hsc = deps_hsc { hsc_HPT  = addListToHpt (hsc_HPT deps_hsc) [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- linkables, let hm = linkableHomeMod lb] }
-    -- MP: Probably not right with MHU (9.4)
-    _ <- liftIO $ addHomeModuleToFinder linkable_hsc (moduleName (ms_mod ms)) (ms_location ms)
+    let linkable_hsc = loadModulesHome (map linkableHomeMod linkables) deps_hsc
     return (ms, linkable_hsc)
   -- Bit awkward we need to use evalGhcEnv here but setContext requires to run
   -- in the Ghc monad
@@ -423,7 +420,9 @@ initialiseSessionForEval st nfp = do
             setContext [Compat.IIModule (moduleName (ms_mod ms))]
             let df = flip xopt_set    LangExt.ExtendedDefaultRules
                    . flip xopt_unset  LangExt.MonomorphismRestriction
-                   $ ms_hspp_opts ms
+                   $ (ms_hspp_opts ms) {
+                        useColor = Never
+                      , canUseColor = False }
             modifyDynFlags (const df)
             getSession
   return env2
