@@ -1,6 +1,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE CPP                       #-}
+{-# OPTIONS_GHC -Wno-orphans -Wno-unused-imports #-}
 
 -- |Debug utilities
 module Ide.Plugin.Eval.Util (
@@ -11,7 +12,7 @@ module Ide.Plugin.Eval.Util (
     logWith,
 ) where
 
-import           Control.Exception               (SomeException, evaluate)
+import           Control.Exception               (SomeException, evaluate, fromException)
 import           Control.Monad.IO.Class          (MonadIO (liftIO))
 import           Control.Monad.Trans.Except      (ExceptT (..), runExceptT)
 import           Data.Aeson                      (Value (Null))
@@ -19,7 +20,8 @@ import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
 import           Development.IDE                 (IdeState, Priority (..),
                                                   ideLogger, logPriority)
-import           Development.IDE.GHC.Compat.Util (MonadCatch, catch)
+import           Development.IDE.GHC.Compat.Util (MonadCatch, catch, bagToList)
+import           Development.IDE.GHC.Compat.Outputable
 import           GHC.Exts                        (toList)
 import           GHC.Stack                       (HasCallStack, callStack,
                                                   srcLocFile, srcLocStartCol,
@@ -79,4 +81,17 @@ gevaluate :: MonadIO m => a -> m a
 gevaluate = liftIO . evaluate
 
 showErr :: Monad m => SomeException -> m (Either String b)
-showErr = return . Left . show
+showErr e =
+#if MIN_VERSION_ghc(9,3,0)
+  case fromException e of
+    -- On GHC 9.4+, the show instance adds the error message span
+    -- We don't want this for the plugin
+    -- So render without the span.
+    Just (SourceError msgs) -> return $ Left $ renderWithContext defaultSDocContext
+                                             $ vcat
+                                             $ bagToList
+                                             $ fmap (vcat . unDecorated . diagnosticMessage . errMsgDiagnostic)
+                                             $ getMessages msgs
+    _ ->
+#endif
+      return . Left . show $ e

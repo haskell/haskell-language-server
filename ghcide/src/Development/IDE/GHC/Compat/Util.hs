@@ -24,9 +24,7 @@ module Development.IDE.GHC.Compat.Util (
     LBooleanFormula,
     BooleanFormula(..),
     -- * OverridingBool
-#if !MIN_VERSION_ghc(9,3,0)
     OverridingBool(..),
-#endif
     -- * Maybes
     MaybeErr(..),
     orElse,
@@ -103,6 +101,11 @@ import           UniqDFM
 import           Unique
 import           Util
 #endif
+
+#if MIN_VERSION_ghc(9,3,0)
+import           GHC.Data.Bool
+#endif
+
 
 #if !MIN_VERSION_ghc(9,0,0)
 type MonadCatch = Exception.ExceptionMonad

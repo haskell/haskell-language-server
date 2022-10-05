@@ -874,7 +874,7 @@ pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
 pattern FunTy :: Type -> Type -> Type
 pattern FunTy arg res <- TyCoRep.FunTy {ft_arg = arg, ft_res = res}
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(8,10,0)
 -- type HasSrcSpan x a = (GenLocated SrcSpan a ~ x)
 -- type HasSrcSpan x = () :: Constraint
 
