@@ -4,7 +4,7 @@
 {-# OPTIONS_GHC -Wwarn -fno-warn-orphans #-}
 
 -- | Expression execution
-module Ide.Plugin.Eval.Code (Statement, testRanges, resultRange, evalSetup, propSetup, testCheck, asStatements,myExecStmt) where
+module Ide.Plugin.Eval.Code (Statement, testRanges, resultRange, propSetup, testCheck, asStatements,myExecStmt) where
 
 import           Control.Lens                   ((^.))
 import           Control.Monad.IO.Class
@@ -80,12 +80,6 @@ asStmts (Property t _ _) =
     ["prop11 = " ++ t, "(propEvaluation prop11 :: IO String)"]
 
 
--- |GHC declarations required for expression evaluation
-evalSetup :: Ghc ()
-evalSetup = do
-    preludeAsP <- parseImportDecl "import qualified Prelude as P"
-    context <- getContext
-    setContext (IIDecl preludeAsP : context)
 
 -- | A wrapper of 'InteractiveEval.execStmt', capturing the execution result
 myExecStmt :: String -> ExecOptions -> Ghc (Either String (Maybe String))

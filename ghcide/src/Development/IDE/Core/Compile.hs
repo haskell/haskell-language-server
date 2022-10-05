@@ -308,7 +308,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                  mods_transitive = getTransitiveMods hsc_env needed_mods
 
                  -- If we don't support multiple home units, ModuleNames are sufficient because all the units will be the same
-                 mods_transitive_list = 
+                 mods_transitive_list =
 #if MIN_VERSION_ghc(9,3,0)
                                          mapMaybe nodeKeyToInstalledModule $ Set.toList mods_transitive
 #else
@@ -362,7 +362,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
 #endif
 
     -- Compute the transitive set of linkables required
-    getTransitiveMods hsc_env needed_mods 
+    getTransitiveMods hsc_env needed_mods
 #if MIN_VERSION_ghc(9,3,0)
       = Set.unions (Set.fromList (map moduleToNodeKey mods) : [ dep | m <- mods
                                                               , Just dep <- [Map.lookup (moduleToNodeKey m) (mgTransDeps (hsc_mod_graph hsc_env))]
@@ -1000,28 +1000,6 @@ handleGenerationErrors' dflags source action =
     . (("Error during " ++ T.unpack source) ++) . show @SomeException
     ]
 
--- | Load modules, quickly. Input doesn't need to be desugared.
--- A module must be loaded before dependent modules can be typechecked.
--- This variant of loadModuleHome will *never* cause recompilation, it just
--- modifies the session.
--- The order modules are loaded is important when there are hs-boot files.
--- In particular you should make sure to load the .hs version of a file after the
--- .hs-boot version.
-loadModulesHome
-    :: [HomeModInfo]
-    -> HscEnv
-    -> HscEnv
-loadModulesHome mod_infos e =
-#if MIN_VERSION_ghc(9,3,0)
-  hscUpdateHUG (\hug -> foldr addHomeModInfoToHug hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
-#else
-  let !new_modules = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
-  in e { hsc_HPT = new_modules
-       , hsc_type_env_var = Nothing
-       }
-    where
-      mod_name = moduleName . mi_module . hm_iface
-#endif
 
 -- Merge the HPTs, module graphs and FinderCaches
 -- See Note [GhcSessionDeps] in Development.IDE.Core.Rules
