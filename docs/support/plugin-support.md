@@ -49,7 +49,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-class-plugin`                  | 2    | 9.4                      |
 | `hls-change-type-signature-plugin`  | 2    |                          |
 | `hls-eval-plugin`                   | 2    | 9.4                      |
-| `hls-expliit-fixity-plugin`         | 2    |                          |
+| `hls-explicit-fixity-plugin`        | 2    |                          |
 | `hls-floskell-plugin`               | 2    | 9.4                      |
 | `hls-fourmolu-plugin`               | 2    | 9.4                      |
 | `hls-gadt-plugin`                   | 2    | 9.4                      |
