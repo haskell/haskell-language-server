@@ -1,4 +1,4 @@
-GCH and Plugin Support
+GHC and Plugin Support
 ======================
 
 .. toctree::
