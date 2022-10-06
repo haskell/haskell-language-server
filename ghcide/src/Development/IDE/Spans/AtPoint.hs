@@ -57,7 +57,8 @@ import           HieDb                                hiding (pointCommand)
 import           System.Directory                     (doesFileExist)
 
 #if MIN_VERSION_ghc(9,0,1)
-import qualified Outputable                           as O
+import qualified GHC.Utils.Outputable                           as O
+import           GHC.Data.FastString                            (lengthFS)
 import Data.Tree
 import qualified Data.Tree as T
 import           Data.List                            (isSuffixOf, sortOn)
@@ -298,14 +299,14 @@ atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) _rf _ kind) (DKMap dm km) env pos 
                  vcat $ text "constructed using:" : map renderEvidenceTree' xs
         renderEvidenceTree (T.Node (EvidenceInfo{..}) _)
           = hang (text "Evidence of constraint `" O.<> expandType evidenceType O.<> "`") 2 $
-                 vcat $ printDets evidenceSpan evidenceDetails : map (text . T.unpack) (definedAt evidenceVar)
+                 vcat $ printDets evidenceSpan evidenceDetails : map (text . T.unpack) (maybeToList $ definedAt evidenceVar)
 
         -- renderEvidenceTree' skips let bound evidence variables and prints the children directly
         renderEvidenceTree' (T.Node (EvidenceInfo{evidenceDetails=Just (EvLetBind _,_,_)}) xs)
           = vcat (map renderEvidenceTree' xs)
         renderEvidenceTree' (T.Node (EvidenceInfo{..}) _)
           = hang (text "- `" O.<> expandType evidenceType O.<> "`") 2 $
-                 vcat $ printDets evidenceSpan evidenceDetails : map (text . T.unpack) (definedAt evidenceVar)
+                 vcat $ printDets evidenceSpan evidenceDetails : map (text . T.unpack) (maybeToList $ definedAt evidenceVar)
 
         printDets :: RealSrcSpan -> Maybe (EvVarSource, Scope, Maybe Span) -> SDoc
         printDets _    Nothing = text "using an external instance"
