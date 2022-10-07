@@ -609,6 +609,28 @@ renameActionTests = testGroup "rename actions"
             , "foo x y = x `monus` y"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "change template function" $ do
+      let content = T.unlines
+            [ "{-# LANGUAGE TemplateHaskellQuotes #-}"
+            , "module Testing where"
+            , "import Language.Haskell.TH (Name)"
+            , "foo :: Name"
+            , "foo = 'bread"
+            ]
+      doc <- createDoc "Testing.hs" "haskell" content
+      diags <- waitForDiagnostics
+      actionsOrCommands <- getCodeActions doc (Range (Position 4 6) (Position 4 12))
+      [fixTypo] <- pure [action | InR action@CodeAction{ _title = actionTitle } <- actionsOrCommands, "break" `T.isInfixOf` actionTitle ]
+      executeCodeAction fixTypo
+      contentAfterAction <- documentContents doc
+      let expectedContentAfterAction = T.unlines
+            [ "{-# LANGUAGE TemplateHaskellQuotes #-}"
+            , "module Testing where"
+            , "import Language.Haskell.TH (Name)"
+            , "foo :: Name"
+            , "foo = 'break"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
 
 typeWildCardActionTests :: TestTree
