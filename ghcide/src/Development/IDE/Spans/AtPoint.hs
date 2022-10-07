@@ -227,10 +227,17 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
         wrapHaskell x = "\n```haskell\n"<>x<>"\n```\n"
         info = nodeInfoH kind ast
         names = M.assocs $ nodeIdentifiers info
+        isInternal :: (Identifier, IdentifierDetails a) -> Bool
+        isInternal (Right n, _) =
+          let name = printOutputable n
+              prefix = T.take 2 name
+          in elem prefix ["$d", "$c"]
+        isInternal (Left _, _) = False
+        filteredNames = filter (not . isInternal) names
         types = nodeType info
 
         prettyNames :: [T.Text]
-        prettyNames = map prettyName names
+        prettyNames = map prettyName filteredNames
         prettyName (Right n, dets) = T.unlines $
           wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
           : maybeToList (pretty (definedAt n) (prettyPackageName n))
