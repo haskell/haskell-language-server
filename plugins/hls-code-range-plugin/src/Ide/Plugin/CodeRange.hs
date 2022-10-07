@@ -19,6 +19,7 @@ import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        maybeToExceptT)
 import           Data.Either.Extra                    (maybeToEither)
+import           Data.List.Extra                      (drop1)
 import           Data.Maybe                           (fromMaybe)
 import           Data.Vector                          (Vector)
 import qualified Data.Vector                          as V
@@ -206,7 +207,7 @@ findPosition pos root = go Nothing root
 findFoldingRanges :: CodeRange -> [FoldingRange]
 findFoldingRanges codeRange =
     -- removing the first node because it folds the entire file
-    drop 1 $ findFoldingRangesRec codeRange
+    drop1 $ findFoldingRangesRec codeRange
 
 findFoldingRangesRec :: CodeRange -> [FoldingRange]
 findFoldingRangesRec r@(CodeRange _ children _) =

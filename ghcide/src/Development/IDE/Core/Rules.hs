@@ -697,7 +697,7 @@ typeCheckRuleDefinition hsc pm = do
 
   unlift <- askUnliftIO
   let dets = TypecheckHelpers
-           { getLinkablesToKeep = unliftIO unlift $ currentLinkables
+           { getLinkablesToKeep = unliftIO unlift currentLinkables
            , getLinkables = unliftIO unlift . uses_ GetLinkable
            }
   addUsageDependencies $ liftIO $
