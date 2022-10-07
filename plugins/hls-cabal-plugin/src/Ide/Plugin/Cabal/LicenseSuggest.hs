@@ -12,15 +12,19 @@ module Ide.Plugin.Cabal.LicenseSuggest
 )
 where
 
-import qualified Data.HashMap.Strict as Map
-import qualified Data.Text           as T
-import           Language.LSP.Types  (CodeAction (CodeAction),
-                                      CodeActionKind (CodeActionQuickFix),
-                                      Diagnostic (..), List (List),
-                                      Position (Position), Range (Range),
-                                      TextEdit (TextEdit), Uri,
-                                      WorkspaceEdit (WorkspaceEdit))
+import qualified Data.HashMap.Strict         as Map
+import qualified Data.Text                   as T
+import           Language.LSP.Types          (CodeAction (CodeAction),
+                                              CodeActionKind (CodeActionQuickFix),
+                                              Diagnostic (..), List (List),
+                                              Position (Position),
+                                              Range (Range),
+                                              TextEdit (TextEdit), Uri,
+                                              WorkspaceEdit (WorkspaceEdit))
 import           Text.Regex.TDFA
+
+import           Distribution.SPDX.LicenseId (licenseId)
+import           Text.Fuzzy                  (simpleFilter)
 
 -- | Given a diagnostic returned by 'Ide.Plugin.Cabal.Diag.errorDiagnostic',
 --   if it represents an "Unknown SPDX license identifier"-error along
@@ -31,7 +35,7 @@ licenseErrorAction
   -- ^ File for which the diagnostic was generated
   -> Diagnostic
   -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
-  -> Maybe CodeAction
+  -> [CodeAction]
 licenseErrorAction uri diag =
   mkCodeAction <$> licenseErrorSuggestion (_message diag)
   where
@@ -52,22 +56,25 @@ licenseErrorAction uri diag =
         edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
       in CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing Nothing
 
--- | Given an error message returned by 'Ide.Plugin.Cabal.Diag.errorDiagnostic',
+-- | License name of every license supported by cabal
+licenseNames :: [T.Text]
+licenseNames = map (T.pack . licenseId) [minBound .. maxBound]
+
+-- | Given a diagnostic returned by 'Ide.Plugin.Cabal.Diag.errorDiagnostic',
 --   if it represents an "Unknown SPDX license identifier"-error along
 --   with a suggestion then return the suggestion (after the "Do you mean"-text)
 --   along with the incorrect identifier.
-licenseErrorSuggestion
-  :: T.Text
+licenseErrorSuggestion ::
+  T.Text
   -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
-  -> Maybe (T.Text, T.Text)
+  -> [(T.Text, T.Text)]
   -- ^ (Original (incorrect) license identifier, suggested replacement)
-licenseErrorSuggestion message =
-  mSuggestion message >>= \case
-    [original, suggestion] -> Just (original, suggestion)
-    _                      -> Nothing
+licenseErrorSuggestion msg = take 10 $
+   (getMatch <$> msg =~~ regex) >>= \case
+          [original] -> simpleFilter original licenseNames >>= \x -> [(original,x)]
+          _ -> []
   where
     regex :: T.Text
-    regex = "Unknown SPDX license identifier: '(.*)' Do you mean (.*)\\?"
-    mSuggestion msg = getMatch <$> (msg :: T.Text) =~~ regex
+    regex = "Unknown SPDX license identifier: '(.*)'"
     getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [T.Text]
     getMatch (_, _, _, results) = results

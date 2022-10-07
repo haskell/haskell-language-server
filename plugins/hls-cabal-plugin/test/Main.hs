@@ -1,11 +1,13 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings        #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE NamedFieldPuns           #-}
 module Main
   ( main
   ) where
 
 import           Control.Lens                    ((^.))
+import           Control.Monad                   (guard)
 import qualified Data.ByteString                 as BS
 import           Data.Either                     (isRight)
 import           Data.Function
@@ -70,14 +72,14 @@ codeActionUnitTests :: TestTree
 codeActionUnitTests = testGroup "Code Action Tests"
   [ testCase "Unknown format" $ do
       -- the message has the wrong format
-      licenseErrorSuggestion "Unknown license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= Nothing,
+      licenseErrorSuggestion "Unknown license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= [],
 
     testCase "BSD-3-Clause" $ do
-      licenseErrorSuggestion "Unknown SPDX license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= Just ("BSD3", "BSD-3-Clause"),
+      licenseErrorSuggestion "Unknown SPDX license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= [("BSD3", "BSD-3-Clause")],
 
     testCase "MIT" $ do
       -- contains no suggestion
-      licenseErrorSuggestion "Unknown SPDX license identifier: 'MIT3'" @?= Nothing
+      licenseErrorSuggestion "Unknown SPDX license identifier: 'MIT3'" @?= [("MIT3", "MIT")]
   ]
 
 -- ------------------------------------------------------------------------
@@ -137,7 +139,7 @@ pluginTests recorder = testGroup "Plugin Tests"
             length diags @?= 1
             reduceDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
             reduceDiag ^. J.severity @?= Just DsError
-        [InR codeAction] <- getCodeActions doc (Range (Position 3 24) (Position 4 0))
+        [codeAction] <- getLicenseAction "BSD-3-Clause"<$> getCodeActions doc (Range (Position 3 24) (Position 4 0))
         executeCodeAction codeAction
         contents <- documentContents doc
         liftIO $ contents @?= Text.unlines
@@ -150,8 +152,36 @@ pluginTests recorder = testGroup "Plugin Tests"
           , "    build-depends:    base"
           , "    default-language: Haskell2010"
           ]
+    , runCabalTestCaseSession "Apache-2.0" recorder "" $ do
+        doc <- openDoc "licenseCodeAction2.cabal" "cabal"
+        diags <- waitForDiagnosticsFromSource doc "parsing"
+        -- test if it supports typos in license name, here 'apahe'
+        reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'apahe'"]
+        liftIO $ do
+            length diags @?= 1
+            reduceDiag ^. J.range @?= Range (Position 3 25) (Position 4 0)
+            reduceDiag ^. J.severity @?= Just DsError
+        [codeAction] <- getLicenseAction "Apache-2.0"<$> getCodeActions doc (Range (Position 3 24) (Position 4 0))
+        executeCodeAction codeAction
+        contents <- documentContents doc
+        liftIO $ contents @?= Text.unlines
+          [ "cabal-version:      3.0"
+          , "name:               licenseCodeAction2"
+          , "version:            0.1.0.0"
+          , "license:            Apache-2.0"
+          , ""
+          , "library"
+          , "    build-depends:    base"
+          , "    default-language: Haskell2010"
+          ]
     ]
   ]
+  where
+    getLicenseAction :: Text.Text -> [(|?) Command  CodeAction] -> [CodeAction]
+    getLicenseAction license codeActions = do
+                  InR action@CodeAction{_title} <- codeActions
+                  guard (_title=="Replace with "<>license)
+                  pure action
 
 -- ------------------------------------------------------------------------
 -- Runner utils
