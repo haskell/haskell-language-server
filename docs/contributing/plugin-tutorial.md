@@ -44,7 +44,7 @@ cabal build
 ```
 
 If you run into any issues trying to build the binaries, the #haskell-language-server IRC chat room in
-Freenode is always a good place to ask for help.
+[Libera Chat](https://libera.chat/) is always a good place to ask for help.
 
 Once cabal is done take a note of the location of the `haskell-language-server` binary and point your LSP client to it. In VSCode this is done by editing the "Haskell Server Executable Path" setting. This way you can simply test your changes by reloading your editor after rebuilding the binary.
 
@@ -83,7 +83,7 @@ The HLS codebase includes several plugins under the namespace `Ide.Plugin.*`, th
 
 I would recommend looking at the existing plugins for inspiration and reference.
 
-Plugins are "linked" in the `Main` module, so we will need to add our plugin there once we have defined it:
+Plugins are "linked" in the `HlsPlugins` module, so we will need to add our plugin there once we have defined it:
 
 ```haskell
 idePlugins = pluginDescToIdePlugins allPlugins
@@ -381,7 +381,7 @@ generateLens pId uri minImports (L src imp)
 
 ## Wrapping up
 
-There's only one haskell code change left to do at this point: "link" the plugin in the `Main` HLS module.
+There's only one haskell code change left to do at this point: "link" the plugin in the `HlsPlugins` HLS module.
 However integrating the plugin in haskell-language-server itself will need some changes in config files. The best way is looking for the id (f.e. `hls-tactics-plugin`) of an existing plugin:
 - `./cabal*.project` and `./stack*.yaml`: add the plugin package in the `packages` field
 - `./haskell-language-server.cabal`: add a conditional block with the plugin package dependency
