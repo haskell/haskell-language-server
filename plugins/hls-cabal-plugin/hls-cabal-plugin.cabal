@@ -32,6 +32,8 @@ library
     , base                  >=4.12     && <5
     , bytestring
     , Cabal                 ^>=3.2 || ^>=3.4 || ^>=3.6
+    , containers
+    , text-rope
     , deepseq
     , directory
     , extra                 >=1.7.4

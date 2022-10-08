@@ -29,11 +29,20 @@ import qualified Ide.Plugin.Cabal.LicenseSuggest as LicenseSuggest
 import qualified Ide.Plugin.Cabal.Parse          as Parse
 import           Ide.Plugin.Config               (Config)
 import           Ide.Types
-import           Language.LSP.Server             (LspM)
+import qualified Language.LSP.Server                as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.Types              as LSP
 import qualified Language.LSP.VFS                as VFS
-
+import qualified Data.Text as T
+import qualified Language.LSP.Types.Lens as JL
+import qualified Language.LSP.Types as J
+import Distribution.Compat.Lens((^.))
+import qualified Text.Fuzzy.Parallel as Fuzzy
+import           Data.Map (Map)
+import qualified Data.Map as Map
+import Language.LSP.VFS (VirtualFile)
+import qualified Data.Text.Utf16.Rope as Rope
+import qualified Data.List as List
 data Log
   = LogModificationTime NormalizedFilePath (Maybe FileVersion)
   | LogDiagnostics NormalizedFilePath [FileDiagnostic]
@@ -63,7 +72,8 @@ instance Pretty Log where
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultCabalPluginDescriptor plId)
   { pluginRules = cabalRules recorder
-  , pluginHandlers = mkPluginHandler STextDocumentCodeAction licenseSuggestCodeAction
+  , pluginHandlers = mkPluginHandler STextDocumentCodeAction licenseSuggestCodeAction 
+                      <> mkPluginHandler J.STextDocumentCompletion completion
   , pluginNotificationHandlers = mconcat
   [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
@@ -149,6 +159,208 @@ licenseSuggestCodeAction
   :: IdeState
   -> PluginId
   -> CodeActionParams
-  -> LspM Config (Either ResponseError (ResponseResult 'TextDocumentCodeAction))
+  -> LSP.LspM Config (Either ResponseError (ResponseResult 'TextDocumentCodeAction))
 licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List diags}) =
   pure $ Right $ List $ mapMaybe (fmap InR . LicenseSuggest.licenseErrorAction uri) diags
+
+-- ----------------------------------------------------------------
+-- Completion
+-- ----------------------------------------------------------------
+completion :: PluginMethodHandler IdeState 'J.TextDocumentCompletion
+completion _ide _ complParams = do
+  let (J.TextDocumentIdentifier uri) = complParams ^. JL.textDocument
+      position = complParams ^. JL.position
+  contents <- LSP.getVirtualFile $ toNormalizedUri uri
+  fmap (Right . J.InL) $ case (contents, uriToFilePath' uri) of
+    (Just cnts, Just _path) -> do
+      pref <- VFS.getCompletionPrefix position cnts
+      return $ result pref cnts
+    _ -> return $ J.List []
+  where
+    result :: Maybe VFS.PosPrefixInfo -> VirtualFile -> J.List CompletionItem
+    result Nothing _ = J.List []
+    result (Just pfix) cnts
+      | (VFS.cursorPos pfix) ^. JL.line == 0 = J.List [buildCompletion cabalVersionKeyword]
+      | Stanza s <- findCurrentLevel (getPreviousLines pfix cnts) = 
+          case (Map.lookup s stanzaKeywordMap) of
+            Nothing ->
+              J.List $
+                makeCompletionItems pfix topLevelKeywords
+            Just l -> J.List $ (makeCompletionItems pfix l) ++ (makeCompletionItems pfix $ Map.keys stanzaKeywordMap)
+      | otherwise =
+        J.List $
+          makeCompletionItems pfix topLevelKeywords
+          where 
+            topLevelKeywords = cabalKeywords ++ Map.keys stanzaKeywordMap
+
+-- | Takes info about the current cursor position and a set of possible keywords 
+--   and creates completion suggestions that fit the current input from the given list
+makeCompletionItems :: VFS.PosPrefixInfo -> [T.Text] -> [CompletionItem]
+makeCompletionItems pfix l =
+  map
+    (buildCompletion . Fuzzy.original)
+    (Fuzzy.simpleFilter 1000 10 (VFS.prefixText pfix) l)
+
+-- | Parse the given set of lines (starting before current cursor position 
+--   up to the start of the file) to find the nearest stanza declaration, 
+--   if none is found we are in the top level
+findCurrentLevel :: [T.Text] -> Context
+findCurrentLevel [] = TopLevel
+findCurrentLevel (cur : xs)
+  | Just s <- stanza = Stanza s
+  | otherwise = findCurrentLevel xs
+  where
+    stanza = List.find (`T.isPrefixOf` cur) (Map.keys stanzaKeywordMap)
+
+-- | Get all lines before the given cursor position in the given file 
+--   and reverse them since we want to traverse starting from our current position
+getPreviousLines :: VFS.PosPrefixInfo -> VirtualFile -> [T.Text]
+getPreviousLines pos cont = reverse $ take (fromIntegral currentLine) allLines
+  where
+    allLines = Rope.lines $ cont ^. VFS.file_text
+    currentLine = (VFS.cursorPos pos) ^. JL.line
+
+
+data Context 
+  = TopLevel 
+  -- ^ top level context in a cabal file such as 'author'
+  | Stanza T.Text
+  -- ^ nested context in a cabal file, such as 'library', which has nested keywords, specific to the stanza
+  deriving (Eq)
+
+-- | Keyword for cabal version required to be the top line in a cabal file
+cabalVersionKeyword :: T.Text
+cabalVersionKeyword = "cabal-version:"
+
+-- | Top level keywords of a cabal file
+cabalKeywords :: [T.Text]
+cabalKeywords = 
+  [
+    "name:",
+    "version:",
+    "build-type:",
+    "license:",
+    "license-file:",
+    "license-files:",
+    "copyright:",
+    "author:",
+    "maintainer:",
+    "stability:",
+    "homepage:",
+    "bug-reports:",
+    "package-url:",
+    "synopsis:",
+    "description:",
+    "category:",
+    "tested-with:",
+    "data-files:",
+    "data-dir:",
+    "data-dir:",
+    "extra-doc-files:",
+    "extra-tmp-files:"
+  ]
+
+-- | Map, containing all stanzas in a cabal file as keys and lists of their possible nested keywords as values
+stanzaKeywordMap :: Map T.Text [T.Text]
+stanzaKeywordMap = Map.fromList [("library", [   
+    "exposed-modules:",
+    "virtual-modules:",
+    "exposed:",
+    "visibility:",
+    "reexported-modules:",
+    "signatures:"
+  ])]
+  
+
+-- TODO move out toplevel commands i.e. test-suite
+-- cabalTestKeywords :: [T.Text]
+-- cabalTestKeywords = 
+--   [
+--     "test-suite",
+--     "type:",
+--     "main-is:",
+--     "test-module:",
+--     "benchmark",
+--     "main-is:",
+--     "foreign-library",
+--     "type:",
+--     "options:",
+--     "mod-def-file:",
+--     "lib-version-info:",
+--     "lib-version-linux:",
+--     "build-depends:",
+--     "other-modules:",
+--     "hs-source-dir:",
+--     "hs-source-dirs:",
+--     "default-extensions:",
+--     "other-extensions:",
+--     "default-language:",
+--     "other-languages:",
+--     "extensions:",
+--     "build-tool-depends:",
+--     "build-tools:",
+--     "buildable:",
+--     "ghc-options:",
+--     "ghc-prof-options:",
+--     "ghc-shared-options:",
+--     "ghcjs-options:",
+--     "ghcjs-prof-options:",
+--     "ghcjs-shared-options:",
+--     "includes:",
+--     "install-includes:",
+--     ("include-dirs:", "directory list"),
+--     ("c-sources:", "filename list"),
+--     ("cxx-sources:", "filename list"),
+--     ("asm-sources:", "filename list"),
+--     ("cmm-sources:", "filename list"),
+--     ("js-sources:", "filename list"),
+--     ("extra-libraries:", "token list"),
+--     ("extra-libraries-static:", "token list"),
+--     ("extra-ghci-libraries:", "token list"),
+--     ("extra-bundled-libraries:", "token list"),
+--     ("extra-lib-dirs:", "directory list")
+--     ("extra-lib-dirs-static:", "directory list"),
+--     ("extra-library-flavours:", "notsure"),
+--     ("extra-dynamic-library-flavours:", "notsure"),
+--     ("cc-options:", "token list"),
+--     ("cpp-options:", "token list"),
+--     ("cxx-options:", "token list"),
+--     ("cmm-options:", "token list"),
+--     ("asm-options:", "token list"),
+--     ("ld-options:", "token list"),
+--     ("hsc2hs-options:", "token list"),
+--     ("pkgconfig-depends:", "package list"),
+--     ("frameworks:", "token list"),
+--     ("extra-framework-dirs:", "directory list"),
+--     ("mixins:", "mixin list")
+--   ]
+
+-- cabalFlagKeywords :: [(T.Text, T.Text)]
+-- cabalFlagKeywords = 
+--   [
+--     ("flag", "name"),
+--     ("description:", "freeform"),
+--     ("default:", "boolean"),
+--     ("manual:", "boolean")
+--   ]
+
+-- cabalStanzaKeywords :: [(T.Text, T.Text)]
+-- cabalStanzaKeywords = 
+--   [
+--     ("common", "name"),
+--     ("import:", "token-list")
+--   ]
+
+-- cabalSourceRepoKeywords :: [(T.Text, T.Text)]
+-- cabalSourceRepoKeywords = 
+--   [
+--     ("source-repository", ""),
+--     ("type:", "token"),
+--     ("location:", "URL")
+--       ]
+
+buildCompletion :: T.Text -> J.CompletionItem
+buildCompletion label =
+  J.CompletionItem label (Just J.CiKeyword) Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
