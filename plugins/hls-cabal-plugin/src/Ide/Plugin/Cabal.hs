@@ -26,6 +26,7 @@ import qualified Development.IDE.Core.Shake      as Shake
 import           GHC.Generics
 import qualified Ide.Plugin.Cabal.Diagnostics    as Diagnostics
 import qualified Ide.Plugin.Cabal.LicenseSuggest as LicenseSuggest
+import qualified Ide.Plugin.Cabal.FieldSuggest as FieldSuggest
 import qualified Ide.Plugin.Cabal.Parse          as Parse
 import           Ide.Plugin.Config               (Config)
 import           Ide.Types
@@ -74,6 +75,7 @@ descriptor recorder plId = (defaultCabalPluginDescriptor plId)
   { pluginRules = cabalRules recorder
   , pluginHandlers = mkPluginHandler STextDocumentCodeAction licenseSuggestCodeAction 
                       <> mkPluginHandler J.STextDocumentCompletion completion
+                      <> mkPluginHandler STextDocumentCodeAction fieldSuggestCodeAction
   , pluginNotificationHandlers = mconcat
   [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
@@ -364,3 +366,11 @@ buildCompletion label =
   J.CompletionItem label (Just J.CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing
+fieldSuggestCodeAction
+  :: IdeState
+  -> PluginId
+  -> CodeActionParams
+  -> LspM Config (Either ResponseError (ResponseResult 'TextDocumentCodeAction))
+
+fieldSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List diags}) =
+  pure $ Right $ List $ diags >>=(fmap InR . FieldSuggest.fieldErrorAction uri) 

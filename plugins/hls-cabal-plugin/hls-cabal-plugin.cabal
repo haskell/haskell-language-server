@@ -26,6 +26,7 @@ library
     Ide.Plugin.Cabal
     Ide.Plugin.Cabal.Diagnostics
     Ide.Plugin.Cabal.LicenseSuggest
+    Ide.Plugin.Cabal.FieldSuggest
     Ide.Plugin.Cabal.Parse
 
   build-depends:
