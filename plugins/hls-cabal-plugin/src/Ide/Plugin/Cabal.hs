@@ -1,12 +1,13 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE DataKinds               #-}
+{-# LANGUAGE DeriveGeneric           #-}
+{-# LANGUAGE DuplicateRecordFields   #-}
+{-# LANGUAGE FlexibleContexts        #-}
+{-# LANGUAGE FlexibleInstances       #-}
+{-# LANGUAGE LambdaCase              #-}
+{-# LANGUAGE NamedFieldPuns          #-}
+{-# LANGUAGE OverloadedStrings       #-}
+{-# LANGUAGE TypeFamilies            #-}
+{-# LANGUAGE DisambiguateRecordFields#-}
 
 module Ide.Plugin.Cabal where
 
@@ -44,6 +45,7 @@ import qualified Data.Map as Map
 import Language.LSP.VFS (VirtualFile)
 import qualified Data.Text.Utf16.Rope as Rope
 import qualified Data.List as List
+import qualified Data.HashMap.Strict as MapStrict
 data Log
   = LogModificationTime NormalizedFilePath (Maybe FileVersion)
   | LogDiagnostics NormalizedFilePath [FileDiagnostic]
@@ -73,7 +75,7 @@ instance Pretty Log where
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultCabalPluginDescriptor plId)
   { pluginRules = cabalRules recorder
-  , pluginHandlers = mkPluginHandler STextDocumentCodeAction licenseSuggestCodeAction 
+  , pluginHandlers = mkPluginHandler STextDocumentCodeAction licenseSuggestCodeAction
                       <> mkPluginHandler J.STextDocumentCompletion completion
                       <> mkPluginHandler STextDocumentCodeAction fieldSuggestCodeAction
   , pluginNotificationHandlers = mconcat
@@ -157,6 +159,7 @@ cabalRules recorder = do
 -- Code Actions
 -- ----------------------------------------------------------------
 
+-- | CodeActions for unsupported license values 
 licenseSuggestCodeAction
   :: IdeState
   -> PluginId
@@ -165,42 +168,62 @@ licenseSuggestCodeAction
 licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List diags}) =
   pure $ Right $ List $ mapMaybe (fmap InR . LicenseSuggest.licenseErrorAction uri) diags
 
+-- | CodeActions for misspelled fields in cabal files
+--   both for toplevel fields, and fields in stanzas.
+--   uses same logic as completions but reacts on diagnostics from cabal
+fieldSuggestCodeAction
+  :: IdeState
+  -> PluginId
+  -> CodeActionParams
+  -> LSP.LspM Config (Either ResponseError (ResponseResult 'TextDocumentCodeAction))
+fieldSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=List diags}) =do
+  cnts <- LSP.getVirtualFile $ toNormalizedUri uri
+  let fields = mapMaybe FieldSuggest.fieldErrorName diags
+  results <- forM fields (getSuggestion cnts)
+  return $ Right $  J.List $ map InR $ concat results
+  where
+    getSuggestion :: Maybe VirtualFile -> (T.Text,Diagnostic) -> LSP.LspM Config [CodeAction]
+    getSuggestion cnts (field,Diagnostic{ _range=_range@(Range (Position lineNr col) _) })= do
+      completions <- completionAtPosition uri (Position lineNr (col + fromIntegral (T.length field))) cnts
+      pure $ fieldErrorAction uri field completions _range
 -- ----------------------------------------------------------------
 -- Completion
 -- ----------------------------------------------------------------
+-- | Generates similiar field names for given file, position and contents of file
+completionAtPosition :: Uri -> Position -> Maybe VirtualFile -> LSP.LspM Config [T.Text]
+completionAtPosition uri pos contents = do
+  case (contents, uriToFilePath' uri) of
+    (Just cnts, Just _path) -> do
+      pref <- VFS.getCompletionPrefix pos cnts
+      return $ result pref cnts
+    _ -> return  []
+  where
+    result :: Maybe VFS.PosPrefixInfo -> VirtualFile -> [T.Text]
+    result Nothing _ =  []
+    result (Just pfix) cnts
+      | VFS.cursorPos pfix ^. JL.line == 0 = [cabalVersionKeyword]
+      | Stanza s <- findCurrentLevel (getPreviousLines pfix cnts) =
+          case Map.lookup s stanzaKeywordMap of
+            Nothing ->getCompletions pfix topLevelKeywords
+            Just l -> getCompletions pfix l ++ (getCompletions pfix $ Map.keys stanzaKeywordMap)
+      | otherwise =
+        getCompletions pfix topLevelKeywords
+          where
+            topLevelKeywords = cabalKeywords ++ Map.keys stanzaKeywordMap
+
 completion :: PluginMethodHandler IdeState 'J.TextDocumentCompletion
 completion _ide _ complParams = do
   let (J.TextDocumentIdentifier uri) = complParams ^. JL.textDocument
       position = complParams ^. JL.position
   contents <- LSP.getVirtualFile $ toNormalizedUri uri
-  fmap (Right . J.InL) $ case (contents, uriToFilePath' uri) of
-    (Just cnts, Just _path) -> do
-      pref <- VFS.getCompletionPrefix position cnts
-      return $ result pref cnts
-    _ -> return $ J.List []
-  where
-    result :: Maybe VFS.PosPrefixInfo -> VirtualFile -> J.List CompletionItem
-    result Nothing _ = J.List []
-    result (Just pfix) cnts
-      | (VFS.cursorPos pfix) ^. JL.line == 0 = J.List [buildCompletion cabalVersionKeyword]
-      | Stanza s <- findCurrentLevel (getPreviousLines pfix cnts) = 
-          case (Map.lookup s stanzaKeywordMap) of
-            Nothing ->
-              J.List $
-                makeCompletionItems pfix topLevelKeywords
-            Just l -> J.List $ (makeCompletionItems pfix l) ++ (makeCompletionItems pfix $ Map.keys stanzaKeywordMap)
-      | otherwise =
-        J.List $
-          makeCompletionItems pfix topLevelKeywords
-          where 
-            topLevelKeywords = cabalKeywords ++ Map.keys stanzaKeywordMap
+  fmap (Right . J.InL . J.List . fmap buildCompletion) $ completionAtPosition uri position contents
 
 -- | Takes info about the current cursor position and a set of possible keywords 
 --   and creates completion suggestions that fit the current input from the given list
-makeCompletionItems :: VFS.PosPrefixInfo -> [T.Text] -> [CompletionItem]
-makeCompletionItems pfix l =
+getCompletions :: VFS.PosPrefixInfo -> [T.Text] -> [T.Text]
+getCompletions pfix l =
   map
-    (buildCompletion . Fuzzy.original)
+     Fuzzy.original
     (Fuzzy.simpleFilter 1000 10 (VFS.prefixText pfix) l)
 
 -- | Parse the given set of lines (starting before current cursor position 
@@ -220,11 +243,11 @@ getPreviousLines :: VFS.PosPrefixInfo -> VirtualFile -> [T.Text]
 getPreviousLines pos cont = reverse $ take (fromIntegral currentLine) allLines
   where
     allLines = Rope.lines $ cont ^. VFS.file_text
-    currentLine = (VFS.cursorPos pos) ^. JL.line
+    currentLine = VFS.cursorPos pos ^. JL.line
 
 
-data Context 
-  = TopLevel 
+data Context
+  = TopLevel
   -- ^ top level context in a cabal file such as 'author'
   | Stanza T.Text
   -- ^ nested context in a cabal file, such as 'library', which has nested keywords, specific to the stanza
@@ -236,7 +259,7 @@ cabalVersionKeyword = "cabal-version:"
 
 -- | Top level keywords of a cabal file
 cabalKeywords :: [T.Text]
-cabalKeywords = 
+cabalKeywords =
   [
     "name:",
     "version:",
@@ -264,7 +287,7 @@ cabalKeywords =
 
 -- | Map, containing all stanzas in a cabal file as keys and lists of their possible nested keywords as values
 stanzaKeywordMap :: Map T.Text [T.Text]
-stanzaKeywordMap = Map.fromList [("library", [   
+stanzaKeywordMap = Map.fromList [("library", [
     "exposed-modules:",
     "virtual-modules:",
     "exposed:",
@@ -272,7 +295,7 @@ stanzaKeywordMap = Map.fromList [("library", [
     "reexported-modules:",
     "signatures:"
   ])]
-  
+
 
 -- TODO move out toplevel commands i.e. test-suite
 -- cabalTestKeywords :: [T.Text]
@@ -366,11 +389,32 @@ buildCompletion label =
   J.CompletionItem label (Just J.CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing
-fieldSuggestCodeAction
-  :: IdeState
-  -> PluginId
-  -> CodeActionParams
-  -> LspM Config (Either ResponseError (ResponseResult 'TextDocumentCodeAction))
 
-fieldSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List diags}) =
-  pure $ Right $ List $ diags >>=(fmap InR . FieldSuggest.fieldErrorAction uri) 
+-- | Generate all code action for given file, error field in position and suggestions
+fieldErrorAction
+  :: Uri
+  -- ^ File for which the diagnostic was generated
+  -> T.Text
+  -- ^ Original field
+  -> [T.Text]
+  -- ^ Suggestions
+  -> Range
+  -- ^ location of diagnostic
+  ->  [CodeAction]
+fieldErrorAction uri original suggestions range =
+  fmap mkCodeAction  suggestions
+  where
+    mkCodeAction suggestion =
+      let
+        -- Range returned by cabal here represents fragment from start of 
+        -- offending identifier to end of line, we modify it to the end of identifier
+        adjustRange (Range rangeFrom@(Position lineNr col) _) =
+          Range rangeFrom (Position lineNr (col + fromIntegral (T.length original)))
+        title = "Replace with " <> suggestion'
+        tedit = [TextEdit (adjustRange range ) suggestion']
+        edit  = WorkspaceEdit (Just $ MapStrict.singleton uri $ List tedit) Nothing Nothing
+      in CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing Nothing
+      where
+        -- dropping colon from the end of suggestion
+        suggestion' :: T.Text
+        suggestion' = T.dropEnd 1 suggestion
