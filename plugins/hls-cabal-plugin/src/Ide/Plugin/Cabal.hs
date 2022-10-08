@@ -40,6 +40,7 @@ import qualified Ide.Plugin.Cabal.Completion.Types           as Types
 import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
 import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
 import           Ide.Plugin.Cabal.Orphans                    ()
+import qualified Ide.Plugin.Cabal.FieldSuggest               as FieldSuggest
 import qualified Ide.Plugin.Cabal.Parse                      as Parse
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
@@ -89,6 +90,7 @@ descriptor recorder plId =
         mconcat
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction licenseSuggestCodeAction
           , mkPluginHandler LSP.SMethod_TextDocumentCompletion $ completion recorder
+          , mkPluginHandler LSP.SMethod_TextDocumentCodeAction fieldSuggestCodeAction
           ]
     , pluginNotificationHandlers =
         mconcat
@@ -237,6 +239,10 @@ licenseSuggestCodeAction :: PluginMethodHandler IdeState 'LSP.Method_TextDocumen
 licenseSuggestCodeAction ideState _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=diags}) = do
   maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal-plugin.suggestLicense" ideState getClientConfigAction
   pure $ InL $ diags >>= (fmap InR . LicenseSuggest.licenseErrorAction maxCompls uri)
+
+fieldSuggestCodeAction :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+fieldSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=diags}) =
+  pure $ InL $ diags >>= (fmap InR . FieldSuggest.fieldErrorAction uri)
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
