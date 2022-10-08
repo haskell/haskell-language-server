@@ -19,6 +19,7 @@ import           Data.HashMap.Strict                         (HashMap)
 import qualified Data.HashMap.Strict                         as HashMap
 import qualified Data.List.NonEmpty                          as NE
 import qualified Data.Maybe                                  as Maybe
+import qualified Data.Text                                   as T
 import qualified Data.Text.Encoding                          as Encoding
 import           Data.Typeable
 import           Development.IDE                             as D
@@ -26,7 +27,6 @@ import           Development.IDE.Core.Shake                  (restartShakeSessio
 import qualified Development.IDE.Core.Shake                  as Shake
 import           Development.IDE.Graph                       (Key, alwaysRerun)
 import qualified Development.IDE.Plugin.Completions.Logic    as Ghcide
-import qualified Development.IDE.Plugin.Completions.Types    as Ghcide
 import           Development.IDE.Types.Shake                 (toKey)
 import qualified Distribution.Fields                         as Syntax
 import qualified Distribution.Parsec.Position                as Syntax
@@ -90,7 +90,7 @@ descriptor recorder plId =
         mconcat
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction licenseSuggestCodeAction
           , mkPluginHandler LSP.SMethod_TextDocumentCompletion $ completion recorder
-          , mkPluginHandler LSP.SMethod_TextDocumentCodeAction fieldSuggestCodeAction
+          , mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ fieldSuggestCodeAction recorder
           ]
     , pluginNotificationHandlers =
         mconcat
@@ -240,9 +240,37 @@ licenseSuggestCodeAction ideState _ (CodeActionParams _ _ (TextDocumentIdentifie
   maxCompls <- fmap maxCompletions . liftIO $ runAction "cabal-plugin.suggestLicense" ideState getClientConfigAction
   pure $ InL $ diags >>= (fmap InR . LicenseSuggest.licenseErrorAction maxCompls uri)
 
-fieldSuggestCodeAction :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
-fieldSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=diags}) =
-  pure $ InL $ diags >>= (fmap InR . FieldSuggest.fieldErrorAction uri)
+-- | CodeActions for correcting field names with typos in them.
+--
+-- Provides CodeActions that fix typos in field names, in both stanzas and top-level field names.
+-- The suggestions are computed based on the completion context, where we "move" a fake cursor
+-- to the end of the field name and trigger cabal file completions. The completions are then
+-- suggested to the user.
+fieldSuggestCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+fieldSuggestCodeAction recorder ide _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext{_diagnostics=diags}) = do
+  vfileM <- lift (pluginGetVirtualFile $ toNormalizedUri uri)
+  case (,) <$> vfileM <*> uriToFilePath' uri of
+    Nothing -> pure $ InL []
+    Just (vfile, path) -> do
+      -- We decide on `useWithStale` here, since `useWithStaleFast` often leads to the wrong completions being suggested.
+      -- In case it fails, we still will get some completion results instead of an error.
+      mFields <- liftIO $ runAction "cabal-plugin.fields" ide $ useWithStale ParseCabalFields $ toNormalizedFilePath path
+      case mFields of
+        Nothing ->
+          pure $ InL []
+        Just (cabalFields, _) -> do
+          let fields = Maybe.mapMaybe FieldSuggest.fieldErrorName diags
+          results <- forM fields (getSuggestion vfile path cabalFields)
+          pure $ InL $ map InR $ concat results
+  where
+    getSuggestion vfile fp cabalFields (fieldName,Diagnostic{ _range=_range@(Range (Position lineNr col) _) }) = do
+      let -- Compute where we would anticipate the cursor to be.
+          fakeLspCursorPosition = Position lineNr (col + fromIntegral (T.length fieldName))
+          lspPrefixInfo = Ghcide.getCompletionPrefix fakeLspCursorPosition vfile
+          cabalPrefixInfo = Completions.getCabalPrefixInfo fp lspPrefixInfo
+      completions <- liftIO $ computeCompletionsAt recorder ide cabalPrefixInfo fp cabalFields
+      let completionTexts = fmap (^. JL.label) completions
+      pure $ FieldSuggest.fieldErrorAction uri fieldName completionTexts _range
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
@@ -325,7 +353,7 @@ deleteFileOfInterest recorder state f = do
 
 completion :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCompletion
 completion recorder ide _ complParams = do
-  let (TextDocumentIdentifier uri) = complParams ^. JL.textDocument
+  let TextDocumentIdentifier uri = complParams ^. JL.textDocument
       position = complParams ^. JL.position
   mVf <- lift $ pluginGetVirtualFile $ toNormalizedUri uri
   case (,) <$> mVf <*> uriToFilePath' uri of
@@ -337,39 +365,35 @@ completion recorder ide _ complParams = do
         Nothing ->
           pure . InR $ InR Null
         Just (fields, _) -> do
-          let pref = Ghcide.getCompletionPrefix position cnts
-          let res = produceCompletions pref path fields
+          let lspPrefInfo = Ghcide.getCompletionPrefix position cnts
+              cabalPrefInfo = Completions.getCabalPrefixInfo path lspPrefInfo
+          let res = computeCompletionsAt recorder ide cabalPrefInfo path fields
           liftIO $ fmap InL res
     Nothing -> pure . InR $ InR Null
- where
-  completerRecorder = cmapWithPrio LogCompletions recorder
 
-  produceCompletions :: Ghcide.PosPrefixInfo -> FilePath -> [Syntax.Field Syntax.Position] -> IO [CompletionItem]
-  produceCompletions prefix fp fields = do
-    runMaybeT (context fields) >>= \case
-      Nothing -> pure []
-      Just ctx -> do
-        logWith recorder Debug $ LogCompletionContext ctx pos
-        let completer = Completions.contextToCompleter ctx
-        let completerData = CompleterTypes.CompleterData
-              { getLatestGPD = do
-                -- We decide on useWithStaleFast here, since we mostly care about the file's meta information,
-                -- thus, a quick response gives us the desired result most of the time.
-                -- The `withStale` option is very important here, since we often call this rule with invalid cabal files.
-                mGPD <- runIdeAction "cabal-plugin.modulesCompleter.gpd" (shakeExtras ide) $ useWithStaleFast ParseCabalFile $ toNormalizedFilePath fp
-                pure $ fmap fst mGPD
-              , getCabalCommonSections = do
-                mSections <- runIdeAction "cabal-plugin.modulesCompleter.commonsections" (shakeExtras ide) $ useWithStaleFast ParseCabalCommonSections $ toNormalizedFilePath fp
-                pure $ fmap fst mSections
-              , cabalPrefixInfo = prefInfo
-              , stanzaName =
-                case fst ctx of
-                  Types.Stanza _ name -> name
-                  _                   -> Nothing
-              }
-        completions <- completer completerRecorder completerData
-        pure completions
-   where
-    pos = Ghcide.cursorPos prefix
+computeCompletionsAt :: Recorder (WithPriority Log) -> IdeState -> Types.CabalPrefixInfo -> FilePath -> [Syntax.Field Syntax.Position] -> IO [CompletionItem]
+computeCompletionsAt recorder ide prefInfo fp fields = do
+  runMaybeT (context fields) >>= \case
+    Nothing -> pure []
+    Just ctx -> do
+      logWith recorder Debug $ LogCompletionContext ctx pos
+      let completer = Completions.contextToCompleter ctx
+      let completerData = CompleterTypes.CompleterData
+            { getLatestGPD = do
+              -- We decide on useWithStaleFast here, since we mostly care about the file's meta information,
+              -- thus, a quick response gives us the desired result most of the time.
+              -- The `withStale` option is very important here, since we often call this rule with invalid cabal files.
+              mGPD <- runAction "cabal-plugin.modulesCompleter.gpd" ide $ useWithStale ParseCabalFile $ toNormalizedFilePath fp
+              pure $ fmap fst mGPD
+            , cabalPrefixInfo = prefInfo
+            , stanzaName =
+            case fst ctx of
+                Types.Stanza _ name -> name
+                _                   -> Nothing
+            }
+      completions <- completer completerRecorder completerData
+      pure completions
+  where
+    pos = Types.completionCursorPosition prefInfo
     context fields = Completions.getContext completerRecorder prefInfo fields
-    prefInfo = Completions.getCabalPrefixInfo fp prefix
+    completerRecorder = cmapWithPrio LogCompletions recorder
