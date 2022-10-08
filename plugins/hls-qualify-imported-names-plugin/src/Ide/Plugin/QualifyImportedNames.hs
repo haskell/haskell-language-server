@@ -21,6 +21,7 @@ import qualified Data.Map.Strict                   as Map
 import           Data.Maybe                        (mapMaybe)
 import           Data.Text                         (Text)
 import qualified Data.Text                         as Text
+import           Development.IDE                   (spanContainsRange)
 import           Development.IDE.Core.RuleTypes    (GetFileContents (GetFileContents),
                                                     GetHieAst (GetHieAst),
                                                     HieAstResult (HAR, refMap),
@@ -74,7 +75,6 @@ import           Language.LSP.Types                (CodeAction (CodeAction, _com
                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                     type (|?) (InR),
                                                     uriToNormalizedFilePath)
-import Development.IDE (spanContainsRange)
 
 thenCmp :: Ordering -> Ordering -> Ordering
 {-# INLINE thenCmp #-}
