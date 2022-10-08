@@ -85,6 +85,11 @@ workflow:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-fedora33:$DOCKER_REV"
 
+.x86_64-linux-fedora27:
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-fedora27:$DOCKER_REV"
+
 .x86_64-linux-alpine:
   tags:
     - x86_64-linux
@@ -304,34 +309,23 @@ test-x86_64-linux-fedora33:
 # x86_64 linux unknown
 ######################
 
-build-x86_64-linux-centos7:
-  extends:
-    - .build
-    - .x86_64-linux-centos7
-  before_script:
-    - sudo yum install -y epel-release
-    - sudo yum install -y patchelf tree
-  variables:
-    ADD_CABAL_ARGS: "--enable-split-sections"
-
 build-x86_64-linux-unknown:
   extends:
     - .build
-    - .x86_64-linux-centos7
+    - .x86_64-linux-fedora27
   before_script: |
     echo "NAME=Linux" > ~/os-release.fake
     echo "ID=linux" >> ~/os-release.fake
     echo "PRETTY_NAME=Linux" >> ~/os-release.fake
     sudo ln -sf /home/ghc/os-release.fake /etc/os-release
-    sudo yum install -y epel-release
-    sudo yum install -y patchelf tree
+    sudo dnf install -y patchelf tree
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections"
 
 tar-x86_64-linux-unknown:
   extends:
     - .artifacts
-    - .x86_64-linux-centos7
+    - .x86_64-linux-fedora27
   stage: tar
   needs: ["build-x86_64-linux-unknown"]
   before_script: |
@@ -348,14 +342,14 @@ tar-x86_64-linux-unknown:
 test-x86_64-linux-unknown:
   extends:
     - .test
-    - .x86_64-linux-centos7
+    - .x86_64-linux-fedora27
   needs: ["tar-x86_64-linux-unknown"]
   before_script: |
     echo "NAME=Linux" > ~/os-release.fake
     echo "ID=linux" >> ~/os-release.fake
     echo "PRETTY_NAME=Linux" >> ~/os-release.fake
     sudo ln -sf /home/ghc/os-release.fake /etc/os-release
-    sudo yum install -y tree
+    sudo dnf install -y tree
 
 
 ######################
