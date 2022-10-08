@@ -80,6 +80,7 @@ case "$(uname)" in
 		cp "$(cabal list-bin -v0 ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/haskell-language-server-wrapper"$EXE_EXTENSION
         ;;
 	*)
+		ghcup debug-info
 		sed -i.bak -e '/DELETE MARKER FOR CI/,/END DELETE/d' cabal.project # see comment in cabal.project
 		emake --version
 		emake GHCUP=ghcup hls
