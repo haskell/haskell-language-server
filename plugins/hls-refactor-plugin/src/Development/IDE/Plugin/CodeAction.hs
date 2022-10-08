@@ -906,16 +906,16 @@ newDefinitionAction IdeOptions {..} parsedModule Range {_start} name typ
     sig = name <> colon <> T.dropWhileEnd isSpace (fromMaybe "_" typ)
     ParsedModule {pm_parsed_source = L _ HsModule {hsmodDecls}} = parsedModule
 
-suggestAddArgument :: ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestAddArgument :: ParsedModule -> Diagnostic -> Either ResponseError [(T.Text, [TextEdit])]
 suggestAddArgument parsedModule Diagnostic {_message, _range}
   | Just (name, typ) <- matchVariableNotInScope message = addArgumentAction parsedModule _range name typ
   | Just (name, typ) <- matchFoundHoleIncludeUnderscore message = addArgumentAction parsedModule _range name (Just typ)
-  | otherwise = []
+  | otherwise = pure []
   where
     message = unifySpaces _message
 
 -- TODO use typ to modify type signature
-addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> [(T.Text, [TextEdit])]
+addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> Either ResponseError [(T.Text, [TextEdit])]
 addArgumentAction (ParsedModule _ parsedSource _ _) range name _typ =
   do
     let addArgToMatch (L locMatch (Match xMatch ctxMatch pats rhs)) = do
@@ -929,10 +929,10 @@ addArgumentAction (ParsedModule _ parsedSource _ _) range name _typ =
             pure [decl']
           decl -> pure [decl]
     case runTransformT $ modifySmallestDeclWithM (`spanContainsRange` range) insertArg (makeDeltaAst parsedSource) of
-      Left err -> trace ("Error when inserting argument: " <> err) []
+      Left err -> Left $ responseError ("Error when inserting argument: " <> T.pack err)
       Right (newSource, _, _) ->
         let diff = makeDiffTextEdit (T.pack $ exactPrint parsedSource) (T.pack $ exactPrint newSource)
-         in [("Add argument ‘" <> name <> "’ to function", fromLspList diff)]
+         in pure [("Add argument ‘" <> name <> "’ to function", fromLspList diff)]
 
 fromLspList :: List a -> [a]
 fromLspList (List a) = a
