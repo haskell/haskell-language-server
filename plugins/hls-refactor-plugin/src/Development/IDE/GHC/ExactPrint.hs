@@ -46,7 +46,7 @@ module Development.IDE.GHC.ExactPrint
       ExceptStringT (..),
       TransformT,
       Log(..),
-      )
+    )
 where
 
 import           Control.Applicative                     (Alternative)
@@ -102,12 +102,10 @@ import           GHC                                     (EpAnn (..),
                                                           SrcSpanAnnA,
                                                           TrailingAnn (AddCommaAnn),
                                                           emptyComments,
-                                                          spanAsAnchor, spans)
+                                                          spanAsAnchor)
 import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           DeltaPos (SameLine),
                                                           EpaLocation (EpaDelta))
-import Data.Maybe (fromMaybe)
-import Development.IDE.GHC.Error (isInsideSrcSpan)
 #endif
 
 ------------------------------------------------------------------------------
@@ -662,7 +660,6 @@ eqSrcSpanA l r = leftmost_smallest l r == EQ
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-
 addParensToCtxt :: Maybe EpaLocation -> AnnContext -> AnnContext
 addParensToCtxt close_dp = addOpen . addClose
   where

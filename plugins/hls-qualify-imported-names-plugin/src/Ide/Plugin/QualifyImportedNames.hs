@@ -74,6 +74,7 @@ import           Language.LSP.Types                (CodeAction (CodeAction, _com
                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                     type (|?) (InR),
                                                     uriToNormalizedFilePath)
+import Development.IDE (spanContainsRange)
 
 thenCmp :: Ordering -> Ordering -> Ordering
 {-# INLINE thenCmp #-}
@@ -128,7 +129,7 @@ data ImportedBy = ImportedBy {
 }
 
 isRangeWithinImportedBy :: Range -> ImportedBy -> Bool
-isRangeWithinImportedBy range (ImportedBy _ srcSpan) = isRangeWithinSrcSpan range srcSpan
+isRangeWithinImportedBy range (ImportedBy _ srcSpan) = spanContainsRange srcSpan range
 
 globalRdrEnvToNameToImportedByMap :: GlobalRdrEnv -> NameEnv [ImportedBy]
 globalRdrEnvToNameToImportedByMap =

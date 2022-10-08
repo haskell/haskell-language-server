@@ -82,7 +82,7 @@ import           Language.LSP.Types                                (ApplyWorkspa
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InR),
                                                                     uriToFilePath)
-import           GHC.Exts                                           (IsList (fromList))
+import           GHC.Exts                                           (fromList)
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import           Text.Regex.TDFA                                   (mrAfter,
@@ -96,10 +96,9 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpAnn (..),
                                                                     EpaLocation (..),
                                                                     LEpaComment,
-                                                                    LocatedA, spans)
-import Language.Haskell.GHC.ExactPrint (runTransformFromT, noAnnSrcSpanDP1, runTransform, runTransformT)
+                                                                    LocatedA)
+import Language.Haskell.GHC.ExactPrint (noAnnSrcSpanDP1, runTransformT)
 import GHC.Types.SrcLoc (generatedSrcSpan)
-import Debug.Trace (trace)
 
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
@@ -170,7 +169,9 @@ bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestImplicitParameter
 #endif
     , wrap suggestNewDefinition
+#if MIN_VERSION_ghc(9,2,1)
     , wrap suggestAddArgument
+#endif
     , wrap suggestDeleteUnusedBinding
     ]
     plId
@@ -388,7 +389,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
     Just matched <- allMatchRegexUnifySpaces _message "imported from ‘([^’]+)’ at ([^ ]*)",
     mods <- [(modName, s) | [_, modName, s] <- matched],
     result <- nubOrdBy (compare `on` fst) $ mods >>= uncurry (suggests identifier),
-    hideAll <- ("Hide " <> identifier <> " from all occurence imports", concat $ snd <$> result) =
+    hideAll <- ("Hide " <> identifier <> " from all occurence imports", concatMap snd result) =
     result <> [hideAll]
   | otherwise = []
   where
@@ -906,6 +907,7 @@ newDefinitionAction IdeOptions {..} parsedModule Range {_start} name typ
     sig = name <> colon <> T.dropWhileEnd isSpace (fromMaybe "_" typ)
     ParsedModule {pm_parsed_source = L _ HsModule {hsmodDecls}} = parsedModule
 
+#if MIN_VERSION_ghc(9,2,1)
 suggestAddArgument :: ParsedModule -> Diagnostic -> Either ResponseError [(T.Text, [TextEdit])]
 suggestAddArgument parsedModule Diagnostic {_message, _range}
   | Just (name, typ) <- matchVariableNotInScope message = addArgumentAction parsedModule _range name typ
@@ -933,6 +935,7 @@ addArgumentAction (ParsedModule _ parsedSource _ _) range name _typ =
       Right (newSource, _, _) ->
         let diff = makeDiffTextEdit (T.pack $ exactPrint parsedSource) (T.pack $ exactPrint newSource)
          in pure [("Add argument ‘" <> name <> "’ to function", fromLspList diff)]
+#endif
 
 fromLspList :: List a -> [a]
 fromLspList (List a) = a

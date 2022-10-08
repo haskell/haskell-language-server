@@ -311,7 +311,6 @@ codeActionTests = testGroup "code actions"
   , fillTypedHoleTests
   , addSigActionTests
   , insertNewDefinitionTests
-  , addFunctionArgumentTests
   , deleteUnusedDefinitionTests
   , addInstanceConstraintTests
   , addFunctionConstraintTests
@@ -320,6 +319,9 @@ codeActionTests = testGroup "code actions"
   , exportUnusedTests
   , addImplicitParamsConstraintTests
   , removeExportTests
+#if MIN_VERSION_ghc(9,2,1)
+  , addFunctionArgumentTests
+#endif
   ]
 
 insertImportTests :: TestTree
@@ -2140,6 +2142,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
         ++ txtB')
   ]
 
+#if MIN_VERSION_ghc(9,2,1)
 addFunctionArgumentTests :: TestTree
 addFunctionArgumentTests =
   testGroup
@@ -2321,6 +2324,7 @@ addFunctionArgumentTests =
         contentAfterAction <- documentContents docB
         liftIO $ contentAfterAction @?= T.unlines foo'
     ]
+#endif
 
 deleteUnusedDefinitionTests :: TestTree
 deleteUnusedDefinitionTests = testGroup "delete unused definition action"

@@ -39,8 +39,7 @@ import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
-import Control.Monad.Except (ExceptT(..))
-import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Except (ExceptT(..), runExceptT)
 
 type CodeActionTitle = T.Text
 
