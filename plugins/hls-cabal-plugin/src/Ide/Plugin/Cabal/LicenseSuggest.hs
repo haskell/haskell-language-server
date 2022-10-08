@@ -72,7 +72,7 @@ licenseErrorSuggestion ::
   T.Text
   -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
   -> [(T.Text, T.Text)]
-  -- ^ (Original (incorrect) license identifier, suggested replacement)
+  -- ^ Original (incorrect) license identifier with the suggested replacement
 licenseErrorSuggestion msg =
    (getMatch <$> msg =~~ regex) >>= \case
           [original] ->
