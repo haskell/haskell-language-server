@@ -53,6 +53,18 @@
         "url": "https://hackage.haskell.org/package/constraints-extras-0.3.2.1/constraints-extras-0.3.2.1.tar.gz"
       }
     },
+    "entropy": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-Oj0vftbS7Pau7OzdMrzRPghqwEiimwQbt0w59cMcH98=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/entropy-0.4.1.10/entropy-0.4.1.10.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/entropy-0.4.1.10/entropy-0.4.1.10.tar.gz"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -108,6 +120,18 @@
         "url": "https://hackage.haskell.org/package/fourmolu-0.3.0.0/fourmolu-0.3.0.0.tar.gz"
       }
     },
+    "ghc-check": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-pmmQMrk6X00+zbsstV49w/Es9+V9gssrXzJoub2ReEs=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-check-0.5.0.8/ghc-check-0.5.0.8.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-check-0.5.0.8/ghc-check-0.5.0.8.tar.gz"
+      }
+    },
     "ghc-exactprint": {
       "flake": false,
       "locked": {
@@ -160,6 +184,18 @@
         "url": "https://hackage.haskell.org/package/hie-bios-0.11.0/hie-bios-0.11.0.tar.gz"
       }
     },
+    "hiedb": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-Ny9Ya7Y8GGdBh8r2cryQfK4XZj2dIrYQpaB8dTNQ3KI=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hiedb-0.4.2.0/hiedb-0.4.2.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hiedb-0.4.2.0/hiedb-0.4.2.0.tar.gz"
+      }
+    },
     "hlint": {
       "flake": false,
       "locked": {
@@ -199,30 +235,37 @@
     "lsp": {
       "flake": false,
       "locked": {
-        "lastModified": 1662291729,
-        "narHash": "sha256-KlL38v/75G9zrW7+IiUeiCxFfLJGm/EdFeWQRUikab8=",
-        "owner": "haskell",
-        "repo": "lsp",
-        "rev": "b0f8596887088b8ab65fc1015c773f45b47234ae",
-        "type": "github"
+        "narHash": "sha256-g5R34SVz0kRD5zpODNsaaaIJOHty10cTS6ZDPi4s8pc=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-1.6.0.0/lsp-1.6.0.0.tar.gz"
       },
       "original": {
-        "owner": "haskell",
-        "repo": "lsp",
-        "rev": "b0f8596887088b8ab65fc1015c773f45b47234ae",
-        "type": "github"
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-1.6.0.0/lsp-1.6.0.0.tar.gz"
       }
     },
     "lsp-test": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-TXRy/VT94Cn0BPtiL65c7UqahyJZgUtBQQgESZacrdY=",
+        "narHash": "sha256-HhFAdNvmnnnCzsKfTWbqUyTFrCfq1n6pGKfk2R0fcUc=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.3/lsp-test-0.14.0.3.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-test-0.14.1.0/lsp-test-0.14.1.0.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.3/lsp-test-0.14.0.3.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-test-0.14.1.0/lsp-test-0.14.1.0.tar.gz"
+      }
+    },
+    "lsp-types": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-QSixsrCvsWlckG/LLF1z8LsHhqaXxVAxOPIA1NxjVT4=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-types-1.6.0.0/lsp-types-1.6.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-types-1.6.0.0/lsp-types-1.6.0.0.tar.gz"
       }
     },
     "nixpkgs": {
@@ -271,19 +314,23 @@
         "all-cabal-hashes-unpacked": "all-cabal-hashes-unpacked",
         "brittany-01312": "brittany-01312",
         "constraints-extras": "constraints-extras",
+        "entropy": "entropy",
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "fourmolu": "fourmolu",
         "fourmolu-0300": "fourmolu-0300",
+        "ghc-check": "ghc-check",
         "ghc-exactprint": "ghc-exactprint",
         "ghc-exactprint-150": "ghc-exactprint-150",
         "gitignore": "gitignore",
         "hie-bios": "hie-bios",
+        "hiedb": "hiedb",
         "hlint": "hlint",
         "hlint-34": "hlint-34",
         "implicit-hie-cradle": "implicit-hie-cradle",
         "lsp": "lsp",
         "lsp-test": "lsp-test",
+        "lsp-types": "lsp-types",
         "nixpkgs": "nixpkgs",
         "ptr-poker": "ptr-poker",
         "retrie": "retrie",
