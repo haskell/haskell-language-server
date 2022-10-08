@@ -5,7 +5,6 @@
 
 module Ide.Plugin.Class.CodeAction where
 
-import           Control.Applicative                  (liftA2)
 import           Control.Lens                         hiding (List, use)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class               (liftIO)
@@ -89,7 +88,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
         List diags = context ^. J.diagnostics
 
         ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
-        methodDiags = filter (\d -> isClassMethodWarning (d ^. J.message)) ghcDiags
+        methodDiags = filter (\d -> isClassMethodWarning (d ^. J.message) || isInstanceMissingError (d ^. J.message)) ghcDiags
 
         mkActions
             :: NormalizedFilePath
@@ -111,11 +110,17 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                 $ use GetInstanceBindTypeSigs docPath
             implemented <- findImplementedMethods ast instancePosition
             logWith recorder Info (LogImplementedMethods cls implemented)
+            let groups =
+                    -- If the mininal def contains nothing, the plugin offers to
+                    -- add stub implementations of all methods with default
+                    -- implementations
+                    case classMinimalDef cls of
+                        And [] -> classOpItemsGroups range sigs cls
+                        Or []  -> classOpItemsGroups range sigs cls
+                        minDef -> minDefToMethodGroups range sigs minDef
             pure
                 $ concatMap mkAction
-                $ fmap (filter (\(bind, _) -> bind `notElem` implemented))
-                $ minDefToMethodGroups range sigs
-                $ classMinimalDef cls
+                $ fmap (filter (\(bind, _) -> bind `notElem` implemented)) groups
             where
                 range = diag ^. J.range
 
@@ -207,6 +212,11 @@ isClassNodeIdentifier ident = (isNothing . identType) ident && Use `Set.member` 
 isClassMethodWarning :: T.Text -> Bool
 isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"
 
+isInstanceMissingError :: T.Text -> Bool
+isInstanceMissingError err =
+    "• No instance for" `T.isPrefixOf` err
+    && "In the instance declaration for" `T.isInfixOf` err
+
 isInstanceValBind :: ContextInfo -> Bool
 isInstanceValBind (ValBind InstanceBind _ _) = True
 isInstanceValBind _                          = False
@@ -215,11 +225,19 @@ isInstanceValBind _                          = False
 minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [[(T.Text, T.Text)]]
 minDefToMethodGroups range sigs = go
     where
-        go (Var mn)   = [[ (T.pack . occNameString . occName $ mn, bindRendered sig)
-                        | sig <- sigs
-                        , inRange range (getSrcSpan $ bindName sig)
-                        , printOutputable mn == T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
-                        ]]
+        go (Var mn)   = mkGroups range sigs mn
         go (Or ms)    = concatMap (go . unLoc) ms
         go (And ms)   = foldr (liftA2 (<>)) [[]] (fmap (go . unLoc) ms)
         go (Parens m) = go (unLoc m)
+
+mkGroups :: Range -> [InstanceBindTypeSig] -> Name -> [[(T.Text, T.Text)]]
+mkGroups range sigs name =
+    [[ (T.pack . occNameString . occName $ name, bindRendered sig)
+     | sig <- sigs
+     , inRange range (getSrcSpan $ bindName sig)
+     , printOutputable name == T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
+     ]]
+
+classOpItemsGroups :: Range -> [InstanceBindTypeSig] -> Class -> [[(T.Text, T.Text)]]
+classOpItemsGroups range sigs cls =
+    concatMap (mkGroups range sigs . getName . fst) $ classOpItems cls
