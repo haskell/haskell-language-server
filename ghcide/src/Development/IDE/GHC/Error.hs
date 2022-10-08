@@ -44,6 +44,7 @@ import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           GHC
+import Language.LSP.Types (isSubrangeOf)
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
@@ -121,7 +122,7 @@ p `isInsideSrcSpan` r = case srcSpanToRange r of
   _                  -> False
 
 spanContainsRange :: SrcSpan -> Range -> Bool
-spanContainsRange srcSpan Range {..} = _start `isInsideSrcSpan` srcSpan && _end `isInsideSrcSpan` srcSpan
+spanContainsRange srcSpan range = maybe False (range `isSubrangeOf`) $ srcSpanToRange srcSpan
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).
