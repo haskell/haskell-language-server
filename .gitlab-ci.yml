@@ -300,6 +300,63 @@ test-x86_64-linux-fedora33:
   before_script:
     - sudo dnf install -y tree
 
+######################
+# x86_64 linux unknown
+######################
+
+build-x86_64-linux-centos7:
+  extends:
+    - .build
+    - .x86_64-linux-centos7
+  before_script:
+    - sudo yum install -y epel-release
+    - sudo yum install -y patchelf tree
+  variables:
+    ADD_CABAL_ARGS: "--enable-split-sections"
+
+build-x86_64-linux-unknown:
+  extends:
+    - .build
+    - .x86_64-linux-centos7
+  before_script: |
+    echo "NAME=Linux" > ~/os-release.fake
+    echo "ID=linux" >> ~/os-release.fake
+    echo "PRETTY_NAME=Linux" >> ~/os-release.fake
+    sudo ln -sf /home/ghc/os-release.fake /etc/os-release
+    sudo yum install -y epel-release
+    sudo yum install -y patchelf tree
+  variables:
+    ADD_CABAL_ARGS: "--enable-split-sections"
+
+tar-x86_64-linux-unknown:
+  extends:
+    - .artifacts
+    - .x86_64-linux-centos7
+  stage: tar
+  needs: ["build-x86_64-linux-unknown"]
+  before_script: |
+    echo "NAME=Linux" > ~/os-release.fake
+    echo "ID=linux" >> ~/os-release.fake
+    echo "PRETTY_NAME=Linux" >> ~/os-release.fake
+    sudo ln -sf /home/ghc/os-release.fake /etc/os-release
+  script:
+    - ./.gitlab/tar.sh
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-unknown-linux
+    TARBALL_EXT: tar.xz
+
+test-x86_64-linux-unknown:
+  extends:
+    - .test
+    - .x86_64-linux-centos7
+  needs: ["tar-x86_64-linux-unknown"]
+  before_script: |
+    echo "NAME=Linux" > ~/os-release.fake
+    echo "ID=linux" >> ~/os-release.fake
+    echo "PRETTY_NAME=Linux" >> ~/os-release.fake
+    sudo ln -sf /home/ghc/os-release.fake /etc/os-release
+    sudo yum install -y tree
+
 
 ######################
 # x86_64 linux alpine
