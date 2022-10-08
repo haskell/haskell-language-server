@@ -2812,6 +2812,16 @@ nonLspCommandLine = testGroup "ghcide command line"
         (ec, _, _) <- readCreateProcessWithExitCode cmd ""
 
         ec @?= ExitSuccess
+  , testCase "none cradle does not fail" $ withTempDir $ \dir -> do
+        ghcide <- locateGhcideExecutable
+        copyTestDataFiles dir "none"
+        let cmd = (proc ghcide ["c/C.hs"]){cwd = Just dir}
+
+        setEnv "HOME" "/homeless-shelter" False
+
+        (ec, _, _) <- readCreateProcessWithExitCode cmd ""
+
+        ec @?= ExitSuccess
   ]
 
 -- | checks if we use InitializeParams.rootUri for loading session

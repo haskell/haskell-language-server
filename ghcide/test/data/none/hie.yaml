@@ -1,0 +1,16 @@
+cradle:
+  multi:
+    - path: "./a"
+      config:
+        cradle:
+          cabal:
+            component: "lib:a"
+    - path: "./c"
+      config:
+        cradle:
+          cabal:
+            component: "lib:c"
+    - path: "./b"
+      config:
+        cradle:
+          none:
