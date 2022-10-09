@@ -245,13 +245,6 @@ runEvalCmd plId st EvalParams{..} =
 
             now <- liftIO getCurrentTime
 
-            let modName = moduleName $ ms_mod ms
-                thisModuleTarget =
-                    Target
-                        (TargetFile fp Nothing)
-                        False
-                        (stringToUnitId "blah-0.1.0.0-inplace")
-                        (Just (textToStringBuffer mdlText, now))
 
             -- Setup environment for evaluation
             hscEnv' <- ExceptT $ fmap join $ liftIO . gStrictTry . evalGhcEnv session $ do
@@ -309,6 +302,15 @@ runEvalCmd plId st EvalParams{..} =
                 -- BUG: this fails for files that requires preprocessors (e.g. CPP) for ghc < 8.8
                 -- see https://gitlab.haskell.org/ghc/ghc/-/issues/17066
                 -- and https://hackage.haskell.org/package/ghc-8.10.1/docs/GHC.html#v:TargetFile
+                let modName = moduleName $ ms_mod ms
+                    thisModuleTarget =
+                        Target
+                            (TargetFile fp Nothing)
+                            False
+#if MIN_VERSION_ghc(9,3,0)
+                            (homeUnitId_ $ hsc_dflags session)
+#endif
+                            (Just (textToStringBuffer mdlText, now))
                 eSetTarget <- gStrictTry $ setTargets [thisModuleTarget]
                 dbg "setTarget" eSetTarget
 
@@ -332,9 +334,12 @@ runEvalCmd plId st EvalParams{..} =
             lbs <- liftIO $ runAction "eval: GetLinkables" st $ do
               linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
               uses_ GetLinkable (filter (/= nfp) linkables_needed) -- We don't need the linkable for the current module
-            --let hscEnv'' = hscEnv' { hsc_HPT  = addListToHpt (hsc_HPT hscEnv') [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] }
-            let hscEnv'' =hscUpdateHPT (flip addListToHpt  [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] ) hscEnv'
 
+#if MIN_VERSION_ghc(9,3,0)
+            let hscEnv'' = hscUpdateHPT (flip addListToHpt  [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] ) hscEnv'
+#else
+            let hscEnv'' = hscEnv' { hsc_HPT  = addListToHpt (hsc_HPT hscEnv') [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] }
+#endif
             edits <-
                 perf "edits" $
                     liftIO $
