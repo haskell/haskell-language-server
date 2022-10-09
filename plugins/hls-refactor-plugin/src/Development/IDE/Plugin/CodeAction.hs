@@ -839,8 +839,13 @@ suggestAddTypeAnnotationToSatisfyContraints sourceOpt Diagnostic{_range=_range,.
         in  [( title, edits )]
 
 
-suggestReplaceIdentifier :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
+-- | GHC strips out backticks in case of infix functions as well as single quote
+--   in case of quoted name when using TemplateHaskellQuotes. Which is not desired.
+--
+-- For example:
+-- 1.
+--
+-- @
 -- File.hs:52:41: error:
 --     * Variable not in scope:
 --         suggestAcion :: Maybe T.Text -> Range -> Range
@@ -852,6 +857,27 @@ suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
 --       ‘T.isInfixOf’ (imported from Data.Text),
 --       ‘T.isSuffixOf’ (imported from Data.Text)
 --     Module ‘Data.Text’ does not export ‘isPrfixOf’.
+-- @
+--
+-- * action: \`suggestAcion\` will be renamed to \`suggestAction\` keeping back ticks around the function
+--
+-- 2.
+--
+-- @
+-- import Language.Haskell.TH (Name)
+-- foo :: Name
+-- foo = 'bread
+--
+-- File.hs:8:7: error:
+--     Not in scope: ‘bread’
+--       * Perhaps you meant one of these:
+--         ‘break’ (imported from Prelude), ‘read’ (imported from Prelude)
+--       * In the Template Haskell quotation 'bread
+-- @
+--
+-- * action: 'bread will be renamed to 'break keeping single quote on beginning of name
+suggestReplaceIdentifier :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
     | renameSuggestions@(_:_) <- extractRenamableTerms _message
         = [ ("Replace with ‘" <> name <> "’", [mkRenameEdit contents _range name]) | name <- renameSuggestions ]
     | otherwise = []
@@ -1771,15 +1797,17 @@ extractDoesNotExportModuleName x
 
 
 mkRenameEdit :: Maybe T.Text -> Range -> T.Text -> TextEdit
-mkRenameEdit contents range name =
-    if maybeIsInfixFunction == Just True
-      then TextEdit range ("`" <> name <> "`")
-      else TextEdit range name
+mkRenameEdit contents range name
+    | maybeIsInfixFunction == Just True = TextEdit range ("`" <> name <> "`")
+    | maybeIsTemplateFunction == Just True = TextEdit range ("'" <> name)
+    | otherwise = TextEdit range name
   where
     maybeIsInfixFunction = do
       curr <- textInRange range <$> contents
       pure $ "`" `T.isPrefixOf` curr && "`" `T.isSuffixOf` curr
-
+    maybeIsTemplateFunction = do
+      curr <- textInRange range <$> contents
+      pure $ "'" `T.isPrefixOf` curr
 
 -- | Extract the type and surround it in parentheses except in obviously safe cases.
 --
