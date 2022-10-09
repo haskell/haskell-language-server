@@ -250,6 +250,7 @@ runEvalCmd plId st EvalParams{..} =
                     Target
                         (TargetFile fp Nothing)
                         False
+                        (stringToUnitId "blah-0.1.0.0-inplace")
                         (Just (textToStringBuffer mdlText, now))
 
             -- Setup environment for evaluation
@@ -331,7 +332,8 @@ runEvalCmd plId st EvalParams{..} =
             lbs <- liftIO $ runAction "eval: GetLinkables" st $ do
               linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
               uses_ GetLinkable (filter (/= nfp) linkables_needed) -- We don't need the linkable for the current module
-            let hscEnv'' = hscEnv' { hsc_HPT  = addListToHpt (hsc_HPT hscEnv') [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] }
+            --let hscEnv'' = hscEnv' { hsc_HPT  = addListToHpt (hsc_HPT hscEnv') [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] }
+            let hscEnv'' =hscUpdateHPT (flip addListToHpt  [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] ) hscEnv'
 
             edits <-
                 perf "edits" $
@@ -703,20 +705,20 @@ doKindCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
 doKindCmd False df arg = do
     let input = T.strip arg
     (_, kind) <- typeKind False $ T.unpack input
-    let kindText = text (T.unpack input) <+> "::" <+> pprTypeForUser kind
+    let kindText = text (T.unpack input) <+> "::" <+> pprSigmaType kind
     pure $ Just $ T.pack (showSDoc df kindText)
 doKindCmd True df arg = do
     let input = T.strip arg
     (ty, kind) <- typeKind True $ T.unpack input
-    let kindDoc = text (T.unpack input) <+> "::" <+> pprTypeForUser kind
-        tyDoc = "=" <+> pprTypeForUser ty
+    let kindDoc = text (T.unpack input) <+> "::" <+> pprSigmaType kind
+        tyDoc = "=" <+> pprSigmaType ty
     pure $ Just $ T.pack (showSDoc df $ kindDoc $$ tyDoc)
 
 doTypeCmd :: DynFlags -> Text -> Ghc (Maybe Text)
 doTypeCmd dflags arg = do
     let (emod, expr) = parseExprMode arg
     ty <- GHC.exprType emod $ T.unpack expr
-    let rawType = T.strip $ T.pack $ showSDoc dflags $ pprTypeForUser ty
+    let rawType = T.strip $ T.pack $ showSDoc dflags $ pprSigmaType ty
         broken = T.any (\c -> c == '\r' || c == '\n') rawType
     pure $
         Just $
@@ -725,7 +727,7 @@ doTypeCmd dflags arg = do
                     T.pack $
                         showSDoc dflags $
                             text (T.unpack expr)
-                                $$ nest 2 ("::" <+> pprTypeForUser ty)
+                                $$ nest 2 ("::" <+> pprSigmaType ty)
                 else expr <> " :: " <> rawType <> "\n"
 
 parseExprMode :: Text -> (TcRnExprMode, T.Text)

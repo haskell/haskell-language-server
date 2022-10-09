@@ -24,7 +24,7 @@ module Development.IDE.GHC.Compat.Util (
     LBooleanFormula,
     BooleanFormula(..),
     -- * OverridingBool
-#if !MIN_VERSION_ghc(9,3,0)
+#if !MIN_VERSION_ghc(9,5,0)
     OverridingBool(..),
 #endif
     -- * Maybes
@@ -72,6 +72,10 @@ module Development.IDE.GHC.Compat.Util (
     nextChar,
     atEnd,
     ) where
+
+#if MIN_VERSION_ghc(9,4,0)
+import GHC.Data.Bool (OverridingBool(..))
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import           Control.Exception.Safe  (MonadCatch, catch, try)

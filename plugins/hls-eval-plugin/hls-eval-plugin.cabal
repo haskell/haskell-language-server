@@ -37,7 +37,7 @@ source-repository head
   location: https://github.com/haskell/haskell-language-server
 
 library
-  if impl(ghc >= 9.3)
+  if impl(ghc >= 9.5)
     buildable: False
   else
     buildable: True
