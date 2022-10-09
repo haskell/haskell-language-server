@@ -89,14 +89,14 @@ Plugins are "linked" in the `HlsPlugins` module, so we will need to add our plug
 idePlugins = pluginDescToIdePlugins allPlugins
   where
     allPlugins =
-      [ GhcIde.descriptor  "ghcide"
-      , Pragmas.descriptor  "pragmas"
+      [ GhcIde.descriptor "ghcide"
+      , Pragmas.descriptor "pragmas"
       , Floskell.descriptor "floskell"
       , Fourmolu.descriptor "fourmolu"
-      , Ormolu.descriptor   "ormolu"
+      , Ormolu.descriptor "ormolu"
       , StylishHaskell.descriptor "stylish-haskell"
       , Retrie.descriptor "retrie"
-      , Brittany.descriptor    "brittany"
+      , Brittany.descriptor "brittany"
       , Eval.descriptor "eval"
       ]
 ```
@@ -271,7 +271,7 @@ runImportCommand _lspFuncs _state (ImportCommandParams edit) = do
 
 The code lens provider implements all the steps of the algorithm described earlier:
 
-> 1. Request the type checking artefacts from the ghcide subsystem
+>  1. Request the type checking artefacts from the ghcide subsystem
 >  2. Extract the actual import lists from the type checked AST,
 >  3. Ask GHC to produce the minimal import lists for this AST,
 >  4. For every import statement without a explicit import list, find out what's the minimal import list, and produce a code lens to display it together with a diff to graft the import list in.
@@ -392,5 +392,4 @@ However integrating the plugin in haskell-language-server itself will need some 
 The full code as used in this tutorial, including imports, can be found in [this Gist](https://gist.github.com/pepeiborra/49b872b2e9ad112f61a3220cdb7db967) as well as in this [branch](https://github.com/pepeiborra/ide/blob/imports-lens/src/Ide/Plugin/ImportLens.hs)
 
 I hope this has given you a taste of how easy and joyful it is to write plugins for HLS.
-If you are looking for ideas for contributing, here are some cool ones found in the HLS issue tracker:
-- https://github.com/haskell/haskell-language-server/issues?q=is%3Aopen+is%3Aissue+label%3A%22type%3A+possible+new+plugin%22
+If you are looking for ideas for contributing, here are some cool ones found in the HLS [issue tracker](https://github.com/haskell/haskell-language-server/issues?q=is%3Aopen+is%3Aissue+label%3A%22type%3A+possible+new+plugin%22).
