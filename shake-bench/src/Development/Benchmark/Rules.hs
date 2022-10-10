@@ -690,7 +690,7 @@ plotDiagram includeFailed t@Diagram {traceMetric, runLogs} out = do
                   ]
               ]
           return (lplot E.& E.plot_lines_style . E.line_width E.*~ 2)
-        case (runFirstReponse rl) of
+        case runFirstReponse rl of
           Just t -> E.plot $ pure $
               E.vlinePlot ("First build: " ++ runVersion rl) (E.defaultPlotLineStyle E.& E.line_color E..~ c) t
           _ -> pure ()

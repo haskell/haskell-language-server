@@ -316,7 +316,7 @@ abbreviateImportTitle input =
       oneLineText = T.unwords $ T.lines input
       -- Now, split at the max columns, leaving space for the summary text we're going to add
       -- (conservatively assuming we won't need to print a number larger than 100)
-      (prefix, suffix) = T.splitAt (maxColumns - (T.length (summaryText 100))) oneLineText
+      (prefix, suffix) = T.splitAt (maxColumns - T.length (summaryText 100)) oneLineText
       -- We also want to truncate the last item so we get a "clean" break, rather than half way through
       -- something. The conditional here is just because 'breakOnEnd' doesn't give us quite the right thing
       -- if there are actually no commas.

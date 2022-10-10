@@ -1,7 +1,7 @@
 -- We deliberately want to ensure the function we add to the rule database
 -- has the constraints we need on it when we get it out.
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# LANGUAGE DeriveFunctor              #-}
+
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
