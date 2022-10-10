@@ -118,7 +118,7 @@ lensProvider
     -- haskell-lsp provides conversion functions
     | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $
       do
-        mbMinImports <- runAction "" state $ useWithStale MinimalImports nfp
+        mbMinImports <- runAction "MinimalImports" state $ useWithStale MinimalImports nfp
         case mbMinImports of
           -- Implement the provider logic:
           -- for every import, if it's lacking a explicit list, generate a code lens
@@ -212,6 +212,7 @@ minimalImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \Minimal
         Map.fromList
           [ (realSrcSpanStart l, printOutputable i)
             | L (locA -> RealSrcSpan l _) i <- fromMaybe [] mbMinImports
+            , not (isImplicitPrelude i)
           ]
       res =
         [ (i, Map.lookup (realSrcSpanStart l) importsMap)
@@ -219,6 +220,15 @@ minimalImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \Minimal
           , RealSrcSpan l _ <- [getLoc i]
         ]
   return ([], MinimalImportsResult res <$ mbMinImports)
+  where
+    isImplicitPrelude :: (Outputable a) => a -> Bool
+    isImplicitPrelude importDecl =
+      T.isPrefixOf implicitPreludeImportPrefix (printOutputable importDecl)
+
+-- | This is the prefix of an implicit prelude import which should be ignored,
+-- when considering the minimal imports rule
+implicitPreludeImportPrefix :: T.Text
+implicitPreludeImportPrefix = "import (implicit) Prelude"
 
 --------------------------------------------------------------------------------
 
