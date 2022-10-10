@@ -31,6 +31,7 @@ library
       aeson
     , base                 >=4.12 && < 5
     , containers
+    , extra
     , ghcide               ^>= 1.8
     , ghc-boot-th
     , hls-graph

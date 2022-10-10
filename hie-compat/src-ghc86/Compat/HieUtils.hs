@@ -127,7 +127,7 @@ recoverFullType i m = go i
 
 getTypeIndex :: Type -> State HieTypeState TypeIndex
 getTypeIndex t
-  | otherwise = do
+   = do
       tm <- gets tyMap
       case lookupTypeMap tm t of
         Just i -> return i
