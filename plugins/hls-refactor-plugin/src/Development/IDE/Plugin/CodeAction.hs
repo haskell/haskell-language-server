@@ -1520,7 +1520,7 @@ suggestNewImport packageExportsMap ps fileContents Diagnostic{_message}
   , Just (range, indent) <- newImportInsertRange ps fileContents
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
-  = let suggestions = nubSort
+  = let suggestions = nubSortBy simpleCompareImportSuggestion
           (constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions) in
     map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
@@ -1529,7 +1529,7 @@ suggestNewImport _ _ _ _ = []
 
 constructNewImportSuggestions
   :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [ImportSuggestion]
-constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrd
+constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrdBy simpleCompareImportSuggestion
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing] -- strip away qualified module names from the unknown name
   , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)   -- look up the modified unknown name in the export map
@@ -1568,16 +1568,18 @@ constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = 
               | otherwise = 0
         m = moduleNameText identInfo
 
--- | Implements a lexicographic order for import suggestions.
--- First compares the importance score in DESCENDING order.
--- If the scores are equal it compares the import names alphabetical order.
 data ImportSuggestion = ImportSuggestion !Int !CodeActionKind !NewImport
   deriving ( Eq )
 
-instance Ord ImportSuggestion where
-  compare (ImportSuggestion s1 _ i1) (ImportSuggestion s2 _ i2)
-    | s1 == s2  = compare i1 i2
-    | otherwise = flip compare s1 s2
+-- | Implements a lexicographic order for import suggestions that ignores the code action.
+-- First it compares the importance score in DESCENDING order.
+-- If the scores are equal it compares the import names alphabetical order.
+--
+-- TODO: this should be a correct Ord instance but CodeActionKind does not implement a Ord
+-- which would lead to an unlawful Ord instance.
+simpleCompareImportSuggestion :: ImportSuggestion -> ImportSuggestion -> Ordering
+simpleCompareImportSuggestion (ImportSuggestion s1 _ i1) (ImportSuggestion s2 _ i2)
+  = flip compare s1 s2 <> compare i1 i2
 
 newtype NewImport = NewImport {unNewImport :: T.Text}
   deriving (Show, Eq, Ord)
