@@ -6,23 +6,29 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Ide.Plugin.Cabal where
+module Ide.Plugin.Cabal (descriptor, Log(..)) where
 
 import           Control.Concurrent.STM
-import           Control.DeepSeq                 (NFData)
+import           Control.Concurrent.Strict
+import           Control.DeepSeq
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Data.ByteString                 as BS
 import           Data.Hashable
+import           Data.HashMap.Strict             (HashMap)
+import qualified Data.HashMap.Strict             as HashMap
 import qualified Data.List.NonEmpty              as NE
 import           Data.Maybe                      (mapMaybe)
+import qualified Data.Text                       as T
 import qualified Data.Text.Encoding              as Encoding
 import           Data.Typeable
 import           Development.IDE                 as D
 import           Development.IDE.Core.Shake      (restartShakeSession)
 import qualified Development.IDE.Core.Shake      as Shake
+import           Development.IDE.Graph           (alwaysRerun)
 import           GHC.Generics
 import qualified Ide.Plugin.Cabal.Diagnostics    as Diagnostics
 import qualified Ide.Plugin.Cabal.LicenseSuggest as LicenseSuggest
@@ -69,24 +75,28 @@ descriptor recorder plId = (defaultCabalPluginDescriptor plId)
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       whenUriFile _uri $ \file -> do
         log' Debug $ LogDocOpened _uri
+        addFileOfInterest ide file Modified{firstOpen=True}
         restartCabalShakeSession ide vfs file "(opened)"
 
   , mkPluginNotificationHandler LSP.STextDocumentDidChange $
       \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
       whenUriFile _uri $ \file -> do
         log' Debug $ LogDocModified _uri
+        addFileOfInterest ide file Modified{firstOpen=False}
         restartCabalShakeSession ide vfs file "(changed)"
 
   , mkPluginNotificationHandler LSP.STextDocumentDidSave $
       \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
       whenUriFile _uri $ \file -> do
         log' Debug $ LogDocSaved _uri
+        addFileOfInterest ide file OnDisk
         restartCabalShakeSession ide vfs file "(saved)"
 
   , mkPluginNotificationHandler LSP.STextDocumentDidClose $
       \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
       whenUriFile _uri $ \file -> do
         log' Debug $ LogDocClosed _uri
+        deleteFileOfInterest ide file
         restartCabalShakeSession ide vfs file "(closed)"
   ]
   }
@@ -103,7 +113,71 @@ restartCabalShakeSession :: IdeState -> VFS.VFS -> NormalizedFilePath -> String 
 restartCabalShakeSession ide vfs file actionMsg = do
   join $ atomically $ Shake.recordDirtyKeys (shakeExtras ide) GetModificationTime [file]
   restartShakeSession (shakeExtras ide) (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) []
-  join $ Shake.shakeEnqueue (shakeExtras ide) $ Shake.mkDelayedAction "cabal parse modified" Info $ void $ use ParseCabal file
+
+-- ----------------------------------------------------------------
+-- Cabal file of Interset rules and global variable
+-- ----------------------------------------------------------------
+
+newtype OfInterestCabalVar = OfInterestCabalVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
+
+instance Shake.IsIdeGlobal OfInterestCabalVar
+
+data IsCabalFileOfInterest = IsCabalFileOfInterest
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable IsCabalFileOfInterest
+instance NFData   IsCabalFileOfInterest
+
+type instance RuleResult IsCabalFileOfInterest = CabalFileOfInterestResult
+
+data CabalFileOfInterestResult = NotCabalFOI | IsCabalFOI FileOfInterestStatus
+  deriving (Eq, Show, Typeable, Generic)
+instance Hashable CabalFileOfInterestResult
+instance NFData   CabalFileOfInterestResult
+
+-- | The rule that initialises the files of interest state.
+ofInterestRules :: Recorder (WithPriority Log) -> Rules ()
+ofInterestRules recorder = do
+    Shake.addIdeGlobal . OfInterestCabalVar =<< liftIO (newVar HashMap.empty)
+    Shake.defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsCabalFileOfInterest f -> do
+        alwaysRerun
+        filesOfInterest <- getCabalFilesOfInterestUntracked
+        let foi = maybe NotCabalFOI IsCabalFOI $ f `HashMap.lookup` filesOfInterest
+            fp  = summarize foi
+            res = (Just fp, Just foi)
+        return res
+    where
+    summarize NotCabalFOI                   = BS.singleton 0
+    summarize (IsCabalFOI OnDisk)           = BS.singleton 1
+    summarize (IsCabalFOI (Modified False)) = BS.singleton 2
+    summarize (IsCabalFOI (Modified True))  = BS.singleton 3
+
+getCabalFilesOfInterestUntracked ::  Action (HashMap NormalizedFilePath FileOfInterestStatus)
+getCabalFilesOfInterestUntracked = do
+    OfInterestCabalVar var <- Shake.getIdeGlobalAction
+    liftIO $ readVar var
+
+getFilesOfInterest :: IdeState -> IO( HashMap NormalizedFilePath FileOfInterestStatus)
+getFilesOfInterest state = do
+    OfInterestCabalVar var <- Shake.getIdeGlobalState state
+    readVar var
+
+addFileOfInterest :: IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO ()
+addFileOfInterest state f v = do
+    OfInterestCabalVar var <- Shake.getIdeGlobalState state
+    (prev, files) <- modifyVar var $ \dict -> do
+        let (prev, new) = HashMap.alterF (, Just v) f dict
+        pure (new, (prev, new))
+    when (prev /= Just v) $ do
+        join $ atomically $ Shake.recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
+        logDebug (ideLogger state) $
+            "Set files of interest to: " <> T.pack (show files)
+
+deleteFileOfInterest :: IdeState -> NormalizedFilePath -> IO ()
+deleteFileOfInterest state f = do
+    OfInterestCabalVar var <- Shake.getIdeGlobalState state
+    files <- modifyVar' var $ HashMap.delete f
+    join $ atomically $ Shake.recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
+    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show files)
 
 -- ----------------------------------------------------------------
 -- Plugin Rules
@@ -118,6 +192,7 @@ type instance RuleResult ParseCabal = ()
 
 cabalRules :: Recorder (WithPriority Log) -> Rules ()
 cabalRules recorder = do
+  ofInterestRules recorder
   define (cmapWithPrio LogShake recorder) $ \ParseCabal file -> do
     t <- use GetModificationTime file
     log' Debug $ LogModificationTime file t
@@ -138,8 +213,20 @@ cabalRules recorder = do
       Right _ -> do
         log' Debug $ LogDiagnostics file warningDiags
         pure (warningDiags, Just ())
+
+  action $ do
+    -- Run the cabal kick. This code always runs when 'shakeRestart' is run.
+    -- Must be careful to not impede the performance too much. Crucial to
+    -- a snappy IDE experience.
+    kick
   where
     log' = logWith recorder
+
+-- | TODO: add documentation
+kick :: Action ()
+kick = do
+  files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
+  void $ uses ParseCabal files
 
 -- ----------------------------------------------------------------
 -- Code Actions
