@@ -57,6 +57,7 @@ import           Text.Regex.TDFA                          ((=~))
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
 import           Test.Hls
 
+import           Control.Applicative                      (liftA2)
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
 
@@ -1488,7 +1489,7 @@ extendImportTests = testGroup "extend import actions"
             actionsOrCommands <- getCodeActions docB range
             let codeActions =
                   filter
-                    (T.isPrefixOf "Add" . codeActionTitle)
+                    (liftA2 (&&) (T.isPrefixOf "Add") (not . T.isPrefixOf "Add argument") . codeActionTitle)
                     [ca | InR ca <- actionsOrCommands]
                 actualTitles = codeActionTitle <$> codeActions
             -- Note that we are not testing the order of the actions, as the
