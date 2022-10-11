@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE TypeOperators     #-}
 {-# LANGUAGE ViewPatterns      #-}
@@ -26,39 +27,49 @@ import           Development.IDE                 (IdeState, NormalizedFilePath,
                                                   Pretty (..), Priority (..),
                                                   Range (..), Recorder (..),
                                                   Rules, WithPriority (..),
+                                                  getFileContents, hscEnv,
                                                   logWith, realSrcSpanToRange,
                                                   srcSpanToRange)
 import           Development.IDE.Core.Rules      (runAction)
-import           Development.IDE.Core.RuleTypes  (GhcSessionDeps (..),
+import           Development.IDE.Core.RuleTypes  (GhcSession (..),
+                                                  GhcSessionDeps (..),
                                                   TcModuleResult (..),
                                                   TypeCheck (..))
-import           Development.IDE.Core.Shake      (define, use)
+import           Development.IDE.Core.Shake      (define, use, useWithStale)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      (HasSrcSpan (..),
                                                   HsConDetails (RecCon),
-                                                  HsRecFields (..), LPat,
-                                                  Outputable, RealSrcSpan, SDoc,
-                                                  SrcSpan, getLocA, locA, unLoc,
-                                                  unLocA)
+                                                  HsRecFields (..), HscEnv (..),
+                                                  LPat, Outputable, RealSrcSpan,
+                                                  SDoc, SrcSpan, getLocA, locA,
+                                                  pm_mod_summary, unLoc, unLocA)
 import           Development.IDE.GHC.Compat.Core (GenLocated (..), GhcPass (..),
                                                   HsBindLR (..),
+                                                  HsRecField' (..),
                                                   HsValBindsLR (..),
+                                                  ModSummary (..),
                                                   NHsValBindsLR (..), Pass (..),
-                                                  Pat (..), hs_valds)
-import           Development.IDE.GHC.Compat.Util (bagToList)
+                                                  Pat (..), extensionFlags,
+                                                  hs_valds)
+import           Development.IDE.GHC.Compat.Util (bagToList, toList)
 import           Development.IDE.GHC.Util        (printOutputable)
 import           Development.IDE.Graph           (RuleResult)
 import           Development.IDE.Graph.Classes   (Hashable, NFData)
+import           Development.IDE.Spans.Pragmas   (NextPragmaInfo (..),
+                                                  getNextPragmaInfo,
+                                                  insertNewPragma)
 import           Development.IDE.Types.Logger    (cmapWithPrio)
 import           GHC.Data.Maybe                  (fromMaybe)
 import           GHC.Generics                    (Generic)
 import           GHC.Hs.Dump                     (BlankSrcSpan (..),
                                                   showAstData)
+import           GHC.LanguageExtensions.Type     (Extension (..))
 import           Ide.PluginUtils                 (getNormalizedFilePath,
                                                   handleMaybeM, pluginResponse,
                                                   subRange)
 import           Ide.Types                       (PluginDescriptor (..),
-                                                  PluginId, PluginMethodHandler,
+                                                  PluginId (..),
+                                                  PluginMethodHandler,
                                                   defaultPluginDescriptor,
                                                   mkPluginHandler)
 import           Language.LSP.Types              (CodeAction (..),
@@ -87,11 +98,30 @@ showAstDataFull = showAstData NoBlankSrcSpan
 showRecord :: Outputable arg => HsRecFields p arg -> Text
 showRecord rec = printOutputable (rec { rec_dotdot = Nothing })
 
--- Same as `showRecord` but works with `Pat` types. This is a partial function
--- but it is only ever called with record patterns, so it should be okay.
+-- Same as `showRecord` but works with `Pat` types.
 showRecordPat :: Outputable (Pat p) => Pat p -> Maybe Text
 showRecordPat pat@(ConPat _ _ (RecCon flds)) =
-  Just $ printOutputable $ pat { pat_args = RecCon (flds { rec_dotdot = Nothing }) }
+  Just $ printOutputable $
+    pat { pat_args = RecCon (flds { rec_dotdot = Nothing
+                                  , rec_flds = rec_flds'
+                                  }) }
+  where
+    -- TODO(ozkutuk): HsRecField' is renamed to HsFieldBind in GHC 9.4
+    -- Add it as a pattern synonym to the ghcide compat module, so it would
+    -- work on all HLS builds.
+    -- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/5757
+
+    -- TODO(ozkutuk): Check if `NamedFieldPuns` extension is present
+
+    no_pun_count = maybe (length (rec_flds flds)) unLoc (rec_dotdot flds)
+    -- Field binds of the explicit form (e.g. `{ a = a' }`) should be
+    -- left as is, hence the split.
+    (no_puns, puns) = splitAt no_pun_count (rec_flds flds)
+    -- `hsRecPun` is set to `True` in order to pretty-print the fields as field
+    -- puns (since there is similar mechanism in the `Outputable` instance as
+    -- explained the documentation of `showRecord` function).
+    puns' = map (\(L ss fld) -> L ss (fld { hsRecPun = True })) puns
+    rec_flds' = no_puns <> puns'
 showRecordPat _ = Nothing
 
 data Log
@@ -119,7 +149,10 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
 -- type instance RuleResult CollectRecords = CollectRecordsResult
 --
 -- -- TODO(ozkutuk)
--- data CollectRecordsResult = CRR -- [RecordInfo]
+data CollectRecordsResult = CRR
+  { recordInfos       :: ![RecordInfo]
+  , enabledExtensions :: ![Extension]
+  }
 --                           deriving (Show, Generic)
 -- instance NFData CollectRecordsResult
 
@@ -146,24 +179,30 @@ getRecPatterns conPat@(unLoc -> ConPat _ _ (RecCon flds))
   | isJust (rec_dotdot flds) = Just conPat
 getRecPatterns _ = Nothing
 
-collectRecordsInRange :: MonadIO m => IdeState -> Range -> NormalizedFilePath -> ExceptT String m [RecordInfo]
-collectRecordsInRange ideState range nfp = do
-  recs <- collectRecords' ideState range nfp
-  let recsInRange = filter inRange recs
-  pure recsInRange
+-- collectRecordsResult :: MonadIO m => Range -> IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
+-- collectRecordsResult range ideState nfp = do
+--   recordInfos <- collectRecordsInRange range ideState nfp
+--   enabledExtensions <- error "todo"
+--   pure $ CRR {..}
+
+collectRecordsInRange :: MonadIO m => Range -> IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
+collectRecordsInRange range ideState nfp = do
+  CRR recs exts <- collectRecords' ideState nfp
+  pure $ CRR (filter inRange recs) exts
 
   where
     inRange :: RecordInfo -> Bool
     inRange (RecordInfo (srcSpanToRange -> recRange) _) =
       maybe False (subRange range) recRange
 
-collectRecords' :: MonadIO m => IdeState -> Range -> NormalizedFilePath -> ExceptT String m [RecordInfo]
-collectRecords' ideState range nfp = do
+collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
+collectRecords' ideState nfp = do
   tmr <- handleMaybeM "Unable to TypeCheck"
     $ liftIO
     $ runAction "ExplicitFields" ideState
     $ use TypeCheck nfp
-  let (hsGroup,_,_,_) = tmrRenamed tmr
+  let exts = getEnabledExtensions tmr
+      (hsGroup,_,_,_) = tmrRenamed tmr
       valBinds = hs_valds hsGroup
       recs = collectRecords valBinds
       (srcs, recs') = unzip $ map (getLoc &&& unLoc) recs
@@ -171,7 +210,11 @@ collectRecords' ideState range nfp = do
       -- srcs = map (locA . (\(L l _) -> l) . pat_con) recs
       -- recsPrinted = map (showRecord . (\(RecCon x) -> x) . pat_args) recs
       recInfos = zipWith RecordInfo srcs recs'
-  pure recInfos
+  pure $ CRR recInfos exts
+
+  where
+    getEnabledExtensions :: TcModuleResult -> [Extension]
+    getEnabledExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary . tmrParsed
       -- logTxts xs = logWith recorder Info (LogTxts xs)
   -- logTxts recsPrinted
   --   *> logTxts (map printOutputable srcs)
@@ -199,18 +242,19 @@ collectRecords' ideState range nfp = do
 
 codeActionProvider :: Recorder (WithPriority Log)
                    -> PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionProvider recorder ideState _ (CodeActionParams _ _ docId range _) = pluginResponse $ do
+codeActionProvider recorder ideState pId (CodeActionParams _ _ docId range _) = pluginResponse $ do
   nfp <- getNormalizedFilePath (docId ^. L.uri)
-  recs <- collectRecordsInRange ideState range nfp
+  pragma <- getFirstPragma pId ideState nfp
+  CRR recs exts <- collectRecordsInRange range ideState nfp
   logWith recorder Info $ LogTxts $ map (T.pack . show . srcSpanToRange . getSrcSpan) recs
-  let actions = map (mkCodeAction nfp) recs
+  let actions = map (mkCodeAction nfp exts pragma) recs
   -- liftIO $ runAction "ExplicitFields" ideState $ use CollectRecords nfp
   pure $ List actions
 
   where
-    mkCodeAction :: NormalizedFilePath -> RecordInfo -> Command |? CodeAction
-    mkCodeAction nfp rec = InR CodeAction
-      { _title = "Expand the record wildcard"
+    mkCodeAction :: NormalizedFilePath -> [Extension] -> NextPragmaInfo -> RecordInfo -> Command |? CodeAction
+    mkCodeAction nfp exts pragma rec = InR CodeAction
+      { _title = mkCodeActionTitle exts
       , _kind = Just CodeActionRefactorRewrite
       , _diagnostics = Nothing
       , _isPreferred = Nothing
@@ -220,9 +264,39 @@ codeActionProvider recorder ideState _ (CodeActionParams _ _ docId range _) = pl
       , _xdata = Nothing
       }
       where
-        edits = catMaybes [TextEdit <$> (srcSpanToRange $ getSrcSpan rec) <*> getEdit rec]
+        edits = catMaybes
+          [ TextEdit <$> (srcSpanToRange $ getSrcSpan rec) <*> getEdit rec
+          , pragmaEdit
+          ]
+
+        -- TODO(ozkutuk): `RecordPuns` extension is renamed to `NamedFieldPuns`
+        -- in GHC 9.4, so I probably need to add this to the compat module as
+        -- well.
+        -- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/6156
+        pragmaEdit :: Maybe TextEdit
+        pragmaEdit = if RecordPuns `elem` exts
+                       then Nothing
+                       else Just $ insertNewPragma pragma RecordPuns
 
     mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
     mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
       where
         changes = Just $ HashMap.singleton (fromNormalizedUri (normalizedFilePathToUri nfp)) (List edits)
+
+mkCodeActionTitle :: [Extension] -> Text
+mkCodeActionTitle exts =
+  if RecordPuns `elem` exts
+    then title
+    else title <> " (needs extension: " <> (T.pack $ show RecordPuns) <> ")"
+    where
+      title = "Expand record wildcard"
+
+-- Copied from hls-alternate-number-format-plugin
+getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
+getFirstPragma (PluginId pId) state nfp = handleMaybeM "Could not get NextPragmaInfo" $ do
+  ghcSession <- liftIO $ runAction (T.unpack pId <> ".GhcSession") state $ useWithStale GhcSession nfp
+  (_, fileContents) <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp
+  case ghcSession of
+    Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
+    Nothing                                           -> pure Nothing
+
