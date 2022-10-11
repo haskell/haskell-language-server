@@ -32,7 +32,7 @@ Support status (see the support policy below for more details):
 | 8.8.4        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)       | full support, will be deprecated after LTS and HLS full support for ghc-9.2 |
 | 8.8.3        | [1.5.1](https://github.com/haskell/haskell-language-server/releases/1.5.1)         | deprecated                                                                  |
 | 8.8.2        | [1.2.0](https://github.com/haskell/haskell-language-server/releases/tag/1.2.0)     | deprecated                                                                  |
-| 8.6.5        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)       | full support, will be deprecated after LTS and HLS full suppot for ghc-9.2  |
+| 8.6.5        | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0) | deprecated                                                                  |
 | 8.6.4        | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0)     | deprecated                                                                  |
 
 GHC versions not in the list have never been supported by HLS.
