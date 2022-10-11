@@ -13,7 +13,7 @@ module Ide.Plugin.ExplicitFields
   ) where
 
 import           Control.Arrow                   ((&&&))
-import           Control.Lens                    ((^.))
+import           Control.Lens                    ((%~), (^.))
 import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Control.Monad.Trans.Except      (ExceptT)
 import           Data.Data                       (Data)
@@ -276,7 +276,9 @@ codeActionProvider recorder ideState pId (CodeActionParams _ _ docId range _) = 
         pragmaEdit :: Maybe TextEdit
         pragmaEdit = if RecordPuns `elem` exts
                        then Nothing
-                       else Just $ insertNewPragma pragma RecordPuns
+                       else Just $ patchExtName $ insertNewPragma pragma RecordPuns
+          where
+            patchExtName = L.newText %~ T.replace "Record" "NamedField"
 
     mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
     mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
@@ -287,7 +289,7 @@ mkCodeActionTitle :: [Extension] -> Text
 mkCodeActionTitle exts =
   if RecordPuns `elem` exts
     then title
-    else title <> " (needs extension: " <> (T.pack $ show RecordPuns) <> ")"
+    else title <> " (needs extension: NamedFieldPuns)"
     where
       title = "Expand record wildcard"
 
