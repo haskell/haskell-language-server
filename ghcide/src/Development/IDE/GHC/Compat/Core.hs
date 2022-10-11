@@ -935,11 +935,7 @@ addBootSuffixLocnOut :: GHC.ModLocation -> GHC.ModLocation
 addBootSuffixLocnOut = Module.addBootSuffixLocnOut
 
 dataConExTyCoVars :: DataCon -> [TyCoVar]
-#if __GLASGOW_HASKELL__ >= 808
 dataConExTyCoVars = DataCon.dataConExTyCoVars
-#else
-dataConExTyCoVars = DataCon.dataConExTyVars
-#endif
 
 #if !MIN_VERSION_ghc(9,0,0)
 -- Linear Haskell
@@ -953,7 +949,7 @@ unrestricted = id
 
 mkVisFunTys :: [Scaled Type] -> Type -> Type
 mkVisFunTys =
-#if __GLASGOW_HASKELL__ <= 808
+#if __GLASGOW_HASKELL__ == 808
   mkFunTys
 #else
   TcType.mkVisFunTys

@@ -16,20 +16,20 @@ module Development.IDE.GHC.Compat.CPP (
     doCpp
     ) where
 
-import           FileCleanup
-import           Packages
-import           Panic
-import           SysTools
-import           LlvmCodeGen                (llvmVersionList)
 import           Control.Monad
 import           Data.List                  (intercalate)
 import           Data.Maybe
 import           Data.Version
 import           DynFlags
+import           FileCleanup
+import           LlvmCodeGen                (llvmVersionList)
 import           Module                     (rtsUnitId, toInstalledUnitId)
+import           Packages
+import           Panic
 import           System.Directory
 import           System.FilePath
 import           System.Info
+import           SysTools
 
 import           Development.IDE.GHC.Compat as Compat
 

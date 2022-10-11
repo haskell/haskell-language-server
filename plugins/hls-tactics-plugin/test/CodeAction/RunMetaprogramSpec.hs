@@ -11,17 +11,11 @@ import  Wingman.Types
 spec :: Spec
 spec = do
   let metaTest l c f =
-#if __GLASGOW_HASKELL__ >= 808
         goldenTest RunMetaprogram "" l c f
-#else
-        pure ()
-#endif
 
-#if __GLASGOW_HASKELL__ >= 808
   describe "beginMetaprogram" $ do
     goldenTest BeginMetaprogram ""  1  7 "MetaBegin"
     goldenTest BeginMetaprogram ""  1  9 "MetaBeginNoWildify"
-#endif
 
   describe "golden" $ do
     metaTest  6 11 "MetaMaybeAp"

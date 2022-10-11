@@ -4,9 +4,7 @@
 module Development.IDE.GHC.Compat.Plugins (
     Plugin(..),
     defaultPlugin,
-#if __GLASGOW_HASKELL__ >= 808
     PluginWithArgs(..),
-#endif
     applyPluginsParsedResultAction,
     initializePlugins,
 
