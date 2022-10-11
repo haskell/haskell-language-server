@@ -566,8 +566,7 @@ generatedNodeInfo = sourceNodeInfo -- before ghc 9.0, we don't distinguish the s
 #endif
 
 data GhcVersion
-  = GHC86
-  | GHC88
+  = GHC88
   | GHC810
   | GHC90
   | GHC92
@@ -588,8 +587,6 @@ ghcVersion = GHC90
 ghcVersion = GHC810
 #elif MIN_VERSION_GLASGOW_HASKELL(8,8,0,0)
 ghcVersion = GHC88
-#elif MIN_VERSION_GLASGOW_HASKELL(8,6,0,0)
-ghcVersion = GHC86
 #endif
 
 runUnlit :: Logger -> DynFlags -> [Option] -> IO ()
