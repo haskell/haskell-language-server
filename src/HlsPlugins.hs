@@ -94,6 +94,10 @@ import           Ide.Plugin.GADT                   as GADT
 import           Ide.Plugin.ExplicitFixity         as ExplicitFixity
 #endif
 
+#if explicitFields
+import           Ide.Plugin.ExplicitFields         as ExplicitFields
+#endif
+
 -- formatters
 
 #if hls_floskell
@@ -220,5 +224,8 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       GhcIde.descriptors (pluginRecorder "ghcide")
 #if explicitFixity
       ++ [let pId = "explicit-fixity" in ExplicitFixity.descriptor (pluginRecorder pId) pId]
+#endif
+#if explicitFields
+      ++ [let pId = "explicit-fields" in ExplicitFields.descriptor (pluginRecorder pId) pId]
 #endif
 

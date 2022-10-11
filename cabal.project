@@ -33,6 +33,7 @@ packages:
          ./plugins/hls-stan-plugin
          ./plugins/hls-gadt-plugin
          ./plugins/hls-explicit-fixity-plugin
+         ./plugins/hls-explicit-record-fields-plugin
          ./plugins/hls-refactor-plugin
 
 -- Standard location for temporary packages needed for particular environments

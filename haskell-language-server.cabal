@@ -163,6 +163,11 @@ flag explicitFixity
   default:     True
   manual:      True
 
+flag explicitFields
+  description: Enable explicitFields plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -300,6 +305,11 @@ common explicitFixity
     build-depends: hls-explicit-fixity-plugin ^>= 1.0
     cpp-options: -DexplicitFixity
 
+common explicitFields
+  if flag(explicitFields)
+    build-depends: hls-explicit-record-fields-plugin ^>= 1.0
+    cpp-options: -DexplicitFields
+
 -- formatters
 
 common floskell
@@ -358,6 +368,7 @@ library
                   , codeRange
                   , gadt
                   , explicitFixity
+                  , explicitFields
                   , floskell
                   , fourmolu
                   , ormolu
