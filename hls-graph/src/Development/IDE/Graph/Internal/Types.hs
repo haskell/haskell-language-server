@@ -12,11 +12,6 @@ module Development.IDE.Graph.Internal.Types where
 
 import           Control.Applicative
 import           Control.Monad.Catch
-#if __GLASGOW_HASKELL__ < 808
-import           Control.Concurrent.STM.Stats  (TVar, atomically)
-#else
-import           GHC.Conc                      (TVar, atomically)
-#endif
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
 import           Data.Aeson                    (FromJSON, ToJSON)
@@ -31,6 +26,7 @@ import           Data.List                     (intercalate)
 import           Data.Maybe
 import           Data.Typeable
 import           Development.IDE.Graph.Classes
+import           GHC.Conc                      (TVar, atomically)
 import           GHC.Generics                  (Generic)
 import qualified ListT
 import qualified StmContainers.Map             as SMap

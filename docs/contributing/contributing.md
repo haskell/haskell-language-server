@@ -64,8 +64,6 @@ To create binaries:
 * `nix build .#haskell-language-server-884` - GHC 8.8.4
 * `nix build .#haskell-language-server-901` - GHC 9.0.1
 
-GHC 8.6.5 is not supported here because `nixpkgs-unstable` no longer maintains the corresponding packages set.
-
 ## Testing
 
 The tests make use of the [Tasty](https://github.com/feuerbach/tasty) test framework.

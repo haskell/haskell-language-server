@@ -68,12 +68,12 @@ import Development.IDE.Types.Logger (Recorder, cmapWithPrio, WithPriority, Prett
 import qualified Development.IDE.Core.Shake as Shake
 
 
-newtype Log 
+newtype Log
   = LogShake Shake.Log
   deriving Show
 
 instance Pretty Log where
-  pretty = \case 
+  pretty = \case
     LogShake shakeLog -> pretty shakeLog
 
 tacticDesc :: T.Text -> T.Text
@@ -425,9 +425,7 @@ buildPatHy prov (fromPatCompat -> p0) =
           mkDerivedConHypothesis prov con args $ zip [0..] [pgt, pgt5]
         RecCon r ->
           mkDerivedRecordHypothesis prov con args r
-#if __GLASGOW_HASKELL__ >= 808
     SigPat  _ p _ -> buildPatHy prov p
-#endif
 #if __GLASGOW_HASKELL__ == 808
     XPat   p      -> buildPatHy prov $ unLoc p
 #endif
@@ -585,7 +583,7 @@ wingmanRules recorder plId = do
 #endif
                         | isHole occ ->
                             maybeToList $ srcSpanToRange span
-#if __GLASGOW_HASKELL__ <= 808
+#if __GLASGOW_HASKELL__ == 808
                       L span (EWildPat _) ->
                         maybeToList $ srcSpanToRange span
 #endif
