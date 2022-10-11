@@ -139,6 +139,10 @@ tests =
   , goldenWithEval "Don't panic on {-# UNPACK #-} pragma" "TUNPACK" "hs"
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"
   , goldenWithEval "Test on last line insert results correctly" "TLastLine" "hs"
+  , testGroup "with preprocessors"
+    [ goldenWithEval "CPP support" "TCPP" "hs"
+    , goldenWithEval "Literate Haskell Bird Style" "TLHS" "lhs"
+    ]
   , goldenWithEval "Works with NoImplicitPrelude" "TNoImplicitPrelude" "hs"
   , goldenWithEval "Variable 'it' works" "TIt" "hs"
   , testGroup "configuration"
