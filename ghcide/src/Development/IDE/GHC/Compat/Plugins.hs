@@ -11,10 +11,8 @@ module Development.IDE.GHC.Compat.Plugins (
     initializePlugins,
 
     -- * Static plugins
-#if MIN_VERSION_ghc(8,8,0)
     StaticPlugin(..),
     hsc_static_plugins,
-#endif
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -31,13 +29,9 @@ import           GHC.Driver.Plugins                (ParsedResult (..),
                                                     staticPlugins)
 #endif
 import qualified GHC.Runtime.Loader                as Loader
-#elif MIN_VERSION_ghc(8,8,0)
-import qualified DynamicLoading                    as Loader
-import           Plugins
 #else
 import qualified DynamicLoading                    as Loader
-import           Plugins                           (Plugin (..), defaultPlugin,
-                                                    withPlugins)
+import           Plugins
 #endif
 import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env    (hscSetFlags, hsc_dflags)
@@ -76,7 +70,6 @@ initializePlugins env = do
 #endif
 
 
-#if MIN_VERSION_ghc(8,8,0)
 hsc_static_plugins :: HscEnv -> [StaticPlugin]
 #if MIN_VERSION_ghc(9,3,0)
 hsc_static_plugins = staticPlugins . Env.hsc_plugins
@@ -84,5 +77,4 @@ hsc_static_plugins = staticPlugins . Env.hsc_plugins
 hsc_static_plugins = Env.hsc_static_plugins
 #else
 hsc_static_plugins = staticPlugins . hsc_dflags
-#endif
 #endif

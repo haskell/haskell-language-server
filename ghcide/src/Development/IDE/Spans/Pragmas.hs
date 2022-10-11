@@ -416,10 +416,7 @@ mkLexerPState dynFlags stringBuffer =
     startRealSrcLoc = mkRealSrcLoc "asdf" 1 1
     updateDynFlags = flip gopt_unset Opt_Haddock . flip gopt_set Opt_KeepRawTokenStream
     finalDynFlags = updateDynFlags dynFlags
-#if !MIN_VERSION_ghc(8,8,1)
-    pState = mkPState finalDynFlags stringBuffer startRealSrcLoc
-    finalPState = pState{ use_pos_prags = False }
-#elif !MIN_VERSION_ghc(8,10,1)
+#if !MIN_VERSION_ghc(8,10,1)
     mkLexerParserFlags =
       mkParserFlags'
       <$> warningFlags
