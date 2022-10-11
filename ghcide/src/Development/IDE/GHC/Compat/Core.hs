@@ -240,7 +240,7 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.mkGeneralSrcSpan,
     SrcLoc.mkRealSrcSpan,
     SrcLoc.mkRealSrcLoc,
-    getRealSrcSpan,
+    SrcLoc.getRealSrcSpan,
     SrcLoc.realSrcLocSpan,
     SrcLoc.realSrcSpanStart,
     SrcLoc.realSrcSpanEnd,
@@ -309,13 +309,13 @@ module Development.IDE.GHC.Compat.Core (
     Module.ml_hs_file,
     Module.ml_obj_file,
     Module.ml_hi_file,
-    Development.IDE.GHC.Compat.Core.ml_hie_file,
+    Module.ml_hie_file,
     -- * DataCon
-    Development.IDE.GHC.Compat.Core.dataConExTyCoVars,
+    DataCon.dataConExTyCoVars,
     -- * Role
     Role(..),
     -- * Panic
-    PlainGhcException,
+    Plain.PlainGhcException,
     panic,
     panicDoc,
     -- * Other
@@ -926,16 +926,10 @@ getLoc :: SrcLoc.HasSrcSpan a => a -> SrcLoc.SrcSpan
 getLoc = SrcLoc.getLoc
 #endif
 
-getRealSrcSpan :: SrcLoc.RealLocated a -> SrcLoc.RealSrcSpan
-getRealSrcSpan = SrcLoc.getRealSrcSpan
-
 -- | Add the @-boot@ suffix to all output file paths associated with the
 -- module, not including the input file itself
 addBootSuffixLocnOut :: GHC.ModLocation -> GHC.ModLocation
 addBootSuffixLocnOut = Module.addBootSuffixLocnOut
-
-dataConExTyCoVars :: DataCon -> [TyCoVar]
-dataConExTyCoVars = DataCon.dataConExTyCoVars
 
 #if !MIN_VERSION_ghc(9,0,0)
 -- Linear Haskell
@@ -992,16 +986,11 @@ noExtField :: GHC.NoExt
 noExtField = GHC.noExt
 #endif
 
-ml_hie_file :: GHC.ModLocation -> FilePath
-ml_hie_file = Module.ml_hie_file
-
 #if !MIN_VERSION_ghc(9,0,0)
 pattern NotBoot, IsBoot :: IsBootInterface
 pattern NotBoot = False
 pattern IsBoot = True
 #endif
-
-type PlainGhcException = Plain.PlainGhcException
 
 #if MIN_VERSION_ghc(9,0,0)
 -- This is from the old api, but it still simplifies
