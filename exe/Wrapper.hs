@@ -12,11 +12,11 @@
 module Main where
 
 import           Control.Monad.Extra
-import           Data.Char                          (isSpace)
 import           Data.Default
 import           Data.Either.Extra                  (eitherToMaybe)
 import           Data.Foldable
 import           Data.List
+import           Data.List.Extra                    (trimEnd)
 import           Data.Void
 import qualified Development.IDE.Session            as Session
 import qualified HIE.Bios.Environment               as HieBios
@@ -232,7 +232,7 @@ findProjectCradle' log = do
 trim :: String -> String
 trim s = case lines s of
   [] -> s
-  ls -> dropWhileEnd isSpace $ last ls
+  ls -> trimEnd $ last ls
 
 data WrapperSetupError
     = FailedToObtainGhcVersion (ActionName Void) CradleError

@@ -228,18 +228,8 @@ import           DynFlags                              hiding (ExposePackage)
 import           HscTypes
 import           MkIface                               hiding (writeIfaceFile)
 
-#if MIN_VERSION_ghc(8,8,0)
 import           StringBuffer                          (hPutStringBuffer)
-#endif
 import qualified SysTools
-
-#if !MIN_VERSION_ghc(8,8,0)
-import qualified EnumSet
-import           SrcLoc                                (RealLocated)
-
-import           Foreign.ForeignPtr
-import           System.IO
-#endif
 #endif
 
 import           Compat.HieAst                         (enrichHie)
@@ -385,13 +375,6 @@ corePrepExpr _ = GHC.corePrepExpr
 simplifyExpr df _ = GHC.simplifyExpr df
 #endif
 
-#if !MIN_VERSION_ghc(8,8,0)
-hPutStringBuffer :: Handle -> StringBuffer -> IO ()
-hPutStringBuffer hdl (StringBuffer buf len cur)
-    = withForeignPtr (plusForeignPtr buf cur) $ \ptr ->
-             hPutBuf hdl ptr len
-#endif
-
 #if MIN_VERSION_ghc(9,2,0)
 type ErrMsg  = MsgEnvelope DecoratedSDoc
 #endif
@@ -445,12 +428,7 @@ hieExportNames = nameListFromAvails . hie_exports
 type NameCacheUpdater = NameCache
 #else
 upNameCache :: IORef NameCache -> (NameCache -> (NameCache, c)) -> IO c
-#if MIN_VERSION_ghc(8,8,0)
 upNameCache = updNameCache
-#else
-upNameCache ref upd_fn
-  = atomicModifyIORef' ref upd_fn
-#endif
 #endif
 
 #if !MIN_VERSION_ghc(9,0,1)
@@ -480,27 +458,15 @@ addIncludePathsQuote path x = x{includePaths = f $ includePaths x}
     where f i = i{includePathsQuote = path : includePathsQuote i}
 
 setHieDir :: FilePath -> DynFlags -> DynFlags
-setHieDir _f d =
-#if MIN_VERSION_ghc(8,8,0)
-    d { hieDir     = Just _f}
-#else
-    d
-#endif
+setHieDir _f d = d { hieDir = Just _f}
 
 dontWriteHieFiles :: DynFlags -> DynFlags
-dontWriteHieFiles d =
-#if MIN_VERSION_ghc(8,8,0)
-    gopt_unset d Opt_WriteHie
-#else
-    d
-#endif
+dontWriteHieFiles d = gopt_unset d Opt_WriteHie
 
 setUpTypedHoles ::DynFlags -> DynFlags
 setUpTypedHoles df
   = flip gopt_unset Opt_AbstractRefHoleFits    -- too spammy
-#if MIN_VERSION_ghc(8,8,0)
   $ flip gopt_unset Opt_ShowDocsOfHoleFits     -- not used
-#endif
   $ flip gopt_unset Opt_ShowMatchesOfHoleFits  -- nice but broken (forgets module qualifiers)
   $ flip gopt_unset Opt_ShowProvOfHoleFits     -- not used
   $ flip gopt_unset Opt_ShowTypeAppOfHoleFits  -- not used
@@ -532,12 +498,6 @@ getModuleHash = mi_mod_hash
 disableWarningsAsErrors :: DynFlags -> DynFlags
 disableWarningsAsErrors df =
     flip gopt_unset Opt_WarnIsError $ foldl' wopt_unset_fatal df [toEnum 0 ..]
-
-#if !MIN_VERSION_ghc(8,8,0)
-wopt_unset_fatal :: DynFlags -> WarningFlag -> DynFlags
-wopt_unset_fatal dfs f
-    = dfs { fatalWarningFlags = EnumSet.delete f (fatalWarningFlags dfs) }
-#endif
 
 isQualifiedImport :: ImportDecl a -> Bool
 #if MIN_VERSION_ghc(8,10,0)
@@ -606,8 +566,7 @@ generatedNodeInfo = sourceNodeInfo -- before ghc 9.0, we don't distinguish the s
 #endif
 
 data GhcVersion
-  = GHC86
-  | GHC88
+  = GHC88
   | GHC810
   | GHC90
   | GHC92
@@ -628,8 +587,6 @@ ghcVersion = GHC90
 ghcVersion = GHC810
 #elif MIN_VERSION_GLASGOW_HASKELL(8,8,0,0)
 ghcVersion = GHC88
-#elif MIN_VERSION_GLASGOW_HASKELL(8,6,0,0)
-ghcVersion = GHC86
 #endif
 
 runUnlit :: Logger -> DynFlags -> [Option] -> IO ()

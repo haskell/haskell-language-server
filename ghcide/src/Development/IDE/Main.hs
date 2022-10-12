@@ -283,7 +283,7 @@ testing recorder logger =
     hlsPlugins = pluginDescToIdePlugins $
       idePluginsToPluginDesc argsHlsPlugins
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
-    ideOptions = \config sessionLoader ->
+    ideOptions config sessionLoader =
       let
         defOptions = argsIdeOptions config sessionLoader
       in

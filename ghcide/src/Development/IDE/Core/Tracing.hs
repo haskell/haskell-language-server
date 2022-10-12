@@ -37,18 +37,8 @@ import           OpenTelemetry.Eventlog            (SpanInFlight (..), addEvent,
                                                     beginSpan, endSpan, setTag,
                                                     withSpan)
 
-#if MIN_VERSION_ghc(8,8,0)
-otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
-otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => ByteString -> f [a] -> f [a]
-withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> m ()) -> m a) -> m a
-#else
-otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a
-otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => String -> f [a] -> f [a]
-withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> m ()) -> m a) -> m a
-#endif
 
-withTrace :: (MonadMask m, MonadIO m) =>
-    String -> ((String -> String -> m ()) -> m a) -> m a
+withTrace :: (MonadMask m, MonadIO m) => String -> ((String -> String -> m ()) -> m a) -> m a
 withTrace name act
   | userTracingEnabled
   = withSpan (fromString name) $ \sp -> do
@@ -56,6 +46,7 @@ withTrace name act
       act setSpan'
   | otherwise = act (\_ _ -> pure ())
 
+withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> m ()) -> m a) -> m a
 withEventTrace name act
   | userTracingEnabled
   = withSpan (fromString name) $ \sp -> do
@@ -125,6 +116,7 @@ otTracedAction key file mode result act
         (\sp -> act (liftIO . setTag sp "diagnostics" . encodeUtf8 . showDiagnostics ))
   | otherwise = act (\_ -> return ())
 
+otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => ByteString -> f [a] -> f [a]
 otTracedGarbageCollection label act
   | userTracingEnabled = fst <$>
       generalBracket
@@ -138,6 +130,7 @@ otTracedGarbageCollection label act
         (const act)
   | otherwise = act
 
+otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
 otTracedProvider (PluginId pluginName) provider act
   | userTracingEnabled = do
     runInIO <- askRunInIO
@@ -145,5 +138,4 @@ otTracedProvider (PluginId pluginName) provider act
         setTag sp "plugin" (encodeUtf8 pluginName)
         runInIO act
   | otherwise = act
-
 

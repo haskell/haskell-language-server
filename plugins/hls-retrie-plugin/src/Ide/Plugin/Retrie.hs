@@ -306,11 +306,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
           ]
         | L (locA -> l) r  <- rds_rules,
           pos `isInsideSrcSpan` l,
-#if MIN_VERSION_ghc(8,8,0)
           let HsRule {rd_name = L _ (_, rn)} = r,
-#else
-          let HsRule _ (L _ (_,rn)) _ _ _ _ = r,
-#endif
           let ruleName = unpackFS rn
       ]
   where

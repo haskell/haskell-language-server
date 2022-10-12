@@ -308,7 +308,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                  mods_transitive = getTransitiveMods hsc_env needed_mods
 
                  -- If we don't support multiple home units, ModuleNames are sufficient because all the units will be the same
-                 mods_transitive_list = 
+                 mods_transitive_list =
 #if MIN_VERSION_ghc(9,3,0)
                                          mapMaybe nodeKeyToInstalledModule $ Set.toList mods_transitive
 #else
@@ -362,7 +362,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
 #endif
 
     -- Compute the transitive set of linkables required
-    getTransitiveMods hsc_env needed_mods 
+    getTransitiveMods hsc_env needed_mods
 #if MIN_VERSION_ghc(9,3,0)
       = Set.unions (Set.fromList (map moduleToNodeKey mods) : [ dep | m <- mods
                                                               , Just dep <- [Map.lookup (moduleToNodeKey m) (mgTransDeps (hsc_mod_graph hsc_env))]
@@ -561,7 +561,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
 
 
       when (not $ null diffs) $
-        panicDoc "verify core failed!" (vcat $ punctuate (text "\n\n") (diffs )) -- ++ [ppr binds , ppr binds']))
+        panicDoc "verify core failed!" (vcat $ punctuate (text "\n\n") diffs) -- ++ [ppr binds , ppr binds']))
     _ -> pure ()
 
   pure ([], Just $! mkHiFileResult ms final_iface details (tmrRuntimeModules tcm) core_file)
@@ -1181,9 +1181,7 @@ getModSummaryFromImports env fp modTime contents = do
         msrModSummary =
             ModSummary
                 { ms_mod          = modl
-#if MIN_VERSION_ghc(8,8,0)
                 , ms_hie_date     = Nothing
-#endif
 #if MIN_VERSION_ghc(9,3,0)
                 , ms_dyn_obj_date    = Nothing
                 , ms_ghc_prim_import = ghc_prim_import

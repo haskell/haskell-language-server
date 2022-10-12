@@ -36,11 +36,9 @@ module Development.IDE.GHC.Compat.Core (
     maxRefHoleFits,
     maxValidHoleFits,
     setOutputFile,
-#if MIN_VERSION_ghc(8,8,0)
     CommandLineOption,
 #if !MIN_VERSION_ghc(9,2,0)
     staticPlugins,
-#endif
 #endif
     sPgm_F,
     settings,
@@ -242,7 +240,7 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.mkGeneralSrcSpan,
     SrcLoc.mkRealSrcSpan,
     SrcLoc.mkRealSrcLoc,
-    getRealSrcSpan,
+    SrcLoc.getRealSrcSpan,
     SrcLoc.realSrcLocSpan,
     SrcLoc.realSrcSpanStart,
     SrcLoc.realSrcSpanEnd,
@@ -263,7 +261,7 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.noSrcSpan,
     SrcLoc.noSrcLoc,
     SrcLoc.noLoc,
-#if !MIN_VERSION_ghc(8,10,0) && MIN_VERSION_ghc(8,8,0)
+#if !MIN_VERSION_ghc(8,10,0)
     SrcLoc.dL,
 #endif
     -- * Finder
@@ -311,13 +309,13 @@ module Development.IDE.GHC.Compat.Core (
     Module.ml_hs_file,
     Module.ml_obj_file,
     Module.ml_hi_file,
-    Development.IDE.GHC.Compat.Core.ml_hie_file,
+    Module.ml_hie_file,
     -- * DataCon
-    Development.IDE.GHC.Compat.Core.dataConExTyCoVars,
+    DataCon.dataConExTyCoVars,
     -- * Role
     Role(..),
     -- * Panic
-    PlainGhcException,
+    Plain.PlainGhcException,
     panic,
     panicDoc,
     -- * Other
@@ -734,19 +732,12 @@ import           NameCache
 import           NameEnv
 import           NameSet
 import           Packages
-#if MIN_VERSION_ghc(8,8,0)
 import           Panic                        hiding (try)
 import qualified PlainPanic                   as Plain
-#else
-import           Panic                        hiding (GhcException, try)
-import qualified Panic                        as Plain
-#endif
 import           Parser
 import           PatSyn
 import           RnFixity
-#if MIN_VERSION_ghc(8,8,0)
 import           Plugins
-#endif
 import           PprTyThing                   hiding (pprFamInst)
 import           PrelInfo
 import           PrelNames                    hiding (Unique, printName)
@@ -791,10 +782,8 @@ import           SrcLoc                       (RealLocated,
 #endif
 
 
-#if !MIN_VERSION_ghc(8,8,0)
 import           Data.List                    (isSuffixOf)
 import           System.FilePath
-#endif
 
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -931,49 +920,16 @@ pattern L l a <- GHC.L (getLoc -> l) a
 {-# COMPLETE L #-}
 #endif
 
-#elif MIN_VERSION_ghc(8,8,0)
+#else
 type HasSrcSpan = SrcLoc.HasSrcSpan
 getLoc :: SrcLoc.HasSrcSpan a => a -> SrcLoc.SrcSpan
 getLoc = SrcLoc.getLoc
-
-#else
-
-class HasSrcSpan a where
-    getLoc :: a -> SrcSpan
-instance HasSrcSpan Name where
-    getLoc = nameSrcSpan
-instance HasSrcSpan (SrcLoc.GenLocated SrcSpan a) where
-    getLoc = SrcLoc.getLoc
-
 #endif
-
-getRealSrcSpan :: SrcLoc.RealLocated a -> SrcLoc.RealSrcSpan
-#if !MIN_VERSION_ghc(8,8,0)
-getRealSrcSpan = SrcLoc.getLoc
-#else
-getRealSrcSpan = SrcLoc.getRealSrcSpan
-#endif
-
 
 -- | Add the @-boot@ suffix to all output file paths associated with the
 -- module, not including the input file itself
 addBootSuffixLocnOut :: GHC.ModLocation -> GHC.ModLocation
-#if !MIN_VERSION_ghc(8,8,0)
-addBootSuffixLocnOut locn
-  = locn { Module.ml_hi_file  = Module.addBootSuffix (Module.ml_hi_file locn)
-         , Module.ml_obj_file = Module.addBootSuffix (Module.ml_obj_file locn)
-         }
-#else
 addBootSuffixLocnOut = Module.addBootSuffixLocnOut
-#endif
-
-
-dataConExTyCoVars :: DataCon -> [TyCoVar]
-#if __GLASGOW_HASKELL__ >= 808
-dataConExTyCoVars = DataCon.dataConExTyCoVars
-#else
-dataConExTyCoVars = DataCon.dataConExTyVars
-#endif
 
 #if !MIN_VERSION_ghc(9,0,0)
 -- Linear Haskell
@@ -987,7 +943,7 @@ unrestricted = id
 
 mkVisFunTys :: [Scaled Type] -> Type -> Type
 mkVisFunTys =
-#if __GLASGOW_HASKELL__ <= 808
+#if __GLASGOW_HASKELL__ == 808
   mkFunTys
 #else
   TcType.mkVisFunTys
@@ -1030,25 +986,10 @@ noExtField :: GHC.NoExt
 noExtField = GHC.noExt
 #endif
 
-ml_hie_file :: GHC.ModLocation -> FilePath
-#if !MIN_VERSION_ghc(8,8,0)
-ml_hie_file ml
-  | "boot" `isSuffixOf ` Module.ml_hi_file ml = Module.ml_hi_file ml -<.> ".hie-boot"
-  | otherwise  = Module.ml_hi_file ml -<.> ".hie"
-#else
-ml_hie_file = Module.ml_hie_file
-#endif
-
 #if !MIN_VERSION_ghc(9,0,0)
 pattern NotBoot, IsBoot :: IsBootInterface
 pattern NotBoot = False
 pattern IsBoot = True
-#endif
-
-#if MIN_VERSION_ghc(8,8,0)
-type PlainGhcException = Plain.PlainGhcException
-#else
-type PlainGhcException = Plain.GhcException
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)

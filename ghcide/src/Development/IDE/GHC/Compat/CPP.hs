@@ -16,24 +16,20 @@ module Development.IDE.GHC.Compat.CPP (
     doCpp
     ) where
 
-import           FileCleanup
-import           Packages
-import           Panic
-import           SysTools
-#if MIN_VERSION_ghc(8,8,2)
-import           LlvmCodeGen                (llvmVersionList)
-#elif MIN_VERSION_ghc(8,8,0)
-import           LlvmCodeGen                (LlvmVersion (..))
-#endif
 import           Control.Monad
 import           Data.List                  (intercalate)
 import           Data.Maybe
 import           Data.Version
 import           DynFlags
+import           FileCleanup
+import           LlvmCodeGen                (llvmVersionList)
 import           Module                     (rtsUnitId, toInstalledUnitId)
+import           Packages
+import           Panic
 import           System.Directory
 import           System.FilePath
 import           System.Info
+import           SysTools
 
 import           Development.IDE.GHC.Compat as Compat
 
@@ -136,16 +132,9 @@ getBackendDefs :: DynFlags -> IO [String]
 getBackendDefs dflags | hscTarget dflags == HscLlvm = do
     llvmVer <- figureLlvmVersion dflags
     return $ case llvmVer of
-#if MIN_VERSION_ghc(8,8,2)
                Just v
                  | [m] <- llvmVersionList v -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m, 0) ]
                  | m:n:_   <- llvmVersionList v -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m, n) ]
-#elif MIN_VERSION_ghc(8,8,0)
-               Just (LlvmVersion n) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (n,0) ]
-               Just (LlvmVersionOld m n) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m,n) ]
-#else
-               Just n -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format n ]
-#endif
                _      -> []
   where
     format (major, minor)

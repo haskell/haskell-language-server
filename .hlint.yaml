@@ -23,6 +23,7 @@
 - ignore: {name: "Use camelCase"}
 - ignore: {name: "Use uncurry"}
 - ignore: {name: "Avoid lambda using `infix`"}
+- ignore: {name: "Replace case with fromMaybe"}
 
 # Gives at least one suggestion we don't like.
 - ignore: {name: "Use <=<"}
@@ -65,11 +66,11 @@
     - Wingman.Types
     - AutoTupleSpec
   - name: unsafeInterleaveIO
-    within: 
+    within:
     - Development.IDE.LSP.LanguageServer
   - {name: unsafeDupablePerformIO, within: []}
   - name: unsafeCoerce
-    within: 
+    within:
     - Ide.Plugin.Eval.Code
     - Development.IDE.Core.Compile
     - Development.IDE.Types.Shake
@@ -85,12 +86,12 @@
     - Compat.HieBin
 
   # Partial functions
-  
+
   # We need to check fucntions which
   # are typically exported multiple ways under both names,
   # see https://github.com/ndmitchell/hlint/issues/1389
   - name: [Prelude.head, Data.List.head]
-    within: 
+    within:
     - Main
     - Experiments
     - Development.Benchmark.Rules
@@ -116,7 +117,7 @@
     - Wingman.Tactics
 
   - name: [Prelude.tail, Data.List.tail]
-    within: 
+    within:
     - Main
     - Development.Benchmark.Rules
     - Development.IDE.Plugin.CodeAction
@@ -125,7 +126,7 @@
     - UnificationSpec
 
   - name: [Prelude.last, Data.List.last]
-    within: 
+    within:
     - Main
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.CodeAction.ExactPrint
@@ -136,7 +137,7 @@
     - Ide.Plugin.Eval.CodeLens
 
   - name: [Prelude.init, Data.List.init]
-    within: 
+    within:
     - Main
     - Development.IDE.Spans.Common
     - Ide.PluginUtils
@@ -151,7 +152,7 @@
     within: []
 
   - name: ["Prelude.!!", "Data.List.!!"]
-    within: 
+    within:
     - Main
     - Experiments
     - FunctionalCodeAction
@@ -171,11 +172,11 @@
     within: []
 
   - name: Data.Foldable.foldr1
-    within: 
+    within:
     - Wingman.Tactics
 
-  - name: Data.Maybe.fromJust 
-    within: 
+  - name: Data.Maybe.fromJust
+    within:
     - Experiments
     - Main
     - MultipleImports
@@ -193,7 +194,7 @@
     - Ide.Plugin.Class
 
   - name: "Data.Map.!"
-    within: 
+    within:
     - Wingman.LanguageServer
 
   - name: "Data.IntMap.!"
@@ -210,7 +211,7 @@
   # Debug.Trace, because that module also
   # includes the eventlog tracing functions,
   # which are legitimate to use.
-  - name: 
+  - name:
     - Debug.Trace.trace
     - Debug.Trace.traceId
     - Debug.Trace.traceShow
@@ -220,7 +221,7 @@
     - Debug.Trace.traceM
     - Debug.Trace.traceShowM
     - Debug.Trace.putTraceMsg
-    within: 
+    within:
     - Development.IDE.Core.Compile
     - Development.IDE.Graph.Internal.Database
     - Development.IDE.GHC.Util

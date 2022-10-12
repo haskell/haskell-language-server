@@ -38,7 +38,7 @@ import           GHC.Types.TypeEnv
 import           GHC.Driver.Types
 #endif
 
-#elif MIN_VERSION_ghc(8,6,0)
+#else
 import           Binary
 import           BinFingerprint                  (fingerprintBinMem)
 import           BinIface
