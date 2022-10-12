@@ -1,0 +1,4 @@
+cradle:
+  bios:
+    shell: |
+      find . -name "*.hs" > $HIE_BIOS_OUTPUT

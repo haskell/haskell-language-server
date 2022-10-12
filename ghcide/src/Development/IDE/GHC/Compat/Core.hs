@@ -447,6 +447,7 @@ module Development.IDE.GHC.Compat.Core (
     -- * Syntax re-exports
 #if MIN_VERSION_ghc(9,0,0)
     module GHC.Hs,
+    module GHC.Hs.Binds,
     module GHC.Parser,
     module GHC.Parser.Header,
     module GHC.Parser.Lexer,
@@ -786,6 +787,7 @@ import qualified Finder as GHC
 -- (until the CPP extension is actually needed).
 import GHC.LanguageExtensions.Type hiding (Cpp)
 
+import           GHC.Hs.Binds
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
 #if MIN_VERSION_ghc(9,3,0)

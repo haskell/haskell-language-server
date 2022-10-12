@@ -982,7 +982,10 @@ usesWithStale_ key files = do
 --
 -- Run via 'runIdeAction'.
 newtype IdeAction a = IdeAction { runIdeActionT  :: (ReaderT ShakeExtras IO) a }
-    deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad)
+    deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad, Semigroup)
+
+-- https://hub.darcs.net/ross/transformers/issue/86
+deriving instance (Semigroup (m a)) => Semigroup (ReaderT r m a)
 
 runIdeAction :: String -> ShakeExtras -> IdeAction a -> IO a
 runIdeAction _herald s i = runReaderT (runIdeActionT i) s

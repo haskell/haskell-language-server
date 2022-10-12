@@ -20,6 +20,8 @@ module Development.IDE.Spans.AtPoint (
   , getNamesAtPoint
   , toCurrentLocation
   , rowToLoc
+  , nameToLocation
+  , LookupModule
   ) where
 
 import           Development.IDE.GHC.Error
