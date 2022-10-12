@@ -43,6 +43,7 @@ descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor I
 descriptor recorder plId =
     (defaultPluginDescriptor plId)
         { pluginHandlers = mkFormattingHandlers $ provider recorder plId
+        , pluginConfigDescriptor = defaultConfigDescriptor{configCustomConfig = mkCustomConfig properties}
         }
 
 properties :: Properties '[ 'PropertyKey "external" 'TBoolean]
