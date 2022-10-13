@@ -149,7 +149,7 @@ data Log
   | LogLspStart [PluginId]
   | LogLspStartDuration !Seconds
   | LogShouldRunSubset !Bool
-  | LogOnlyPartialGhc92Support
+  | LogOnlyPartialGhc94Support
   | LogSetInitialDynFlagsException !SomeException
   | LogService Service.Log
   | LogShake Shake.Log
@@ -173,8 +173,8 @@ instance Pretty Log where
       "Started LSP server in" <+> pretty (showDuration duration)
     LogShouldRunSubset shouldRunSubset ->
       "shouldRunSubset:" <+> pretty shouldRunSubset
-    LogOnlyPartialGhc92Support ->
-      "Currently, HLS supports GHC 9.2 only partially. See [issue #2982](https://github.com/haskell/haskell-language-server/issues/2982) for more detail."
+    LogOnlyPartialGhc94Support ->
+      "Currently, HLS supports GHC 9.4 only partially. See [issue #3190](https://github.com/haskell/haskell-language-server/issues/3190) for more detail."
     LogSetInitialDynFlagsException e ->
       "setInitialDynFlags:" <+> pretty (displayException e)
     LogService log -> pretty log
@@ -353,9 +353,9 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                               , optRunSubset = runSubset
                               }
                       caps = LSP.resClientCapabilities env
-                  -- FIXME: Remove this after GHC 9.2 gets fully supported
-                  when (ghcVersion == GHC92) $
-                      log Warning LogOnlyPartialGhc92Support
+                  -- FIXME: Remove this after GHC 9.4 gets fully supported
+                  when (ghcVersion == GHC94) $
+                      log Warning LogOnlyPartialGhc94Support
                   monitoring <- argsMonitoring
                   initialise
                       (cmapWithPrio LogService recorder)
