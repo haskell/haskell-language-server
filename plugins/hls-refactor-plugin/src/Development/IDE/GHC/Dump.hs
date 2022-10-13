@@ -3,11 +3,7 @@ module Development.IDE.GHC.Dump(showAstDataHtml) where
 import           Data.Data                             hiding (Fixity)
 import           Development.IDE.GHC.Compat            hiding (NameAnn)
 import           Development.IDE.GHC.Compat.ExactPrint
-#if MIN_VERSION_ghc(8,10,1)
 import           GHC.Hs.Dump
-#else
-import           HsDumpAst
-#endif
 #if MIN_VERSION_ghc(9,2,1)
 import qualified Data.ByteString                       as B
 import           Development.IDE.GHC.Compat.Util

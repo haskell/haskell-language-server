@@ -46,8 +46,6 @@ library
     Compat.HieDebug
     Compat.HieUtils
 
-  if (impl(ghc > 8.7) && impl(ghc < 8.10))
-    hs-source-dirs: src-ghc88 src-reexport
   if (impl(ghc > 8.9) && impl(ghc < 8.11))
     hs-source-dirs: src-ghc810 src-reexport
   if (impl(ghc >= 9.0) && impl(ghc < 9.1) || flag(ghc-lib))

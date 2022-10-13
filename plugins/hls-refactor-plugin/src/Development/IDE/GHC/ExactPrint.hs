@@ -489,13 +489,8 @@ instance p ~ GhcPs => ASTElement AnnListItem (HsExpr p) where
     graft = graftExpr
 
 instance p ~ GhcPs => ASTElement AnnListItem (Pat p) where
-#if __GLASGOW_HASKELL__ == 808
-    parseAST = fmap (fmap $ right $ second dL) . parsePattern
-    maybeParensAST = dL . parenthesizePat appPrec . unLoc
-#else
     parseAST = parsePattern
     maybeParensAST = parenthesizePat appPrec
-#endif
 
 instance p ~ GhcPs => ASTElement AnnListItem (HsType p) where
     parseAST = parseType
