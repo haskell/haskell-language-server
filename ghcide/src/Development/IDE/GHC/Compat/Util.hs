@@ -74,7 +74,7 @@ module Development.IDE.GHC.Compat.Util (
     ) where
 
 #if MIN_VERSION_ghc(9,4,0)
-import GHC.Data.Bool (OverridingBool(..))
+import           GHC.Data.Bool           (OverridingBool (..))
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
