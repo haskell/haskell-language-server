@@ -111,8 +111,6 @@ showRecordPat pat@(ConPat _ _ (RecCon flds)) =
     -- work on all HLS builds.
     -- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/5757
 
-    -- TODO(ozkutuk): Check if `NamedFieldPuns` extension is present
-
     no_pun_count = maybe (length (rec_flds flds)) unLoc (rec_dotdot flds)
     -- Field binds of the explicit form (e.g. `{ a = a' }`) should be
     -- left as is, hence the split.
@@ -195,31 +193,29 @@ collectRecordsInRange range ideState nfp = do
     inRange (RecordInfo (srcSpanToRange -> recRange) _) =
       maybe False (subRange range) recRange
 
-collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
-collectRecords' ideState nfp = do
-  tmr <- handleMaybeM "Unable to TypeCheck"
-    $ liftIO
-    $ runAction "ExplicitFields" ideState
-    $ use TypeCheck nfp
-  let exts = getEnabledExtensions tmr
-      (hsGroup,_,_,_) = tmrRenamed tmr
+getEnabledExtensions :: TcModuleResult -> [Extension]
+getEnabledExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary . tmrParsed
+
+getRecords :: TcModuleResult -> [RecordInfo]
+getRecords tmr =
+  let (hsGroup,_,_,_) = tmrRenamed tmr
       valBinds = hs_valds hsGroup
       recs = collectRecords valBinds
       (srcs, recs') = unzip $ map (getLoc &&& unLoc) recs
-      -- recs' = map unLoc recs
-      -- srcs = map (locA . (\(L l _) -> l) . pat_con) recs
-      -- recsPrinted = map (showRecord . (\(RecCon x) -> x) . pat_args) recs
-      recInfos = zipWith RecordInfo srcs recs'
-  pure $ CRR recInfos exts
+  in zipWith RecordInfo srcs recs'
 
+getTypecheckedModule :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m TcModuleResult
+getTypecheckedModule ideState =
+  handleMaybeM "Unable to TypeCheck"
+    . liftIO
+    . runAction "ExplicitFields" ideState
+    . use TypeCheck
+
+collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
+collectRecords' ideState nfp = mkResult <$> getTypecheckedModule ideState nfp
   where
-    getEnabledExtensions :: TcModuleResult -> [Extension]
-    getEnabledExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary . tmrParsed
-      -- logTxts xs = logWith recorder Info (LogTxts xs)
-  -- logTxts recsPrinted
-  --   *> logTxts (map printOutputable srcs)
-  --   *> logTxts (map (printOutputable . showAstDataFull) recs)
-  --   *> pure ([], Nothing)
+    mkResult :: TcModuleResult -> CollectRecordsResult
+    mkResult tmr = CRR (getRecords tmr) (getEnabledExtensions tmr)
 
 -- collectRecordsRule :: Recorder (WithPriority Log) -> Rules ()
 -- collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectRecords nfp -> do
