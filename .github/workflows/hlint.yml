@@ -18,7 +18,7 @@ jobs:
         version: '3.4'
 
     - name: 'Checking code'
-      uses: rwe/actions-hlint-run@v1
+      uses: rwe/actions-hlint-run@v2
       with:
         hlint-bin: "hlint --with-group=extra"
         fail-on: error

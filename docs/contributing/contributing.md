@@ -64,8 +64,6 @@ To create binaries:
 * `nix build .#haskell-language-server-884` - GHC 8.8.4
 * `nix build .#haskell-language-server-901` - GHC 9.0.1
 
-GHC 8.6.5 is not supported here because `nixpkgs-unstable` no longer maintains the corresponding packages set.
-
 ## Testing
 
 The tests make use of the [Tasty](https://github.com/feuerbach/tasty) test framework.
@@ -196,7 +194,7 @@ See the [tutorial](./plugin-tutorial.md) on writing a plugin in HLS.
 
 When ghcide is built with the `ekg` flag, HLS opens a metrics server on port 8999 exposing GC and ghcide metrics. The ghcide metrics currently exposed are:
 
-- `ghcide.values_count`- count of build results in the store
+- `ghcide.values_count` - count of build results in the store
 - `ghcide.database_count` - count of build keys in the store (these two would be the same in the absence of GC)
 - `ghcide.build_count` - build count. A key is GC'ed if it is dirty and older than 100 builds
 - `ghcide.dirty_keys_count` - non transitive count of dirty build keys

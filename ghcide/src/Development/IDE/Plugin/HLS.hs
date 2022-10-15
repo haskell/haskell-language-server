@@ -71,20 +71,26 @@ prettyResponseError err = errorCode <> ":" <+> errorBody
         errorBody = pretty $ err ^. LSP.message
 
 pluginNotEnabled :: SMethod m -> [(PluginId, b, a)] -> Text
-pluginNotEnabled method availPlugins = "No plugin enabled for " <> T.pack (show method) <> ", available:\n" <> T.pack (unlines $ map (\(plid,_,_) -> show plid) availPlugins)
+pluginNotEnabled method availPlugins =
+    "No plugin enabled for " <> T.pack (show method) <> ", available: "
+        <> (T.intercalate ", " $ map (\(PluginId plid, _, _) -> plid) availPlugins)
 
 pluginDoesntExist :: PluginId -> Text
 pluginDoesntExist (PluginId pid) = "Plugin " <> pid <> " doesn't exist"
 
 commandDoesntExist :: CommandId -> PluginId -> [PluginCommand ideState] -> Text
-commandDoesntExist (CommandId com) (PluginId pid) legalCmds = "Command " <> com <> " isn't defined for plugin " <> pid <> ". Legal commands are:\n" <> T.pack (unlines $ map (show . commandId) legalCmds)
+commandDoesntExist (CommandId com) (PluginId pid) legalCmds =
+    "Command " <> com <> " isn't defined for plugin " <> pid <> ". Legal commands are: "
+        <> (T.intercalate ", " $ map (\(PluginCommand{commandId = CommandId cid}) -> cid) legalCmds)
 
 failedToParseArgs :: CommandId  -- ^ command that failed to parse
                     -> PluginId -- ^ Plugin that created the command
                     -> String   -- ^ The JSON Error message
                     -> J.Value  -- ^ The Argument Values
                     -> Text
-failedToParseArgs (CommandId com) (PluginId pid) err arg = "Error while parsing args for " <> com <> " in plugin " <> pid <> ": " <> T.pack err <> "\narg = " <> T.pack (show arg)
+failedToParseArgs (CommandId com) (PluginId pid) err arg =
+    "Error while parsing args for " <> com <> " in plugin " <> pid <> ": "
+        <> T.pack err <> ", arg = " <> T.pack (show arg)
 
 -- | Build a ResponseError and log it before returning to the caller
 logAndReturnError :: Recorder (WithPriority Log) -> PluginId -> ErrorCode -> Text -> LSP.LspT Config IO (Either ResponseError a)

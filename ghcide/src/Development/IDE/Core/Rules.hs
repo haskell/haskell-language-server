@@ -62,9 +62,6 @@ module Development.IDE.Core.Rules(
     DisplayTHWarning(..),
     ) where
 
-#if !MIN_VERSION_ghc(8,8,0)
-import           Control.Applicative                          (liftA2)
-#endif
 import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
@@ -697,7 +694,7 @@ typeCheckRuleDefinition hsc pm = do
 
   unlift <- askUnliftIO
   let dets = TypecheckHelpers
-           { getLinkablesToKeep = unliftIO unlift $ currentLinkables
+           { getLinkablesToKeep = unliftIO unlift currentLinkables
            , getLinkables = unliftIO unlift . uses_ GetLinkable
            }
   addUsageDependencies $ liftIO $

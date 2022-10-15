@@ -150,23 +150,11 @@ commandProvider Refine =
   requireHoleSort (== Hole) $
     provide Refine ""
 commandProvider BeginMetaprogram =
-  requireGHC88OrHigher $
   requireHoleSort (== Hole) $
     provide BeginMetaprogram ""
 commandProvider RunMetaprogram =
-  requireGHC88OrHigher $
   withMetaprogram $ \mp ->
     provide RunMetaprogram mp
-
-
-requireGHC88OrHigher :: TacticProvider -> TacticProvider
-#if __GLASGOW_HASKELL__ >= 808
-requireGHC88OrHigher tp tpd =
-  tp tpd
-#else
-requireGHC88OrHigher _ _=
-  mempty
-#endif
 
 
 ------------------------------------------------------------------------------

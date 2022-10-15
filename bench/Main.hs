@@ -44,7 +44,6 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE TypeFamilies       #-}
 {-# OPTIONS -Wno-orphans #-}
-{-# LANGUAGE PackageImports     #-}
 
 import           Control.Lens                (preview, (^.))
 import           Control.Monad.Extra

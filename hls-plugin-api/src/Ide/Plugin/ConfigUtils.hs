@@ -12,7 +12,7 @@ import qualified Data.Aeson.Types      as A
 import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
-import           Data.List             (nub)
+import           Data.List.Extra       (nubOrd)
 import           Data.String           (IsString (fromString))
 import qualified Data.Text             as T
 import           Ide.Plugin.Config
@@ -62,7 +62,7 @@ pluginsToDefaultConfig IdePlugins {..} =
         -- }
         --
         genericDefaultConfig =
-          let x = ["diagnosticsOn" A..= True | configHasDiagnostics] <> nub (mconcat (handlersToGenericDefaultConfig <$> handlers))
+          let x = ["diagnosticsOn" A..= True | configHasDiagnostics] <> nubOrd (mconcat (handlersToGenericDefaultConfig <$> handlers))
            in case x of
                 -- if the plugin has only one capability, we produce globalOn instead of the specific one;
                 -- otherwise we don't produce globalOn at all
@@ -106,7 +106,7 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
         genericSchema =
           let x =
                 [toKey' "diagnosticsOn" A..= schemaEntry "diagnostics" | configHasDiagnostics]
-                  <> nub (mconcat (handlersToGenericSchema <$> handlers))
+                  <> nubOrd (mconcat (handlersToGenericSchema <$> handlers))
            in case x of
                 -- If the plugin has only one capability, we produce globalOn instead of the specific one;
                 -- otherwise we don't produce globalOn at all

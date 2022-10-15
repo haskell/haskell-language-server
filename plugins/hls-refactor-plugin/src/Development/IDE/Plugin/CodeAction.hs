@@ -38,7 +38,6 @@ import           Data.Ord                                          (comparing)
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Utf16.Rope                              as Rope
-import           Data.Tuple.Extra                                  (fst3)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -87,6 +86,7 @@ import           Language.LSP.Types                                (ApplyWorkspa
                                                                     uriToFilePath)
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
+import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
 #if MIN_VERSION_ghc(9,2,0)
@@ -99,7 +99,6 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpaLocation (..),
                                                                     LEpaComment,
                                                                     LocatedA)
-
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
                                                                     DeltaPos,
@@ -137,13 +136,13 @@ iePluginDescriptor recorder plId =
             wrap suggestExportUnusedTopBinding
           , wrap suggestModuleTypo
           , wrap suggestFixConstructorImport
-          , wrap suggestNewImport
 #if !MIN_VERSION_ghc(9,3,0)
           , wrap suggestExtendImport
           , wrap suggestImportDisambiguation
           , wrap suggestNewOrExtendImportForClassMethod
           , wrap suggestHideShadow
 #endif
+          , wrap suggestNewImport
           ]
           plId
    in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler STextDocumentCodeAction codeAction }
@@ -839,8 +838,13 @@ suggestAddTypeAnnotationToSatisfyContraints sourceOpt Diagnostic{_range=_range,.
         in  [( title, edits )]
 
 
-suggestReplaceIdentifier :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
+-- | GHC strips out backticks in case of infix functions as well as single quote
+--   in case of quoted name when using TemplateHaskellQuotes. Which is not desired.
+--
+-- For example:
+-- 1.
+--
+-- @
 -- File.hs:52:41: error:
 --     * Variable not in scope:
 --         suggestAcion :: Maybe T.Text -> Range -> Range
@@ -852,6 +856,27 @@ suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
 --       ‘T.isInfixOf’ (imported from Data.Text),
 --       ‘T.isSuffixOf’ (imported from Data.Text)
 --     Module ‘Data.Text’ does not export ‘isPrfixOf’.
+-- @
+--
+-- * action: \`suggestAcion\` will be renamed to \`suggestAction\` keeping back ticks around the function
+--
+-- 2.
+--
+-- @
+-- import Language.Haskell.TH (Name)
+-- foo :: Name
+-- foo = 'bread
+--
+-- File.hs:8:7: error:
+--     Not in scope: ‘bread’
+--       * Perhaps you meant one of these:
+--         ‘break’ (imported from Prelude), ‘read’ (imported from Prelude)
+--       * In the Template Haskell quotation 'bread
+-- @
+--
+-- * action: 'bread will be renamed to 'break keeping single quote on beginning of name
+suggestReplaceIdentifier :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
     | renameSuggestions@(_:_) <- extractRenamableTerms _message
         = [ ("Replace with ‘" <> name <> "’", [mkRenameEdit contents _range name]) | name <- renameSuggestions ]
     | otherwise = []
@@ -1495,34 +1520,66 @@ suggestNewImport packageExportsMap ps fileContents Diagnostic{_message}
   , Just (range, indent) <- newImportInsertRange ps fileContents
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
-  = sortOn fst3 [(imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))
-    | (kind, unNewImport -> imp) <- constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions
-    ]
+  = let suggestions = nubSortBy simpleCompareImportSuggestion
+          (constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions) in
+    map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
     L _ HsModule {..} = astA ps
 suggestNewImport _ _ _ _ = []
 
 constructNewImportSuggestions
-  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [(CodeActionKind, NewImport)]
-constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrdOn snd
+  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [ImportSuggestion]
+constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrdBy simpleCompareImportSuggestion
   [ suggestion
-  | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing]
-  , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
-  , canUseIdent thingMissing identInfo
-  , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules
-  , suggestion <- renderNewImport identInfo
+  | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing] -- strip away qualified module names from the unknown name
+  , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)   -- look up the modified unknown name in the export map
+  , canUseIdent thingMissing identInfo                                              -- check if the identifier information retrieved can be used
+  , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules                 -- check if the module of the identifier is allowed
+  , suggestion <- renderNewImport identInfo                                         -- creates a list of import suggestions for the retrieved identifier information
   ]
  where
-  renderNewImport :: IdentInfo -> [(CodeActionKind, NewImport)]
+  renderNewImport :: IdentInfo -> [ImportSuggestion]
   renderNewImport identInfo
     | Just q <- qual
-    = [(quickFixImportKind "new.qualified", newQualImport m q)]
+    = [ImportSuggestion importanceScore (quickFixImportKind "new.qualified") (newQualImport m q)]
     | otherwise
-    = [(quickFixImportKind' "new" importStyle, newUnqualImport m (renderImportStyle importStyle) False)
+    = [ImportSuggestion importanceScore (quickFixImportKind' "new" importStyle) (newUnqualImport m (renderImportStyle importStyle) False)
       | importStyle <- NE.toList $ importStyles identInfo] ++
-      [(quickFixImportKind "new.all", newImportAll m)]
+      [ImportSuggestion importanceScore (quickFixImportKind "new.all") (newImportAll m)]
     where
+        -- The importance score takes 2 metrics into account. The first being the similarity using
+        -- the Text.Fuzzy.Parallel.match function. The second is a factor of the relation between
+        -- the modules prefix import suggestion and the unknown identifier names.
+        importanceScore
+          | Just q <- qual
+          = let
+              similarityScore = fromIntegral $ unpackMatchScore (TFP.match (T.toLower q) (T.toLower m)) :: Double
+              (maxLength, minLength) = case (T.length q, T.length m) of
+                 (la, lb)
+                   | la >= lb -> (fromIntegral la, fromIntegral lb)
+                   | otherwise -> (fromIntegral lb, fromIntegral la)
+              lengthPenaltyFactor = 100 * minLength / maxLength
+            in max 0 (floor (similarityScore * lengthPenaltyFactor))
+          | otherwise
+          = 0
+          where
+            unpackMatchScore pScore
+              | Just score <- pScore = score
+              | otherwise = 0
         m = moduleNameText identInfo
+
+data ImportSuggestion = ImportSuggestion !Int !CodeActionKind !NewImport
+  deriving ( Eq )
+
+-- | Implements a lexicographic order for import suggestions that ignores the code action.
+-- First it compares the importance score in DESCENDING order.
+-- If the scores are equal it compares the import names alphabetical order.
+--
+-- TODO: this should be a correct Ord instance but CodeActionKind does not implement a Ord
+-- which would lead to an unlawful Ord instance.
+simpleCompareImportSuggestion :: ImportSuggestion -> ImportSuggestion -> Ordering
+simpleCompareImportSuggestion (ImportSuggestion s1 _ i1) (ImportSuggestion s2 _ i2)
+  = flip compare s1 s2 <> compare i1 i2
 
 newtype NewImport = NewImport {unNewImport :: T.Text}
   deriving (Show, Eq, Ord)
@@ -1771,15 +1828,17 @@ extractDoesNotExportModuleName x
 
 
 mkRenameEdit :: Maybe T.Text -> Range -> T.Text -> TextEdit
-mkRenameEdit contents range name =
-    if maybeIsInfixFunction == Just True
-      then TextEdit range ("`" <> name <> "`")
-      else TextEdit range name
+mkRenameEdit contents range name
+    | maybeIsInfixFunction == Just True = TextEdit range ("`" <> name <> "`")
+    | maybeIsTemplateFunction == Just True = TextEdit range ("'" <> name)
+    | otherwise = TextEdit range name
   where
     maybeIsInfixFunction = do
       curr <- textInRange range <$> contents
       pure $ "`" `T.isPrefixOf` curr && "`" `T.isSuffixOf` curr
-
+    maybeIsTemplateFunction = do
+      curr <- textInRange range <$> contents
+      pure $ "'" `T.isPrefixOf` curr
 
 -- | Extract the type and surround it in parentheses except in obviously safe cases.
 --

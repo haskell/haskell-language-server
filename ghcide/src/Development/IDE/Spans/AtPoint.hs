@@ -280,11 +280,7 @@ typeLocationsAtPoint withHieDb lookupModule _ideOptions pos (HAR _ ast _ _ hieKi
             where ni = nodeInfo' x
           getTypes ts = flip concatMap (unfold ts) $ \case
             HTyVarTy n -> [n]
-#if MIN_VERSION_ghc(8,8,0)
             HAppTy a (HieArgs xs) -> getTypes (a : map snd xs)
-#else
-            HAppTy a b -> getTypes [a,b]
-#endif
             HTyConApp tc (HieArgs xs) -> ifaceTyConName tc : getTypes (map snd xs)
             HForAllTy _ a -> getTypes [a]
 #if MIN_VERSION_ghc(9,0,1)
