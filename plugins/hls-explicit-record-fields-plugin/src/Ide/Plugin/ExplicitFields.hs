@@ -20,7 +20,7 @@ import           Data.Data                       (Data)
 import           Data.Generics                   (GenericQ, everything, extQ,
                                                   mkQ)
 import qualified Data.HashMap.Strict             as HashMap
-import           Data.Maybe                      (catMaybes, isJust,
+import           Data.Maybe                      (catMaybes, isJust, mapMaybe,
                                                   maybeToList)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
@@ -56,7 +56,7 @@ import           Development.IDE.GHC.Compat.Core (GenLocated (..), GhcPass (..),
 import           Development.IDE.GHC.Compat.Util (bagToList, toList)
 import           Development.IDE.GHC.Util        (printOutputable)
 import           Development.IDE.Graph           (RuleResult)
-import           Development.IDE.Graph.Classes   (Hashable, NFData)
+import           Development.IDE.Graph.Classes   (Hashable, NFData (rnf))
 import           Development.IDE.Spans.Pragmas   (NextPragmaInfo (..),
                                                   getNextPragmaInfo,
                                                   insertNewPragma)
@@ -115,7 +115,6 @@ preprocessRecord flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
     puns' = map (\(L ss fld) -> L ss (fld { hsRecPun = True })) puns
     rec_flds' = no_puns <> puns'
 
--- Same as `showRecord` but works with `Pat` types.
 showRecordPat :: Outputable (Pat p) => Pat p -> Maybe Text
 showRecordPat pat@(ConPat _ _ (RecCon flds)) =
   Just $ printOutputable $
@@ -141,43 +140,48 @@ instance Pretty Log where
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginHandlers = mkPluginHandler STextDocumentCodeAction (codeActionProvider recorder)
-  -- , pluginRules = collectRecordsRule recorder
+  , pluginRules = collectRecordsRule recorder
   }
 
--- data CollectRecords = CollectRecords
---                     deriving (Eq, Show, Generic)
---
--- instance Hashable CollectRecords
--- instance NFData CollectRecords
---
--- type instance RuleResult CollectRecords = CollectRecordsResult
---
--- -- TODO(ozkutuk)
+data CollectRecords = CollectRecords
+                    deriving (Eq, Show, Generic)
+
+instance Hashable CollectRecords
+instance NFData CollectRecords
+
 data CollectRecordsResult = CRR
-  { recordInfos       :: ![RecordInfo]
-  , enabledExtensions :: ![Extension]
+  { recordInfos       :: ![RenderedRecordInfo]
+  , enabledExtensions :: ![GhcExtension]
   }
---                           deriving (Show, Generic)
--- instance NFData CollectRecordsResult
+  deriving (Generic)
 
--- newtype RecordPattern = RecordPattern [Pat (GhcPass 'Renamed)]
---                       deriving (Generic)
+instance NFData CollectRecordsResult
 
--- instance Show RecordPattern where
---   show (RecordPattern l) = T.unpack (printOutputable l)
+instance Show CollectRecordsResult where
+  show _ = "<CollectRecordsResult>"
+
+type instance RuleResult CollectRecords = CollectRecordsResult
+
+newtype GhcExtension = GhcExtension { unExt :: Extension }
+
+instance NFData GhcExtension where
+  rnf x = x `seq` ()
 
 data RecordInfo
   = RecordInfoPat !SrcSpan !(Pat (GhcPass 'Renamed))
   | RecordInfoCon !SrcSpan !(HsExpr (GhcPass 'Renamed))
-                -- deriving (Show, Generic)
 
-getSrcSpan :: RecordInfo -> SrcSpan
-getSrcSpan (RecordInfoPat ss _) = ss
-getSrcSpan (RecordInfoCon ss _) = ss
+data RenderedRecordInfo = RenderedRecordInfo
+  { renderedSrcSpan :: !SrcSpan
+  , renderedRecord  :: !Text
+  }
+  deriving (Generic)
 
-getEdit :: RecordInfo -> Maybe Text
-getEdit (RecordInfoPat _ pat)  = showRecordPat pat
-getEdit (RecordInfoCon _ expr) = showRecordCon expr
+instance NFData RenderedRecordInfo
+
+renderRecordInfo :: RecordInfo -> Maybe RenderedRecordInfo
+renderRecordInfo (RecordInfoPat ss pat) = RenderedRecordInfo ss <$> showRecordPat pat
+renderRecordInfo (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecordCon expr
 
 -- collectRecords :: GenericQ [LPat (GhcPass 'Renamed)]
 collectRecords :: GenericQ [RecordInfo]
@@ -199,73 +203,50 @@ getRecPatterns conPat@(unLoc -> ConPat _ _ (RecCon flds))
     mkRecInfo pat = RecordInfoPat (getLoc pat) (unLoc pat)
 getRecPatterns _ = Nothing
 
--- collectRecordsResult :: MonadIO m => Range -> IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
--- collectRecordsResult range ideState nfp = do
---   recordInfos <- collectRecordsInRange range ideState nfp
---   enabledExtensions <- error "todo"
---   pure $ CRR {..}
-
 collectRecordsInRange :: MonadIO m => Range -> IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
 collectRecordsInRange range ideState nfp = do
-  CRR recs exts <- collectRecords' ideState nfp
-  pure $ CRR (filter inRange recs) exts
+  CRR renderedRecs exts <- collectRecords' ideState nfp
+  pure $ CRR (filter inRange renderedRecs) exts
 
   where
-    inRange :: RecordInfo -> Bool
-    inRange r = maybe False (subRange range) (srcSpanToRange (getSrcSpan r))
+    inRange :: RenderedRecordInfo -> Bool
+    inRange (RenderedRecordInfo ss _) = maybe False (subRange range) (srcSpanToRange ss)
 
-getEnabledExtensions :: TcModuleResult -> [Extension]
-getEnabledExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary . tmrParsed
+getEnabledExtensions :: TcModuleResult -> [GhcExtension]
+getEnabledExtensions = map GhcExtension . toList . extensionFlags . ms_hspp_opts . pm_mod_summary . tmrParsed
 
 getRecords :: TcModuleResult -> [RecordInfo]
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
   collectRecords valBinds
 
-getTypecheckedModule :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m TcModuleResult
-getTypecheckedModule ideState =
+collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
+collectRecords' ideState =
   handleMaybeM "Unable to TypeCheck"
     . liftIO
     . runAction "ExplicitFields" ideState
-    . use TypeCheck
+    . use CollectRecords
 
-collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
-collectRecords' ideState nfp = mkResult <$> getTypecheckedModule ideState nfp
-  where
-    mkResult :: TcModuleResult -> CollectRecordsResult
-    mkResult tmr = CRR (getRecords tmr) (getEnabledExtensions tmr)
-
--- collectRecordsRule :: Recorder (WithPriority Log) -> Rules ()
--- collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectRecords nfp -> do
---   tmr <- use TypeCheck nfp
---   -- hsc <- use GhcSessionDeps nfp
---   case tmr of
---     Nothing -> undefined
---     Just tmr' ->
---       let (hsGroup,_,_,_) = tmrRenamed tmr'
---           valBinds = hs_valds hsGroup
---           recs = collectRecords valBinds
---           srcs = map (locA . (\(L l _) -> l) . pat_con) recs
---           recsPrinted = map (showRecord . (\(RecCon x) -> x) . pat_args) recs
---           logTxts xs = logWith recorder Info (LogTxts xs)
---       in logTxts recsPrinted
---            *> logTxts (map printOutputable srcs)
---            *> logTxts (map (printOutputable . showAstDataFull) recs)
---            *> pure ([], Nothing)
--- -- *> logWith recorder Info (LogTxts $ map printOutputable bindsList') *> pure ([], Nothing)
+collectRecordsRule :: Recorder (WithPriority Log) -> Rules ()
+collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectRecords nfp -> do
+  tmr <- use TypeCheck nfp
+  let exts = getEnabledExtensions <$> tmr
+      recs = getRecords <$> tmr
+      renderedRecs = mapMaybe renderRecordInfo <$> recs
+  pure ([], CRR <$> renderedRecs <*> exts)
 
 codeActionProvider :: Recorder (WithPriority Log)
                    -> PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionProvider recorder ideState pId (CodeActionParams _ _ docId range _) = pluginResponse $ do
   nfp <- getNormalizedFilePath (docId ^. L.uri)
   pragma <- getFirstPragma pId ideState nfp
-  CRR recs exts <- collectRecordsInRange range ideState nfp
-  logWith recorder Info $ LogTxts $ map (T.pack . show . srcSpanToRange . getSrcSpan) recs
-  let actions = map (mkCodeAction nfp exts pragma) recs
+  CRR renderedRecs (map unExt -> exts) <- collectRecordsInRange range ideState nfp
+  logWith recorder Info $ LogTxts $ map (T.pack . show . srcSpanToRange . renderedSrcSpan) renderedRecs
+  let actions = map (mkCodeAction nfp exts pragma) renderedRecs
   -- liftIO $ runAction "ExplicitFields" ideState $ use CollectRecords nfp
   pure $ List actions
 
   where
-    mkCodeAction :: NormalizedFilePath -> [Extension] -> NextPragmaInfo -> RecordInfo -> Command |? CodeAction
+    mkCodeAction :: NormalizedFilePath -> [Extension] -> NextPragmaInfo -> RenderedRecordInfo -> Command |? CodeAction
     mkCodeAction nfp exts pragma rec = InR CodeAction
       { _title = mkCodeActionTitle exts
       , _kind = Just CodeActionRefactorRewrite
@@ -277,10 +258,10 @@ codeActionProvider recorder ideState pId (CodeActionParams _ _ docId range _) = 
       , _xdata = Nothing
       }
       where
-        edits = catMaybes
-          [ TextEdit <$> (srcSpanToRange $ getSrcSpan rec) <*> getEdit rec
-          , pragmaEdit
-          ]
+        edits = catMaybes [ mkTextEdit rec , pragmaEdit ]
+
+        mkTextEdit :: RenderedRecordInfo -> Maybe TextEdit
+        mkTextEdit (RenderedRecordInfo ss r) = TextEdit <$> srcSpanToRange ss <*> pure r
 
         -- TODO(ozkutuk): `RecordPuns` extension is renamed to `NamedFieldPuns`
         -- in GHC 9.4, so I probably need to add this to the compat module as
@@ -314,4 +295,3 @@ getFirstPragma (PluginId pId) state nfp = handleMaybeM "Could not get NextPragma
   case ghcSession of
     Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
     Nothing                                           -> pure Nothing
-
