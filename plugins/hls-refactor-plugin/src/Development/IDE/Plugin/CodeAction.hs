@@ -39,7 +39,6 @@ import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Utf16.Rope                              as Rope
 import           Data.Tuple.Extra                                  (first)
-import           Development.IDE.Types.Logger                      hiding (group)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -60,10 +59,13 @@ import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger                      hiding
+                                                                   (group)
 import           Development.IDE.Types.Options
 import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
-import           Ide.PluginUtils                                   (subRange, makeDiffTextEdit)
+import           Ide.PluginUtils                                   (makeDiffTextEdit,
+                                                                    subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
 import           Language.LSP.Types                                (ApplyWorkspaceEditParams (..),
@@ -99,8 +101,9 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpaLocation (..),
                                                                     LEpaComment,
                                                                     LocatedA)
-import           Language.Haskell.GHC.ExactPrint                   (noAnnSrcSpanDP1, runTransformT)
 import           GHC.Types.SrcLoc                                  (generatedSrcSpan)
+import           Language.Haskell.GHC.ExactPrint                   (noAnnSrcSpanDP1,
+                                                                    runTransformT)
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
                                                                     DeltaPos,
