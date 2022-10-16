@@ -91,6 +91,11 @@ import           Language.LSP.VFS                                  (VirtualFile,
 import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
+#if MIN_VERSION_ghc(9,2,1)
+import           GHC.Types.SrcLoc                                  (generatedSrcSpan)
+import           Language.Haskell.GHC.ExactPrint                   (noAnnSrcSpanDP1,
+                                                                    runTransformT)
+#endif
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
@@ -101,9 +106,6 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpaLocation (..),
                                                                     LEpaComment,
                                                                     LocatedA)
-import           GHC.Types.SrcLoc                                  (generatedSrcSpan)
-import           Language.Haskell.GHC.ExactPrint                   (noAnnSrcSpanDP1,
-                                                                    runTransformT)
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
                                                                     DeltaPos,
