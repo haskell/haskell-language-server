@@ -36,7 +36,6 @@ library
       , text
       , syb
       , transformers
-      , ghc
       , ghc-boot-th
       , unordered-containers
     hs-source-dirs:   src

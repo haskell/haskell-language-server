@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE TypeOperators     #-}
 {-# LANGUAGE ViewPatterns      #-}
@@ -12,11 +11,9 @@ module Ide.Plugin.ExplicitFields
   ( descriptor
   ) where
 
-import           Control.Arrow                   ((&&&))
 import           Control.Lens                    ((%~), (^.))
 import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Control.Monad.Trans.Except      (ExceptT)
-import           Data.Data                       (Data)
 import           Data.Generics                   (GenericQ, everything, extQ,
                                                   mkQ)
 import qualified Data.HashMap.Strict             as HashMap
@@ -25,15 +22,13 @@ import           Data.Maybe                      (catMaybes, isJust, mapMaybe,
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE                 (IdeState, NormalizedFilePath,
-                                                  Pretty (..), Priority (..),
-                                                  Range (..), Recorder (..),
-                                                  Rules, WithPriority (..),
+                                                  Pretty (..), Range (..),
+                                                  Recorder (..), Rules,
+                                                  WithPriority (..),
                                                   getFileContents, hscEnv,
-                                                  logWith, realSrcSpanToRange,
                                                   srcSpanToRange)
 import           Development.IDE.Core.Rules      (runAction)
 import           Development.IDE.Core.RuleTypes  (GhcSession (..),
-                                                  GhcSessionDeps (..),
                                                   TcModuleResult (..),
                                                   TypeCheck (..))
 import           Development.IDE.Core.Shake      (define, use, useWithStale)
@@ -41,19 +36,15 @@ import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      (HasSrcSpan (..),
                                                   HsConDetails (RecCon),
                                                   HsRecFields (..), HscEnv (..),
-                                                  LPat, Outputable, RealSrcSpan,
-                                                  SDoc, SrcSpan, getLocA, locA,
-                                                  pm_mod_summary, unLoc, unLocA)
+                                                  LPat, Outputable, SrcSpan,
+                                                  pm_mod_summary, unLoc)
 import           Development.IDE.GHC.Compat.Core (GenLocated (..), GhcPass (..),
-                                                  HsBindLR (..),
                                                   HsExpr (RecordCon, rcon_flds),
-                                                  HsRecField' (..),
-                                                  HsValBindsLR (..), LHsExpr,
-                                                  ModSummary (..),
-                                                  NHsValBindsLR (..), Pass (..),
+                                                  HsRecField' (..), LHsExpr,
+                                                  ModSummary (..), Pass (..),
                                                   Pat (..), extensionFlags,
                                                   hs_valds)
-import           Development.IDE.GHC.Compat.Util (bagToList, toList)
+import           Development.IDE.GHC.Compat.Util (toList)
 import           Development.IDE.GHC.Util        (printOutputable)
 import           Development.IDE.Graph           (RuleResult)
 import           Development.IDE.Graph.Classes   (Hashable, NFData (rnf))
@@ -61,10 +52,7 @@ import           Development.IDE.Spans.Pragmas   (NextPragmaInfo (..),
                                                   getNextPragmaInfo,
                                                   insertNewPragma)
 import           Development.IDE.Types.Logger    (cmapWithPrio)
-import           GHC.Data.Maybe                  (fromMaybe)
 import           GHC.Generics                    (Generic)
-import           GHC.Hs.Dump                     (BlankSrcSpan (..),
-                                                  showAstData)
 import           GHC.LanguageExtensions.Type     (Extension (..))
 import           Ide.PluginUtils                 (getNormalizedFilePath,
                                                   handleMaybeM, pluginResponse,
@@ -82,16 +70,10 @@ import           Language.LSP.Types              (CodeAction (..),
                                                   TextEdit (..),
                                                   WorkspaceEdit (WorkspaceEdit),
                                                   fromNormalizedUri,
-                                                  isSubrangeOf,
                                                   normalizedFilePathToUri,
                                                   type (|?) (InR))
 import qualified Language.LSP.Types.Lens         as L
 
-showAstDataFull :: Data a => a -> SDoc
-showAstDataFull = showAstData NoBlankSrcSpan
---
--- showAstDataFull' :: Data a => a -> SDoc
--- showAstDataFull' = showAstData BlankSrcSpan
 
 -- `Outputable` instance of `HsRecFields` does smart things to print
 -- the records that originally had wildcards with dots, even after they
@@ -127,19 +109,15 @@ showRecordCon expr@(RecordCon _ _ flds) =
     expr { rcon_flds = preprocessRecord flds }
 showRecordCon _ = Nothing
 
-data Log
-  = LogShake Shake.Log
-  | LogTxts [Text]
-  deriving Show
+data Log = LogShake Shake.Log
 
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
-    LogTxts txts      -> pretty (length txts) <> " - " <> pretty txts
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler STextDocumentCodeAction (codeActionProvider recorder)
+  { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
   , pluginRules = collectRecordsRule recorder
   }
 
@@ -203,28 +181,12 @@ getRecPatterns conPat@(unLoc -> ConPat _ _ (RecCon flds))
     mkRecInfo pat = RecordInfoPat (getLoc pat) (unLoc pat)
 getRecPatterns _ = Nothing
 
-collectRecordsInRange :: MonadIO m => Range -> IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
-collectRecordsInRange range ideState nfp = do
-  CRR renderedRecs exts <- collectRecords' ideState nfp
-  pure $ CRR (filter inRange renderedRecs) exts
-
-  where
-    inRange :: RenderedRecordInfo -> Bool
-    inRange (RenderedRecordInfo ss _) = maybe False (subRange range) (srcSpanToRange ss)
-
 getEnabledExtensions :: TcModuleResult -> [GhcExtension]
 getEnabledExtensions = map GhcExtension . toList . extensionFlags . ms_hspp_opts . pm_mod_summary . tmrParsed
 
 getRecords :: TcModuleResult -> [RecordInfo]
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
   collectRecords valBinds
-
-collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
-collectRecords' ideState =
-  handleMaybeM "Unable to TypeCheck"
-    . liftIO
-    . runAction "ExplicitFields" ideState
-    . use CollectRecords
 
 collectRecordsRule :: Recorder (WithPriority Log) -> Rules ()
 collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectRecords nfp -> do
@@ -234,15 +196,29 @@ collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
       renderedRecs = mapMaybe renderRecordInfo <$> recs
   pure ([], CRR <$> renderedRecs <*> exts)
 
-codeActionProvider :: Recorder (WithPriority Log)
-                   -> PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionProvider recorder ideState pId (CodeActionParams _ _ docId range _) = pluginResponse $ do
+collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
+collectRecords' ideState =
+  handleMaybeM "Unable to TypeCheck"
+    . liftIO
+    . runAction "ExplicitFields" ideState
+    . use CollectRecords
+
+collectRecordsInRange :: MonadIO m => Range -> IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
+collectRecordsInRange range ideState nfp = do
+  CRR renderedRecs exts <- collectRecords' ideState nfp
+  pure $ CRR (filter inRange renderedRecs) exts
+
+  where
+    inRange :: RenderedRecordInfo -> Bool
+    inRange (RenderedRecordInfo ss _) = maybe False (subRange range) (srcSpanToRange ss)
+
+
+codeActionProvider :: PluginMethodHandler IdeState 'TextDocumentCodeAction
+codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginResponse $ do
   nfp <- getNormalizedFilePath (docId ^. L.uri)
   pragma <- getFirstPragma pId ideState nfp
   CRR renderedRecs (map unExt -> exts) <- collectRecordsInRange range ideState nfp
-  logWith recorder Info $ LogTxts $ map (T.pack . show . srcSpanToRange . renderedSrcSpan) renderedRecs
   let actions = map (mkCodeAction nfp exts pragma) renderedRecs
-  -- liftIO $ runAction "ExplicitFields" ideState $ use CollectRecords nfp
   pure $ List actions
 
   where
