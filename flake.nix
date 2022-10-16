@@ -39,6 +39,10 @@
       url = "https://hackage.haskell.org/package/lsp-test-0.14.1.0/lsp-test-0.14.1.0.tar.gz";
       flake = false;
     };
+    ghc-exactprint-160 = {
+      url = "https://hackage.haskell.org/package/ghc-exactprint-1.6.0/ghc-exactprint-1.6.0.tar.gz";
+      flake = false;
+    };
     ghc-exactprint-150 = {
       url = "https://hackage.haskell.org/package/ghc-exactprint-1.5.0/ghc-exactprint-1.5.0.tar.gz";
       flake = false;
