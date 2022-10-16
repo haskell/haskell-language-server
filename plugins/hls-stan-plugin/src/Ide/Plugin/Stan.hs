@@ -7,15 +7,15 @@ import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad.Trans.Maybe      (MaybeT (MaybeT), runMaybeT)
 import           Data.Default
 import           Data.Foldable                  (toList)
-import qualified Data.HashMap.Strict            as HM
 import           Data.Hashable                  (Hashable)
+import qualified Data.HashMap.Strict            as HM
 import qualified Data.Map                       as Map
 import           Data.Maybe                     (fromJust, mapMaybe)
 import qualified Data.Text                      as T
 import           Development.IDE
-import           Development.IDE.Core.RuleTypes (HieAstResult (..))
 import           Development.IDE.Core.Rules     (getHieFile,
                                                  getSourceFileSource)
+import           Development.IDE.Core.RuleTypes (HieAstResult (..))
 import qualified Development.IDE.Core.Shake     as Shake
 import           Development.IDE.GHC.Compat     (HieASTs (HieASTs),
                                                  RealSrcSpan (..), mkHieFile',
@@ -29,7 +29,8 @@ import           GHC.Generics                   (Generic)
 import           HieTypes                       (HieASTs, HieFile)
 import           Ide.Plugin.Config
 import           Ide.Types                      (PluginDescriptor (..),
-                                                 PluginId,
+                                                 PluginId, configHasDiagnostics,
+                                                 defaultConfigDescriptor,
                                                  defaultPluginDescriptor,
                                                  pluginEnabledConfig)
 import qualified Language.LSP.Types             as LSP
@@ -42,7 +43,11 @@ import           Stan.Observation               (Observation (..))
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
-    {pluginRules = rules recorder plId}
+  { pluginRules = rules recorder plId
+  , pluginConfigDescriptor = defaultConfigDescriptor
+      { configHasDiagnostics = True
+      }
+    }
 
 newtype Log = LogShake Shake.Log deriving (Show)
 

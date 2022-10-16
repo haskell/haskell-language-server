@@ -28,11 +28,15 @@
 
     # List of hackage dependencies
     lsp = {
-      url = "github:haskell/lsp/b0f8596887088b8ab65fc1015c773f45b47234ae";
+      url = "https://hackage.haskell.org/package/lsp-1.6.0.0/lsp-1.6.0.0.tar.gz";
+      flake = false;
+    };
+    lsp-types = {
+      url = "https://hackage.haskell.org/package/lsp-types-1.6.0.0/lsp-types-1.6.0.0.tar.gz";
       flake = false;
     };
     lsp-test = {
-      url = "https://hackage.haskell.org/package/lsp-test-0.14.0.3/lsp-test-0.14.0.3.tar.gz";
+      url = "https://hackage.haskell.org/package/lsp-test-0.14.1.0/lsp-test-0.14.1.0.tar.gz";
       flake = false;
     };
     ghc-exactprint-150 = {
@@ -41,6 +45,10 @@
     };
     ghc-exactprint = {
       url = "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz";
+      flake = false;
+    };
+    ghc-check = {
+      url = "https://hackage.haskell.org/package/ghc-check-0.5.0.8/ghc-check-0.5.0.8.tar.gz";
       flake = false;
     };
     constraints-extras = {
@@ -91,16 +99,14 @@
       url = "https://hackage.haskell.org/package/hie-bios-0.11.0/hie-bios-0.11.0.tar.gz";
       flake = false;
     };
-    myst-parser = {
-      url = "github:smunix/MyST-Parser?ref=fix.hls-docutils";
+    entropy = {
+      url = "https://hackage.haskell.org/package/entropy-0.4.1.10/entropy-0.4.1.10.tar.gz";
       flake = false;
     };
-    # For https://github.com/readthedocs/sphinx_rtd_theme/pull/1185, otherwise lists are broken locally
-    sphinx_rtd_theme = {
-      url = "github:readthedocs/sphinx_rtd_theme?rev=34f81daaf52466366c80003db293d50075c1b896";
+    hiedb = {
+      url = "https://hackage.haskell.org/package/hiedb-0.4.2.0/hiedb-0.4.2.0.tar.gz";
       flake = false;
     };
-    poetry2nix.url = "github:nix-community/poetry2nix/master";
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, all-cabal-hashes-unpacked, ... }:
@@ -148,6 +154,13 @@
             hls-plugin-api = ./hls-plugin-api;
             hls-test-utils = ./hls-test-utils;
             ghcide-test-utils = ./ghcide/test;
+            # hiedb depends on hie-compact, which is part of this repository. If
+            # cabal inside the nix development shell tries to use the hiedb
+            # compiled inside nix, it thinks that this package is broken and
+            # does nothing. Adding this here ensures that hiedb compiled in nix
+            # is not available to cabal and then cabal downloads hiedb from
+            # hackage and compiles it.
+            hiedb = inputs.hiedb;
           } // pluginSourceDirs;
 
           # Tweak our packages
@@ -159,12 +172,15 @@
               # GHCIDE requires hie-bios ^>=0.9.1
               hie-bios = hself.callCabal2nix "hie-bios" inputs.hie-bios {};
 
-              lsp = hsuper.callCabal2nix "lsp" "${inputs.lsp}/lsp" {};
-              lsp-types = hsuper.callCabal2nix "lsp-types" "${inputs.lsp}/lsp-types" {};
+              lsp = hsuper.callCabal2nix "lsp" inputs.lsp {};
+              lsp-types = hsuper.callCabal2nix "lsp-types" inputs.lsp-types {};
               lsp-test = hsuper.callCabal2nix "lsp-test" inputs.lsp-test {};
 
-              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.implicit-hie-cradle {};
+              entropy = hsuper.callCabal2nix "entropy" inputs.entropy {};
+              hiedb = hsuper.callCabal2nix "hiedb" inputs.hiedb {};
 
+              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.implicit-hie-cradle {};
+              ghc-check = hself.callCabal2nix "ghc-check" inputs.ghc-check {};
               # https://github.com/NixOS/nixpkgs/issues/140774
               ormolu =
                 if final.system == "aarch64-darwin"
@@ -221,7 +237,7 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ self.overlays.default inputs.poetry2nix.overlay ];
+          overlays = [ self.overlays.default ];
           config = { allowBroken = true; };
         };
 
@@ -246,26 +262,7 @@
         ghc942 = supportedGHCs.ghc942;
         ghcDefault = supportedGHCs.default;
 
-        # For markdown support
-        myst-parser = pkgs.poetry2nix.mkPoetryEnv {
-          projectDir = inputs.myst-parser;
-          python = pkgs.python39;
-          overrides = [
-            pkgs.poetry2nix.defaultPoetryOverrides
-          ];
-        };
-        sphinx_rtd_theme = pkgs.poetry2nix.mkPoetryEnv {
-          projectDir = inputs.sphinx_rtd_theme;
-          python = pkgs.python39;
-          overrides = [
-            pkgs.poetry2nix.defaultPoetryOverrides
-            (self: super: {
-              # The RTD theme doesn't work with newer docutils
-              docutils = pkgs.python3Packages.callPackage ./docutils.nix {};
-            })
-          ];
-        };
-        pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx myst-parser sphinx_rtd_theme ps.pip]);
+        pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx ps.myst-parser ps.sphinx_rtd_theme ps.pip]);
 
         docs = pkgs.stdenv.mkDerivation {
           name = "hls-docs";

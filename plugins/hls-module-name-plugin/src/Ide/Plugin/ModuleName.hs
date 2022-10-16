@@ -33,7 +33,7 @@ import qualified Data.Text                    as T
 import           Development.IDE              (GetParsedModule (GetParsedModule),
                                                GhcSession (GhcSession),
                                                IdeState, Pretty,
-                                               Priority (Debug, Info), Recorder,
+                                               Priority (Debug), Recorder,
                                                WithPriority, colon, evalGhcEnv,
                                                hscEnvWithImportPaths, logWith,
                                                realSrcSpanToRange, runAction,
@@ -112,7 +112,7 @@ action recorder state uri =
     correctNames <- liftIO $ pathModuleNames recorder state nfp fp
     logWith recorder Debug (CorrectNames correctNames)
     bestName <- minimumBy (comparing T.length) <$> (MaybeT . pure $ NE.nonEmpty correctNames)
-    logWith recorder Info (BestName bestName)
+    logWith recorder Debug (BestName bestName)
 
     statedNameMaybe <- liftIO $ codeModuleName state nfp
     logWith recorder Debug (ModuleName $ snd <$> statedNameMaybe)

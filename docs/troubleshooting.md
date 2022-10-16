@@ -149,7 +149,7 @@ If you see an error about HLS being compiled with the wrong version of GHC, then
 ### Unsupported GHC version or missing binaries
 
 HLS does not support every GHC version - there are a lot of them!
-Please see the [supported versions page](./supported-versions.md) for more information, including what to do if you need binaries for a version that is not yet supported by a HLS release.
+Please see the [supported versions page](./support/ghc-version-support.md) for more information, including what to do if you need binaries for a version that is not yet supported by a HLS release.
 
 ### Missing server or build tools
 

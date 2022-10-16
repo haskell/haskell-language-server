@@ -28,7 +28,7 @@ import           Data.List                         (isSuffixOf)
 import           Data.Maybe
 import           System.FilePath
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Types.PkgQual
+import           GHC.Types.PkgQual
 #endif
 
 data Import
@@ -123,11 +123,12 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
 #if MIN_VERSION_ghc(9,3,0)
     OtherPkg uid
       | Just dirs <- lookup uid import_paths
+          -> lookupLocal uid dirs
 #else
     Just pkgName
       | Just (uid, dirs) <- lookup (PackageName pkgName) import_paths
-#endif
           -> lookupLocal uid dirs
+#endif
       | otherwise -> lookupInPackageDB env
 #if MIN_VERSION_ghc(9,3,0)
     NoPkgQual -> do
@@ -148,7 +149,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
 
       mbFile <- locateModuleFile ((homeUnitId_ dflags, importPaths dflags) : import_paths') exts targetFor isSource $ unLoc modName
       case mbFile of
-        Nothing   -> lookupInPackageDB env
+        Nothing          -> lookupInPackageDB env
         Just (uid, file) -> toModLocation uid file
   where
     dflags = hsc_dflags env

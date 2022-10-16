@@ -1,7 +1,7 @@
 # hie-compat
 
 Mainly a backport of [HIE
-Files](https://gitlab.haskell.org/ghc/ghc/-/wikis/hie-files) for ghc 8.6, along
+Files](https://gitlab.haskell.org/ghc/ghc/-/wikis/hie-files) for ghc 8.8, along
 with a few other backports of fixes useful for `ghcide`
 
 Also includes backport of record-dot-syntax support to 9.2.x

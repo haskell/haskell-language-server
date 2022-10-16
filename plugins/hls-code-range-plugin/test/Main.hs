@@ -27,8 +27,10 @@ main = do
     defaultTestRunner $
         testGroup "Code Range" [
             testGroup "Integration Tests" [
-                makeSelectionRangeGoldenTest recorder "Import" [(4, 36), (1, 8)],
-                makeSelectionRangeGoldenTest recorder "Function" [(5, 19), (5, 12), (4, 4), (3, 5)]
+                selectionRangeGoldenTest recorder "Import" [(4, 36), (1, 8)],
+                selectionRangeGoldenTest recorder "Function" [(5, 19), (5, 12), (4, 4), (3, 5)],
+                selectionRangeGoldenTest recorder "Empty" [(1, 5)],
+                foldingRangeGoldenTest recorder "Function"
             ],
             testGroup "Unit Tests" [
                 Ide.Plugin.CodeRangeTest.testTree,
@@ -36,8 +38,8 @@ main = do
             ]
         ]
 
-makeSelectionRangeGoldenTest :: Recorder (WithPriority Log) -> TestName -> [(UInt, UInt)] -> TestTree
-makeSelectionRangeGoldenTest recorder testName positions = goldenGitDiff testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
+selectionRangeGoldenTest :: Recorder (WithPriority Log) -> TestName -> [(UInt, UInt)] -> TestTree
+selectionRangeGoldenTest recorder testName positions = goldenGitDiff testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
     res <- runSessionWithServer (plugin recorder) testDataDir $ do
         doc <- openDoc (testName <.> "hs") "haskell"
         resp <- request STextDocumentSelectionRange $ SelectionRangeParams Nothing Nothing doc
@@ -64,3 +66,28 @@ makeSelectionRangeGoldenTest recorder testName positions = goldenGitDiff testNam
         showPosition :: Position -> ByteString
         showPosition (Position line col) = "(" <> showLBS (line + 1) <> "," <> showLBS (col + 1) <> ")"
         showLBS = fromString . show
+
+foldingRangeGoldenTest :: Recorder (WithPriority Log) -> TestName -> TestTree
+foldingRangeGoldenTest recorder testName = goldenGitDiff  testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
+    res <- runSessionWithServer (plugin recorder) testDataDir $ do
+        doc <- openDoc (testName <.> "hs") "haskell"
+        resp <- request STextDocumentFoldingRange $ FoldingRangeParams Nothing Nothing doc
+        let res = resp ^. result
+        pure $ fmap showFoldingRangesForTest res
+
+    case res of
+        Left err     -> assertFailure (show err)
+        Right golden -> pure golden
+
+    where
+        testDataDir :: FilePath
+        testDataDir = "test" </> "testdata" </> "folding-range"
+
+        showFoldingRangesForTest :: List FoldingRange -> ByteString
+        showFoldingRangesForTest (List foldingRanges) = LBSChar8.intercalate "\n" $ fmap showFoldingRangeForTest foldingRanges
+
+        showFoldingRangeForTest :: FoldingRange -> ByteString
+        showFoldingRangeForTest f@(FoldingRange sl (Just sc) el (Just ec) (Just frk)) = "((" <> showLBS sl <>", "<> showLBS sc <> ")" <> " : " <> "(" <> showLBS el <>", "<> showLBS ec<> ")) : " <> showFRK frk
+
+        showLBS = fromString . show
+        showFRK = fromString . show

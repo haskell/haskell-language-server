@@ -143,14 +143,13 @@ import           System.IO                                (BufferMode (LineBuffe
 import           System.Random                            (newStdGen)
 import           System.Time.Extra                        (Seconds, offsetTime,
                                                            showDuration)
-import           Text.Printf                              (printf)
 
 data Log
   = LogHeapStats !HeapStats.Log
   | LogLspStart [PluginId]
   | LogLspStartDuration !Seconds
   | LogShouldRunSubset !Bool
-  | LogOnlyPartialGhc92Support
+  | LogOnlyPartialGhc94Support
   | LogSetInitialDynFlagsException !SomeException
   | LogService Service.Log
   | LogShake Shake.Log
@@ -174,8 +173,8 @@ instance Pretty Log where
       "Started LSP server in" <+> pretty (showDuration duration)
     LogShouldRunSubset shouldRunSubset ->
       "shouldRunSubset:" <+> pretty shouldRunSubset
-    LogOnlyPartialGhc92Support ->
-      "Currently, HLS supports GHC 9.2 only partially. See [issue #2982](https://github.com/haskell/haskell-language-server/issues/2982) for more detail."
+    LogOnlyPartialGhc94Support ->
+      "Currently, HLS supports GHC 9.4 only partially. See [issue #3190](https://github.com/haskell/haskell-language-server/issues/3190) for more detail."
     LogSetInitialDynFlagsException e ->
       "setInitialDynFlags:" <+> pretty (displayException e)
     LogService log -> pretty log
@@ -191,8 +190,6 @@ data Command
     | Db {hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
      -- ^ Run a command in the hiedb
     | LSP   -- ^ Run the LSP server
-    | PrintExtensionSchema
-    | PrintDefaultConfig
     | Custom {ideCommand :: IdeCommand IdeState} -- ^ User defined
     deriving Show
 
@@ -209,8 +206,6 @@ commandP plugins =
     hsubparser(command "typecheck" (info (Check <$> fileCmd) fileInfo)
             <> command "hiedb" (info (Db <$> HieDb.optParser "" True <*> HieDb.cmdParser) hieInfo)
             <> command "lsp" (info (pure LSP) lspInfo)
-            <> command "vscode-extension-schema" extensionSchemaCommand
-            <> command "generate-default-config" generateDefaultConfigCommand
             <> pluginCommands
             )
   where
@@ -218,12 +213,6 @@ commandP plugins =
     lspInfo = fullDesc <> progDesc "Start talking to an LSP client"
     fileInfo = fullDesc <> progDesc "Used as a test bed to check your IDE will work"
     hieInfo = fullDesc <> progDesc "Query .hie files"
-    extensionSchemaCommand =
-        info (pure PrintExtensionSchema)
-             (fullDesc <> progDesc "Print generic config schema for plugins (used in the package.json of haskell vscode extension)")
-    generateDefaultConfigCommand =
-        info (pure PrintDefaultConfig)
-             (fullDesc <> progDesc "Print config supported by the server with default values")
 
     pluginCommands = mconcat
         [ command (T.unpack pId) (Custom <$> p)
@@ -294,7 +283,7 @@ testing recorder logger =
     hlsPlugins = pluginDescToIdePlugins $
       idePluginsToPluginDesc argsHlsPlugins
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
-    ideOptions = \config sessionLoader ->
+    ideOptions config sessionLoader =
       let
         defOptions = argsIdeOptions config sessionLoader
       in
@@ -331,10 +320,6 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
     numProcessors <- getNumProcessors
 
     case argCommand of
-        PrintExtensionSchema ->
-            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema argsHlsPlugins
-        PrintDefaultConfig ->
-            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig argsHlsPlugins
         LSP -> withNumCapabilities (maybe (numProcessors `div` 2) fromIntegral argsThreads) $ do
             t <- offsetTime
             log Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
@@ -368,9 +353,9 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                               , optRunSubset = runSubset
                               }
                       caps = LSP.resClientCapabilities env
-                  -- FIXME: Remove this after GHC 9.2 gets fully supported
-                  when (ghcVersion == GHC92) $
-                      log Warning LogOnlyPartialGhc92Support
+                  -- FIXME: Remove this after GHC 9.4 gets fully supported
+                  when (ghcVersion == GHC94) $
+                      log Warning LogOnlyPartialGhc94Support
                   monitoring <- argsMonitoring
                   initialise
                       (cmapWithPrio LogService recorder)

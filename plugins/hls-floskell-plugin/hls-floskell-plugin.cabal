@@ -16,6 +16,10 @@ extra-source-files:
   LICENSE
   test/testdata/**/*.hs
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 library
   if impl(ghc >= 9.3)
     buildable: False

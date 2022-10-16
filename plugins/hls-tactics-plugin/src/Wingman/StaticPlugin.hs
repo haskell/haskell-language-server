@@ -14,14 +14,12 @@ import GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
 
 import Ide.Types
 
-#if __GLASGOW_HASKELL__ >= 808
 import Data.Data
 import Generics.SYB
 #if __GLASGOW_HASKELL__ >= 900
 import GHC.Driver.Plugins (purePlugin)
 #else
 import Plugins (purePlugin)
-#endif
 #endif
 
 staticPlugin :: DynFlagsModifications
@@ -34,13 +32,9 @@ staticPlugin = mempty
              { refLevelHoleFits = Just 0
              , maxRefHoleFits   = Just 0
              , maxValidHoleFits = Just 0
-#if __GLASGOW_HASKELL__ >= 808
              , staticPlugins = staticPlugins df <> [metaprogrammingPlugin]
-#endif
              }
-#if __GLASGOW_HASKELL__ >= 808
   , dynFlagsModifyParser = enableQuasiQuotes
-#endif
   }
 
 
@@ -71,7 +65,6 @@ allowEmptyCaseButWithWarning =
   flip xopt_set EmptyCase . flip wopt_set Opt_WarnIncompletePatterns
 
 
-#if __GLASGOW_HASKELL__ >= 808
 metaprogrammingPlugin :: StaticPlugin
 metaprogrammingPlugin =
     StaticPlugin $ PluginWithArgs pluginDefinition  []
@@ -101,7 +94,6 @@ addMetaprogrammingSyntax =
     L ss (MetaprogramSyntax mp) ->
       L ss $ mkMetaprogram ss mp
     (x :: LHsExpr GhcPs) -> x
-#endif
 
 metaprogramHoleName :: OccName
 metaprogramHoleName = mkVarOcc "_$metaprogram"

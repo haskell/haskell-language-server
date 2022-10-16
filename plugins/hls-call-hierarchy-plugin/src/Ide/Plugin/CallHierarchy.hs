@@ -7,7 +7,8 @@ import           Language.LSP.Types
 
 descriptor :: PluginDescriptor IdeState
 descriptor = (defaultPluginDescriptor X.callHierarchyId)
-  { Ide.Types.pluginHandlers = mkPluginHandler STextDocumentPrepareCallHierarchy X.prepareCallHierarchy
-                            <> mkPluginHandler SCallHierarchyIncomingCalls X.incomingCalls
-                            <> mkPluginHandler SCallHierarchyOutgoingCalls X.outgoingCalls
-  }
+    { Ide.Types.pluginHandlers =
+        mkPluginHandler STextDocumentPrepareCallHierarchy X.prepareCallHierarchy
+     <> mkPluginHandler SCallHierarchyIncomingCalls X.incomingCalls
+     <> mkPluginHandler SCallHierarchyOutgoingCalls X.outgoingCalls
+    }

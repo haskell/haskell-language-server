@@ -538,7 +538,7 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
                 output (showDuration t)
                 -- Wait for the delayed actions to finish
                 td <- waitForBuildQueue
-                loop' (timeForFirstResponse <|> (Just (t,td))) (userWaits+t) (delayedWork+td) (n -1)
+                loop' (timeForFirstResponse <|> Just (t,td)) (userWaits+t) (delayedWork+td) (n -1)
           loop = loop' Nothing
 
       (runExperiment, result) <- duration $ loop 0 0 samples

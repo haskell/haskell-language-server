@@ -4,7 +4,7 @@ This table gives a summary of the features that HLS supports.
 Many of these are standard LSP features, but a lot of special features are provided as [code actions](#code-actions) and [code lenses](#code-lenses).
 
 | Feature                                             | [LSP method](./what-is-hls.md#lsp-terminology)                                                    |
-|-----------------------------------------------------|---------------------------------------------------------------------------------------------------|
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | [Diagnostics](#diagnostics)                         | `textDocument/publishDiagnostics`                                                                 |
 | [Hovers](#hovers)                                   | `textDocument/hover`                                                                              |
 | [Jump to definition](#jump-to-definition)           | `textDocument/definition`                                                                         |
@@ -22,7 +22,7 @@ Many of these are standard LSP features, but a lot of special features are provi
 | [Rename](#rename)                                   | `textDocument/rename`                                                                             |
 
 The individual sections below also identify which [HLS plugin](./what-is-hls.md#hls-plugins) is responsible for providing the given functionality, which is useful if you want to raise an issue report or contribute!
-Additionally, not all plugins are supported on all versions of GHC, see the [GHC version support page](supported-versions.md) for details.
+Additionally, not all plugins are supported on all versions of GHC, see the [plugin support page](./support/plugin-support.md) for details.
 
 ## Diagnostics
 
@@ -100,7 +100,7 @@ Completions for language pragmas.
 Format your code with various Haskell code formatters.
 
 | Formatter       | Provided by                  |
-|-----------------|------------------------------|
+| --------------- | ---------------------------- |
 | Brittany        | `hls-brittany-plugin`        |
 | Floskell        | `hls-floskell-plugin`        |
 | Fourmolu        | `hls-fourmolu-plugin`        |
@@ -261,6 +261,7 @@ Change/Update a type signature to match implementation.
 Status: Until GHC 9.4, the implementation is ad-hoc and relies on GHC error messages to create a new signature. Not all GHC error messages are supported.
 
 Known Limitations:
+
 - Not all GHC error messages are supported
 - Top-level and Function-local bindings with the same names can cause issues, such as incorrect signature changes or no code actions available.
 
@@ -345,6 +346,16 @@ support.
 
 ![Selection range demo](https://user-images.githubusercontent.com/16440269/177240833-7dc8fe39-b446-477e-b5b1-7fc303608d4f.gif)
 
+## Folding range
+
+Provided by: `hls-code-range-plugin`
+
+Provides haskell specific
+[Folding](https://code.visualstudio.com/docs/editor/codebasics#_folding)
+support.
+
+![Folding range demo](https://user-images.githubusercontent.com/54478821/184468510-7c0d5182-c684-48ef-9b39-3866dc2309df.gif)
+
 ## Rename
 
 Provided by: `hls-rename-plugin`
@@ -362,15 +373,14 @@ Known limitations:
 The following features are supported by the LSP specification but not implemented in HLS.
 Contributions welcome!
 
-| Feature                | Status                                                                                   | [LSP method](./what-is-hls.md#lsp-terminology)      |
-|------------------------|------------------------------------------------------------------------------------------|-----------------------------------------------------|
-| Signature help         | Unimplemented                                                                            | `textDocument/signatureHelp`                        |
-| Jump to declaration    | Unclear if useful                                                                        | `textDocument/declaration`                          |
-| Jump to implementation | Unclear if useful                                                                        | `textDocument/implementation`                       |
-| Folding                | Unimplemented                                                                            | `textDocument/foldingRange`                         |
-| Semantic tokens        | Unimplemented                                                                            | `textDocument/semanticTokens`                       |
-| Linked editing         | Unimplemented                                                                            | `textDocument/linkedEditingRange`                   |
-| Document links         | Unimplemented                                                                            | `textDocument/documentLink`                         |
-| Document color         | Unclear if useful                                                                        | `textDocument/documentColor`                        |
-| Color presentation     | Unclear if useful                                                                        | `textDocument/colorPresentation`                    |
-| Monikers               | Unclear if useful                                                                        | `textDocument/moniker`                              |
+| Feature                | Status            | [LSP method](./what-is-hls.md#lsp-terminology) |
+| ---------------------- | ----------------- | ---------------------------------------------- |
+| Signature help         | Unimplemented     | `textDocument/signatureHelp`                   |
+| Jump to declaration    | Unclear if useful | `textDocument/declaration`                     |
+| Jump to implementation | Unclear if useful | `textDocument/implementation`                  |
+| Semantic tokens        | Unimplemented     | `textDocument/semanticTokens`                  |
+| Linked editing         | Unimplemented     | `textDocument/linkedEditingRange`              |
+| Document links         | Unimplemented     | `textDocument/documentLink`                    |
+| Document color         | Unclear if useful | `textDocument/documentColor`                   |
+| Color presentation     | Unclear if useful | `textDocument/colorPresentation`               |
+| Monikers               | Unclear if useful | `textDocument/moniker`                         |
