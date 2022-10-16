@@ -24,6 +24,7 @@
 /plugins/hls-qualify-imported-names-plugin @eddiemundo
 /plugins/hls-refine-imports-plugin
 /plugins/hls-rename-plugin @OliverMadine
+/plugins/hls-refactor-plugin @santiweight
 /plugins/hls-retrie-plugin @pepeiborra
 /plugins/hls-code-range-plugin @kokobd
 /plugins/hls-splice-plugin @konn
