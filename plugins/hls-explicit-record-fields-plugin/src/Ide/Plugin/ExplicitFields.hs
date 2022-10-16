@@ -17,7 +17,8 @@ import           Control.Lens                    ((%~), (^.))
 import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Control.Monad.Trans.Except      (ExceptT)
 import           Data.Data                       (Data)
-import           Data.Generics                   (GenericQ, everything, mkQ)
+import           Data.Generics                   (GenericQ, everything, extQ,
+                                                  mkQ)
 import qualified Data.HashMap.Strict             as HashMap
 import           Data.Maybe                      (catMaybes, isJust,
                                                   maybeToList)
@@ -45,8 +46,9 @@ import           Development.IDE.GHC.Compat      (HasSrcSpan (..),
                                                   pm_mod_summary, unLoc, unLocA)
 import           Development.IDE.GHC.Compat.Core (GenLocated (..), GhcPass (..),
                                                   HsBindLR (..),
+                                                  HsExpr (RecordCon, rcon_flds),
                                                   HsRecField' (..),
-                                                  HsValBindsLR (..),
+                                                  HsValBindsLR (..), LHsExpr,
                                                   ModSummary (..),
                                                   NHsValBindsLR (..), Pass (..),
                                                   Pat (..), extensionFlags,
@@ -95,16 +97,8 @@ showAstDataFull = showAstData NoBlankSrcSpan
 -- the records that originally had wildcards with dots, even after they
 -- are removed by the renamer pass. Here `rec_dotdot` is set to
 -- `Nothing` so that fields are printed without such post-processing.
-showRecord :: Outputable arg => HsRecFields p arg -> Text
-showRecord rec = printOutputable (rec { rec_dotdot = Nothing })
-
--- Same as `showRecord` but works with `Pat` types.
-showRecordPat :: Outputable (Pat p) => Pat p -> Maybe Text
-showRecordPat pat@(ConPat _ _ (RecCon flds)) =
-  Just $ printOutputable $
-    pat { pat_args = RecCon (flds { rec_dotdot = Nothing
-                                  , rec_flds = rec_flds'
-                                  }) }
+preprocessRecord :: HsRecFields p arg -> HsRecFields p arg
+preprocessRecord flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
   where
     -- TODO(ozkutuk): HsRecField' is renamed to HsFieldBind in GHC 9.4
     -- Add it as a pattern synonym to the ghcide compat module, so it would
@@ -117,10 +111,22 @@ showRecordPat pat@(ConPat _ _ (RecCon flds)) =
     (no_puns, puns) = splitAt no_pun_count (rec_flds flds)
     -- `hsRecPun` is set to `True` in order to pretty-print the fields as field
     -- puns (since there is similar mechanism in the `Outputable` instance as
-    -- explained the documentation of `showRecord` function).
+    -- explained above).
     puns' = map (\(L ss fld) -> L ss (fld { hsRecPun = True })) puns
     rec_flds' = no_puns <> puns'
+
+-- Same as `showRecord` but works with `Pat` types.
+showRecordPat :: Outputable (Pat p) => Pat p -> Maybe Text
+showRecordPat pat@(ConPat _ _ (RecCon flds)) =
+  Just $ printOutputable $
+    pat { pat_args = RecCon (preprocessRecord flds) }
 showRecordPat _ = Nothing
+
+showRecordCon :: Outputable (HsExpr p) => HsExpr p -> Maybe Text
+showRecordCon expr@(RecordCon _ _ flds) =
+  Just $ printOutputable $
+    expr { rcon_flds = preprocessRecord flds }
+showRecordCon _ = Nothing
 
 data Log
   = LogShake Shake.Log
@@ -160,21 +166,37 @@ data CollectRecordsResult = CRR
 -- instance Show RecordPattern where
 --   show (RecordPattern l) = T.unpack (printOutputable l)
 
-data RecordInfo = RecordInfo !SrcSpan !(Pat (GhcPass 'Renamed))
+data RecordInfo
+  = RecordInfoPat !SrcSpan !(Pat (GhcPass 'Renamed))
+  | RecordInfoCon !SrcSpan !(HsExpr (GhcPass 'Renamed))
                 -- deriving (Show, Generic)
 
 getSrcSpan :: RecordInfo -> SrcSpan
-getSrcSpan (RecordInfo ss _) = ss
+getSrcSpan (RecordInfoPat ss _) = ss
+getSrcSpan (RecordInfoCon ss _) = ss
 
 getEdit :: RecordInfo -> Maybe Text
-getEdit (RecordInfo _ pat) = showRecordPat pat
+getEdit (RecordInfoPat _ pat)  = showRecordPat pat
+getEdit (RecordInfoCon _ expr) = showRecordCon expr
 
-collectRecords :: GenericQ [LPat (GhcPass 'Renamed)]
-collectRecords = everything (<>) (maybeToList . (Nothing `mkQ` getRecPatterns))
+-- collectRecords :: GenericQ [LPat (GhcPass 'Renamed)]
+collectRecords :: GenericQ [RecordInfo]
+collectRecords = everything (<>) (maybeToList . (Nothing `mkQ` getRecPatterns `extQ` getRecCons))
 
-getRecPatterns :: LPat (GhcPass 'Renamed) -> Maybe (LPat (GhcPass 'Renamed))
+getRecCons :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordInfo
+getRecCons e@(unLoc -> RecordCon _ _ flds)
+  | isJust (rec_dotdot flds) = Just $ mkRecInfo e
+  where
+    mkRecInfo :: LHsExpr (GhcPass 'Renamed) -> RecordInfo
+    mkRecInfo expr = RecordInfoCon (getLoc expr) (unLoc expr)
+getRecCons _ = Nothing
+
+getRecPatterns :: LPat (GhcPass 'Renamed) -> Maybe RecordInfo
 getRecPatterns conPat@(unLoc -> ConPat _ _ (RecCon flds))
-  | isJust (rec_dotdot flds) = Just conPat
+  | isJust (rec_dotdot flds) = Just $ mkRecInfo conPat
+  where
+    mkRecInfo :: LPat (GhcPass 'Renamed) -> RecordInfo
+    mkRecInfo pat = RecordInfoPat (getLoc pat) (unLoc pat)
 getRecPatterns _ = Nothing
 
 -- collectRecordsResult :: MonadIO m => Range -> IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
@@ -190,19 +212,14 @@ collectRecordsInRange range ideState nfp = do
 
   where
     inRange :: RecordInfo -> Bool
-    inRange (RecordInfo (srcSpanToRange -> recRange) _) =
-      maybe False (subRange range) recRange
+    inRange r = maybe False (subRange range) (srcSpanToRange (getSrcSpan r))
 
 getEnabledExtensions :: TcModuleResult -> [Extension]
 getEnabledExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary . tmrParsed
 
 getRecords :: TcModuleResult -> [RecordInfo]
-getRecords tmr =
-  let (hsGroup,_,_,_) = tmrRenamed tmr
-      valBinds = hs_valds hsGroup
-      recs = collectRecords valBinds
-      (srcs, recs') = unzip $ map (getLoc &&& unLoc) recs
-  in zipWith RecordInfo srcs recs'
+getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
+  collectRecords valBinds
 
 getTypecheckedModule :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m TcModuleResult
 getTypecheckedModule ideState =
