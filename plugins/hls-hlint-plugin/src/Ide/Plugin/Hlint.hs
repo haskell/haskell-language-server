@@ -68,6 +68,9 @@ import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      wopt)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 
+#if MIN_GHC_API_VERSION(9,4,0)
+import qualified "ghc-lib-parser" GHC.Data.Strict                   as Strict
+#endif
 #if MIN_GHC_API_VERSION(9,0,0)
 import           "ghc-lib-parser" GHC.Types.SrcLoc                  hiding
                                                                     (RealSrcSpan)
@@ -157,7 +160,7 @@ instance Pretty Log where
 #if !MIN_GHC_API_VERSION(9,0,0)
 type BufSpan = ()
 #endif
-pattern RealSrcSpan :: GHC.RealSrcSpan -> Maybe BufSpan -> GHC.SrcSpan
+pattern RealSrcSpan :: GHC.RealSrcSpan -> Strict.Maybe BufSpan -> GHC.SrcSpan
 #if MIN_GHC_API_VERSION(9,0,0)
 pattern RealSrcSpan x y = GHC.RealSrcSpan x y
 #else

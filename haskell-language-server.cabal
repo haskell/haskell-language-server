@@ -246,7 +246,7 @@ common tactic
     cpp-options: -Dhls_tactic
 
 common hlint
-  if flag(hlint) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(hlint)
     build-depends: hls-hlint-plugin ^>= 1.1
     cpp-options: -Dhls_hlint
 
@@ -271,7 +271,7 @@ common splice
     cpp-options: -Dhls_splice
 
 common alternateNumberFormat
-  if flag(alternateNumberFormat) 
+  if flag(alternateNumberFormat)
     build-depends: hls-alternate-number-format-plugin ^>= 1.2
     cpp-options: -Dhls_alternateNumberFormat
 
