@@ -44,7 +44,7 @@ import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           GHC
-import Language.LSP.Types (isSubrangeOf)
+import           Language.LSP.Types                (isSubrangeOf)
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
