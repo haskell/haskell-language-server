@@ -62,7 +62,7 @@ jobs:
         extra_nix_config: |
           experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
-    - uses: cachix/cachix-action@v10
+    - uses: cachix/cachix-action@v11
       with:
         name: haskell-language-server
         # Disable pushing, we will do that in job `build`
@@ -96,7 +96,7 @@ jobs:
         extra_nix_config: |
           experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
-    - uses: cachix/cachix-action@v10
+    - uses: cachix/cachix-action@v11
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
