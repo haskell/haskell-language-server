@@ -42,7 +42,8 @@ import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake                        hiding (Log)
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat                        hiding
+                                                                   (ImplicitPrelude)
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error

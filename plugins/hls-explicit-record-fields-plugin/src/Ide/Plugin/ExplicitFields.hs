@@ -38,12 +38,13 @@ import           Development.IDE.GHC.Compat      (HasSrcSpan (..),
                                                   HsRecFields (..), HscEnv (..),
                                                   LPat, Outputable, SrcSpan,
                                                   pm_mod_summary, unLoc)
-import           Development.IDE.GHC.Compat.Core (GenLocated (..), GhcPass (..),
+import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
+                                                  GhcPass (..),
                                                   HsExpr (RecordCon, rcon_flds),
-                                                  HsRecField' (..), LHsExpr,
-                                                  ModSummary (..), Pass (..),
-                                                  Pat (..), extensionFlags,
-                                                  hs_valds)
+                                                  LHsExpr, ModSummary (..),
+                                                  Pass (..), Pat (..),
+                                                  extensionFlags, hfbPun,
+                                                  hs_valds, mapLoc)
 import           Development.IDE.GHC.Compat.Util (toList)
 import           Development.IDE.GHC.Util        (printOutputable)
 import           Development.IDE.Graph           (RuleResult)
@@ -53,7 +54,6 @@ import           Development.IDE.Spans.Pragmas   (NextPragmaInfo (..),
                                                   insertNewPragma)
 import           Development.IDE.Types.Logger    (cmapWithPrio)
 import           GHC.Generics                    (Generic)
-import           GHC.LanguageExtensions.Type     (Extension (..))
 import           Ide.PluginUtils                 (getNormalizedFilePath,
                                                   handleMaybeM, pluginResponse,
                                                   subRange)
@@ -79,14 +79,9 @@ import qualified Language.LSP.Types.Lens         as L
 -- the records that originally had wildcards with dots, even after they
 -- are removed by the renamer pass. Here `rec_dotdot` is set to
 -- `Nothing` so that fields are printed without such post-processing.
-preprocessRecord :: HsRecFields p arg -> HsRecFields p arg
+preprocessRecord :: HsRecFields (GhcPass c) arg -> HsRecFields (GhcPass c) arg
 preprocessRecord flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
   where
-    -- TODO(ozkutuk): HsRecField' is renamed to HsFieldBind in GHC 9.4
-    -- Add it as a pattern synonym to the ghcide compat module, so it would
-    -- work on all HLS builds.
-    -- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/5757
-
     no_pun_count = maybe (length (rec_flds flds)) unLoc (rec_dotdot flds)
     -- Field binds of the explicit form (e.g. `{ a = a' }`) should be
     -- left as is, hence the split.
@@ -94,16 +89,16 @@ preprocessRecord flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
     -- `hsRecPun` is set to `True` in order to pretty-print the fields as field
     -- puns (since there is similar mechanism in the `Outputable` instance as
     -- explained above).
-    puns' = map (\(L ss fld) -> L ss (fld { hsRecPun = True })) puns
+    puns' = map (mapLoc (\fld -> fld { hfbPun = True })) puns
     rec_flds' = no_puns <> puns'
 
-showRecordPat :: Outputable (Pat p) => Pat p -> Maybe Text
+showRecordPat :: Outputable (Pat (GhcPass c)) => Pat (GhcPass c) -> Maybe Text
 showRecordPat pat@(ConPat _ _ (RecCon flds)) =
   Just $ printOutputable $
     pat { pat_args = RecCon (preprocessRecord flds) }
 showRecordPat _ = Nothing
 
-showRecordCon :: Outputable (HsExpr p) => HsExpr p -> Maybe Text
+showRecordCon :: Outputable (HsExpr (GhcPass c)) => HsExpr (GhcPass c) -> Maybe Text
 showRecordCon expr@(RecordCon _ _ flds) =
   Just $ printOutputable $
     expr { rcon_flds = preprocessRecord flds }
@@ -239,14 +234,14 @@ codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginRes
         mkTextEdit :: RenderedRecordInfo -> Maybe TextEdit
         mkTextEdit (RenderedRecordInfo ss r) = TextEdit <$> srcSpanToRange ss <*> pure r
 
-        -- TODO(ozkutuk): `RecordPuns` extension is renamed to `NamedFieldPuns`
-        -- in GHC 9.4, so I probably need to add this to the compat module as
-        -- well.
+        -- NOTE(ozkutuk): `RecordPuns` extension is renamed to `NamedFieldPuns`
+        -- in GHC 9.4, but we still want to insert `NamedFieldPuns` in pre-9.4
+        -- GHC as well, hence the replacement.
         -- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/6156
         pragmaEdit :: Maybe TextEdit
-        pragmaEdit = if RecordPuns `elem` exts
+        pragmaEdit = if NamedFieldPuns `elem` exts
                        then Nothing
-                       else Just $ patchExtName $ insertNewPragma pragma RecordPuns
+                       else Just $ patchExtName $ insertNewPragma pragma NamedFieldPuns
           where
             patchExtName = L.newText %~ T.replace "Record" "NamedField"
 
@@ -257,7 +252,7 @@ codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginRes
 
 mkCodeActionTitle :: [Extension] -> Text
 mkCodeActionTitle exts =
-  if RecordPuns `elem` exts
+  if NamedFieldPuns `elem` exts
     then title
     else title <> " (needs extension: NamedFieldPuns)"
     where
