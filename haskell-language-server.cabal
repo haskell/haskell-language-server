@@ -63,6 +63,12 @@ flag ignore-plugins-ghc-bounds
   default:     False
   manual:      True
 
+
+flag cabal
+  description: Enable cabal plugin
+  default:     True
+  manual:      True
+
 flag class
   description: Enable class plugin
   default:     True
@@ -200,6 +206,11 @@ flag dynamic
   default:     True
   manual:      True
 
+common cabal
+  if flag(cabal)
+    build-depends: hls-cabal-plugin ^>= 0.1
+    cpp-options: -Dhls_cabal
+  
 common class
   if flag(class)
     build-depends: hls-class-plugin ^>= 1.1
@@ -338,6 +349,7 @@ library
                   , warnings
                   , pedantic
                   -- plugins
+                  , cabal
                   , callHierarchy
                   , changeTypeSignature
                   , class

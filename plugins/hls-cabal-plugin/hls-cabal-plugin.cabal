@@ -1,0 +1,69 @@
+cabal-version:      3.0
+name:               hls-cabal-plugin
+version:            0.1.0.0
+synopsis:           Cabal integration plugin with Haskell Language Server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
+homepage:
+license:            MIT
+license-file:       LICENSE
+author:             Fendor
+maintainer:         fendor@posteo.de
+category:           Development
+extra-source-files:
+  CHANGELOG.md
+  test/testdata/invalid.cabal
+  test/testdata/licenseCodeAction.cabal
+  test/testdata/simple.cabal
+
+common warnings
+  ghc-options: -Wall
+
+library
+  import:           warnings
+  exposed-modules:
+    Ide.Plugin.Cabal
+    Ide.Plugin.Cabal.Diagnostics
+    Ide.Plugin.Cabal.LicenseSuggest
+    Ide.Plugin.Cabal.FieldSuggest
+    Ide.Plugin.Cabal.Parse
+
+  build-depends:
+    , base                  >=4.12     && <5
+    , bytestring
+    , Cabal                 ^>=3.2 || ^>=3.4 || ^>=3.6
+    , containers
+    , text-rope
+    , deepseq
+    , directory
+    , extra                 >=1.7.4
+    , ghcide                ^>= 1.8
+    , hashable
+    , hls-plugin-api        ^>=1.5
+    , lsp                   ^>=1.6.0.0
+    , lsp-types             ^>=1.6.0.0
+    , regex-tdfa            ^>=1.3.1
+    , stm
+    , text                  ^>=1.2.4.0
+    , unordered-containers  >=0.2.10.0
+
+  hs-source-dirs:   src
+  default-language: Haskell2010
+
+test-suite tests
+  import:           warnings
+  default-language: Haskell2010
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  build-depends:
+    , base
+    , filepath
+    , ghcide
+    , hls-cabal-plugin
+    , hls-test-utils    ^>=1.4
+    , lens
+    , lsp-types
+    , tasty-hunit
+    , text

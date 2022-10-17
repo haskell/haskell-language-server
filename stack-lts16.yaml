@@ -9,6 +9,7 @@ packages:
   - ./shake-bench
   - ./hls-plugin-api
   - ./hls-test-utils
+  - ./plugins/hls-cabal-plugin
   - ./plugins/hls-call-hierarchy-plugin
   - ./plugins/hls-class-plugin
   - ./plugins/hls-haddock-comments-plugin
@@ -44,6 +45,7 @@ extra-deps:
   - apply-refact-0.9.3.0
   - brittany-0.13.1.2
   - bytestring-trie-0.2.5.0
+  - Cabal-3.2.1.0
   - cabal-plan-0.6.2.0
   - clock-0.7.2
   - constrained-dynamic-0.1.0.0
@@ -64,6 +66,7 @@ extra-deps:
   - ilist-0.3.1.0
   - implicit-hie-cradle-0.3.0.5
   - implicit-hie-0.1.2.6
+  - lens-4.19
   - megaparsec-9.0.1
   - monad-dijkstra-0.1.1.2
   - opentelemetry-0.6.1
