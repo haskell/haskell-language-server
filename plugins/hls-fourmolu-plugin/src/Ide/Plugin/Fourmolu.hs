@@ -17,6 +17,7 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Bifunctor                  (bimap, first)
 import           Data.Maybe
+import qualified Data.Set                        as Set
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE                 hiding (pluginHandlers)
@@ -24,6 +25,8 @@ import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
                                                             hang, vcat)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
+import           GHC.Unit                        (UnitId (UnitId))
+import           GHC.Unit.Env                    (UnitEnv (ue_units))
 import           Ide.Plugin.Fourmolu.Shim
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                 (makeDiffTextEdit,
@@ -56,16 +59,25 @@ properties =
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
 provider recorder plId ideState typ contents fp fo = withIndefiniteProgress title Cancellable $ do
-    fileOpts <-
-        maybe [] (convertDynFlags . hsc_dflags . hscEnv)
-            <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
+    maybeHscEnv <- liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
+    let fileOpts = maybe [] (convertDynFlags . hsc_dflags . hscEnv) maybeHscEnv
+        deps = case maybeHscEnv of
+            Nothing -> []
+            Just env -> flip mapMaybe (Compat.explicitUnits $ ue_units $ hsc_unit_env $ hscEnv env) $ \case
+                RealUnit (Definite (UnitId x)) -> pure . reverse <=< dropChunk <=< dropChunk . reverse $ S.unpackFS x
+                _ -> Nothing
+          where
+            dropChunk = tailSafe . dropWhile (/= '-')
+            tailSafe = \case
+                _ : xs -> Just xs
+                _      -> Nothing
     useCLI <- usePropertyLsp #external plId properties
     if useCLI
         then liftIO
             . fmap (join . first (mkError . show))
             . try @IOException
             $ do
-                CLIVersionInfo{noCabal} <- do -- check Fourmolu version so that we know which flags to use
+                CLIVersionInfo{noCabal, packages} <- do -- check Fourmolu version so that we know which flags to use
                     (exitCode, out, _err) <- readCreateProcessWithExitCode ( proc "fourmolu" ["-v"] ) ""
                     let version = do
                             guard $ exitCode == ExitSuccess
@@ -74,17 +86,20 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                     case version of
                         Just v -> pure CLIVersionInfo
                             { noCabal = v >= [0, 7]
+                            , packages = v >= [0, 7]
                             }
                         Nothing -> do
                             logWith recorder Warning $ NoVersion out
                             pure CLIVersionInfo
                                 { noCabal = True
+                                , packages = True
                                 }
                 (exitCode, out, err) <- -- run Fourmolu
                     readCreateProcessWithExitCode
                         ( proc "fourmolu" $
                             map ("-o" <>) fileOpts
                                 <> mwhen noCabal ["--no-cabal"]
+                                <> mwhen packages (deps >>= \d -> ["-p", d])
                                 <> catMaybes
                                     [ ("--start-line=" <>) . show <$> regionStartLine region
                                     , ("--end-line=" <>) . show <$> regionEndLine region
@@ -114,6 +129,7 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                                 fillMissingPrinterOpts
                                     (printerOpts <> lspPrinterOpts)
                                     defaultPrinterOpts
+                            , cfgDependencies = Set.fromList deps
                             }
              in liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> liftIO $ do
@@ -168,8 +184,9 @@ convertDynFlags df =
             x   -> "-X" ++ show x
      in pp <> pm <> ex
 
-newtype CLIVersionInfo = CLIVersionInfo
+data CLIVersionInfo = CLIVersionInfo
     { noCabal :: Bool
+    , packages :: Bool
     }
 
 mwhen :: Monoid a => Bool -> a -> a
