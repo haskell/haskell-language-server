@@ -559,14 +559,8 @@ build-aarch64-darwin:
     - aarch64-darwin-m1
   before_script:
     - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
-    - arch -arm64 /bin/bash ./.gitlab/brew.sh llvm@14 autoconf automake coreutils make tree
+    - arch -arm64 /bin/bash ./.gitlab/brew.sh autoconf automake coreutils make tree
   script: |
-    export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
-    export CC=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang
-    export CXX=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang++
-    export LD=ld
-    export AR=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ar
-    export RANLIB=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ranlib
     arch -arm64 /bin/bash ./.gitlab/ci.sh
   after_script:
     - rm -Rf /private/tmp/.brew_tmp

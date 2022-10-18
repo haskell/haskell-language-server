@@ -35,17 +35,6 @@ case "$(uname -s)" in
 	"Darwin"|"darwin")
 		case "$(/usr/bin/arch)" in
 			aarch64|arm64|armv8l)
-				export PATH="$PATH:$CI_PROJECT_DIR/.brew/opt/llvm@14/bin"
-        export LDFLAGS="-L$CI_PROJECT_DIR/.brew/opt/llvm@14/lib"
-        export CPPFLAGS="-I$CI_PROJECT_DIR/.brew/opt/llvm@14/include"
-        export CC="$CI_PROJECT_DIR/.brew/opt/llvm@14/bin/clang"
-				ls "$CI_PROJECT_DIR/.brew/opt/llvm@14/bin"
-				which $CC
-				file $(which $CC)
-				$CC --version
-				echo "int main() { return 0; }" > test.c
-				$CC test.c
-				./a.out
 				curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | arch -arm64 /bin/bash
 				export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
 				;;
