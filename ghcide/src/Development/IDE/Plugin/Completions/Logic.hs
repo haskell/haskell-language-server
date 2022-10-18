@@ -290,12 +290,8 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
                   then getArgs ret
                   else Prelude.filter (not . isDictTy) $ map scaledThing args
           | isPiTy t = getArgs $ snd (splitPiTys t)
-#if MIN_VERSION_ghc(8,10,0)
           | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
           = getArgs t
-#else
-          | isCoercionTy t = maybe [] (getArgs . snd) (splitCoercionType_maybe t)
-#endif
           | otherwise = []
 
 
@@ -766,9 +762,6 @@ uniqueCompl candidate unique =
       importedFrom (provenance -> ImportedFrom m) = m
       importedFrom (provenance -> DefinedIn m)    = m
       importedFrom (provenance -> Local _)        = "local"
-#if __GLASGOW_HASKELL__ < 810
-      importedFrom _                              = ""
-#endif
 
 -- ---------------------------------------------------------------------
 -- helper functions for infix backticks

@@ -18,7 +18,7 @@ import           Development.IDE.GHC.ExactPrint
 import           Generics.SYB.GHC (mkBindListT, everywhereM')
 import           Wingman.AbstractLSP.Types
 import           Wingman.CaseSplit
-import           Wingman.GHC (liftMaybe, isHole, pattern AMatch, unXPat)
+import           Wingman.GHC (liftMaybe, isHole, pattern AMatch)
 import           Wingman.Judgements (jNeedsToBindArgs)
 import           Wingman.LanguageServer (runStaleIde)
 import           Wingman.LanguageServer.TacticProviders
@@ -133,7 +133,7 @@ graftHole span rtr
                 )
                 (occName name)
             $ iterateSplit
-            $ mkFirstAgda (fmap unXPat pats)
+            $ mkFirstAgda pats
             $ unLoc
             $ rtr_extract rtr
 graftHole span rtr

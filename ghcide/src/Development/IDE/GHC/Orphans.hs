@@ -104,11 +104,6 @@ instance Show ParsedModule where
 instance NFData ModSummary where
     rnf = rwhnf
 
-#if !MIN_VERSION_ghc(8,10,0)
-instance NFData FastString where
-    rnf = rwhnf
-#endif
-
 #if MIN_VERSION_ghc(9,2,0)
 instance Ord FastString where
     compare a b = if a == b then EQ else compare (fs_sbs a) (fs_sbs b)

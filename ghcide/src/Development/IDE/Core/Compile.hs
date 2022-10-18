@@ -104,10 +104,6 @@ import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
 import           Unsafe.Coerce
 
-#if !MIN_VERSION_ghc(8,10,0)
-import           ErrUtils
-#endif
-
 #if MIN_VERSION_ghc(9,0,1)
 import           GHC.Tc.Gen.Splice
 
@@ -482,11 +478,9 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
                     Nothing
 #endif
 
-#elif MIN_VERSION_ghc(8,10,0)
+#else 
   let !partial_iface = force (mkPartialIface session details simplified_guts)
   final_iface <- mkFullIface session partial_iface
-#else
-  (final_iface,_) <- mkIface session Nothing details simplified_guts
 #endif
 
   -- Write the core file now
@@ -637,11 +631,7 @@ generateObjectCode session summary guts = do
 #else
                       (outputFilename, _mStub, _foreign_files) <- hscGenHardCode session' guts
 #endif
-#if MIN_VERSION_ghc(8,10,0)
                                 (ms_location summary)
-#else
-                                summary
-#endif
                                 fp
                       obj <- compileFile session' driverNoStop (outputFilename, Just (As False))
 #if MIN_VERSION_ghc(9,3,0)
@@ -670,11 +660,7 @@ generateByteCode (CoreFileTime time) hscEnv summary guts = do
                           -- TODO: maybe settings ms_hspp_opts is unnecessary?
                           summary' = summary { ms_hspp_opts = hsc_dflags session }
                       hscInteractive session guts
-#if MIN_VERSION_ghc(8,10,0)
                                 (ms_location summary')
-#else
-                                summary'
-#endif
               let unlinked = BCOs bytecode sptEntries
               let linkable = LM time (ms_mod summary) [unlinked]
               pure (map snd warnings, linkable)
@@ -739,9 +725,7 @@ unnecessaryDeprecationWarningFlags
     , Opt_WarnUnusedMatches
     , Opt_WarnUnusedTypePatterns
     , Opt_WarnUnusedForalls
-#if MIN_VERSION_ghc(8,10,0)
     , Opt_WarnUnusedRecordWildcards
-#endif
     , Opt_WarnInaccessibleCode
     , Opt_WarnWarningsDeprecations
     ]

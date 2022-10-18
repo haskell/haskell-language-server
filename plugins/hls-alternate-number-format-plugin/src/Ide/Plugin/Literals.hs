@@ -62,17 +62,8 @@ getLiteral (L (locA -> (RealSrcSpan sSpan _)) expr) = case expr of
     _                   -> Nothing
 getLiteral _ = Nothing
 
-
-
--- GHC 8.8 typedefs LPat = Pat
-#if __GLASGOW_HASKELL__ == 808
-type LocPat a = GenLocated SrcSpan (Pat a)
-#else
-type LocPat a = LPat a
-#endif
-
 -- | Destructure Patterns to unwrap any Literals
-getPattern :: LocPat GhcPs -> Maybe Literal
+getPattern :: LPat GhcPs -> Maybe Literal
 getPattern (L (locA -> (RealSrcSpan patSpan _)) pat) = case pat of
     LitPat _ lit -> case lit of
         HsInt _ val   -> fromIntegralLit patSpan val

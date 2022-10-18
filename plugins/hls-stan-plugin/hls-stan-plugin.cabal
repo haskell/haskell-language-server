@@ -26,7 +26,7 @@ flag pedantic
   manual:      True
 
 library
-  if impl(ghc < 8.8) || impl(ghc >= 9.0)
+  if impl(ghc < 8.10) || impl(ghc >= 9.0)
     buildable: False
   else
     buildable: True
@@ -58,7 +58,7 @@ library
     OverloadedStrings
 
 test-suite test
-  if impl(ghc < 8.8) || impl(ghc >= 9.0)
+  if impl(ghc < 8.10) || impl(ghc >= 9.0)
     buildable: False
   else
     buildable: True
