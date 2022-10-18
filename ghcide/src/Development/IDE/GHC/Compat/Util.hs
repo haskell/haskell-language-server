@@ -30,10 +30,8 @@ module Development.IDE.GHC.Compat.Util (
     -- * Maybes
     MaybeErr(..),
     orElse,
-#if MIN_VERSION_ghc(8,10,0)
     -- * Pair
     Pair(..),
-#endif
     -- * EnumSet
     EnumSet,
     toList,
@@ -97,10 +95,8 @@ import qualified Exception
 import           FastString
 import           Fingerprint
 import           Maybes
-#if MIN_VERSION_ghc(8,10,0)
-import           Pair
-#endif
 import           Outputable              (pprHsString)
+import           Pair
 import           Panic                   hiding (try)
 import           StringBuffer
 import           UniqDFM

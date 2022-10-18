@@ -1186,7 +1186,7 @@ checkFileCompiles fp diag =
 
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
-  ignoreInWindowsForGHC88And810 $
+  ignoreInWindowsForGHC810 $
   ignoreForGHC92Plus "blocked on ghc-typelits-natnormalise" $
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
@@ -1201,7 +1201,7 @@ pluginSimpleTests =
 
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
-  ignoreInWindowsForGHC88And810 $
+  ignoreInWindowsForGHC810 $
   ignoreForGHC92Plus "No need for this plugin anymore!" $
   testSessionWithExtraFiles "plugin-recorddot" "parsedResultAction plugin" $ \dir -> do
     _ <- openDoc (dir</> "RecordDot.hs") "haskell"
@@ -1370,7 +1370,7 @@ thTests =
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
         expectDiagnostics [ ( "B.hs", [(DsWarning, (4, 0), "Top-level binding with no type signature: main :: IO ()")] ) ]
-    , ignoreInWindowsForGHC88 $ testCase "findsTHnewNameConstructor" $ runWithExtraFiles "THNewName" $ \dir -> do
+    , testCase "findsTHnewNameConstructor" $ runWithExtraFiles "THNewName" $ \dir -> do
 
     -- This test defines a TH value with the meaning "data A = A" in A.hs
     -- Loads and export the template in B.hs
@@ -2273,16 +2273,12 @@ xfail = flip expectFailBecause
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause = ignoreFor (BrokenForOS Windows)
 
-ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
-ignoreInWindowsForGHC88And810 =
-    ignoreFor (BrokenSpecific Windows [GHC88, GHC810]) "tests are unreliable in windows for ghc 8.8 and 8.10"
+ignoreInWindowsForGHC810 :: TestTree -> TestTree
+ignoreInWindowsForGHC810 =
+    ignoreFor (BrokenSpecific Windows [GHC810]) "tests are unreliable in windows for ghc 8.10"
 
 ignoreForGHC92Plus :: String -> TestTree -> TestTree
 ignoreForGHC92Plus = ignoreFor (BrokenForGHC [GHC92, GHC94])
-
-ignoreInWindowsForGHC88 :: TestTree -> TestTree
-ignoreInWindowsForGHC88 =
-    ignoreFor (BrokenSpecific Windows [GHC88]) "tests are unreliable in windows for ghc 8.8"
 
 knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
 knownBrokenForGhcVersions ghcVers = knownBrokenFor (BrokenForGHC ghcVers)
@@ -2455,7 +2451,7 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
 
 dependentFileTest :: TestTree
 dependentFileTest = testGroup "addDependentFile"
-    [testGroup "file-changed" [ignoreInWindowsForGHC88 $ testSession' "test" test]
+    [testGroup "file-changed" [testSession' "test" test]
     ]
     where
       test dir = do

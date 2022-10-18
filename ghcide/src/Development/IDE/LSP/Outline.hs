@@ -248,11 +248,7 @@ documentSymbolForImport (L (locA -> (RealSrcSpan l _)) ImportDecl { ideclName, i
   (defDocumentSymbol l :: DocumentSymbol)
     { _name   = "import " <> printOutputable ideclName
     , _kind   = SkModule
-#if MIN_VERSION_ghc(8,10,0)
     , _detail = case ideclQualified of { NotQualified -> Nothing; _ -> Just "qualified" }
-#else
-    , _detail = if ideclQualified then Just "qualified" else Nothing
-#endif
     }
 documentSymbolForImport _ = Nothing
 

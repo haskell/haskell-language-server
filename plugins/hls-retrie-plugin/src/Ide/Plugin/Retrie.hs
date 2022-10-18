@@ -559,8 +559,4 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
     ideclExt = GHC.noExtField
 #endif
     ideclAs = toMod <$> ideclAsString
-#if MIN_VERSION_ghc(8,10,0)
     ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
-#else
-    ideclQualified = ideclQualifiedBool
-#endif

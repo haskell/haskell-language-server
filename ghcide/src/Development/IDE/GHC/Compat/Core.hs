@@ -76,12 +76,8 @@ module Development.IDE.GHC.Compat.Core (
     -- * Interface Files
     IfaceExport,
     IfaceTyCon(..),
-#if MIN_VERSION_ghc(8,10,0)
     ModIface,
     ModIface_(..),
-#else
-    ModIface(..),
-#endif
     HscSource(..),
     WhereFrom(..),
     loadInterface,
@@ -90,12 +86,8 @@ module Development.IDE.GHC.Compat.Core (
 #endif
     loadModuleInterface,
     RecompileRequired(..),
-#if MIN_VERSION_ghc(8,10,0)
     mkPartialIface,
     mkFullIface,
-#else
-    mkIface,
-#endif
     checkOldIface,
 #if MIN_VERSION_ghc(9,0,0)
     IsBootInterface(..),
@@ -141,7 +133,7 @@ module Development.IDE.GHC.Compat.Core (
 #if !MIN_VERSION_ghc(9,2,0)
     Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
 #endif
-    Development.IDE.GHC.Compat.Core.mkVisFunTys,
+    mkVisFunTys,
     Development.IDE.GHC.Compat.Core.mkInfForAllTys,
     -- * Specs
     ImpDeclSpec(..),
@@ -261,9 +253,6 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.noSrcSpan,
     SrcLoc.noSrcLoc,
     SrcLoc.noLoc,
-#if !MIN_VERSION_ghc(8,10,0)
-    SrcLoc.dL,
-#endif
     -- * Finder
     FindResult(..),
     mkHomeModLocation,
@@ -403,10 +392,8 @@ module Development.IDE.GHC.Compat.Core (
 #else
     module BasicTypes,
     module Class,
-#if MIN_VERSION_ghc(8,10,0)
     module Coercion,
     module Predicate,
-#endif
     module ConLike,
     module CoreUtils,
     module DataCon,
@@ -453,22 +440,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Parser.Header,
     module GHC.Parser.Lexer,
 #else
-#if MIN_VERSION_ghc(8,10,0)
     module GHC.Hs,
-#else
-    module HsBinds,
-    module HsDecls,
-    module HsDoc,
-    module HsExtension,
-    noExtField,
-    module HsExpr,
-    module HsImpExp,
-    module HsLit,
-    module HsPat,
-    module HsSyn,
-    module HsTypes,
-    module HsUtils,
-#endif
     module ExtractDocs,
     module Parser,
     module Lexer,
@@ -541,8 +513,7 @@ import           GHC.Core.Predicate
 import           GHC.Core.TyCo.Ppr
 import qualified GHC.Core.TyCo.Rep            as TyCoRep
 import           GHC.Core.TyCon
-import           GHC.Core.Type                hiding (mkInfForAllTys,
-                                               mkVisFunTys)
+import           GHC.Core.Type                hiding (mkInfForAllTys)
 import           GHC.Core.Unify
 import           GHC.Core.Utils
 
@@ -693,29 +664,13 @@ import           ExtractDocs
 import           FamInst
 import           FamInstEnv
 import           Finder                       hiding (mkHomeModLocation)
-#if MIN_VERSION_ghc(8,10,0)
 import           GHC.Hs                       hiding (HsLet, LetStmt)
-#endif
 import qualified GHCi
 import           GhcMonad
 import           HeaderInfo                   hiding (getImports)
 import           Hooks
 import           HscMain                      as GHC
 import           HscTypes
-#if !MIN_VERSION_ghc(8,10,0)
--- Syntax imports
-import           HsBinds
-import           HsDecls
-import           HsDoc
-import           HsExpr                       hiding (HsLet, LetStmt)
-import           HsExtension
-import           HsImpExp
-import           HsLit
-import           HsPat
-import           HsSyn                        hiding (wildCardName, HsLet, LetStmt)
-import           HsTypes                      hiding (wildCardName)
-import           HsUtils
-#endif
 import           Id
 import           IfaceSyn
 import           InstEnv
@@ -755,12 +710,12 @@ import           TcRnMonad                    hiding (Applicative (..), IORef,
                                                allM, anyM, concatMapM, foldrM,
                                                mapMaybeM, (<$>))
 import           TcRnTypes
-import           TcType                       hiding (mkVisFunTys)
+import           TcType                       
 import qualified TcType
 import           TidyPgm                     as GHC
 import qualified TyCoRep
 import           TyCon
-import           Type                         hiding (mkVisFunTys)
+import           Type                         
 import           TysPrim
 import           TysWiredIn
 import           Unify
@@ -769,16 +724,10 @@ import           UniqSupply
 import           Var                          (Var (varName), setTyVarUnique,
                                                setVarUnique, varType)
 
-#if MIN_VERSION_ghc(8,10,0)
 import           Coercion                     (coercionKind)
 import           Predicate
 import           SrcLoc                       (Located, SrcLoc (UnhelpfulLoc),
                                                SrcSpan (UnhelpfulSpan))
-#else
-import           SrcLoc                       (RealLocated,
-                                               SrcLoc (UnhelpfulLoc),
-                                               SrcSpan (UnhelpfulSpan))
-#endif
 #endif
 
 
@@ -890,11 +839,7 @@ pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
 #endif
 
 pattern FunTy :: Type -> Type -> Type
-#if MIN_VERSION_ghc(8,10,0)
 pattern FunTy arg res <- TyCoRep.FunTy {ft_arg = arg, ft_res = res}
-#else
-pattern FunTy arg res <- TyCoRep.FunTy arg res
-#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 -- type HasSrcSpan x a = (GenLocated SrcSpan a ~ x)
@@ -941,14 +886,6 @@ unrestricted :: a -> Scaled a
 unrestricted = id
 #endif
 
-mkVisFunTys :: [Scaled Type] -> Type -> Type
-mkVisFunTys =
-#if __GLASGOW_HASKELL__ == 808
-  mkFunTys
-#else
-  TcType.mkVisFunTys
-#endif
-
 mkInfForAllTys :: [TyVar] -> Type -> Type
 mkInfForAllTys =
 #if MIN_VERSION_ghc(9,0,0)
@@ -980,11 +917,6 @@ tcSplitForAllTyVarBinder_maybe =
   tcSplitForAllTy_maybe
 #endif
 
-
-#if !MIN_VERSION_ghc(8,10,0)
-noExtField :: GHC.NoExt
-noExtField = GHC.noExt
-#endif
 
 #if !MIN_VERSION_ghc(9,0,0)
 pattern NotBoot, IsBoot :: IsBootInterface
@@ -1132,15 +1064,11 @@ makeSimpleDetails hsc_env =
 #endif
 
 mkIfaceTc hsc_env sf details ms tcGblEnv =
-#if MIN_VERSION_ghc(8,10,0)
   GHC.mkIfaceTc hsc_env sf details
 #if MIN_VERSION_ghc(9,3,0)
               ms
 #endif
               tcGblEnv
-#else
-  fst <$> GHC.mkIfaceTc hsc_env Nothing sf details tcGblEnv
-#endif
 
 mkBootModDetailsTc :: HscEnv -> TcGblEnv -> IO ModDetails
 mkBootModDetailsTc session = GHC.mkBootModDetailsTc
