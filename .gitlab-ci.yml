@@ -557,9 +557,6 @@ build-aarch64-darwin:
   stage: build
   tags:
     - aarch64-darwin-m1
-  before_script:
-    - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
-    - arch -arm64 /bin/bash ./.gitlab/brew.sh autoconf automake coreutils make tree
   script: |
     arch -arm64 /bin/bash ./.gitlab/ci.sh
   after_script:

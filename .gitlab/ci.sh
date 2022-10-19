@@ -35,7 +35,9 @@ case "$(uname -s)" in
 	"Darwin"|"darwin")
 		case "$(/usr/bin/arch)" in
 			aarch64|arm64|armv8l)
-  			export CXXFLAGS="-stdlib=libc++"
+        nix build -f $CI_PROJECT_DIR/.gitlab/darwin/toolchain.nix --argstr system "$NIX_SYSTEM" -o toolchain.sh
+        cat toolchain.sh
+        source toolchain.sh
 				curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | arch -arm64 /bin/bash
 				export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
 				;;
