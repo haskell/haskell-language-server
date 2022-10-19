@@ -140,7 +140,7 @@ renderKey :: Key -> Text
 renderKey (lookupKeyValue -> KeyValue _ t) = t
 
 newtype KeySet = KeySet IntSet
-  deriving (Eq, Ord, Semigroup, Monoid)
+  deriving newtype (Eq, Ord, Semigroup, Monoid)
 
 instance Show KeySet where
   showsPrec p (KeySet is)= showParen (p > 10) $
@@ -178,7 +178,7 @@ lengthKeySet :: KeySet -> Int
 lengthKeySet = coerce IS.size
 
 newtype KeyMap a = KeyMap (IntMap a)
-  deriving (Eq, Ord, Semigroup, Monoid)
+  deriving newtype (Eq, Ord, Semigroup, Monoid)
 
 instance Show a => Show (KeyMap a) where
   showsPrec p (KeyMap im)= showParen (p > 10) $
