@@ -576,6 +576,7 @@ tar-aarch64-darwin:
   variables:
     TARBALL_ARCHIVE_SUFFIX: aarch64-apple-darwin
     TARBALL_EXT: tar.xz
+    NIX_SYSTEM: aarch64-darwin
 
 test-aarch64-darwin:
   extends: .test
