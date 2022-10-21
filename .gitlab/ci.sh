@@ -36,6 +36,7 @@ case "$(uname -s)" in
 		case "$(/usr/bin/arch)" in
 			aarch64|arm64|armv8l)
   			export NIX_SYSTEM="aarch64-darwin"
+  			export CXXFLAGS="-stdlib=libc++"
         nix build -f $CI_PROJECT_DIR/.gitlab/darwin/toolchain.nix --argstr system "$NIX_SYSTEM" -o toolchain.sh
         cat toolchain.sh
         source toolchain.sh
