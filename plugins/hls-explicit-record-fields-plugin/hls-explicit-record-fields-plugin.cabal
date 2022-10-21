@@ -50,5 +50,9 @@ test-suite hls-explicit-record-fields-plugin-test
     hs-source-dirs:   test
     main-is:          Main.hs
     build-depends:
-        base ^>=4.15.1.0,
-        hls-explicit-record-fields-plugin
+      , base ^>=4.15.1.0
+      , filepath
+      , text
+      , hls-explicit-record-fields-plugin
+      , lsp-test
+      , hls-test-utils
