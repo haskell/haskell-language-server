@@ -1199,7 +1199,7 @@ updateFileDiagnostics :: MonadIO m
   -> ShakeExtras
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> m ()
-updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, debouncer, lspEnv} current =
+updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, debouncer, lspEnv, ideTesting} current0 =
   liftIO $ withTrace ("update diagnostics " <> fromString(fromNormalizedFilePath fp)) $ \ addTag -> do
     addTag "key" (show k)
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
@@ -1208,6 +1208,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
         addTagUnsafe msg t x v = unsafePerformIO(addTag (msg <> t) x) `seq` v
         update :: (forall a. String -> String -> a -> a) -> [Diagnostic] -> STMDiagnosticStore -> STM [Diagnostic]
         update addTagUnsafe new store = addTagUnsafe "count" (show $ Prelude.length new) $ setStageDiagnostics addTagUnsafe uri ver (renderKey k) new store
+        current = second diagsFromRule <$> current0
     addTag "version" (show ver)
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
@@ -1230,6 +1231,11 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
                                 LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
                  return action
+    where
+        diagsFromRule c
+            | coerce ideTesting = c{_source = ((T.pack(show k) <> ":") <>) <$> _source c}
+            | otherwise = c
+
 
 newtype Priority = Priority Double
 
