@@ -2690,8 +2690,6 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     expectDiagnostics
       [("P.hs", [(DsWarning,(4,0), "Top-level binding")])] -- So what we know P has been loaded
 
-    waitForProgressDone
-
     -- Change y from Int to B
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
     -- save so that we can that the error propagates to A
@@ -2702,7 +2700,6 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     expectDiagnostics
       [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])]
 
-
     -- Check that we wrote the interfaces for B when we saved
     hidir <- getInterfaceFilesDir bdoc
     hi_exists <- liftIO $ doesFileExist $ hidir </> "B.hi"
@@ -2712,7 +2709,6 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     expectDiagnostics
       [("P.hs", [(DsWarning,(4,0), "Top-level binding")])
       ]
-    waitForProgressDone
     changeDoc pdoc [TextDocumentContentChangeEvent Nothing Nothing $ pSource <> "\nfoo = y :: Bool" ]
     -- Now in P we have
     -- bar = x :: Int
