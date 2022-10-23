@@ -2709,6 +2709,9 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     liftIO $ assertBool ("Couldn't find B.hi in " ++ hidir) hi_exists
 
     pdoc <- openDoc pPath "haskell"
+    expectDiagnostics
+      [("P.hs", [(DsWarning,(4,0), "Top-level binding")])
+      ]
     waitForProgressDone
     changeDoc pdoc [TextDocumentContentChangeEvent Nothing Nothing $ pSource <> "\nfoo = y :: Bool" ]
     -- Now in P we have
