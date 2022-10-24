@@ -59,6 +59,7 @@
     - Development.IDE.Graph.Internal.Database
     - Development.IDE.Graph.Internal.Paths
     - Development.IDE.Graph.Internal.Profile
+    - Development.IDE.Graph.Internal.Types
     - Ide.Types
     - Test.Hls
     - Test.Hls.Command
