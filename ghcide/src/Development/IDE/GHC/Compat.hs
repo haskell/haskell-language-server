@@ -244,10 +244,6 @@ import           Data.List                             (foldl')
 import qualified Data.Map                              as Map
 import qualified Data.Set                              as S
 
-#if !MIN_VERSION_ghc(8,10,0)
-import           Bag                                   (unitBag)
-#endif
-
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Builtin.Uniques
 import           GHC.ByteCode.Types
@@ -404,17 +400,10 @@ pattern PFailedWithErrorMessages msgs
 #else
      <- PFailed (const . fmap pprError . getErrorMessages -> msgs)
 #endif
-#elif MIN_VERSION_ghc(8,10,0)
-pattern PFailedWithErrorMessages :: (DynFlags -> ErrorMessages) -> ParseResult a
-pattern PFailedWithErrorMessages msgs
-     <- PFailed (getErrorMessages -> msgs)
 #else
 pattern PFailedWithErrorMessages :: (DynFlags -> ErrorMessages) -> ParseResult a
 pattern PFailedWithErrorMessages msgs
-     <- ((fmap.fmap) unitBag . mkPlainErrMsgIfPFailed -> Just msgs)
-
-mkPlainErrMsgIfPFailed (PFailed _ pst err) = Just (\dflags -> mkPlainErrMsg dflags pst err)
-mkPlainErrMsgIfPFailed _ = Nothing
+     <- PFailed (getErrorMessages -> msgs)
 #endif
 {-# COMPLETE POk, PFailedWithErrorMessages #-}
 
@@ -488,11 +477,7 @@ nameListFromAvails as =
 
 
 getModuleHash :: ModIface -> Fingerprint
-#if MIN_VERSION_ghc(8,10,0)
 getModuleHash = mi_mod_hash . mi_final_exts
-#else
-getModuleHash = mi_mod_hash
-#endif
 
 
 disableWarningsAsErrors :: DynFlags -> DynFlags
@@ -500,12 +485,8 @@ disableWarningsAsErrors df =
     flip gopt_unset Opt_WarnIsError $ foldl' wopt_unset_fatal df [toEnum 0 ..]
 
 isQualifiedImport :: ImportDecl a -> Bool
-#if MIN_VERSION_ghc(8,10,0)
 isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
 isQualifiedImport ImportDecl{}                              = True
-#else
-isQualifiedImport ImportDecl{ideclQualified}                = ideclQualified
-#endif
 isQualifiedImport _                                         = False
 
 
@@ -566,8 +547,7 @@ generatedNodeInfo = sourceNodeInfo -- before ghc 9.0, we don't distinguish the s
 #endif
 
 data GhcVersion
-  = GHC88
-  | GHC810
+  = GHC810
   | GHC90
   | GHC92
   | GHC94
@@ -585,8 +565,6 @@ ghcVersion = GHC92
 ghcVersion = GHC90
 #elif MIN_VERSION_GLASGOW_HASKELL(8,10,0,0)
 ghcVersion = GHC810
-#elif MIN_VERSION_GLASGOW_HASKELL(8,8,0,0)
-ghcVersion = GHC88
 #endif
 
 runUnlit :: Logger -> DynFlags -> [Option] -> IO ()

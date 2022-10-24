@@ -69,7 +69,7 @@ codeActionTests recorder = testGroup
       executeCodeAction gAction
   , goldenWithClass recorder "Creates a placeholder for other two methods" "T6" "2" $ \(_:_:ghAction:_) -> do
       executeCodeAction ghAction
-  , onlyRunForGhcVersions [GHC92] "Only ghc-9.2 enabled GHC2021 implicitly" $
+  , onlyRunForGhcVersions [GHC92, GHC94] "Only ghc-9.2+ enabled GHC2021 implicitly" $
       goldenWithClass recorder "Don't insert pragma with GHC2021" "InsertWithGHC2021Enabled" "" $ \(_:eqWithSig:_) -> do
         executeCodeAction eqWithSig
   , goldenWithClass recorder "Insert pragma if not exist" "InsertWithoutPragma" "" $ \(_:eqWithSig:_) -> do
@@ -96,7 +96,7 @@ codeLensTests recorder = testGroup
     , goldenCodeLens recorder "Apply code lens for local class" "LocalClassDefine" 0
     , goldenCodeLens recorder "Apply code lens on the same line" "Inline" 0
     , goldenCodeLens recorder "Don't insert pragma while existing" "CodeLensWithPragma" 0
-    , onlyRunForGhcVersions [GHC92] "Only ghc-9.2 enabled GHC2021 implicitly" $
+    , onlyRunForGhcVersions [GHC92, GHC94] "Only ghc-9.2+ enabled GHC2021 implicitly" $
         goldenCodeLens recorder "Don't insert pragma while GHC2021 enabled" "CodeLensWithGHC2021" 0
     , goldenCodeLens recorder "Qualified name" "Qualified" 0
     , goldenCodeLens recorder "Type family" "TypeFamily" 0

@@ -47,6 +47,8 @@ library
     Development.IDE.Graph.Classes
     Development.IDE.Graph.Database
     Development.IDE.Graph.Rule
+    Development.IDE.Graph.KeyMap
+    Development.IDE.Graph.KeySet
     Development.IDE.Graph.Internal.Action
     Development.IDE.Graph.Internal.Options
     Development.IDE.Graph.Internal.Rules
@@ -82,6 +84,7 @@ library
     , transformers
     , unliftio
     , unordered-containers
+    , text
 
   if flag(embed-files)
         cpp-options: -DFILE_EMBED

@@ -305,9 +305,6 @@ runEvalCmd plId st EvalParams{..} =
 #endif
 
                 -- Load the module with its current content (as the saved module might not be up to date)
-                -- BUG: this fails for files that requires preprocessors (e.g. CPP) for ghc < 8.8
-                -- see https://gitlab.haskell.org/ghc/ghc/-/issues/17066
-                -- and https://hackage.haskell.org/package/ghc-8.10.1/docs/GHC.html#v:TargetFile
                 eSetTarget <- gStrictTry $ setTargets [thisModuleTarget]
                 dbg "setTarget" eSetTarget
 

@@ -14,7 +14,7 @@ description:
     Test utils for ghcide
 homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC == 8.8.4 || == 8.10.7 || == 9.0.2 || == 9.2.3 || == 9.2.4
+tested-with:        GHC == 8.10.7 || == 9.0.2 || == 9.2.3 || == 9.2.4
 
 source-repository head
     type:     git

@@ -416,23 +416,10 @@ mkLexerPState dynFlags stringBuffer =
     startRealSrcLoc = mkRealSrcLoc "asdf" 1 1
     updateDynFlags = flip gopt_unset Opt_Haddock . flip gopt_set Opt_KeepRawTokenStream
     finalDynFlags = updateDynFlags dynFlags
-#if !MIN_VERSION_ghc(8,10,1)
-    mkLexerParserFlags =
-      mkParserFlags'
-      <$> warningFlags
-      <*> extensionFlags
-      <*> homeUnitId_
-      <*> safeImportsOn
-      <*> gopt Opt_Haddock
-      <*> gopt Opt_KeepRawTokenStream
-      <*> const False
-    finalPState = mkPStatePure (mkLexerParserFlags finalDynFlags) stringBuffer startRealSrcLoc
-#else
     pState = initParserState (initParserOpts finalDynFlags) stringBuffer startRealSrcLoc
     PState{ options = pStateOptions } = pState
     finalExtBitsMap = setBit (pExtsBitmap pStateOptions) (fromEnum UsePosPragsBit)
     finalPStateOptions = pStateOptions{ pExtsBitmap = finalExtBitsMap }
     finalPState = pState{ options = finalPStateOptions }
-#endif
   in
     finalPState

@@ -280,13 +280,6 @@ ioe_dupHandlesNotCompatible h =
 --------------------------------------------------------------------------------
 -- Tracing exactprint terms
 
--- Should in `Development.IDE.GHC.Orphans`,
--- leave it here to prevent cyclic module dependency
-#if !MIN_VERSION_ghc(8,10,0)
-instance Outputable SDoc where
-  ppr = id
-#endif
-
 -- | Print a GHC value in `defaultUserStyle` without unique symbols.
 -- It uses `showSDocUnsafe` with `unsafeGlobalDynFlags` internally.
 --

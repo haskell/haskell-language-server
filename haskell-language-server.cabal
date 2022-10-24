@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 8.8.4 || == 8.10.7 || == 9.0.2 || == 9.2.3 || == 9.2.4
+tested-with:        GHC == 8.10.7 || == 9.0.2 || == 9.2.3 || == 9.2.4
 extra-source-files:
   README.md
   ChangeLog.md
@@ -201,7 +201,7 @@ flag dynamic
   manual:      True
 
 common class
-  if flag(class) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(class)
     build-depends: hls-class-plugin ^>= 1.1
     cpp-options: -Dhls_class
 
@@ -251,7 +251,7 @@ common hlint
     cpp-options: -Dhls_hlint
 
 common stan
-  if flag(stan) && (impl(ghc >= 8.8) && impl(ghc < 9.0))
+  if flag(stan) && (impl(ghc >= 8.10) && impl(ghc < 9.0))
     build-depends: hls-stan-plugin ^>= 1.0
     cpp-options: -Dhls_stan
 
@@ -271,7 +271,7 @@ common splice
     cpp-options: -Dhls_splice
 
 common alternateNumberFormat
-  if flag(alternateNumberFormat) 
+  if flag(alternateNumberFormat)
     build-depends: hls-alternate-number-format-plugin ^>= 1.2
     cpp-options: -Dhls_alternateNumberFormat
 

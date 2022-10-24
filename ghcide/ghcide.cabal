@@ -13,7 +13,7 @@ description:
     A library for building Haskell IDE's on top of the GHC API.
 homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC == 8.8.4 || == 8.10.7 || == 9.0.2 || == 9.2.3 || == 9.2.4
+tested-with:        GHC == 8.10.7 || == 9.0.2 || == 9.2.3 || == 9.2.4
 extra-source-files: README.md CHANGELOG.md
                     test/data/**/*.project
                     test/data/**/*.cabal
@@ -62,7 +62,7 @@ library
         focus,
         ghc-trace-events,
         Glob,
-        haddock-library >= 1.8 && < 1.11,
+        haddock-library >= 1.8 && < 1.12,
         hashable,
         hie-compat ^>= 0.3.0.0,
         hls-plugin-api ^>= 1.5,
@@ -99,7 +99,7 @@ library
         unliftio-core,
         ghc-boot-th,
         ghc-boot,
-        ghc >= 8.8,
+        ghc >= 8.10,
         ghc-check >=0.5.0.8,
         ghc-paths,
         cryptohash-sha1 >=0.11.100 && <0.12,

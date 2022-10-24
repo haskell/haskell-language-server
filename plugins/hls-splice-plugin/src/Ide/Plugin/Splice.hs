@@ -126,9 +126,6 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
             let exprSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan exprSplices
                 _patSuperSpans =
-#if __GLASGOW_HASKELL__ == 808
-                    fmap (second dL) $
-#endif
                     listToMaybe $ findSubSpansDesc srcSpan patSplices
                 typeSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan typeSplices

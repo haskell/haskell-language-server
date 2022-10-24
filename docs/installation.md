@@ -26,7 +26,7 @@ More information here: <https://www.haskell.org/ghcup/guide/#hls>
 
 ## Installation from source
 
-Direct installation from source, while possible via `cabal install haskell-language-server`
+Direct installation from source, while possible via `cabal install exe:haskell-language-server`
 and `stack install --stack-yaml stack-<GHCVER>.yaml`, is not recommended for most people.
 Said command builds the `haskell-language-server` binary and installs it in the default `cabal` binaries folder,
 but the binary will only work with projects that use the same GHC version that built it.
@@ -157,7 +157,7 @@ Homebrew users can install `haskell-language-server` using the following command
 brew install haskell-language-server
 ```
 
-This formula contains HLS binaries compiled with GHC versions available via Homebrew; at the moment those are: 8.8.4, 8.10.7.
+This formula contains HLS binaries compiled with GHC versions available via Homebrew; at the moment those are: 8.10.7.
 
 You need to provide your own GHC/Cabal/Stack as required by your project, possibly via Homebrew.
 

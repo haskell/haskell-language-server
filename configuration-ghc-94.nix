@@ -25,7 +25,7 @@ let
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
       ghc-exactprint =
-        hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-150 { };
+        hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-160 { };
       # Hlint is still broken
       hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint { });
 

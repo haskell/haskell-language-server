@@ -23,6 +23,7 @@ import           GHC.Generics
 
 import           GHC
 
+import           Data.Bifunctor               (second)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans  ()
 import           Development.IDE.GHC.Util
@@ -179,8 +180,12 @@ haddockToMarkdown (H.DocHeader (H.Header level title))
 
 haddockToMarkdown (H.DocUnorderedList things)
   = '\n' : (unlines $ map (("+ " ++) . trimStart . splitForList . haddockToMarkdown) things)
-haddockToMarkdown (H.DocOrderedList things)
-  = '\n' : (unlines $ map (("1. " ++) . trimStart . splitForList . haddockToMarkdown) things)
+haddockToMarkdown (H.DocOrderedList things) =
+#if MIN_VERSION_haddock_library(1,11,0)
+  '\n' : (unlines $ map ((\(num, str) -> show num ++ ". " ++ str) . second (trimStart . splitForList . haddockToMarkdown)) things)
+#else
+  '\n' : (unlines $ map (("1. " ++) . trimStart . splitForList . haddockToMarkdown) things)
+#endif
 haddockToMarkdown (H.DocDefList things)
   = '\n' : (unlines $ map (\(term, defn) -> "+ **" ++ haddockToMarkdown term ++ "**: " ++ haddockToMarkdown defn) things)
 
