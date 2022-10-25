@@ -154,8 +154,8 @@ instance Hashable CollectRecords
 instance NFData CollectRecords
 
 data CollectRecordsResult = CRR
-  { recordInfos       :: ![RenderedRecordInfo]
-  , enabledExtensions :: ![GhcExtension]
+  { recordInfos       :: [RenderedRecordInfo]
+  , enabledExtensions :: [GhcExtension]
   }
   deriving (Generic)
 
@@ -172,12 +172,12 @@ instance NFData GhcExtension where
   rnf x = x `seq` ()
 
 data RecordInfo
-  = RecordInfoPat !SrcSpan !(Pat (GhcPass 'Renamed))
-  | RecordInfoCon !SrcSpan !(HsExpr (GhcPass 'Renamed))
+  = RecordInfoPat SrcSpan (Pat (GhcPass 'Renamed))
+  | RecordInfoCon SrcSpan (HsExpr (GhcPass 'Renamed))
 
 data RenderedRecordInfo = RenderedRecordInfo
-  { renderedSrcSpan :: !SrcSpan
-  , renderedRecord  :: !Text
+  { renderedSrcSpan :: SrcSpan
+  , renderedRecord  :: Text
   }
   deriving (Generic)
 
