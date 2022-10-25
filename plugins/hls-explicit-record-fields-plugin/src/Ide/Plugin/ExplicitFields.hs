@@ -32,8 +32,8 @@ import           Development.IDE.Core.Shake      (define, use)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      (HasSrcSpan (..),
                                                   HsConDetails (RecCon),
-                                                  HsRecFields (..),
-                                                  LPat, Outputable, SrcSpan,
+                                                  HsRecFields (..), LPat,
+                                                  Outputable, SrcSpan,
                                                   pm_mod_summary, unLoc)
 import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
                                                   GhcPass (..),
@@ -110,10 +110,6 @@ codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginRes
         mkTextEdit :: RenderedRecordInfo -> Maybe TextEdit
         mkTextEdit (RenderedRecordInfo ss r) = TextEdit <$> srcSpanToRange ss <*> pure r
 
-        -- NOTE(ozkutuk): `RecordPuns` extension is renamed to `NamedFieldPuns`
-        -- in GHC 9.4, but we still want to insert `NamedFieldPuns` in pre-9.4
-        -- GHC as well, hence the replacement.
-        -- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/6156
         pragmaEdit :: Maybe TextEdit
         pragmaEdit = if NamedFieldPuns `elem` exts
                        then Nothing
@@ -166,6 +162,8 @@ instance Show CollectRecordsResult where
 
 type instance RuleResult CollectRecords = CollectRecordsResult
 
+-- `Extension` is wrapped so that we can provide an `NFData` instance
+-- (without resorting to creating an orphan instance).
 newtype GhcExtension = GhcExtension { unExt :: Extension }
 
 instance NFData GhcExtension where
@@ -187,10 +185,15 @@ renderRecordInfo :: RecordInfo -> Maybe RenderedRecordInfo
 renderRecordInfo (RecordInfoPat ss pat) = RenderedRecordInfo ss <$> showRecordPat pat
 renderRecordInfo (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecordCon expr
 
--- `Outputable` instance of `HsRecFields` does smart things to print
--- the records that originally had wildcards with dots, even after they
--- are removed by the renamer pass. Here `rec_dotdot` is set to
--- `Nothing` so that fields are printed without such post-processing.
+-- We make use of the `Outputable` instances on AST types to pretty-print
+-- the renamed and expanded records back into source form, to be substituted
+-- with the original record later. However, `Outputable` instance of
+-- `HsRecFields` does smart things to print the records that originally had
+-- wildcards in their original form (i.e. with dots, without field names),
+-- even after the wildcard is removed by the renamer pass. This is undesirable,
+-- as we want to print the records in their fully expanded form.
+-- Here `rec_dotdot` is set to `Nothing` so that fields are printed without
+-- such post-processing.
 preprocessRecord :: HsRecFields (GhcPass c) arg -> HsRecFields (GhcPass c) arg
 preprocessRecord flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
   where

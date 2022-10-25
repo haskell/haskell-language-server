@@ -36,6 +36,10 @@ getNextPragmaInfo dynFlags sourceText =
      | otherwise
      -> NextPragmaInfo 0 Nothing
 
+-- NOTE(ozkutuk): `RecordPuns` extension is renamed to `NamedFieldPuns`
+-- in GHC 9.4, but we still want to insert `NamedFieldPuns` in pre-9.4
+-- GHC as well, hence the replacement.
+-- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/6156
 showExtension :: Extension -> Text
 showExtension RecordPuns = "NamedFieldPuns"
 showExtension ext = pack (show ext)
