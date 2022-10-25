@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeFamilies  #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE ViewPatterns  #-}
 module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 
 import           Control.Lens                    ((^.))
@@ -21,6 +20,7 @@ import           Development.IDE.GHC.Compat      hiding (getSrcSpan)
 import           Development.IDE.GHC.Compat.Util (toList)
 import           Development.IDE.Graph.Classes   (Hashable, NFData, rnf)
 import           Development.IDE.Spans.Pragmas   (NextPragmaInfo,
+                                                  getFirstPragma,
                                                   getNextPragmaInfo,
                                                   insertNewPragma)
 import           Development.IDE.Types.Logger    as Logger
@@ -140,14 +140,6 @@ contains Range {_start, _end} x = isInsideRealSrcSpan _start x || isInsideRealSr
 
 isInsideRealSrcSpan :: Position -> RealSrcSpan -> Bool
 p `isInsideRealSrcSpan` r = let (Range sp ep) = realSrcSpanToRange r in sp <= p && p <= ep
-
-getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
-getFirstPragma (PluginId pId) state nfp = handleMaybeM "Could not get NextPragmaInfo" $ do
-      ghcSession <- liftIO $ runAction (unpack pId <> ".GhcSession") state $ useWithStale GhcSession nfp
-      (_, fileContents) <- liftIO $ runAction (unpack pId <> ".GetFileContents") state $ getFileContents nfp
-      case ghcSession of
-        Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
-        Nothing                                           -> pure Nothing
 
 requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
 requestLiterals (PluginId pId) state = handleMaybeM "Could not Collect Literals"

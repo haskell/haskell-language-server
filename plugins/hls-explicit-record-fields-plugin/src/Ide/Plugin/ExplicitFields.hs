@@ -11,7 +11,7 @@ module Ide.Plugin.ExplicitFields
   ( descriptor
   ) where
 
-import           Control.Lens                    ((%~), (^.))
+import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Control.Monad.Trans.Except      (ExceptT)
 import           Data.Generics                   (GenericQ, everything, extQ,
@@ -20,22 +20,19 @@ import qualified Data.HashMap.Strict             as HashMap
 import           Data.Maybe                      (catMaybes, isJust, mapMaybe,
                                                   maybeToList)
 import           Data.Text                       (Text)
-import qualified Data.Text                       as T
 import           Development.IDE                 (IdeState, NormalizedFilePath,
                                                   Pretty (..), Range (..),
                                                   Recorder (..), Rules,
                                                   WithPriority (..),
-                                                  getFileContents, hscEnv,
                                                   srcSpanToRange)
 import           Development.IDE.Core.Rules      (runAction)
-import           Development.IDE.Core.RuleTypes  (GhcSession (..),
-                                                  TcModuleResult (..),
+import           Development.IDE.Core.RuleTypes  (TcModuleResult (..),
                                                   TypeCheck (..))
-import           Development.IDE.Core.Shake      (define, use, useWithStale)
+import           Development.IDE.Core.Shake      (define, use)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      (HasSrcSpan (..),
                                                   HsConDetails (RecCon),
-                                                  HsRecFields (..), HscEnv (..),
+                                                  HsRecFields (..),
                                                   LPat, Outputable, SrcSpan,
                                                   pm_mod_summary, unLoc)
 import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
@@ -50,7 +47,7 @@ import           Development.IDE.GHC.Util        (printOutputable)
 import           Development.IDE.Graph           (RuleResult)
 import           Development.IDE.Graph.Classes   (Hashable, NFData (rnf))
 import           Development.IDE.Spans.Pragmas   (NextPragmaInfo (..),
-                                                  getNextPragmaInfo,
+                                                  getFirstPragma,
                                                   insertNewPragma)
 import           Development.IDE.Types.Logger    (cmapWithPrio)
 import           GHC.Generics                    (Generic)
@@ -120,9 +117,7 @@ codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginRes
         pragmaEdit :: Maybe TextEdit
         pragmaEdit = if NamedFieldPuns `elem` exts
                        then Nothing
-                       else Just $ patchExtName $ insertNewPragma pragma NamedFieldPuns
-          where
-            patchExtName = L.newText %~ T.replace "Record" "NamedField"
+                       else Just $ insertNewPragma pragma NamedFieldPuns
 
     mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
     mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
@@ -255,12 +250,3 @@ collectRecordsInRange range ideState nfp = do
   where
     inRange :: RenderedRecordInfo -> Bool
     inRange (RenderedRecordInfo ss _) = maybe False (subRange range) (srcSpanToRange ss)
-
--- Copied from hls-alternate-number-format-plugin
-getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
-getFirstPragma (PluginId pId) state nfp = handleMaybeM "Could not get NextPragmaInfo" $ do
-  ghcSession <- liftIO $ runAction (T.unpack pId <> ".GhcSession") state $ useWithStale GhcSession nfp
-  (_, fileContents) <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp
-  case ghcSession of
-    Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
-    Nothing                                           -> pure Nothing
