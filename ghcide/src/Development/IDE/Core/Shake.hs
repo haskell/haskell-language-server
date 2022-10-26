@@ -1232,8 +1232,9 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                                 LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
                  return action
     where
+        diagsFromRule :: Diagnostic -> Diagnostic
         diagsFromRule c
-            | coerce ideTesting = c{_source = ((T.pack(show k) <> ":") <>) <$> _source c}
+            | coerce ideTesting = c{_code = Just $ InR $ T.pack(show k)}
             | otherwise = c
 
 
