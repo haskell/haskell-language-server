@@ -2393,6 +2393,34 @@ haddockTests
              , ""
              ]
           )
+      , testCase "ordered list" $ checkHaddock
+          (unlines
+             [ "may require"
+             , "different precautions:"
+             , ""
+             , "  1. Use @{\\-\\# NOINLINE foo \\#-\\}@ as a pragma on any function @foo@"
+             , "        that calls 'unsafePerformIO'.  If the call is inlined,"
+             , "        the I\\/O may be performed more than once."
+             , ""
+             , "  2. Use the compiler flag @-fno-cse@ to prevent common sub-expression"
+             , "        elimination being performed on the module."
+             , ""
+             ]
+          )
+          (unlines
+             [ ""
+             , ""
+             , "may require"
+             , "different precautions: "
+             , "1. Use  `{-# NOINLINE foo #-}`  as a pragma on any function  `foo` "
+             , "  that calls  `unsafePerformIO` .  If the call is inlined,"
+             , "  the I/O may be performed more than once."
+             , ""
+             , "2. Use the compiler flag  `-fno-cse`  to prevent common sub-expression"
+             , "  elimination being performed on the module."
+             , ""
+             ]
+          )
       ]
   where
     checkHaddock s txt = spanDocToMarkdownForTest s @?= txt
