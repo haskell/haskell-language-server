@@ -60,7 +60,9 @@ import           Development.IDE.Graph.Classes            (Hashable,
 import           Development.IDE.Spans.Pragmas            (NextPragmaInfo (..),
                                                            getFirstPragma,
                                                            insertNewPragma)
-import           Development.IDE.Types.Logger             (cmapWithPrio)
+import           Development.IDE.Types.Logger             (Priority (..),
+                                                           cmapWithPrio,
+                                                           logWith, (<+>))
 import           GHC.Generics                             (Generic)
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IM
 import           Ide.PluginUtils                          (getNormalizedFilePath,
@@ -86,11 +88,14 @@ import           Language.LSP.Types                       (CodeAction (..),
 import qualified Language.LSP.Types.Lens                  as L
 
 
-data Log = LogShake Shake.Log
+data Log
+  = LogShake Shake.Log
+  | LogCollectedRecords [RecordInfo]
 
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
+    LogCollectedRecords recs -> "Collected records with wildcards:" <+> pretty recs
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
@@ -146,8 +151,9 @@ collectRecordsRule :: Recorder (WithPriority Log) -> Rules ()
 collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectRecords nfp -> do
   tmr <- use TypeCheck nfp
   let exts = getEnabledExtensions <$> tmr
-      recs = getRecords <$> tmr
-      renderedRecs = mapMaybe renderRecordInfo <$> recs
+      recs = concat $ maybeToList (getRecords <$> tmr)
+  logWith recorder Debug (LogCollectedRecords recs)
+  let renderedRecs = traverse renderRecordInfo recs
       recMap = buildIntervalMap <$> renderedRecs
   pure ([], CRR <$> recMap <*> exts)
 
@@ -188,11 +194,18 @@ data RecordInfo
   = RecordInfoPat SrcSpan (Pat (GhcPass 'Renamed))
   | RecordInfoCon SrcSpan (HsExpr (GhcPass 'Renamed))
 
+instance Pretty RecordInfo where
+  pretty (RecordInfoPat ss p) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable p)
+  pretty (RecordInfoCon ss e) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable e)
+
 data RenderedRecordInfo = RenderedRecordInfo
   { renderedSrcSpan :: SrcSpan
   , renderedRecord  :: Text
   }
   deriving (Generic)
+
+instance Pretty RenderedRecordInfo where
+  pretty (RenderedRecordInfo ss r) = pretty (printOutputable ss) <> ":" <+> pretty r
 
 instance NFData RenderedRecordInfo
 
