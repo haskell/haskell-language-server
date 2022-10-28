@@ -51,7 +51,8 @@ import qualified Data.Text                                          as T
 import qualified Data.Text.Encoding                                 as T
 import           Data.Typeable
 import           Development.IDE                                    hiding
-                                                                    (Error)
+                                                                    (Error,
+                                                                     getExtensions)
 import           Development.IDE.Core.Rules                         (defineNoFile,
                                                                      getParsedModuleWithComments,
                                                                      usePropertyAction)

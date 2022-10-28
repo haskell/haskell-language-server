@@ -40,20 +40,15 @@ import           Development.IDE.GHC.Compat               (HasSrcSpan (..),
                                                            HsConDetails (RecCon),
                                                            HsRecFields (..),
                                                            LPat, Outputable,
-                                                           SrcSpan,
-                                                           pm_mod_summary,
-                                                           unLoc)
+                                                           SrcSpan, unLoc)
 import           Development.IDE.GHC.Compat.Core          (Extension (NamedFieldPuns),
                                                            GhcPass (..),
                                                            HsExpr (RecordCon, rcon_flds),
-                                                           LHsExpr,
-                                                           ModSummary (..),
-                                                           Pass (..), Pat (..),
-                                                           extensionFlags,
-                                                           hfbPun, hs_valds,
-                                                           mapLoc)
-import           Development.IDE.GHC.Compat.Util          (toList)
-import           Development.IDE.GHC.Util                 (printOutputable)
+                                                           LHsExpr, Pass (..),
+                                                           Pat (..), hfbPun,
+                                                           hs_valds, mapLoc)
+import           Development.IDE.GHC.Util                 (getExtensions,
+                                                           printOutputable)
 import           Development.IDE.Graph                    (RuleResult)
 import           Development.IDE.Graph.Classes            (Hashable,
                                                            NFData (rnf))
@@ -156,9 +151,9 @@ collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
   let renderedRecs = traverse renderRecordInfo recs
       recMap = buildIntervalMap <$> renderedRecs
   pure ([], CRR <$> recMap <*> exts)
-
-getEnabledExtensions :: TcModuleResult -> [GhcExtension]
-getEnabledExtensions = map GhcExtension . toList . extensionFlags . ms_hspp_opts . pm_mod_summary . tmrParsed
+  where
+    getEnabledExtensions :: TcModuleResult -> [GhcExtension]
+    getEnabledExtensions = map GhcExtension . getExtensions . tmrParsed
 
 getRecords :: TcModuleResult -> [RecordInfo]
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =

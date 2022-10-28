@@ -8,28 +8,26 @@
 {-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.GADT (descriptor) where
 
-import           Control.Lens                    ((^.))
+import           Control.Lens                  ((^.))
 import           Control.Monad.Except
-import           Data.Aeson                      (FromJSON, ToJSON,
-                                                  Value (Null), toJSON)
-import           Data.Either.Extra               (maybeToEither)
-import qualified Data.HashMap.Lazy               as HashMap
-import qualified Data.Text                       as T
+import           Data.Aeson                    (FromJSON, ToJSON, Value (Null),
+                                                toJSON)
+import           Data.Either.Extra             (maybeToEither)
+import qualified Data.HashMap.Lazy             as HashMap
+import qualified Data.Text                     as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
 
-import           Control.Monad.Trans.Except      (throwE)
-import           Data.Maybe                      (mapMaybe)
-import           Development.IDE.GHC.Compat.Util (toList)
-import           Development.IDE.Spans.Pragmas   (getFirstPragma,
-                                                  insertNewPragma)
-import           GHC.Generics                    (Generic)
+import           Control.Monad.Trans.Except    (throwE)
+import           Data.Maybe                    (mapMaybe)
+import           Development.IDE.Spans.Pragmas (getFirstPragma, insertNewPragma)
+import           GHC.Generics                  (Generic)
 import           Ide.Plugin.GHC
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server             (sendRequest)
+import           Language.LSP.Server           (sendRequest)
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens         as L
+import qualified Language.LSP.Types.Lens       as L
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -116,5 +114,5 @@ getInRangeH98DeclsAndExts state range nfp = do
         decls = filter isH98DataDecl
             $ mapMaybe getDataDecl
             $ filter (inRange range) hsDecls
-        exts = (toList . extensionFlags . ms_hspp_opts . pm_mod_summary) pm
+        exts = getExtensions pm
     pure (decls, exts)

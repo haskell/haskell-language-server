@@ -4,37 +4,32 @@
 {-# LANGUAGE TypeOperators #-}
 module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 
-import           Control.Lens                    ((^.))
-import           Control.Monad.Except            (ExceptT, MonadIO, liftIO)
-import qualified Data.HashMap.Strict             as HashMap
-import           Data.Text                       (Text, unpack)
-import qualified Data.Text                       as T
-import           Development.IDE                 (GetParsedModule (GetParsedModule),
-                                                  GhcSession (GhcSession),
-                                                  IdeState, RuleResult, Rules,
-                                                  define, getFileContents,
-                                                  hscEnv, realSrcSpanToRange,
-                                                  runAction, use, useWithStale)
-import qualified Development.IDE.Core.Shake      as Shake
-import           Development.IDE.GHC.Compat      hiding (getSrcSpan)
-import           Development.IDE.GHC.Compat.Util (toList)
-import           Development.IDE.Graph.Classes   (Hashable, NFData, rnf)
-import           Development.IDE.Spans.Pragmas   (NextPragmaInfo,
-                                                  getFirstPragma,
-                                                  getNextPragmaInfo,
-                                                  insertNewPragma)
-import           Development.IDE.Types.Logger    as Logger
-import           GHC.Generics                    (Generic)
-import           GHC.LanguageExtensions.Type     (Extension)
-import           Ide.Plugin.Conversion           (AlternateFormat,
-                                                  ExtensionNeeded (NeedsExtension, NoExtension),
-                                                  alternateFormat)
+import           Control.Lens                  ((^.))
+import           Control.Monad.Except          (ExceptT, MonadIO, liftIO)
+import qualified Data.HashMap.Strict           as HashMap
+import           Data.Text                     (Text, unpack)
+import qualified Data.Text                     as T
+import           Development.IDE               (GetParsedModule (GetParsedModule),
+                                                IdeState, RuleResult, Rules,
+                                                define, realSrcSpanToRange,
+                                                runAction, use)
+import qualified Development.IDE.Core.Shake    as Shake
+import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
+import           Development.IDE.GHC.Util      (getExtensions)
+import           Development.IDE.Graph.Classes (Hashable, NFData, rnf)
+import           Development.IDE.Spans.Pragmas (NextPragmaInfo, getFirstPragma,
+                                                insertNewPragma)
+import           Development.IDE.Types.Logger  as Logger
+import           GHC.Generics                  (Generic)
+import           Ide.Plugin.Conversion         (AlternateFormat,
+                                                ExtensionNeeded (NeedsExtension, NoExtension),
+                                                alternateFormat)
 import           Ide.Plugin.Literals
-import           Ide.PluginUtils                 (getNormalizedFilePath,
-                                                  handleMaybeM, pluginResponse)
+import           Ide.PluginUtils               (getNormalizedFilePath,
+                                                handleMaybeM, pluginResponse)
 import           Ide.Types
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens         as L
+import qualified Language.LSP.Types.Lens       as L
 
 newtype Log = LogShake Shake.Log deriving Show
 
@@ -75,12 +70,10 @@ collectLiteralsRule :: Recorder (WithPriority Log) -> Rules ()
 collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectLiterals nfp -> do
     pm <- use GetParsedModule nfp
     -- get the current extensions active and transform them into FormatTypes
-    let exts = getExtensions <$> pm
+    let exts = map GhcExtension . getExtensions <$> pm
         -- collect all the literals for a file
         lits = collectLiterals . pm_parsed_source <$> pm
     pure ([], CLR <$> lits <*> exts)
-    where
-        getExtensions = map GhcExtension . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = pluginResponse $ do
