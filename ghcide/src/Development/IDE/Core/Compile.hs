@@ -171,11 +171,11 @@ typecheckModule :: IdeDefer
 typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
-        mmodSummary' <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
+        initialized <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
                                       (initPlugins hsc modSummary)
-        case mmodSummary' of
+        case initialized of
           Left errs -> return (errs, Nothing)
-          Right modSummary' -> do
+          Right (modSummary', hsc) -> do
             (warnings, etcm) <- withWarnings "typecheck" $ \tweak ->
                 let
                   session = tweak (hscSetFlags dflags hsc)
@@ -562,11 +562,6 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
       , Handler $ return . (,Nothing) . diagFromString source DsError (noSpan "<internal>")
       . (("Error during " ++ T.unpack source) ++) . show @SomeException
       ]
-
-initPlugins :: HscEnv -> ModSummary -> IO ModSummary
-initPlugins session modSummary = do
-    session1 <- liftIO $ initializePlugins (hscSetFlags (ms_hspp_opts modSummary) session)
-    return modSummary{ms_hspp_opts = hsc_dflags session1}
 
 -- | Whether we should run the -O0 simplifier when generating core.
 --
@@ -1095,7 +1090,9 @@ getModSummaryFromImports
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
 getModSummaryFromImports env fp modTime contents = do
-    (contents, opts, dflags) <- preprocessor env fp contents
+    (contents, opts, env) <- preprocessor env fp contents
+
+    let dflags = hsc_dflags env
 
     -- The warns will hopefully be reported when we actually parse the module
     (_warns, L main_loc hsmod) <- parseHeader dflags fp contents

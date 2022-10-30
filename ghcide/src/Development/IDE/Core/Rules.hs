@@ -255,7 +255,7 @@ getParsedModuleRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetParsedModule file -> do
     ModSummaryResult{msrModSummary = ms'} <- use_ GetModSummary file
     sess <- use_ GhcSession file
-    let hsc = hscEnv sess
+    (ms', hsc) <- liftIO $ initPlugins (hscEnv sess) ms'
     opt <- getIdeOptions
     modify_dflags <- getModifyDynFlags dynFlagsModifyParser
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
@@ -329,6 +329,7 @@ getParsedModuleWithCommentsRule recorder =
   defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetParsedModuleWithComments file -> do
     ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
     sess <- use_ GhcSession file
+    (ms, hsc) <- liftIO $ initPlugins (hscEnv sess) ms
     opt <- getIdeOptions
 
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
@@ -336,7 +337,7 @@ getParsedModuleWithCommentsRule recorder =
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
+    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition hsc opt file ms
 
 getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags f = do
