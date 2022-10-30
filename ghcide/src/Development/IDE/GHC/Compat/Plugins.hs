@@ -7,6 +7,7 @@ module Development.IDE.GHC.Compat.Plugins (
     PluginWithArgs(..),
     applyPluginsParsedResultAction,
     initializePlugins,
+    initPlugins,
 
     -- * Static plugins
     StaticPlugin(..),
@@ -67,6 +68,12 @@ initializePlugins env = do
     pure $ hscSetFlags newDf env
 #endif
 
+-- Plugins aren't stored in ModSummary anymore since GHC 9.0, but this
+-- function still returns it for compatibility with 8.10
+initPlugins :: HscEnv -> ModSummary -> IO (ModSummary, HscEnv)
+initPlugins session modSummary = do
+    session1 <- initializePlugins (hscSetFlags (ms_hspp_opts modSummary) session)
+    return (modSummary{ms_hspp_opts = hsc_dflags session1}, session1)
 
 hsc_static_plugins :: HscEnv -> [StaticPlugin]
 #if MIN_VERSION_ghc(9,3,0)
