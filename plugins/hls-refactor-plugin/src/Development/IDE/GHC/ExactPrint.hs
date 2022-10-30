@@ -476,7 +476,17 @@ graftDeclsWithM dst toDecls = Graft $ \dflags a -> do
     modifyDeclsT (fmap DL.toList . go) a
 
 
-class (Data ast, Default l, Typeable l, Outputable l, Outputable ast) => ASTElement l ast | ast -> l where
+-- In 9.2+, we need `Default l` to do `setPrecedingLines` on annotated elements.
+-- In older versions, we pass around annotations explicitly, so the instance isn't needed.
+class
+    ( Data ast
+    , Typeable l
+    , Outputable l
+    , Outputable ast
+#if MIN_VERSION_ghc(9,2,0)
+    , Default l
+#endif
+    ) => ASTElement l ast | ast -> l where
     parseAST :: Parser (LocatedAn l ast)
     maybeParensAST :: LocatedAn l ast -> LocatedAn l ast
     {- | Construct a 'Graft', replacing the node at the given 'SrcSpan' with

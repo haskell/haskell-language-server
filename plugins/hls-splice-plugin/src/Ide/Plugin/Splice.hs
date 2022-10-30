@@ -15,6 +15,7 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 
@@ -51,6 +52,10 @@ import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util as Util
 import           Development.IDE.GHC.ExactPrint
 import           GHC.Exts
+#if __GLASGOW_HASKELL__ >= 902
+import           GHC.Parser.Annotation (SrcSpanAnn'(..))
+import qualified GHC.Types.Error as Error
+#endif
 import           Ide.Plugin.Splice.Types
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint (uniqueSrcSpanT)
@@ -58,8 +63,6 @@ import           Language.LSP.Server
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.Types.Lens         as J
-import GHC.Hs (SrcSpanAnn'(..))
-import qualified GHC.Types.Error as Error
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -264,11 +267,23 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
             J.range %~ \r ->
                 if r == bad then ran else bad
 
+-- Define a pattern to get hold of a `SrcSpan` from the location part of a
+-- `GenLocated`. In GHC >= 9.2 this will be a SrcSpanAnn', with annotations;
+-- earlier it will just be a plain `SrcSpan`.
+{-# COMPLETE AsSrcSpan #-}
+#if __GLASGOW_HASKELL__ >= 902
+pattern AsSrcSpan :: SrcSpan -> SrcSpanAnn' a
+pattern AsSrcSpan locA <- SrcSpanAnn {locA}
+#else
+pattern AsSrcSpan :: SrcSpan -> SrcSpan
+pattern AsSrcSpan loc <- loc
+#endif
+
 findSubSpansDesc :: SrcSpan -> [(LHsExpr GhcTc, a)] -> [(SrcSpan, a)]
 findSubSpansDesc srcSpan =
     sortOn (Down . SubSpan . fst)
         . mapMaybe
-            ( \(L (SrcSpanAnn {locA = spn}) _, e) -> do
+            ( \(L (AsSrcSpan spn) _, e) -> do
                 guard (spn `isSubspanOf` srcSpan)
                 pure (spn, e)
             )
@@ -354,11 +369,11 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                                             Right y -> unRenamedE dflags y
                                     _ -> pure Nothing
             let (warns, errs) =
-            #if __GLASGOW_HASKELL__ >= 902
+#if __GLASGOW_HASKELL__ >= 902
                                 (Error.getWarningMessages msgs, Error.getErrorMessages msgs)
-            #else
+#else
                                 msgs
-            #endif
+#endif
             pure $ (warns,) <$> fromMaybe (Left $ show errs) eresl
 
     unless
@@ -382,9 +397,15 @@ unRenamedE ::
     TransformT m (LocatedAn l (ast GhcPs))
 unRenamedE dflags expr = do
     uniq <- show <$> uniqueSrcSpanT
-    either (fail . show) pure $
+#if __GLASGOW_HASKELL__ >= 902
+    expr' <-
+#else
+    (_anns, expr') <-
+#endif
+        either (fail . show) pure $
         parseAST @_ @(ast GhcPs) dflags uniq $
             showSDoc dflags $ ppr expr
+    pure expr'
 
 data SearchResult r =
     Continue | Stop | Here r
@@ -428,7 +449,7 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
             mkQ
                 Continue
                 ( \case
-                    (L (SrcSpanAnn {locA = l@(RealSrcSpan spLoc _)}) expr :: LHsExpr GhcPs)
+                    (L (AsSrcSpan l@(RealSrcSpan spLoc _)) expr :: LHsExpr GhcPs)
                         | spanIsRelevant l ->
                             case expr of
                                 HsSpliceE {} -> Here (spLoc, Expr)
@@ -439,7 +460,7 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
 #if __GLASGOW_HASKELL__ == 808
                     (dL @(Pat GhcPs) -> L l@(RealSrcSpan spLoc _) pat :: Located (Pat GhcPs))
 #else
-                    (L (SrcSpanAnn {locA = l@(RealSrcSpan spLoc _)}) pat :: LPat GhcPs)
+                    (L (AsSrcSpan l@(RealSrcSpan spLoc _)) pat :: LPat GhcPs)
 #endif
                         | spanIsRelevant l ->
                             case pat of
@@ -447,14 +468,14 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
                                 _           -> Continue
                     _ -> Stop
                 `extQ` \case
-                    (L (SrcSpanAnn {locA = l@(RealSrcSpan spLoc _)}) ty :: LHsType GhcPs)
+                    (L (AsSrcSpan l@(RealSrcSpan spLoc _)) ty :: LHsType GhcPs)
                         | spanIsRelevant l ->
                             case ty of
                                 HsSpliceTy {} -> Here (spLoc, HsType)
                                 _             -> Continue
                     _ -> Stop
                 `extQ` \case
-                    (L (SrcSpanAnn {locA = l@(RealSrcSpan spLoc _)}) decl :: LHsDecl GhcPs)
+                    (L (AsSrcSpan l@(RealSrcSpan spLoc _)) decl :: LHsDecl GhcPs)
                         | spanIsRelevant l ->
                             case decl of
                                 SpliceD {} -> Here (spLoc, HsDecl)
