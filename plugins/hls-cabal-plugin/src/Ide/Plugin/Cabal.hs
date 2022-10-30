@@ -115,71 +115,6 @@ restartCabalShakeSession ide vfs file actionMsg = do
   restartShakeSession (shakeExtras ide) (VFSModified vfs) (fromNormalizedFilePath file ++ " " ++ actionMsg) []
 
 -- ----------------------------------------------------------------
--- Cabal file of Interset rules and global variable
--- ----------------------------------------------------------------
-
-newtype OfInterestCabalVar = OfInterestCabalVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
-
-instance Shake.IsIdeGlobal OfInterestCabalVar
-
-data IsCabalFileOfInterest = IsCabalFileOfInterest
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable IsCabalFileOfInterest
-instance NFData   IsCabalFileOfInterest
-
-type instance RuleResult IsCabalFileOfInterest = CabalFileOfInterestResult
-
-data CabalFileOfInterestResult = NotCabalFOI | IsCabalFOI FileOfInterestStatus
-  deriving (Eq, Show, Typeable, Generic)
-instance Hashable CabalFileOfInterestResult
-instance NFData   CabalFileOfInterestResult
-
--- | The rule that initialises the files of interest state.
-ofInterestRules :: Recorder (WithPriority Log) -> Rules ()
-ofInterestRules recorder = do
-    Shake.addIdeGlobal . OfInterestCabalVar =<< liftIO (newVar HashMap.empty)
-    Shake.defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsCabalFileOfInterest f -> do
-        alwaysRerun
-        filesOfInterest <- getCabalFilesOfInterestUntracked
-        let foi = maybe NotCabalFOI IsCabalFOI $ f `HashMap.lookup` filesOfInterest
-            fp  = summarize foi
-            res = (Just fp, Just foi)
-        return res
-    where
-    summarize NotCabalFOI                   = BS.singleton 0
-    summarize (IsCabalFOI OnDisk)           = BS.singleton 1
-    summarize (IsCabalFOI (Modified False)) = BS.singleton 2
-    summarize (IsCabalFOI (Modified True))  = BS.singleton 3
-
-getCabalFilesOfInterestUntracked ::  Action (HashMap NormalizedFilePath FileOfInterestStatus)
-getCabalFilesOfInterestUntracked = do
-    OfInterestCabalVar var <- Shake.getIdeGlobalAction
-    liftIO $ readVar var
-
-getFilesOfInterest :: IdeState -> IO( HashMap NormalizedFilePath FileOfInterestStatus)
-getFilesOfInterest state = do
-    OfInterestCabalVar var <- Shake.getIdeGlobalState state
-    readVar var
-
-addFileOfInterest :: IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO ()
-addFileOfInterest state f v = do
-    OfInterestCabalVar var <- Shake.getIdeGlobalState state
-    (prev, files) <- modifyVar var $ \dict -> do
-        let (prev, new) = HashMap.alterF (, Just v) f dict
-        pure (new, (prev, new))
-    when (prev /= Just v) $ do
-        join $ atomically $ Shake.recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
-        logDebug (ideLogger state) $
-            "Set files of interest to: " <> T.pack (show files)
-
-deleteFileOfInterest :: IdeState -> NormalizedFilePath -> IO ()
-deleteFileOfInterest state f = do
-    OfInterestCabalVar var <- Shake.getIdeGlobalState state
-    files <- modifyVar' var $ HashMap.delete f
-    join $ atomically $ Shake.recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
-    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show files)
-
--- ----------------------------------------------------------------
 -- Plugin Rules
 -- ----------------------------------------------------------------
 
@@ -192,7 +127,9 @@ type instance RuleResult ParseCabal = ()
 
 cabalRules :: Recorder (WithPriority Log) -> Rules ()
 cabalRules recorder = do
+  -- Make sure we initialise the cabal files-of-interest.
   ofInterestRules recorder
+  -- Rule to produce diagnostics for cabal files.
   define (cmapWithPrio LogShake recorder) $ \ParseCabal file -> do
     t <- use GetModificationTime file
     log' Debug $ LogModificationTime file t
@@ -222,7 +159,12 @@ cabalRules recorder = do
   where
     log' = logWith recorder
 
--- | TODO: add documentation
+-- | This is the kick function for the cabal plugin.
+-- We run this action, whenever we need to restart the shake session, which triggers
+-- actions to produce diagnostics for cabal files.
+--
+-- It is paramount that this kick-function can be run quickly, since it is a blocking
+-- function invocation.
 kick :: Action ()
 kick = do
   files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
@@ -239,3 +181,71 @@ licenseSuggestCodeAction
   -> LspM Config (Either ResponseError (ResponseResult 'TextDocumentCodeAction))
 licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List diags}) =
   pure $ Right $ List $ mapMaybe (fmap InR . LicenseSuggest.licenseErrorAction uri) diags
+
+-- ----------------------------------------------------------------
+-- Cabal file of Interest rules and global variable
+-- ----------------------------------------------------------------
+
+-- | Cabal files that are currently open in the lsp-client.
+-- Specific actions happen when these files are saved, closed or modified,
+-- such as generating diagnostics, re-parsing, etc...
+--
+-- We need to store the open files to parse them again if we restart the shake session.
+-- Restarting of the shake session happens whenever these files are modified.
+newtype OfInterestCabalVar = OfInterestCabalVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
+
+instance Shake.IsIdeGlobal OfInterestCabalVar
+
+data IsCabalFileOfInterest = IsCabalFileOfInterest
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable IsCabalFileOfInterest
+instance NFData   IsCabalFileOfInterest
+
+type instance RuleResult IsCabalFileOfInterest = CabalFileOfInterestResult
+
+data CabalFileOfInterestResult = NotCabalFOI | IsCabalFOI FileOfInterestStatus
+  deriving (Eq, Show, Typeable, Generic)
+instance Hashable CabalFileOfInterestResult
+instance NFData   CabalFileOfInterestResult
+
+-- | The rule that initialises the files of interest state.
+--
+-- Needs to be run on start-up.
+ofInterestRules :: Recorder (WithPriority Log) -> Rules ()
+ofInterestRules recorder = do
+    Shake.addIdeGlobal . OfInterestCabalVar =<< liftIO (newVar HashMap.empty)
+    Shake.defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsCabalFileOfInterest f -> do
+        alwaysRerun
+        filesOfInterest <- getCabalFilesOfInterestUntracked
+        let foi = maybe NotCabalFOI IsCabalFOI $ f `HashMap.lookup` filesOfInterest
+            fp  = summarize foi
+            res = (Just fp, Just foi)
+        return res
+    where
+    summarize NotCabalFOI                   = BS.singleton 0
+    summarize (IsCabalFOI OnDisk)           = BS.singleton 1
+    summarize (IsCabalFOI (Modified False)) = BS.singleton 2
+    summarize (IsCabalFOI (Modified True))  = BS.singleton 3
+
+getCabalFilesOfInterestUntracked ::  Action (HashMap NormalizedFilePath FileOfInterestStatus)
+getCabalFilesOfInterestUntracked = do
+    OfInterestCabalVar var <- Shake.getIdeGlobalAction
+    liftIO $ readVar var
+
+addFileOfInterest :: IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO ()
+addFileOfInterest state f v = do
+    OfInterestCabalVar var <- Shake.getIdeGlobalState state
+    (prev, files) <- modifyVar var $ \dict -> do
+        let (prev, new) = HashMap.alterF (, Just v) f dict
+        pure (new, (prev, new))
+    when (prev /= Just v) $ do
+        join $ atomically $ Shake.recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
+        logDebug (ideLogger state) $
+            "Set files of interest to: " <> T.pack (show files)
+
+deleteFileOfInterest :: IdeState -> NormalizedFilePath -> IO ()
+deleteFileOfInterest state f = do
+    OfInterestCabalVar var <- Shake.getIdeGlobalState state
+    files <- modifyVar' var $ HashMap.delete f
+    join $ atomically $ Shake.recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
+    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show files)
