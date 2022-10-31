@@ -190,7 +190,38 @@
         "hlint": "hlint",
         "hlint-34": "hlint-34",
         "nixpkgs": "nixpkgs",
-        "ptr-poker": "ptr-poker"
+        "ptr-poker": "ptr-poker",
+        "retrie": "retrie",
+        "stylish-haskell": "stylish-haskell",
+        "unstablePkgs": "unstablePkgs"
+      }
+    },
+    "stylish-haskell": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-oZSR5UQ+ieMFRq7MvL0sJqOblMk74awvcepuT+JHYtA=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/stylish-haskell-0.14.2.0/stylish-haskell-0.14.2.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/stylish-haskell-0.14.2.0/stylish-haskell-0.14.2.0.tar.gz"
+      }
+    },
+    "unstablePkgs": {
+      "locked": {
+        "lastModified": 1665296151,
+        "narHash": "sha256-uOB0oxqxN9K7XGF1hcnY+PQnlQJ+3bP2vCn/+Ru/bbc=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "14ccaaedd95a488dd7ae142757884d8e125b3363",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
       }
     }
   },

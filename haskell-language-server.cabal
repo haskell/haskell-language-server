@@ -104,6 +104,12 @@ flag rename
   default:     True
   manual:      True
 
+flag latex
+  description: Enable latex plugin
+  default:     True
+  manual:      True
+
+
 flag retrie
   description: Enable retrie plugin
   default:     True
@@ -261,6 +267,11 @@ common rename
     build-depends: hls-rename-plugin ^>= 1.0
     cpp-options: -Dhls_rename
 
+common latex
+  if flag(latex) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+    build-depends: hls-latex-plugin ^>= 1.0
+    cpp-options: -Dhls_latex
+
 common retrie
   if flag(retrie) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-retrie-plugin ^>= 1.0
@@ -379,6 +390,7 @@ library
                   , importLens
                   , refineImports
                   , rename
+                  , latex
                   , retrie
                   , tactic
                   , hlint
