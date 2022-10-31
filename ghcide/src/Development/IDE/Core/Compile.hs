@@ -172,18 +172,18 @@ typecheckModule :: IdeDefer
 typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
-        mmodSummary' <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
+        (mmodSummary') <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
                                       (initPlugins hsc modSummary)
         case mmodSummary' of
           Left errs -> return (errs, Nothing)
-          Right modSummary' -> do
+          Right (modSummary', hsc') -> do
             (warnings, etcm) <- withWarnings "typecheck" $ \tweak ->
                 let
-                  session = tweak (hscSetFlags dflags hsc)
+                  session = tweak hsc'
                    -- TODO: maybe settings ms_hspp_opts is unnecessary?
                   mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
                 in
-                  catchSrcErrors (hsc_dflags hsc) "typecheck" $ do
+                  catchSrcErrors (hsc_dflags session) "typecheck" $ do
                     tcRnModule session tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
             let errorPipeline = unDefer . hideDiag dflags . tagDiag
                 diags = map errorPipeline warnings
@@ -478,7 +478,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
                     Nothing
 #endif
 
-#else 
+#else
   let !partial_iface = force (mkPartialIface session details simplified_guts)
   final_iface <- mkFullIface session partial_iface
 #endif
@@ -569,10 +569,10 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
       . (("Error during " ++ T.unpack source) ++) . show @SomeException
       ]
 
-initPlugins :: HscEnv -> ModSummary -> IO ModSummary
+initPlugins :: HscEnv -> ModSummary -> IO (ModSummary, HscEnv)
 initPlugins session modSummary = do
     session1 <- liftIO $ initializePlugins (hscSetFlags (ms_hspp_opts modSummary) session)
-    return modSummary{ms_hspp_opts = hsc_dflags session1}
+    return (modSummary{ms_hspp_opts = hsc_dflags session1}, session1 )
 
 -- | Whether we should run the -O0 simplifier when generating core.
 --
