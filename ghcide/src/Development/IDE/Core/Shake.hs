@@ -1233,8 +1233,18 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                  return action
     where
         diagsFromRule :: Diagnostic -> Diagnostic
-        diagsFromRule c
-            | coerce ideTesting = c{_code = Just $ InR $ T.pack(show k)}
+        diagsFromRule c@Diagnostic{_range}
+            | coerce ideTesting = c
+                {_relatedInformation =
+                    Just $ List [
+                        DiagnosticRelatedInformation
+                            (Location
+                                (filePathToUri $ fromNormalizedFilePath fp)
+                                _range
+                            )
+                            (T.pack $ show k)
+                            ]
+                }
             | otherwise = c
 
 
