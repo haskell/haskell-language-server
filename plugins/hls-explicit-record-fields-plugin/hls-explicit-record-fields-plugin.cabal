@@ -27,7 +27,7 @@ library
     -- other-modules:
     -- other-extensions:
     build-depends:
-      , base                  ^>=4.15.1.0
+      , base                  >=4.12 && <5
       , ghcide                ^>=1.7 || ^>=1.8
       , hls-plugin-api        ^>=1.4 || ^>=1.5
       , lsp
@@ -51,7 +51,7 @@ test-suite hls-explicit-record-fields-plugin-test
     hs-source-dirs:   test
     main-is:          Main.hs
     build-depends:
-      , base ^>=4.15.1.0
+      , base
       , filepath
       , text
       , hls-explicit-record-fields-plugin
