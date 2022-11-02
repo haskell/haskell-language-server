@@ -34,6 +34,7 @@ packages:
   - ./plugins/hls-gadt-plugin
   - ./plugins/hls-explicit-fixity-plugin
   - ./plugins/hls-refactor-plugin
+  - ./plugins/hls-explicit-record-fields-plugin
 
 ghc-options:
   "$everything": -haddock
