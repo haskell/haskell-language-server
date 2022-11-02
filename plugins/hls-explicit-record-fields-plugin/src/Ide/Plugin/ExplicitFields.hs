@@ -36,17 +36,19 @@ import           Development.IDE.Core.RuleTypes           (TcModuleResult (..),
                                                            TypeCheck (..))
 import           Development.IDE.Core.Shake               (define, use)
 import qualified Development.IDE.Core.Shake               as Shake
-import           Development.IDE.GHC.Compat               (HasSrcSpan (..),
-                                                           HsConDetails (RecCon),
+import           Development.IDE.GHC.Compat               (HsConDetails (RecCon),
                                                            HsRecFields (..),
                                                            LPat, Outputable,
-                                                           SrcSpan, unLoc)
+                                                           SrcSpan, getLoc,
+                                                           unLoc)
 import           Development.IDE.GHC.Compat.Core          (Extension (NamedFieldPuns),
-                                                           GhcPass (..),
+                                                           GhcPass,
                                                            HsExpr (RecordCon, rcon_flds),
                                                            LHsExpr, Pass (..),
-                                                           Pat (..), hfbPun,
-                                                           hs_valds, mapLoc)
+                                                           Pat (..),
+                                                           conPatDetails,
+                                                           hfbPun, hs_valds,
+                                                           mapLoc)
 import           Development.IDE.GHC.Util                 (getExtensions,
                                                            printOutputable)
 import           Development.IDE.Graph                    (RuleResult)
@@ -231,7 +233,7 @@ preprocessRecord flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
     rec_flds' = no_puns <> puns'
 
 showRecordPat :: Outputable (Pat (GhcPass c)) => Pat (GhcPass c) -> Maybe Text
-showRecordPat pat@(ConPat _ _ (RecCon flds)) =
+showRecordPat pat@(conPatDetails -> RecCon flds) =
   Just $ printOutputable $
     pat { pat_args = RecCon (preprocessRecord flds) }
 showRecordPat _ = Nothing
@@ -254,7 +256,7 @@ getRecCons e@(unLoc -> RecordCon _ _ flds)
 getRecCons _ = Nothing
 
 getRecPatterns :: LPat (GhcPass 'Renamed) -> Maybe RecordInfo
-getRecPatterns conPat@(unLoc -> ConPat _ _ (RecCon flds))
+getRecPatterns conPat@(conPatDetails . unLoc -> RecCon flds)
   | isJust (rec_dotdot flds) = Just $ mkRecInfo conPat
   where
     mkRecInfo :: LPat (GhcPass 'Renamed) -> RecordInfo

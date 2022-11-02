@@ -130,6 +130,7 @@ module Development.IDE.GHC.Compat.Core (
       ),
     pattern FunTy,
     pattern ConPatIn,
+    conPatDetails,
 #if !MIN_VERSION_ghc(9,2,0)
     Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
 #endif
@@ -952,6 +953,13 @@ pattern ConPatIn con args <- ConPat EpAnnNotUsed (L _ (SrcLoc.noLoc -> con)) arg
 #else
 pattern ConPatIn con args = ConPat NoExtField con args
 #endif
+#endif
+
+conPatDetails :: Pat p -> HsConPatDetails p
+#if MIN_VERSION_ghc(9,0,0)
+conPatDetails (ConPat _ _ args) = args
+#else
+conPatDetails (ConPatIn _ args) = args
 #endif
 
 initDynLinker, initObjLinker :: HscEnv -> IO ()
