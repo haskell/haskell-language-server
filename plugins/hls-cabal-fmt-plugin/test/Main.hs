@@ -1,12 +1,11 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE CPP #-}
 module Main
   ( main
   ) where
 
 import qualified Ide.Plugin.CabalFmt as CabalFmt
-import           System.Directory (findExecutable)
+import           System.Directory    (findExecutable)
 import           System.FilePath
 import           Test.Hls
 
@@ -36,10 +35,12 @@ cabalFmtPlugin = CabalFmt.descriptor mempty "cabal-fmt"
 
 tests :: CabalFmtFound -> TestTree
 tests found = testGroup "cabal-fmt"
-  [ cabalFmtGolden found "formats a simple document" "simple_testdata" "formatted_document" $ \doc -> do
+  [ knownBrokenOnWindows "Eats newlines between comments" $
+    cabalFmtGolden found "formats a simple document" "simple_testdata" "formatted_document" $ \doc -> do
       formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
 
-  , cabalFmtGolden found "formats a document with expand:src comment" "commented_testdata" "formatted_document" $ \doc -> do
+  , knownBrokenOnWindows "expand:src comment bug in cabal-fmt on windows" $
+    cabalFmtGolden found "formats a document with expand:src comment" "commented_testdata" "formatted_document" $ \doc -> do
       formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
 
   , cabalFmtGolden found "formats a document with lib information" "lib_testdata" "formatted_document" $ \doc -> do
