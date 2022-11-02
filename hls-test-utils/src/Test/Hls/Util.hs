@@ -20,7 +20,9 @@ module Test.Hls.Util
     , getCompletionByLabel
     , ghcVersion, GhcVersion(..)
     , hostOS, OS(..)
+    , IssueSolution(..)
     , matchesCurrentEnv, EnvSpec(..)
+    , forGhcVersions, brokenSpecific
     , noLiteralCaps
     , ignoreForGhcVersions
     , ignoreInEnv
@@ -138,6 +140,8 @@ data EnvSpec = HostOS OS | GhcVer GhcVersion | Specific OS GhcVersion
 matchesCurrentEnv :: EnvSpec -> Bool
 matchesCurrentEnv (HostOS os)  = hostOS == os
 matchesCurrentEnv (GhcVer ver) = ghcVersion == ver
+matchesCurrentEnv (Specific os ver) =
+  hostOS == os && ghcVersion == ver
 
 data OS = Windows | MacOS | Linux
     deriving (Show, Eq)
@@ -147,6 +151,15 @@ hostOS
     | isWindows = Windows
     | isMac = MacOS
     | otherwise = Linux
+
+-- | Helper to mark a test as broken for the given GhcVersions
+forGhcVersions :: [GhcVersion] -> [EnvSpec]
+forGhcVersions = map GhcVer
+
+-- | Helper to create many specific environment specifications
+-- for a single OS.
+brokenSpecific :: OS -> [GhcVersion] -> [EnvSpec]
+brokenSpecific os = map (Specific os)
 
 -- | Mark the given TestTree as having a known issue if /any/ of environmental
 -- spec matches the current environment.

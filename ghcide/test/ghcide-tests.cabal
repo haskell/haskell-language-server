@@ -53,6 +53,7 @@ test-suite ghcide-tests
         lsp,
         lsp-types,
         hls-plugin-api,
+        hls-test-utils,
         lens,
         list-t,
         lsp-test ^>= 0.14,

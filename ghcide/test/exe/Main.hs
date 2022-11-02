@@ -17,124 +17,122 @@ module Main (main) where
 
 import           Control.Applicative.Combinators
 import           Control.Concurrent
-import           Control.Exception                        (bracket_, catch,
-                                                           finally)
-import qualified Control.Lens                             as Lens
+import           Control.Exception                    (bracket_, catch, finally)
+import qualified Control.Lens                         as Lens
 import           Control.Monad
-import           Control.Monad.IO.Class                   (MonadIO, liftIO)
-import           Data.Aeson                               (toJSON)
-import qualified Data.Aeson                               as A
+import           Control.Monad.IO.Class               (MonadIO, liftIO)
+import           Data.Aeson                           (toJSON)
+import qualified Data.Aeson                           as A
 import           Data.Default
 import           Data.Foldable
 import           Data.List.Extra
 import           Data.Maybe
-import qualified Data.Set                                 as Set
-import qualified Data.Text                                as T
-import           Data.Text.Utf16.Rope                     (Rope)
-import qualified Data.Text.Utf16.Rope                     as Rope
-import           Development.IDE.Core.PositionMapping     (PositionResult (..),
-                                                           fromCurrent,
-                                                           positionResultToMaybe,
-                                                           toCurrent)
-import           Development.IDE.GHC.Compat               (GhcVersion (..),
-                                                           ghcVersion)
+import qualified Data.Set                             as Set
+import qualified Data.Text                            as T
+import           Data.Text.Utf16.Rope                 (Rope)
+import qualified Data.Text.Utf16.Rope                 as Rope
+import           Development.IDE.Core.PositionMapping (PositionResult (..),
+                                                       fromCurrent,
+                                                       positionResultToMaybe,
+                                                       toCurrent)
+import           Development.IDE.GHC.Compat           (GhcVersion (..),
+                                                       ghcVersion)
 import           Development.IDE.GHC.Util
-import qualified Development.IDE.Main                     as IDE
-import           Development.IDE.Plugin.TypeLenses        (typeLensCommandId)
+import qualified Development.IDE.Main                 as IDE
+import           Development.IDE.Plugin.TypeLenses    (typeLensCommandId)
 import           Development.IDE.Spans.Common
-import           Development.IDE.Test                     (Cursor,
-                                                           canonicalizeUri,
-                                                           configureCheckProject,
-                                                           diagnostic,
-                                                           expectCurrentDiagnostics,
-                                                           expectDiagnostics,
-                                                           expectDiagnosticsWithTags,
-                                                           expectNoMoreDiagnostics,
-                                                           flushMessages,
-                                                           getInterfaceFilesDir,
-                                                           getStoredKeys,
-                                                           isReferenceReady,
-                                                           referenceReady,
-                                                           standardizeQuotes,
-                                                           waitForAction,
-                                                           waitForGC,
-                                                           waitForTypecheck)
+import           Development.IDE.Test                 (Cursor, canonicalizeUri,
+                                                       configureCheckProject,
+                                                       diagnostic,
+                                                       expectCurrentDiagnostics,
+                                                       expectDiagnostics,
+                                                       expectDiagnosticsWithTags,
+                                                       expectNoMoreDiagnostics,
+                                                       flushMessages,
+                                                       getInterfaceFilesDir,
+                                                       getStoredKeys,
+                                                       isReferenceReady,
+                                                       referenceReady,
+                                                       standardizeQuotes,
+                                                       waitForAction, waitForGC,
+                                                       waitForTypecheck)
 import           Development.IDE.Test.Runfiles
-import qualified Development.IDE.Types.Diagnostics        as Diagnostics
+import qualified Development.IDE.Types.Diagnostics    as Diagnostics
 import           Development.IDE.Types.Location
-import           Development.Shake                        (getDirectoryFilesIO)
+import           Development.Shake                    (getDirectoryFilesIO)
 import           Ide.Plugin.Config
 import           Language.LSP.Test
-import           Language.LSP.Types                       hiding
-                                                          (SemanticTokenAbsolute (length, line),
-                                                           SemanticTokenRelative (length),
-                                                           SemanticTokensEdit (_start),
-                                                           mkRange)
+import           Language.LSP.Types                   hiding
+                                                      (SemanticTokenAbsolute (length, line),
+                                                       SemanticTokenRelative (length),
+                                                       SemanticTokensEdit (_start),
+                                                       mkRange)
 import           Language.LSP.Types.Capabilities
-import qualified Language.LSP.Types.Lens                  as Lens (label)
-import qualified Language.LSP.Types.Lens                  as Lsp (diagnostics,
-                                                                  message,
-                                                                  params)
-import           Language.LSP.VFS                         (VfsLog, applyChange)
+import qualified Language.LSP.Types.Lens              as Lens (label)
+import qualified Language.LSP.Types.Lens              as Lsp (diagnostics,
+                                                              message, params)
+import           Language.LSP.VFS                     (VfsLog, applyChange)
 import           Network.URI
 import           System.Directory
-import           System.Environment.Blank                 (getEnv, setEnv,
-                                                           unsetEnv)
-import           System.Exit                              (ExitCode (ExitSuccess))
+import           System.Environment.Blank             (getEnv, setEnv, unsetEnv)
+import           System.Exit                          (ExitCode (ExitSuccess))
 import           System.FilePath
-import           System.Info.Extra                        (isMac, isWindows)
+import           System.Info.Extra                    (isMac, isWindows)
 import qualified System.IO.Extra
-import           System.IO.Extra                          hiding (withTempDir)
-import           System.Mem                               (performGC)
-import           System.Process.Extra                     (CreateProcess (cwd),
-                                                           createPipe, proc,
-                                                           readCreateProcessWithExitCode)
+import           System.IO.Extra                      hiding (withTempDir)
+import           System.Mem                           (performGC)
+import           System.Process.Extra                 (CreateProcess (cwd),
+                                                       createPipe, proc,
+                                                       readCreateProcessWithExitCode)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
 import           Control.Concurrent.Async
-import           Control.Lens                             (to, (.~), (^.))
-import           Control.Monad.Extra                      (whenJust)
-import           Data.Function                            ((&))
-import           Data.Functor.Identity                    (runIdentity)
+import           Control.Lens                         (to, (.~), (^.))
+import           Control.Monad.Extra                  (whenJust)
+import           Data.Function                        ((&))
+import           Data.Functor.Identity                (runIdentity)
 import           Data.IORef
-import           Data.IORef.Extra                         (atomicModifyIORef_)
-import           Data.String                              (IsString (fromString))
+import           Data.IORef.Extra                     (atomicModifyIORef_)
+import           Data.String                          (IsString (fromString))
 import           Data.Tuple.Extra
-import           Development.IDE.Core.FileStore           (getModTime)
-import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
-import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds),
-                                                           WaitForIdeRuleResult (..),
-                                                           blockCommandId)
-import           Development.IDE.Types.Logger             (Logger (Logger),
-                                                           LoggingColumn (DataColumn, PriorityColumn),
-                                                           Pretty (pretty),
-                                                           Priority (Debug),
-                                                           Recorder (Recorder, logger_),
-                                                           WithPriority (WithPriority, priority),
-                                                           cfilter,
-                                                           cmapWithPrio,
-                                                           makeDefaultStderrRecorder,
-                                                           toCologActionWithPrio)
+import           Development.IDE.Core.FileStore       (getModTime)
+import qualified Development.IDE.Plugin.HLS.GhcIde    as Ghcide
+import           Development.IDE.Plugin.Test          (TestRequest (BlockSeconds),
+                                                       WaitForIdeRuleResult (..),
+                                                       blockCommandId)
+import           Development.IDE.Types.Logger         (Logger (Logger),
+                                                       LoggingColumn (DataColumn, PriorityColumn),
+                                                       Pretty (pretty),
+                                                       Priority (Debug),
+                                                       Recorder (Recorder, logger_),
+                                                       WithPriority (WithPriority, priority),
+                                                       cfilter, cmapWithPrio,
+                                                       makeDefaultStderrRecorder,
+                                                       toCologActionWithPrio)
 import qualified FuzzySearch
-import           GHC.Stack                                (emptyCallStack)
+import           GHC.Stack                            (emptyCallStack)
 import qualified HieDbRetry
-import           Ide.PluginUtils                          (pluginDescToIdePlugins)
+import           Ide.PluginUtils                      (pluginDescToIdePlugins)
 import           Ide.Types
-import qualified Language.LSP.Types                       as LSP
-import           Language.LSP.Types.Lens                  (didChangeWatchedFiles,
-                                                           workspace)
-import qualified Language.LSP.Types.Lens                  as L
+import qualified Language.LSP.Types                   as LSP
+import           Language.LSP.Types.Lens              (didChangeWatchedFiles,
+                                                       workspace)
+import qualified Language.LSP.Types.Lens              as L
 import qualified Progress
 import           System.Time.Extra
-import qualified Test.QuickCheck.Monadic                  as MonadicQuickCheck
-import           Test.QuickCheck.Monadic                  (forAllM, monadicIO)
+import qualified Test.Hls.Util                        as Util
+import           Test.Hls.Util                        (EnvSpec (..),
+                                                       IssueSolution (..),
+                                                       OS (..))
+import qualified Test.QuickCheck.Monadic              as MonadicQuickCheck
+import           Test.QuickCheck.Monadic              (forAllM, monadicIO)
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
-import           Text.Printf                              (printf)
-import           Text.Regex.TDFA                          ((=~))
+import           Text.Printf                          (printf)
+import           Text.Regex.TDFA                      ((=~))
 
 data Log
   = LogGhcIde Ghcide.Log
@@ -2001,10 +1999,10 @@ completionDocTests =
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
   ]
   where
-    brokenForGhc9 = knownBrokenFor (BrokenForGHC [GHC90, GHC92, GHC94]) "Completion doc doesn't support ghc9"
-    brokenForWinGhc9 = knownBrokenFor (BrokenSpecific Windows [GHC90, GHC92]) "Extern doc doesn't support Windows for ghc9.2"
+    brokenForGhc9 = knownBrokenFor (Util.forGhcVersions [GHC90, GHC92, GHC94]) "Completion doc doesn't support ghc9"
+    brokenForWinGhc9 = knownBrokenFor (Util.brokenSpecific Windows [GHC90, GHC92]) "Extern doc doesn't support Windows for ghc9.2"
     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
-    brokenForMacGhc9 = knownBrokenFor (BrokenSpecific MacOS [GHC90, GHC92, GHC94]) "Extern doc doesn't support MacOS for ghc9"
+    brokenForMacGhc9 = knownBrokenFor (Util.brokenSpecific MacOS [GHC90, GHC92, GHC94]) "Extern doc doesn't support MacOS for ghc9"
     test doc pos label mn expected = do
       _ <- waitForDiagnostics
       compls <- getCompletions doc pos
@@ -2271,57 +2269,25 @@ xfail :: TestTree -> String -> TestTree
 xfail = flip expectFailBecause
 
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
-ignoreInWindowsBecause = ignoreFor (BrokenForOS Windows)
+ignoreInWindowsBecause = ignoreFor [HostOS Windows]
 
 ignoreInWindowsForGHC810 :: TestTree -> TestTree
 ignoreInWindowsForGHC810 =
-    ignoreFor (BrokenSpecific Windows [GHC810]) "tests are unreliable in windows for ghc 8.10"
+    ignoreFor [Specific Windows GHC810] "tests are unreliable in windows for ghc 8.10"
 
 ignoreForGHC92Plus :: String -> TestTree -> TestTree
-ignoreForGHC92Plus = ignoreFor (BrokenForGHC [GHC92, GHC94])
+ignoreForGHC92Plus = ignoreFor (Util.forGhcVersions [GHC92, GHC94])
 
 knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
-knownBrokenForGhcVersions ghcVers = knownBrokenFor (BrokenForGHC ghcVers)
-
-data BrokenOS = Linux | MacOS | Windows deriving (Show)
-
-data IssueSolution = Broken | Ignore deriving (Show)
-
-data BrokenTarget =
-    BrokenSpecific BrokenOS [GhcVersion]
-    -- ^Broken for `BrokenOS` with `GhcVersion`
-    | BrokenForOS BrokenOS
-    -- ^Broken for `BrokenOS`
-    | BrokenForGHC [GhcVersion]
-    -- ^Broken for `GhcVersion`
-    deriving (Show)
+knownBrokenForGhcVersions ghcVers = knownBrokenFor (Util.forGhcVersions ghcVers)
 
 -- | Ignore test for specific os and ghc with reason.
-ignoreFor :: BrokenTarget -> String -> TestTree -> TestTree
-ignoreFor = knownIssueFor Ignore
+ignoreFor :: [EnvSpec] -> String -> TestTree -> TestTree
+ignoreFor = Util.knownIssueInEnv Ignore
 
 -- | Known broken for specific os and ghc with reason.
-knownBrokenFor :: BrokenTarget -> String -> TestTree -> TestTree
-knownBrokenFor = knownIssueFor Broken
-
--- | Deal with `IssueSolution` for specific OS and GHC.
-knownIssueFor :: IssueSolution -> BrokenTarget -> String -> TestTree -> TestTree
-knownIssueFor solution = go . \case
-    BrokenSpecific bos vers -> isTargetOS bos && isTargetGhc vers
-    BrokenForOS bos         -> isTargetOS bos
-    BrokenForGHC vers       -> isTargetGhc vers
-    where
-        isTargetOS = \case
-            Windows -> isWindows
-            MacOS   -> isMac
-            Linux   -> not isWindows && not isMac
-
-        isTargetGhc = elem ghcVersion
-
-        go True = case solution of
-            Broken -> expectFailBecause
-            Ignore -> ignoreTestBecause
-        go False = \_ -> id
+knownBrokenFor :: [EnvSpec] -> String -> TestTree -> TestTree
+knownBrokenFor = Util.knownIssueInEnv Broken
 
 data Expect
   = ExpectRange Range -- Both gotoDef and hover should report this range
@@ -3107,10 +3073,10 @@ runWithExtraFiles prefix s = withTempDir $ \dir -> do
 copyTestDataFiles :: FilePath -> FilePath -> IO ()
 copyTestDataFiles dir prefix = do
   -- Copy all the test data files to the temporary workspace
-  testDataFiles <- getDirectoryFilesIO ("test/data" </> prefix) ["//*"]
+  testDataFiles <- getDirectoryFilesIO ("data" </> prefix) ["//*"]
   for_ testDataFiles $ \f -> do
     createDirectoryIfMissing True $ dir </> takeDirectory f
-    copyFile ("test/data" </> prefix </> f) (dir </> f)
+    copyFile ("data" </> prefix </> f) (dir </> f)
 
 run' :: (FilePath -> Session a) -> IO a
 run' s = withTempDir $ \dir -> runInDir dir (s dir)
@@ -3181,7 +3147,7 @@ lspTestCapsNoFileWatches = lspTestCaps & workspace . Lens._Just . didChangeWatch
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do
-  source <- liftIO $ readFileUtf8 $ "test/data" </> path
+  source <- liftIO $ readFileUtf8 $ "data" </> path
   createDoc path "haskell" source
 
 unitTests :: Recorder (WithPriority Log) -> Logger -> TestTree
