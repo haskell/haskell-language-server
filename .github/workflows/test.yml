@@ -106,7 +106,7 @@ jobs:
           os:  ${{ runner.os }}
 
       - name: Build
-        run: cabal build 
+        run: cabal build
 
       - name: Set test options
         # run the tests without parallelism, otherwise tasty will attempt to run
@@ -130,7 +130,7 @@ jobs:
       - if: needs.pre_job.outputs.should_skip_ghcide != 'true' && matrix.test
         name: Test ghcide
         # run the tests without parallelism to avoid running out of memory
-        run: cabal test ghcide --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test ghcide --test-options="$TEST_OPTS"
+        run: cabal test ghcide-tests --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test ghcide-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
         name: Test hls-plugin-api
@@ -148,7 +148,7 @@ jobs:
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
-        run: cabal test wrapper-test --test-options="$TEST_OPTS --rerun-log-file .tasty-rerun-log-wrapper" 
+        run: cabal test wrapper-test --test-options="$TEST_OPTS --rerun-log-file .tasty-rerun-log-wrapper"
 
       - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.4.2'
         name: Test hls-brittany-plugin

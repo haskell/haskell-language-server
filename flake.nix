@@ -157,7 +157,8 @@
             hie-compat = ./hie-compat;
             hls-plugin-api = ./hls-plugin-api;
             hls-test-utils = ./hls-test-utils;
-            ghcide-test-utils = ./ghcide/test;
+            ghcide-test-utils = ./ghcide/ghcide-test-utils;
+            ghcide-tests = ./ghcide/test;
             # hiedb depends on hie-compact, which is part of this repository. If
             # cabal inside the nix development shell tries to use the hiedb
             # compiled inside nix, it thinks that this package is broken and

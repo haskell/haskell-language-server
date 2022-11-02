@@ -1,0 +1,106 @@
+cabal-version:      3.0
+-- Extracted the test-suite into its own package, s.t. that it can depend
+-- on hls-test-utils. It can't be part of ghcide package, because hls-test-utils
+-- depends on ghcide.
+build-type:         Simple
+category:           Development
+name:               ghcide-tests
+version:            1.8.0.0
+license:            Apache-2.0
+license-file:       LICENSE
+author:             Digital Asset and Ghcide contributors
+maintainer:         Ghcide contributors
+copyright:          Digital Asset and Ghcide contributors 2018-2022
+synopsis:           Test utils for ghcide
+description:
+    Testsuite for ghcide
+homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
+bug-reports:        https://github.com/haskell/haskell-language-server/issues
+tested-with:        GHC == 8.10.7 || == 9.0.2 || == 9.2.3 || == 9.2.4 || == 9.4.2
+
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
+
+test-suite ghcide-tests
+    type: exitcode-stdio-1.0
+    default-language: Haskell2010
+    build-tool-depends:
+        ghcide:ghcide,
+        ghcide:ghcide-test-preprocessor,
+        implicit-hie:gen-hie
+    build-depends:
+        aeson,
+        async,
+        base,
+        containers,
+        data-default,
+        directory,
+        extra,
+        filepath,
+        fuzzy,
+        --------------------------------------------------------------
+        -- The MIN_VERSION_ghc macro relies on MIN_VERSION pragmas
+        -- which require depending on ghc. So the tests need to depend
+        -- on ghc if they need to use MIN_VERSION_ghc. Maybe a
+        -- better solution can be found, but this is a quick solution
+        -- which works for now.
+        ghc,
+        --------------------------------------------------------------
+        ghcide,
+        ghcide-test-utils,
+        lsp,
+        lsp-types,
+        hls-plugin-api,
+        lens,
+        list-t,
+        lsp-test ^>= 0.14,
+        monoid-subclasses,
+        network-uri,
+        QuickCheck,
+        random,
+        regex-tdfa ^>= 1.3.1,
+        shake,
+        sqlite-simple,
+        stm,
+        stm-containers,
+        tasty,
+        tasty-expected-failure,
+        tasty-hunit >= 0.10,
+        tasty-quickcheck,
+        tasty-rerun,
+        text,
+        text-rope,
+        unordered-containers,
+    if impl(ghc < 9.2)
+      build-depends:
+          record-dot-preprocessor,
+          record-hasfield
+    if impl(ghc < 9.3)
+       build-depends:  ghc-typelits-knownnat
+    if impl(ghc >= 9)
+        ghc-options: -Wunused-packages
+    hs-source-dirs: cabal exe src
+    ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors
+    main-is: Main.hs
+    other-modules:
+        Development.IDE.Test.Runfiles
+        FuzzySearch
+        Progress
+        HieDbRetry
+    default-extensions:
+        BangPatterns
+        DeriveFunctor
+        DeriveGeneric
+        FlexibleContexts
+        GeneralizedNewtypeDeriving
+        LambdaCase
+        NamedFieldPuns
+        OverloadedStrings
+        RecordWildCards
+        ScopedTypeVariables
+        StandaloneDeriving
+        TupleSections
+        TypeApplications
+        ViewPatterns
