@@ -227,6 +227,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
         wrapHaskell x = "\n```haskell\n"<>x<>"\n```\n"
         info = nodeInfoH kind ast
         names = M.assocs $ nodeIdentifiers info
+        -- Check if a name matches a pattern for a generated Core variable.
         isInternal :: (Identifier, IdentifierDetails a) -> Bool
         isInternal (Right n, _) =
           let name = printOutputable n
