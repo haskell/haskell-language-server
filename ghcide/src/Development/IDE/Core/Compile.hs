@@ -132,6 +132,9 @@ import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
 #endif
+#if MIN_VERSION_ghc(9,3,0)
+import GHC.Driver.Plugins                          (PsMessages (..))
+#endif
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -1219,7 +1222,7 @@ parseHeader dflags filename contents = do
      PFailedWithErrorMessages msgs ->
         throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
      POk pst rdr_module -> do
-        let (warns, errs) = getMessages' pst dflags
+        let (warns, errs) = renderMessages $ getMessages' pst dflags
 
         -- Just because we got a `POk`, it doesn't mean there
         -- weren't errors! To clarify, the GHC parser
@@ -1254,9 +1257,18 @@ parseFileContents env customPreprocessor filename ms = do
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
-             (warns, errs) = getMessages' pst dflags
+             psMessages = getMessages' pst dflags
          in
            do
+               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
+
+               unless (null errs) $
+                  throwE $ diagFromStrings "parser" DsError errs
+
+               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
+               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed psMessages
+               let (warns, errs) = renderMessages msgs
+
                -- Just because we got a `POk`, it doesn't mean there
                -- weren't errors! To clarify, the GHC parser
                -- distinguishes between fatal and non-fatal
@@ -1269,14 +1281,6 @@ parseFileContents env customPreprocessor filename ms = do
                unless (null errs) $
                  throwE $ diagFromErrMsgs "parser" dflags errs
 
-               -- Ok, we got here. It's safe to continue.
-               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
-
-               unless (null errs) $
-                  throwE $ diagFromStrings "parser" DsError errs
-
-               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               parsed' <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed
 
                -- To get the list of extra source files, we take the list
                -- that the parser gave us,

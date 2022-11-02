@@ -27,6 +27,7 @@ module Development.IDE.GHC.Compat(
     reLoc,
     reLocA,
     getMessages',
+    renderMessages,
     pattern PFailedWithErrorMessages,
     isObjectLinkable,
 
@@ -268,6 +269,7 @@ import           GHC.Types.IPE
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Types.Error
 import GHC.Driver.Config.Stg.Pipeline
+import GHC.Driver.Plugins                              (PsMessages (..))
 #endif
 
 #if !MIN_VERSION_ghc(9,3,0)
@@ -390,10 +392,14 @@ type ErrMsg  = MsgEnvelope DecoratedSDoc
 type WarnMsg  = MsgEnvelope DecoratedSDoc
 #endif
 
-getMessages' :: PState -> DynFlags -> (Bag WarnMsg, Bag ErrMsg)
+#if !MIN_VERSION_ghc(9,3,0)
+type PsMessages = (Bag WarnMsg, Bag ErrMsg)
+#endif
+
+getMessages' :: PState -> DynFlags -> PsMessages
 getMessages' pst dflags =
 #if MIN_VERSION_ghc(9,3,0)
-  bimap (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) $ getPsMessages pst
+  uncurry PsMessages $ getPsMessages pst
 #else
 #if MIN_VERSION_ghc(9,2,0)
                  bimap (fmap pprWarning) (fmap pprError) $
@@ -402,6 +408,15 @@ getMessages' pst dflags =
 #if !MIN_VERSION_ghc(9,2,0)
                    dflags
 #endif
+#endif
+
+renderMessages :: PsMessages -> (Bag WarnMsg, Bag ErrMsg)
+renderMessages msgs =
+#if MIN_VERSION_ghc(9,3,0)
+  let renderMsgs extractor = (fmap . fmap) renderDiagnosticMessageWithHints . getMessages $ extractor msgs
+  in (renderMsgs psWarnings, renderMsgs psErrors)
+#else
+  msgs
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
