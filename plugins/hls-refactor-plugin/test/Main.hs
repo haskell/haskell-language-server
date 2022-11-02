@@ -3719,42 +3719,7 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
   f dir'
 
 ignoreForGHC92 :: String -> TestTree -> TestTree
-ignoreForGHC92 = ignoreFor (BrokenForGHC [GHC92])
-
-data BrokenTarget =
-    BrokenSpecific OS [GhcVersion]
-    -- ^Broken for `BrokenOS` with `GhcVersion`
-    | BrokenForOS OS
-    -- ^Broken for `BrokenOS`
-    | BrokenForGHC [GhcVersion]
-    -- ^Broken for `GhcVersion`
-    deriving (Show)
-
--- | Ignore test for specific os and ghc with reason.
-ignoreFor :: BrokenTarget -> String -> TestTree -> TestTree
-ignoreFor = knownIssueFor Ignore
-
--- | Deal with `IssueSolution` for specific OS and GHC.
-knownIssueFor :: IssueSolution -> BrokenTarget -> String -> TestTree -> TestTree
-knownIssueFor solution = go . \case
-    BrokenSpecific bos vers -> isTargetOS bos && isTargetGhc vers
-    BrokenForOS bos         -> isTargetOS bos
-    BrokenForGHC vers       -> isTargetGhc vers
-    where
-        isTargetOS = \case
-            Windows -> isWindows
-            MacOS   -> isMac
-            Linux   -> not isWindows && not isMac
-
-        isTargetGhc = elem ghcVersion
-
-        go True = case solution of
-            Broken -> expectFailBecause
-            Ignore -> ignoreTestBecause
-        go False = \_ -> id
-
-
-data IssueSolution = Broken | Ignore deriving (Show)
+ignoreForGHC92 = knownIssueInEnv Ignore [GhcVer GHC92]
 
 -- | Assert that a value is not 'Nothing', and extract the value.
 assertJust :: MonadIO m => String -> Maybe a -> m a

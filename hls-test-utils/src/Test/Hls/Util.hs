@@ -28,15 +28,20 @@ module Test.Hls.Util
     , inspectCodeAction
     , inspectCommand
     , inspectDiagnostic
+    -- * Mark tests as broken for various reasons.
     , knownBrokenOnWindows
     , knownBrokenForGhcVersions
+    , knownIssueInEnv
     , knownBrokenInEnv
     , onlyWorkForGhcVersions
+    -- * Setup test-suite state
     , setupBuildToolFiles
+    -- * Diagnostics helpers
     , SymbolLocation
     , waitForDiagnosticsFrom
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
+    -- * Working directory modifications
     , withCurrentDirectoryInTmp
     , withCurrentDirectoryInTmp'
     , withCanonicalTempDir
@@ -115,7 +120,19 @@ files =
    -- , "./test/testdata/wErrorTest/"
   ]
 
-data EnvSpec = HostOS OS | GhcVer GhcVersion
+-- | Why is the test broken?
+--
+-- Are they broken for the given spec or are we just ignoring the test
+-- because the test doesn't make sense in the Environment.
+data IssueSolution
+  = Broken
+  -- ^ Mark a test as known broken, expecting the test to be fixed eventually.
+  | Ignore
+  -- ^ Mark a test as ignored, because the test doesn't make sense in the
+  -- associated environment.
+  deriving (Show)
+
+data EnvSpec = HostOS OS | GhcVer GhcVersion | Specific OS GhcVersion
     deriving (Show, Eq)
 
 matchesCurrentEnv :: EnvSpec -> Bool
@@ -131,11 +148,18 @@ hostOS
     | isMac = MacOS
     | otherwise = Linux
 
+-- | Mark the given TestTree as having a known issue if /any/ of environmental
+-- spec matches the current environment.
+knownIssueInEnv :: IssueSolution -> [EnvSpec] -> String -> TestTree -> TestTree
+knownIssueInEnv issueSolution envSpecs reason
+    | any matchesCurrentEnv envSpecs = case issueSolution of
+        Broken -> expectFailBecause reason
+        Ignore -> ignoreTestBecause reason
+    | otherwise = id
+
 -- | Mark as broken if /any/ of environmental spec mathces the current environment.
 knownBrokenInEnv :: [EnvSpec] -> String -> TestTree -> TestTree
-knownBrokenInEnv envSpecs reason
-    | any matchesCurrentEnv envSpecs = expectFailBecause reason
-    | otherwise = id
+knownBrokenInEnv = knownIssueInEnv Broken
 
 knownBrokenOnWindows :: String -> TestTree -> TestTree
 knownBrokenOnWindows = knownBrokenInEnv [HostOS Windows]
