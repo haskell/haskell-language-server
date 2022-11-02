@@ -955,11 +955,13 @@ pattern ConPatIn con args = ConPat NoExtField con args
 #endif
 #endif
 
-conPatDetails :: Pat p -> HsConPatDetails p
+conPatDetails :: Pat p -> Maybe (HsConPatDetails p)
 #if MIN_VERSION_ghc(9,0,0)
-conPatDetails (ConPat _ _ args) = args
+conPatDetails (ConPat _ _ args) = Just args
+conPatDetails _ = Nothing
 #else
-conPatDetails (ConPatIn _ args) = args
+conPatDetails (ConPatIn _ args) = Just args
+conPatDetails _ = Nothing
 #endif
 
 initDynLinker, initObjLinker :: HscEnv -> IO ()

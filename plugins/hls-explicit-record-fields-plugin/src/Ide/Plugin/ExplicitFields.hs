@@ -233,7 +233,7 @@ preprocessRecord flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
     rec_flds' = no_puns <> puns'
 
 showRecordPat :: Outputable (Pat (GhcPass c)) => Pat (GhcPass c) -> Maybe Text
-showRecordPat pat@(conPatDetails -> RecCon flds) =
+showRecordPat pat@(conPatDetails -> Just (RecCon flds)) =
   Just $ printOutputable $
     pat { pat_args = RecCon (preprocessRecord flds) }
 showRecordPat _ = Nothing
@@ -256,7 +256,7 @@ getRecCons e@(unLoc -> RecordCon _ _ flds)
 getRecCons _ = Nothing
 
 getRecPatterns :: LPat (GhcPass 'Renamed) -> Maybe RecordInfo
-getRecPatterns conPat@(conPatDetails . unLoc -> RecCon flds)
+getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))
   | isJust (rec_dotdot flds) = Just $ mkRecInfo conPat
   where
     mkRecInfo :: LPat (GhcPass 'Renamed) -> RecordInfo
