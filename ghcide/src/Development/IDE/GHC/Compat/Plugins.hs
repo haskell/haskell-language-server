@@ -35,15 +35,18 @@ import           Plugins
 import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env    (hscSetFlags, hsc_dflags)
 import           Development.IDE.GHC.Compat.Parser as Parser
+import Debug.Trace
+import GHC.Driver.Env (hsc_plugins)
+import GHC.Driver.Plugins
 
-applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> Parser.ApiAnns -> ParsedSource -> IO ParsedSource
-applyPluginsParsedResultAction env dflags ms hpm_annotations parsed = do
+applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> Parser.ApiAnns -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
+applyPluginsParsedResultAction env dflags ms hpm_annotations parsed msgs = do
   -- Apply parsedResultAction of plugins
   let applyPluginAction p opts = parsedResultAction p opts ms
 #if MIN_VERSION_ghc(9,3,0)
-  fmap (hpm_module . parsedResultModule) $ runHsc env $ withPlugins
+  fmap (\result -> (hpm_module (parsedResultModule result), (parsedResultMessages result))) $ runHsc env $ withPlugins
 #else
-  fmap hpm_module $ runHsc env $ withPlugins
+  fmap ((, msgs), hpm_module) $ runHsc env $ withPlugins
 #endif
 #if MIN_VERSION_ghc(9,3,0)
       (Env.hsc_plugins env)
@@ -54,7 +57,7 @@ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed = do
 #endif
       applyPluginAction
 #if MIN_VERSION_ghc(9,3,0)
-      (ParsedResult (HsParsedModule parsed [] hpm_annotations) (PsMessages mempty mempty))
+      (ParsedResult (HsParsedModule parsed [] hpm_annotations) msgs)
 #else
       (HsParsedModule parsed [] hpm_annotations)
 #endif
