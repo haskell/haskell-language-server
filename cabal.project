@@ -56,6 +56,8 @@ constraints:
   entropy >= 0.4.1.10,
   -- For GHC 9.4
   basement >= 0.0.15,
+  -- For GHC 9.4
+  hw-prim >= 0.6.3.2,
   hyphenation +embed,
   -- remove this when hlint sets ghc-lib to true by default
   -- https://github.com/ndmitchell/hlint/issues/1376

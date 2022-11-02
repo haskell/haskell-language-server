@@ -41,7 +41,7 @@ getNextPragmaInfo dynFlags sourceText =
 -- GHC as well, hence the replacement.
 -- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/6156
 showExtension :: Extension -> Text
-showExtension RecordPuns = "NamedFieldPuns"
+showExtension NamedFieldPuns = "NamedFieldPuns"
 showExtension ext = pack (show ext)
 
 insertNewPragma :: NextPragmaInfo -> Extension -> LSP.TextEdit
