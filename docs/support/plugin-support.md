@@ -50,7 +50,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-change-type-signature-plugin`  | 2    |                          |
 | `hls-eval-plugin`                   | 2    | 9.4                      |
 | `hls-explicit-fixity-plugin`        | 2    |                          |
-| `hls-explicit-record-fields-plugin` | 2    | 9.4                      |
+| `hls-explicit-record-fields-plugin` | 2    |                          |
 | `hls-floskell-plugin`               | 2    | 9.4                      |
 | `hls-fourmolu-plugin`               | 2    | 9.4                      |
 | `hls-gadt-plugin`                   | 2    | 9.4                      |
