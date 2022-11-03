@@ -60,7 +60,7 @@
       flake = false;
     };
     retrie = {
-      url = "https://hackage.haskell.org/package/retrie-1.2.0.1/retrie-1.2.0.1.tar.gz";
+      url = "https://github.com/MercuryTechnologies/retrie/tarball/cc8f9b2d424831618c1d686f46a5816bc95e2386";
       flake = false;
     };
     fourmolu = {
@@ -187,6 +187,7 @@
               entropy = hsuper.callCabal2nix "entropy" inputs.entropy {};
               hiedb = hsuper.callCabal2nix "hiedb" inputs.hiedb {};
               hw-prim = hsuper.callCabal2nix "hw-prim" inputs.hw-prim {};
+              retrie = hsuper.callCabal2nix "retrie" inputs.retrie {};
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.implicit-hie-cradle {};
               ghc-check = hself.callCabal2nix "ghc-check" inputs.ghc-check {};
@@ -310,8 +311,6 @@
             gmp zlib ncurses
             # Changelog tooling
             (gen-hls-changelogs pkgs.haskellPackages)
-            # For the documentation
-            pythonWithPackages
             # @guibou: I'm not sure this is needed.
             hlint
             pkgs.haskellPackages.opentelemetry-extra
