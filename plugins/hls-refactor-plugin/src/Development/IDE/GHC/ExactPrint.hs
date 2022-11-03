@@ -3,9 +3,6 @@
 
 -- | This module hosts various abstractions and utility functions to work with ghc-exactprint.
 module Development.IDE.GHC.ExactPrint
-#if MIN_VERSION_ghc(9,3,0)
-   (  ) where
-#else
     ( Graft(..),
       graftDecls,
       graftDeclsWithM,
@@ -95,11 +92,14 @@ import           Ide.PluginUtils
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities         (ClientCapabilities)
-import           Retrie.ExactPrint                       hiding (Annotated (..),
-                                                          parseDecl, parseExpr,
+import           Retrie.ExactPrint                       hiding (parseDecl,
+                                                          parseExpr,
                                                           parsePattern,
                                                           parseType)
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,9,0)
+import           GHC.Plugins                             (showSDoc)
+import           GHC.Utils.Outputable                    (Outputable (ppr))
+#elif MIN_VERSION_ghc(9,2,0)
 import           GHC                                     (EpAnn (..),
                                                           NameAdornment (NameParens),
                                                           NameAnn (..),
@@ -696,7 +696,10 @@ annotate :: (ASTElement l ast, Outputable l)
 annotate dflags needs_space ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+    expr' <- lift $ mapLeft (showSDoc dflags . ppr) $ parseAST dflags uniq rendered
+    pure expr'
+#elif MIN_VERSION_ghc(9,2,0)
     expr' <- lift $ mapLeft show $ parseAST dflags uniq rendered
     pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
 #else
@@ -720,6 +723,21 @@ annotateDecl dflags
     let set_matches matches =
           ValD ext fb { fun_matches = mg { mg_alts = L alt_src matches }}
 
+#if MIN_VERSION_ghc(9,2,0)
+    alts' <- for alts $ \alt -> do
+      uniq <- show <$> uniqueSrcSpanT
+      let rendered = render dflags $ set_matches [alt]
+#if MIN_VERSION_ghc(9,4,0)
+      lift (mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered) >>= \case
+#elif MIN_VERSION_ghc(9,2,0)
+      lift (mapLeft show $ parseDecl dflags uniq rendered) >>= \case
+#endif
+        (L _ (ValD _ FunBind { fun_matches = MG { mg_alts = L _ [alt']}}))
+           -> pure alt'
+        _ ->  lift $ Left "annotateDecl: didn't parse a single FunBind match"
+
+    pure $ L src $ set_matches alts'
+#else
     (anns', alts') <- fmap unzip $ for alts $ \alt -> do
       uniq <- show <$> uniqueSrcSpanT
       let rendered = render dflags $ set_matches [alt]
@@ -737,6 +755,10 @@ annotateDecl dflags ast = do
 #if MIN_VERSION_ghc(9,2,0)
     expr' <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     pure $ setPrecedingLines expr' 1 0
+#if MIN_VERSION_ghc(9,4,0)
+    lift $ mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered
+#elif MIN_VERSION_ghc(9,2,0)
+    lift $ mapLeft show $ parseDecl dflags uniq rendered
 #else
     (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     let anns' = setPrecedingLines expr' 1 0 anns
@@ -818,6 +840,4 @@ removeTrailingComma = flip modifyAnns $ \(AnnListItem l) -> AnnListItem $ filter
 isCommaAnn :: TrailingAnn -> Bool
 isCommaAnn AddCommaAnn{} = True
 isCommaAnn _             = False
-#endif
-
 #endif

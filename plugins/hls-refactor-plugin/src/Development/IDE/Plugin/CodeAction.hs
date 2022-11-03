@@ -157,12 +157,10 @@ iePluginDescriptor recorder plId =
             wrap suggestExportUnusedTopBinding
           , wrap suggestModuleTypo
           , wrap suggestFixConstructorImport
-#if !MIN_VERSION_ghc(9,3,0)
           , wrap suggestExtendImport
           , wrap suggestImportDisambiguation
           , wrap suggestNewOrExtendImportForClassMethod
           , wrap suggestHideShadow
-#endif
           , wrap suggestNewImport
           ]
           plId
@@ -174,10 +172,8 @@ typeSigsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
       wrap $ suggestSignature True
     , wrap suggestFillTypeWildcard
     , wrap suggestAddTypeAnnotationToSatisfyConstraints
-#if !MIN_VERSION_ghc(9,3,0)
     , wrap removeRedundantConstraints
     , wrap suggestConstraint
-#endif
     ]
     plId
 
@@ -185,9 +181,7 @@ bindingsPluginDescriptor :: Recorder (WithPriority E.Log) ->  PluginId -> Plugin
 bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
   mkGhcideCAsPlugin [
       wrap suggestReplaceIdentifier
-#if !MIN_VERSION_ghc(9,3,0)
     , wrap suggestImplicitParameter
-#endif
     , wrap suggestNewDefinition
 #if MIN_VERSION_ghc(9,2,1)
     , wrap suggestAddArgument
@@ -1198,7 +1192,6 @@ getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
 indentation :: T.Text -> Int
 indentation = T.length . T.takeWhile isSpace
 
-#if !MIN_VERSION_ghc(9,3,0)
 suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, Rewrite)]
 suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
@@ -1246,7 +1239,6 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
                 , parent = Nothing
                 , isDatacon = False
                 , moduleNameText = mod}
-#endif
 
 data HidingMode
     = HideOthers [ModuleTarget]

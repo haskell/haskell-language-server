@@ -196,26 +196,30 @@ removeConstraint ::
 removeConstraint toRemove = go . traceAst "REMOVE_CONSTRAINT_input"
   where
     go :: LHsType GhcPs -> Rewrite
-#if !MIN_VERSION_ghc(9,2,0)
-    go (L l it@HsQualTy{hst_ctxt = L l' ctxt, hst_body}) = Rewrite (locA l) $ \_ -> do
-#else
+#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,4,0)
     go (L l it@HsQualTy{hst_ctxt = Just (L l' ctxt), hst_body}) = Rewrite (locA l) $ \_ -> do
+#else
+    go (L l it@HsQualTy{hst_ctxt = L l' ctxt, hst_body}) = Rewrite (locA l) $ \_ -> do
 #endif
       let ctxt' = filter (not . toRemove) ctxt
           removeStuff = (toRemove <$> headMaybe ctxt) == Just True
-#if !MIN_VERSION_ghc(9,2,0)
-      when removeStuff  $
-        setEntryDPT hst_body (DP (0, 0))
-      return $ L l $ it{hst_ctxt =  L l' ctxt'}
-#else
+#if MIN_VERSION_ghc(9,2,0)
       let hst_body' = if removeStuff then resetEntryDP hst_body else hst_body
       return $ case ctxt' of
           [] -> hst_body'
           _ -> do
             let ctxt'' = over _last (first removeComma) ctxt'
+#if MIN_VERSION_ghc(9,4,0)
+            L l $ it{ hst_ctxt = L l' ctxt''
+#else
             L l $ it{ hst_ctxt = Just $ L l' ctxt''
+#endif
                     , hst_body = hst_body'
                     }
+#else
+      when removeStuff  $
+        setEntryDPT hst_body (DP (0, 0))
+      return $ L l $ it{hst_ctxt =  L l' ctxt'}
 #endif
     go (L _ (HsParTy _ ty)) = go ty
     go (L _ HsForAllTy{hst_body}) = go hst_body
@@ -231,10 +235,12 @@ appendConstraint ::
   Rewrite
 appendConstraint constraintT = go . traceAst "appendConstraint"
  where
-#if !MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
   go (L l it@HsQualTy{hst_ctxt = L l' ctxt}) = Rewrite (locA l) $ \df -> do
-#else
+#elif MIN_VERSION_ghc(9,2,0)
   go (L l it@HsQualTy{hst_ctxt = Just (L l' ctxt)}) = Rewrite (locA l) $ \df -> do
+#else
+  go (L l it@HsQualTy{hst_ctxt = L l' ctxt}) = Rewrite (locA l) $ \df -> do
 #endif
     constraint <- liftParseAST df constraintT
 #if !MIN_VERSION_ghc(9,2,0)
@@ -258,7 +264,11 @@ appendConstraint constraintT = go . traceAst "appendConstraint"
             [L _ (HsParTy EpAnn{anns=AnnParen{ap_close}} _)] -> Just ap_close
             _ -> Nothing
         ctxt' = over _last (first addComma) $ map dropHsParTy ctxt
+#if MIN_VERSION_ghc(9,4,0)
+    return $ L l $ it{hst_ctxt = L l'' $ ctxt' ++ [constraint]}
+#else
     return $ L l $ it{hst_ctxt = Just $ L l'' $ ctxt' ++ [constraint]}
+#endif
 #endif
   go (L _ HsForAllTy{hst_body}) = go hst_body
   go (L _ (HsParTy _ ty)) = go ty
@@ -267,7 +277,16 @@ appendConstraint constraintT = go . traceAst "appendConstraint"
     constraint <- liftParseAST df constraintT
     lContext <- uniqueSrcSpanT
     lTop <- uniqueSrcSpanT
-#if !MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+    let context = reAnnL annCtxt emptyComments $ L lContext [resetEntryDP constraint]
+#else
+    let context = Just $ reAnnL annCtxt emptyComments $ L lContext [resetEntryDP constraint]
+#endif
+        annCtxt = AnnContext (Just (NormalSyntax, epl 1)) [epl 0 | needsParens] [epl 0 | needsParens]
+        needsParens = hsTypeNeedsParens sigPrec $ unLoc constraint
+    ast <- pure $ setEntryDP ast (SameLine 1)
+#else
     let context = L lContext [constraint]
     addSimpleAnnT context dp00 $
       (G AnnDarrow, DP (0, 1)) :
@@ -277,11 +296,6 @@ appendConstraint constraintT = go . traceAst "appendConstraint"
           ]
         | hsTypeNeedsParens sigPrec $ unLoc constraint
         ]
-#else
-    let context = Just $ reAnnL annCtxt emptyComments $ L lContext [resetEntryDP constraint]
-        annCtxt = AnnContext (Just (NormalSyntax, epl 1)) [epl 0 | needsParens] [epl 0 | needsParens]
-        needsParens = hsTypeNeedsParens sigPrec $ unLoc constraint
-    ast <- pure $ setEntryDP ast (SameLine 1)
 #endif
 
     return $ reLocA $ L lTop $ HsQualTy noExtField context ast
