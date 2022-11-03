@@ -25,6 +25,7 @@ module Development.IDE.GHC.ExactPrint
       Annotate,
       setPrecedingLinesT,
 #else
+      setPrecedingLines,
       addParens,
       addParensToCtxt,
       modifyAnns,
@@ -56,6 +57,7 @@ import           Control.Monad.Trans.Except
 import           Control.Monad.Zip
 import           Data.Bifunctor
 import           Data.Bool                               (bool)
+import           Data.Default                            (Default)
 import qualified Data.DList                              as DL
 import           Data.Either.Extra                       (mapLeft)
 import           Data.Foldable                           (Foldable (fold))
@@ -101,7 +103,13 @@ import           GHC                                     (EpAnn (..),
                                                           spanAsAnchor)
 import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           DeltaPos (SameLine),
-                                                          EpaLocation (EpaDelta))
+                                                          EpaLocation (EpaDelta),
+                                                          deltaPos)
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+setPrecedingLines :: Default t => LocatedAn t a -> Int -> Int -> LocatedAn t a
+setPrecedingLines ast n c = setEntryDP ast (deltaPos n c)
 #endif
 
 ------------------------------------------------------------------------------
@@ -114,10 +122,10 @@ instance Pretty Log where
 
 instance Show (Annotated ParsedSource) where
   show _ = "<Annotated ParsedSource>"
- 
+
 instance NFData (Annotated ParsedSource) where
   rnf = rwhnf
- 
+
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
   deriving (Eq, Show, Typeable, GHC.Generic)
 
@@ -374,7 +382,7 @@ graftWithM dst trans = Graft $ \dflags a -> do
 #if MIN_VERSION_ghc(9,2,0)
                                 val'' <-
                                     hoistTransform (either Fail.fail pure) $
-                                        annotate dflags True $ maybeParensAST val'
+                                        annotate dflags False $ maybeParensAST val'
                                 pure val''
 #else
                                 (anns, val'') <-
@@ -468,7 +476,17 @@ graftDeclsWithM dst toDecls = Graft $ \dflags a -> do
     modifyDeclsT (fmap DL.toList . go) a
 
 
-class (Data ast, Typeable l, Outputable l, Outputable ast) => ASTElement l ast | ast -> l where
+-- In 9.2+, we need `Default l` to do `setPrecedingLines` on annotated elements.
+-- In older versions, we pass around annotations explicitly, so the instance isn't needed.
+class
+    ( Data ast
+    , Typeable l
+    , Outputable l
+    , Outputable ast
+#if MIN_VERSION_ghc(9,2,0)
+    , Default l
+#endif
+    ) => ASTElement l ast | ast -> l where
     parseAST :: Parser (LocatedAn l ast)
     maybeParensAST :: LocatedAn l ast -> LocatedAn l ast
     {- | Construct a 'Graft', replacing the node at the given 'SrcSpan' with
@@ -520,6 +538,7 @@ fixAnns ParsedModule {..} =
 
 ------------------------------------------------------------------------------
 
+
 -- | Given an 'LHSExpr', compute its exactprint annotations.
 --   Note that this function will throw away any existing annotations (and format)
 annotate :: (ASTElement l ast, Outputable l)
@@ -533,7 +552,7 @@ annotate dflags needs_space ast = do
     let rendered = render dflags ast
 #if MIN_VERSION_ghc(9,2,0)
     expr' <- lift $ mapLeft show $ parseAST dflags uniq rendered
-    pure expr'
+    pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
 #else
     (anns, expr') <- lift $ mapLeft show $ parseAST dflags uniq rendered
     let anns' = setPrecedingLines expr' 0 (bool 0 1 needs_space) anns
@@ -542,6 +561,7 @@ annotate dflags needs_space ast = do
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.
 annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (LHsDecl GhcPs)
+#if !MIN_VERSION_ghc(9,2,0)
 -- The 'parseDecl' function fails to parse 'FunBind' 'ValD's which contain
 -- multiple matches. To work around this, we split the single
 -- 'FunBind'-of-multiple-'Match'es into multiple 'FunBind's-of-one-'Match',
@@ -554,17 +574,6 @@ annotateDecl dflags
     let set_matches matches =
           ValD ext fb { fun_matches = mg { mg_alts = L alt_src matches }}
 
-#if MIN_VERSION_ghc(9,2,0)
-    alts' <- for alts $ \alt -> do
-      uniq <- show <$> uniqueSrcSpanT
-      let rendered = render dflags $ set_matches [alt]
-      lift (mapLeft show $ parseDecl dflags uniq rendered) >>= \case
-        (L _ (ValD _ FunBind { fun_matches = MG { mg_alts = L _ [alt']}}))
-           -> pure alt'
-        _ ->  lift $ Left "annotateDecl: didn't parse a single FunBind match"
-
-    pure $ L src $ set_matches alts'
-#else
     (anns', alts') <- fmap unzip $ for alts $ \alt -> do
       uniq <- show <$> uniqueSrcSpanT
       let rendered = render dflags $ set_matches [alt]
@@ -580,7 +589,8 @@ annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
 #if MIN_VERSION_ghc(9,2,0)
-    lift $ mapLeft show $ parseDecl dflags uniq rendered
+    expr' <- lift $ mapLeft show $ parseDecl dflags uniq rendered
+    pure $ setPrecedingLines expr' 1 0
 #else
     (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     let anns' = setPrecedingLines expr' 1 0 anns
