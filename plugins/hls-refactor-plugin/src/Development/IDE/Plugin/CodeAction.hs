@@ -158,12 +158,10 @@ iePluginDescriptor recorder plId =
           , wrap suggestModuleTypo
           , wrap suggestFixConstructorImport
           , wrap suggestExtendImport
-#if !MIN_VERSION_ghc(9,3,0)
           , wrap suggestImportDisambiguation
           , wrap suggestNewOrExtendImportForClassMethod
           , wrap suggestHideShadow
           , wrap suggestNewImport
-#endif
           ]
           plId
    in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler STextDocumentCodeAction codeAction }
