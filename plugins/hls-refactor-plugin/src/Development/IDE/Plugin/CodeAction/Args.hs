@@ -74,7 +74,9 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
         Just (_, txt) -> pure txt
         _             -> pure Nothing
   caaDf <- onceIO $ fmap (ms_hspp_opts . pm_mod_summary) <$> caaParsedModule
+#if !MIN_VERSION_ghc(9,3,0)
   caaAnnSource <- onceIO $ runRule GetAnnotatedParsedSource
+#endif
   caaTmr <- onceIO $ runRule TypeCheck
   caaHar <- onceIO $ runRule GetHieAst
   caaBindings <- onceIO $ runRule GetBindings
@@ -266,11 +268,13 @@ instance ToCodeAction r => ToCodeAction (Maybe DynFlags -> r) where
 instance ToCodeAction r => ToCodeAction (DynFlags -> r) where
   toCodeAction = toCodeAction2 caaDf
 
+#if !MIN_VERSION_ghc(9,3,0)
 instance ToCodeAction r => ToCodeAction (Maybe (Annotated ParsedSource) -> r) where
   toCodeAction = toCodeAction1 caaAnnSource
 
 instance ToCodeAction r => ToCodeAction (Annotated ParsedSource -> r) where
   toCodeAction = toCodeAction2 caaAnnSource
+#endif
 
 instance ToCodeAction r => ToCodeAction (Maybe TcModuleResult -> r) where
   toCodeAction = toCodeAction1 caaTmr
