@@ -453,7 +453,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       transferAnn lAbs x $ \old -> old{annsDP = annsDP old ++ [(G AnnOpenP, DP (0, 1)), (G AnnCloseP, dp00)]}
       addSimpleAnnT childRdr dp00 [(G AnnVal, dp00)]
 #else
-          x :: LIE GhcPs = L ll' $ IEThingWith (addAnns mempty [AddEpAnn AnnOpenP (EpaDelta (SameLine 1) []), AddEpAnn AnnCloseP def] emptyComments) absIE NoIEWildcard [childLIE]
+          x :: LIE GhcPs = L ll' $ IEThingWith (addAnns mempty [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)] emptyComments) absIE NoIEWildcard [childLIE]
 #endif
       return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [x] ++ xs)}
 #if !MIN_VERSION_ghc(9,2,0)
@@ -467,7 +467,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #if MIN_VERSION_ghc(9,2,0)
         let it' = it{ideclHiding = Just (hide, lies)}
             thing = IEThingWith newl twIE (IEWildcard 2) []
-            newl = (\ann -> ann ++ [(AddEpAnn AnnDotdot d0)]) <$> l'''
+            newl = addAnns l''' [AddEpAnn AnnOpenP (epl 0), AddEpAnn AnnDotdot d0, AddEpAnn AnnCloseP (epl 0)] emptyComments
             lies = L l' $ reverse pre ++ [L l'' thing] ++ xs
         return $ L l it'
 #else
@@ -520,7 +520,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #else
       let parentLIE = reLocA $ L srcParent $ (if isParentOperator then IEType (epl 0) parentRdr' else IEName parentRdr')
           parentRdr' = modifyAnns parentRdr $ \case
-              it@NameAnn{nann_adornment = NameParens} -> it{nann_open = epl 1}
+              it@NameAnn{nann_adornment = NameParens} -> it{nann_open = epl 1, nann_close = epl 0}
               other -> other
           childLIE = reLocA $ L srcChild $ IEName childRdr
 #endif
