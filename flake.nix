@@ -60,7 +60,7 @@
       flake = false;
     };
     retrie = {
-      url = "https://github.com/MercuryTechnologies/retrie/tarball/cc8f9b2d424831618c1d686f46a5816bc95e2386";
+      url = "github:MercuryTechnologies/retrie/mercury/ghc94";
       flake = false;
     };
     fourmolu = {

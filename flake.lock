@@ -323,13 +323,18 @@
     "retrie": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-ibfeHXCf+YSZ1E8KPSiAtiqoUH+0s466SkSvpk37qfY=",
-        "type": "file",
-        "url": "https://github.com/MercuryTechnologies/retrie/tarball/cc8f9b2d424831618c1d686f46a5816bc95e2386"
+        "lastModified": 1667519855,
+        "narHash": "sha256-6xr3fsqy28VGQo+by3sKIB5F5lSAg2HwJMzfiQ0uuNw=",
+        "owner": "MercuryTechnologies",
+        "repo": "retrie",
+        "rev": "415e5e6c01acac6ef77255834edc90fe80f37396",
+        "type": "github"
       },
       "original": {
-        "type": "file",
-        "url": "https://github.com/MercuryTechnologies/retrie/tarball/cc8f9b2d424831618c1d686f46a5816bc95e2386"
+        "owner": "MercuryTechnologies",
+        "ref": "mercury/ghc94",
+        "repo": "retrie",
+        "type": "github"
       }
     },
     "root": {
