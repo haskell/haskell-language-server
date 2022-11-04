@@ -723,21 +723,6 @@ annotateDecl dflags
     let set_matches matches =
           ValD ext fb { fun_matches = mg { mg_alts = L alt_src matches }}
 
-#if MIN_VERSION_ghc(9,2,0)
-    alts' <- for alts $ \alt -> do
-      uniq <- show <$> uniqueSrcSpanT
-      let rendered = render dflags $ set_matches [alt]
-#if MIN_VERSION_ghc(9,4,0)
-      lift (mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered) >>= \case
-#elif MIN_VERSION_ghc(9,2,0)
-      lift (mapLeft show $ parseDecl dflags uniq rendered) >>= \case
-#endif
-        (L _ (ValD _ FunBind { fun_matches = MG { mg_alts = L _ [alt']}}))
-           -> pure alt'
-        _ ->  lift $ Left "annotateDecl: didn't parse a single FunBind match"
-
-    pure $ L src $ set_matches alts'
-#else
     (anns', alts') <- fmap unzip $ for alts $ \alt -> do
       uniq <- show <$> uniqueSrcSpanT
       let rendered = render dflags $ set_matches [alt]
@@ -752,13 +737,12 @@ annotateDecl dflags
 annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,4,0)
+    expr' <- lift $ mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered
+    pure $ setPrecedingLines expr' 1 0
+#elif MIN_VERSION_ghc(9,2,0)
     expr' <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     pure $ setPrecedingLines expr' 1 0
-#if MIN_VERSION_ghc(9,4,0)
-    lift $ mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered
-#elif MIN_VERSION_ghc(9,2,0)
-    lift $ mapLeft show $ parseDecl dflags uniq rendered
 #else
     (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     let anns' = setPrecedingLines expr' 1 0 anns
