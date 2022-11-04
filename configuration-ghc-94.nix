@@ -48,6 +48,9 @@ let
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         (pkgs.lib.concatStringsSep " " [ "-fpedantic" "-f-hlint" ]) { };
+
+      #
+      retrie = hself.retrieHEAD;
     });
 in {
   inherit disabledPlugins;

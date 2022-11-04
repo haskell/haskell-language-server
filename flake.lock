@@ -337,6 +337,18 @@
         "type": "github"
       }
     },
+    "retrie_1100": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-yn8gguMdBtrB3fCa+4Rq6GHtPSyxYlriENPTgOvjeHE=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/retrie-1.1.0.0/retrie-1.1.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/retrie-1.1.0.0/retrie-1.1.0.0.tar.gz"
+      }
+    },
     "root": {
       "inputs": {
         "aeson-1520": "aeson-1520",
@@ -365,6 +377,7 @@
         "nixpkgs": "nixpkgs",
         "ptr-poker": "ptr-poker",
         "retrie": "retrie",
+        "retrie_1100": "retrie_1100",
         "stylish-haskell": "stylish-haskell"
       }
     },

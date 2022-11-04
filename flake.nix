@@ -59,6 +59,10 @@
       url = "https://hackage.haskell.org/package/constraints-extras-0.3.2.1/constraints-extras-0.3.2.1.tar.gz";
       flake = false;
     };
+    retrie_1100 = {
+      url = "https://hackage.haskell.org/package/retrie-1.1.0.0/retrie-1.1.0.0.tar.gz";
+      flake = false;
+    };
     retrie = {
       url = "github:MercuryTechnologies/retrie/mercury/ghc94";
       flake = false;
@@ -188,6 +192,8 @@
               hiedb = hsuper.callCabal2nix "hiedb" inputs.hiedb {};
               hw-prim = hsuper.callCabal2nix "hw-prim" inputs.hw-prim {};
               retrie = hsuper.callCabal2nix "retrie" inputs.retrie {};
+              retrieHEAD = hsuper.callCabal2nix "retrie" inputs.retrie {};
+              retrie_1_1_0_0 = hsuper.callCabal2nix "retrie" inputs.retrie_1100 {};
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.implicit-hie-cradle {};
               ghc-check = hself.callCabal2nix "ghc-check" inputs.ghc-check {};
