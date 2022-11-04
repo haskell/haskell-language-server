@@ -202,6 +202,45 @@
                 if final.system == "aarch64-darwin"
                 then overrideCabal hsuper.ormolu (_: { enableSeparateBinOutput = false; })
                 else hsuper.ormolu;
+
+              # Fourmolu needs a handful of patches to build on GHC 9.4.
+              fourmolu =
+                appendPatches
+                (doJailbreak hsuper.fourmolu_0_8_2_0)
+                [
+                  # The GHC 9.4 pull request builds upon these unpublished changes,
+                  # which is why we include them.
+                  #
+                  # Also, there is no PR for these changes.  The fourmolu maintainers
+                  # apparently commit straight to master …
+                  (final.fetchpatch {
+                    url = "https://github.com/fourmolu/fourmolu/commit/2c11f555945e755cc6e805de482404d5484d53b6.patch";
+                    sha256 = "sha256-bWJxOYQoLtsW7KaVbTxIxX+cFx9x3ekEmbA9NuJ3qtk=";
+                  })
+                  (final.fetchpatch {
+                    url = "https://github.com/fourmolu/fourmolu/commit/8eb7ef82676ab3bff9b249c74fc5d81dc23a2657.patch";
+                    sha256 = "sha256-rlKDRv27EGnlStNiKEniZiKSib1Zr9E3hGT3QuU5xLI=";
+                  })
+                  (final.fetchpatch {
+                    url = "https://github.com/fourmolu/fourmolu/commit/14b1bc832716edaf4239c4e364836185f0aa816b.patch";
+                    sha256 = "sha256-cfXh6ufxASbg2wXp/5ixfUNSC54O/eq8hx88lZKAJ18=";
+                  })
+                  (final.fetchpatch {
+                    url = "https://github.com/fourmolu/fourmolu/commit/e7fc4ec52aeeb50b3a886d1f55f4468ae6d46a46.patch";
+                    sha256 = "sha256-d+hg/mOEAybq461VLkmCrwtFyHgX8Q+715yaJXHn7/g=";
+                  })
+                  (final.fetchpatch {
+                    url = "https://github.com/fourmolu/fourmolu/commit/809256014cb6f65d8cd3447c0502493f57d3e307.patch";
+                    sha256 = "sha256-FdVj9MidRCfMUERVWvFV9k2rnvnorxJE7NpehNBQ8OQ=";
+                  })
+
+                  # The actual change to support GHC 9.4
+                  (final.fetchpatch {
+                    url = "https://github.com/fourmolu/fourmolu/pull/242.patch";
+                    sha256 = "sha256-mWMtG+pkiNzmkXWVZhIILhhnPzQM070o6+hwyNZkY+0=";
+                    includes = ["data/*" "src/*" "tests/*" "fourmolu.cabal"];
+                  })
+                ];
             };
 
           hlsSources =
