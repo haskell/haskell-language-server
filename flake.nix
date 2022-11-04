@@ -206,7 +206,9 @@
               # Fourmolu needs a handful of patches to build on GHC 9.4.
               fourmolu =
                 appendPatches
-                (doJailbreak hsuper.fourmolu_0_8_2_0)
+                (doJailbreak (if final.system == "aarch64-darwin"
+                              then overrideCabal hsuper.fourmolu_0_8_2_0 (_: { enableSeparateBinOutput = false; })
+                              else hsuper.fourmolu_0_8_2_0))
                 [
                   # The GHC 9.4 pull request builds upon these unpublished changes,
                   # which is why we include them.
