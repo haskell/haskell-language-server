@@ -15,7 +15,8 @@ where
 import           Control.Concurrent.STM.Stats                 (readTVarIO)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
-import           Data.Either                                  (fromRight, partitionEithers)
+import           Data.Either                                  (fromRight,
+                                                               partitionEithers)
 import qualified Data.HashMap.Strict                          as Map
 import           Data.IORef.Extra
 import           Data.Maybe                                   (fromMaybe)
@@ -30,6 +31,8 @@ import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Plugin.CodeAction.ExactPrint (Rewrite,
                                                                rewriteToEdit)
 #endif
+import           Control.Monad.Except                         (ExceptT (..),
+                                                               runExceptT)
 import           Development.IDE.Plugin.TypeLenses            (GetGlobalBindingTypeSigs (GetGlobalBindingTypeSigs),
                                                                GlobalBindingTypeSigsResult)
 import           Development.IDE.Spans.LocalBindings          (Bindings)
@@ -39,7 +42,6 @@ import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
-import Control.Monad.Except (ExceptT(..), runExceptT)
 
 type CodeActionTitle = T.Text
 
