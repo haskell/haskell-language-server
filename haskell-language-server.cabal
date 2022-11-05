@@ -266,7 +266,7 @@ common pragmas
     cpp-options: -Dhls_pragmas
 
 common splice
-  if flag(splice) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(splice) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-splice-plugin ^>=1.0.0.1
     cpp-options: -Dhls_splice
 
