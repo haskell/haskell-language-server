@@ -2345,6 +2345,33 @@ addFunctionArgumentTests =
         liftIO $ actionTitle @?= "Add argument ‘select’ to function"
         executeCodeAction action
         contentAfterAction <- documentContents docB
+        liftIO $ contentAfterAction @?= T.unlines foo',
+      testSession "where clause" $ do
+        let foo =
+              [ "foo -- c1",
+                "  -- | c2",
+                "  {- c3 -} True -- c4",
+                "  = select",
+                "",
+                "foo False = False"
+              ]
+            -- TODO could use improvement here...
+            foo' =
+              [ "foo -- c1",
+                "  -- | c2",
+                "  {- c3 -} True select -- c4",
+                "  = select",
+                "",
+                "foo False select = False"
+              ]
+        docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ foo)
+        _ <- waitForDiagnostics
+        InR action@CodeAction {_title = actionTitle} : _ <-
+          filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
+            <$> getCodeActions docB (R 3 0 3 50)
+        liftIO $ actionTitle @?= "Add argument ‘select’ to function"
+        executeCodeAction action
+        contentAfterAction <- documentContents docB
         liftIO $ contentAfterAction @?= T.unlines foo'
     ]
 #endif
