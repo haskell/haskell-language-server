@@ -4,7 +4,6 @@
 
 - For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the `PATH`. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/ghc) on Windows.
 - For Cabal based projects, both ghc and [cabal-install](https://www.haskell.org/cabal/) must be installed and on the `PATH`. It can also be installed with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/cabal) on Windows.
-- For Stack based projects, [stack](http://haskellstack.org) must be installed and on the `PATH`.
 
 ## ghcup
 
@@ -26,18 +25,16 @@ More information here: <https://www.haskell.org/ghcup/guide/#hls>
 
 ## Installation from source
 
-Direct installation from source, while possible via `cabal install exe:haskell-language-server`
-and `stack install --stack-yaml stack-<GHCVER>.yaml`, is not recommended for most people.
+Direct installation from source, while possible via `cabal install exe:haskell-language-server`, is not recommended for most people.
 Said command builds the `haskell-language-server` binary and installs it in the default `cabal` binaries folder,
 but the binary will only work with projects that use the same GHC version that built it.
 
 ### Common pre-requirements
 
-- `stack` or `cabal` must be in your `PATH`
-  - You need `stack` version >= 2.1.1 or `cabal` >= 2.4.0.0
+- `cabal` must be in your `PATH`
+  - You need `cabal` >= 2.4.0.0
 - `git` must be in your `PATH`
-- The directory where `stack`or `cabal` put the binaries must be in you PATH:
-  - For `stack` you can get it with `stack path --local-bin`
+- The directory where `cabal` put the binaries must be in you PATH:
   - For `cabal` it is by default `$HOME/.cabal/bin` in Linux and `%APPDATA%\cabal\bin` in windows.
 
 Tip: you can quickly check if some command is in your path by running the command.
