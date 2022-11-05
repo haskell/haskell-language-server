@@ -121,8 +121,9 @@ p `isInsideSrcSpan` r = case srcSpanToRange r of
   Just (Range sp ep) -> sp <= p && p <= ep
   _                  -> False
 
-spanContainsRange :: SrcSpan -> Range -> Bool
-spanContainsRange srcSpan range = maybe False (range `isSubrangeOf`) $ srcSpanToRange srcSpan
+-- Returns Nothing if the SrcSpan does not represent a valid range
+spanContainsRange :: SrcSpan -> Range -> Maybe Bool
+spanContainsRange srcSpan range = (range `isSubrangeOf`) <$> srcSpanToRange srcSpan
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).

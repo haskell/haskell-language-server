@@ -97,6 +97,7 @@ import           Language.Haskell.GHC.ExactPrint                   (noAnnSrcSpan
                                                                     runTransformT)
 #endif
 #if MIN_VERSION_ghc(9,2,0)
+import           Extra                                             (maybeToEither)
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
@@ -949,6 +950,20 @@ newDefinitionAction IdeOptions {..} parsedModule Range {_start} name typ
     ParsedModule {pm_parsed_source = L _ HsModule {hsmodDecls}} = parsedModule
 
 #if MIN_VERSION_ghc(9,2,1)
+-- When GHC tells us that a variable is not bound, it will tell us either:
+--  - there is an unbound variable with a given type
+--  - there is an unbound variable (GHC provides no type suggestion)
+--
+-- When we receive either of these errors, we produce a text edit that will add a new argument (as a new pattern in the
+-- last position of each LHS of the top-level bindings for this HsDecl).
+--
+-- TODO Include logic to also update the type signature of a binding
+--
+-- NOTE When adding a new argument to a declaration, the corresponding argument's type in declaration's signature might
+--      not be the last type in the signature, such as:
+--         foo :: a -> b -> c -> d
+--         foo a b = \c -> ...
+--      In this case a new argument would have to add its type between b and c in the signature.
 suggestAddArgument :: ParsedModule -> Diagnostic -> Either ResponseError [(T.Text, [TextEdit])]
 suggestAddArgument parsedModule Diagnostic {_message, _range}
   | Just (name, typ) <- matchVariableNotInScope message = addArgumentAction parsedModule _range name typ
@@ -971,11 +986,13 @@ addArgumentAction (ParsedModule _ parsedSource _ _) range name _typ =
             let decl' = L locDecl (ValD xVal (FunBind xFunBind idFunBind mg' coreFunBind))
             pure [decl']
           decl -> pure [decl]
-    case runTransformT $ modifySmallestDeclWithM (`spanContainsRange` range) insertArg (makeDeltaAst parsedSource) of
-      Left err -> Left $ responseError ("Error when inserting argument: " <> T.pack err)
+    case runTransformT $ modifySmallestDeclWithM spanContainsRangeOrErr insertArg (makeDeltaAst parsedSource) of
+      Left err -> Left err
       Right (newSource, _, _) ->
         let diff = makeDiffTextEdit (T.pack $ exactPrint parsedSource) (T.pack $ exactPrint newSource)
          in pure [("Add argument ‘" <> name <> "’ to function", fromLspList diff)]
+      where
+        spanContainsRangeOrErr = maybeToEither (responseError "SrcSpan was not valid range") . (`spanContainsRange` range)
 #endif
 
 fromLspList :: List a -> [a]
