@@ -20,6 +20,10 @@ module Development.IDE.GHC.ExactPrint
       transform,
       transformM,
       ExactPrint(..),
+#if MIN_VERSION_ghc(9,2,1)
+      modifySmallestDeclWithM,
+      modifyMgMatchesT,
+#endif
 #if !MIN_VERSION_ghc(9,2,0)
       Anns,
       Annotate,
@@ -437,6 +441,41 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
             | locA src `eqSrcSpan` dst = DL.fromList decs <> DL.fromList rest
             | otherwise = DL.singleton (L src e) <> go rest
     modifyDeclsT (pure . DL.toList . go) a
+
+#if MIN_VERSION_ghc(9,2,1)
+
+-- | Replace the smallest declaration whose SrcSpan satisfies the given condition with a new
+-- list of declarations.
+--
+-- For example, if you would like to move a where-clause-defined variable to the same
+-- level as its parent HsDecl, you could use this function.
+modifySmallestDeclWithM ::
+  forall a m.
+  (HasDecls a, Monad m) =>
+  (SrcSpan -> m Bool) ->
+  (LHsDecl GhcPs -> TransformT m [LHsDecl GhcPs]) ->
+  a ->
+  TransformT m a
+modifySmallestDeclWithM validSpan f a = do
+  let modifyMatchingDecl [] = pure DL.empty
+      modifyMatchingDecl (e@(L src _) : rest) =
+        lift (validSpan $ locA src) >>= \case
+            True -> do
+              decs' <- f e
+              pure $ DL.fromList decs' <> DL.fromList rest
+            False -> (DL.singleton e <>) <$> modifyMatchingDecl rest
+  modifyDeclsT (fmap DL.toList . modifyMatchingDecl) a
+
+-- | Modify the each LMatch in a MatchGroup
+modifyMgMatchesT ::
+  Monad m =>
+  MatchGroup GhcPs (LHsExpr GhcPs) ->
+  (LMatch GhcPs (LHsExpr GhcPs) -> TransformT m (LMatch GhcPs (LHsExpr GhcPs))) ->
+  TransformT m (MatchGroup GhcPs (LHsExpr GhcPs))
+modifyMgMatchesT (MG xMg (L locMatches matches) originMg) f = do
+  matches' <- mapM f matches
+  pure $ MG xMg (L locMatches matches') originMg
+#endif
 
 graftSmallestDeclsWithM ::
     forall a.
