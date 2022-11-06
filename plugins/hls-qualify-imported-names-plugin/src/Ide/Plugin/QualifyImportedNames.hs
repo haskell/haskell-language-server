@@ -18,7 +18,7 @@ import qualified Data.HashMap.Strict               as HashMap
 import           Data.List                         (sortOn)
 import qualified Data.List                         as List
 import qualified Data.Map.Strict                   as Map
-import           Data.Maybe                        (mapMaybe)
+import           Data.Maybe                        (fromMaybe, mapMaybe)
 import           Data.Text                         (Text)
 import qualified Data.Text                         as Text
 import           Development.IDE                   (spanContainsRange)
@@ -93,7 +93,7 @@ findLImportDeclAt range parsedModule
   | ParsedModule {..} <- parsedModule
   , L _ hsModule <- pm_parsed_source
   , locatedImportDecls <- hsmodImports hsModule =
-      find (\ (L (locA -> srcSpan) _) -> srcSpan `spanContainsRange` range) locatedImportDecls
+      find (\ (L (locA -> srcSpan) _) -> fromMaybe False $ srcSpan `spanContainsRange` range) locatedImportDecls
 
 makeCodeActions :: Uri -> [TextEdit] -> [a |? CodeAction]
 makeCodeActions uri textEdits = [InR CodeAction {..} | not (null textEdits)]
@@ -129,7 +129,7 @@ data ImportedBy = ImportedBy {
 }
 
 isRangeWithinImportedBy :: Range -> ImportedBy -> Bool
-isRangeWithinImportedBy range (ImportedBy _ srcSpan) = spanContainsRange srcSpan range
+isRangeWithinImportedBy range (ImportedBy _ srcSpan) = fromMaybe False $ spanContainsRange srcSpan range
 
 globalRdrEnvToNameToImportedByMap :: GlobalRdrEnv -> NameEnv [ImportedBy]
 globalRdrEnvToNameToImportedByMap =
