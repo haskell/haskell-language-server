@@ -58,6 +58,7 @@ import           Test.Hls
 import           Control.Applicative                      (liftA2)
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
+import qualified Test.AddToWhere
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -319,7 +320,7 @@ codeActionTests = testGroup "code actions"
   , removeExportTests
 #if MIN_VERSION_ghc(9,2,1)
   , addFunctionArgumentTests
-  , addToWhereTests
+  , Test.AddToWhere.tests
 #endif
   ]
 
@@ -2381,37 +2382,7 @@ addToWhereTests :: TestTree
 addToWhereTests =
   testGroup
     "add to where"
-  [ testSession "insert new where" $ do
-      let foo =
-            [ "module Foo where"
-            , ""
-            , "bar = 1"
-            , ""
-            , "foo True = _select [True]"
-            ,  ""
-            , "foo False = False"
-            ]
-          foo' =
-            [ "module Foo where"
-            , ""
-            , "bar = 1"
-            , ""
-            , "foo True = _select [True]"
-            , "  where"
-            , "    _select = _"
-            , ""
-            , "foo False = False"
-            ]
-      docB <- createDoc "ModuleB.hs" "haskell" (T.unlines foo)
-      _ <- waitForDiagnostics
-      InR action@CodeAction { _title = actionTitle } : _
-                    <- filter (\(InR CodeAction{_title=x}) -> "Add to " `isPrefixOf` T.unpack x ) <$>
-                     getCodeActions docB (R 4 0 4 50)
-      liftIO $ actionTitle @?= "Add to where ‘_select’"
-      executeCodeAction action
-      contentAfterAction <- documentContents docB
-      liftIO $ contentAfterAction @?= T.unlines foo'
-  , testSession "simple" $ do
+  [ testSession "simple" $ do
       let foo =
             [ "module Foo where"
             , ""
