@@ -48,6 +48,7 @@ import           Development.IDE.GHC.Compat.Core          (Extension (NamedField
                                                            Pat (..),
                                                            conPatDetails,
                                                            hfbPun, hs_valds,
+                                                           mapConPatDetail,
                                                            mapLoc)
 import           Development.IDE.GHC.Util                 (getExtensions,
                                                            printOutputable)
@@ -88,11 +89,13 @@ import qualified Language.LSP.Types.Lens                  as L
 data Log
   = LogShake Shake.Log
   | LogCollectedRecords [RecordInfo]
+  | LogRenderedRecords [RenderedRecordInfo]
 
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
     LogCollectedRecords recs -> "Collected records with wildcards:" <+> pretty recs
+    LogRenderedRecords recs -> "Rendered records:" <+> pretty recs
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
@@ -152,6 +155,7 @@ collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
   logWith recorder Debug (LogCollectedRecords recs)
   let renderedRecs = traverse renderRecordInfo recs
       recMap = buildIntervalMap <$> renderedRecs
+  logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
   pure ([], CRR <$> recMap <*> exts)
   where
     getEnabledExtensions :: TcModuleResult -> [GhcExtension]
@@ -233,10 +237,9 @@ preprocessRecord flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
     rec_flds' = no_puns <> puns'
 
 showRecordPat :: Outputable (Pat (GhcPass c)) => Pat (GhcPass c) -> Maybe Text
-showRecordPat pat@(conPatDetails -> Just (RecCon flds)) =
-  Just $ printOutputable $
-    pat { pat_args = RecCon (preprocessRecord flds) }
-showRecordPat _ = Nothing
+showRecordPat = fmap printOutputable . mapConPatDetail (\case
+  RecCon flds -> Just $ RecCon (preprocessRecord flds)
+  _           -> Nothing)
 
 showRecordCon :: Outputable (HsExpr (GhcPass c)) => HsExpr (GhcPass c) -> Maybe Text
 showRecordCon expr@(RecordCon _ _ flds) =

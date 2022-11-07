@@ -131,6 +131,7 @@ module Development.IDE.GHC.Compat.Core (
     pattern FunTy,
     pattern ConPatIn,
     conPatDetails,
+    mapConPatDetail,
 #if !MIN_VERSION_ghc(9,2,0)
     Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
 #endif
@@ -963,6 +964,16 @@ conPatDetails _ = Nothing
 conPatDetails (ConPatIn _ args) = Just args
 conPatDetails _ = Nothing
 #endif
+
+mapConPatDetail :: (HsConPatDetails p -> Maybe (HsConPatDetails p)) -> Pat p -> Maybe (Pat p)
+#if MIN_VERSION_ghc(9,0,0)
+mapConPatDetail f pat@(ConPat _ _ args) = (\args' -> pat { pat_args = args'}) <$> f args
+mapConPatDetail _ _ = Nothing
+#else
+mapConPatDetail f (ConPatIn ss args) = ConPatIn ss <$> f args
+mapConPatDetail _ _ = Nothing
+#endif
+
 
 initDynLinker, initObjLinker :: HscEnv -> IO ()
 initDynLinker =
