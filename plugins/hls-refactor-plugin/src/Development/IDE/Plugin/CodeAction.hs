@@ -1030,7 +1030,6 @@ addToWhere (ParsedModule _ parsedSource _ _) range name _typ = bimap traceShowId
                       noLocA (Match newDeclMatchAnn (FunRhs (mkUnqual name) Prefix SrcStrict) [] grhss)
                     newDeclMg = MG NoExtField (L (noAnnSrcSpanDP0 declMatchSrcSpan) [newDeclMatch]) Generated
                     newDecl = (FunBind NoExtField (mkUnqual name) newDeclMg [])
-                traceShowM "tag1"
                 prependDeclToWhereDecls match (noLocA newDecl)
               else pure match
           let decl' = L locDecl (ValD xVal (FunBind xFunBind idFunBind mg' coreFunBind))

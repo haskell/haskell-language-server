@@ -2380,8 +2380,8 @@ addFunctionArgumentTests =
 addToWhereTests :: TestTree
 addToWhereTests =
   testGroup
-    "add_to_where"
-  [ testSession "insert_new_where" $ do
+    "add to where"
+  [ testSession "insert new where" $ do
       let foo =
             [ "module Foo where"
             , ""

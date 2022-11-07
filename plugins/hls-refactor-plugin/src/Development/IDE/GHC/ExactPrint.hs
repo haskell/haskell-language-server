@@ -514,11 +514,8 @@ insertAtStart' old newDecl = do
     insertDeclAtStart _ d ds = d : ds
 
 prependDeclToWhereDecls decl newWhereDecl = do
-  traceShowM "tag2"
   ds <- balanceCommentsList =<< hsDecls decl
-  traceShowM "tag3"
   let ds' = prependDecl (wrapDecl newWhereDecl) ds
-  traceShowM "tag4"
   replaceDecls decl ds'
 
 prependDecl :: LHsDecl GhcPs -> [LHsDecl GhcPs] -> [LHsDecl GhcPs]
@@ -559,8 +556,8 @@ prependDecl ldecl = \case
          (L (SrcSpanAnn (EpAnn (Anchor d1Rss d1AncOp) d1Ann epaCs@(EpaCommentsBalanced [] _)) ss) d1) ->
            let ld1' = L (SrcSpanAnn (EpAnn (Anchor d1Rss $ MovedAnchor $ DifferentLine 1 0) d1Ann epaCs) ss) d1
            in (d1AncOp, ld1')
-         L (SrcSpanAnn EpAnnNotUsed _) _ -> trace "tag6" error "Unexpected EpAnnNotUsed"
-       ldecl' = setEntryDP ldecl (maybe (trace "tag7" error "what to do with UnchangedAnchor?") id $ getAnchorOpDp ancOp)
+         L (SrcSpanAnn EpAnnNotUsed _) _ -> error "Unexpected EpAnnNotUsed"
+       ldecl' = setEntryDP ldecl (maybe (error "what to do with UnchangedAnchor?") id $ getAnchorOpDp ancOp)
 
 setAnchorDp :: Anchor -> DeltaPos -> Anchor
 setAnchorDp (Anchor rss _) dp = Anchor rss (MovedAnchor dp)
