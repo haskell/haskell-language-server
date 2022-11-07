@@ -20,7 +20,8 @@ import           Data.List.Extra
 
 tests = testGroup "add to where" [
         mkGoldenAddArgTest "InsertNewWhere" (R 0 0 0 50),
-        mkGoldenAddArgTest "PrependWhereDecls" (R 0 0 0 50)
+        mkGoldenAddArgTest "PrependWhereDecls" (R 0 0 0 50),
+        mkGoldenAddArgTest "PrependWhereDeclsComplex" (R 0 0 0 50)
   ]
 
 mkGoldenAddArgTest :: FilePath -> Range -> TestTree
