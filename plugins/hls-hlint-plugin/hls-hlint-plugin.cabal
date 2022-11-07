@@ -47,7 +47,7 @@ library
     , ghc-exactprint        >=0.6.3.4
     , ghcide                ^>=1.8
     , hashable
-    , hlint                 < 3.5
+    , hlint                 < 3.6
     , hls-plugin-api        ^>=1.5
     , hslogger
     , lens
