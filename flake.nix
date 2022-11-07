@@ -356,6 +356,10 @@
 
             src = null;
           };
+
+        mkEnvShell = hpkgs:
+          pkgs.lib.mapAttrs (name: value: hpkgs.${name}.env) pkgs.hlsSources;
+
         # Create a hls executable
         # Copied from https://github.com/NixOS/nixpkgs/blob/210784b7c8f3d926b7db73bdad085f4dc5d79428/pkgs/development/tools/haskell/haskell-language-server/withWrapper.nix#L16
         mkExe = hpkgs:
@@ -388,6 +392,15 @@
           haskell-language-server-942-dev-nix = mkDevShellWithNixDeps ghc942 "cabal.project";
         };
 
+        # The default shell provided by Nixpkgs for a Haskell package (i.e. the
+        # one that comes in the `.env` attribute)
+        envShells = {
+          haskell-language-server-dev-env = mkEnvShell ghcDefault;
+          haskell-language-server-902-dev-env = mkEnvShell ghc902;
+          haskell-language-server-924-dev-env = mkEnvShell ghc924;
+          haskell-language-server-942-dev-env = mkEnvShell ghc942;
+        };
+
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-902 = mkExe ghc902;
@@ -395,7 +408,7 @@
           haskell-language-server-942 = mkExe ghc942;
         };
 
-        devShells = simpleDevShells // nixDevShells // {
+        devShells = simpleDevShells // nixDevShells // envShells // {
           default = simpleDevShells.haskell-language-server-dev;
         };
 
