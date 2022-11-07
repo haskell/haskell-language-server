@@ -513,6 +513,7 @@ insertAtStart' old newDecl = do
       in newDecl' : secondDecl' : ds
     insertDeclAtStart _ d ds = d : ds
 
+prependDeclToWhereDecls :: (Monad m, HasDecls b) => b -> LHsBindLR GhcPs GhcPs -> TransformT m b
 prependDeclToWhereDecls decl newWhereDecl = do
   ds <- balanceCommentsList =<< hsDecls decl
   let ds' = prependDecl (wrapDecl newWhereDecl) ds

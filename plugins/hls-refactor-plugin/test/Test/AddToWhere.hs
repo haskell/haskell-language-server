@@ -17,15 +17,17 @@ import qualified Development.IDE.Plugin.CodeAction        as Refactor
 import Test.Hls
 
 import           Data.List.Extra
+import System.FilePath
 
 tests = testGroup "add to where" [
         mkGoldenAddArgTest "InsertNewWhere" (R 0 0 0 50),
         mkGoldenAddArgTest "PrependWhereDecls" (R 0 0 0 50),
-        mkGoldenAddArgTest "PrependWhereDeclsComplex" (R 0 0 0 50)
+        mkGoldenAddArgTest "PrependWhereDeclsComplex" (R 0 0 0 50),
+        mkGoldenAddArgTest "PrependWhereDeclsComplex" (R 6 0 6 50)
   ]
 
 mkGoldenAddArgTest :: FilePath -> Range -> TestTree
-mkGoldenAddArgTest testFileName range = do
+mkGoldenAddArgTest testFileName range@(Range (Position sl sc) (Position el ec)) = do
     let action docB = do
           _ <- waitForDiagnostics
           InR action@CodeAction {_title = actionTitle} : _ <-
@@ -33,12 +35,13 @@ mkGoldenAddArgTest testFileName range = do
               <$> getCodeActions docB range
           liftIO $ actionTitle @?= "Add to where ‘new_def’"
           executeCodeAction action
+        rangeName = show sl <> "_" <> show sc <> "_" <> show el <> "_" <> show ec
     goldenWithHaskellDoc
       (Refactor.bindingsPluginDescriptor mempty "ghcide-code-actions-bindings")
-      (testFileName <> " (golden)")
+      (testFileName <> " " <> rangeName <> " (golden)")
       "test/data/golden/add_to_where"
       testFileName
-      "expected"
+      (rangeName <.> "expected")
       "hs"
       action
 
