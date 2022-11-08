@@ -556,24 +556,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 
           lies' = addCommaInImportList (reverse pre) x
 #endif
-
-{-
-
-      srcHiding <- uniqueSrcSpanT
-      let ann_94 = noAnnSrcSpanDP0 srcHiding
-          ann_94' = flip (fmap.fmap) ann_94 $ \x -> x
-              {al_rest = [AddEpAnn AnnHiding (epl 1)]
-              ,al_open = Just $ AddEpAnn AnnOpenP (epl 1)
-              ,al_close = Just $ AddEpAnn AnnCloseP (epl 0)
-              }
-
-      -- let l_94 = noSrcSpanA { ann = addAnns mempty [AddEpAnn AnnCloseP (epl 0)] emptyComments }
-           -- l'
-      return $ L l it{ideclHiding = Just (hide, L ann_94' lies')}
-
--}
       return $ L l it{ideclHiding = Just (hide, L l' lies')}
-
 extendImportViaParent _ _ _ _ = lift $ Left "Unable to extend the import list via parent"
 
 #if MIN_VERSION_ghc(9,2,0)
