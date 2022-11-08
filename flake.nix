@@ -75,10 +75,6 @@
       url = "https://hackage.haskell.org/package/brittany-0.13.1.2/brittany-0.13.1.2.tar.gz";
       flake = false;
     };
-    hlint = {
-      url = "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz";
-      flake = false;
-    };
     hlint-341 = {
       url = "https://hackage.haskell.org/package/hlint-3.4.1/hlint-3.4.1.tar.gz";
       flake = false;
