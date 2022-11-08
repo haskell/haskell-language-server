@@ -19,6 +19,7 @@ case "${TARBALL_EXT}" in
     tar.xz)
 		emake --version
 		HLS_VERSION="$(emake -s -C out/bindist/haskell-language-server-* version)"
+		emake TARBALL="${TARBALL_PREFIX}-${HLS_VERSION}-${TARBALL_ARCHIVE_SUFFIX}.tar.xz" bindist
 		emake TARBALL="${TARBALL_PREFIX}-${HLS_VERSION}-${TARBALL_ARCHIVE_SUFFIX}.tar.xz" bindist-tar
 		rm -rf out/bindist
         ;;

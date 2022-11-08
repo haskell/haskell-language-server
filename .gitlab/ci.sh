@@ -28,18 +28,13 @@ export BOOTSTRAP_HASKELL_NONINTERACTIVE=1
 export BOOTSTRAP_HASKELL_GHC_VERSION="${GHC_VERSION:-recommended}"
 export BOOTSTRAP_HASKELL_CABAL_VERSION="$CABAL_INSTALL_VERSION"
 export BOOTSTRAP_HASKELL_VERBOSE=1
+export BOOTSTRAP_HASKELL_INSTALL_NO_STACK=1
 export BOOTSTRAP_HASKELL_ADJUST_CABAL_CONFIG=yes
 
 # for some reason the subshell doesn't pick up the arm64 environment on darwin
 # and starts installing x86_64 GHC
 case "$(uname -s)" in
     "Darwin"|"darwin")
-        nix build -f $CI_PROJECT_DIR/.gitlab/darwin/toolchain.nix --argstr system "$NIX_SYSTEM" -o toolchain.sh
-        cat toolchain.sh
-        source toolchain.sh
-        # Precautious since we want to use ghc from ghcup
-        unset MACOSX_DEPLOYMENT_TARGET
-        unset GHC
         case "$(/usr/bin/arch)" in
             aarch64|arm64|armv8l)
                 curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | arch -arm64 /bin/bash
@@ -90,8 +85,8 @@ case "$(uname)" in
     *)
         sed -i.bak -e '/DELETE MARKER FOR CI/,/END DELETE/d' cabal.project # see comment in cabal.project
         emake --version
-        emake GHCUP=ghcup hls
-        emake GHCUP=ghcup bindist
+        emake GHCUP=ghcup hls-ghc
+        emake GHCUP=ghcup bindist-ghc
         rm -rf out/*.*.*
         ;;
 esac

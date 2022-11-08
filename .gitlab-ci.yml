@@ -11,19 +11,17 @@ variables:
 
   CABAL_INSTALL_VERSION: 3.8.1.0
 
-.windows_matrix: &windows_matrix
+.matrix: &matrix
   matrix:
     - GHC_VERSION: 8.10.7
       CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.0.2
       CABAL_PROJECT: cabal.project
-    - GHC_VERSION: 9.2.3
-      CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.2.4
       CABAL_PROJECT: cabal.project
-    - GHC_VERSION: 9.4.1
-      CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.4.2
+      CABAL_PROJECT: cabal.project
+    - GHC_VERSION: 9.4.3
       CABAL_PROJECT: cabal.project
 
 workflow:
@@ -49,6 +47,7 @@ workflow:
 .build:
   extends: .artifacts:short
   stage: build
+  parallel: *matrix
   script:
     - bash .gitlab/ci.sh
 
@@ -514,8 +513,6 @@ build-x86_64-darwin:
     NIX_SYSTEM: x86_64-darwin
   script: |
     /bin/bash ./.gitlab/ci.sh
-  after_script:
-    - rm -Rf /private/tmp/.brew_tmp
 
 tar-x86_64-darwin:
   extends: .artifacts
@@ -525,8 +522,6 @@ tar-x86_64-darwin:
     - x86_64-darwin
   script: |
     /bin/bash ./.gitlab/tar.sh
-  after_script:
-    - rm -Rf /private/tmp/.brew_tmp
   variables:
     TARBALL_ARCHIVE_SUFFIX: x86_64-apple-darwin
     TARBALL_EXT: tar.xz
@@ -539,8 +534,6 @@ test-x86_64-darwin:
     - x86_64-darwin
   script: |
     /bin/bash .gitlab/test.sh
-  after_script:
-    - rm -Rf /private/tmp/.brew_tmp
 
 
 ######################
@@ -554,8 +547,6 @@ build-aarch64-darwin:
     - aarch64-darwin-m1
   script: |
     arch -arm64 /bin/bash ./.gitlab/ci.sh
-  after_script:
-    - rm -Rf /private/tmp/.brew_tmp
   variables:
     MACOSX_DEPLOYMENT_TARGET: "10.7"
     ADD_CABAL_ARGS: ""
@@ -581,8 +572,6 @@ test-aarch64-darwin:
     - aarch64-darwin-m1
   script: |
     arch -arm64 /bin/bash ./.gitlab/test.sh
-  after_script:
-    - rm -Rf /private/tmp/.brew_tmp
 
 
 ######################
@@ -593,7 +582,6 @@ build-x86_64-windows:
   extends: .build
   tags:
     - new-x86_64-windows
-  parallel: *windows_matrix
   script:
     - $env:CHERE_INVOKING = "yes"
     - bash '-lc' "ADD_CABAL_ARGS=$env:ADD_CABAL_ARGS GHC_VERSION=$env:GHC_VERSION CABAL_INSTALL_VERSION=$CABAL_INSTALL_VERSION .gitlab/ci.sh"
