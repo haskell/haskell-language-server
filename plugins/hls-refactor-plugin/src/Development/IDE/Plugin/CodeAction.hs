@@ -98,6 +98,7 @@ import           Language.Haskell.GHC.ExactPrint                   (noAnnSrcSpan
                                                                     runTransformT)
 #endif
 #if MIN_VERSION_ghc(9,2,0)
+import           Control.Monad.Except                              (lift)
 import           Debug.Trace
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
@@ -117,7 +118,6 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     noAnn)
 import           GHC.Hs                                            (IsUnicodeSyntax (..))
 import           Language.Haskell.GHC.ExactPrint.Transform         (d1)
-import Control.Monad.Except (lift)
 
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
@@ -983,7 +983,7 @@ suggestAddArgument parsedModule Diagnostic {_message, _range}
     message = unifySpaces _message
 
 -- Given a name for the new binding, add a new pattern to the match in the last position,
--- returning how many patterns are in this match:
+-- returning how many patterns there were in this match prior to the transformation:
 --      addArgToMatch "foo" `bar arg1 arg2 = ...`
 --   => (`bar arg1 arg2 foo = ...`, 2)
 addArgToMatch :: T.Text -> GenLocated l (Match GhcPs body) -> (GenLocated l (Match GhcPs body), Int)
@@ -992,9 +992,12 @@ addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
       newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
   in (L locMatch (Match xMatch ctxMatch (pats <> [newPat]) rhs), length pats)
 
--- Attempt to insert a binding pattern into each match for the given LHsDecl. Also return the declaration's name, and
--- the number of bound patterns in the declaration's matches, if the HsDecl is a fun bind
+-- Attempt to insert a binding pattern into each match for the given LHsDecl; succeeds only if the function is a FunBind.
+-- Also return:
+--   - the declaration's name
+--   - the number of bound patterns in the declaration's matches prior to the transformation
 --
+-- For example:
 --    insertArg "new_pat" `foo bar baz = 1`
 -- => (`foo bar baz new_pat = 1`, Just ("foo", 2))
 appendFinalPatToMatches :: T.Text -> LHsDecl GhcPs -> TransformT (Either ResponseError) (LHsDecl GhcPs, Maybe (GenLocated SrcSpanAnnN RdrName, Int))

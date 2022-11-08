@@ -459,6 +459,9 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
 --
 -- For example, if you would like to move a where-clause-defined variable to the same
 -- level as its parent HsDecl, you could use this function.
+--
+-- When matching declaration is found in the sub-declarations of `a`, `Just r` is also returned with the new `a`. If
+-- not declaration matched, then `Nothing` is returned.
 modifySmallestDeclWithM ::
   forall a m r.
   (HasDecls a, Monad m) =>
@@ -559,7 +562,7 @@ modifyDeclsT' action t = do
   t' <- liftT $ replaceDecls t decls'
   pure (t', r)
 
--- | Modify the each LMatch in a MatchGroup
+-- | Modify each LMatch in a MatchGroup
 modifyMgMatchesT ::
   Monad m =>
   MatchGroup GhcPs (LHsExpr GhcPs) ->
