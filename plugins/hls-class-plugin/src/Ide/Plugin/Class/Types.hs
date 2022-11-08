@@ -68,7 +68,7 @@ data Log
 instance Pretty Log where
   pretty = \case
     LogImplementedMethods cls methods ->
-      pretty ("Detected implmented methods for class" :: String)
+      pretty ("Detected implemented methods for class" :: String)
         <+> pretty (show (getOccString cls) <> ":") -- 'show' is used here to add quotes around the class name
         <+> pretty methods
     LogShake log -> pretty log

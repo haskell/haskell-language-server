@@ -59,8 +59,8 @@ heapStatsThread l = forever $ do
   threadDelay heapStatsInterval
   logHeapStats l
 
--- | A helper function which lauches the 'heapStatsThread' and kills it
--- appropiately when the inner action finishes. It also checks to see
+-- | A helper function which launches the 'heapStatsThread' and kills it
+-- appropriately when the inner action finishes. It also checks to see
 -- if `-T` is enabled.
 withHeapStats :: Recorder (WithPriority Log) -> IO r -> IO r
 withHeapStats l k = do

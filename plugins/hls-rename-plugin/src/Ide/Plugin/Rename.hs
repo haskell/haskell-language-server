@@ -176,7 +176,7 @@ replaceRefs newName refs = everywhere $ mkT replaceLoc
 ---------------------------------------------------------------------------------------------------
 -- Reference finding
 
--- | Note: We only find exact name occurences (i.e. type reference "depth" is 0).
+-- | Note: We only find exact name occurrences (i.e. type reference "depth" is 0).
 refsAtName ::
     MonadIO m =>
     IdeState ->

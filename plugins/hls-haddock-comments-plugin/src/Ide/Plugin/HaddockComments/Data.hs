@@ -47,10 +47,10 @@ addHaddockCommentsToList
     :: (Data a, Monad m)
     => Bool -- ^ If true, for each node, use previous node in the list as the anchor. Otherwise, use the outer node
     -> SrcSpan -- ^ The outer node
-    -> KeywordId -- ^ The seperator between adjacent nodes
+    -> KeywordId -- ^ The separator between adjacent nodes
     -> [Located a] -- ^ The list of nodes. Haddock comments will be added to each of them
     -> TransformT m ()
-addHaddockCommentsToList usePrevNodeAsAnchor outerLoc seperator nodes =
+addHaddockCommentsToList usePrevNodeAsAnchor outerLoc separator nodes =
     -- If you want to understand this function, please first read this page carefully:
     --     https://hackage.haskell.org/package/ghc-exactprint-0.6.4/docs/Language-Haskell-GHC-ExactPrint-Delta.html
     -- The important part is that for DP(r,c), if r is zero, c is the offset start from the end of the previous node.
@@ -71,23 +71,23 @@ addHaddockCommentsToList usePrevNodeAsAnchor outerLoc seperator nodes =
             -- For the multiline case (which is the most common), we keep the original indentation of each constructor
             -- and field.
             --
-            -- For the inline case, we use the first construcotr/field as the base, and align all following items
+            -- For the inline case, we use the first constructor/field as the base, and align all following items
             -- to them.
             let sameLineAsPrev = prevNode >>= (
-                    \prevNode' -> if notSeperatedByLineEnding prevNode' node
+                    \prevNode' -> if notSeparatedByLineEnding prevNode' node
                         then pure prevNode'
                         else Nothing
                     )
-            -- For the inline case, we need to move the seperator to the next line.
+            -- For the inline case, we need to move the separator to the next line.
             -- For constructors, it's vertical bar; for fields, it's comma.
-            -- The seperator is passed in as function argument.
+            -- The separator is passed in as function argument.
             when (isJust sameLineAsPrev) $ modifyAnnsT $ \anns ->
                 let newSepCol :: Annotation -> Int
                     newSepCol ann =
                         if usePrevNodeAsAnchor then 0 else deltaColumn (annEntryDelta ann)
                     updateSepAnn :: Annotation -> Annotation
                     updateSepAnn ann = ann {annsDP =
-                        Map.toList . Map.adjust (const $ DP (1, newSepCol ann)) seperator . Map.fromList $ annsDP ann}
+                        Map.toList . Map.adjust (const $ DP (1, newSepCol ann)) separator . Map.fromList $ annsDP ann}
                  in flip (maybe anns) prevNode $ \prevNode' -> Map.adjust updateSepAnn (mkAnnKey prevNode') anns
             -- Calculate the real column of the anchor
             let anchorCol = maybe 0 srcSpanStartCol . realSpan . maybe outerLoc getLoc $
@@ -110,7 +110,7 @@ addHaddockCommentsToList usePrevNodeAsAnchor outerLoc seperator nodes =
                 let updateCurrent :: Annotation -> Annotation
                     updateCurrent ann = ann {
                             -- If there exist non-haddock comments, we simply inherit the first one's delta pos,
-                            -- and move them two lines below, to seperate them from our newly added haddock comments
+                            -- and move them two lines below, to separate them from our newly added haddock comments
                             -- Otherwise, inherit the node's entry delta pos.
                             annPriorComments = case annPriorComments ann of
                                 (c, dp) : rem -> (emptyPriorHaddockComment, dp) : (c, DP (2,0)) : rem
@@ -127,12 +127,12 @@ missingSomeHaddock anns = any $ \lcon@(L _ conDecl) -> case conDecl of
     _                                       -> False -- GADT is not supported yet
 
 -- | Returns 'True' if the end of the first node and the start of the second node are on the same line.
-notSeperatedByLineEnding :: Located a
+notSeparatedByLineEnding :: Located a
                          -> Located a
                          -> Bool
-notSeperatedByLineEnding (L (RealSrcSpan x _) _) (L (RealSrcSpan y _) _) =
+notSeparatedByLineEnding (L (RealSrcSpan x _) _) (L (RealSrcSpan y _) _) =
     srcLocLine (realSrcSpanEnd x) == srcLocLine (realSrcSpanStart y)
-notSeperatedByLineEnding _ _ = False
+notSeparatedByLineEnding _ _ = False
 
 -- | Empty haddock, suitable for being added to 'annPriorComments'
 emptyPriorHaddockComment :: Comment

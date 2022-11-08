@@ -319,7 +319,7 @@ getNeedsSpaceAndParenthesize ::
 getNeedsSpaceAndParenthesize dst a =
   -- Traverse the tree, looking for our replacement node. But keep track of
   -- the context (parent HsExpr constructor) we're in while we do it. This
-  -- lets us determine wehther or not we need parentheses.
+  -- lets us determine whether or not we need parentheses.
   let (needs_parens, needs_space) =
           everythingWithContext (Nothing, Nothing) (<>)
             ( mkQ (mempty, ) $ \x s -> case x of

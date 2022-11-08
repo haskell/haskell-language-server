@@ -206,7 +206,7 @@ running  `collapse` will produce:
 arguments: single reference.  
 deterministic.
 
-> Use the given data cosntructor.
+> Use the given data constructor.
 
 
 ### Example
@@ -254,7 +254,7 @@ case a of
 arguments: none.  
 deterministic.
 
-> Pattern match on every function paramater, in original binding order.
+> Pattern match on every function parameter, in original binding order.
 
 
 ### Example
@@ -358,7 +358,7 @@ running  `intro aye` will produce:
 
 ## intros
 
-arguments: varadic binding.  
+arguments: variadic binding.  
 deterministic.
 
 > Construct a lambda expression, using the specific names if given, generating unique names otherwise. When no arguments are given, all of the function arguments will be bound; otherwise, this tactic will bind only enough to saturate the given names. Extra names are ignored.
@@ -408,7 +408,7 @@ running  `intros x y z w` will produce:
 
 ## let
 
-arguments: varadic binding.  
+arguments: variadic binding.  
 deterministic.
 
 > Create let-bindings for each binder given to this tactic.

@@ -222,7 +222,7 @@ destruct' use_field_puns f hi jdg = do
 
 
 ------------------------------------------------------------------------------
--- | Combinator for performign case splitting, and running sub-rules on the
+-- | Combinator for performing case splitting, and running sub-rules on the
 -- resulting matches.
 destructLambdaCase' :: Bool -> (ConLike -> Judgement -> Rule) -> Judgement -> Rule
 destructLambdaCase' use_field_puns f jdg = do
