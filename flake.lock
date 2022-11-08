@@ -29,6 +29,23 @@
         "type": "github"
       }
     },
+    "apply-refact": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1666418383,
+        "narHash": "sha256-a/qTzS1dgDfjT1vnOkaMHegKtBo6F1j3q62HY8g0V/Y=",
+        "owner": "July541",
+        "repo": "apply-refact",
+        "rev": "1943b3848e10f9824806c4a3a286fcaec22b4bb8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "July541",
+        "ref": "ghc-9.4",
+        "repo": "apply-refact",
+        "type": "github"
+      }
+    },
     "brittany-01312": {
       "flake": false,
       "locked": {
@@ -244,6 +261,18 @@
         "url": "https://hackage.haskell.org/package/hw-prim-0.6.3.2/hw-prim-0.6.3.2.tar.gz"
       }
     },
+    "hlint-35": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-qQNUlQQnahUGEO92Lm0RwjTGBGr2Yaw0KRuFRMoc5No=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hlint-3.5/hlint-3.5.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hlint-3.5/hlint-3.5.tar.gz"
+      }
+    },
     "implicit-hie-cradle": {
       "flake": false,
       "locked": {
@@ -353,6 +382,7 @@
       "inputs": {
         "aeson-1520": "aeson-1520",
         "all-cabal-hashes-unpacked": "all-cabal-hashes-unpacked",
+        "apply-refact": "apply-refact",
         "brittany-01312": "brittany-01312",
         "constraints-extras": "constraints-extras",
         "entropy": "entropy",
@@ -370,6 +400,7 @@
         "hlint": "hlint",
         "hlint-34": "hlint-34",
         "hw-prim": "hw-prim",
+        "hlint-35": "hlint-35",
         "implicit-hie-cradle": "implicit-hie-cradle",
         "lsp": "lsp",
         "lsp-test": "lsp-test",

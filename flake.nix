@@ -91,6 +91,10 @@
       url = "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz";
       flake = false;
     };
+    hlint-35 = {
+      url = "https://hackage.haskell.org/package/hlint-3.5/hlint-3.5.tar.gz";
+      flake = false;
+    };
     ptr-poker = {
       url = "https://hackage.haskell.org/package/ptr-poker-0.1.2.8/ptr-poker-0.1.2.8.tar.gz";
       flake = false;
@@ -117,6 +121,10 @@
     };
     hw-prim = {
       url = "https://hackage.haskell.org/package/hw-prim-0.6.3.2/hw-prim-0.6.3.2.tar.gz";
+      flake = false;
+    };
+    apply-refact = {
+      url = "github:July541/apply-refact/ghc-9.4";
       flake = false;
     };
   };
@@ -194,6 +202,7 @@
               retrie = hsuper.callCabal2nix "retrie" inputs.retrie {};
               retrieHEAD = hsuper.callCabal2nix "retrie" inputs.retrie {};
               retrie_1_1_0_0 = hsuper.callCabal2nix "retrie" inputs.retrie_1100 {};
+              apply-refact = hsuper.callCabal2nix "apply-refact" inputs.apply-refact {};
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.implicit-hie-cradle {};
               ghc-check = hself.callCabal2nix "ghc-check" inputs.ghc-check {};
