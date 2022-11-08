@@ -21,8 +21,6 @@ pkgs.writeTextFile {
     PATH="${pkgs.autoconf}/bin:$PATH"
     PATH="${pkgs.automake}/bin:$PATH"
     PATH="${pkgs.tree}/bin:$PATH"
-    PATH="${pkgs.tar}/bin:$PATH"
-    export FONTCONFIG_FILE=${fonts}
     export HAPPY="${happy}/bin/happy"
     export ALEX="${alex}/bin/alex"
     export LLC="${llvm}/bin/llc"
