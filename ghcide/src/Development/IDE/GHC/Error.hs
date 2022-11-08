@@ -24,6 +24,7 @@ module Development.IDE.GHC.Error
   , zeroSpan
   , realSpan
   , isInsideSrcSpan
+  , spanContainsRange
   , noSpan
 
   -- * utilities working with severities
@@ -43,6 +44,7 @@ import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           GHC
+import           Language.LSP.Types                (isSubrangeOf)
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
@@ -118,6 +120,10 @@ isInsideSrcSpan :: Position -> SrcSpan -> Bool
 p `isInsideSrcSpan` r = case srcSpanToRange r of
   Just (Range sp ep) -> sp <= p && p <= ep
   _                  -> False
+
+-- Returns Nothing if the SrcSpan does not represent a valid range
+spanContainsRange :: SrcSpan -> Range -> Maybe Bool
+spanContainsRange srcSpan range = (range `isSubrangeOf`) <$> srcSpanToRange srcSpan
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).

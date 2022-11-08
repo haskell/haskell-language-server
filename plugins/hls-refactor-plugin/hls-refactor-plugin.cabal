@@ -113,6 +113,8 @@ test-suite tests
     , extra
     , text-rope
     , containers
+    -- ghc is included to enable the MIN_VERSION_ghc macro
+    , ghc
     , ghcide
     , ghcide-test-utils
     , shake

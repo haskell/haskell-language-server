@@ -271,6 +271,14 @@ Known Limitations:
 
 ![Link to Docs](../plugins/hls-change-type-signature-plugin/README.md)
 
+### Add argument to function
+
+Provided by: `hls-refactor-plugin`
+
+Code action kind: `quickfix`
+
+Add an undefined variable as an argument to the top-level binding.
+
 ### Convert to GADT syntax
 
 Provided by: `hls-gadt-plugin`
