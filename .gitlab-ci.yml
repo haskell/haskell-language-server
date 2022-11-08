@@ -511,10 +511,8 @@ build-x86_64-darwin:
     - x86_64-darwin
   variables:
     ADD_CABAL_ARGS: ""
-  before_script:
-    - /bin/bash ./.gitlab/brew.sh autoconf automake coreutils make tree
+    NIX_SYSTEM: x86_64-darwin
   script: |
-    export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     /bin/bash ./.gitlab/ci.sh
   after_script:
     - rm -Rf /private/tmp/.brew_tmp
@@ -525,26 +523,21 @@ tar-x86_64-darwin:
   needs: ["build-x86_64-darwin"]
   tags:
     - x86_64-darwin
-  before_script:
-    - /bin/bash ./.gitlab/brew.sh autoconf automake coreutils make tree
   script: |
-    export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     /bin/bash ./.gitlab/tar.sh
   after_script:
     - rm -Rf /private/tmp/.brew_tmp
   variables:
     TARBALL_ARCHIVE_SUFFIX: x86_64-apple-darwin
     TARBALL_EXT: tar.xz
+    NIX_SYSTEM: x86_64-darwin
 
 test-x86_64-darwin:
   extends: .test
   needs: ["tar-x86_64-darwin"]
   tags:
     - x86_64-darwin
-  before_script:
-    - /bin/bash ./.gitlab/brew.sh make tree
   script: |
-    export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     /bin/bash .gitlab/test.sh
   after_script:
     - rm -Rf /private/tmp/.brew_tmp
@@ -559,22 +552,14 @@ build-aarch64-darwin:
   stage: build
   tags:
     - aarch64-darwin-m1
-  before_script:
-    - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
-    - arch -arm64 /bin/bash ./.gitlab/brew.sh llvm autoconf automake coreutils make tree
   script: |
-    export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
-    export CC=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang
-    export CXX=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang++
-    export LD=ld
-    export AR=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ar
-    export RANLIB=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ranlib
     arch -arm64 /bin/bash ./.gitlab/ci.sh
   after_script:
     - rm -Rf /private/tmp/.brew_tmp
   variables:
     MACOSX_DEPLOYMENT_TARGET: "10.7"
     ADD_CABAL_ARGS: ""
+    NIX_SYSTEM: aarch64-darwin
 
 tar-aarch64-darwin:
   extends: .artifacts
@@ -587,17 +572,14 @@ tar-aarch64-darwin:
   variables:
     TARBALL_ARCHIVE_SUFFIX: aarch64-apple-darwin
     TARBALL_EXT: tar.xz
+    NIX_SYSTEM: aarch64-darwin
 
 test-aarch64-darwin:
   extends: .test
   needs: ["tar-aarch64-darwin"]
   tags:
     - aarch64-darwin-m1
-  before_script:
-    - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
-    - arch -arm64 /bin/bash ./.gitlab/brew.sh make tree
   script: |
-    export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     arch -arm64 /bin/bash ./.gitlab/test.sh
   after_script:
     - rm -Rf /private/tmp/.brew_tmp

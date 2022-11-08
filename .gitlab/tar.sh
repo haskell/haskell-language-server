@@ -3,6 +3,7 @@
 set -Eeuxo pipefail
 
 source "$CI_PROJECT_DIR/.gitlab/common.sh"
+source "$CI_PROJECT_DIR/.gitlab/setup.sh"
 
 ls -la out/
 
