@@ -49,8 +49,8 @@ test-suite tests
   hs-source-dirs:   test
   main-is:          Main.hs
   ghc-options:      -Wall -threaded -rtsopts -with-rtsopts=-N
-  build-tool-depends:
-    fourmolu:fourmolu
+  -- build-tool-depends:
+  --   fourmolu:fourmolu
   build-depends:
     , base
     , aeson
