@@ -195,17 +195,23 @@
           hlsSources =
             builtins.mapAttrs (_: dir: gitignoreSource dir) sourceDirs;
 
-          extended = hpkgs:
-            (hpkgs.override (old: {
-              overrides = lib.composeExtensions (old.overrides or (_: _: { }))
-                haskellOverrides;
-            })).extend (hself: hsuper:
-              # disable all checks for our packages
-              builtins.mapAttrs (_: drv: haskell.lib.dontCheck drv)
-              (lib.composeExtensions
-                (haskell.lib.packageSourceOverrides hlsSources) tweaks hself
-                hsuper));
+          # Disable tests, but only for the packages mentioned in this overlay
+          #
+          # We don't want to disable tests for *all* packages
+          dontCheck = overlay: hself: hsuper:
+            builtins.mapAttrs (_: haskell.lib.dontCheck)
+              (overlay hself hsuper);
 
+          extended = hpkgs: hpkgs.override (old: {
+            overrides =
+              lib.fold
+                lib.composeExtensions
+                (old.overrides or (_: _: { }))
+                [ haskellOverrides
+                  (dontCheck (haskell.lib.packageSourceOverrides hlsSources))
+                  tweaks
+                ];
+          });
         in {
           inherit hlsSources;
 
