@@ -25,8 +25,7 @@ let
       Cabal = hself.Cabal_3_6_3_0;
       ormolu = hself.ormolu_0_5_0_1;
       fourmolu = hself.fourmolu_0_8_2_0;
-      # Hlint is still broken
-      hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint-34 { });
+      hlint = appendConfigureFlag (hself.callCabal2nix "hlint" inputs.hlint-341 {}) "-fghc-lib";
 
       hls-hlint-plugin = hself.callCabal2nixWithOptions "hls-hlint-plugin"
         ./plugins/hls-hlint-plugin
@@ -39,7 +38,6 @@ let
         { };
 
       retrie = hself.retrie_1_1_0_0;
-      fourmolu = hself.fourmolu_0_8_2_0;
 
     });
 in {
