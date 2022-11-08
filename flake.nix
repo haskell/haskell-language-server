@@ -194,7 +194,7 @@
               retrie = hsuper.callCabal2nix "retrie" inputs.retrie {};
               retrieHEAD = hsuper.callCabal2nix "retrie" inputs.retrie {};
               retrie_1_1_0_0 = hsuper.callCabal2nix "retrie" inputs.retrie_1100 {};
-              apply-refact = hsuper.callCabal2nix "apply-refact" inputs.apply-refact {};
+              apply-refactHEAD = hsuper.callCabal2nix "apply-refact" inputs.apply-refact {};
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.implicit-hie-cradle {};
               ghc-check = hself.callCabal2nix "ghc-check" inputs.ghc-check {};

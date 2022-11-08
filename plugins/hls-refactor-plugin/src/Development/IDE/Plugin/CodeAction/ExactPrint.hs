@@ -49,6 +49,7 @@ import           GHC            (AddEpAnn (..), AnnContext (..), AnnList (..),
                                  NameAdornment (NameParens),
                                  TrailingAnn (AddCommaAnn), addAnns, ann,
                                  emptyComments, noSrcSpanA, reAnnL)
+import Language.Haskell.GHC.ExactPrint.ExactPrint      (makeDeltaAst, showAst)
 #else
 import           Control.Applicative                   (Alternative ((<|>)))
 import           Control.Monad.Extra                   (whenJust)
@@ -62,9 +63,6 @@ import           Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP),
                                                         KeywordId (G), mkAnnKey)
 #endif
 
-import Debug.Trace (trace)
-import GHC (EpaLocation (..))
-import Language.Haskell.GHC.ExactPrint.ExactPrint (makeDeltaAst, showAst)
 
 ------------------------------------------------------------------------------
 

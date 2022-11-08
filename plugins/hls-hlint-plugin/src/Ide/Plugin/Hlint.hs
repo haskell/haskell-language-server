@@ -69,7 +69,7 @@ import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      wopt)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 
-#if MIN_GHC_API_VERSION(9,2,0)
+#if MIN_GHC_API_VERSION(9,4,0)
 import qualified "ghc-lib-parser" GHC.Data.Strict                   as Strict
 #endif
 #if MIN_GHC_API_VERSION(9,0,0)

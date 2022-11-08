@@ -38,6 +38,7 @@ let
 
       #
       retrie = hself.retrieHEAD;
+      apply-refact = hself.apply-refactHEAD;
 
     });
 in {
