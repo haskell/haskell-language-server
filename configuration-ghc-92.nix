@@ -2,7 +2,6 @@
 
 let
   disabledPlugins = [
-    "hls-hlint-plugin"
     # That one is not technically a plugin, but by putting it in this list, we
     # get it removed from the top level list of requirement and it is not pull
     # in the nix shell.
@@ -26,8 +25,7 @@ let
 
       ghc-exactprint =
         hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-150 { };
-      # Hlint is still broken
-      hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint { });
+      hlint = appendConfigureFlag (hself.callCabal2nix "hlint" inputs.hlint-341 {}) "-fghc-lib";
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
@@ -38,7 +36,7 @@ let
 
       #
       retrie = hself.retrieHEAD;
-      apply-refact = hself.apply-refactHEAD;
+      fourmolu = hself.fourmolu_0_8_2_0;
 
     });
 in {

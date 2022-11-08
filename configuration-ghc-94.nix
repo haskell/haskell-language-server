@@ -25,7 +25,6 @@ let
 
       ghc-exactprint =
         hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-160 { };
-      # Hlint is still broken
       hlint = hsuper.callCabal2nix "hlint" inputs.hlint-35 {};
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
@@ -51,6 +50,7 @@ let
       #
       retrie = hself.retrieHEAD;
       apply-refact = hself.apply-refactHEAD;
+      fourmolu = hself.fourmoluHEAD;
 
     });
 in {

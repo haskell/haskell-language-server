@@ -79,8 +79,8 @@
       url = "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz";
       flake = false;
     };
-    hlint-34 = {
-      url = "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz";
+    hlint-341 = {
+      url = "https://hackage.haskell.org/package/hlint-3.4.1/hlint-3.4.1.tar.gz";
       flake = false;
     };
     hlint-35 = {
@@ -205,7 +205,7 @@
                 else hsuper.ormolu;
 
               # Fourmolu needs a handful of patches to build on GHC 9.4.
-              fourmolu =
+              fourmoluHEAD =
                 appendPatches
                 (doJailbreak (if final.system == "aarch64-darwin"
                               then overrideCabal hsuper.fourmolu_0_8_2_0 (_: { enableSeparateBinOutput = false; })

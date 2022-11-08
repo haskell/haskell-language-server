@@ -39,6 +39,7 @@ let
         { };
 
       retrie = hself.retrie_1_1_0_0;
+      fourmolu = hself.fourmolu_0_8_2_0;
 
     });
 in {
