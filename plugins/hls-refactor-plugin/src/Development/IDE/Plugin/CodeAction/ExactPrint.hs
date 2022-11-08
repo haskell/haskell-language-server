@@ -64,6 +64,8 @@ import           Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP),
 
 import Debug.Trace (trace)
 import GHC (EpaLocation (..))
+import Language.Haskell.GHC.ExactPrint.ExactPrint (makeDeltaAst, showAst)
+
 ------------------------------------------------------------------------------
 
 -- | Construct a 'Rewrite', replacing the node at the given 'SrcSpan' with the
@@ -352,8 +354,16 @@ extendImport mparent identifier lDecl@(L l _) =
   Rewrite (locA l) $ \df -> do
     case mparent of
       -- This will also work for `ImportAllConstructors`
+#if !MIN_VERSION_ghc(9,2,0)
       Just parent -> extendImportViaParent df parent identifier lDecl
       _           -> extendImportTopLevel identifier lDecl
+#else
+      -- Parsed source in GHC 9.4 uses absolute position annotation (RealSrcSpan),
+      -- while rewriting relies on relative positions. ghc-exactprint has the utility
+      -- makeDeltaAst for relativization.
+      Just parent -> extendImportViaParent df parent identifier (makeDeltaAst lDecl)
+      _           -> extendImportTopLevel identifier (makeDeltaAst lDecl)
+#endif
 
 -- | Add an identifier or a data type to import list. Expects a Delta AST
 --
@@ -466,65 +476,10 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
     -- ThingWith ie lies' => ThingWith ie (lies' ++ [child])
     | parent == unIEWrappedName ie
     , child == wildCardSymbol = do
-#if MIN_VERSION_ghc(9,4,0)
-        let insertDotdot ann =
-              trace ("ann size = " ++ show (Prelude.length ann)) $ goA [] ann
-              where
-                formatLoc (EpaSpan s) = "RealSrcSpan"
-                formatLoc (EpaDelta dp comm) = show (dp, comm)
-                goA ys [] = pure ys
-                goA ys (x@(AddEpAnn tag loc):xs) =
-                 trace ("x = " ++ show tag ++ ", " ++ formatLoc loc)
-                  $ case x of
-                    AddEpAnn AnnOpenP s -> goA (ys ++ [AddEpAnn AnnOpenP s]) xs
-                    AddEpAnn AnnCloseP _ -> goA (ys ++ [AddEpAnn AnnCloseP (epl 0), AddEpAnn AnnDotdot (epl 0)]) xs
-                    _ -> goA ys xs
-
-              --  (\ann -> [AddEpAnn AnnDotdot d0] ++ ann) <$> l''' -- l'''  -- (\ann -> [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnDotdot d0] ++ ann ++ [AddEpAnn AnnCloseP (epl 0)]) <$> l'''
-            -- newl = addAnns l''' [AddEpAnn AnnOpenP (epl 0), AddEpAnn AnnDotdot d0, AddEpAnn AnnCloseP (epl 0)] emptyComments
-            -- newl = addAnns mempty [AddEpAnn AnnOpenP (epl 0), AddEpAnn AnnDotdot d0, AddEpAnn AnnCloseP (epl 0)] emptyComments
-              -- addAnns l''' [AddEpAnn AnnOpenP (epl 0), AddEpAnn AnnDotdot d0, AddEpAnn AnnCloseP (epl 0)] emptyComments
-        let ann_ = anns l'''
-
-        ann_' <- insertDotdot ann_
-        --    ann_' = [AddEpAnn AnnOpenP (epl 0), AddEpAnn AnnDotdot d0, AddEpAnn AnnCloseP (epl 0)]
-        let newl = -- l''' --
-              l''' {anns = ann_'}
-            -- addAnns {- l''' -} mempty [AddEpAnn AnnOpenP (epl 0), AddEpAnn AnnDotdot d0, AddEpAnn AnnCloseP (epl 0)] emptyComments
-            -- (\ann -> [AddEpAnn AnnDotdot d0] ++ ann) <$> l''' --
-            -- ann_94 = l' -- noAnnSrcSpanDP0 srcHiding
-        let thing = IEThingAll newl twIE -- IEThingWith newl twIE (IEWildcard 2) []
-            ann_94' = flip (fmap.fmap) l' $ \x -> x
-                {al_open = Just $ AddEpAnn AnnOpenP (epl 0)
-                ,al_close = Just $ AddEpAnn AnnCloseP (epl 0)
-                }
-            lies = L ann_94' $ reverse pre ++ [L l'' thing] ++ xs
-            it' = it{ideclHiding = Just (hide, lies)}
-
-        return $ L l it'
-#elif MIN_VERSION_ghc(9,2,0)
-        -- experiment
-        let insertDotdot ann =
-              trace ("ann size = " ++ show (Prelude.length ann)) $ goA [] ann
-              where
-                formatLoc (EpaSpan s) = "RealSrcSpan"
-                formatLoc (EpaDelta dp comm) = show dp -- , (unLoc comm))
-                goA ys [] = pure ys
-                goA ys (x@(AddEpAnn tag loc):xs) =
-                 trace ("x = " ++ show tag ++ ", " ++ formatLoc loc)
-                  $ case x of
-                    AddEpAnn AnnOpenP s -> goA (ys ++ [AddEpAnn AnnOpenP s]) xs
-                    AddEpAnn AnnCloseP _ -> goA (ys ++ [AddEpAnn AnnCloseP (epl 0), AddEpAnn AnnDotdot (epl 0)]) xs
-                    _ -> goA ys xs
-        let ann_ = anns l'''
-        ann_' <- insertDotdot ann_
-        let newl = l''' {anns = ann_'}
-
+#if MIN_VERSION_ghc(9,2,0)
         let it' = it{ideclHiding = Just (hide, lies)}
             thing = IEThingWith newl twIE (IEWildcard 2) []
             newl = (\ann -> ann ++ [(AddEpAnn AnnDotdot d0)]) <$> l'''
-
-            -- newl = addAnns l''' [AddEpAnn AnnOpenP (epl 0), AddEpAnn AnnDotdot d0, AddEpAnn AnnCloseP (epl 0)] emptyComments
             lies = L l' $ reverse pre ++ [L l'' thing] ++ xs
         return $ L l it'
 #else
