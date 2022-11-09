@@ -385,7 +385,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
             MtWarning
             [ "Warning during expanding: "
             , ""
-            , T.pack (showBag warns)
+            , T.pack (showErrors warns)
             ]
     pure resl
     where
