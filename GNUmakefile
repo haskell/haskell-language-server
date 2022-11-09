@@ -111,4 +111,4 @@ clean:
 clean-all:
 	$(RM_RF) out/* $(STORE_DIR)
 
-.PHONY: hls-ghc bindist bindist-ghc bindist-tar clean clean-all install-ghcs
+.PHONY: hls-ghc bindist bindist-ghc bindist-tar clean clean-all install-ghcs version
