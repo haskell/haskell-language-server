@@ -94,6 +94,7 @@ import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
 #if MIN_VERSION_ghc(9,2,1)
 import           Data.Either.Extra                                 (maybeToEither)
+import           Development.IDE.GHC.Error                         (spanContainsRange)
 import           GHC.Types.SrcLoc                                  (generatedSrcSpan)
 import           Language.Haskell.GHC.ExactPrint                   (noAnnSrcSpanDP1,
                                                                     runTransformT)
