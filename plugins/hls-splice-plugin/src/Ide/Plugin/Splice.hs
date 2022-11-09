@@ -99,7 +99,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                 liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck fp
             (TcModuleResult {..}, _) <-
                 maybe
-                (throwE "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (errornous) macro and expand splice again."
+                (throwE "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (erroneous) macro and expand splice again."
                 )
                 pure mresl
             reportEditor
@@ -166,7 +166,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                                 (graftDecls (RealSrcSpan spliceSpan Nothing) expanded)
                                 ps
                                 <&>
-                                -- FIXME: Why ghc-exactprint sweeps preceeding comments?
+                                -- FIXME: Why ghc-exactprint sweeps preceding comments?
                                 adjustToRange uri range
 
     res <- liftIO $ runMaybeT $ do
@@ -483,7 +483,7 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
                     _ -> Stop
 
 -- | Like 'something', but performs top-down searching, cutoffs when 'Stop' received,
---   and picks inenrmost result.
+--   and picks innermost result.
 something' :: forall a. GenericQ (SearchResult a) -> GenericQ (Maybe a)
 something' f =  go
     where

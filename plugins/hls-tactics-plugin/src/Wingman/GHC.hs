@@ -218,7 +218,7 @@ pattern Lambda pats body <-
 
 
 ------------------------------------------------------------------------------
--- | A GRHS that caontains no guards.
+-- | A GRHS that contains no guards.
 pattern UnguardedRHSs :: LHsExpr p -> GRHSs p (LHsExpr p)
 pattern UnguardedRHSs body <-
   GRHSs {grhssGRHSs = [L _ (GRHS _ [] body)]}

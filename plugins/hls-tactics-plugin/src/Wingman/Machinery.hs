@@ -255,7 +255,7 @@ unify goal inst = do
     Nothing -> cut
 
 ------------------------------------------------------------------------------
--- | Get a substition out of a theta's fundeps
+-- | Get a substitution out of a theta's fundeps
 learnFromFundeps
     :: ThetaType
     -> RuleM ()

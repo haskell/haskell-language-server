@@ -2,7 +2,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# HLINT ignore "Unused LANGUAGE pragma" #-}
 
--- | Parser compaibility module.
+-- | Parser compatibility module.
 module Development.IDE.GHC.Compat.Parser (
     initParserOpts,
     initParserState,

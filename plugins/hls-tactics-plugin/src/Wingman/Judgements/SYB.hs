@@ -36,7 +36,7 @@ everythingContaining dst f = go
 ------------------------------------------------------------------------------
 -- | Helper function for implementing 'everythingWithin'
 --
--- NOTE(sandy): Subtly broken. In an ideal world, this function shuld return
+-- NOTE(sandy): Subtly broken. In an ideal world, this function should return
 -- @Just False@ for nodes of /any type/ which do not contain the span. But if
 -- this functionality exists anywhere within the SYB machinery, I have yet to
 -- find it.
@@ -49,7 +49,7 @@ genericIsSubspan dst = mkQ1 (L noSrcSpan ()) Nothing $ \case
 
 ------------------------------------------------------------------------------
 -- | Like 'mkQ', but allows for polymorphic instantiation of its specific case.
--- This instantation matches whenever the dynamic value has the same
+-- This instantiation matches whenever the dynamic value has the same
 -- constructor as the proxy @f ()@ value.
 mkQ1 :: forall a r f
       . (Data a, Data (f ()))
