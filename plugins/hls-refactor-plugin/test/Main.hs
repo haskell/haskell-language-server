@@ -101,7 +101,8 @@ initializeTests = withResource acquire release tests
               doTest = do
                   ir <- getInitializeResponse
                   let Just ExecuteCommandOptions {_commands = List commands} = getActual $ innerCaps ir
-                  zipWithM_ (\e o -> T.isSuffixOf e o @? show (e,o)) expected commands
+                  -- Check if expected exists in commands. Note that commands can arrive in different order.
+                  mapM_ (\e -> any (\o -> T.isSuffixOf e o) commands @? show (expected, show commands)) expected
 
     acquire :: IO (ResponseMessage Initialize)
     acquire = run initializeResponse
