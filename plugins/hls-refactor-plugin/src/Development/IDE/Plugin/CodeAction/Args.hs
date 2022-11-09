@@ -13,6 +13,8 @@ module Development.IDE.Plugin.CodeAction.Args
 where
 
 import           Control.Concurrent.STM.Stats                 (readTVarIO)
+import           Control.Monad.Except                         (ExceptT (..),
+                                                               runExceptT)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
 import           Data.Either                                  (fromRight,
@@ -29,9 +31,6 @@ import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Plugin.CodeAction.ExactPrint (Rewrite,
                                                                rewriteToEdit)
-#endif
-import           Control.Monad.Except                         (ExceptT (..),
-                                                               runExceptT)
 import           Development.IDE.Plugin.TypeLenses            (GetGlobalBindingTypeSigs (GetGlobalBindingTypeSigs),
                                                                GlobalBindingTypeSigsResult)
 import           Development.IDE.Spans.LocalBindings          (Bindings)
