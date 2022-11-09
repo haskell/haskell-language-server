@@ -543,7 +543,7 @@ test-x86_64-darwin:
 ######################
 
 build-aarch64-darwin:
-  extends: .artifacts:short
+  extends: .build
   stage: build
   tags:
     - aarch64-darwin-m1
