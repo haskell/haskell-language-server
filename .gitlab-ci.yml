@@ -23,8 +23,6 @@ variables:
       CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.4.2
       CABAL_PROJECT: cabal.project
-    - GHC_VERSION: 9.4.3
-      CABAL_PROJECT: cabal.project
 
 workflow:
   rules:
