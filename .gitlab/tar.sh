@@ -5,7 +5,10 @@ set -Eeuxo pipefail
 source "$CI_PROJECT_DIR/.gitlab/common.sh"
 source "$CI_PROJECT_DIR/.gitlab/setup.sh"
 
+ls
 ls -la out/
+ls -la out/bindist/
+cat GNUmakefile
 
 # create tarball/zip
 TARBALL_PREFIX="haskell-language-server"
