@@ -77,7 +77,7 @@ mkSubst :: Set TyVar -> Type -> Type -> TCvSubst
 mkSubst skolems a b =
   let tyvars = S.fromList $ mapMaybe getTyVar_maybe [a, b]
       -- If we can unify our skolems, at least one is no longer a skolem.
-      -- Removing them from this set ensures we can get a subtitution between
+      -- Removing them from this set ensures we can get a substitution between
       -- the two. But it's okay to leave them in 'ts_skolems' in general, since
       -- they won't exist after running this substitution.
       skolems' = skolems S.\\ tyvars

@@ -34,7 +34,7 @@ import           Wingman.Types
 
 
 ------------------------------------------------------------------------------
--- | Attact the 'Interaction's to a 'PluginDescriptor'. Interactions are
+-- | Attach the 'Interaction's to a 'PluginDescriptor'. Interactions are
 -- self-contained request/response pairs that abstract over the LSP, and
 -- provide a unified interface for doing interesting things, without needing to
 -- dive into the underlying API too directly.

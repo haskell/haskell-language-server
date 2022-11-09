@@ -79,13 +79,13 @@ h98ToGADTDecl = \case
                 }
             x -> x
 
--- | Convert H98 data constuctor to GADT data constructor
+-- | Convert H98 data constructor to GADT data constructor
 h98ToGADTConDecl ::
-    LIdP GP -- ^Type constuctor name,
-            -- used for constucting final result type in GADT
+    LIdP GP -- ^Type constructor name,
+            -- used for constructing final result type in GADT
     -> LHsQTyVars GP
             -- ^Type variable names
-            -- used for constucting final result type in GADT
+            -- used for constructing final result type in GADT
     -> Maybe (LHsContext GP)
             -- ^Data type context
     -> ConDecl GP
@@ -203,7 +203,7 @@ prettyGADTDecl df decl =
             where
                 go (Anchor a _) = Anchor a (MovedAnchor (DifferentLine 1 2))
 
-        -- Adjust where annotation to the same line of the type constuctor
+        -- Adjust where annotation to the same line of the type constructor
         adjustWhere tcdDExt = tcdDExt <&> map
             (\(AddEpAnn ann l) ->
             if ann == AnnWhere
@@ -237,7 +237,7 @@ prettyGADTDecl df decl =
                     | isConDeclGADTAnn key = adjustCon ann
                     | otherwise = ann
 
-                -- Adjust where annotation to the same line of the type constuctor
+                -- Adjust where annotation to the same line of the type constructor
                 adjustWhere Ann{..} = Ann
                     { annsDP = annsDP <&>
                         (\(keyword, dp) ->
@@ -249,7 +249,7 @@ prettyGADTDecl df decl =
 
                 -- Make every data constructor start with a new line and 2 spaces
                 --
-                -- Here we can't force every GADT constuctor has (1, 2)
+                -- Here we can't force every GADT constructor has (1, 2)
                 -- delta. For the first constructor with (1, 2), it prints
                 -- a new line with 2 spaces, but for other constructors
                 -- with (1, 2), it will print a new line with 4 spaces.

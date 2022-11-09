@@ -469,12 +469,12 @@ insertImportTests = testGroup "insert import"
       "NoExplicitExports.expected.hs"
       "import Data.Monoid"
   , checkImport
-      "add to correctly placed exisiting import"
+      "add to correctly placed existing import"
       "ImportAtTop.hs"
       "ImportAtTop.expected.hs"
       "import Data.Monoid"
   , checkImport
-      "add to multiple correctly placed exisiting imports"
+      "add to multiple correctly placed existing imports"
       "MultipleImportsAtTop.hs"
       "MultipleImportsAtTop.expected.hs"
       "import Data.Monoid"
@@ -1856,7 +1856,7 @@ suggestHideShadowTests =
     [ testGroup
         "single"
         [ testOneCodeAction
-            "hide unsued"
+            "hide unused"
             "Hide on from Data.Function"
             (1, 2)
             (1, 4)
@@ -1869,7 +1869,7 @@ suggestHideShadowTests =
             , "g on = on"
             ]
         , testOneCodeAction
-            "extend hiding unsued"
+            "extend hiding unused"
             "Hide on from Data.Function"
             (1, 2)
             (1, 4)
@@ -1880,7 +1880,7 @@ suggestHideShadowTests =
             , "f on = on"
             ]
         , testOneCodeAction
-            "delete unsued"
+            "delete unused"
             "Hide on from Data.Function"
             (1, 2)
             (1, 4)
@@ -1982,7 +1982,7 @@ suggestHideShadowTests =
             ]
         , testOneCodeAction
             "auto hide all"
-            "Hide ++ from all occurence imports"
+            "Hide ++ from all occurrence imports"
             (2, 2)
             (2, 6)
             [ "import B"

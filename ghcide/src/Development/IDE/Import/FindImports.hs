@@ -183,7 +183,7 @@ notFoundErr env modName reason =
     mkError' = diagFromString "not found" DsError (Compat.getLoc modName)
     modName0 = unLoc modName
     ppr' = showSDoc dfs
-    -- We convert the lookup result to a find result to reuse GHC's cannotFindMoudle pretty printer.
+    -- We convert the lookup result to a find result to reuse GHC's cannotFindModule pretty printer.
     lookupToFindResult =
       \case
         LookupFound _m _pkgConfig ->

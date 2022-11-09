@@ -160,7 +160,7 @@ typeSigsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
   mkGhcideCAsPlugin [
       wrap $ suggestSignature True
     , wrap suggestFillTypeWildcard
-    , wrap suggestAddTypeAnnotationToSatisfyContraints
+    , wrap suggestAddTypeAnnotationToSatisfyConstraints
 #if !MIN_VERSION_ghc(9,3,0)
     , wrap removeRedundantConstraints
     , wrap suggestConstraint
@@ -396,7 +396,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
     Just matched <- allMatchRegexUnifySpaces _message "imported from ‘([^’]+)’ at ([^ ]*)",
     mods <- [(modName, s) | [_, modName, s] <- matched],
     result <- nubOrdBy (compare `on` fst) $ mods >>= uncurry (suggests identifier),
-    hideAll <- ("Hide " <> identifier <> " from all occurence imports", concatMap snd result) =
+    hideAll <- ("Hide " <> identifier <> " from all occurrence imports", concatMap snd result) =
     result <> [hideAll]
   | otherwise = []
   where
@@ -793,8 +793,8 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportFamily, reLoc $ fdLName tcdFam)
     exportsAs _                                = Nothing
 
-suggestAddTypeAnnotationToSatisfyContraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAddTypeAnnotationToSatisfyContraints sourceOpt Diagnostic{_range=_range,..}
+suggestAddTypeAnnotationToSatisfyConstraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,..}
 -- File.hs:52:41: warning:
 --     * Defaulting the following constraint to type ‘Integer’
 --        Num p0 arising from the literal ‘1’
@@ -1734,7 +1734,7 @@ findPositionAfterModuleName ps hsmodName' = do
     prevSrcSpan = maybe (getLoc hsmodName') getLoc hsmodExports
 
     -- The relative position of 'where' keyword (in lines, relative to the previous AST node).
-    -- The exact-print API changed a lot in ghc-9.2, so we need to handle it seperately for different compiler versions.
+    -- The exact-print API changed a lot in ghc-9.2, so we need to handle it separately for different compiler versions.
     whereKeywordLineOffset :: Maybe Int
 #if MIN_VERSION_ghc(9,2,0)
     whereKeywordLineOffset = case hsmodAnn of
@@ -1767,7 +1767,7 @@ findPositionAfterModuleName ps hsmodName' = do
         deltaPos <- fmap NE.head . NE.nonEmpty .mapMaybe filterWhere $ annsDP ann
         pure $ deltaRow deltaPos
 
-    -- Before ghc 9.2, DeltaPos doesn't take comment into acccount, so we don't need to sum line offset of comments.
+    -- Before ghc 9.2, DeltaPos doesn't take comment into account, so we don't need to sum line offset of comments.
     filterWhere :: (KeywordId, DeltaPos) -> Maybe DeltaPos
     filterWhere (keywordId, deltaPos) =
         if keywordId == G AnnWhere then Just deltaPos else Nothing

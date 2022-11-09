@@ -256,7 +256,7 @@ data ShakeExtras = ShakeExtras
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
-    -- accumlation of all previous mappings.
+    -- accumulation of all previous mappings.
     ,progress :: ProgressReporting
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
@@ -280,12 +280,12 @@ data ShakeExtras = ShakeExtras
     , withHieDb :: WithHieDb -- ^ Use only to read.
     , hiedbWriter :: HieDbWriter -- ^ use to write
     , persistentKeys :: TVar (KeyMap GetStalePersistent)
-      -- ^ Registery for functions that compute/get "stale" results for the rule
+      -- ^ Registry for functions that compute/get "stale" results for the rule
       -- (possibly from disk)
     , vfsVar :: TVar VFS
     -- ^ A snapshot of the current state of the virtual file system. Updated on shakeRestart
     -- VFS state is managed by LSP. However, the state according to the lsp library may be newer than the state of the current session,
-    -- leaving us vulnerable to suble race conditions. To avoid this, we take a snapshot of the state of the VFS on every
+    -- leaving us vulnerable to subtle race conditions. To avoid this, we take a snapshot of the state of the VFS on every
     -- restart, so that the whole session sees a single consistent view of the VFS.
     -- We don't need a STM.Map because we never update individual keys ourselves.
     , defaultConfig :: Config
@@ -662,7 +662,7 @@ getStateKeys = (fmap.fmap) fst . atomically . ListT.toList . STM.listT . state
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()
 shakeSessionInit recorder ide@IdeState{..} = do
-    -- Take a snapshot of the VFS - it should be empty as we've recieved no notifications
+    -- Take a snapshot of the VFS - it should be empty as we've received no notifications
     -- till now, but it can't hurt to be in sync with the `lsp` library.
     vfs <- vfsSnapshot (lspEnv shakeExtras)
     initSession <- newSession recorder shakeExtras (VFSModified vfs) shakeDb [] "shakeSessionInit"
@@ -831,7 +831,7 @@ instantiateDelayedAction (DelayedAction _ s p a) = do
   b <- newBarrier
   let a' = do
         -- work gets reenqueued when the Shake session is restarted
-        -- it can happen that a work item finished just as it was reenqueud
+        -- it can happen that a work item finished just as it was reenqueued
         -- in that case, skipping the work is fine
         alreadyDone <- liftIO $ isJust <$> waitBarrierMaybe b
         unless alreadyDone $ do
