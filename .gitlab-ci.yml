@@ -509,7 +509,7 @@ test-x86_64-freebsd13:
 build-x86_64-darwin:
   extends: .build
   tags:
-    - x86_64-darwin
+    - x86_64-darwin-m1
   variables:
     ADD_CABAL_ARGS: ""
     NIX_SYSTEM: x86_64-darwin
@@ -521,7 +521,7 @@ tar-x86_64-darwin:
   stage: tar
   needs: ["build-x86_64-darwin"]
   tags:
-    - x86_64-darwin
+    - x86_64-darwin-m1
   script: |
     /bin/bash ./.gitlab/tar.sh
   variables:
@@ -533,7 +533,7 @@ test-x86_64-darwin:
   extends: .test
   needs: ["tar-x86_64-darwin"]
   tags:
-    - x86_64-darwin
+    - x86_64-darwin-m1
   script: |
     /bin/bash .gitlab/test.sh
 
