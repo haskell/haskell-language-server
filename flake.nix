@@ -111,6 +111,10 @@
       url = "https://hackage.haskell.org/package/hiedb-0.4.2.0/hiedb-0.4.2.0.tar.gz";
       flake = false;
     };
+    hw-prim = {
+      url = "https://hackage.haskell.org/package/hw-prim-0.6.3.2/hw-prim-0.6.3.2.tar.gz";
+      flake = false;
+    };
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, all-cabal-hashes-unpacked, ... }:
@@ -182,6 +186,7 @@
 
               entropy = hsuper.callCabal2nix "entropy" inputs.entropy {};
               hiedb = hsuper.callCabal2nix "hiedb" inputs.hiedb {};
+              hw-prim = hsuper.callCabal2nix "hw-prim" inputs.hw-prim {};
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.implicit-hie-cradle {};
               ghc-check = hself.callCabal2nix "ghc-check" inputs.ghc-check {};
