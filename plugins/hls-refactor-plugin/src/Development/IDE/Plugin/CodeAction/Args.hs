@@ -228,10 +228,10 @@ instance ToCodeAction r => ToCodeAction (ParsedSource -> r) where
       Just s -> flip runReaderT caa . runExceptT . toCodeAction . f . astA $ s
       _      -> pure $ Right []
 #else
-  toCodeAction f = ReaderT $ \caa@CodeActionArgs {caaParsedModule = x} ->
+  toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaParsedModule = x} ->
     x >>= \case
-      Just s -> flip runReaderT caa . toCodeAction . f . pm_parsed_source $ s
-      _      -> pure []
+      Just s -> flip runReaderT caa . runExceptT . toCodeAction . f . pm_parsed_source $ s
+      _      -> pure $ Right []
 #endif
 
 instance ToCodeAction r => ToCodeAction (ExportsMap -> r) where
