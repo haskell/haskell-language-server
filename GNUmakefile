@@ -11,9 +11,10 @@ UNAME := $(shell uname)
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 GHC_VERSION  ?=
+TARBALL_ARCHIVE_SUFFIX ?=
 
 HLS_VERSION := $(shell grep '^version:' haskell-language-server.cabal | awk '{ print $$2 }')
-TARBALL     ?= haskell-language-server-$(HLS_VERSION).tar.xz
+TARBALL     ?= haskell-language-server-$(HLS_VERSION)-$(TARBALL_ARCHIVE_SUFFIX).tar.xz
 
 CHMOD     := chmod
 CHMOD_X   := $(CHMOD) 755
