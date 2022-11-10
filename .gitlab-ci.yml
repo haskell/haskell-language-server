@@ -537,7 +537,7 @@ test-x86_64-darwin:
   script: |
     /bin/bash .gitlab/test.sh
   variables:
-    NIX_SYSTEM: aarch64-darwin
+    NIX_SYSTEM: x86_64-darwin
 
 
 ######################
