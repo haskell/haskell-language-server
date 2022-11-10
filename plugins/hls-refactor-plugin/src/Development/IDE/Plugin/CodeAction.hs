@@ -840,6 +840,18 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
     | otherwise = []
     where
       makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
+#if MIN_VERSION_ghc(9,4,0)
+      pat multiple at inArg inExpr = T.concat [ ".*Defaulting the type variable "
+                                       , ".*to type ‘([^ ]+)’ "
+                                       , "in the following constraint"
+                                       , if multiple then "s" else ""
+                                       , ".*arising from the literal ‘(.+)’"
+                                       , if inArg then ".+In the.+argument" else ""
+                                       , if at then ".+at" else ""
+                                       , if inExpr then ".+In the expression" else ""
+                                       , ".+In the expression"
+                                       ]
+#else
       pat multiple at inArg inExpr = T.concat [ ".*Defaulting the following constraint"
                                        , if multiple then "s" else ""
                                        , " to type ‘([^ ]+)’ "
@@ -849,11 +861,11 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
                                        , if inExpr then ".+In the expression" else ""
                                        , ".+In the expression"
                                        ]
+#endif
       codeEdit ty lit replacement =
         let title = "Add type annotation ‘" <> ty <> "’ to ‘" <> lit <> "’"
             edits = [TextEdit _range replacement]
         in  [( title, edits )]
-
 
 -- | GHC strips out backticks in case of infix functions as well as single quote
 --   in case of quoted name when using TemplateHaskellQuotes. Which is not desired.
