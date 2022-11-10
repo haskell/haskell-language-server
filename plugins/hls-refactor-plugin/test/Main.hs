@@ -1460,7 +1460,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
-        , ignoreForGHC92 "Diagnostic message has no suggestions" $
+        , ignoreFor (BrokenForGHC [GHC92, GHC94]) "Diagnostic message has no suggestions" $
           testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
@@ -3351,7 +3351,7 @@ exportUnusedTests = testGroup "export unused actions"
         (R 2 0 2 11)
         "Export ‘bar’"
         Nothing
-    , ignoreForGHC92 "Diagnostic message has no suggestions" $
+    , ignoreFor (BrokenForGHC [GHC92, GHC94]) "Diagnostic message has no suggestions" $
       testSession "type is exported but not the constructor of same name" $ template
         (T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
@@ -3985,6 +3985,9 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
 
 ignoreForGHC92 :: String -> TestTree -> TestTree
 ignoreForGHC92 = ignoreFor (BrokenForGHC [GHC92])
+
+ignoreForGHC94 :: String -> TestTree -> TestTree
+ignoreForGHC94 = ignoreFor (BrokenForGHC [GHC94])
 
 data BrokenTarget =
     BrokenSpecific OS [GhcVersion]
