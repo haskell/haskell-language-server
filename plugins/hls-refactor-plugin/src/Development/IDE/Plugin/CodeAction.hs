@@ -1970,8 +1970,13 @@ extractQualifiedModuleName x
 extractDoesNotExportModuleName :: T.Text -> Maybe T.Text
 extractDoesNotExportModuleName x
   | Just [m] <-
+#if MIN_VERSION_ghc(9,4,0)
+    matchRegexUnifySpaces x "the module ‘([^’]*)’ does not export"
+      <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ export"
+#else
     matchRegexUnifySpaces x "Module ‘([^’]*)’ does not export"
       <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ exports"
+#endif
   = Just m
   | otherwise
   = Nothing
