@@ -122,6 +122,7 @@ data Log
   | LogCradlePath !FilePath
   | LogCradleNotFound !FilePath
   | LogSessionLoadingResult !(Either [CradleError] (ComponentOptions, FilePath))
+  | LogSessionLoaded
   | LogCradle !(Cradle Void)
   | LogNoneCradleFound FilePath
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
@@ -191,6 +192,8 @@ instance Pretty Log where
         , "You should ignore this message, unless you see a 'Multi Cradle: No prefixes matched' error." ]
     LogSessionLoadingResult e ->
       "Session loading result:" <+> viaShow e
+    LogSessionLoaded ->
+      "Session loaded"
     LogCradle cradle ->
       "Cradle:" <+> viaShow cradle
     LogNewComponentCache componentCache ->
@@ -609,7 +612,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
           checkProject <- getCheckProject
           unless (null cs || not checkProject) $ do
                 cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations cs)
-                void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
+                void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Info $ void $ do
                     mmt <- uses GetModificationTime cfps'
                     let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
                     modIfaces <- uses GetModIface cs_exist
@@ -655,7 +658,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                      error $ "GHC installation not found in libdir: " <> libdir
                  InstallationMismatch{..} ->
                      return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
-                 InstallationChecked _compileTime _ghcLibCheck ->
+                 InstallationChecked _compileTime _ghcLibCheck -> do
+                   log Info $ LogSessionLoaded
                    session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
              -- Failure case, either a cradle error or the none cradle
              Left err -> do

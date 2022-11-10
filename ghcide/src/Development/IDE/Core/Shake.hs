@@ -603,10 +603,10 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
         -- lazily initialize the exports map with the contents of the hiedb
         -- TODO: exceptions can be swallowed here?
         _ <- async $ do
-            log Debug LogCreateHieDbExportsMapStart
+            log Info LogCreateHieDbExportsMapStart
             em <- createExportsMapHieDb withHieDb
             atomically $ modifyTVar' exportsMap (<> em)
-            log Debug $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
+            log Info $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
 
         progress <- do
             let (before, after) = if testing then (0,0.1) else (0.1,0.1)
@@ -667,7 +667,7 @@ shakeSessionInit recorder ide@IdeState{..} = do
     vfs <- vfsSnapshot (lspEnv shakeExtras)
     initSession <- newSession recorder shakeExtras (VFSModified vfs) shakeDb [] "shakeSessionInit"
     putMVar shakeSession initSession
-    logDebug (ideLogger ide) "Shake session initialized"
+    logInfo (ideLogger ide) "Shake session initialized"
 
 shakeShut :: IdeState -> IO ()
 shakeShut IdeState{..} = do
@@ -806,7 +806,7 @@ newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reason = do
                     case res of
                       Left e -> Just e
                       _      -> Nothing
-              logWith recorder Debug $ LogBuildSessionFinish exception
+              logWith recorder Info $ LogBuildSessionFinish exception
 
     -- Do the work in a background thread
     workThread <- asyncWithUnmask workRun
