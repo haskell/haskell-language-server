@@ -9,6 +9,7 @@ source "$CI_PROJECT_DIR/.gitlab/setup.sh"
 # create tarball/zip
 case "${TARBALL_EXT}" in
     zip)
+    TARBALL_PREFIX="haskell-language-server"
 		HLS_VERSION="$("$CI_PROJECT_DIR/out/haskell-language-server-8.10.7" --numeric-version)"
 		cd out/
         zip "${TARBALL_PREFIX}-${HLS_VERSION}-${TARBALL_ARCHIVE_SUFFIX}.zip" haskell-language-server-*
