@@ -192,7 +192,15 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
               Left errs -> return (map snd diags ++ errs, Nothing)
               Right tcm -> return (map snd diags, Just $ tcm{tmrDeferredError = deferredError})
     where
+#if MIN_VERSION_ghc(9,4,0)
+        -- Unfortunately, on GHC 9.4, with DynFlags corresponding -fdefer-type-errors,
+        -- the error messages are significantly different from the ones without that, and
+        -- thus the code action triggers (such as in hls-refactor-plugin) are not fired properly.
+        -- So we disable the error demotion.
+        demoteIfDefer = id
+#else
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
+#endif
 
 -- | Install hooks to capture the splices as well as the runtime module dependencies
 captureSplicesAndDeps :: TypecheckHelpers -> HscEnv -> (HscEnv -> IO a) -> IO (a, Splices, ModuleEnv BS.ByteString)
