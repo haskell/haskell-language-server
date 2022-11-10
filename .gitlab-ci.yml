@@ -536,6 +536,8 @@ test-x86_64-darwin:
     - x86_64-darwin-m1
   script: |
     /bin/bash .gitlab/test.sh
+  variables:
+    NIX_SYSTEM: aarch64-darwin
 
 
 ######################
@@ -574,6 +576,8 @@ test-aarch64-darwin:
     - aarch64-darwin-m1
   script: |
     arch -arm64 /bin/bash ./.gitlab/test.sh
+  variables:
+    NIX_SYSTEM: aarch64-darwin
 
 
 ######################

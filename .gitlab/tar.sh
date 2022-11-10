@@ -5,10 +5,6 @@ set -Eeuxo pipefail
 source "$CI_PROJECT_DIR/.gitlab/common.sh"
 source "$CI_PROJECT_DIR/.gitlab/setup.sh"
 
-ls
-ls -la out/
-ls -la out/bindist/
-cat GNUmakefile
 
 # create tarball/zip
 case "${TARBALL_EXT}" in
@@ -19,6 +15,9 @@ case "${TARBALL_EXT}" in
 		find . -type f ! -name '*.zip' -delete
         ;;
     tar.xz)
+		ls -la out/
+		ls -la out/bindist/
+		ls -la out/bindist/*/
 		emake --version
 		emake bindist
 		emake bindist-tar
