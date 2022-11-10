@@ -286,7 +286,7 @@ common splice
     cpp-options: -Dhls_splice
 
 common alternateNumberFormat
-  if flag(alternateNumberFormat) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(alternateNumberFormat)
     build-depends: hls-alternate-number-format-plugin ^>= 1.2
     cpp-options: -Dhls_alternateNumberFormat
 
@@ -311,7 +311,7 @@ common gadt
     cpp-options: -Dhls_gadt
 
 common explicitFixity
-  if flag(explicitFixity) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(explicitFixity)
     build-depends: hls-explicit-fixity-plugin ^>= 1.0
     cpp-options: -DexplicitFixity
 
