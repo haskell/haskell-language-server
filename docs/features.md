@@ -291,6 +291,16 @@ Convert a datatype to GADT syntax.
 
 ![Link to Docs](../plugins/hls-gadt-plugin/README.md)
 
+### Expand record wildcard
+
+Provided by: `hls-explicit-record-fields-plugin`
+
+Code action kind: `refactor.rewrite`
+
+Expand record wildcards, explicitly listing all record fields as field puns.
+
+![Explicit Wildcard Demo](../plugins/hls-explicit-record-fields-plugin/wildcard.gif)
+
 ## Code lenses
 
 ### Add type signature

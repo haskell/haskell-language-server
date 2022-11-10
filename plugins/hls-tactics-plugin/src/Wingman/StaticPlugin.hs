@@ -10,7 +10,6 @@ module Wingman.StaticPlugin
 
 import Development.IDE.GHC.Compat
 import Development.IDE.GHC.Compat.Util
-import GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
 
 import Ide.Types
 
