@@ -21,6 +21,7 @@ data Log
   = LogProcessInvocationFailure Int
   | LogReadCreateProcessInfo String [String]
   | LogInvalidInvocationInfo
+  | LogCabalFmtNotFound
   deriving (Show)
 
 instance Pretty Log where
@@ -31,6 +32,7 @@ instance Pretty Log where
         ["Invocation of cabal-fmt with arguments" <+> pretty args]
           ++ ["failed with standard error:" <+> pretty stdErrorOut | not (null stdErrorOut)]
     LogInvalidInvocationInfo -> "Invocation of cabal-fmt with range was called but is not supported."
+    LogCabalFmtNotFound -> "Couldn't find executable 'cabal-fmt'"
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
@@ -66,6 +68,7 @@ provider recorder _ide FormatText contents nfp opts = liftIO $ do
           let fmtDiff = makeDiffTextEdit contents (T.pack out)
           pure $ Right fmtDiff
     Nothing -> do
+      log Error LogCabalFmtNotFound
       pure $ Left (ResponseError InvalidRequest "No installation of cabal-fmt could be found. Please install it into your global environment." Nothing)
   where
     fp = fromNormalizedFilePath nfp
