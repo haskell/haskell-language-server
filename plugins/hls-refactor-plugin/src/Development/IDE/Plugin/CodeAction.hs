@@ -1554,7 +1554,7 @@ suggestFunctionConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
 
 -- | Suggests the removal of a redundant constraint for a type signature.
 removeRedundantConstraints :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
-removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
+removeRedundantConstraints df (makeDeltaAst -> L _ HsModule {hsmodDecls}) Diagnostic{..}
 -- • Redundant constraint: Eq a
 -- • In the type signature for:
 --      foo :: forall a. Eq a => a -> a
