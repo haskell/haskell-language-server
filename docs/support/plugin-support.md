@@ -46,6 +46,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-pragmas-plugin`                | 1    |                          |
 | `hls-refactor-plugin`               | 1    | 9.4                      |
 | `hls-alternate-number-plugin`       | 2    |                          |
+| `hls-cabal-fmt-plugin`              | 2    |                          |
 | `hls-class-plugin`                  | 2    |                          |
 | `hls-change-type-signature-plugin`  | 2    |                          |
 | `hls-eval-plugin`                   | 2    | 9.4                      |

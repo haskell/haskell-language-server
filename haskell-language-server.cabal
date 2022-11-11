@@ -205,6 +205,16 @@ flag dynamic
   default:     True
   manual:      True
 
+flag cabalfmt
+  description: Enable cabal-fmt plugin
+  default:     True
+  manual:      True
+
+common cabalfmt
+  if flag(cabalfmt)
+    build-depends: hls-cabal-fmt-plugin ^>= 0.1.0.0
+    cpp-options: -Dhls_cabalfmt
+
 common class
   if flag(class)
     build-depends: hls-class-plugin ^>= 1.1
