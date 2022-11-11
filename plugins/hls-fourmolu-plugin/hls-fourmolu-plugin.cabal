@@ -35,7 +35,7 @@ library
   build-depends:
     , base            >=4.12 && <5
     , filepath
-    , fourmolu        ^>=0.3 || ^>=0.4 || ^>= 0.6 || ^>= 0.7 || ^>= 0.8
+    , fourmolu        ^>=0.3 || ^>=0.4 || ^>= 0.6 || ^>= 0.7 || ^>= 0.8 || ^>= 0.9
     , ghc
     , ghc-boot-th
     , ghcide          ^>=1.8
