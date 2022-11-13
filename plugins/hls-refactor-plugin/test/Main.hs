@@ -2376,6 +2376,8 @@ addFunctionArgumentTests =
         liftIO $ contentAfterAction @?= T.unlines foo',
         mkGoldenAddArgTest "AddArgWithSig" (R 1 0 1 50),
         mkGoldenAddArgTest "AddArgWithSigAndDocs" (R 8 0 8 50),
+        mkGoldenAddArgTest "AddArgFromLet" (R 2 0 2 50),
+        mkGoldenAddArgTest "AddArgFromWhere" (R 3 0 3 50),
         mkGoldenAddArgTest "AddArgWithTypeSynSig" (R 2 0 2 50),
         mkGoldenAddArgTest "AddArgWithTypeSynSigContravariant" (R 2 0 2 50),
         mkGoldenAddArgTest "AddArgWithLambda" (R 1 0 1 50),
