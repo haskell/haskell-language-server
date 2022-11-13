@@ -2,4 +2,5 @@
 
 ## 0.1.0.0 -- YYYY-mm-dd
 
-* First version. Released on an unsuspecting world.
+* Provide Diagnostics on parse errors and warnings for .cabal files
+* Provide CodeAction for the common SPDX License mistake "BSD3" instead of "BSD-3-Clause"
