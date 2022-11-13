@@ -97,6 +97,7 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
+import           Test.Tasty.Runners              (NumThreads (..))
 
 newtype Log = LogIDEMain IDEMain.Log
 
@@ -106,7 +107,7 @@ instance Pretty Log where
 
 -- | Run 'defaultMainWithRerun', limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = defaultMainWithRerun . adjustOption (const $ mkTimeout 600000000)
+defaultTestRunner = defaultMainWithRerun . adjustOption (const $ NumThreads 1) . adjustOption (const $ mkTimeout 600000000)
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]

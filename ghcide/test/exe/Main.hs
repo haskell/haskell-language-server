@@ -1,6 +1,31 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-
+ NOTE On enforcing determinism
+
+   The tests below use two mechanisms to enforce deterministic LSP sequences:
+
+    1. Progress reporting: waitForProgress(Begin|Done)
+    2. Diagnostics: expectDiagnostics
+
+    Either is fine, but diagnostics are generally more reliable.
+
+    Mixing them both in the same test is NOT FINE as it will introduce race
+    conditions since multiple interleavings are possible. In other words,
+    the sequence of diagnostics and progress reports is not deterministic.
+    For example:
+
+    < do something >
+    waitForProgressDone
+    expectDiagnostics [...]
+
+    - When the diagnostics arrive after the progress done message, as they usually do, the test will pass
+    - When the diagnostics arrive before the progress done msg, when on a slow machine occasionally, the test will timeout
+
+    Therefore, avoid mixing both progress reports and diagnostics in the same test
+ -}
+
 {-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
@@ -2690,8 +2715,6 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     expectDiagnostics
       [("P.hs", [(DsWarning,(4,0), "Top-level binding")])] -- So what we know P has been loaded
 
-    waitForProgressDone
-
     -- Change y from Int to B
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
     -- save so that we can that the error propagates to A
@@ -2702,14 +2725,15 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     expectDiagnostics
       [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])]
 
-
     -- Check that we wrote the interfaces for B when we saved
     hidir <- getInterfaceFilesDir bdoc
     hi_exists <- liftIO $ doesFileExist $ hidir </> "B.hi"
     liftIO $ assertBool ("Couldn't find B.hi in " ++ hidir) hi_exists
 
     pdoc <- openDoc pPath "haskell"
-    waitForProgressDone
+    expectDiagnostics
+      [("P.hs", [(DsWarning,(4,0), "Top-level binding")])
+      ]
     changeDoc pdoc [TextDocumentContentChangeEvent Nothing Nothing $ pSource <> "\nfoo = y :: Bool" ]
     -- Now in P we have
     -- bar = x :: Int

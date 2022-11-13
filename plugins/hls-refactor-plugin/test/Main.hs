@@ -1844,7 +1844,6 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
     auxFiles = ["AVec.hs", "BVec.hs", "CVec.hs", "DVec.hs", "EVec.hs", "FVec.hs"]
     withTarget file locs k = runWithExtraFiles "hiding" $ \dir -> do
         doc <- openDoc file "haskell"
-        waitForProgressDone
         void $ expectDiagnostics [(file, [(DsError, loc, "Ambiguous occurrence") | loc <- locs])]
         actions <- getAllCodeActions doc
         k dir doc actions
