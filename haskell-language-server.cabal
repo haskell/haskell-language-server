@@ -163,6 +163,11 @@ flag explicitFixity
   default:     True
   manual:      True
 
+flag explicitFields
+  description: Enable explicitFields plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -199,6 +204,16 @@ flag dynamic
   description: Build with the dyn rts
   default:     True
   manual:      True
+
+flag cabalfmt
+  description: Enable cabal-fmt plugin
+  default:     True
+  manual:      True
+
+common cabalfmt
+  if flag(cabalfmt)
+    build-depends: hls-cabal-fmt-plugin ^>= 0.1.0.0
+    cpp-options: -Dhls_cabalfmt
 
 common class
   if flag(class)
@@ -300,6 +315,11 @@ common explicitFixity
     build-depends: hls-explicit-fixity-plugin ^>= 1.0
     cpp-options: -DexplicitFixity
 
+common explicitFields
+  if flag(explicitFields)
+    build-depends: hls-explicit-record-fields-plugin ^>= 1.0
+    cpp-options: -DexplicitFields
+
 -- formatters
 
 common floskell
@@ -358,6 +378,7 @@ library
                   , codeRange
                   , gadt
                   , explicitFixity
+                  , explicitFields
                   , floskell
                   , fourmolu
                   , ormolu

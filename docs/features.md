@@ -107,6 +107,13 @@ Format your code with various Haskell code formatters.
 | Ormolu          | `hls-ormolu-plugin`          |
 | Stylish Haskell | `hls-stylish-haskell-plugin` |
 
+Format your cabal files with a cabal code formatter.
+
+| Formatter       | Provided by                  |
+|-----------------|------------------------------|
+| cabal-fmt       | `hls-cabal-fmt-plugin`       |
+
+
 ## Document symbols
 
 Provided by: `ghcide`
@@ -290,6 +297,16 @@ Convert a datatype to GADT syntax.
 ![GADT Demo](../plugins/hls-gadt-plugin/gadt.gif)
 
 ![Link to Docs](../plugins/hls-gadt-plugin/README.md)
+
+### Expand record wildcard
+
+Provided by: `hls-explicit-record-fields-plugin`
+
+Code action kind: `refactor.rewrite`
+
+Expand record wildcards, explicitly listing all record fields as field puns.
+
+![Explicit Wildcard Demo](../plugins/hls-explicit-record-fields-plugin/wildcard.gif)
 
 ## Code lenses
 

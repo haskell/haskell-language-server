@@ -36,12 +36,12 @@ data Count a where
 
 prettyCount :: Count a -> Doc b
 prettyCount One  = "single"
-prettyCount Many = "varadic"
+prettyCount Many = "variadic"
 
 
 ------------------------------------------------------------------------------
 -- | What sorts of arguments does the tactic take? Currently there is no
--- distincion between 'Ref' and 'Bind', other than documentation.
+-- distinction between 'Ref' and 'Bind', other than documentation.
 --
 -- The type index here is used for the shape of the function the parser should
 -- take.

@@ -461,7 +461,7 @@ mkFakeVar = do
 
 
 ------------------------------------------------------------------------------
--- | Construct a fake varible to attach the current 'Provenance' to, and then
+-- | Construct a fake variable to attach the current 'Provenance' to, and then
 -- build a sub-hypothesis for the pattern match.
 mkDerivedConHypothesis
     :: Provenance

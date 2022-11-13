@@ -593,7 +593,7 @@ diagnosticTests = testGroup "diagnostics"
         [ ( "Foo.hs"
       -- The test is to make sure that warnings contain unqualified names
       -- where appropriate. The warning should use an unqualified name 'Ord', not
-      -- sometihng like 'GHC.Classes.Ord'. The choice of redundant-constraints to
+      -- something like 'GHC.Classes.Ord'. The choice of redundant-constraints to
       -- test this is fairly arbitrary.
           , [(DsWarning, (2, if ghcVersion >= GHC94 then 7 else 0), "Redundant constraint: Ord a")
             ]
@@ -2593,7 +2593,7 @@ simpleMultiTest3 =
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
 
--- Like simpleMultiTest but open the files in component 'a' in a seperate session
+-- Like simpleMultiTest but open the files in component 'a' in a separate session
 simpleMultiDefTest :: TestTree
 simpleMultiDefTest = testCase "simple-multi-def-test" $ runWithExtraFiles "multi" $ \dir -> do
     let aPath = dir </> "a/A.hs"
@@ -2670,7 +2670,7 @@ ifaceTHTest = testCase "iface-th-test" $ runWithExtraFiles "TH" $ \dir -> do
     -- Change [TH]a from () to Bool
     liftIO $ writeFileUTF8 aPath (unlines $ init (lines $ T.unpack aSource) ++ ["th_a = [d| a = False|]"])
 
-    -- Check that the change propogates to C
+    -- Check that the change propagates to C
     changeDoc cdoc [TextDocumentContentChangeEvent Nothing Nothing cSource]
     expectDiagnostics
       [("THC.hs", [(DsError, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
@@ -2694,11 +2694,11 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
 
     -- Change y from Int to B
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
-    -- save so that we can that the error propogates to A
+    -- save so that we can that the error propagates to A
     sendNotification STextDocumentDidSave (DidSaveTextDocumentParams bdoc Nothing)
 
 
-    -- Check that the error propogates to A
+    -- Check that the error propagates to A
     expectDiagnostics
       [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])]
 

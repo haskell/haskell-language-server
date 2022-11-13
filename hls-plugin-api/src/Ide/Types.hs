@@ -403,14 +403,15 @@ instance PluginMethod Request TextDocumentCompletion where
 
 instance PluginMethod Request TextDocumentFormatting where
   pluginEnabled STextDocumentFormatting msgParams pluginDesc conf =
-    pluginResponsible uri pluginDesc && PluginId (formattingProvider conf) == pid
+    pluginResponsible uri pluginDesc
+      && (PluginId (formattingProvider conf) == pid || PluginId (cabalFormattingProvider conf) == pid)
     where
       uri = msgParams ^. J.textDocument . J.uri
       pid = pluginId pluginDesc
 
 instance PluginMethod Request TextDocumentRangeFormatting where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && PluginId (formattingProvider conf) == pid
+      && (PluginId (formattingProvider conf) == pid || PluginId (cabalFormattingProvider conf) == pid)
     where
       uri = msgParams ^. J.textDocument . J.uri
       pid = pluginId pluginDesc

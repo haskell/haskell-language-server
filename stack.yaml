@@ -9,6 +9,7 @@ packages:
 - ./hls-plugin-api
 - ./hls-test-utils
 - ./shake-bench
+- ./plugins/hls-cabal-fmt-plugin
 - ./plugins/hls-call-hierarchy-plugin
 - ./plugins/hls-class-plugin
 # - ./plugins/hls-haddock-comments-plugin
@@ -34,8 +35,11 @@ packages:
 - ./plugins/hls-gadt-plugin
 - ./plugins/hls-explicit-fixity-plugin
 - ./plugins/hls-refactor-plugin
+- ./plugins/hls-explicit-record-fields-plugin
 
 extra-deps:
+# needed for tests of hls-cabal-fmt-plugin
+- cabal-fmt-0.1.6@sha256:54041d50c8148c32d1e0a67aef7edeebac50ae33571bef22312f6815908eac19,3626
 - floskell-0.10.6@sha256:e77d194189e8540abe2ace2c7cb8efafc747ca35881a2fefcbd2d40a1292e036,3819
 - hiedb-0.4.2.0
 - implicit-hie-0.1.2.7@sha256:82bbbb1a8c05f99c8af3c16ac53e80c8648d8bf047b25ed5ce45a135bd736907,3122

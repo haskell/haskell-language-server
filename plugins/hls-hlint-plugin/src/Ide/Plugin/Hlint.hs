@@ -51,7 +51,8 @@ import qualified Data.Text                                          as T
 import qualified Data.Text.Encoding                                 as T
 import           Data.Typeable
 import           Development.IDE                                    hiding
-                                                                    (Error)
+                                                                    (Error,
+                                                                     getExtensions)
 import           Development.IDE.Core.Rules                         (defineNoFile,
                                                                      getParsedModuleWithComments,
                                                                      usePropertyAction)
@@ -430,7 +431,7 @@ codeActionProvider ideState pluginId (CodeActionParams _ _ documentId _ context)
 
     LSP.List diags = context ^. LSP.diagnostics
 
--- | Convert a hlint diagonistic into an apply and an ignore code action
+-- | Convert a hlint diagnostic into an apply and an ignore code action
 -- if applicable
 diagnosticToCodeActions :: DynFlags -> T.Text -> PluginId -> TextDocumentIdentifier -> LSP.Diagnostic -> [LSP.CodeAction]
 diagnosticToCodeActions dynFlags fileContents pluginId documentId diagnostic
@@ -555,7 +556,7 @@ applyHint recorder ide nfp mhint =
     modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
     let dflags = ms_hspp_opts $ msrModSummary modsum
     -- Setting a environment variable with the libdir used by ghc-exactprint.
-    -- It is a workaround for an error caused by the use of a hadcoded at compile time libdir
+    -- It is a workaround for an error caused by the use of a hardcoded at compile time libdir
     -- in ghc-exactprint that makes dependent executables non portables.
     -- See https://github.com/alanz/ghc-exactprint/issues/96.
     -- WARNING: this code is not thread safe, so if you try to apply several async refactorings

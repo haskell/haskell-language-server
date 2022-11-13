@@ -16,7 +16,6 @@ import           Data.Monoid
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Development.IDE.GHC.Compat
-import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Types
 import           Language.LSP.Types hiding (SemanticTokenAbsolute (..), SemanticTokenRelative (..))
 import           Prelude hiding (span)

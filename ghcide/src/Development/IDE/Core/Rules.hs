@@ -782,7 +782,7 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
             let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails Nothing) ifaces
 #if MIN_VERSION_ghc(9,3,0)
             -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
-            -- also points to all the direct descendents of the current module. To get the keys for the descendents
+            -- also points to all the direct descendants of the current module. To get the keys for the descendants
             -- we must get their `ModSummary`s
             !final_deps <- do
               dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
@@ -950,7 +950,7 @@ getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ 
       hiDiags <- case hiFile of
         Just hiFile
           | OnDisk <- status
-          , not (tmrDeferedError tmr) -> liftIO $ writeHiFile se hsc hiFile
+          , not (tmrDeferredError tmr) -> liftIO $ writeHiFile se hsc hiFile
         _ -> pure []
       return (fp, (diags++hiDiags, hiFile))
     NotFOI -> do
@@ -1022,9 +1022,9 @@ regenerateHiFile sess f ms compNeeded = do
                     wDiags <- forM masts $ \asts ->
                       liftIO $ writeAndIndexHieFile hsc se (tmrModSummary tmr) f (tcg_exports $ tmrTypechecked tmr) asts source
 
-                    -- We don't write the `.hi` file if there are defered errors, since we won't get
+                    -- We don't write the `.hi` file if there are deferred errors, since we won't get
                     -- accurate diagnostics next time if we do
-                    hiDiags <- if not $ tmrDeferedError tmr
+                    hiDiags <- if not $ tmrDeferredError tmr
                                then liftIO $ writeHiFile se hsc hiFile
                                else pure []
 
@@ -1057,7 +1057,7 @@ getClientSettingsRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake 
   settings <- clientSettings <$> getIdeConfiguration
   return (LBS.toStrict $ B.encode $ hash settings, settings)
 
--- | Returns the client configurarion stored in the IdeState.
+-- | Returns the client configuration stored in the IdeState.
 -- You can use this function to access it from shake Rules
 getClientConfigAction :: Config -- ^ default value
                       -> Action Config

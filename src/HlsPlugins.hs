@@ -94,6 +94,10 @@ import           Ide.Plugin.GADT                   as GADT
 import           Ide.Plugin.ExplicitFixity         as ExplicitFixity
 #endif
 
+#if explicitFields
+import           Ide.Plugin.ExplicitFields         as ExplicitFields
+#endif
+
 -- formatters
 
 #if hls_floskell
@@ -102,6 +106,10 @@ import qualified Ide.Plugin.Floskell               as Floskell
 
 #if hls_fourmolu
 import qualified Ide.Plugin.Fourmolu               as Fourmolu
+#endif
+
+#if hls_cabalfmt
+import qualified Ide.Plugin.CabalFmt               as CabalFmt
 #endif
 
 #if hls_ormolu
@@ -146,6 +154,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_fourmolu
       let pId = "fourmolu" in Fourmolu.descriptor (pluginRecorder pId) pId:
+#endif
+#if hls_cabalfmt
+      let pId = "cabalfmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_tactic
       let pId = "tactics" in Tactic.descriptor (pluginRecorder pId) pId:
@@ -220,5 +231,8 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       GhcIde.descriptors (pluginRecorder "ghcide")
 #if explicitFixity
       ++ [let pId = "explicit-fixity" in ExplicitFixity.descriptor (pluginRecorder pId) pId]
+#endif
+#if explicitFields
+      ++ [let pId = "explicit-fields" in ExplicitFields.descriptor (pluginRecorder pId) pId]
 #endif
 

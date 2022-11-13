@@ -41,7 +41,7 @@
     │           ├── <experiment>.log                  - bench stdout
     │           └── results.csv                       - results of all the experiments for the example
     ├── results.csv        - aggregated results of all the examples, experiments, versions and configurations
-    └── <experiment>.svg   - graph of bytes over elapsed time, for all the examples, experiments, versions and configuratiof
+    └── <experiment>.svg   - graph of bytes over elapsed time, for all the examples, experiments, versions and configurations
 
    For diff graphs, the "previous version" is the preceding entry in the list of versions
    in the config file. A possible improvement is to obtain this info via `git rev-list`.

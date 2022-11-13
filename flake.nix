@@ -111,6 +111,10 @@
       url = "https://hackage.haskell.org/package/hiedb-0.4.2.0/hiedb-0.4.2.0.tar.gz";
       flake = false;
     };
+    hw-prim = {
+      url = "https://hackage.haskell.org/package/hw-prim-0.6.3.2/hw-prim-0.6.3.2.tar.gz";
+      flake = false;
+    };
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, all-cabal-hashes-unpacked, ... }:
@@ -182,6 +186,7 @@
 
               entropy = hsuper.callCabal2nix "entropy" inputs.entropy {};
               hiedb = hsuper.callCabal2nix "hiedb" inputs.hiedb {};
+              hw-prim = hsuper.callCabal2nix "hw-prim" inputs.hw-prim {};
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.implicit-hie-cradle {};
               ghc-check = hself.callCabal2nix "ghc-check" inputs.ghc-check {};
@@ -195,17 +200,23 @@
           hlsSources =
             builtins.mapAttrs (_: dir: gitignoreSource dir) sourceDirs;
 
-          extended = hpkgs:
-            (hpkgs.override (old: {
-              overrides = lib.composeExtensions (old.overrides or (_: _: { }))
-                haskellOverrides;
-            })).extend (hself: hsuper:
-              # disable all checks for our packages
-              builtins.mapAttrs (_: drv: haskell.lib.dontCheck drv)
-              (lib.composeExtensions
-                (haskell.lib.packageSourceOverrides hlsSources) tweaks hself
-                hsuper));
+          # Disable tests, but only for the packages mentioned in this overlay
+          #
+          # We don't want to disable tests for *all* packages
+          dontCheck = overlay: hself: hsuper:
+            builtins.mapAttrs (_: haskell.lib.dontCheck)
+              (overlay hself hsuper);
 
+          extended = hpkgs: hpkgs.override (old: {
+            overrides =
+              lib.fold
+                lib.composeExtensions
+                (old.overrides or (_: _: { }))
+                [ haskellOverrides
+                  (dontCheck (haskell.lib.packageSourceOverrides hlsSources))
+                  tweaks
+                ];
+          });
         in {
           inherit hlsSources;
 
@@ -356,6 +367,10 @@
 
             src = null;
           };
+
+        mkEnvShell = hpkgs:
+          pkgs.lib.mapAttrs (name: value: hpkgs.${name}.env) pkgs.hlsSources;
+
         # Create a hls executable
         # Copied from https://github.com/NixOS/nixpkgs/blob/210784b7c8f3d926b7db73bdad085f4dc5d79428/pkgs/development/tools/haskell/haskell-language-server/withWrapper.nix#L16
         mkExe = hpkgs:
@@ -388,6 +403,15 @@
           haskell-language-server-942-dev-nix = mkDevShellWithNixDeps ghc942 "cabal.project";
         };
 
+        # The default shell provided by Nixpkgs for a Haskell package (i.e. the
+        # one that comes in the `.env` attribute)
+        envShells = {
+          haskell-language-server-dev-env = mkEnvShell ghcDefault;
+          haskell-language-server-902-dev-env = mkEnvShell ghc902;
+          haskell-language-server-924-dev-env = mkEnvShell ghc924;
+          haskell-language-server-942-dev-env = mkEnvShell ghc942;
+        };
+
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-902 = mkExe ghc902;
@@ -395,7 +419,7 @@
           haskell-language-server-942 = mkExe ghc942;
         };
 
-        devShells = simpleDevShells // nixDevShells // {
+        devShells = simpleDevShells // nixDevShells // envShells // {
           default = simpleDevShells.haskell-language-server-dev;
         };
 

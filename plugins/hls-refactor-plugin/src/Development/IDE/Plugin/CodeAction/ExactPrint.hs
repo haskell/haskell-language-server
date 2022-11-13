@@ -385,7 +385,7 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
             nodeHasComma x = isJust $ Map.lookup (mkAnnKey x) anns >>= find isAnnComma . annsDP
         when shouldAddTrailingComma (addTrailingCommaT x)
 
-        -- Parens are attachted to `lies`, so if `lies` was empty previously,
+        -- Parens are attached to `lies`, so if `lies` was empty previously,
         -- we need change the ann key from `[]` to `:` to keep parens and other anns.
         unless hasSibling $
           transferAnn (L l' lies) (L l' [x]) id
@@ -435,7 +435,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
           childLIE = reLocA $ L srcChild $ IEName childRdr
 #if !MIN_VERSION_ghc(9,2,0)
           x :: LIE GhcPs = L ll' $ IEThingWith noExtField absIE NoIEWildcard [childLIE] []
-      -- take anns from ThingAbs, and attatch parens to it
+      -- take anns from ThingAbs, and attach parens to it
       transferAnn lAbs x $ \old -> old{annsDP = annsDP old ++ [(G AnnOpenP, DP (0, 1)), (G AnnCloseP, dp00)]}
       addSimpleAnnT childRdr dp00 [(G AnnVal, dp00)]
 #else
@@ -518,7 +518,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       addSimpleAnnT parentRdr (DP (0, if hasSibling then 1 else 0)) $ unqalDP 1 isParentOperator
       addSimpleAnnT childRdr (DP (0, 0)) [(G AnnVal, dp00)]
       addSimpleAnnT x (DP (0, 0)) [(G AnnOpenP, DP (0, 1)), (G AnnCloseP, DP (0, 0))]
-      -- Parens are attachted to `pre`, so if `pre` was empty previously,
+      -- Parens are attached to `pre`, so if `pre` was empty previously,
       -- we need change the ann key from `[]` to `:` to keep parens and other anns.
       unless hasSibling $
         transferAnn (L l' $ reverse pre) (L l' [x]) id
@@ -538,7 +538,7 @@ extendImportViaParent _ _ _ _ = lift $ Left "Unable to extend the import list vi
 addCommaInImportList ::
   -- | Initial list
   [LocatedAn AnnListItem a]
-  -- | Additionnal item
+  -- | Additional item
   -> LocatedAn AnnListItem a
   -> [LocatedAn AnnListItem a]
 addCommaInImportList lies x =

@@ -44,8 +44,8 @@ deriveFmap = do
 -- and then calling mappend recursively. At each recursive call, we filter away
 -- any binding that isn't in an analogous position.
 --
--- The recursive call first attempts to use an instace in scope. If that fails,
--- it fals back to trying a theta method from the hypothesis with the correct
+-- The recursive call first attempts to use an instance in scope. If that fails,
+-- it falls back to trying a theta method from the hypothesis with the correct
 -- name.
 deriveMappend :: TacticsM ()
 deriveMappend = do

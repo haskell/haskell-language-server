@@ -62,13 +62,13 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
 
         pure Null
     where
-        toTextDocunemtEdit edit =
+        toTextDocumentEdit edit =
             TextDocumentEdit (VersionedTextDocumentIdentifier uri (Just 0)) (List [InL edit])
 
         mergeEdit :: WorkspaceEdit -> [TextEdit] -> WorkspaceEdit
         mergeEdit WorkspaceEdit{..} edits = WorkspaceEdit
             { _documentChanges =
-                (\(List x) -> List $ x ++ map (InL . toTextDocunemtEdit) edits)
+                (\(List x) -> List $ x ++ map (InL . toTextDocumentEdit) edits)
                     <$> _documentChanges
             , ..
             }

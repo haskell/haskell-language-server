@@ -366,11 +366,11 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
       asNamespace :: ImportDecl GhcPs -> ModuleName
       asNamespace imp = maybe (iDeclToModName imp) GHC.unLoc (ideclAs imp)
       -- Full canonical names of imported modules
-      importDeclerations = map unLoc limports
+      importDeclarations = map unLoc limports
 
 
       -- The given namespaces for the imported modules (ie. full name, or alias if used)
-      allModNamesAsNS = map (showModName . asNamespace) importDeclerations
+      allModNamesAsNS = map (showModName . asNamespace) importDeclarations
 
       rdrElts = globalRdrEnvElts globalEnv
 

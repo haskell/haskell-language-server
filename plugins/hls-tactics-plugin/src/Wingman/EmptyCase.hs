@@ -21,7 +21,7 @@ import           Development.IDE (hscEnv, realSrcSpanToRange)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat hiding (empty)
+import           Development.IDE.GHC.Compat hiding (empty, EmptyCase)
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (getLocalScope)
 import           Ide.Types

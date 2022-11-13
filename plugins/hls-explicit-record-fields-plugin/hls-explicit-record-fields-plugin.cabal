@@ -1,0 +1,59 @@
+cabal-version:      3.0
+name:               hls-explicit-record-fields-plugin
+version:            1.0.0.0
+synopsis:           Explicit record fields plugin for Haskell Language Server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Berk Ozkutuk
+maintainer:         berk.ozkutuk@tweag.io
+-- copyright:
+category:           Development
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+-- extra-source-files:
+
+source-repository head
+  type:     git
+  location: https://github.com/haskell/haskell-language-server
+
+common warnings
+    ghc-options: -Wall
+
+library
+    import:           warnings
+    exposed-modules:  Ide.Plugin.ExplicitFields
+    -- other-modules:
+    -- other-extensions:
+    build-depends:
+      , base                  >=4.12 && <5
+      , ghcide                ^>=1.7 || ^>=1.8
+      , hls-plugin-api        ^>=1.4 || ^>=1.5
+      , lsp
+      , lens
+      , hls-graph
+      , text
+      , syb
+      , transformers
+      , ghc-boot-th
+      , unordered-containers
+      , hw-fingertree
+    hs-source-dirs:   src
+    default-language: Haskell2010
+
+test-suite tests
+    import:           warnings
+    default-language: Haskell2010
+    -- other-modules:
+    -- other-extensions:
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    build-depends:
+      , base
+      , filepath
+      , text
+      , hls-explicit-record-fields-plugin
+      , lsp-test
+      , hls-test-utils
