@@ -13,9 +13,11 @@ maintainer:         fendor@posteo.de
 category:           Development
 extra-source-files:
   CHANGELOG.md
-  test/testdata/invalid.cabal
-  test/testdata/licenseCodeAction.cabal
-  test/testdata/simple.cabal
+  test/testdata/*.cabal
+  test/testdata/simple-cabal/A.hs
+  test/testdata/simple-cabal/cabal.project
+  test/testdata/simple-cabal/hie.yaml
+  test/testdata/simple-cabal/simple-cabal.cabal
 
 common warnings
   ghc-options: -Wall
