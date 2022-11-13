@@ -88,7 +88,8 @@ pluginTests recorder = testGroup "Plugin Tests"
         expectNoMoreDiagnostics 1 hsDoc "typechecking"
         cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
         expectNoMoreDiagnostics 1 cabalDoc "parsing"
-    , runCabalTestCaseSession "Diagnostics in .hs files from invalid .cabal file" recorder "simple-cabal" $ do
+    , ignoreTestBecause "Testcase is flaky for certain GHC versions (e.g. 9.2.4). See #3333 for details." $ do
+      runCabalTestCaseSession "Diagnostics in .hs files from invalid .cabal file" recorder "simple-cabal" $ do
         hsDoc <- openDoc "A.hs" "haskell"
         expectNoMoreDiagnostics 1 hsDoc "typechecking"
         cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
