@@ -23,6 +23,9 @@ module Development.IDE.GHC.ExactPrint
 #if MIN_VERSION_ghc(9,2,1)
       modifySmallestDeclWithM,
       modifyMgMatchesT,
+      modifyMgMatchesT',
+      modifySigWithM,
+      genAnchor1,
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
       Anns,
@@ -111,11 +114,18 @@ import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           deltaPos)
 #endif
 
+#if MIN_VERSION_ghc(9,2,1)
+import Data.List (partition)
+import GHC (Anchor(..), realSrcSpan, AnchorOperation, DeltaPos(..), SrcSpanAnnN)
+import GHC.Types.SrcLoc (generatedSrcSpan)
+import Control.Lens ((&), _last)
+import Control.Lens.Operators ((%~))
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 setPrecedingLines :: Default t => LocatedAn t a -> Int -> Int -> LocatedAn t a
 setPrecedingLines ast n c = setEntryDP ast (deltaPos n c)
 #endif
-
 ------------------------------------------------------------------------------
 
 data Log = LogShake Shake.Log deriving Show
@@ -449,32 +459,129 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
 --
 -- For example, if you would like to move a where-clause-defined variable to the same
 -- level as its parent HsDecl, you could use this function.
+--
+-- When matching declaration is found in the sub-declarations of `a`, `Just r` is also returned with the new `a`. If
+-- not declaration matched, then `Nothing` is returned.
 modifySmallestDeclWithM ::
-  forall a m.
+  forall a m r.
   (HasDecls a, Monad m) =>
   (SrcSpan -> m Bool) ->
-  (LHsDecl GhcPs -> TransformT m [LHsDecl GhcPs]) ->
+  (LHsDecl GhcPs -> TransformT m ([LHsDecl GhcPs], r)) ->
   a ->
-  TransformT m a
+  TransformT m (a, Maybe r)
 modifySmallestDeclWithM validSpan f a = do
-  let modifyMatchingDecl [] = pure DL.empty
-      modifyMatchingDecl (e@(L src _) : rest) =
+  let modifyMatchingDecl [] = pure (DL.empty, Nothing)
+      modifyMatchingDecl (ldecl@(L src _) : rest) =
         lift (validSpan $ locA src) >>= \case
             True -> do
-              decs' <- f e
-              pure $ DL.fromList decs' <> DL.fromList rest
-            False -> (DL.singleton e <>) <$> modifyMatchingDecl rest
-  modifyDeclsT (fmap DL.toList . modifyMatchingDecl) a
+              (decs', r) <- f ldecl
+              pure $ (DL.fromList decs' <> DL.fromList rest, Just r)
+            False -> first (DL.singleton ldecl <>) <$> modifyMatchingDecl rest
+  modifyDeclsT' (fmap (first DL.toList) . modifyMatchingDecl) a
 
--- | Modify the each LMatch in a MatchGroup
+generatedAnchor :: AnchorOperation -> Anchor
+generatedAnchor anchorOp = GHC.Anchor (GHC.realSrcSpan generatedSrcSpan) anchorOp
+
+setAnchor :: Anchor -> SrcSpanAnnN -> SrcSpanAnnN
+setAnchor anc (SrcSpanAnn (EpAnn _ nameAnn comments) span) =
+  SrcSpanAnn (EpAnn anc nameAnn comments) span
+setAnchor _ spanAnnN = spanAnnN
+
+removeTrailingAnns :: SrcSpanAnnN -> SrcSpanAnnN
+removeTrailingAnns (SrcSpanAnn (EpAnn anc nameAnn comments) span) =
+  let nameAnnSansTrailings = nameAnn {nann_trailing = []}
+  in SrcSpanAnn (EpAnn anc nameAnnSansTrailings comments) span
+removeTrailingAnns spanAnnN = spanAnnN
+
+-- | Modify the type signature for the given IdP. This function handles splitting a multi-sig
+-- SigD into multiple SigD if the type signature is changed.
+--
+-- For example, update the type signature for `foo` from `Int` to `Bool`:
+--
+-- - foo :: Int
+-- + foo :: Bool
+--
+-- - foo, bar :: Int
+-- + bar :: Int
+-- + foo :: Bool
+--
+-- - foo, bar, baz :: Int
+-- + bar, baz :: Int
+-- + foo :: Bool
+modifySigWithM ::
+  forall a m.
+  (HasDecls a, Monad m) =>
+  IdP GhcPs ->
+  (LHsSigType GhcPs -> LHsSigType GhcPs) ->
+  a ->
+  TransformT m a
+modifySigWithM queryId f a = do
+  let modifyMatchingSigD :: [LHsDecl GhcPs] -> TransformT m (DL.DList (LHsDecl GhcPs))
+      modifyMatchingSigD [] = pure (DL.empty)
+      modifyMatchingSigD (ldecl@(L annSigD (SigD xsig (TypeSig xTypeSig ids (HsWC xHsWc lHsSig)))) : rest)
+        | queryId `elem` (unLoc <$> ids) = do
+            let newSig = f lHsSig
+            -- If this signature update caused no change, then we don't need to split up multi-signatures
+            if newSig `geq` lHsSig
+              then pure $ DL.singleton ldecl <> DL.fromList rest
+              else case partition ((== queryId) . unLoc) ids of
+                ([L annMatchedId matchedId], otherIds) ->
+                  let matchedId' = L (setAnchor genAnchor0 $ removeTrailingAnns annMatchedId) matchedId
+                      matchedIdSig =
+                        let sig' = SigD xsig (TypeSig xTypeSig [matchedId'] (HsWC xHsWc newSig))
+                            epAnn = bool (noAnnSrcSpanDP generatedSrcSpan (DifferentLine 1 0)) annSigD (null otherIds)
+                        in L epAnn sig'
+                      otherSig = case otherIds of
+                        [] -> []
+                        (L (SrcSpanAnn epAnn span) id1:ids) -> [
+                          let epAnn' = case epAnn of
+                                EpAnn _ nameAnn commentsId1 -> EpAnn genAnchor0 nameAnn commentsId1
+                                EpAnnNotUsed -> EpAnn genAnchor0 mempty emptyComments
+                              ids' = L (SrcSpanAnn epAnn' span) id1:ids
+                              ids'' = ids' & _last %~ first removeTrailingAnns
+                            in L annSigD (SigD xsig (TypeSig xTypeSig ids'' (HsWC xHsWc lHsSig)))
+                            ]
+                  in pure $ DL.fromList otherSig <> DL.singleton matchedIdSig <> DL.fromList rest
+                _ -> error "multiple ids matched"
+      modifyMatchingSigD (ldecl : rest) = (DL.singleton ldecl <>) <$> modifyMatchingSigD rest
+  modifyDeclsT (fmap DL.toList . modifyMatchingSigD) a
+
+genAnchor0 :: Anchor
+genAnchor0 = generatedAnchor m0
+
+genAnchor1 :: Anchor
+genAnchor1 = generatedAnchor m1
+
+-- | Apply a transformation to the decls contained in @t@
+modifyDeclsT' :: (HasDecls t, HasTransform m)
+             => ([LHsDecl GhcPs] -> m ([LHsDecl GhcPs], r))
+             -> t -> m (t, r)
+modifyDeclsT' action t = do
+  decls <- liftT $ hsDecls t
+  (decls', r) <- action decls
+  t' <- liftT $ replaceDecls t decls'
+  pure (t', r)
+
+-- | Modify each LMatch in a MatchGroup
 modifyMgMatchesT ::
   Monad m =>
   MatchGroup GhcPs (LHsExpr GhcPs) ->
   (LMatch GhcPs (LHsExpr GhcPs) -> TransformT m (LMatch GhcPs (LHsExpr GhcPs))) ->
   TransformT m (MatchGroup GhcPs (LHsExpr GhcPs))
-modifyMgMatchesT (MG xMg (L locMatches matches) originMg) f = do
-  matches' <- mapM f matches
-  pure $ MG xMg (L locMatches matches') originMg
+modifyMgMatchesT mg f = fst <$> modifyMgMatchesT' mg (fmap (, ()) . f) () ((.) pure . const)
+
+-- | Modify the each LMatch in a MatchGroup
+modifyMgMatchesT' ::
+  Monad m =>
+  MatchGroup GhcPs (LHsExpr GhcPs) ->
+  (LMatch GhcPs (LHsExpr GhcPs) -> TransformT m (LMatch GhcPs (LHsExpr GhcPs), r)) ->
+  r ->
+  (r -> r -> m r) ->
+  TransformT m (MatchGroup GhcPs (LHsExpr GhcPs), r)
+modifyMgMatchesT' (MG xMg (L locMatches matches) originMg) f def combineResults = do
+  (unzip -> (matches', rs)) <- mapM f matches
+  r' <- lift $ foldM combineResults def rs
+  pure $ (MG xMg (L locMatches matches') originMg, r')
 #endif
 
 graftSmallestDeclsWithM ::
