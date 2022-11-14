@@ -54,7 +54,8 @@ import           Test.Tasty.HUnit
 import           Text.Regex.TDFA                          ((=~))
 
 
-import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
+import           Development.IDE.Plugin.CodeAction        (bindingsPluginDescriptor,
+                                                           matchRegExMultipleImports)
 import           Test.Hls
 
 import           Control.Applicative                      (liftA2)
@@ -2371,9 +2372,37 @@ addFunctionArgumentTests =
         liftIO $ actionTitle @?= "Add argument ‘select’ to function"
         executeCodeAction action
         contentAfterAction <- documentContents docB
-        liftIO $ contentAfterAction @?= T.unlines foo'
+        liftIO $ contentAfterAction @?= T.unlines foo',
+        mkGoldenAddArgTest "AddArgWithSig" (R 1 0 1 50),
+        mkGoldenAddArgTest "AddArgWithSigAndDocs" (R 8 0 8 50),
+        mkGoldenAddArgTest "AddArgFromLet" (R 2 0 2 50),
+        mkGoldenAddArgTest "AddArgFromWhere" (R 3 0 3 50),
+        mkGoldenAddArgTest "AddArgWithTypeSynSig" (R 2 0 2 50),
+        mkGoldenAddArgTest "AddArgWithTypeSynSigContravariant" (R 2 0 2 50),
+        mkGoldenAddArgTest "AddArgWithLambda" (R 1 0 1 50),
+        mkGoldenAddArgTest "MultiSigFirst" (R 2 0 2 50),
+        mkGoldenAddArgTest "MultiSigLast" (R 2 0 2 50),
+        mkGoldenAddArgTest "MultiSigMiddle" (R 2 0 2 50)
     ]
 #endif
+
+mkGoldenAddArgTest :: FilePath -> Range -> TestTree
+mkGoldenAddArgTest testFileName range = do
+    let action docB = do
+          _ <- waitForDiagnostics
+          InR action@CodeAction {_title = actionTitle} : _ <-
+            filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
+              <$> getCodeActions docB range
+          liftIO $ actionTitle @?= "Add argument ‘new_def’ to function"
+          executeCodeAction action
+    goldenWithHaskellDoc
+      (Refactor.bindingsPluginDescriptor mempty "ghcide-code-actions-bindings")
+      (testFileName <> " (golden)")
+      "test/data/golden/add-arg"
+      testFileName
+      "expected"
+      "hs"
+      action
 
 deleteUnusedDefinitionTests :: TestTree
 deleteUnusedDefinitionTests = testGroup "delete unused definition action"
