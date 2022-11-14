@@ -188,7 +188,6 @@
               hiedb = hsuper.callCabal2nix "hiedb" inputs.hiedb {};
               hw-prim = hsuper.callCabal2nix "hw-prim" inputs.hw-prim {};
               retrie = hsuper.callCabal2nix "retrie" inputs.retrie {};
-              retrieHEAD = hsuper.callCabal2nix "retrie" inputs.retrie {};
               retrie_1_1_0_0 = hsuper.callCabal2nix "retrie" inputs.retrie_1100 {};
               apply-refactHEAD = hsuper.callCabal2nix "apply-refact" inputs.apply-refact {};
 
@@ -355,6 +354,8 @@
             gmp zlib ncurses
             # Changelog tooling
             (gen-hls-changelogs pkgs.haskellPackages)
+            # For the documentation
+            pythonWithPackages
             # @guibou: I'm not sure this is needed.
             hlint
             pkgs.haskellPackages.opentelemetry-extra

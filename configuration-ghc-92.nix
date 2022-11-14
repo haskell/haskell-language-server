@@ -34,8 +34,6 @@ let
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         (pkgs.lib.concatStringsSep " " [ "-fpedantic" "-f-hlint" ]) { };
 
-      #
-      retrie = hself.retrieHEAD;
       fourmolu = hself.fourmolu_0_8_2_0;
 
     });
