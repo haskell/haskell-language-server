@@ -64,7 +64,7 @@
       flake = false;
     };
     retrie = {
-      url = "github:MercuryTechnologies/retrie/mercury/ghc94";
+      url = "https://hackage.haskell.org/package/retrie-1.2.1/retrie-1.2.1.tar.gz";
       flake = false;
     };
     aeson-1520= {
