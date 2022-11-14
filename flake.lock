@@ -15,11 +15,11 @@
     "all-cabal-hashes-unpacked": {
       "flake": false,
       "locked": {
-        "lastModified": 1668108032,
-        "narHash": "sha256-z0L4I5ADn786XmVrKqmQ6qRY1RyTQWgLyZXFVinq4LA=",
+        "lastModified": 1668441869,
+        "narHash": "sha256-6dTPbQBy9XZDQi6tDW8w09hArHp/ZA5s1DkSaJNYwSU=",
         "owner": "commercialhaskell",
         "repo": "all-cabal-hashes",
-        "rev": "670aa678eef4c0d19ea370137cf9a51da039d706",
+        "rev": "3f9094b2ab1f351a7036b0bbf39236a74fc77b6e",
         "type": "github"
       },
       "original": {
@@ -287,11 +287,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1668058645,
-        "narHash": "sha256-vHAXeYfKVO6ZbDN0GquEPVFZ42LzlYoX4ZWuKteFzj0=",
+        "lastModified": 1668415355,
+        "narHash": "sha256-F52qWYvLFJV1jibZiuNzeca8+UgZ7NZrr44J2ednmpE=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "d01cb18be494e3d860fcfe6be4ad63614360333c",
+        "rev": "69f8e94c46904a3194afcc8b232402287c7f91c9",
         "type": "github"
       },
       "original": {
@@ -316,18 +316,13 @@
     "retrie": {
       "flake": false,
       "locked": {
-        "lastModified": 1668115819,
-        "narHash": "sha256-oMAdLkJTnX4NNxCPROxjQt+S3++dzfnu7kjIHmGyMDQ=",
-        "owner": "MercuryTechnologies",
-        "repo": "retrie",
-        "rev": "12223a54fe01e9d49f94e86125fb82d689cc562c",
-        "type": "github"
+        "narHash": "sha256-yokMPa3T7gO3YGwaE0CwCO+vG4IVvObSo+q8fzGbAvc=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/retrie-1.2.1/retrie-1.2.1.tar.gz"
       },
       "original": {
-        "owner": "MercuryTechnologies",
-        "ref": "mercury/ghc94",
-        "repo": "retrie",
-        "type": "github"
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/retrie-1.2.1/retrie-1.2.1.tar.gz"
       }
     },
     "retrie_1100": {
