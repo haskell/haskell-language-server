@@ -55,7 +55,7 @@ import           Development.IDE.GHC.ExactPrint
 import           GHC.Data.Bag (Bag)
 #endif
 import           GHC.Exts
-#if MIN_VERSION_ghc(9,0,2)
+#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Parser.Annotation (SrcSpanAnn'(..))
 import qualified GHC.Types.Error as Error
 #endif
@@ -274,7 +274,7 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
 -- `GenLocated`. In GHC >= 9.2 this will be a SrcSpanAnn', with annotations;
 -- earlier it will just be a plain `SrcSpan`.
 {-# COMPLETE AsSrcSpan #-}
-#if MIN_VERSION_ghc(9,0,2)
+#if MIN_VERSION_ghc(9,2,0)
 pattern AsSrcSpan :: SrcSpan -> SrcSpanAnn' a
 pattern AsSrcSpan locA <- SrcSpanAnn {locA}
 #else
@@ -372,7 +372,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                                             Right y -> unRenamedE dflags y
                                     _ -> pure Nothing
             let (warns, errs) =
-#if MIN_VERSION_ghc(9,0,2)
+#if MIN_VERSION_ghc(9,2,0)
                                 (Error.getWarningMessages msgs, Error.getErrorMessages msgs)
 #else
                                 msgs
@@ -419,7 +419,7 @@ unRenamedE ::
     TransformT m (LocatedAn l (ast GhcPs))
 unRenamedE dflags expr = do
     uniq <- show <$> uniqueSrcSpanT
-#if MIN_VERSION_ghc(9,0,2)
+#if MIN_VERSION_ghc(9,2,0)
     expr' <-
 #else
     (_anns, expr') <-
