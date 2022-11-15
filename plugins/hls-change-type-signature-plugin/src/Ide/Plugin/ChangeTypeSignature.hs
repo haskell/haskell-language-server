@@ -38,14 +38,14 @@ descriptor :: PluginDescriptor IdeState
 descriptor = (defaultPluginDescriptor changeTypeSignatureId) { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler }
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = pluginResponse $ do
-      nfp <- getNormalizedFilePath plId uri
+codeActionHandler ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = pluginResponse $ do
+      nfp <- getNormalizedFilePath uri
       decls <- getDecls ideState nfp
       let actions = mapMaybe (generateAction uri decls) diags
       pure $ List actions
 
 getDecls :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m [LHsDecl GhcPs]
-getDecls state = handleMaybeM "Error: Could not get Parsed Module"
+getDecls state = handleMaybeM "Could not get Parsed Module"
     . liftIO
     . fmap (fmap (hsmodDecls . unLoc . pm_parsed_source))
     . runAction (changeTypeSignatureId <> ".GetParsedModule") state

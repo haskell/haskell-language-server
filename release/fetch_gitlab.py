@@ -41,13 +41,14 @@ def fetch_artifacts(release: str, pipeline_id: int,
                 logging.info(f'artifact archive for job {job.name} (job {job.id}) is empty')
                 continue
 
-            dest = dest_dir / f'haskell-language-server-{release}-{platform}.tar.xz'
+            extension = 'zip' if job.name.endswith('windows') else 'tar.xz'
+            dest = dest_dir / f'haskell-language-server-{release}-{platform}.{extension}'
             if dest.exists():
                 logging.info(f'bindist {dest} already exists')
                 continue
 
             subprocess.run(['unzip', '-bo', zip_name, '-d', destdir])
-            bindist_files = list(destdir.glob('*/haskell-language-server*.tar.xz'))
+            bindist_files = list(destdir.glob(f'*/haskell-language-server*.{extension}'))
             if len(bindist_files) == 0:
                 logging.warn(f'Bindist does not exist')
                 continue

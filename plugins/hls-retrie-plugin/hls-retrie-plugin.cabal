@@ -1,6 +1,6 @@
 cabal-version:      2.2
 name:               hls-retrie-plugin
-version:            1.0.2.1
+version:            1.0.2.2
 synopsis:           Retrie integration plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -12,7 +12,15 @@ category:           Development
 build-type:         Simple
 extra-source-files: LICENSE
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 library
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   exposed-modules:    Ide.Plugin.Retrie
   hs-source-dirs:     src
   build-depends:
@@ -24,9 +32,9 @@ library
     , directory
     , extra
     , ghc
-    , ghcide                ^>=1.7
+    , ghcide                ^>=1.8
     , hashable
-    , hls-plugin-api        ^>=1.4
+    , hls-plugin-api        ^>=1.5
     , lsp
     , lsp-types
     , retrie                >=0.1.1.0

@@ -5,44 +5,50 @@
 
 module Main(main) where
 
-import           Arguments                         (Arguments (..),
-                                                    getArguments)
-import           Control.Monad.Extra               (unless)
-import           Control.Monad.IO.Class            (liftIO)
-import           Data.Default                      (def)
-import           Data.Function                     ((&))
-import           Data.Version                      (showVersion)
-import           Development.GitRev                (gitHash)
-import           Development.IDE                   (action)
-import           Development.IDE.Core.OfInterest   (kick)
-import           Development.IDE.Core.Rules        (mainRule)
-import qualified Development.IDE.Core.Rules        as Rules
-import           Development.IDE.Core.Tracing      (withTelemetryLogger)
-import qualified Development.IDE.Main              as IDEMain
+import           Arguments                                (Arguments (..),
+                                                           getArguments)
+import           Control.Monad.Extra                      (unless)
+import           Control.Monad.IO.Class                   (liftIO)
+import           Data.Default                             (def)
+import           Data.Function                            ((&))
+import           Data.Version                             (showVersion)
+import           Development.GitRev                       (gitHash)
+import           Development.IDE                          (action)
+import           Development.IDE.Core.OfInterest          (kick)
+import           Development.IDE.Core.Rules               (mainRule)
+import qualified Development.IDE.Core.Rules               as Rules
+import           Development.IDE.Core.Tracing             (withTelemetryLogger)
+import qualified Development.IDE.Main                     as IDEMain
+import qualified Development.IDE.Monitoring.EKG           as EKG
 import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
-import qualified Development.IDE.Monitoring.EKG    as EKG
-import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import           Development.IDE.Types.Logger      (Logger (Logger),
-                                                    LoggingColumn (DataColumn, PriorityColumn),
-                                                    Pretty (pretty),
-                                                    Priority (Debug, Info, Error),
-                                                    WithPriority (WithPriority, priority),
-                                                    cfilter, cmapWithPrio,
-                                                    makeDefaultStderrRecorder, layoutPretty, renderStrict, defaultLayoutOptions)
-import qualified Development.IDE.Types.Logger      as Logger
+import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
+import           Development.IDE.Types.Logger             (Logger (Logger),
+                                                           LoggingColumn (DataColumn, PriorityColumn),
+                                                           Pretty (pretty),
+                                                           Priority (Debug, Error, Info),
+                                                           WithPriority (WithPriority, priority),
+                                                           cfilter,
+                                                           cmapWithPrio,
+                                                           defaultLayoutOptions,
+                                                           layoutPretty,
+                                                           makeDefaultStderrRecorder,
+                                                           renderStrict)
+import qualified Development.IDE.Types.Logger             as Logger
 import           Development.IDE.Types.Options
-import           GHC.Stack                         (emptyCallStack)
-import           Language.LSP.Server               as LSP
-import           Language.LSP.Types                as LSP
-import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
-import           Ide.PluginUtils                   (pluginDescToIdePlugins)
-import           Ide.Types                         (PluginDescriptor (pluginNotificationHandlers), defaultPluginDescriptor, mkPluginNotificationHandler)
-import           Paths_ghcide                      (version)
-import qualified System.Directory.Extra            as IO
-import           System.Environment                (getExecutablePath)
-import           System.Exit                       (exitSuccess)
-import           System.IO                         (hPutStrLn, stderr)
-import           System.Info                       (compilerVersion)
+import           GHC.Stack                                (emptyCallStack)
+import           Ide.Plugin.Config                        (Config (checkParents, checkProject))
+import           Ide.PluginUtils                          (pluginDescToIdePlugins)
+import           Ide.Types                                (PluginDescriptor (pluginNotificationHandlers),
+                                                           defaultPluginDescriptor,
+                                                           mkPluginNotificationHandler)
+import           Language.LSP.Server                      as LSP
+import           Language.LSP.Types                       as LSP
+import           Paths_ghcide                             (version)
+import qualified System.Directory.Extra                   as IO
+import           System.Environment                       (getExecutablePath)
+import           System.Exit                              (exitSuccess)
+import           System.Info                              (compilerVersion)
+import           System.IO                                (hPutStrLn, stderr)
 
 data Log
   = LogIDEMain IDEMain.Log
@@ -138,7 +144,6 @@ main = withTelemetryLogger $ \telemetryLogger -> do
             let defOptions = IDEMain.argsIdeOptions arguments config sessionLoader
             in defOptions
                 { optShakeProfiling = argsShakeProfiling
-                , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
                 , optCheckParents = pure $ checkParents config
                 , optCheckProject = pure $ checkProject config
                 , optRunSubset = not argsConservativeChangeTracking

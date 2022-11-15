@@ -79,7 +79,7 @@ shakeGetBuildEdges :: ShakeDatabase -> IO Int
 shakeGetBuildEdges (ShakeDatabase _ _ db) = do
     keys <- getDatabaseValues db
     let ress = mapMaybe (getResult . snd) keys
-    return $ sum $ map (length . getResultDepsDefault [] . resultDeps) ress
+    return $ sum $ map (lengthKeySet . getResultDepsDefault mempty . resultDeps) ress
 
 -- | Returns an approximation of the database keys,
 --   annotated with how long ago (in # builds) they were visited

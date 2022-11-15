@@ -33,6 +33,9 @@ import           System.Directory
 import           System.FilePath
 
 import           Language.LSP.Types              (filePathToUri, getUri)
+#if MIN_VERSION_ghc(9,3,0)
+import           GHC.Types.Unique.Map
+#endif
 
 mkDocMap
   :: HscEnv
@@ -41,12 +44,18 @@ mkDocMap
   -> IO DocAndKindMap
 mkDocMap env rm this_mod =
   do
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,3,0)
+     (Just Docs{docs_decls = UniqMap this_docs}) <- extractDocs (hsc_dflags env) this_mod
+#elif MIN_VERSION_ghc(9,2,0)
      (_ , DeclDocMap this_docs, _) <- extractDocs this_mod
 #else
      let (_ , DeclDocMap this_docs, _) = extractDocs this_mod
 #endif
+#if MIN_VERSION_ghc(9,3,0)
+     d <- foldrM getDocs (fmap (\(_, x) -> (map hsDocString x) `SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
+#else
      d <- foldrM getDocs (mkNameEnv $ M.toList $ fmap (`SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
+#endif
      k <- foldrM getType (tcg_type_env this_mod) names
      pure $ DKMap d k
   where
@@ -69,7 +78,7 @@ lookupKind env mod =
     fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env mod
 
 getDocumentationTryGhc :: HscEnv -> Module -> Name -> IO SpanDoc
-getDocumentationTryGhc env mod n = head <$> getDocumentationsTryGhc env mod [n]
+getDocumentationTryGhc env mod n = fromMaybe emptySpanDoc . listToMaybe <$> getDocumentationsTryGhc env mod [n]
 
 getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO [SpanDoc]
 getDocumentationsTryGhc env mod names = do
@@ -78,7 +87,11 @@ getDocumentationsTryGhc env mod names = do
       Left _    -> return []
       Right res -> zipWithM unwrap res names
   where
+#if MIN_VERSION_ghc(9,3,0)
+    unwrap (Right (Just docs, _)) n = SpanDocString (map hsDocString docs) <$> getUris n
+#else
     unwrap (Right (Just docs, _)) n = SpanDocString docs <$> getUris n
+#endif
     unwrap _ n                      = mkSpanDocText n
 
     mkSpanDocText name =
@@ -115,7 +128,7 @@ getDocumentation
 -- TODO : Build a version of GHC exactprint to extract this information
 -- more accurately.
 -- TODO : Implement this for GHC 9.2 with in-tree annotations
---        (alternatively, just remove it and rely soley on GHC's parsing)
+--        (alternatively, just remove it and rely solely on GHC's parsing)
 getDocumentation sources targetName = fromMaybe [] $ do
 #if MIN_VERSION_ghc(9,2,0)
   Nothing
@@ -124,7 +137,7 @@ getDocumentation sources targetName = fromMaybe [] $ do
   targetNameSpan <- realSpan $ getLoc targetName
   tc <-
     find ((==) (Just $ srcSpanFile targetNameSpan) . annotationFileName)
-      $ reverse sources -- TODO : Is reversing the list here really neccessary?
+      $ reverse sources -- TODO : Is reversing the list here really necessary?
 
   -- Top level names bound by the module
   let bs = [ n | let L _ HsModule{hsmodDecls} = pm_parsed_source tc

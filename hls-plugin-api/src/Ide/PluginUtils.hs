@@ -31,21 +31,25 @@ module Ide.PluginUtils
     pluginResponse,
     handleMaybe,
     handleMaybeM,
-    throwPluginError
+    throwPluginError,
+    unescape,
     )
 where
 
 
+import           Control.Arrow                   ((&&&))
 import           Control.Monad.Extra             (maybeM)
 import           Control.Monad.Trans.Class       (lift)
 import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
 import           Data.Bifunctor                  (Bifunctor (first))
-import           Data.Containers.ListUtils       (nubOrdOn)
+import           Data.Char                       (isPrint, showLitChar)
+import           Data.Functor                    (void)
 import qualified Data.HashMap.Strict             as H
 import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
+import           Data.Void                       (Void)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Ide.Types
@@ -56,6 +60,9 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
+import qualified Text.Megaparsec                 as P
+import qualified Text.Megaparsec.Char            as P
+import qualified Text.Megaparsec.Char.Lexer      as P
 
 -- ---------------------------------------------------------------------
 
@@ -159,15 +166,14 @@ clientSupportsDocumentChanges caps =
 -- ---------------------------------------------------------------------
 
 pluginDescToIdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
-pluginDescToIdePlugins plugins =
-    IdePlugins $ map (\p -> (pluginId p, p)) $ nubOrdOn pluginId plugins
+pluginDescToIdePlugins = IdePlugins
 
 idePluginsToPluginDesc :: IdePlugins ideState -> [PluginDescriptor ideState]
-idePluginsToPluginDesc (IdePlugins pp) = map snd pp
+idePluginsToPluginDesc (IdePlugins pp) = pp
 
 -- ---------------------------------------------------------------------
 -- | Returns the current client configuration. It is not wise to permanently
--- cache the returned value of this function, as clients can at runitime change
+-- cache the returned value of this function, as clients can at runtime change
 -- their configuration.
 --
 getClientConfig :: MonadLsp Config m => m Config
@@ -218,45 +224,32 @@ fullRange s = Range startPos endPos
         lastLine = fromIntegral $ length $ T.lines s
 
 subRange :: Range -> Range -> Bool
-subRange smallRange range =
-     positionInRange (_start smallRange) range
-  && positionInRange (_end smallRange) range
-
-positionInRange :: Position -> Range -> Bool
-positionInRange p (Range sp ep) = sp <= p && p <= ep
+subRange = isSubrangeOf
 
 -- ---------------------------------------------------------------------
 
 allLspCmdIds' :: T.Text -> IdePlugins ideState -> [T.Text]
-allLspCmdIds' pid (IdePlugins ls) = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
-    where
-        justs (p, Just x)  = [(p, x)]
-        justs (_, Nothing) = []
-
-
-        mkPlugin maker selector
-            = maker $ concatMap (\(pid, p) -> justs (pid, selector p)) ls
-
+allLspCmdIds' pid (IdePlugins ls) =
+    allLspCmdIds pid $ map (pluginId &&& pluginCommands) ls
 
 allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand ideState])] -> [T.Text]
 allLspCmdIds pid commands = concatMap go commands
   where
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
 
+
 -- ---------------------------------------------------------------------
 
-getNormalizedFilePath :: Monad m => PluginId -> Uri -> ExceptT String m NormalizedFilePath
-getNormalizedFilePath (PluginId plId) uri = handleMaybe errMsg
+getNormalizedFilePath :: Monad m => Uri -> ExceptT String m NormalizedFilePath
+getNormalizedFilePath uri = handleMaybe errMsg
         $ uriToNormalizedFilePath
         $ toNormalizedUri uri
     where
-        errMsg = T.unpack $ "Error(" <> plId <> "): converting " <> getUri uri <> " to NormalizedFilePath"
+        errMsg = T.unpack $ "Failed converting " <> getUri uri <> " to NormalizedFilePath"
 
 -- ---------------------------------------------------------------------
-throwPluginError :: Monad m => PluginId -> String -> String -> ExceptT String m b
-throwPluginError (PluginId who) what where' = throwE msg
-    where
-        msg = (T.unpack who) <> " failed with " <> what <> " at " <> where'
+throwPluginError :: Monad m => String -> ExceptT String m b
+throwPluginError = throwE
 
 handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
 handleMaybe msg = maybe (throwE msg) return
@@ -268,3 +261,34 @@ pluginResponse :: Monad m => ExceptT String m a -> m (Either ResponseError a)
 pluginResponse =
   fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
     . runExceptT
+
+-- ---------------------------------------------------------------------
+
+type TextParser = P.Parsec Void T.Text
+
+-- | Unescape printable escape sequences within double quotes.
+-- This is useful if you have to call 'show' indirectly, and it escapes some characters which you would prefer to
+-- display as is.
+unescape :: T.Text -> T.Text
+unescape input =
+    case P.runParser escapedTextParser "inline" input of
+        Left _     -> input
+        Right strs -> T.pack strs
+
+-- | Parser for a string that contains double quotes. Returns unescaped string.
+escapedTextParser :: TextParser String
+escapedTextParser = concat <$> P.many (outsideStringLiteral P.<|> stringLiteral)
+  where
+    outsideStringLiteral :: TextParser String
+    outsideStringLiteral = P.someTill (P.anySingleBut '"') (P.lookAhead (void (P.char '"') P.<|> P.eof))
+
+    stringLiteral :: TextParser String
+    stringLiteral = do
+        inside <- P.char '"' >> P.manyTill P.charLiteral (P.char '"')
+        let f '"' = "\\\"" -- double quote should still be escaped
+            -- Despite the docs, 'showLitChar' and 'showLitString' from 'Data.Char' DOES ESCAPE unicode printable
+            -- characters. So we need to call 'isPrint' from 'Data.Char' manually.
+            f ch  = if isPrint ch then [ch] else showLitChar ch ""
+            inside' = concatMap f inside
+
+        pure $ "\"" <> inside' <> "\""

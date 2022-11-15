@@ -3,7 +3,14 @@
 -- | Compat module for the main Driver types, such as 'HscEnv',
 -- 'UnitEnv' and some DynFlags compat functions.
 module Development.IDE.GHC.Compat.Env (
-    Env.HscEnv(hsc_FC, hsc_NC, hsc_IC, hsc_mod_graph, hsc_HPT, hsc_type_env_var),
+    Env.HscEnv(hsc_FC, hsc_NC, hsc_IC, hsc_mod_graph
+#if MIN_VERSION_ghc(9,3,0)
+              , hsc_type_env_vars
+#else
+              , hsc_type_env_var
+#endif
+              ),
+    Env.hsc_HPT,
     InteractiveContext(..),
     setInteractivePrintName,
     setInteractiveDynFlags,
@@ -51,7 +58,11 @@ import           GHC                  (setInteractiveDynFlags)
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Backend   as Backend
+#if MIN_VERSION_ghc(9,3,0)
+import           GHC.Driver.Env       (HscEnv)
+#else
 import           GHC.Driver.Env       (HscEnv, hsc_EPS)
+#endif
 import qualified GHC.Driver.Env       as Env
 import qualified GHC.Driver.Session   as Session
 import           GHC.Platform.Ways    hiding (hostFullWays)
@@ -87,6 +98,11 @@ import qualified Data.Set             as Set
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
 import           Data.IORef
+#endif
+
+#if MIN_VERSION_ghc(9,3,0)
+hsc_EPS :: HscEnv -> UnitEnv
+hsc_EPS = hsc_unit_env
 #endif
 
 #if !MIN_VERSION_ghc(9,2,0)

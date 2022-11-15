@@ -1,6 +1,6 @@
 module RulesSpec where
 
-import Test.Hspec
+import           Test.Hspec
 
 spec :: Spec
 spec = do

@@ -18,7 +18,7 @@ The LSP protocol is designed to support many useful server configuration options
 These are sent to the server by the client, and can be controlled without reference to a specific language.
 
 For example, there are protocol methods for highlighting matching identifiers throughout a document.
-This is a capability which any server can implement, so the client can decide generically whether to ask the server to do it or not.
+This is a capability that any server can implement, so the client can decide generically whether to ask the server to do it or not.
 So your editor can provide a setting to turn this on or off globally, for any language server you might use.
 
 Settings like this are typically provided by the generic LSP client support for your editor, for example in Emacs by [lsp-mode](https://github.com/emacs-lsp/lsp-mode).
@@ -42,15 +42,15 @@ Here is a list of the additional settings currently supported by `haskell-langua
 
 - Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `floskell`, `ormolu`, `fourmolu`, `stylish-haskell`, or `brittany` (if compiled with the brittany plugin).
 - Max completions (`haskell.maxCompletions`, default 40): maximum number of completions sent to the LSP client.
-- Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on load. As it is activated by default could drive to bad perfomance in large projects.
-- Check parents (`haskell.checkParents`, default `CheckOnSaveAndClose`): when to typecheck reverse dependencies of a file; one of `NeverCheck`, `CheckOnClose`, `CheckOnSaveAndClose`, or `AlwaysCheck`.
+- Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on initial load. As it is activated by default could drive to bad performance in large projects.
+- Check parents (`haskell.checkParents`, default `CheckOnSave`): when to typecheck reverse dependencies of a file; one of `NeverCheck`, `CheckOnSave` (means dependent/parent modules will only be checked when you save), or `AlwaysCheck` (means re-typechecking them on every change).
 
 #### Generic plugin configuration
 
 Plugins have a generic config to control their behaviour. The schema of such config is:
 
 - `haskell.plugin.${pluginName}.globalOn`: usually with default true. Whether the plugin is enabled at runtime or it is not. That is the option you might use if you want to disable completely a plugin.
-  - Actual plugin names are: `ghcide-code-actions-fill-holes`, `ghcide-completions`, `ghcide-hover-and-symbols`, `ghcide-type-lenses`, `ghcide-code-actions-type-signatures`, `ghcide-code-actions-bindings`, `ghcide-code-actions-imports-exports`, `eval`, `moduleName`, `pragmas`, `refineImports`, `importLens`, `class`, `tactics` (aka wingman), `hlint`, `haddockComments`, `retrie`, `rename`, `splice`.
+  - Actual plugin names are: `ghcide-code-actions-fill-holes`, `ghcide-completions`, `ghcide-hover-and-symbols`, `ghcide-type-lenses`, `ghcide-code-actions-type-signatures`, `ghcide-code-actions-bindings`, `ghcide-code-actions-imports-exports`, `eval`, `moduleName`, `pragmas`, `refineImports`, `importLens`, `class`, `tactics` (aka wingman), `hlint`, `haddockComments`, `retrie`, `rename`, `splice`, `stan`.
   - So to disable the import lens with an explicit list of module definitions you could set `haskell.plugin.importLens.globalOn: false`
 - `haskell.plugin.${pluginName}.${lspCapability}On`: usually with default true. Whether a concrete plugin capability is enabled.
   - Capabilities are the different ways a lsp server can interact with the editor. The current available capabilities of the server are: `callHierarchy`, `codeActions`, `codeLens`, `diagnostics`, `hover`, `symbols`, `completion`, `rename`.
@@ -72,7 +72,7 @@ Plugins have a generic config to control their behaviour. The schema of such con
     - `haskell.plugin.ghcide-completions.config.snippetsOn`, default true: Inserts snippets when using code completions.
     - `haskell.plugin.ghcide-completions.config.autoExtendOn`, default true: Extends the import list automatically when completing a out-of-scope identifier.
   - `ghcide-type-lenses`:
-    - `haskell.plugin.ghcide-type-lenses.config.mode`, default `always`: Control how type lenses are shown. One of `always`, `exported`, `diganostics`.
+    - `haskell.plugin.ghcide-type-lenses.config.mode`, default `always`: Control how type lenses are shown. One of `always`, `exported`, `diagnostics`.
   - `hlint`:
     - `haskell.plugin.hlint.config.flags`, default empty: List of flags used by hlint.
 This reference of configuration can be outdated at any time but we can query the `haskell-server-executable` about what configuration is effectively used:
@@ -271,6 +271,8 @@ Coc is recommend since it is the only complete LSP implementation for Vim and Ne
 Follow Coc's [installation instructions](https://github.com/neoclide/coc.nvim).
 Then issue `:CocConfig` and add the following to your Coc config file.
 
+##### Minimal Example
+
 ```json
 {
   "languageserver": {
@@ -279,6 +281,32 @@ Then issue `:CocConfig` and add the following to your Coc config file.
       "args": ["--lsp"],
       "rootPatterns": ["*.cabal", "stack.yaml", "cabal.project", "package.yaml", "hie.yaml"],
       "filetypes": ["haskell", "lhaskell"]
+    }
+  }
+}
+```
+
+##### Example with Settings
+
+```json
+{
+  "languageserver": {
+    "haskell": {
+      "command": "haskell-language-server-wrapper",
+      "args": ["--lsp"],
+      "rootPatterns": [ "*.cabal", "stack.yaml", "cabal.project", "package.yaml", "hie.yaml" ],
+      "filetypes": ["haskell", "lhaskell"],
+      "settings": {
+        "haskell": {
+          "checkParents": "CheckOnSave",
+          "checkProject": true,
+          "maxCompletions": 40,
+          "formattingProvider": "ormolu",
+          "plugin": {
+            "stan": { "globalOn": true }
+          }
+        }
+      }
     }
   }
 }
@@ -414,3 +442,8 @@ roots = ["Setup.hs", "stack.yaml", "*.cabal"]
 command = "haskell-language-server-wrapper"
 args = ["--lsp"]
 ```
+
+### [Helix](https://github.com/helix-editor/helix)
+
+Once `haskell-language-server-wrapper` is installed in your system, it will be used automatically by the editor.
+For more details please refer to the [helix guide on installing language servers](https://github.com/helix-editor/helix/wiki/How-to-install-the-default-language-servers)

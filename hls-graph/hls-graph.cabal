@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name:          hls-graph
-version:       1.7.0.0
+version:       1.8.0.0
 synopsis:      Haskell Language Server internal graph API
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/hls-graph#readme>
@@ -47,6 +47,8 @@ library
     Development.IDE.Graph.Classes
     Development.IDE.Graph.Database
     Development.IDE.Graph.Rule
+    Development.IDE.Graph.KeyMap
+    Development.IDE.Graph.KeySet
     Development.IDE.Graph.Internal.Action
     Development.IDE.Graph.Internal.Options
     Development.IDE.Graph.Internal.Rules
@@ -61,7 +63,7 @@ library
   hs-source-dirs:     src
   build-depends:
     , aeson
-    , async
+    , async >= 2.0
     , base >=4.12 && <5
     , bytestring
     , containers
@@ -76,13 +78,13 @@ library
     , js-flot
     , js-jquery
     , list-t
-    , primitive
     , stm
     , stm-containers
     , time
     , transformers
     , unliftio
     , unordered-containers
+    , text
 
   if flag(embed-files)
         cpp-options: -DFILE_EMBED
@@ -91,7 +93,8 @@ library
             template-haskell
   if flag(stm-stats)
         cpp-options: -DSTM_STATS
-
+  if impl(ghc >= 9)
+        ghc-options: -Wunused-packages
 
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing
@@ -134,4 +137,7 @@ test-suite tests
     , tasty-hunit
     , tasty-rerun
     , text
+    , unordered-containers
   build-tool-depends: hspec-discover:hspec-discover -any
+  if impl(ghc >= 9)
+        ghc-options: -Wunused-packages

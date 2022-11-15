@@ -1,8 +1,8 @@
-cabal-version:      2.4
+cabal-version:      3.0
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            1.7.0.1
+version:            1.8.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -13,7 +13,7 @@ description:
     A library for building Haskell IDE's on top of the GHC API.
 homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.7 || == 9.0.2 || == 9.2.2 || == 9.2.3
+tested-with:        GHC == 8.10.7 || == 9.0.2 || == 9.2.3 || == 9.2.4
 extra-source-files: README.md CHANGELOG.md
                     test/data/**/*.project
                     test/data/**/*.cabal
@@ -46,6 +46,7 @@ library
         binary,
         bytestring,
         case-insensitive,
+        co-log-core,
         containers,
         data-default,
         deepseq,
@@ -59,32 +60,27 @@ library
         filepath,
         fingertree,
         focus,
-        ghc-exactprint,
         ghc-trace-events,
         Glob,
-        haddock-library >= 1.8 && < 1.11,
+        haddock-library >= 1.8 && < 1.12,
         hashable,
-        hie-compat ^>= 0.2.0.0,
-        hls-plugin-api ^>= 1.4,
+        hie-compat ^>= 0.3.0.0,
+        hls-plugin-api ^>= 1.5,
         lens,
         list-t,
-        hiedb == 0.4.1.*,
-        lsp-types ^>= 1.4.0.1,
-        lsp ^>= 1.4.0.0 ,
-        monoid-subclasses,
+        hiedb == 0.4.2.*,
+        lsp-types ^>= 1.6.0.0,
+        lsp ^>= 1.6.0.0 ,
         mtl,
-        network-uri,
         optparse-applicative,
         parallel,
         prettyprinter-ansi-terminal,
         prettyprinter >= 1.6,
         random,
         regex-tdfa >= 1.3.1.0,
-        retrie,
-        rope-utf16-splay,
-        safe,
+        text-rope,
         safe-exceptions,
-        hls-graph ^>= 1.7,
+        hls-graph ^>= 1.8,
         sorted-list,
         sqlite-simple,
         stm,
@@ -94,28 +90,22 @@ library
         time,
         transformers,
         unordered-containers >= 0.2.10.0,
-        utf8-string,
         vector,
-        vector-algorithms,
         hslogger,
         Diff ^>=0.4.0,
         vector,
         opentelemetry >=0.6.1,
-        heapsize ==0.3.*,
-        unliftio,
+        unliftio >= 0.2.6,
         unliftio-core,
         ghc-boot-th,
         ghc-boot,
-        ghc >= 8.6,
-        ghc-check >=0.5.0.4,
+        ghc >= 8.10,
+        ghc-check >=0.5.0.8,
         ghc-paths,
         cryptohash-sha1 >=0.11.100 && <0.12,
-        hie-bios ^>= 0.9.1,
+        hie-bios ^>= 0.11.0,
         implicit-hie-cradle ^>= 0.3.0.5 || ^>= 0.5,
         base16-bytestring >=0.1.1 && <1.1
-    if impl(ghc >= 9.2)
-      build-depends:
-        ghc-exactprint >= 1.4
     if os(windows)
       build-depends:
         Win32
@@ -171,7 +161,6 @@ library
         Development.IDE.GHC.Compat
         Development.IDE.GHC.Compat.Core
         Development.IDE.GHC.Compat.Env
-        Development.IDE.GHC.Compat.ExactPrint
         Development.IDE.GHC.Compat.Iface
         Development.IDE.GHC.Compat.Logger
         Development.IDE.GHC.Compat.Outputable
@@ -181,9 +170,7 @@ library
         Development.IDE.GHC.Compat.Util
         Development.IDE.Core.Compile
         Development.IDE.GHC.CoreFile
-        Development.IDE.GHC.Dump
         Development.IDE.GHC.Error
-        Development.IDE.GHC.ExactPrint
         Development.IDE.GHC.Orphans
         Development.IDE.GHC.Util
         Development.IDE.Import.DependencyInformation
@@ -191,6 +178,7 @@ library
         Development.IDE.Monitoring.EKG
         Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.LanguageServer
+        Development.IDE.LSP.Notifications
         Development.IDE.LSP.Outline
         Development.IDE.LSP.Server
         Development.IDE.Session
@@ -212,8 +200,6 @@ library
         Development.IDE.Plugin
         Development.IDE.Plugin.Completions
         Development.IDE.Plugin.Completions.Types
-        Development.IDE.Plugin.CodeAction
-        Development.IDE.Plugin.CodeAction.ExactPrint
         Development.IDE.Plugin.HLS
         Development.IDE.Plugin.HLS.GhcIde
         Development.IDE.Plugin.Test
@@ -224,9 +210,6 @@ library
         Development.IDE.Core.FileExists
         Development.IDE.GHC.CPP
         Development.IDE.GHC.Warnings
-        Development.IDE.LSP.Notifications
-        Development.IDE.Plugin.CodeAction.PositionIndexed
-        Development.IDE.Plugin.CodeAction.Args
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Session.VersionCheck
         Development.IDE.Types.Action
@@ -244,6 +227,9 @@ library
     if impl(ghc < 8.10)
       exposed-modules:
         Development.IDE.GHC.Compat.CPP
+
+    if impl(ghc >= 9)
+        ghc-options: -Wunused-packages
 
     if flag(ekg)
         build-depends:
@@ -266,45 +252,6 @@ executable ghcide-test-preprocessor
     if !flag(test-exe)
         buildable: False
 
-benchmark benchHist
-    type: exitcode-stdio-1.0
-    default-language: Haskell2010
-    ghc-options: -Wall -Wno-name-shadowing -threaded
-    main-is: Main.hs
-    hs-source-dirs: bench/hist bench/lib
-    other-modules: Experiments.Types
-    build-tool-depends:
-        ghcide:ghcide-bench,
-        hp2pretty:hp2pretty,
-        implicit-hie:gen-hie
-    default-extensions:
-        BangPatterns
-        DeriveFunctor
-        DeriveGeneric
-        FlexibleContexts
-        GeneralizedNewtypeDeriving
-        LambdaCase
-        NamedFieldPuns
-        RecordWildCards
-        ScopedTypeVariables
-        StandaloneDeriving
-        TupleSections
-        TypeApplications
-        ViewPatterns
-
-    build-depends:
-        aeson,
-        base == 4.*,
-        shake-bench == 0.1.*,
-        directory,
-        extra,
-        filepath,
-        lens,
-        optparse-applicative,
-        shake,
-        text,
-        yaml
-
 flag executable
     description: Build the ghcide executable
     default: True
@@ -325,28 +272,15 @@ executable ghcide
                 "-with-rtsopts=-I0 -A128M -T"
     main-is: Main.hs
     build-depends:
-        hiedb,
-        aeson,
         base == 4.*,
         data-default,
-        directory,
         extra,
-        filepath,
         gitrev,
-        safe-exceptions,
-        ghc,
-        hashable,
         lsp,
         lsp-types,
-        heapsize,
-        hie-bios,
         hls-plugin-api,
         ghcide,
-        lens,
         optparse-applicative,
-        hls-graph,
-        text,
-        unordered-containers,
     other-modules:
         Arguments
         Paths_ghcide
@@ -376,6 +310,9 @@ executable ghcide
             ekg-wai,
             ekg-core,
         cpp-options:   -DMONITORING_EKG
+    if impl(ghc >= 9)
+        ghc-options: -Wunused-packages
+
 
 test-suite ghcide-tests
     type: exitcode-stdio-1.0
@@ -388,8 +325,6 @@ test-suite ghcide-tests
         aeson,
         async,
         base,
-        binary,
-        bytestring,
         containers,
         data-default,
         directory,
@@ -405,8 +340,6 @@ test-suite ghcide-tests
         ghc,
         --------------------------------------------------------------
         ghcide,
-        ghc-typelits-knownnat,
-        haddock-library,
         lsp,
         lsp-types,
         hls-plugin-api,
@@ -415,98 +348,39 @@ test-suite ghcide-tests
         lsp-test ^>= 0.14,
         monoid-subclasses,
         network-uri,
-        optparse-applicative,
-        parallel,
-        process,
         QuickCheck,
-        quickcheck-instances,
         random,
-        rope-utf16-splay,
         regex-tdfa ^>= 1.3.1,
-        safe,
-        safe-exceptions,
         shake,
         sqlite-simple,
         stm,
         stm-containers,
-        hls-graph,
         tasty,
         tasty-expected-failure,
-        tasty-hunit,
+        tasty-hunit >= 0.10,
         tasty-quickcheck,
         tasty-rerun,
         text,
+        text-rope,
         unordered-containers,
-        vector,
-    if (impl(ghc >= 8.6) && impl(ghc < 9.2))
+    if impl(ghc < 9.2)
       build-depends:
           record-dot-preprocessor,
           record-hasfield
-    hs-source-dirs: test/cabal test/exe test/src bench/lib
+    if impl(ghc < 9.3)
+       build-depends:  ghc-typelits-knownnat
+    if impl(ghc >= 9)
+        ghc-options: -Wunused-packages
+    hs-source-dirs: test/cabal test/exe test/src
     ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors
     main-is: Main.hs
     other-modules:
-        Development.IDE.Test
-        Development.IDE.Test.Diagnostic
         Development.IDE.Test.Runfiles
-        Experiments
-        Experiments.Types
         FuzzySearch
         Progress
         HieDbRetry
-    default-extensions:
-        BangPatterns
-        DeriveFunctor
-        DeriveGeneric
-        FlexibleContexts
-        GeneralizedNewtypeDeriving
-        LambdaCase
-        NamedFieldPuns
-        OverloadedStrings
-        RecordWildCards
-        ScopedTypeVariables
-        StandaloneDeriving
-        TupleSections
-        TypeApplications
-        ViewPatterns
-
-flag bench-exe
-    description: Build the ghcide-bench executable
-    default: True
-
-executable ghcide-bench
-    default-language: Haskell2010
-    build-tool-depends:
-        ghcide:ghcide
-    build-depends:
-        aeson,
-        base,
-        bytestring,
-        containers,
-        data-default,
-        directory,
-        extra,
-        filepath,
-        ghcide,
-        hls-plugin-api,
-        lens,
-        lsp-test,
-        lsp-types,
-        optparse-applicative,
-        process,
-        safe-exceptions,
-        hls-graph,
-        shake,
-        tasty-hunit,
-        text
-    hs-source-dirs: bench/lib bench/exe test/src
-    ghc-options: -threaded -Wall -Wno-name-shadowing -rtsopts
-    main-is: Main.hs
-    other-modules:
         Development.IDE.Test
         Development.IDE.Test.Diagnostic
-        Experiments
-        Experiments.Types
     default-extensions:
         BangPatterns
         DeriveFunctor
@@ -522,6 +396,3 @@ executable ghcide-bench
         TupleSections
         TypeApplications
         ViewPatterns
-
-    if !flag(bench-exe)
-        buildable: False

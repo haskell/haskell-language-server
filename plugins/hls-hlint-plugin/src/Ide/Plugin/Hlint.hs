@@ -4,24 +4,24 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE StrictData            #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE StrictData            #-}
 
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
 #ifdef HLINT_ON_GHC_LIB
-#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib(x,y,z)
+#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib_parser(x,y,z)
 #else
 #define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc(x,y,z)
 #endif
@@ -44,14 +44,15 @@ import           Data.Aeson.Types                                   (FromJSON (.
                                                                      Value (..))
 import qualified Data.ByteString                                    as BS
 import           Data.Default
-import qualified Data.HashMap.Strict                                as Map
 import           Data.Hashable
+import qualified Data.HashMap.Strict                                as Map
 import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.Encoding                                 as T
 import           Data.Typeable
 import           Development.IDE                                    hiding
-                                                                    (Error)
+                                                                    (Error,
+                                                                     getExtensions)
 import           Development.IDE.Core.Rules                         (defineNoFile,
                                                                      getParsedModuleWithComments,
                                                                      usePropertyAction)
@@ -67,13 +68,15 @@ import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      topDir,
                                                                      wopt)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
-import           "ghc-lib" GHC                                      hiding
-                                                                    (DynFlags (..),
-                                                                     RealSrcSpan,
-                                                                     ms_hspp_opts)
-import qualified "ghc-lib" GHC
+
 #if MIN_GHC_API_VERSION(9,0,0)
-import           "ghc-lib-parser" GHC.Types.SrcLoc                  (BufSpan)
+import           "ghc-lib-parser" GHC.Types.SrcLoc                  hiding
+                                                                    (RealSrcSpan)
+import qualified "ghc-lib-parser" GHC.Types.SrcLoc                  as GHC
+#else
+import           "ghc-lib-parser" SrcLoc                            hiding
+                                                                    (RealSrcSpan)
+import qualified "ghc-lib-parser" SrcLoc                            as GHC
 #endif
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
@@ -89,7 +92,8 @@ import           System.IO                                          (IOMode (Wri
 import           System.IO.Temp
 #else
 import           Development.IDE.GHC.Compat                         hiding
-                                                                    (setEnv, (<+>))
+                                                                    (setEnv,
+                                                                     (<+>))
 import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
 #if MIN_GHC_API_VERSION(9,2,0)
 import           Language.Haskell.GHC.ExactPrint.ExactPrint         (deltaOptions)
@@ -427,7 +431,7 @@ codeActionProvider ideState pluginId (CodeActionParams _ _ documentId _ context)
 
     LSP.List diags = context ^. LSP.diagnostics
 
--- | Convert a hlint diagonistic into an apply and an ignore code action
+-- | Convert a hlint diagnostic into an apply and an ignore code action
 -- if applicable
 diagnosticToCodeActions :: DynFlags -> T.Text -> PluginId -> TextDocumentIdentifier -> LSP.Diagnostic -> [LSP.CodeAction]
 diagnosticToCodeActions dynFlags fileContents pluginId documentId diagnostic
@@ -443,23 +447,25 @@ diagnosticToCodeActions dynFlags fileContents pluginId documentId diagnostic
             Nothing
             Nothing
   = catMaybes
+      -- Applying the hint is marked preferred because it addresses the underlying error.
+      -- Disabling the rule isn't, because less often used and configuration can be adapted.
       [ if | isHintApplicable
            , let applyHintTitle = "Apply hint \"" <> hint <> "\""
                  applyHintArguments = [toJSON (AOP (documentId ^. LSP.uri) start hint)]
                  applyHintCommand = mkLspCommand pluginId "applyOne" applyHintTitle (Just applyHintArguments) ->
-               Just (mkCodeAction applyHintTitle diagnostic Nothing (Just applyHintCommand))
+               Just (mkCodeAction applyHintTitle diagnostic Nothing (Just applyHintCommand) True)
            | otherwise -> Nothing
-      , Just (mkCodeAction suppressHintTitle diagnostic (Just suppressHintWorkspaceEdit) Nothing)
+      , Just (mkCodeAction suppressHintTitle diagnostic (Just suppressHintWorkspaceEdit) Nothing False)
       ]
   | otherwise = []
 
-mkCodeAction :: T.Text -> LSP.Diagnostic -> Maybe LSP.WorkspaceEdit -> Maybe LSP.Command -> LSP.CodeAction
-mkCodeAction title diagnostic workspaceEdit command =
+mkCodeAction :: T.Text -> LSP.Diagnostic -> Maybe LSP.WorkspaceEdit -> Maybe LSP.Command -> Bool -> LSP.CodeAction
+mkCodeAction title diagnostic workspaceEdit command isPreferred =
   LSP.CodeAction
     { _title = title
     , _kind = Just LSP.CodeActionQuickFix
     , _diagnostics = Just (LSP.List [diagnostic])
-    , _isPreferred = Nothing
+    , _isPreferred = Just isPreferred
     , _disabled = Nothing
     , _edit = workspaceEdit
     , _command = command
@@ -550,7 +556,7 @@ applyHint recorder ide nfp mhint =
     modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
     let dflags = ms_hspp_opts $ msrModSummary modsum
     -- Setting a environment variable with the libdir used by ghc-exactprint.
-    -- It is a workaround for an error caused by the use of a hadcoded at compile time libdir
+    -- It is a workaround for an error caused by the use of a hardcoded at compile time libdir
     -- in ghc-exactprint that makes dependent executables non portables.
     -- See https://github.com/alanz/ghc-exactprint/issues/96.
     -- WARNING: this code is not thread safe, so if you try to apply several async refactorings

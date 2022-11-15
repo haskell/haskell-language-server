@@ -28,8 +28,8 @@ import           Data.IORef                           (readIORef)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (catMaybes, fromMaybe,
                                                        isJust)
-import qualified Data.Text                            as T
 import           Data.String                          (fromString)
+import qualified Data.Text                            as T
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.PositionMapping
@@ -118,7 +118,7 @@ lensProvider
     -- haskell-lsp provides conversion functions
     | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $
       do
-        mbMinImports <- runAction "" state $ useWithStale MinimalImports nfp
+        mbMinImports <- runAction "MinimalImports" state $ useWithStale MinimalImports nfp
         case mbMinImports of
           -- Implement the provider logic:
           -- for every import, if it's lacking a explicit list, generate a code lens
@@ -212,6 +212,7 @@ minimalImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \Minimal
         Map.fromList
           [ (realSrcSpanStart l, printOutputable i)
             | L (locA -> RealSrcSpan l _) i <- fromMaybe [] mbMinImports
+            , not (isImplicitPrelude i)
           ]
       res =
         [ (i, Map.lookup (realSrcSpanStart l) importsMap)
@@ -219,6 +220,15 @@ minimalImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \Minimal
           , RealSrcSpan l _ <- [getLoc i]
         ]
   return ([], MinimalImportsResult res <$ mbMinImports)
+  where
+    isImplicitPrelude :: (Outputable a) => a -> Bool
+    isImplicitPrelude importDecl =
+      T.isPrefixOf implicitPreludeImportPrefix (printOutputable importDecl)
+
+-- | This is the prefix of an implicit prelude import which should be ignored,
+-- when considering the minimal imports rule
+implicitPreludeImportPrefix :: T.Text
+implicitPreludeImportPrefix = "import (implicit) Prelude"
 
 --------------------------------------------------------------------------------
 
@@ -306,7 +316,7 @@ abbreviateImportTitle input =
       oneLineText = T.unwords $ T.lines input
       -- Now, split at the max columns, leaving space for the summary text we're going to add
       -- (conservatively assuming we won't need to print a number larger than 100)
-      (prefix, suffix) = T.splitAt (maxColumns - (T.length (summaryText 100))) oneLineText
+      (prefix, suffix) = T.splitAt (maxColumns - T.length (summaryText 100)) oneLineText
       -- We also want to truncate the last item so we get a "clean" break, rather than half way through
       -- something. The conditional here is just because 'breakOnEnd' doesn't give us quite the right thing
       -- if there are actually no commas.

@@ -16,9 +16,9 @@ import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
 import           Development.IDE.Graph.Classes (NFData (rnf))
-import qualified GHC.Generics                  as GHC
 import           Generics.SYB                  (Data, Typeable, everything,
                                                 extQ)
+import qualified GHC.Generics                  as GHC
 
 -- data type to capture what type of literal we are dealing with
 -- provides location and possibly source text (for OverLits) as well as it's value
@@ -62,25 +62,20 @@ getLiteral (L (locA -> (RealSrcSpan sSpan _)) expr) = case expr of
     _                   -> Nothing
 getLiteral _ = Nothing
 
-
-
--- GHC 8.8 typedefs LPat = Pat
-#if __GLASGOW_HASKELL__ == 808
-type LocPat a = GenLocated SrcSpan (Pat a)
-#else
-type LocPat a = LPat a
-#endif
-
 -- | Destructure Patterns to unwrap any Literals
-getPattern :: LocPat GhcPs -> Maybe Literal
+getPattern :: LPat GhcPs -> Maybe Literal
 getPattern (L (locA -> (RealSrcSpan patSpan _)) pat) = case pat of
     LitPat _ lit -> case lit of
         HsInt _ val   -> fromIntegralLit patSpan val
         HsRat _ val _ -> fromFractionalLit patSpan val
         _             -> Nothing
-    -- a located HsOverLit is (GenLocated SrcSpan HsOverLit) NOT (GenLocated SrcSpanAnn' a HsOverLit)
+#if __GLASGOW_HASKELL__ == 902
     NPat _ (L (RealSrcSpan sSpan _) overLit) _ _ -> fromOverLit overLit sSpan
     NPlusKPat _ _ (L (RealSrcSpan sSpan _) overLit1) _ _ _ -> fromOverLit overLit1 sSpan
+#else
+    NPat _ (L (locA -> (RealSrcSpan sSpan _)) overLit) _ _ -> fromOverLit overLit sSpan
+    NPlusKPat _ _ (L (locA -> (RealSrcSpan sSpan _)) overLit1) _ _ _ -> fromOverLit overLit1 sSpan
+#endif
     _ -> Nothing
 getPattern _ = Nothing
 

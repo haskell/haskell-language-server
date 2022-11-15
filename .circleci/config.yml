@@ -75,24 +75,13 @@ defaults: &defaults
 
 version: 2
 jobs:
-  stackage-lts16:
-    environment:
-      # https://github.com/digital-asset/ghc-lib/issues/352
-      - CPATH: "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi:$CPATH"
-      - STACK_FILE: "stack-lts16.yaml"
-    <<: *defaults
-
   stackage-lts19:
     environment:
-      # https://github.com/digital-asset/ghc-lib/issues/352
-      - CPATH: "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi:$CPATH"
       - STACK_FILE: "stack-lts19.yaml"
     <<: *defaults
 
   stackage-nightly:
     environment:
-      # https://github.com/digital-asset/ghc-lib/issues/352
-      - CPATH: "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi:$CPATH"
       - STACK_FILE: "stack.yaml"
     <<: *defaults
 
@@ -101,6 +90,5 @@ workflows:
   version: 2
   multiple-ghcs:
     jobs:
-      - stackage-lts16
       - stackage-lts19
       - stackage-nightly

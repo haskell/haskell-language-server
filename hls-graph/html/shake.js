@@ -981,7 +981,7 @@ function speculativeCriticalPath(profile) {
     return maxCriticalPath;
 }
 /*
-Calculating a precise critical path, taking into account the deep dependeny structure, is non-obvious.
+Calculating a precise critical path, taking into account the deep dependency structure, is non-obvious.
 Dependencies have the type [{X}], e.g:
 
     X = [{a,b},{c,d}]

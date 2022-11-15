@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
@@ -16,7 +15,7 @@ import           Control.Exception               (IOException, try)
 import           Control.Lens                    ((^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.Bifunctor                  (first)
+import           Data.Bifunctor                  (bimap, first)
 import           Data.Maybe
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
@@ -25,6 +24,7 @@ import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
                                                             hang, vcat)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
+import           Ide.Plugin.Fourmolu.Shim
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                 (makeDiffTextEdit,
                                                   usePropertyLsp)
@@ -33,7 +33,6 @@ import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types              hiding (line)
 import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
-import           Ormolu.Config
 import           System.Exit
 import           System.FilePath
 import           System.Process.Run              (cwd, proc)
@@ -44,6 +43,7 @@ descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor I
 descriptor recorder plId =
     (defaultPluginDescriptor plId)
         { pluginHandlers = mkFormattingHandlers $ provider recorder plId
+        , pluginConfigDescriptor = defaultConfigDescriptor{configCustomConfig = mkCustomConfig properties}
         }
 
 properties :: Properties '[ 'PropertyKey "external" 'TBoolean]
@@ -100,17 +100,12 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                         pure . Left . responseError $ "Fourmolu failed with exit code " <> T.pack (show n)
         else do
             let format fourmoluConfig =
-                    first (mkError . show)
-                        <$> try @OrmoluException (makeDiffTextEdit contents <$> ormolu config fp' (T.unpack contents))
+                    bimap (mkError . show) (makeDiffTextEdit contents)
+                        <$> try @OrmoluException (ormolu config fp' (T.unpack contents))
                   where
-                    printerOpts =
-#if MIN_VERSION_fourmolu(0,7,0)
-                        cfgFilePrinterOpts fourmoluConfig
-#else
-                        fourmoluConfig
-
-#endif
+                    printerOpts = cfgFilePrinterOpts fourmoluConfig
                     config =
+                        addFixityOverrides (cfgFileFixities fourmoluConfig) $
                         defaultConfig
                             { cfgDynOptions = map DynOption fileOpts
                             , cfgRegion = region
@@ -119,10 +114,6 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                                 fillMissingPrinterOpts
                                     (printerOpts <> lspPrinterOpts)
                                     defaultPrinterOpts
-#if MIN_VERSION_fourmolu(0,7,0)
-                            , cfgFixityOverrides =
-                                cfgFileFixities fourmoluConfig
-#endif
                             }
              in liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> liftIO $ do
@@ -130,18 +121,7 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                         format opts
                     ConfigNotFound searchDirs -> liftIO $ do
                         logWith recorder Info $ NoConfigPath searchDirs
-                        format emptyOptions
-                      where
-                        emptyOptions =
-#if MIN_VERSION_fourmolu(0,7,0)
-                            FourmoluConfig
-                                { cfgFilePrinterOpts = mempty
-                                , cfgFileFixities = mempty
-                                }
-#else
-                            mempty
-#endif
-
+                        format emptyConfig
                     ConfigParseError f err -> do
                         sendNotification SWindowShowMessage $
                             ShowMessageParams
@@ -150,13 +130,7 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                                 }
                         return . Left $ responseError errorMessage
                       where
-                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (convertErr err)
-                        convertErr =
-#if MIN_VERSION_fourmolu(0,7,0)
-                            show
-#else
-                            snd
-#endif
+                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (showParseError err)
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')

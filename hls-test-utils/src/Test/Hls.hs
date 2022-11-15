@@ -17,9 +17,11 @@ module Test.Hls
     goldenGitDiff,
     goldenWithHaskellDoc,
     goldenWithHaskellDocFormatter,
+    goldenWithCabalDocFormatter,
     def,
     runSessionWithServer,
     runSessionWithServerFormatter,
+    runSessionWithCabalServerFormatter,
     runSessionWithServer',
     waitForProgressDone,
     waitForAllProgressDone,
@@ -70,6 +72,7 @@ import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           GHC.Stack                       (emptyCallStack)
 import           Ide.Plugin.Config               (Config, PluginConfig,
+                                                  cabalFormattingProvider,
                                                   formattingProvider, plugins)
 import           Ide.PluginUtils                 (idePluginsToPluginDesc,
                                                   pluginDescToIdePlugins)
@@ -130,15 +133,30 @@ goldenWithHaskellDoc plugin title testDataDir path desc ext act =
     act doc
     documentContents doc
 
+
+runSessionWithServer :: PluginDescriptor IdeState -> FilePath -> Session a -> IO a
+runSessionWithServer plugin = runSessionWithServer' [plugin] def def fullCaps
+
+runSessionWithServerFormatter :: PluginDescriptor IdeState -> String -> PluginConfig -> FilePath -> Session a -> IO a
+runSessionWithServerFormatter plugin formatter conf =
+  runSessionWithServer'
+    [plugin]
+    def
+      { formattingProvider = T.pack formatter
+      , plugins = M.singleton (T.pack formatter) conf
+      }
+    def
+    fullCaps
+
 goldenWithHaskellDocFormatter
-  :: PluginDescriptor IdeState
-  -> String
+  :: PluginDescriptor IdeState -- ^ Formatter plugin to be used
+  -> String -- ^ Name of the formatter to be used
   -> PluginConfig
-  -> TestName
-  -> FilePath
-  -> FilePath
-  -> FilePath
-  -> FilePath
+  -> TestName -- ^ Title of the test
+  -> FilePath -- ^ Directory of the test data to be used
+  -> FilePath -- ^ Path to the testdata to be used within the directory
+  -> FilePath -- ^ Additional suffix to be appended to the output file
+  -> FilePath -- ^ Extension of the output file
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
 goldenWithHaskellDocFormatter plugin formatter conf title testDataDir path desc ext act =
@@ -151,15 +169,33 @@ goldenWithHaskellDocFormatter plugin formatter conf title testDataDir path desc 
     act doc
     documentContents doc
 
-runSessionWithServer :: PluginDescriptor IdeState -> FilePath -> Session a -> IO a
-runSessionWithServer plugin = runSessionWithServer' [plugin] def def fullCaps
+goldenWithCabalDocFormatter
+  :: PluginDescriptor IdeState -- ^ Formatter plugin to be used
+  -> String -- ^ Name of the formatter to be used
+  -> PluginConfig
+  -> TestName -- ^ Title of the test
+  -> FilePath -- ^ Directory of the test data to be used
+  -> FilePath -- ^ Path to the testdata to be used within the directory
+  -> FilePath -- ^ Additional suffix to be appended to the output file
+  -> FilePath -- ^ Extension of the output file
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithCabalDocFormatter plugin formatter conf title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithCabalServerFormatter plugin formatter conf testDataDir
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "cabal"
+    void waitForBuildQueue
+    act doc
+    documentContents doc
 
-runSessionWithServerFormatter :: PluginDescriptor IdeState -> String -> PluginConfig -> FilePath -> Session a -> IO a
-runSessionWithServerFormatter plugin formatter conf =
+runSessionWithCabalServerFormatter :: PluginDescriptor IdeState -> String -> PluginConfig -> FilePath -> Session a -> IO a
+runSessionWithCabalServerFormatter plugin formatter conf =
   runSessionWithServer'
     [plugin]
     def
-      { formattingProvider = T.pack formatter
+      { cabalFormattingProvider = T.pack formatter
       , plugins = M.singleton (T.pack formatter) conf
       }
     def
@@ -189,57 +225,56 @@ runSessionWithServer' ::
   Session a ->
   IO a
 runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurrentDirectory $ do
-  (inR, inW) <- createPipe
-  (outR, outW) <- createPipe
+    (inR, inW) <- createPipe
+    (outR, outW) <- createPipe
 
-  docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing Debug
+    docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing Debug
 
-  logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
+    logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
 
-  let
-    docWithFilteredPriorityRecorder@Recorder{ logger_ } =
-      if logStdErr == "0" then mempty
-      else cfilter (\WithPriority{ priority } -> priority >= Debug) docWithPriorityRecorder
+    let
+        docWithFilteredPriorityRecorder@Recorder{ logger_ } =
+            if logStdErr == "0" then mempty
+            else cfilter (\WithPriority{ priority } -> priority >= Debug) docWithPriorityRecorder
 
-    -- exists until old logging style is phased out
-    logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
+        -- exists until old logging style is phased out
+        logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
 
-    recorder = cmapWithPrio pretty docWithFilteredPriorityRecorder
+        recorder = cmapWithPrio pretty docWithFilteredPriorityRecorder
 
-    arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmapWithPrio LogIDEMain recorder) logger
+        arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmapWithPrio LogIDEMain recorder) logger
 
-    hlsPlugins =
-      plugins
-      ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
-      ++ idePluginsToPluginDesc argsHlsPlugins
-    ideOptions = \config ghcSession ->
-      let defIdeOptions = argsIdeOptions config ghcSession
-      in defIdeOptions
-           { optTesting = IdeTesting True
-           , optCheckProject = pure False
-           }
+        hlsPlugins =
+            plugins
+            ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
+            ++ idePluginsToPluginDesc argsHlsPlugins
+        ideOptions config ghcSession =
+            let defIdeOptions = argsIdeOptions config ghcSession
+            in defIdeOptions
+                    { optTesting = IdeTesting True
+                    , optCheckProject = pure False
+                    }
 
-  server <-
-    async $
-      Ghcide.defaultMain
-        (cmapWithPrio LogIDEMain recorder)
-        arguments
-          { argsHandleIn = pure inR
-          , argsHandleOut = pure outW
-          , argsDefaultHlsConfig = conf
-          , argsLogger = argsLogger
-          , argsIdeOptions = ideOptions
-          , argsHlsPlugins = pluginDescToIdePlugins hlsPlugins }
+    server <- async $
+        Ghcide.defaultMain (cmapWithPrio LogIDEMain recorder)
+            arguments
+                { argsHandleIn = pure inR
+                , argsHandleOut = pure outW
+                , argsDefaultHlsConfig = conf
+                , argsLogger = argsLogger
+                , argsIdeOptions = ideOptions
+                , argsHlsPlugins = pluginDescToIdePlugins hlsPlugins
+                }
 
-  x <- runSessionWithHandles inW outR sconf caps root s
-  hClose inW
-  timeout 3 (wait server) >>= \case
-    Just () -> pure ()
-    Nothing -> do
-      putStrLn "Server does not exit in 3s, canceling the async task..."
-      (t, _) <- duration $ cancel server
-      putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
-  pure x
+    x <- runSessionWithHandles inW outR sconf caps root s
+    hClose inW
+    timeout 3 (wait server) >>= \case
+        Just () -> pure ()
+        Nothing -> do
+            putStrLn "Server does not exit in 3s, canceling the async task..."
+            (t, _) <- duration $ cancel server
+            putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
+    pure x
 
 -- | Wait for the next progress end step
 waitForProgressDone :: Session ()

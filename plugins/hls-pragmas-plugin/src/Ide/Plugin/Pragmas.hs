@@ -14,21 +14,22 @@ module Ide.Plugin.Pragmas
   , validPragmas
   ) where
 
-import           Control.Lens                  hiding (List)
-import           Control.Monad.IO.Class        (MonadIO (liftIO))
-import qualified Data.HashMap.Strict           as H
-import           Data.List.Extra               (nubOrdOn)
-import           Data.Maybe                    (catMaybes)
-import qualified Data.Text                     as T
+import           Control.Lens                       hiding (List)
+import           Control.Monad.IO.Class             (MonadIO (liftIO))
+import qualified Data.HashMap.Strict                as H
+import           Data.List.Extra                    (nubOrdOn)
+import           Data.Maybe                         (catMaybes)
+import qualified Data.Text                          as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
-import qualified Development.IDE.Spans.Pragmas as Pragmas
+import           Development.IDE.Plugin.Completions (ghcideCompletionsPluginPriority)
+import qualified Development.IDE.Spans.Pragmas      as Pragmas
 import           Ide.Types
-import qualified Language.LSP.Server           as LSP
-import qualified Language.LSP.Types            as J
-import qualified Language.LSP.Types.Lens       as J
-import qualified Language.LSP.VFS              as VFS
-import qualified Text.Fuzzy                    as Fuzzy
+import qualified Language.LSP.Server                as LSP
+import qualified Language.LSP.Types                 as J
+import qualified Language.LSP.Types.Lens            as J
+import qualified Language.LSP.VFS                   as VFS
+import qualified Text.Fuzzy                         as Fuzzy
 
 -- ---------------------------------------------------------------------
 
@@ -36,6 +37,7 @@ descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginHandlers = mkPluginHandler J.STextDocumentCodeAction codeActionProvider
                   <> mkPluginHandler J.STextDocumentCompletion completion
+  , pluginPriority = ghcideCompletionsPluginPriority + 1
   }
 
 -- ---------------------------------------------------------------------

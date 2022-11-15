@@ -29,11 +29,6 @@ module Development.IDE.Test
   , getStoredKeys
   , waitForCustomMessage
   , waitForGC
-  , getBuildKeysBuilt
-  , getBuildKeysVisited
-  , getBuildKeysChanged
-  , getBuildEdgesCount
-  , getRebuildsCount
   , configureCheckProject
   , isReferenceReady
   , referenceReady) where
@@ -63,9 +58,9 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import           Language.LSP.Types.Lens         as Lsp
 import           System.Directory                (canonicalizePath)
+import           System.FilePath                 (equalFilePath)
 import           System.Time.Extra
 import           Test.Tasty.HUnit
-import System.FilePath (equalFilePath)
 
 requireDiagnosticM
     :: (Foldable f, Show (f Diagnostic), HasCallStack)
@@ -213,21 +208,6 @@ callTestPlugin cmd = do
 waitForAction :: String -> TextDocumentIdentifier -> Session WaitForIdeRuleResult
 waitForAction key TextDocumentIdentifier{_uri} =
     callTestPlugin (WaitForIdeRule key _uri)
-
-getBuildKeysBuilt :: Session (Either ResponseError [T.Text])
-getBuildKeysBuilt = tryCallTestPlugin GetBuildKeysBuilt
-
-getBuildKeysVisited :: Session (Either ResponseError [T.Text])
-getBuildKeysVisited = tryCallTestPlugin GetBuildKeysVisited
-
-getBuildKeysChanged :: Session (Either ResponseError [T.Text])
-getBuildKeysChanged = tryCallTestPlugin GetBuildKeysChanged
-
-getBuildEdgesCount :: Session (Either ResponseError Int)
-getBuildEdgesCount = tryCallTestPlugin GetBuildEdgesCount
-
-getRebuildsCount :: Session (Either ResponseError Int)
-getRebuildsCount = tryCallTestPlugin GetRebuildsCount
 
 getInterfaceFilesDir :: TextDocumentIdentifier -> Session FilePath
 getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)

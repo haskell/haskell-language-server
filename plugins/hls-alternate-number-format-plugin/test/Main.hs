@@ -7,7 +7,6 @@ import           Data.Either                      (rights)
 import           Data.List                        (find)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
-import           Debug.Trace
 import qualified Ide.Plugin.AlternateNumberFormat as AlternateNumberFormat
 import qualified Ide.Plugin.Conversion            as Conversion
 import           Language.LSP.Types               (toEither)
@@ -21,7 +20,7 @@ main :: IO ()
 main = defaultTestRunner test
 
 alternateNumberFormatPlugin :: PluginDescriptor IdeState
-alternateNumberFormatPlugin = AlternateNumberFormat.descriptor mempty
+alternateNumberFormatPlugin = AlternateNumberFormat.descriptor mempty  "alternateNumberFormat"
 
 -- NOTE: For whatever reason, this plugin does not play nice with creating Code Actions on time.
 -- As a result tests will mostly pass if `import Prelude` is added at the top. We (mostly fendor) surmise this has something

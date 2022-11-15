@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-eval-plugin
-version:            1.2.2.0
+version:            1.3.0.0
 synopsis:           Eval plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -37,6 +37,10 @@ source-repository head
   location: https://github.com/haskell/haskell-language-server
 
 library
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   exposed-modules:
     Ide.Plugin.Eval
     Ide.Plugin.Eval.Types
@@ -66,16 +70,16 @@ library
     , ghc
     , ghc-boot-th
     , ghc-paths
-    , ghcide                ^>=1.7
+    , ghcide                ^>=1.8
     , hashable
     , hls-graph
-    , hls-plugin-api        ^>=1.4
+    , hls-plugin-api        ^>=1.5
     , lens
     , lsp
     , lsp-types
     , megaparsec            >=9.0
     , mtl
-    , parser-combinators
+    , parser-combinators    >=1.2
     , pretty-simple
     , QuickCheck
     , safe-exceptions
@@ -97,6 +101,10 @@ library
     TypeOperators
 
 test-suite tests
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
@@ -111,7 +119,7 @@ test-suite tests
     , filepath
     , hls-eval-plugin
     , hls-plugin-api
-    , hls-test-utils   ^>=1.3
+    , hls-test-utils   ^>=1.4
     , lens
     , lsp-types
     , text

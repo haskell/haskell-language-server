@@ -12,9 +12,7 @@ import           Data.Bifunctor
 import qualified Data.ByteString.Lazy.Char8              as LBS
 import           Data.Char
 import           Data.Dynamic                            (toDyn)
-import           Data.HashMap.Strict                     (HashMap)
 import qualified Data.HashMap.Strict                     as Map
-import qualified Data.HashSet                            as Set
 import           Data.List                               (dropWhileEnd, foldl',
                                                           intercalate,
                                                           partition, sort,
@@ -47,8 +45,8 @@ writeProfile :: FilePath -> Database -> IO ()
 writeProfile out db = do
     (report, mapping) <- toReport db
     dirtyKeysMapped <- do
-        dirtyIds <- Set.fromList . fmap fst <$> getDirtySet db
-        let dirtyKeysMapped = mapMaybe (`Map.lookup` mapping) . Set.toList $ dirtyIds
+        dirtyIds <- fromListKeySet . fmap fst <$> getDirtySet db
+        let dirtyKeysMapped = mapMaybe (`lookupKeyMap` mapping) . toListKeySet $ dirtyIds
         return $ Just $ sort dirtyKeysMapped
     rpt <- generateHTML dirtyKeysMapped report
     LBS.writeFile out rpt
@@ -58,17 +56,17 @@ data ProfileEntry = ProfileEntry
 
 -- | Eliminate all errors from the database, pretending they don't exist
 -- resultsOnly :: Map.HashMap Id (Key, Status) -> Map.HashMap Id (Key, Result (Either BS.ByteString Value))
-resultsOnly :: [(Key, Status)] -> Map.HashMap Key Result
-resultsOnly mp = Map.map (\r ->
-      r{resultDeps = mapResultDeps (filter (isJust . flip Map.lookup keep)) $ resultDeps r}
+resultsOnly :: [(Key, Status)] -> KeyMap Result
+resultsOnly mp = mapKeyMap (\r ->
+      r{resultDeps = mapResultDeps (filterKeySet (isJust . flip lookupKeyMap keep)) $ resultDeps r}
     ) keep
     where
-        keep = Map.fromList $ mapMaybe (traverse getResult) mp
+        keep = fromListKeyMap $ mapMaybe (traverse getResult) mp
 
 -- | Given a map of representing a dependency order (with a show for error messages), find an ordering for the items such
 --   that no item points to an item before itself.
 --   Raise an error if you end up with a cycle.
-dependencyOrder :: (Eq a, Hashable a) => (a -> String) -> [(a,[a])] -> [a]
+-- dependencyOrder :: (Eq a, Hashable a) => (a -> String) -> [(a,[a])] -> [a]
 -- Algorithm:
 --    Divide everyone up into those who have no dependencies [Id]
 --    And those who depend on a particular Id, Dep :-> Maybe [(Key,[Dep])]
@@ -78,8 +76,8 @@ dependencyOrder :: (Eq a, Hashable a) => (a -> String) -> [(a,[a])] -> [a]
 --    k :-> Nothing means the key has already been freed
 dependencyOrder shw status =
   f (map fst noDeps) $
-    Map.map Just $
-      Map.fromListWith (++)
+    mapKeyMap Just $
+      fromListWithKeyMap (++)
         [(d, [(k,ds)]) | (k,d:ds) <- hasDeps]
     where
         (noDeps, hasDeps) = partition (null . snd) status
@@ -89,33 +87,33 @@ dependencyOrder shw status =
                     "Internal invariant broken, database seems to be cyclic" :
                     map ("    " ++) bad ++
                     ["... plus " ++ show (length badOverflow) ++ " more ..." | not $ null badOverflow]
-            where (bad,badOverflow) = splitAt 10 [shw i | (i, Just _) <- Map.toList mp]
+            where (bad,badOverflow) = splitAt 10 [shw i | (i, Just _) <- toListKeyMap mp]
 
         f (x:xs) mp = x : f (now++xs) later
-            where Just free = Map.lookupDefault (Just []) x mp
-                  (now,later) = foldl' g ([], Map.insert x Nothing mp) free
+            where Just free = lookupDefaultKeyMap (Just []) x mp
+                  (now,later) = foldl' g ([], insertKeyMap x Nothing mp) free
 
         g (free, mp) (k, []) = (k:free, mp)
-        g (free, mp) (k, d:ds) = case Map.lookupDefault (Just []) d mp of
+        g (free, mp) (k, d:ds) = case lookupDefaultKeyMap (Just []) d mp of
             Nothing   -> g (free, mp) (k, ds)
-            Just todo -> (free, Map.insert d (Just $ (k,ds) : todo) mp)
+            Just todo -> (free, insertKeyMap d (Just $ (k,ds) : todo) mp)
 
-prepareForDependencyOrder :: Database -> IO (HashMap Key Result)
+prepareForDependencyOrder :: Database -> IO (KeyMap Result)
 prepareForDependencyOrder db = do
     current <- readTVarIO $ databaseStep db
-    Map.insert (Key "alwaysRerun") (alwaysRerunResult current) .  resultsOnly
+    insertKeyMap (newKey "alwaysRerun") (alwaysRerunResult current) .  resultsOnly
         <$> getDatabaseValues db
 
 -- | Returns a list of profile entries, and a mapping linking a non-error Id to its profile entry
-toReport :: Database -> IO ([ProfileEntry], HashMap Key Int)
+toReport :: Database -> IO ([ProfileEntry], KeyMap Int)
 toReport db = do
     status <- prepareForDependencyOrder db
     let order = dependencyOrder show
-                $ map (second (getResultDepsDefault [Key "alwaysRerun"] . resultDeps))
-                $ Map.toList status
-        ids = Map.fromList $ zip order [0..]
+                $ map (second (toListKeySet . getResultDepsDefault (singletonKeySet $ newKey "alwaysRerun") . resultDeps))
+                $ toListKeyMap status
+        ids = fromListKeyMap $ zip order [0..]
 
-        steps = let xs = nubOrd $ concat [[resultChanged, resultBuilt, resultVisited] | Result{..} <- Map.elems status]
+        steps = let xs = nubOrd $ concat [[resultChanged, resultBuilt, resultVisited] | Result{..} <- elemsKeyMap status]
 
                 in Map.fromList $ zip (sortBy (flip compare) xs) [0..]
 
@@ -124,14 +122,14 @@ toReport db = do
             ,prfBuilt = fromStep resultBuilt
             ,prfVisited = fromStep resultVisited
             ,prfChanged = fromStep resultChanged
-            ,prfDepends = map pure $ mapMaybe (`Map.lookup` ids) $ getResultDepsDefault [Key "alwaysRerun"] resultDeps
+            ,prfDepends = map pure $ elemsKeyMap $ restrictKeysKeyMap ids $ getResultDepsDefault (singletonKeySet $ newKey "alwaysRerun") resultDeps
             ,prfExecution = resultExecution
             }
             where fromStep i = fromJust $ Map.lookup i steps
-    pure ([maybe (error "toReport") (f i) $ Map.lookup i status | i <- order], ids)
+    pure ([maybe (error "toReport") (f i) $ lookupKeyMap i status | i <- order], ids)
 
 alwaysRerunResult :: Step -> Result
-alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (ResultDeps []) 0 mempty
+alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (ResultDeps mempty) 0 mempty
 
 generateHTML :: Maybe [Int] -> [ProfileEntry] -> IO LBS.ByteString
 generateHTML dirtyKeys xs = do

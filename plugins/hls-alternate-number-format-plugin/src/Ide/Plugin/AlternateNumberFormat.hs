@@ -2,40 +2,34 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeFamilies  #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE ViewPatterns  #-}
 module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 
-import           Control.Lens                    ((^.))
-import           Control.Monad.Except            (ExceptT, MonadIO, liftIO)
-import qualified Data.HashMap.Strict             as HashMap
-import           Data.String                     (IsString)
-import           Data.Text                       (Text)
-import qualified Data.Text                       as T
-import           Development.IDE                 (GetParsedModule (GetParsedModule),
-                                                  GhcSession (GhcSession),
-                                                  IdeState, RuleResult, Rules,
-                                                  define, getFileContents,
-                                                  hscEnv, realSrcSpanToRange,
-                                                  runAction, use, useWithStale)
-import qualified Development.IDE.Core.Shake      as Shake
-import           Development.IDE.GHC.Compat      hiding (getSrcSpan)
-import           Development.IDE.GHC.Compat.Util (toList)
-import           Development.IDE.Graph.Classes   (Hashable, NFData, rnf)
-import           Development.IDE.Spans.Pragmas   (NextPragmaInfo,
-                                                  getNextPragmaInfo,
-                                                  insertNewPragma)
-import           Development.IDE.Types.Logger    as Logger
-import           GHC.Generics                    (Generic)
-import           GHC.LanguageExtensions.Type     (Extension)
-import           Ide.Plugin.Conversion           (AlternateFormat,
-                                                  ExtensionNeeded (NeedsExtension, NoExtension),
-                                                  alternateFormat)
+import           Control.Lens                  ((^.))
+import           Control.Monad.Except          (ExceptT, MonadIO, liftIO)
+import qualified Data.HashMap.Strict           as HashMap
+import           Data.Text                     (Text, unpack)
+import qualified Data.Text                     as T
+import           Development.IDE               (GetParsedModule (GetParsedModule),
+                                                IdeState, RuleResult, Rules,
+                                                define, realSrcSpanToRange,
+                                                runAction, use)
+import qualified Development.IDE.Core.Shake    as Shake
+import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
+import           Development.IDE.GHC.Util      (getExtensions)
+import           Development.IDE.Graph.Classes (Hashable, NFData, rnf)
+import           Development.IDE.Spans.Pragmas (NextPragmaInfo, getFirstPragma,
+                                                insertNewPragma)
+import           Development.IDE.Types.Logger  as Logger
+import           GHC.Generics                  (Generic)
+import           Ide.Plugin.Conversion         (AlternateFormat,
+                                                ExtensionNeeded (NeedsExtension, NoExtension),
+                                                alternateFormat)
 import           Ide.Plugin.Literals
-import           Ide.PluginUtils                 (getNormalizedFilePath,
-                                                  handleMaybeM, pluginResponse)
+import           Ide.PluginUtils               (getNormalizedFilePath,
+                                                handleMaybeM, pluginResponse)
 import           Ide.Types
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens         as L
+import qualified Language.LSP.Types.Lens       as L
 
 newtype Log = LogShake Shake.Log deriving Show
 
@@ -43,11 +37,8 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
-alternateNumberFormatId :: IsString a => a
-alternateNumberFormatId = "alternateNumberFormat"
-
-descriptor :: Recorder (WithPriority Log) -> PluginDescriptor IdeState
-descriptor recorder = (defaultPluginDescriptor alternateNumberFormatId)
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder pId = (defaultPluginDescriptor pId)
     { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler
     , pluginRules = collectLiteralsRule recorder
     }
@@ -79,25 +70,22 @@ collectLiteralsRule :: Recorder (WithPriority Log) -> Rules ()
 collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectLiterals nfp -> do
     pm <- use GetParsedModule nfp
     -- get the current extensions active and transform them into FormatTypes
-    let exts = getExtensions <$> pm
+    let exts = map GhcExtension . getExtensions <$> pm
         -- collect all the literals for a file
         lits = collectLiterals . pm_parsed_source <$> pm
     pure ([], CLR <$> lits <*> exts)
-    where
-        getExtensions = map GhcExtension . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler state plId (CodeActionParams _ _ docId currRange _) = pluginResponse $ do
-    nfp <- getNormalizedFilePath plId (docId ^. L.uri)
-    CLR{..} <- requestLiterals state nfp
-    pragma <- getFirstPragma state nfp
+codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = pluginResponse $ do
+    nfp <- getNormalizedFilePath (docId ^. L.uri)
+    CLR{..} <- requestLiterals pId state nfp
+    pragma <- getFirstPragma pId state nfp
         -- remove any invalid literals (see validTarget comment)
     let litsInRange = filter inCurrentRange literals
         -- generate alternateFormats and zip with the literal that generated the alternates
         literalPairs = map (\lit -> (lit, alternateFormat lit)) litsInRange
         -- make a code action for every literal and its' alternates (then flatten the result)
         actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit enabledExtensions pragma) alts) literalPairs
-
     pure $ List actions
     where
         inCurrentRange :: Literal -> Bool
@@ -146,16 +134,8 @@ contains Range {_start, _end} x = isInsideRealSrcSpan _start x || isInsideRealSr
 isInsideRealSrcSpan :: Position -> RealSrcSpan -> Bool
 p `isInsideRealSrcSpan` r = let (Range sp ep) = realSrcSpanToRange r in sp <= p && p <= ep
 
-getFirstPragma :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
-getFirstPragma state nfp = handleMaybeM "Error: Could not get NextPragmaInfo" $ do
-      ghcSession <- liftIO $ runAction (alternateNumberFormatId <> ".GhcSession") state $ useWithStale GhcSession nfp
-      (_, fileContents) <- liftIO $ runAction (alternateNumberFormatId <> ".GetFileContents") state $ getFileContents nfp
-      case ghcSession of
-        Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
-        Nothing                                           -> pure Nothing
-
-requestLiterals :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
-requestLiterals state = handleMaybeM "Error: Could not Collect Literals"
+requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
+requestLiterals (PluginId pId) state = handleMaybeM "Could not Collect Literals"
                 . liftIO
-                . runAction (alternateNumberFormatId <> ".CollectLiterals") state
+                . runAction (unpack pId <> ".CollectLiterals") state
                 . use CollectLiterals

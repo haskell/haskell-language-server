@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 
 module Development.IDE.GHC.Warnings(withWarnings) where
@@ -23,14 +24,18 @@ import           Language.LSP.Types                (type (|?) (..))
 --   https://github.com/ghc/ghc/blob/5f1d949ab9e09b8d95319633854b7959df06eb58/compiler/main/GHC.hs#L623-L640
 --   which basically says that log_action is taken from the ModSummary when GHC feels like it.
 --   The given argument lets you refresh a ModSummary log_action
+#if MIN_VERSION_ghc(9,3,0)
+withWarnings :: T.Text -> ((HscEnv -> HscEnv) -> IO a) -> IO ([(Maybe DiagnosticReason, FileDiagnostic)], a)
+#else
 withWarnings :: T.Text -> ((HscEnv -> HscEnv) -> IO a) -> IO ([(WarnReason, FileDiagnostic)], a)
+#endif
 withWarnings diagSource action = do
   warnings <- newVar []
-  let newAction :: LogActionCompat
-      newAction dynFlags wr _ loc prUnqual msg = do
-        let wr_d = map ((wr,) . third3 (attachReason wr)) $ diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags loc prUnqual msg
+  let newAction :: DynFlags -> LogActionCompat
+      newAction dynFlags logFlags wr _ loc prUnqual msg = do
+        let wr_d = map ((wr,) . third3 (attachReason wr)) $ diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags wr logFlags loc prUnqual msg
         modifyVar_ warnings $ return . (wr_d:)
-      newLogger env = pushLogHook (const (logActionCompat newAction)) (hsc_logger env)
+      newLogger env = pushLogHook (const (logActionCompat (newAction (hsc_dflags env)))) (hsc_logger env)
   res <- action $ \env -> putLogHook (newLogger env) env
   warns <- readVar warnings
   return (reverse $ concat warns, res)
@@ -38,6 +43,15 @@ withWarnings diagSource action = do
     third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
     third3 f (a, b, c) = (a, b, f c)
 
+#if MIN_VERSION_ghc(9,3,0)
+attachReason :: Maybe DiagnosticReason -> Diagnostic -> Diagnostic
+attachReason Nothing d = d
+attachReason (Just wr) d = d{_code = InR <$> showReason wr}
+ where
+  showReason = \case
+    WarningWithFlag flag -> showFlag flag
+    _                    -> Nothing
+#else
 attachReason :: WarnReason -> Diagnostic -> Diagnostic
 attachReason wr d = d{_code = InR <$> showReason wr}
  where
@@ -45,6 +59,7 @@ attachReason wr d = d{_code = InR <$> showReason wr}
     NoReason       -> Nothing
     Reason flag    -> showFlag flag
     ErrReason flag -> showFlag =<< flag
+#endif
 
 showFlag :: WarningFlag -> Maybe T.Text
 showFlag flag = ("-W" <>) . T.pack . flagSpecName <$> find ((== flag) . flagSpecFlag) wWarningFlags

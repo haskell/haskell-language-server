@@ -57,7 +57,7 @@ jobs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v4.0.0
+        uses: fkirc/skip-duplicate-actions@v5.2.0
         with:
           cancel_others: false
           paths_ignore: '["**/docs/**"
@@ -80,12 +80,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: [ "9.2.3"
-             , "9.2.2"
+        ghc: [ "9.2.4"
+             , "9.2.3"
              , "9.0.2"
              , "8.10.7"
-             , "8.8.4"
-             , "8.6.5"
              ]
         os: [ "ubuntu-latest"
             , "macOS-latest"
@@ -115,9 +113,6 @@ jobs:
         run: |
           # repeating builds to workaround segfaults in windows and ghc-8.8.4
           cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
-        env:
-          # needed for GHC 9.2.2 https://github.com/digital-asset/ghc-lib/issues/352
-          CPATH: "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi:$CPATH"
 
       # We build ghcide with benchs and test enabled to include its dependencies in the cache
       # (including shake-bench)

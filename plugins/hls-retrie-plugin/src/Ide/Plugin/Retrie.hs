@@ -11,12 +11,12 @@
 {-# LANGUAGE StandaloneDeriving  #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 {-# OPTIONS -Wno-orphans #-}
 
 module Ide.Plugin.Retrie (descriptor) where
 
-import           Control.Concurrent.Extra             (readVar)
 import           Control.Concurrent.STM               (readTVarIO)
 import           Control.Exception.Safe               (Exception (..),
                                                        SomeException, catch,
@@ -29,11 +29,8 @@ import           Control.Monad.Trans.Except           (ExceptT (ExceptT),
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (FromJSON (..),
                                                        ToJSON (..),
-                                                       Value (Null),
-                                                       genericParseJSON)
-import qualified Data.Aeson                           as Aeson
-import           Data.Bifunctor                       (Bifunctor (first),
-                                                       second)
+                                                       Value (Null))
+import           Data.Bifunctor                       (second)
 import qualified Data.ByteString                      as BS
 import           Data.Coerce
 import           Data.Either                          (partitionEithers)
@@ -43,7 +40,7 @@ import qualified Data.HashSet                         as Set
 import           Data.IORef.Extra                     (atomicModifyIORef'_,
                                                        newIORef, readIORef)
 import           Data.List.Extra                      (find, nubOrdOn)
-import           Data.String                          (IsString (fromString))
+import           Data.String                          (IsString)
 import qualified Data.Text                            as T
 import qualified Data.Text.Encoding                   as T
 import           Data.Typeable                        (Typeable)
@@ -51,36 +48,39 @@ import           Development.IDE                      hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake           (ShakeExtras (knownTargetsVar),
                                                        toKnownFiles)
-import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
+import           Development.IDE.GHC.Compat           (GenLocated (L), GhcPs,
+                                                       GhcRn, GhcTc,
                                                        HsBindLR (FunBind),
                                                        HsGroup (..),
                                                        HsValBindsLR (..),
                                                        HscEnv, IdP, LRuleDecls,
                                                        ModSummary (ModSummary, ms_hspp_buf, ms_mod),
-                                                       NHsValBindsLR (..),
                                                        Outputable,
                                                        ParsedModule (..),
                                                        RuleDecl (HsRule),
                                                        RuleDecls (HsRules),
                                                        SourceText (..),
-                                                       SrcSpan (..),
                                                        TyClDecl (SynDecl),
                                                        TyClGroup (..), fun_id,
                                                        hm_iface, isQual,
-                                                       isQual_maybe,
+                                                       isQual_maybe, locA,
                                                        mi_fixities,
                                                        moduleNameString,
+                                                       ms_hspp_opts,
                                                        nameModule_maybe,
-                                                       nameRdrName, occNameFS,
-                                                       occNameString,
-                                                       parseModule,
+                                                       nameRdrName, noLocA,
+                                                       occNameFS, occNameString,
                                                        pattern IsBoot,
                                                        pattern NotBoot,
                                                        pattern RealSrcSpan,
+                                                       pm_parsed_source,
                                                        rdrNameOcc, rds_rules,
-                                                       srcSpanFile)
+                                                       srcSpanFile, topDir,
+                                                       unLocA)
 import           Development.IDE.GHC.Compat.Util      hiding (catch, try)
-import qualified GHC                                  (parseModule)
+import qualified GHC                                  (Module,
+                                                       ParsedModule (..),
+                                                       moduleName, parseModule)
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils
 import           Ide.Types
@@ -94,8 +94,13 @@ import           Language.LSP.Types                   as J hiding
                                                             SemanticTokenRelative (length),
                                                             SemanticTokensEdit (_start))
 import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
-import           Retrie.ExactPrint                    (fix, relativiseApiAnns,
+import           Retrie.ExactPrint                    (Annotated, fix,
                                                        transformA, unsafeMkA)
+#if MIN_VERSION_ghc(9,2,0)
+import           Retrie.ExactPrint                    (makeDeltaAst)
+#else
+import           Retrie.ExactPrint                    (relativiseApiAnns)
+#endif
 import           Retrie.Fixity                        (mkFixityEnv)
 import qualified Retrie.GHC                           as GHC
 import           Retrie.Monad                         (addImports, apply,
@@ -202,7 +207,7 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
           ++ concatMap (suggestRuleRewrites uri pos ms_mod) hs_ruleds
           ++ [ r
                | TyClGroup {group_tyclds} <- hs_tyclds,
-                 L l g <- group_tyclds,
+                 L (locA -> l) g <- group_tyclds,
                  pos `isInsideSrcSpan` l,
                  r <- suggestTypeRewrites uri ms_mod g
 
@@ -225,7 +230,7 @@ getBinds nfp = runMaybeT $ do
       ( HsGroup
           { hs_valds =
               XValBindsLR
-                (NValBinds binds _sigs :: NHsValBindsLR GHC.GhcRn),
+                (GHC.NValBinds binds _sigs :: GHC.NHsValBindsLR GhcRn),
             hs_ruleds,
             hs_tyclds
           },
@@ -247,7 +252,7 @@ suggestBindRewrites ::
   GHC.Module ->
   HsBindLR GhcRn GhcRn ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L l' rdrName}
+suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') rdrName}
   | pos `isInsideSrcSpan` l' =
     let pprNameText = printOutputable rdrName
         pprName = T.unpack pprNameText
@@ -267,13 +272,13 @@ describeRestriction restrictToOriginatingFile =
         if restrictToOriginatingFile then " in current file" else ""
 
 suggestTypeRewrites ::
-  (Outputable (IdP pass)) =>
+  (Outputable (IdP GhcRn)) =>
   Uri ->
   GHC.Module ->
-  TyClDecl pass ->
+  TyClDecl GhcRn ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName = L _ rdrName} =
-    let pprNameText = printOutputable rdrName
+suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName} =
+    let pprNameText = printOutputable (unLocA tcdLName)
         pprName = T.unpack pprNameText
         unfoldRewrite restrictToOriginatingFile =
             let rewrites = [TypeForward (qualify ms_mod pprName)]
@@ -290,7 +295,7 @@ suggestRuleRewrites ::
   Uri ->
   Position ->
   GHC.Module ->
-  LRuleDecls pass ->
+  LRuleDecls GhcRn ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
     concat
@@ -299,13 +304,9 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
           , backwardsRewrite ruleName True
           , backwardsRewrite ruleName False
           ]
-        | L l r  <- rds_rules,
+        | L (locA -> l) r  <- rds_rules,
           pos `isInsideSrcSpan` l,
-#if MIN_VERSION_ghc(8,8,0)
           let HsRule {rd_name = L _ (_, rn)} = r,
-#else
-          let HsRule _ (L _ (_,rn)) _ _ _ _ = r,
-#endif
           let ruleName = unpackFS rn
       ]
   where
@@ -326,7 +327,6 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
                 CodeActionRefactor,
                 RunRetrieParams {..}
               )
-
 suggestRuleRewrites _ _ _ _ = []
 
 qualify :: GHC.Module -> String -> String
@@ -359,24 +359,26 @@ callRetrie ::
   IO ([CallRetrieError], WorkspaceEdit)
 callRetrie state session rewrites origin restrictToOriginatingFile = do
   knownFiles <- toKnownFiles . unhashed <$> readTVarIO (knownTargetsVar $ shakeExtras state)
+#if MIN_VERSION_ghc(9,2,0)
+  -- retrie needs the libdir for `parseRewriteSpecs`
+  libdir <- topDir . ms_hspp_opts . msrModSummary <$> useOrFail "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary origin
+#endif
   let reuseParsedModule f = do
-        pm <-
-          useOrFail "GetParsedModule" NoParse GetParsedModule f
-        (fixities, pm) <- fixFixities f (fixAnns pm)
-        return (fixities, pm)
+        pm <- useOrFail "Retrie.GetParsedModule" NoParse GetParsedModule f
+        (fixities, pm') <- fixFixities f (fixAnns pm)
+        return (fixities, pm')
       getCPPmodule t = do
         nt <- toNormalizedFilePath' <$> makeAbsolute t
         let getParsedModule f contents = do
               modSummary <- msrModSummary <$>
-                useOrFail "GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
+                useOrFail "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
               let ms' =
                     modSummary
                       { ms_hspp_buf =
                           Just (stringToStringBuffer contents)
                       }
               logPriority (ideLogger state) Info $ T.pack $ "Parsing module: " <> t
-              parsed <-
-                evalGhcEnv session (GHC.parseModule ms')
+              parsed <- evalGhcEnv session (GHC.parseModule ms')
                   `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
               (fixities, parsed) <- fixFixities f (fixAnns parsed)
               return (fixities, parsed)
@@ -416,12 +418,19 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
       (theImports, theRewrites) = partitionEithers rewrites
 
       annotatedImports =
-        unsafeMkA (map (GHC.noLoc . toImportDecl) theImports) mempty 0
+#if MIN_VERSION_ghc(9,2,0)
+        unsafeMkA (map (noLocA . toImportDecl) theImports) 0
+#else
+        unsafeMkA (map (noLocA . toImportDecl) theImports) mempty 0
+#endif
 
   (originFixities, originParsedModule) <- reuseParsedModule origin
   retrie <-
     (\specs -> apply specs >> addImports annotatedImports)
       <$> parseRewriteSpecs
+#if MIN_VERSION_ghc(9,2,0)
+        libdir
+#endif
         (\_f -> return $ NoCPP originParsedModule)
         originFixities
         theRewrites
@@ -463,9 +472,13 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
       let fixities = fixityEnvFromModIface hirModIface
       res <- transformA pm (fix fixities)
       return (fixities, res)
-    fixAnns ParsedModule {..} =
+#if MIN_VERSION_ghc(9,2,0)
+    fixAnns GHC.ParsedModule{pm_parsed_source} = unsafeMkA (makeDeltaAst pm_parsed_source) 0
+#else
+    fixAnns GHC.ParsedModule {..} =
       let ranns = relativiseApiAnns pm_parsed_source pm_annotations
        in unsafeMkA pm_parsed_source ranns 0
+#endif
 
 asEditMap :: [[(Uri, TextEdit)]] -> WorkspaceEditMap
 asEditMap = coerce . HM.fromListWith (++) . concatMap (map (second pure))
@@ -533,17 +546,17 @@ toImportDecl :: ImportSpec -> GHC.ImportDecl GHC.GhcPs
 toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
   where
     ideclSource' = if ideclSource then IsBoot else NotBoot
-    toMod = GHC.noLoc . GHC.mkModuleName
+    toMod = noLocA . GHC.mkModuleName
     ideclName = toMod ideclNameString
     ideclPkgQual = Nothing
     ideclSafe = False
     ideclImplicit = False
     ideclHiding = Nothing
     ideclSourceSrc = NoSourceText
-    ideclExt = GHC.noExtField
-    ideclAs = toMod <$> ideclAsString
-#if MIN_VERSION_ghc(8,10,0)
-    ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
+#if MIN_VERSION_ghc(9,2,0)
+    ideclExt = GHC.EpAnnNotUsed
 #else
-    ideclQualified = ideclQualifiedBool
+    ideclExt = GHC.noExtField
 #endif
+    ideclAs = toMod <$> ideclAsString
+    ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified

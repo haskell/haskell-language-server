@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name:          hls-plugin-api
-version:       1.4.0.0
+version:       1.5.0.0
 synopsis:      Haskell Language Server API for plugin communication
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -39,24 +39,24 @@ library
     , containers
     , data-default
     , dependent-map
-    , dependent-sum
+    , dependent-sum         >=0.7
     , Diff                  ^>=0.4.0
     , dlist
     , extra
     , filepath
     , ghc
     , hashable
-    , hls-graph             ^>= 1.7
+    , hls-graph             ^>= 1.8
     , lens
     , lens-aeson
-    , lsp                   >=1.4.0.0 && < 1.6
-    , opentelemetry
+    , lsp                   ^>=1.6.0.0
+    , opentelemetry         >=0.4
     , optparse-applicative
-    , process
     , regex-tdfa            >=1.3.1.0
     , text
     , transformers
     , unordered-containers
+    , megaparsec > 9
 
   if os(windows)
     build-depends: Win32
@@ -70,6 +70,8 @@ library
 
   if flag(pedantic)
     ghc-options: -Werror
+  if impl(ghc >= 9)
+    ghc-options: -Wunused-packages
 
   default-language:   Haskell2010
   default-extensions:
@@ -90,4 +92,5 @@ test-suite tests
     , tasty
     , tasty-hunit
     , tasty-rerun
+    , text
     , lsp-types

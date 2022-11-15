@@ -17,7 +17,8 @@ import           Data.Semigroup
 import           Data.Text                                       (Text)
 import qualified Data.Text                                       as T
 import           Development.IDE                                 hiding
-                                                                 (pluginHandlers)
+                                                                 (getExtensions,
+                                                                  pluginHandlers)
 import qualified Development.IDE.GHC.Compat                      as GHC hiding
                                                                         (Cpp)
 import qualified Development.IDE.GHC.Compat.Util                 as GHC

@@ -29,6 +29,8 @@ let
       # Hlint is still broken
       hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint { });
 
+      stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
+
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.

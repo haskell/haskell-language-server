@@ -1,13 +1,14 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP #-}
 
 module Development.IDE.Core.Preprocessor
   ( preprocessor
   ) where
 
-import           Development.IDE.GHC.CPP
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util   as Util
+import           Development.IDE.GHC.CPP
 import           Development.IDE.GHC.Orphans       ()
 
 import           Control.DeepSeq                   (NFData (rnf))
@@ -28,6 +29,10 @@ import           Development.IDE.Types.Location
 import qualified GHC.LanguageExtensions            as LangExt
 import           System.FilePath
 import           System.IO.Extra
+#if MIN_VERSION_ghc(9,3,0)
+import           GHC.Utils.Logger                  (LogFlags (..))
+import           GHC.Utils.Outputable              (renderWithContext)
+#endif
 
 -- | Given a file and some contents, apply any necessary preprocessors,
 --   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.
@@ -76,8 +81,13 @@ preprocessor env0 filename mbContents = do
   where
     logAction :: IORef [CPPLog] -> LogActionCompat
     logAction cppLogs dflags _reason severity srcSpan _style msg = do
+#if MIN_VERSION_ghc(9,3,0)
+      let log = CPPLog (fromMaybe SevWarning severity) srcSpan $ T.pack $ renderWithContext (log_default_user_context dflags) msg
+#else
       let log = CPPLog severity srcSpan $ T.pack $ showSDoc dflags msg
+#endif
       modifyIORef cppLogs (log :)
+
 
 
 data CPPLog = CPPLog Severity SrcSpan Text
@@ -133,7 +143,11 @@ parsePragmasIntoDynFlags
     -> Util.StringBuffer
     -> IO (Either [FileDiagnostic] ([String], DynFlags))
 parsePragmasIntoDynFlags env fp contents = catchSrcErrors dflags0 "pragmas" $ do
+#if MIN_VERSION_ghc(9,3,0)
+    let (_warns,opts) = getOptions (initParserOpts dflags0) contents fp
+#else
     let opts = getOptions dflags0 contents fp
+#endif
 
     -- Force bits that might keep the dflags and stringBuffer alive unnecessarily
     evaluate $ rnf opts

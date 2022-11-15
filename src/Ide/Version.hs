@@ -46,13 +46,17 @@ data ProgramsOfInterest = ProgramsOfInterest
 showProgramVersionOfInterest :: ProgramsOfInterest -> String
 showProgramVersionOfInterest ProgramsOfInterest {..} =
   unlines
-    [ "cabal:\t\t" ++ showVersionWithDefault cabalVersion
-    , "stack:\t\t" ++ showVersionWithDefault stackVersion
-    , "ghc:\t\t" ++ showVersionWithDefault ghcVersion
+    [ showProgramVersion "cabal" cabalVersion
+    , showProgramVersion "stack" stackVersion
+    , showProgramVersion "ghc" ghcVersion
     ]
+
+showProgramVersion :: String -> Maybe Version -> String
+showProgramVersion name version =
+  pad 16 (name ++ ":") ++ showVersionWithDefault version
   where
-    showVersionWithDefault :: Maybe Version -> String
     showVersionWithDefault = maybe "Not found" showVersion
+    pad n s = s ++ replicate (n - length s) ' '
 
 findProgramVersions :: IO ProgramsOfInterest
 findProgramVersions = ProgramsOfInterest
@@ -69,8 +73,11 @@ findVersionOf tool =
     Nothing -> pure Nothing
     Just path ->
       readProcessWithExitCode path ["--numeric-version"] "" >>= \case
-        (ExitSuccess, sout, _) -> pure $ consumeParser myVersionParser sout
+        (ExitSuccess, sout, _) -> pure $ mkVersion sout
         _                      -> pure Nothing
+
+mkVersion :: String -> Maybe Version
+mkVersion = consumeParser myVersionParser
   where
     myVersionParser = do
       skipSpaces
@@ -79,4 +86,5 @@ findVersionOf tool =
       pure version
 
     consumeParser :: ReadP a -> String -> Maybe a
-    consumeParser p input = listToMaybe $ map fst . filter (null . snd) $ readP_to_S p input
+    consumeParser p input =
+      listToMaybe $ map fst . filter (null . snd) $ readP_to_S p input

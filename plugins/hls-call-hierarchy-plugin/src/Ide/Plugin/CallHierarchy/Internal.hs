@@ -15,24 +15,18 @@ module Ide.Plugin.CallHierarchy.Internal (
 ) where
 
 import           Control.Lens                   ((^.))
-import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Data.Aeson                     as A
-import qualified Data.ByteString                as BS
-import qualified Data.HashMap.Strict            as HM
 import           Data.List                      (groupBy, sortBy)
 import qualified Data.Map                       as M
 import           Data.Maybe
 import qualified Data.Set                       as S
 import qualified Data.Text                      as T
-import qualified Data.Text.Encoding             as T
 import           Data.Tuple.Extra
 import           Development.IDE
-import           Development.IDE.Core.Compile
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat     as Compat
 import           Development.IDE.Spans.AtPoint
-import           GHC.Conc.Sync
 import           HieDb                          (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query as Q
 import           Ide.Plugin.CallHierarchy.Types
@@ -49,39 +43,31 @@ callHierarchyId = PluginId "callHierarchy"
 
 -- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHierarchy
-prepareCallHierarchy state pluginId param = pluginResponse $ do
-    nfp <- getNormalizedFilePath pluginId (param ^. L.textDocument ^. L.uri)
-    items <- liftIO (runAction "CallHierarchy.prepareHierarchy" state (prepareCallHierarchyItem nfp (param ^. L.position)))
-    pure (List <$> items)
+prepareCallHierarchy state _ param = pluginResponse $ do
+    nfp <- getNormalizedFilePath (param ^. L.textDocument ^. L.uri)
+    items <- liftIO
+        $ runAction "CallHierarchy.prepareHierarchy" state
+        $ prepareCallHierarchyItem nfp (param ^. L.position)
+    pure $ List <$> pure items
 
-prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action (Maybe [CallHierarchyItem])
-prepareCallHierarchyItem = constructFromAst
+prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action [CallHierarchyItem]
+prepareCallHierarchyItem nfp pos = use GetHieAst nfp >>= \case
+    Nothing               -> pure mempty
+    Just (HAR _ hf _ _ _) -> pure $ prepareByAst hf pos nfp
 
-constructFromAst :: NormalizedFilePath -> Position -> Action (Maybe [CallHierarchyItem])
-constructFromAst nfp pos =
-  use GetHieAst nfp >>=
-    \case
-      Nothing -> pure Nothing
-      Just (HAR _ hf _ _ _) -> do
-        resolveIntoCallHierarchy hf pos nfp
+prepareByAst :: HieASTs a -> Position -> NormalizedFilePath -> [CallHierarchyItem]
+prepareByAst hf pos nfp =
+    case listToMaybe $ pointCommand hf pos extract of
+        Nothing    -> mempty
+        Just infos -> mapMaybe (construct nfp hf) infos
 
-resolveIntoCallHierarchy :: Applicative f => HieASTs a -> Position -> NormalizedFilePath -> f (Maybe [CallHierarchyItem])
-resolveIntoCallHierarchy hf pos nfp =
-  case listToMaybe $ pointCommand hf pos extract of
-    Nothing    -> pure Nothing
-    Just infos ->
-      case mapMaybe (construct nfp hf) infos of
-        []  -> pure Nothing
-        res -> pure $ Just res
-
-extract :: HieAST a -> [(Identifier, S.Set ContextInfo, Span)]
+extract :: HieAST a -> [(Identifier, [ContextInfo], Span)]
 extract ast = let span = nodeSpan ast
-                  infos = M.toList $ M.map identInfo (Compat.getNodeIds ast)
-              in  [ (ident, contexts, span) | (ident, contexts) <- infos ]
+                  infos = M.toList $ M.map (S.toList . identInfo) (Compat.getNodeIds ast)
+              in  [(ident, contexts, span) | (ident, contexts) <- infos]
 
 recFieldInfo, declInfo, valBindInfo, classTyDeclInfo,
-  useInfo, patternBindInfo, tyDeclInfo, matchBindInfo
-    :: [ContextInfo] -> Maybe ContextInfo
+    useInfo, patternBindInfo, tyDeclInfo, matchBindInfo :: [ContextInfo] -> Maybe ContextInfo
 recFieldInfo    ctxs = listToMaybe [ctx       | ctx@RecField{}    <- ctxs]
 declInfo        ctxs = listToMaybe [ctx       | ctx@Decl{}        <- ctxs]
 valBindInfo     ctxs = listToMaybe [ctx       | ctx@ValBind{}     <- ctxs]
@@ -91,98 +77,93 @@ patternBindInfo ctxs = listToMaybe [ctx       | ctx@PatternBind{} <- ctxs]
 tyDeclInfo      ctxs = listToMaybe [TyDecl    | TyDecl            <- ctxs]
 matchBindInfo   ctxs = listToMaybe [MatchBind | MatchBind         <- ctxs]
 
-construct :: NormalizedFilePath -> HieASTs a -> (Identifier, S.Set ContextInfo, Span) -> Maybe CallHierarchyItem
+construct :: NormalizedFilePath -> HieASTs a -> (Identifier, [ContextInfo], Span) -> Maybe CallHierarchyItem
 construct nfp hf (ident, contexts, ssp)
-  | isInternalIdentifier ident = Nothing
+    | isInternalIdentifier ident = Nothing
 
-  | Just (RecField RecFieldDecl _) <- recFieldInfo ctxList
-    -- ignored type span
-    = Just $ mkCallHierarchyItem' ident SkField ssp ssp
+    | Just (RecField RecFieldDecl _) <- recFieldInfo contexts
+        -- ignored type span
+        = Just $ mkCallHierarchyItem' ident SkField ssp ssp
 
-  | isJust (matchBindInfo ctxList) && isNothing (valBindInfo ctxList)
-    = Just $ mkCallHierarchyItem' ident SkFunction ssp ssp
+    | isJust (matchBindInfo contexts) && isNothing (valBindInfo contexts)
+        = Just $ mkCallHierarchyItem' ident SkFunction ssp ssp
 
-  | Just ctx <- valBindInfo ctxList
-    = Just $ case ctx of
-        ValBind _ _ span -> mkCallHierarchyItem' ident SkFunction (renderSpan span) ssp
-        _                -> mkCallHierarchyItem' ident skUnknown ssp ssp
+    | Just ctx <- valBindInfo contexts
+        = Just $ case ctx of
+            ValBind _ _ span -> mkCallHierarchyItem' ident SkFunction (renderSpan span) ssp
+            _                -> mkCallHierarchyItem' ident skUnknown ssp ssp
 
-  | Just ctx <- declInfo ctxList
-    = Just $ case ctx of
-        Decl ClassDec span -> mkCallHierarchyItem' ident SkInterface     (renderSpan span) ssp
-        Decl ConDec   span -> mkCallHierarchyItem' ident SkConstructor   (renderSpan span) ssp
-        Decl DataDec  span -> mkCallHierarchyItem' ident SkStruct        (renderSpan span) ssp
-        Decl FamDec   span -> mkCallHierarchyItem' ident SkFunction      (renderSpan span) ssp
-        Decl InstDec  span -> mkCallHierarchyItem' ident SkInterface     (renderSpan span) ssp
-        Decl SynDec   span -> mkCallHierarchyItem' ident SkTypeParameter (renderSpan span) ssp
-        _ -> mkCallHierarchyItem' ident skUnknown ssp ssp
+    | Just ctx <- declInfo contexts
+        = Just $ case ctx of
+            Decl ClassDec span -> mkCallHierarchyItem' ident SkInterface     (renderSpan span) ssp
+            Decl ConDec   span -> mkCallHierarchyItem' ident SkConstructor   (renderSpan span) ssp
+            Decl DataDec  span -> mkCallHierarchyItem' ident SkStruct        (renderSpan span) ssp
+            Decl FamDec   span -> mkCallHierarchyItem' ident SkFunction      (renderSpan span) ssp
+            Decl InstDec  span -> mkCallHierarchyItem' ident SkInterface     (renderSpan span) ssp
+            Decl SynDec   span -> mkCallHierarchyItem' ident SkTypeParameter (renderSpan span) ssp
+            _ -> mkCallHierarchyItem' ident skUnknown ssp ssp
 
-  | Just (ClassTyDecl span) <- classTyDeclInfo ctxList
-    = Just $ mkCallHierarchyItem' ident SkMethod (renderSpan span) ssp
+    | Just (ClassTyDecl span) <- classTyDeclInfo contexts
+        = Just $ mkCallHierarchyItem' ident SkMethod (renderSpan span) ssp
 
-  | Just (PatternBind _ _ span) <- patternBindInfo ctxList
-    = Just $ mkCallHierarchyItem' ident SkFunction (renderSpan span) ssp
+    | Just (PatternBind _ _ span) <- patternBindInfo contexts
+        = Just $ mkCallHierarchyItem' ident SkFunction (renderSpan span) ssp
 
-  | Just Use <- useInfo ctxList
-    = Just $ mkCallHierarchyItem' ident SkInterface ssp ssp
+    | Just _ <- useInfo contexts = Just $ mkCallHierarchyItem' ident SkInterface ssp ssp
 
-  | Just _ <- tyDeclInfo ctxList
-    = renderTyDecl
+    | Just _ <- tyDeclInfo contexts = renderTyDecl
 
-  | otherwise = Nothing
-  where
-    renderSpan = \case Just span -> span
-                       _         -> ssp
+    | otherwise = Nothing
+    where
+        renderSpan (Just span) = span
+        renderSpan _           = ssp
 
-    skUnknown = SkUnknown 27
+        -- https://github.com/haskell/lsp/blob/e11b7c09658610f6d815d04db08a64e7cf6b4467/lsp-types/src/Language/LSP/Types/DocumentSymbol.hs#L97
+        skUnknown = SkUnknown 27 -- 27 is the first unused number while ToJSON
 
-    mkCallHierarchyItem' = mkCallHierarchyItem nfp
+        mkCallHierarchyItem' = mkCallHierarchyItem nfp
 
-    isInternalIdentifier = \case
-      Left _     -> False
-      Right name -> isInternalName name
+        isInternalIdentifier = \case
+            Left _     -> False
+            Right name -> isInternalName name
 
-    ctxList = S.toList contexts
-
-    renderTyDecl = case ident of
-      Left _ -> Nothing
-      Right name -> case getNameBindingInClass name ssp (getAsts hf) of
-        Nothing -> Nothing
-        Just sp -> case resolveIntoCallHierarchy hf (realSrcSpanToRange sp ^. L.start) nfp of
-          Just (Just items) -> listToMaybe items
-          _                 -> Nothing
+        renderTyDecl = case ident of
+            Left _ -> Nothing
+            Right name -> case getNameBinding name (getAsts hf) of
+                Nothing -> Nothing
+                Just sp -> listToMaybe $ prepareByAst hf (realSrcSpanToRange sp ^. L.start) nfp
 
 mkCallHierarchyItem :: NormalizedFilePath -> Identifier -> SymbolKind -> Span -> Span -> CallHierarchyItem
 mkCallHierarchyItem nfp ident kind span selSpan =
-  CallHierarchyItem
-    (T.pack $ optimize $ identifierName ident)
-    kind
-    Nothing
-    (Just $ T.pack $ identifierToDetail ident)
-    (fromNormalizedUri $ normalizedFilePathToUri nfp)
-    (realSrcSpanToRange span)
-    (realSrcSpanToRange selSpan)
-    (toJSON . show <$> mkSymbol ident)
-  where
-    identifierToDetail :: Identifier -> String
-    identifierToDetail = \case
-      Left modName -> moduleNameString modName
-      Right name   -> (moduleNameString . moduleName . nameModule) name
+    CallHierarchyItem
+        (T.pack $ optimizeDisplay $ identifierName ident)
+        kind
+        Nothing
+        (Just $ T.pack $ identifierToDetail ident)
+        (fromNormalizedUri $ normalizedFilePathToUri nfp)
+        (realSrcSpanToRange span)
+        (realSrcSpanToRange selSpan)
+        (toJSON . show <$> mkSymbol ident)
+    where
+        identifierToDetail :: Identifier -> String
+        identifierToDetail = \case
+            Left modName -> moduleNameString modName
+            Right name   -> (moduleNameString . moduleName . nameModule) name
 
-    identifierName :: Identifier -> String
-    identifierName = \case
-      Left modName -> moduleNameString modName
-      Right name   -> occNameString $ nameOccName name
+        identifierName :: Identifier -> String
+        identifierName = \case
+            Left modName -> moduleNameString modName
+            Right name   -> occNameString $ nameOccName name
 
-    optimize :: String -> String
-    optimize name -- optimize display for DuplicateRecordFields
-        | "$sel:" == take 5 name = drop 5 name
-        | otherwise = name
+        optimizeDisplay :: String -> String
+        optimizeDisplay name -- Optimize display for DuplicateRecordFields
+            | "$sel:" == take 5 name = drop 5 name
+            | otherwise = name
 
 mkSymbol :: Identifier -> Maybe Symbol
 mkSymbol = \case
-  Left _     -> Nothing
-  Right name -> Just $ Symbol (occName name) (nameModule name)
+    Left _     -> Nothing
+    Right name -> Just $ Symbol (occName name) (nameModule name)
 
 ----------------------------------------------------------------------
 -------------- Incoming calls and outgoing calls ---------------------
@@ -198,106 +179,103 @@ deriving instance Ord Value
 -- | Render incoming calls request.
 incomingCalls :: PluginMethodHandler IdeState CallHierarchyIncomingCalls
 incomingCalls state pluginId param = pluginResponse $ do
-  calls <- liftIO $ runAction "CallHierarchy.incomingCalls" state $
-      queryCalls (param ^. L.item) Q.incomingCalls mkCallHierarchyIncomingCall
-        mergeIncomingCalls
-  case calls of
-    Just x  -> pure $ Just $ List x
-    Nothing -> throwPluginError callHierarchyId "Internal Error" "incomingCalls"
-  where
-    mkCallHierarchyIncomingCall :: Vertex -> Action (Maybe CallHierarchyIncomingCall)
-    mkCallHierarchyIncomingCall = mkCallHierarchyCall CallHierarchyIncomingCall
+    calls <- liftIO
+        $ runAction "CallHierarchy.incomingCalls" state
+        $ queryCalls
+            (param ^. L.item)
+            Q.incomingCalls
+            mkCallHierarchyIncomingCall
+            (mergeCalls CallHierarchyIncomingCall L.from)
+    pure $ Just $ List calls
+    where
+        mkCallHierarchyIncomingCall :: Vertex -> Action (Maybe CallHierarchyIncomingCall)
+        mkCallHierarchyIncomingCall = mkCallHierarchyCall CallHierarchyIncomingCall
 
-    mergeIncomingCalls :: [CallHierarchyIncomingCall] -> [CallHierarchyIncomingCall]
-    mergeIncomingCalls = map merge
-                       . groupBy (\a b -> a ^. L.from == b ^. L.from)
-                       . sortBy (\a b -> (a ^. L.from) `compare` (b ^. L.from))
-      where
-        merge calls = let ranges = concatMap ((\(List x) -> x) . (^. L.fromRanges)) calls
-                      in  CallHierarchyIncomingCall (head calls ^. L.from) (List ranges)
-
--- Render outgoing calls request.
+-- | Render outgoing calls request.
 outgoingCalls :: PluginMethodHandler IdeState CallHierarchyOutgoingCalls
 outgoingCalls state pluginId param = pluginResponse $ do
-  calls <- liftIO $ runAction "CallHierarchy.outgoingCalls" state $
-      queryCalls (param ^. L.item) Q.outgoingCalls mkCallHierarchyOutgoingCall
-        mergeOutgoingCalls
-  case calls of
-      Just x  -> pure $ Just $ List x
-      Nothing -> throwPluginError callHierarchyId "Internal Error" "outgoingCalls"
-  where
-    mkCallHierarchyOutgoingCall :: Vertex -> Action (Maybe CallHierarchyOutgoingCall)
-    mkCallHierarchyOutgoingCall = mkCallHierarchyCall CallHierarchyOutgoingCall
+    calls <- liftIO
+        $ runAction "CallHierarchy.outgoingCalls" state
+        $ queryCalls
+            (param ^. L.item)
+            Q.outgoingCalls
+            mkCallHierarchyOutgoingCall
+            (mergeCalls CallHierarchyOutgoingCall L.to)
+    pure $ Just $ List calls
+    where
+        mkCallHierarchyOutgoingCall :: Vertex -> Action (Maybe CallHierarchyOutgoingCall)
+        mkCallHierarchyOutgoingCall = mkCallHierarchyCall CallHierarchyOutgoingCall
 
-    mergeOutgoingCalls :: [CallHierarchyOutgoingCall] -> [CallHierarchyOutgoingCall]
-    mergeOutgoingCalls = map merge
-                       . groupBy (\a b -> a ^. L.to == b ^. L.to)
-                       . sortBy (\a b -> (a ^. L.to) `compare` (b ^. L.to))
-      where
-        merge calls = let ranges = concatMap ((\(List x) -> x) . (^. L.fromRanges)) calls
-                      in  CallHierarchyOutgoingCall (head calls ^. L.to) (List ranges)
+-- | Merge calls from the same place
+mergeCalls constructor target =
+    concatMap merge
+        . groupBy (\a b -> a ^. target == b ^. target)
+        . sortBy (\a b -> (a ^. target) `compare` (b ^. target))
+    where
+        merge [] = []
+        merge calls@(call:_) =
+            let ranges = concatMap ((\(List x) -> x) . (^. L.fromRanges)) calls
+            in  [constructor (call ^. target) (List ranges)]
 
 mkCallHierarchyCall :: (CallHierarchyItem -> List Range -> a) -> Vertex -> Action (Maybe a)
 mkCallHierarchyCall mk v@Vertex{..} = do
-  let pos = Position (fromIntegral $ sl - 1) (fromIntegral $ sc - 1)
-      nfp = toNormalizedFilePath' hieSrc
-      range = mkRange (fromIntegral $ casl - 1) (fromIntegral $ casc - 1) (fromIntegral $ cael - 1) (fromIntegral $ caec - 1)
+    let pos = Position (fromIntegral $ sl - 1) (fromIntegral $ sc - 1)
+        nfp = toNormalizedFilePath' hieSrc
+        range = mkRange
+                    (fromIntegral $ casl - 1)
+                    (fromIntegral $ casc - 1)
+                    (fromIntegral $ cael - 1)
+                    (fromIntegral $ caec - 1)
 
-  prepareCallHierarchyItem nfp pos >>=
-    \case
-      Just [item] -> pure $ Just $ mk item (List [range])
-      _           -> do
-        ShakeExtras{withHieDb} <- getShakeExtras
-        liftIO (withHieDb (`Q.getSymbolPosition` v)) >>=
-          \case
-            (x:_) ->
-              prepareCallHierarchyItem nfp (Position (fromIntegral $ psl x - 1) (fromIntegral $ psc x - 1)) >>=
-                \case
-                  Just [item] -> pure $ Just $ mk item (List [range])
-                  _           -> pure Nothing
-            _     -> pure Nothing
+    prepareCallHierarchyItem nfp pos >>=
+        \case
+            [item] -> pure $ Just $ mk item (List [range])
+            _      -> do
+                ShakeExtras{withHieDb} <- getShakeExtras
+                sps <- liftIO (withHieDb (`Q.getSymbolPosition` v))
+                case sps of
+                    (x:_) -> do
+                        items <- prepareCallHierarchyItem
+                                    nfp
+                                    (Position (fromIntegral $ psl x - 1) (fromIntegral $ psc x - 1))
+                        case items of
+                            [item] -> pure $ Just $ mk item (List [range])
+                            _      -> pure Nothing
+                    _     -> pure Nothing
 
 -- | Unified queries include incoming calls and outgoing calls.
 queryCalls :: (Show a)
-  => CallHierarchyItem
-  -> (HieDb -> Symbol -> IO [Vertex])
-  -> (Vertex -> Action (Maybe a))
-  -> ([a] -> [a])
-  -> Action (Maybe [a])
+    => CallHierarchyItem
+    -> (HieDb -> Symbol -> IO [Vertex])
+    -> (Vertex -> Action (Maybe a))
+    -> ([a] -> [a])
+    -> Action [a]
 queryCalls item queryFunc makeFunc merge
-  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-    ShakeExtras{withHieDb} <- getShakeExtras
-    maySymbol <- getSymbol nfp
-    case maySymbol of
-      Nothing -> error "CallHierarchy.Impossible"
-      Just symbol -> do
-        vs <- liftIO $ withHieDb (`queryFunc` symbol)
-        items <- Just . catMaybes <$> mapM makeFunc vs
-        pure $ merge <$> items
-  | otherwise = pure Nothing
-  where
-    uri = item ^. L.uri
-    xdata = item ^. L.xdata
-    pos = item ^. (L.selectionRange . L.start)
+    | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+        ShakeExtras{withHieDb} <- getShakeExtras
+        maySymbol <- getSymbol nfp
+        case maySymbol of
+            Nothing -> pure mempty
+            Just symbol -> do
+                vs <- liftIO $ withHieDb (`queryFunc` symbol)
+                items <- catMaybes <$> mapM makeFunc vs
+                pure $ merge items
+    | otherwise = pure mempty
+    where
+        uri = item ^. L.uri
+        xdata = item ^. L.xdata
+        pos = item ^. (L.selectionRange . L.start)
 
-    getSymbol nfp =
-      case item ^. L.xdata of
-        Just xdata -> case fromJSON xdata of
-          A.Success (symbolStr :: String) ->
-            case readMaybe symbolStr of
-              Just symbol -> pure $ Just symbol
-              Nothing     -> getSymbolFromAst nfp pos
-          A.Error _ -> getSymbolFromAst nfp pos
-        Nothing -> getSymbolFromAst nfp pos
+        getSymbol nfp = case item ^. L.xdata of
+            Just xdata -> case fromJSON xdata of
+                A.Success (symbolStr :: String) -> maybe (getSymbolFromAst nfp pos) (pure . pure) $ readMaybe symbolStr
+                A.Error _ -> getSymbolFromAst nfp pos
+            Nothing -> getSymbolFromAst nfp pos -- Fallback if xdata lost, some editor(VSCode) will drop it
 
-    getSymbolFromAst :: NormalizedFilePath -> Position -> Action (Maybe Symbol)
-    getSymbolFromAst nfp pos =
-      use GetHieAst nfp >>=
-        \case
-          Nothing -> pure Nothing
-          Just (HAR _ hf _ _ _) -> do
-            case listToMaybe $ pointCommand hf pos extract of
-              Just infos -> case mkSymbol . fst3 <$> listToMaybe infos of
-                Nothing  -> pure Nothing
-                Just res -> pure res
-              Nothing -> pure Nothing
+        getSymbolFromAst :: NormalizedFilePath -> Position -> Action (Maybe Symbol)
+        getSymbolFromAst nfp pos = use GetHieAst nfp >>= \case
+            Nothing -> pure Nothing
+            Just (HAR _ hf _ _ _) -> do
+                case listToMaybe $ pointCommand hf pos extract of
+                    Just infos -> maybe (pure Nothing) pure $ mkSymbol . fst3 <$> listToMaybe infos
+                    Nothing -> pure Nothing

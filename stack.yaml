@@ -1,13 +1,15 @@
-resolver: nightly-2022-06-10
+resolver: nightly-2022-08-15
 
 packages:
 - .
 - ./hie-compat
 - ./hls-graph
 - ./ghcide/
+- ./ghcide/test
 - ./hls-plugin-api
 - ./hls-test-utils
 - ./shake-bench
+- ./plugins/hls-cabal-fmt-plugin
 - ./plugins/hls-call-hierarchy-plugin
 - ./plugins/hls-class-plugin
 # - ./plugins/hls-haddock-comments-plugin
@@ -28,25 +30,27 @@ packages:
 - ./plugins/hls-module-name-plugin
 - ./plugins/hls-ormolu-plugin
 - ./plugins/hls-alternate-number-format-plugin
-- ./plugins/hls-selection-range-plugin
+- ./plugins/hls-code-range-plugin
 - ./plugins/hls-change-type-signature-plugin
 - ./plugins/hls-gadt-plugin
+- ./plugins/hls-explicit-fixity-plugin
+- ./plugins/hls-refactor-plugin
+- ./plugins/hls-explicit-record-fields-plugin
 
 extra-deps:
-- direct-sqlite-2.3.26@sha256:04e835402f1508abca383182023e4e2b9b86297b8533afbd4e57d1a5652e0c23,3718
+# needed for tests of hls-cabal-fmt-plugin
+- cabal-fmt-0.1.6@sha256:54041d50c8148c32d1e0a67aef7edeebac50ae33571bef22312f6815908eac19,3626
 - floskell-0.10.6@sha256:e77d194189e8540abe2ace2c7cb8efafc747ca35881a2fefcbd2d40a1292e036,3819
-- heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
-- hiedb-0.4.1.0@sha256:fb20c657d9ecc91701b00dffcf4bbd77cb83720a1f9d867badd77ea227973135,2875
-- hlint-3.4
+- hiedb-0.4.2.0
 - implicit-hie-0.1.2.7@sha256:82bbbb1a8c05f99c8af3c16ac53e80c8648d8bf047b25ed5ce45a135bd736907,3122
 - implicit-hie-cradle-0.5.0.0@sha256:4276f60f3a59bc22df03fd918f73bca9f777de9568f85e3a8be8bd7566234a59,2368
-- lsp-1.4.0.0@sha256:d992cb88d6212f113baf372404c141a6bea14c436baa64ea6e4f01b6188c575b,5088
-- lsp-test-0.14.0.2@sha256:d62d2af45508f04c5fcad23e469c45b37ca19760cee15b025a0eb499cbd28050,4663
-- lsp-types-1.4.0.1@sha256:b902952df7becc1827947ee3ff1cd8c746aa8f9f80db330db20e2fdf1b6089e8,4504
 - monad-dijkstra-0.1.1.3@sha256:d2fc098d7c122555e726830a12ae0423ac187f89de9228f32e56e2f6fc2238e1,1900
 - retrie-1.2.0.1
-- rope-utf16-splay-0.3.2.0
-- sqlite-simple-0.4.18.0@sha256:3ceea56375c0a3590c814e411a4eb86943f8d31b93b110ca159c90689b6b39e5,3002
+- co-log-core-0.3.1.0
+- lsp-1.6.0.0
+- lsp-types-1.6.0.0
+- lsp-test-0.14.1.0
+- hie-bios-0.11.0
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true

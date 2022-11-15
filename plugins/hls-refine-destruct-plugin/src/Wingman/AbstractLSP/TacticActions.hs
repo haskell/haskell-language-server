@@ -4,13 +4,27 @@
 
 module Wingman.AbstractLSP.TacticActions where
 
-import Control.Monad (when)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Maybe (mapMaybeT)
-import Data.Maybe (listToMaybe)
-import Data.Proxy
-import Development.IDE hiding (rangeToRealSrcSpan)
+import           Control.Monad (when)
+import           Control.Monad.IO.Class (liftIO)
+import           Control.Monad.Trans (lift)
+import           Control.Monad.Trans.Maybe (mapMaybeT)
+import           Data.Foldable
+import           Data.Maybe (listToMaybe)
+import           Data.Proxy
+import           Development.IDE hiding (rangeToRealSrcSpan)
+import           Development.IDE.Core.UseStale
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.ExactPrint
+import           Generics.SYB.GHC (mkBindListT, everywhereM')
+import           Wingman.AbstractLSP.Types
+import           Wingman.CaseSplit
+import           Wingman.GHC (liftMaybe, isHole, pattern AMatch)
+import           Wingman.Judgements (jNeedsToBindArgs)
+import           Wingman.LanguageServer (runStaleIde)
+import           Wingman.LanguageServer.TacticProviders
+import           Wingman.Machinery (runTactic, scoreSolution)
+import           Wingman.Range
+import           Wingman.Types
 import Development.IDE.Core.Service (getIdeOptionsIO)
 import Development.IDE.Core.UseStale
 import Development.IDE.GHC.Compat
@@ -19,7 +33,7 @@ import Development.IDE.Types.Options (IdeTesting(IdeTesting), IdeOptions (IdeOpt
 import Generics.SYB.GHC (mkBindListT, everywhereM')
 import Wingman.AbstractLSP.Types
 import Wingman.CaseSplit
-import Wingman.GHC (liftMaybe, isHole, pattern AMatch, unXPat)
+import Wingman.GHC (liftMaybe, isHole, pattern AMatch)
 import Wingman.Judgements (jNeedsToBindArgs)
 import Wingman.LanguageServer (runStaleIde)
 import Wingman.LanguageServer.TacticProviders
@@ -140,7 +154,7 @@ graftHole span (rtr)
                 (occName name)
             $ iterateSplit
             $ traceShowId
-            $ mkFirstAgda (fmap unXPat pats)
+            $ mkFirstAgda pats
             $ unLoc
             $ rtr_extract rtr
 graftHole span (rtr)
@@ -174,7 +188,7 @@ graftDecl dflags dst ix make_decl (L (SrcSpanAnn _ src) (AMatch (FunRhs (L _ nam
           -- For whatever reason, ExactPrint annotates newlines to the ends of
           -- case matches and type signatures, but only allows us to insert
           -- them at the beginning of those things. Thus, we need want to
-          -- insert a preceeding newline (done in 'annotateDecl') on all
+          -- insert a preceding newline (done in 'annotateDecl') on all
           -- matches, except for the first one --- since it gets its newline
           -- from the line above.
           -- when (ix == 0) $

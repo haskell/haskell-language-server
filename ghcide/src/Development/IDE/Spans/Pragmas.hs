@@ -6,7 +6,8 @@ module Development.IDE.Spans.Pragmas
   ( NextPragmaInfo(..)
   , LineSplitTextEdits(..)
   , getNextPragmaInfo
-  , insertNewPragma ) where
+  , insertNewPragma
+  , getFirstPragma ) where
 
 import           Data.Bits                       (Bits (setBit))
 import           Data.Function                   ((&))
@@ -14,11 +15,15 @@ import qualified Data.List                       as List
 import qualified Data.Maybe                      as Maybe
 import           Data.Text                       (Text, pack)
 import qualified Data.Text                       as Text
-import           Development.IDE                 (srcSpanToRange)
+import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, runAction, useWithStale, GhcSession (..), getFileContents, hscEnv)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import           GHC.LanguageExtensions.Type     (Extension)
 import qualified Language.LSP.Types              as LSP
+import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Except (ExceptT)
+import Ide.Types (PluginId(..))
+import qualified Data.Text as T
+import Ide.PluginUtils (handleMaybeM)
 
 getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
 getNextPragmaInfo dynFlags sourceText =
@@ -31,12 +36,28 @@ getNextPragmaInfo dynFlags sourceText =
      | otherwise
      -> NextPragmaInfo 0 Nothing
 
+-- NOTE(ozkutuk): `RecordPuns` extension is renamed to `NamedFieldPuns`
+-- in GHC 9.4, but we still want to insert `NamedFieldPuns` in pre-9.4
+-- GHC as well, hence the replacement.
+-- https://gitlab.haskell.org/ghc/ghc/-/merge_requests/6156
+showExtension :: Extension -> Text
+showExtension NamedFieldPuns = "NamedFieldPuns"
+showExtension ext = pack (show ext)
+
 insertNewPragma :: NextPragmaInfo -> Extension -> LSP.TextEdit
-insertNewPragma (NextPragmaInfo _ (Just (LineSplitTextEdits ins _))) newPragma = ins { LSP._newText = "{-# LANGUAGE " <> pack (show newPragma) <> " #-}\n" } :: LSP.TextEdit
-insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit pragmaInsertRange $ "{-# LANGUAGE " <> pack (show newPragma) <> " #-}\n"
+insertNewPragma (NextPragmaInfo _ (Just (LineSplitTextEdits ins _))) newPragma = ins { LSP._newText = "{-# LANGUAGE " <> showExtension newPragma <> " #-}\n" } :: LSP.TextEdit
+insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit pragmaInsertRange $ "{-# LANGUAGE " <> showExtension newPragma <> " #-}\n"
     where
         pragmaInsertPosition = LSP.Position (fromIntegral nextPragmaLine) 0
         pragmaInsertRange = LSP.Range pragmaInsertPosition pragmaInsertPosition
+
+getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
+getFirstPragma (PluginId pId) state nfp = handleMaybeM "Could not get NextPragmaInfo" $ do
+  ghcSession <- liftIO $ runAction (T.unpack pId <> ".GhcSession") state $ useWithStale GhcSession nfp
+  (_, fileContents) <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp
+  case ghcSession of
+    Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
+    Nothing                                           -> pure Nothing
 
 -- Pre-declaration comments parser -----------------------------------------------------
 
@@ -416,26 +437,10 @@ mkLexerPState dynFlags stringBuffer =
     startRealSrcLoc = mkRealSrcLoc "asdf" 1 1
     updateDynFlags = flip gopt_unset Opt_Haddock . flip gopt_set Opt_KeepRawTokenStream
     finalDynFlags = updateDynFlags dynFlags
-#if !MIN_VERSION_ghc(8,8,1)
-    pState = mkPState finalDynFlags stringBuffer startRealSrcLoc
-    finalPState = pState{ use_pos_prags = False }
-#elif !MIN_VERSION_ghc(8,10,1)
-    mkLexerParserFlags =
-      mkParserFlags'
-      <$> warningFlags
-      <*> extensionFlags
-      <*> homeUnitId_
-      <*> safeImportsOn
-      <*> gopt Opt_Haddock
-      <*> gopt Opt_KeepRawTokenStream
-      <*> const False
-    finalPState = mkPStatePure (mkLexerParserFlags finalDynFlags) stringBuffer startRealSrcLoc
-#else
     pState = initParserState (initParserOpts finalDynFlags) stringBuffer startRealSrcLoc
     PState{ options = pStateOptions } = pState
     finalExtBitsMap = setBit (pExtsBitmap pStateOptions) (fromEnum UsePosPragsBit)
     finalPStateOptions = pStateOptions{ pExtsBitmap = finalExtBitsMap }
     finalPState = pState{ options = finalPStateOptions }
-#endif
   in
     finalPState

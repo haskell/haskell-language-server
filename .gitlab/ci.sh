@@ -6,7 +6,7 @@ source "$CI_PROJECT_DIR/.gitlab/common.sh"
 
 export GHCUP_INSTALL_BASE_PREFIX="$CI_PROJECT_DIR/toolchain"
 export CABAL_DIR="$CI_PROJECT_DIR/cabal"
-EXE_EXTENSION = ""
+EXE_EXTENSION=""
 
 case "$(uname)" in
     MSYS_*|MINGW*)
@@ -50,10 +50,10 @@ esac
 case "$(uname)" in
     MSYS_*|MINGW*)
     # workaround for https://gitlab.haskell.org/ghc/ghc/-/issues/21196
-    export PATH="${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin:${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/usr/bin:$PATH"
-    ls ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin
-    cp ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin/libgcc_s_seh-1.dll ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/bin
-    cp ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin/libwinpthread-1.dll ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/bin
+    # export PATH="${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin:${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/usr/bin:$PATH"
+    # ls ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin
+    # cp ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin/libgcc_s_seh-1.dll ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/bin
+    # cp ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/mingw/bin/libwinpthread-1.dll ${GHCUP_INSTALL_BASE_PREFIX}/ghcup/ghc/${GHC_VERSION}/bin
     ghc --info
 		# Shorten binary names
 		sed -i.bak -e 's/haskell-language-server/hls/g' \
@@ -76,10 +76,11 @@ case "$(uname)" in
 
 		mkdir "$CI_PROJECT_DIR/out"
 
-		cp "$(cabal list-bin ${args[@]} exe:hls)" "$CI_PROJECT_DIR/out/haskell-language-server-${GHC_VERSION}"$EXE_EXTENSION
-		cp "$(cabal list-bin ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/haskell-language-server-wrapper"$EXE_EXTENSION
+		cp "$(cabal list-bin -v0 ${args[@]} exe:hls)" "$CI_PROJECT_DIR/out/haskell-language-server-${GHC_VERSION}"$EXE_EXTENSION
+		cp "$(cabal list-bin -v0 ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/haskell-language-server-wrapper"$EXE_EXTENSION
         ;;
 	*)
+		sed -i.bak -e '/DELETE MARKER FOR CI/,/END DELETE/d' cabal.project # see comment in cabal.project
 		emake --version
 		emake GHCUP=ghcup hls
 		emake GHCUP=ghcup bindist

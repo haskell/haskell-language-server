@@ -79,7 +79,7 @@ introduceHypothesis f ns =
 
 
 ------------------------------------------------------------------------------
--- | Introduce bindings in the context of a lamba.
+-- | Introduce bindings in the context of a lambda.
 lambdaHypothesis
     :: Maybe OccName   -- ^ The name of the top level function. For any other
                        -- function, this should be 'Nothing'.
@@ -149,7 +149,7 @@ filterPosition defn pos jdg =
 findPositionVal :: Judgement' a -> OccName -> Int -> Maybe OccName
 findPositionVal jdg defn pos = listToMaybe $ do
   -- It's important to inspect the entire hypothesis here, as we need to trace
-  -- ancstry through potentially disallowed terms in the hypothesis.
+  -- ancestry through potentially disallowed terms in the hypothesis.
   (name, hi) <- M.toList
               $ M.map (overProvenance expandDisallowed)
               $ hyByName
@@ -252,7 +252,7 @@ disallowing reason ns =
 
 ------------------------------------------------------------------------------
 -- | The hypothesis, consisting of local terms and the ambient environment
--- (impors and class methods.) Hides disallowed values.
+-- (imports and class methods.) Hides disallowed values.
 jHypothesis :: Judgement' a -> Hypothesis a
 jHypothesis
   = Hypothesis

@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               hls-refine-destruct-plugin
-version:            1.6.2.0
+version:            1.7.0.0
 synopsis:           Wingman plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -19,12 +19,20 @@ extra-source-files:
   test/golden/*.hs
   test/golden/*.yaml
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 flag pedantic
   description: Enable -Werror
   default:     False
   manual:      True
 
 library
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   hs-source-dirs:     src
   exposed-modules:
     Ide.Plugin.Tactic
@@ -72,9 +80,10 @@ library
     , ghc-boot-th
     , ghc-exactprint
     , ghc-source-gen        ^>=0.4.1
-    , ghcide                ^>=1.7
+    , ghcide                ^>= 1.8
     , hls-graph
-    , hls-plugin-api        ^>=1.4
+    , hls-plugin-api        ^>=1.5
+    , hls-refactor-plugin
     , hyphenation
     , lens
     , lsp
@@ -116,6 +125,10 @@ library
     ViewPatterns
 
 test-suite tests
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   type:               exitcode-stdio-1.0
   main-is:            Main.hs
   other-modules:
@@ -147,7 +160,7 @@ test-suite tests
     , ghcide
     , hls-plugin-api
     , hls-refine-destruct-plugin
-    , hls-test-utils      ^>=1.3
+    , hls-test-utils      ^>=1.4
     , hspec
     , hspec-expectations
     , lens

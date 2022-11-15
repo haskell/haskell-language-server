@@ -1,6 +1,6 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 -- | CoreFiles let us serialize Core to a file in order to later recover it
 -- without reparsing or retypechecking
@@ -12,45 +12,45 @@ module Development.IDE.GHC.CoreFile
   , writeBinCoreFile
   , getImplicitBinds) where
 
-import GHC.Fingerprint
-import Data.IORef
-import Data.Foldable
-import Data.List (isPrefixOf)
-import Control.Monad.IO.Class
-import Control.Monad
-import Data.Maybe
+import           Control.Monad
+import           Control.Monad.IO.Class
+import           Data.Foldable
+import           Data.IORef
+import           Data.List                       (isPrefixOf)
+import           Data.Maybe
+import           GHC.Fingerprint
 
-import Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC.Utils.Binary
-import GHC.Core
-import GHC.CoreToIface
-import GHC.IfaceToCore
-import GHC.Iface.Env
-import GHC.Iface.Binary
-import GHC.Types.Id.Make
-import GHC.Iface.Recomp.Binary ( fingerprintBinMem )
+import           GHC.Core
+import           GHC.CoreToIface
+import           GHC.Iface.Binary
+import           GHC.Iface.Env
+import           GHC.Iface.Recomp.Binary         (fingerprintBinMem)
+import           GHC.IfaceToCore
+import           GHC.Types.Id.Make
+import           GHC.Utils.Binary
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Types.TypeEnv
+import           GHC.Types.TypeEnv
 #else
-import GHC.Driver.Types
+import           GHC.Driver.Types
 #endif
 
-#elif MIN_VERSION_ghc(8,6,0)
-import Binary
-import CoreSyn
-import ToIface
-import TcIface
-import IfaceEnv
-import BinIface
-import HscTypes
-import IdInfo
-import Var
-import Unique
-import MkId
-import BinFingerprint ( fingerprintBinMem )
+#else
+import           Binary
+import           BinFingerprint                  (fingerprintBinMem)
+import           BinIface
+import           CoreSyn
+import           HscTypes
+import           IdInfo
+import           IfaceEnv
+import           MkId
+import           TcIface
+import           ToIface
+import           Unique
+import           Var
 #endif
 
 import qualified Development.IDE.GHC.Compat.Util as Util
@@ -61,7 +61,7 @@ initBinMemSize = 1024 * 1024
 
 data CoreFile
   = CoreFile
-  { cf_bindings :: [TopIfaceBinding IfaceId]
+  { cf_bindings   :: [TopIfaceBinding IfaceId]
   -- ^ The actual core file bindings, deserialized lazily
   , cf_iface_hash :: !Fingerprint
   }
@@ -143,7 +143,7 @@ isNotImplictBind bind = any (not . isImplicitId) $ bindBindings bind
 
 bindBindings :: CoreBind -> [Var]
 bindBindings (NonRec b _) = [b]
-bindBindings (Rec bnds) = map fst bnds
+bindBindings (Rec bnds)   = map fst bnds
 
 getImplicitBinds :: TyCon -> [CoreBind]
 getImplicitBinds tc = cls_binds ++ getTyConImplicitBinds tc
@@ -219,7 +219,7 @@ tcIfaceId = fmap getIfaceId . tcIfaceDecl False <=< unmangle_decl_name
       | otherwise = pure ifid
     -- invariant: 'IfaceId' is always a 'IfaceId' constructor
     getIfaceId (AnId id) = id
-    getIfaceId _ = error "tcIfaceId: got non Id"
+    getIfaceId _         = error "tcIfaceId: got non Id"
 
 tc_iface_bindings :: TopIfaceBinding Id -> IfL CoreBind
 tc_iface_bindings (TopIfaceNonRec v e) = do

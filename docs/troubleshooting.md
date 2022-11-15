@@ -117,6 +117,13 @@ One strategy for diagnosing this is simply disable all plugins, check if the iss
 
 There is a configuration JSON snippet which disables all plugins [here](https://github.com/haskell/haskell-language-server/issues/2151#issuecomment-911397030).
 
+### Clearing HLS's build cache
+
+HLS builds the dependencies of your project in a separate directory to avoid clashing with your normal build tools.
+Sometimes clearing this out can help if you have persistent build problems.
+The cache directory is at `$HOME/.cache/hie-bios`.
+You may be able to identify a specific subdirectory that relates to your project, but it should always be safe to delete the whole thing, at worst it will cause HLS to redo build work next time it opens a project.
+
 ## Diagnosing problems with the client
 
 The most important thing to do is to consult the client's documentation.
@@ -139,12 +146,10 @@ Normally, we ship binaries for multiple versions and `haskell-language-server-wr
 
 If you see an error about HLS being compiled with the wrong version of GHC, then you either need to install the correct one (if you installed it yourself), or there is something going wrong with the wrapper selecting the right HLS binary to launch.
 
-### Unsupported GHC version
+### Unsupported GHC version or missing binaries
 
 HLS does not support every GHC version - there are a lot of them!
-Please see the [supported versions page](./supported-versions.md) for more information.
-
-In particular, support for GHC 9.0 and 9.2 is only partial; some features are unavailable with GHC >= 9.0.1.
+Please see the [supported versions page](./support/ghc-version-support.md) for more information, including what to do if you need binaries for a version that is not yet supported by a HLS release.
 
 ### Missing server or build tools
 
@@ -201,5 +206,5 @@ This returns an error in HLS if `tasty-discover` is not in the path: `could not 
 
 Due to some limitations in the interaction between HLS and `stack`, there are [issues](https://github.com/haskell/haskell-language-server/issues/366) in projects with multiple components (i.e. a main library and executables, test suites or benchmarks):
 
-- The project has to be built succesfully *before* loading it with HLS to get components other than the library work.
+- The project has to be built successfully *before* loading it with HLS to get components other than the library work.
 - Changes in the library are not automatically propagated to other components, especially in the presence of errors in the library. So you have to restart HLS in order for those components to be loaded correctly. The usual symptom is the editor showing errors like `Could not load module ...` or `Cannot satisfy -package ...`.

@@ -26,14 +26,15 @@ module Development.IDE.GHC.Util(
     setHieDir,
     dontWriteHieFiles,
     disableWarningsAsErrors,
-    traceAst,
-    printOutputable
+    printOutputable,
+    getExtensions
     ) where
 
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Data.EnumSet
 import           GHC.Data.FastString
 import           GHC.Data.StringBuffer
-import           GHC.Driver.Env
+import           GHC.Driver.Env                    hiding (hscSetFlags)
 import           GHC.Driver.Monad
 import           GHC.Driver.Session                hiding (ExposePackage)
 import           GHC.Parser.Lexer
@@ -70,12 +71,11 @@ import           Debug.Trace
 import           Development.IDE.GHC.Compat        as GHC
 import qualified Development.IDE.GHC.Compat.Parser as Compat
 import qualified Development.IDE.GHC.Compat.Units  as Compat
-import           Development.IDE.GHC.Dump          (showAstDataHtml)
 import           Development.IDE.Types.Location
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
 import           Foreign.Storable
-import           GHC
+import           GHC                               hiding (ParsedModule (..))
 import           GHC.IO.BufferedIO                 (BufferedIO)
 import           GHC.IO.Device                     as IODevice
 import           GHC.IO.Encoding
@@ -83,6 +83,7 @@ import           GHC.IO.Exception
 import           GHC.IO.Handle.Internals
 import           GHC.IO.Handle.Types
 import           GHC.Stack
+import           Ide.PluginUtils                   (unescape)
 import           System.Environment.Blank          (getEnvDefault)
 import           System.FilePath
 import           System.IO.Unsafe
@@ -281,48 +282,21 @@ ioe_dupHandlesNotCompatible h =
 --------------------------------------------------------------------------------
 -- Tracing exactprint terms
 
-{-# NOINLINE timestamp #-}
-timestamp :: POSIXTime
-timestamp = utcTimeToPOSIXSeconds $ unsafePerformIO getCurrentTime
-
-debugAST :: Bool
-debugAST = unsafePerformIO (getEnvDefault "GHCIDE_DEBUG_AST" "0") == "1"
-
--- | Prints an 'Outputable' value to stderr and to an HTML file for further inspection
-traceAst :: (Data a, ExactPrint a, Outputable a, HasCallStack) => String -> a -> a
-traceAst lbl x
-  | debugAST = trace doTrace x
-  | otherwise = x
-  where
-#if MIN_VERSION_ghc(9,2,0)
-    renderDump = renderWithContext defaultSDocContext{sdocStyle = defaultDumpStyle, sdocPprDebug = True}
-#else
-    renderDump = showSDocUnsafe . ppr
-#endif
-    htmlDump = showAstDataHtml x
-    doTrace = unsafePerformIO $ do
-        u <- U.newUnique
-        let htmlDumpFileName = printf "/tmp/hls/%s-%s-%d.html" (show timestamp) lbl (U.hashUnique u)
-        writeFile htmlDumpFileName $ renderDump htmlDump
-        return $ unlines
-            [prettyCallStack callStack ++ ":"
-#if MIN_VERSION_ghc(9,2,0)
-            , exactPrint x
-#endif
-            , "file://" ++ htmlDumpFileName]
-
--- Should in `Development.IDE.GHC.Orphans`,
--- leave it here to prevent cyclic module dependency
-#if !MIN_VERSION_ghc(8,10,0)
-instance Outputable SDoc where
-  ppr = id
-#endif
-
 -- | Print a GHC value in `defaultUserStyle` without unique symbols.
+-- It uses `showSDocUnsafe` with `unsafeGlobalDynFlags` internally.
 --
--- This is the most common print utility, will print with a user-friendly style like: `a_a4ME` as `a`.
+-- This is the most common print utility.
+-- It will do something additionally compared to what the 'Outputable' instance does.
 --
--- It internal using `showSDocUnsafe` with `unsafeGlobalDynFlags`.
+--   1. print with a user-friendly style: `a_a4ME` as `a`.
+--   2. unescape escape sequences of printable unicode characters within a pair of double quotes
 printOutputable :: Outputable a => a -> T.Text
-printOutputable = T.pack . printWithoutUniques
+printOutputable =
+    -- IfaceTyLit from GHC.Iface.Type implements Outputable with 'show'.
+    -- Showing a String escapes non-ascii printable characters. We unescape it here.
+    -- More discussion at https://github.com/haskell/haskell-language-server/issues/3115.
+    unescape . T.pack . printWithoutUniques
 {-# INLINE printOutputable #-}
+
+getExtensions :: ParsedModule -> [Extension]
+getExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary

@@ -10,16 +10,18 @@ module Development.IDE.Plugin.Completions.Logic (
 , localCompletionsForParsedModule
 , getCompletions
 , fromIdentInfo
+, getCompletionPrefix
 ) where
 
 import           Control.Applicative
-import           Data.Char                                (isUpper)
+import           Data.Char                                (isAlphaNum, isUpper)
 import           Data.Generics
 import           Data.List.Extra                          as List hiding
                                                                   (stripPrefix)
 import qualified Data.Map                                 as Map
 
-import           Data.Maybe                               (fromMaybe, isJust,
+import           Data.Maybe                               (catMaybes, fromMaybe,
+                                                           isJust, listToMaybe,
                                                            mapMaybe)
 import qualified Data.Text                                as T
 import qualified Text.Fuzzy.Parallel                      as Fuzzy
@@ -30,6 +32,7 @@ import           Data.Either                              (fromRight)
 import           Data.Function                            (on)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
+
 import qualified Data.HashSet                             as HashSet
 import           Data.Monoid                              (First (..))
 import           Data.Ord                                 (Down (Down))
@@ -59,12 +62,18 @@ import           GHC.Plugins                              (Depth (AllTheWay),
 #endif
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
+                                                           IdePlugins (..),
                                                            PluginId)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
+
+import qualified Data.Text.Utf16.Rope                     as Rope
+import           Development.IDE
+
+import           Development.IDE.Spans.AtPoint            (pointCommand)
 
 -- Chunk size used for parallelizing fuzzy matching
 chunkSize :: Int
@@ -161,7 +170,8 @@ occNameToComKind ty oc
 showModName :: ModuleName -> T.Text
 showModName = T.pack . moduleNameString
 
-mkCompl :: PluginId -> IdeOptions -> CompItem -> CompletionItem
+mkCompl :: Maybe PluginId -- ^ Plugin to use for the extend import command
+        -> IdeOptions -> CompItem -> CompletionItem
 mkCompl
   pId
   IdeOptions {..}
@@ -175,7 +185,7 @@ mkCompl
       docs,
       additionalTextEdits
     } = do
-  let mbCommand = mkAdditionalEditsCommand pId `fmap` additionalTextEdits
+  let mbCommand = mkAdditionalEditsCommand pId =<< additionalTextEdits
   let ci = CompletionItem
                  {_label = label,
                   _kind = kind,
@@ -217,9 +227,9 @@ mkCompl
             "line " <> printOutputable (srcLocLine loc) <> ", column " <> printOutputable (srcLocCol loc)
 
 
-mkAdditionalEditsCommand :: PluginId -> ExtendImport -> Command
-mkAdditionalEditsCommand pId edits =
-  mkLspCommand pId (CommandId extendImportCommandId) "extend import" (Just [toJSON edits])
+mkAdditionalEditsCommand :: Maybe PluginId -> ExtendImport -> Maybe Command
+mkAdditionalEditsCommand (Just pId) edits = Just $ mkLspCommand pId (CommandId extendImportCommandId) "extend import" (Just [toJSON edits])
+mkAdditionalEditsCommand _ _ = Nothing
 
 mkNameCompItem :: Uri -> Maybe T.Text -> OccName -> Provenance -> Maybe Type -> Maybe Backtick -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem
 mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp = CI {..}
@@ -280,12 +290,8 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
                   then getArgs ret
                   else Prelude.filter (not . isDictTy) $ map scaledThing args
           | isPiTy t = getArgs $ snd (splitPiTys t)
-#if MIN_VERSION_ghc(8,10,0)
           | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
           = getArgs t
-#else
-          | isCoercionTy t = maybe [] (getArgs . snd) (splitCoercionType_maybe t)
-#endif
           | otherwise = []
 
 
@@ -360,11 +366,11 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
       asNamespace :: ImportDecl GhcPs -> ModuleName
       asNamespace imp = maybe (iDeclToModName imp) GHC.unLoc (ideclAs imp)
       -- Full canonical names of imported modules
-      importDeclerations = map unLoc limports
+      importDeclarations = map unLoc limports
 
 
       -- The given namespaces for the imported modules (ie. full name, or alias if used)
-      allModNamesAsNS = map (showModName . asNamespace) importDeclerations
+      allModNamesAsNS = map (showModName . asNamespace) importDeclarations
 
       rdrElts = globalRdrEnvElts globalEnv
 
@@ -462,11 +468,13 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
             ValD _ PatBind{pat_lhs} ->
                 [mkComp id CiVariable Nothing
                 | VarPat _ id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
-            TyClD _ ClassDecl{tcdLName, tcdSigs} ->
+            TyClD _ ClassDecl{tcdLName, tcdSigs, tcdATs} ->
                 mkComp tcdLName CiInterface (Just $ showForSnippet tcdLName) :
                 [ mkComp id CiFunction (Just $ showForSnippet typ)
                 | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
-                , id <- ids]
+                , id <- ids] ++
+                [ mkComp fdLName CiStruct (Just $ showForSnippet fdLName)
+                | L _ (FamilyDecl{fdLName}) <- tcdATs]
             TyClD _ x ->
                 let generalCompls = [mkComp id cl (Just $ showForSnippet $ tyClDeclLName x)
                         | id <- listify (\(_ :: LIdP GhcPs) -> True) x
@@ -513,7 +521,6 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
                              PrefixCon{} -> Just []
                              _           -> Nothing
 
-        extract ConDeclField{..}
             -- NOTE: 'cd_fld_names' is grouped so that the fields
             -- sharing the same type declaration to fit in the same group; e.g.
             --
@@ -523,7 +530,13 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
             --
             -- is encoded as @[[arg1, arg2], [arg3], [arg4]]@
             -- Hence, we must concat nested arguments into one to get all the fields.
+#if MIN_VERSION_ghc(9,3,0)
+        extract ConDeclField{..}
+            = map (foLabel . unLoc) cd_fld_names
+#else
+        extract ConDeclField{..}
             = map (rdrNameFieldOcc . unLoc) cd_fld_names
+#endif
         -- XConDeclField
         extract _ = []
 findRecordCompl _ _ _ _ = []
@@ -551,24 +564,25 @@ removeSnippetsWhen condition x =
 
 -- | Returns the cached completions for the given module and position.
 getCompletions
-    :: PluginId
+    :: IdePlugins a
     -> IdeOptions
     -> CachedCompletions
     -> Maybe (ParsedModule, PositionMapping)
+    -> Maybe (HieAstResult, PositionMapping)
     -> (Bindings, PositionMapping)
-    -> VFS.PosPrefixInfo
+    -> PosPrefixInfo
     -> ClientCapabilities
     -> CompletionsConfig
     -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
     -> IO [Scored CompletionItem]
-getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
-               maybe_parsed (localBindings, bmapping) prefixInfo caps config moduleExportsMap = do
-  let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
-      enteredQual = if T.null prefixModule then "" else prefixModule <> "."
+getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
+               maybe_parsed maybe_ast_res (localBindings, bmapping) prefixInfo caps config moduleExportsMap = do
+  let PosPrefixInfo { fullLine, prefixScope, prefixText } = prefixInfo
+      enteredQual = if T.null prefixScope then "" else prefixScope <> "."
       fullPrefix  = enteredQual <> prefixText
 
       -- Boolean labels to tag suggestions as qualified (or not)
-      qual = not(T.null prefixModule)
+      qual = not(T.null prefixScope)
       notQual = False
 
       {- correct the position by moving 'foo :: Int -> String ->    '
@@ -576,7 +590,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
           to                             'foo :: Int -> String ->    '
                                                               ^
       -}
-      pos = VFS.cursorPos prefixInfo
+      pos = cursorPos prefixInfo
 
       maxC = maxCompletions config
 
@@ -599,6 +613,42 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
                   hpos = upperRange position'
               in getCContext lpos pm <|> getCContext hpos pm
 
+
+          -- We need the hieast to be "fresh". We can't get types from "stale" hie files, so hasfield won't work,
+          -- since it gets the record fields from the types.
+          -- Perhaps this could be fixed with a refactor to GHC's IfaceTyCon, to have it also contain record fields.
+          -- Requiring fresh hieast is fine for normal workflows, because it is generated while the user edits.
+          recordDotSyntaxCompls :: [(Bool, CompItem)]
+          recordDotSyntaxCompls = case maybe_ast_res of
+            Just (HAR {hieAst = hieast, hieKind = HieFresh},_) -> concat $ pointCommand hieast (completionPrefixPos prefixInfo) nodeCompletions
+            _ -> []
+            where
+              nodeCompletions :: HieAST Type -> [(Bool, CompItem)]
+              nodeCompletions node = concatMap g (nodeType $ nodeInfo node)
+              g :: Type -> [(Bool, CompItem)]
+              g (TyConApp theTyCon _) = map (dotFieldSelectorToCompl (printOutputable $ GHC.tyConName theTyCon)) $ getSels theTyCon
+              g _ = []
+              getSels :: GHC.TyCon -> [T.Text]
+              getSels tycon = let f fieldLabel = printOutputable fieldLabel
+                              in map f $ tyConFieldLabels tycon
+              -- Completions can return more information that just the completion itself, but it will
+              -- require more than what GHC currently gives us in the HieAST, since it only gives the Type
+              -- of the fields, not where they are defined, etc. So for now the extra fields remain empty.
+              -- Also: additionalTextEdits is a todo, since we may want to import the record. It requires a way
+              -- to get the record's module, which isn't included in the type information used to get the fields.
+              dotFieldSelectorToCompl :: T.Text -> T.Text -> (Bool, CompItem)
+              dotFieldSelectorToCompl recname label = (True, CI
+                { compKind = CiField
+                , insertText = label
+                , provenance = DefinedIn recname
+                , typeText = Nothing
+                , label = label
+                , isInfix = Nothing
+                , docs = emptySpanDoc
+                , isTypeCompl = False
+                , additionalTextEdits = Nothing
+                })
+
           -- completions specific to the current context
           ctxCompls' = case mcc of
                         Nothing           -> compls
@@ -609,10 +659,10 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
           ctxCompls = (fmap.fmap) (\comp -> toggleAutoExtend config $ comp { isInfix = infixCompls }) ctxCompls'
 
           infixCompls :: Maybe Backtick
-          infixCompls = isUsedAsInfix fullLine prefixModule prefixText pos
+          infixCompls = isUsedAsInfix fullLine prefixScope prefixText pos
 
           PositionMapping bDelta = bmapping
-          oldPos = fromDelta bDelta $ VFS.cursorPos prefixInfo
+          oldPos = fromDelta bDelta $ cursorPos prefixInfo
           startLoc = lowerRange oldPos
           endLoc = upperRange oldPos
           localCompls = map (uncurry localBindsToCompItem) $ getFuzzyScope localBindings startLoc endLoc
@@ -625,10 +675,14 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
               ty = showForSnippet <$> typ
               thisModName = Local $ nameSrcSpan name
 
-          compls = if T.null prefixModule
-            then map (notQual,) localCompls ++ map (qual,) unqualCompls ++ ((notQual,) . ($Nothing) <$> anyQualCompls)
-            else ((qual,) <$> Map.findWithDefault [] prefixModule (getQualCompls qualCompls))
-                 ++ ((notQual,) . ($ Just prefixModule) <$> anyQualCompls)
+          -- When record-dot-syntax completions are available, we return them exclusively.
+          -- They are only available when we write i.e. `myrecord.` with OverloadedRecordDot enabled.
+          -- Anything that isn't a field is invalid, so those completion don't make sense.
+          compls
+            | T.null prefixScope = map (notQual,) localCompls ++ map (qual,) unqualCompls ++ map (\compl -> (notQual, compl Nothing)) anyQualCompls
+            | not $ null recordDotSyntaxCompls = recordDotSyntaxCompls
+            | otherwise = ((qual,) <$> Map.findWithDefault [] prefixScope (getQualCompls qualCompls))
+                 ++ map (\compl -> (notQual, compl (Just prefixScope))) anyQualCompls
 
       filtListWith f list =
         [ fmap f label
@@ -639,7 +693,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
       filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
       filterModuleExports moduleName = filtListWith $ mkModuleFunctionImport moduleName
       filtKeywordCompls
-          | T.null prefixModule = filtListWith mkExtCompl (optKeywords ideOpts)
+          | T.null prefixScope = filtListWith mkExtCompl (optKeywords ideOpts)
           | otherwise = []
 
   if
@@ -661,7 +715,8 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
     | otherwise -> do
         -- assumes that nubOrdBy is stable
         let uniqueFiltCompls = nubOrdBy (uniqueCompl `on` snd . Fuzzy.original) filtCompls
-        let compls = (fmap.fmap.fmap) (mkCompl plId ideOpts) uniqueFiltCompls
+        let compls = (fmap.fmap.fmap) (mkCompl pId ideOpts) uniqueFiltCompls
+            pId = lookupCommandProvider plugins (CommandId extendImportCommandId)
         return $
           (fmap.fmap) snd $
           sortBy (compare `on` lexicographicOrdering) $
@@ -686,6 +741,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
 
 
 
+
 uniqueCompl :: CompItem -> CompItem -> Ordering
 uniqueCompl candidate unique =
   case compare (label candidate, compKind candidate)
@@ -706,9 +762,6 @@ uniqueCompl candidate unique =
       importedFrom (provenance -> ImportedFrom m) = m
       importedFrom (provenance -> DefinedIn m)    = m
       importedFrom (provenance -> Local _)        = "local"
-#if __GLASGOW_HASKELL__ < 810
-      importedFrom _                              = ""
-#endif
 
 -- ---------------------------------------------------------------------
 -- helper functions for infix backticks
@@ -882,3 +935,32 @@ mergeListsBy cmp all_lists = merge_lists all_lists
         []     -> []
         [xs]   -> xs
         lists' -> merge_lists lists'
+
+-- |From the given cursor position, gets the prefix module or record for autocompletion
+getCompletionPrefix :: Position -> VFS.VirtualFile -> PosPrefixInfo
+getCompletionPrefix pos@(Position l c) (VFS.VirtualFile _ _ ropetext) =
+      fromMaybe (PosPrefixInfo "" "" "" pos) $ do -- Maybe monad
+        let headMaybe = listToMaybe
+            lastMaybe = headMaybe . reverse
+
+        -- grab the entire line the cursor is at
+        curLine <- headMaybe $ T.lines $ Rope.toText
+                             $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) ropetext
+        let beforePos = T.take (fromIntegral c) curLine
+        -- the word getting typed, after previous space and before cursor
+        curWord <-
+            if | T.null beforePos        -> Just ""
+               | T.last beforePos == ' ' -> Just "" -- don't count abc as the curword in 'abc '
+               | otherwise               -> lastMaybe (T.words beforePos)
+
+        let parts = T.split (=='.')
+                      $ T.takeWhileEnd (\x -> isAlphaNum x || x `elem` ("._'"::String)) curWord
+        case reverse parts of
+          [] -> Nothing
+          (x:xs) -> do
+            let modParts = reverse $ filter (not .T.null) xs
+                modName = T.intercalate "." modParts
+            return $ PosPrefixInfo { fullLine = curLine, prefixScope = modName, prefixText = x, cursorPos = pos }
+
+completionPrefixPos :: PosPrefixInfo -> Position
+completionPrefixPos PosPrefixInfo { cursorPos = Position ln co, prefixText = str} = Position ln (co - (fromInteger . toInteger . T.length $ str) - 1)

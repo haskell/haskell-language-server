@@ -15,6 +15,7 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 
@@ -47,13 +48,17 @@ import           Data.Maybe                      (fromMaybe, listToMaybe,
 import qualified Data.Text                       as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat      as Compat hiding (getLoc)
+import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util as Util
 import           Development.IDE.GHC.ExactPrint
 import           GHC.Exts
+#if __GLASGOW_HASKELL__ >= 902
+import           GHC.Parser.Annotation (SrcSpanAnn'(..))
+import qualified GHC.Types.Error as Error
+#endif
 import           Ide.Plugin.Splice.Types
 import           Ide.Types
-import           Language.Haskell.GHC.ExactPrint (setPrecedingLines,
-                                                  uniqueSrcSpanT)
+import           Language.Haskell.GHC.ExactPrint (uniqueSrcSpanT)
 import           Language.LSP.Server
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
@@ -94,7 +99,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                 liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck fp
             (TcModuleResult {..}, _) <-
                 maybe
-                (throwE "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (errornous) macro and expand splice again."
+                (throwE "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (erroneous) macro and expand splice again."
                 )
                 pure mresl
             reportEditor
@@ -125,9 +130,6 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
             let exprSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan exprSplices
                 _patSuperSpans =
-#if __GLASGOW_HASKELL__ == 808
-                    fmap (second dL) $
-#endif
                     listToMaybe $ findSubSpansDesc srcSpan patSplices
                 typeSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan typeSplices
@@ -137,7 +139,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                 graftSpliceWith ::
                     forall ast.
                     HasSplice AnnListItem ast =>
-                    Maybe (SrcSpan, Located (ast GhcPs)) ->
+                    Maybe (SrcSpan, LocatedAn AnnListItem (ast GhcPs)) ->
                     Maybe (Either String WorkspaceEdit)
                 graftSpliceWith expandeds =
                     expandeds <&> \(_, expanded) ->
@@ -164,7 +166,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                                 (graftDecls (RealSrcSpan spliceSpan Nothing) expanded)
                                 ps
                                 <&>
-                                -- FIXME: Why ghc-exactprint sweeps preceeding comments?
+                                -- FIXME: Why ghc-exactprint sweeps preceding comments?
                                 adjustToRange uri range
 
     res <- liftIO $ runMaybeT $ do
@@ -238,11 +240,11 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
     where
         adjustTextEdits :: Traversable f => f TextEdit -> f TextEdit
         adjustTextEdits eds =
-            let Just minStart =
-                    L.fold
-                        (L.premap (view J.range) L.minimum)
-                        eds
-             in adjustLine minStart <$> eds
+            let minStart =
+                    case L.fold (L.premap (view J.range) L.minimum) eds of
+                        Nothing -> error "impossible"
+                        Just v -> v
+            in adjustLine minStart <$> eds
 
         adjustATextEdits :: Traversable f => f (TextEdit |? AnnotatedTextEdit) -> f (TextEdit |? AnnotatedTextEdit)
         adjustATextEdits = fmap $ \case
@@ -265,11 +267,23 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
             J.range %~ \r ->
                 if r == bad then ran else bad
 
+-- Define a pattern to get hold of a `SrcSpan` from the location part of a
+-- `GenLocated`. In GHC >= 9.2 this will be a SrcSpanAnn', with annotations;
+-- earlier it will just be a plain `SrcSpan`.
+{-# COMPLETE AsSrcSpan #-}
+#if __GLASGOW_HASKELL__ >= 902
+pattern AsSrcSpan :: SrcSpan -> SrcSpanAnn' a
+pattern AsSrcSpan locA <- SrcSpanAnn {locA}
+#else
+pattern AsSrcSpan :: SrcSpan -> SrcSpan
+pattern AsSrcSpan loc <- loc
+#endif
+
 findSubSpansDesc :: SrcSpan -> [(LHsExpr GhcTc, a)] -> [(SrcSpan, a)]
 findSubSpansDesc srcSpan =
     sortOn (Down . SubSpan . fst)
         . mapMaybe
-            ( \(L spn _, e) -> do
+            ( \(L (AsSrcSpan spn) _, e) -> do
                 guard (spn `isSubspanOf` srcSpan)
                 pure (spn, e)
             )
@@ -323,7 +337,7 @@ manualCalcEdit ::
 manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _eStyle ExpandSpliceParams {..} = do
     (warns, resl) <-
         ExceptT $ do
-            ((warns, errs), eresl) <-
+            (msgs, eresl) <-
                 initTcWithGbl hscEnv typechkd srcSpan $
                     case classifyAST spliceContext of
                         IsHsDecl -> fmap (fmap $ adjustToRange uri ran) $
@@ -350,8 +364,16 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                                                         Util.try @_ @SomeException $
                                                             (fst <$> expandSplice astP spl)
                                                     )
-                                        Just <$> either (pure . L _spn) (unRenamedE dflags) eExpr
+                                        Just <$> case eExpr of
+                                            Left x -> pure $ L _spn x
+                                            Right y -> unRenamedE dflags y
                                     _ -> pure Nothing
+            let (warns, errs) =
+#if __GLASGOW_HASKELL__ >= 902
+                                (Error.getWarningMessages msgs, Error.getErrorMessages msgs)
+#else
+                                msgs
+#endif
             pure $ (warns,) <$> fromMaybe (Left $ show errs) eresl
 
     unless
@@ -372,14 +394,17 @@ unRenamedE ::
     (Fail.MonadFail m, HasSplice l ast) =>
     DynFlags ->
     ast GhcRn ->
-    TransformT m (Located (ast GhcPs))
+    TransformT m (LocatedAn l (ast GhcPs))
 unRenamedE dflags expr = do
     uniq <- show <$> uniqueSrcSpanT
-    (anns, expr') <-
+#if __GLASGOW_HASKELL__ >= 902
+    expr' <-
+#else
+    (_anns, expr') <-
+#endif
         either (fail . show) pure $
-            parseAST @_ @(ast GhcPs) dflags uniq $
-                showSDoc dflags $ ppr expr
-    let _anns' = setPrecedingLines expr' 0 1 anns
+        parseAST @_ @(ast GhcPs) dflags uniq $
+            showSDoc dflags $ ppr expr
     pure expr'
 
 data SearchResult r =
@@ -418,11 +443,14 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
             RealSrcSpan ->
             GenericQ (SearchResult (RealSrcSpan, SpliceContext))
         detectSplice spn =
+          let
+            spanIsRelevant x = RealSrcSpan spn Nothing `isSubspanOf` x
+          in
             mkQ
                 Continue
                 ( \case
-                    (L l@(RealSrcSpan spLoc _) expr :: LHsExpr GhcPs)
-                        | RealSrcSpan spn Nothing `isSubspanOf` l ->
+                    (L (AsSrcSpan l@(RealSrcSpan spLoc _)) expr :: LHsExpr GhcPs)
+                        | spanIsRelevant l ->
                             case expr of
                                 HsSpliceE {} -> Here (spLoc, Expr)
                                 _            -> Continue
@@ -432,30 +460,30 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
 #if __GLASGOW_HASKELL__ == 808
                     (dL @(Pat GhcPs) -> L l@(RealSrcSpan spLoc _) pat :: Located (Pat GhcPs))
 #else
-                    (L l@(RealSrcSpan spLoc _) pat :: LPat GhcPs)
+                    (L (AsSrcSpan l@(RealSrcSpan spLoc _)) pat :: LPat GhcPs)
 #endif
-                        | RealSrcSpan spn Nothing `isSubspanOf` l ->
+                        | spanIsRelevant l ->
                             case pat of
                                 SplicePat{} -> Here (spLoc, Pat)
                                 _           -> Continue
                     _ -> Stop
                 `extQ` \case
-                    (L l@(RealSrcSpan spLoc _) ty :: LHsType GhcPs)
-                        | RealSrcSpan spn Nothing `isSubspanOf` l ->
+                    (L (AsSrcSpan l@(RealSrcSpan spLoc _)) ty :: LHsType GhcPs)
+                        | spanIsRelevant l ->
                             case ty of
                                 HsSpliceTy {} -> Here (spLoc, HsType)
                                 _             -> Continue
                     _ -> Stop
                 `extQ` \case
-                    (L l@(RealSrcSpan spLoc _) decl :: LHsDecl GhcPs)
-                        | RealSrcSpan spn Nothing `isSubspanOf` l ->
+                    (L (AsSrcSpan l@(RealSrcSpan spLoc _)) decl :: LHsDecl GhcPs)
+                        | spanIsRelevant l ->
                             case decl of
                                 SpliceD {} -> Here (spLoc, HsDecl)
                                 _          -> Continue
                     _ -> Stop
 
 -- | Like 'something', but performs top-down searching, cutoffs when 'Stop' received,
---   and picks inenrmost result.
+--   and picks innermost result.
 something' :: forall a. GenericQ (SearchResult a) -> GenericQ (Maybe a)
 something' f =  go
     where

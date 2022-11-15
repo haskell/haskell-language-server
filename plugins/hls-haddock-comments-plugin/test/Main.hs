@@ -19,7 +19,7 @@ main :: IO ()
 main = defaultTestRunner tests
 
 haddockCommentsPlugin :: PluginDescriptor IdeState
-haddockCommentsPlugin = HaddockComments.descriptor "haddockComments"
+haddockCommentsPlugin = HaddockComments.descriptor mempty "haddockComments"
 
 tests :: TestTree
 tests =
@@ -30,9 +30,11 @@ tests =
       goldenWithHaddockComments "MultivariateFunction" Signature 4 8,
       goldenWithHaddockComments "QualFunction" Signature 2 10,
       goldenWithHaddockComments "Record" Record 7 2,
+      goldenWithHaddockComments "Record2" Record 3 6,
+      goldenWithHaddockComments "InlineRecord" Record 3 20,
       expectedNothing "ConstFunction" Signature 2 2,
       expectedNothing "StaleFunction" Signature 3 3,
-      expectedNothing "StaleRecord" Record 3 12
+      expectedNothing "StaleRecord" Record 4 9
     ]
 
 goldenWithHaddockComments :: FilePath -> GenCommentsType -> UInt -> UInt -> TestTree
@@ -54,7 +56,7 @@ data GenCommentsType = Signature | Record
 
 toTitle :: GenCommentsType -> Text
 toTitle Signature = "Generate signature comments"
-toTitle Record    = "Generate fields comments"
+toTitle Record    = "Generate haddock comments"
 
 caTitle :: (Command |? CodeAction) -> Maybe Text
 caTitle (InR CodeAction {_title}) = Just _title
