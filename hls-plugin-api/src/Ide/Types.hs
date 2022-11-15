@@ -109,7 +109,9 @@ import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text            ()
 
+#if MIN_VERSION_ghc(9,2,0)
 import GHC.Plugins (StaticPlugin)
+#endif
 
 
 -- ---------------------------------------------------------------------
@@ -154,15 +156,26 @@ data GhcOptsModifications = GhcOptsModifications
     -- afterwards. 'dynFlagsModifyParser' allows plugins to enable language
     -- extensions only during parsing. for example, to let them enable
     -- certain pieces of syntax.
+#if MIN_VERSION_ghc(9,2,0)
     , staticPlugins :: [StaticPlugin]
+#endif
     }
 
+#if MIN_VERSION_ghc(9,2,0)
 instance Semigroup GhcOptsModifications where
     GhcOptsModifications g1 p1 plugins1 <> GhcOptsModifications g2 p2 plugins2 =
         GhcOptsModifications (g2 . g1) (p2 . p1) (plugins1 <> plugins2)
 
 instance Monoid GhcOptsModifications where
     mempty = GhcOptsModifications id id []
+#else
+instance Semigroup GhcOptsModifications where
+    GhcOptsModifications g1 p1 <> GhcOptsModifications g2 p2 =
+        GhcOptsModifications (g2 . g1) (p2 . p1)
+
+instance Monoid GhcOptsModifications where
+    mempty = GhcOptsModifications id id
+#endif
 
 -- ---------------------------------------------------------------------
 

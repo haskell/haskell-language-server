@@ -59,6 +59,42 @@ library
       Wingman.StaticPlugin
       Wingman.Tactics
       Wingman.Types
+  else
+    hs-source-dirs:     old/src
+    exposed-modules:
+      Ide.Plugin.Tactic
+      Refinery.Future
+      Wingman.AbstractLSP
+      Wingman.AbstractLSP.TacticActions
+      Wingman.AbstractLSP.Types
+      Wingman.Auto
+      Wingman.CaseSplit
+      Wingman.CodeGen
+      Wingman.CodeGen.Utils
+      Wingman.Context
+      Wingman.Debug
+      Wingman.EmptyCase
+      Wingman.GHC
+      Wingman.Judgements
+      Wingman.Judgements.SYB
+      Wingman.Judgements.Theta
+      Wingman.KnownStrategies
+      Wingman.KnownStrategies.QuickCheck
+      Wingman.LanguageServer
+      Wingman.LanguageServer.Metaprogram
+      Wingman.LanguageServer.TacticProviders
+      Wingman.Machinery
+      Wingman.Metaprogramming.Lexer
+      Wingman.Metaprogramming.Parser
+      Wingman.Metaprogramming.Parser.Documentation
+      Wingman.Metaprogramming.ProofState
+      Wingman.Naming
+      Wingman.Plugin
+      Wingman.Range
+      Wingman.Simplify
+      Wingman.StaticPlugin
+      Wingman.Tactics
+      Wingman.Types
 
   ghc-options:
     -Wall -Wno-name-shadowing -Wredundant-constraints
@@ -147,7 +183,26 @@ test-suite tests
       Spec
       UnificationSpec
       Utils
+  else
+    hs-source-dirs:     old/test
+    other-modules:
+      AutoTupleSpec
+      CodeAction.AutoSpec
+      CodeAction.DestructAllSpec
+      CodeAction.DestructPunSpec
+      CodeAction.DestructSpec
+      CodeAction.IntrosSpec
+      CodeAction.IntroDestructSpec
+      CodeAction.RefineSpec
+      CodeAction.RunMetaprogramSpec
+      CodeAction.UseDataConSpec
+      CodeLens.EmptyCaseSpec
+      ProviderSpec
+      Spec
+      UnificationSpec
+      Utils
 
+  hs-source-dirs:     test
   ghc-options:
     -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
 

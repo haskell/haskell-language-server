@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE RankNTypes  #-}
+{-# LANGUAGE CPP #-}
 
 -- | Custom SYB traversals explicitly designed for operating over the GHC AST.
 module Generics.SYB.GHC
@@ -8,7 +9,9 @@ module Generics.SYB.GHC
       everywhereM',
       smallestM,
       largestM,
+#if MIN_VERSION_ghc(9,2,1)
       genericIsSubspanL
+#endif
     ) where
 
 import           Control.Monad
@@ -17,8 +20,10 @@ import           Data.Monoid                   (Any (Any))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph.Classes
 import           Generics.SYB
-import GHC (LocatedL)
-import GHC.Hs (SrcSpanAnn'(..))
+#if MIN_VERSION_ghc(9,2,1)
+import           GHC                           (LocatedL)
+import           GHC.Hs                        (SrcSpanAnn' (..))
+#endif
 
 
 -- | A generic query intended to be used for calling 'smallestM' and
@@ -36,6 +41,7 @@ genericIsSubspan ::
 genericIsSubspan _ dst = mkQ Nothing $ \case
   (L span ast :: Located ast) -> Just (dst `isSubspanOf` span, ast)
 
+#if MIN_VERSION_ghc(9,2,1)
 -- | A generic query intended to be used for calling 'smallestM' and
 -- 'largestM'. If the current node is a 'Located', returns whether or not the
 -- given 'SrcSpan' is a subspan. For all other nodes, returns 'Nothing', which
@@ -50,6 +56,7 @@ genericIsSubspanL ::
     GenericQ (Maybe (Bool, ast))
 genericIsSubspanL _ dst = mkQ Nothing $ \case
   (L (SrcSpanAnn _ span) ast :: LocatedL ast) -> Just (dst `isSubspanOf` span, ast)
+#endif
 
 
 
