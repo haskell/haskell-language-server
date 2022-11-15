@@ -39,7 +39,6 @@ import           Language.LSP.Types                       hiding
                                                            SemanticTokenRelative (length),
                                                            SemanticTokensEdit (_start),
                                                            mkRange)
-import qualified Language.LSP.Types                       as LSP
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.Types.Lens                  as L
 import           System.Directory
@@ -54,13 +53,13 @@ import           Test.Tasty.HUnit
 import           Text.Regex.TDFA                          ((=~))
 
 
-import           Development.IDE.Plugin.CodeAction        (bindingsPluginDescriptor,
-                                                           matchRegExMultipleImports)
+import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
 import           Test.Hls
 
 import           Control.Applicative                      (liftA2)
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
+import qualified Test.AddArgument
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -322,7 +321,7 @@ codeActionTests = testGroup "code actions"
   , addImplicitParamsConstraintTests
   , removeExportTests
 #if MIN_VERSION_ghc(9,2,1)
-  , addFunctionArgumentTests
+  , Test.AddArgument.tests
 #endif
   ]
 
@@ -2166,44 +2165,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
   ]
 
 #if MIN_VERSION_ghc(9,2,1)
-addFunctionArgumentTests :: TestTree
-addFunctionArgumentTests =
-  testGroup
-    "add argument"
-    [ mkGoldenAddArgTest "Hole" (R 0 0 0 50),
-      mkGoldenAddArgTest "NoTypeSuggestion" (R 0 0 0 50),
-      mkGoldenAddArgTest "MultipleDeclAlts" (R 0 0 0 50),
-      mkGoldenAddArgTest "AddArgWithSig" (R 1 0 1 50),
-      mkGoldenAddArgTest "AddArgWithSigAndDocs" (R 8 0 8 50),
-      mkGoldenAddArgTest "AddArgFromLet" (R 2 0 2 50),
-      mkGoldenAddArgTest "AddArgFromWhere" (R 3 0 3 50),
-      mkGoldenAddArgTest "AddArgFromWhereComments" (R 3 0 3 50),
-      mkGoldenAddArgTest "AddArgWithTypeSynSig" (R 2 0 2 50),
-      mkGoldenAddArgTest "AddArgWithTypeSynSigContravariant" (R 2 0 2 50),
-      mkGoldenAddArgTest "AddArgWithLambda" (R 1 0 1 50),
-      mkGoldenAddArgTest "MultiSigFirst" (R 2 0 2 50),
-      mkGoldenAddArgTest "MultiSigLast" (R 2 0 2 50),
-      mkGoldenAddArgTest "MultiSigMiddle" (R 2 0 2 50)
-    ]
 #endif
-
-mkGoldenAddArgTest :: FilePath -> Range -> TestTree
-mkGoldenAddArgTest testFileName range = do
-    let action docB = do
-          _ <- waitForDiagnostics
-          InR action@CodeAction {_title = actionTitle} : _ <-
-            filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
-              <$> getCodeActions docB range
-          liftIO $ actionTitle @?= "Add argument ‘new_def’ to function"
-          executeCodeAction action
-    goldenWithHaskellDoc
-      (Refactor.bindingsPluginDescriptor mempty "ghcide-code-actions-bindings")
-      (testFileName <> " (golden)")
-      "test/data/golden/add-arg"
-      testFileName
-      "expected"
-      "hs"
-      action
 
 deleteUnusedDefinitionTests :: TestTree
 deleteUnusedDefinitionTests = testGroup "delete unused definition action"
