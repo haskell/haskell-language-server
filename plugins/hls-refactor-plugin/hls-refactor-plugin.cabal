@@ -34,6 +34,8 @@ library
   other-modules:    Development.IDE.Plugin.CodeAction.Args
                     Development.IDE.Plugin.CodeAction.ExactPrint
                     Development.IDE.Plugin.CodeAction.PositionIndexed
+                    Development.IDE.Plugin.Plugins.AddArgument
+                    Development.IDE.Plugin.Plugins.Diagnostic
   default-extensions:
     BangPatterns
     CPP
