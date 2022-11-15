@@ -25,6 +25,13 @@ Wingman writes the boring, auxiliary code, so you don't have to. Generate
 functions from type signatures, and intelligently complete holes.
 
 
+## Project Status
+
+Wingman for GHC versions below 9.2.1 is now in maintenance mode, and can be
+found in the `old` directory. For versions above 9.2.1, a vastly simplified
+version of Wingman has been extracted with the most important functionality,
+which can be found in the `new` directory.
+
 ## Getting Started
 
 Wingman for Haskell is enabled by default in all [official release of Haskell
@@ -113,7 +120,7 @@ endfunction
 ### Emacs
 
 When using Emacs, wingman actions should be available out-of-the-box and
-show up e.g. when using `M-x helm-lsp-code-actions RET` provided by 
+show up e.g. when using `M-x helm-lsp-code-actions RET` provided by
 [helm-lsp](https://github.com/emacs-lsp/helm-lsp) or as popups via
 [lsp-ui-sideline](https://emacs-lsp.github.io/lsp-ui/#lsp-ui-sideline).
 
