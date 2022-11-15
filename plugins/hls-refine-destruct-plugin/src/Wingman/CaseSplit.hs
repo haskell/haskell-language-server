@@ -1,3 +1,4 @@
+{-# LANGUAGE EmptyCase #-}
 module Wingman.CaseSplit
   ( mkFirstAgda
   , iterateSplit
@@ -19,6 +20,10 @@ import GHC.SourceGen.Name
 import Development.IDE.GHC.ExactPrint (annotateDecl)
 import Language.Haskell.GHC.ExactPrint (runTransformT)
 import Data.Either (fromRight)
+import Language.Haskell.GHC.ExactPrint.Transform (setEntryDP)
+import GHC (DeltaPos(..), SrcSpanAnn'(..), EpAnn (..), emptyComments, Anchor (..), realSrcSpan, AnchorOperation (..))
+import GHC.Types.SrcLoc (generatedSrcSpan)
+import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
 
 
 
@@ -98,11 +103,19 @@ splitToDecl
     -> LHsDecl GhcPs
 splitToDecl dflags fixity name ams = do
   let res = traceX "fixity" fixity $
-        noLocA $
+        -- L (SrcSpanAnn (EpAnn (Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor $ DifferentLine 1 0)) mempty emptyComments) generatedSrcSpan) $
+        L (SrcSpanAnn EpAnnNotUsed generatedSrcSpan) $
           funBindsWithFixity fixity (fromString . occNameString . occName $ name) $ do
             AgdaMatch pats body <- ams
             pure $ match pats body
-    in trace "split_to_decl" $ trace (show $ unLoc res) $ either error (\(a,b,c) -> a) $ runTransformT $ annotateDecl dflags res
+      res' = either error (\(a,b,c) -> a) $ runTransformT $ annotateDecl dflags res
+      -- There is a bug here such that each match doesn't get a delta to be on the next line, and so we manually set thos
+      -- deltas...
+      res'' = case res' of
+        L l (ValD xValD funBind@FunBind {fun_matches=MG xMg (L lMatches (m:ms)) originMg}) ->
+          L l (ValD xValD (funBind {fun_matches=MG xMg (L lMatches $ (m:(flip setEntryDP (DifferentLine 1 0) <$> ms))) originMg}))
+        _ -> error "bad"
+    in trace "split_to_decl" $ res''
 
 ------------------------------------------------------------------------------
 -- | Sometimes 'agdaSplit' exposes another opportunity to do 'agdaSplit'. This

@@ -164,7 +164,7 @@ graftDecl
     -> TransformT (Either String) [LMatch GhcPs (LHsExpr GhcPs)]
 graftDecl dflags dst ix make_decl (L (SrcSpanAnn _ src) (AMatch (FunRhs (L _ name) _ _) pats _))
   | dst `isSubspanOf` src = do
-      L _ dec <- annotateDecl dflags $ make_decl name pats
+      L _ dec <- pure $ make_decl name pats
       -- traceM $ show dec
       -- traceM $ showAst dec
       -- L _ dec <- pure $ make_decl name pats
