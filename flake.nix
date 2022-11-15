@@ -204,14 +204,14 @@
                 doJailbreak (overrideCabal hsuper.fourmolu_0_8_2_0 (old: {
                   enableSeparateBinOutput = final.system != "aarch64-darwin";
                   # Update to Fourmolu 0.9 for GHC 9.4 support.
-                  src = self.fetchFromGitHub {
+                  src = prev.fetchFromGitHub {
                     owner = "fourmolu";
                     repo = "fourmolu";
                     # Branch: `main`
                     rev = "47017e0f7c333676f3fd588695c1b3d16f2075cc";
                     hash = "sha256-MPFWDMc9nSpTtCjAIHmjLyENkektm72tCWaKnkAQfuk=";
                   };
-                });
+                }));
             };
 
           hlsSources =
