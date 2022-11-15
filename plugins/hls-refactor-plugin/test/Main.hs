@@ -744,6 +744,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         contentAfterAction <- documentContents doc
         liftIO $ expectedContentAfterAction @=? contentAfterAction
 
+
 {-# HLINT ignore "Use nubOrd" #-}
 removeImportTests :: TestTree
 removeImportTests = testGroup "remove import actions"
@@ -1289,7 +1290,8 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
-        , testSession "extend single line qualified import with value" $ template
+        , ignoreForGHC94 "On GHC 9.4, the error messages with -fdefer-type-errors don't have necessary imported target srcspan info." $
+          testSession "extend single line qualified import with value" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "stuffA :: Double"
