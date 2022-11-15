@@ -32,7 +32,7 @@ tests =
 #if !MIN_VERSION_ghc(9,2,1)
     []
 #else
-    [ mkGoldenAddArgTest "Hole" (r 0 0 0 50),
+    [ mkGoldenAddArgTest' "Hole" (r 0 0 0 50) "_new_def",
       mkGoldenAddArgTest "NoTypeSuggestion" (r 0 0 0 50),
       mkGoldenAddArgTest "MultipleDeclAlts" (r 0 0 0 50),
       mkGoldenAddArgTest "AddArgWithSig" (r 1 0 1 50),
@@ -51,13 +51,17 @@ tests =
     r x y x' y' = Range (Position x y) (Position x' y')
 
 mkGoldenAddArgTest :: FilePath -> Range -> TestTree
-mkGoldenAddArgTest testFileName range = do
+mkGoldenAddArgTest testFileName range = mkGoldenAddArgTest' testFileName range "new_def"
+
+-- Make a golden test for the add argument action. Given varName is the name of the variable not yet defined.
+mkGoldenAddArgTest' :: FilePath -> Range -> T.Text -> TestTree
+mkGoldenAddArgTest' testFileName range varName = do
     let action docB = do
           _ <- waitForDiagnostics
           InR action@CodeAction {_title = actionTitle} : _ <-
             filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
               <$> getCodeActions docB range
-          liftIO $ actionTitle @?= "Add argument ‘new_def’ to function"
+          liftIO $ actionTitle @?= ("Add argument ‘" <> varName <> "’ to function")
           executeCodeAction action
     goldenWithHaskellDoc
       (Refactor.bindingsPluginDescriptor mempty "ghcide-code-actions-bindings")

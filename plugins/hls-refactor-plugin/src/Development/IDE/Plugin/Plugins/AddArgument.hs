@@ -1,6 +1,10 @@
+{-# LANGUAGE CPP #-}
 module Development.IDE.Plugin.Plugins.AddArgument (plugin) where
 
 #if !MIN_VERSION_ghc(9,2,1)
+import qualified Data.Text as T
+import           Language.LSP.Types
+
 plugin :: [(T.Text, [TextEdit])]
 plugin = []
 #else
@@ -19,7 +23,7 @@ import           GHC                                               (EpAnn (..),
 import           GHC.Hs                                            (IsUnicodeSyntax (..))
 import           Language.Haskell.GHC.ExactPrint.Transform         (d1)
 import           Development.IDE.GHC.Compat
-import           Development.IDE
+import           Development.IDE.GHC.Error ( spanContainsRange )
 import           Language.LSP.Types
 import qualified Data.Text as T
 import           Development.IDE.GHC.ExactPrint (modifyMgMatchesT', modifySigWithM, modifySmallestDeclWithM, genAnchor1)

@@ -57,6 +57,7 @@ import           Development.IDE.Plugin.CodeAction.PositionIndexed
 import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.Completions.Types
 import qualified Development.IDE.Plugin.Plugins.AddArgument
+import           Development.IDE.Plugin.Plugins.Diagnostic
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
@@ -92,7 +93,6 @@ import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
 #if MIN_VERSION_ghc(9,2,0)
-import           Development.IDE.Plugin.Plugins.Diagnostic
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
@@ -171,9 +171,7 @@ bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestImplicitParameter
 #endif
     , wrap suggestNewDefinition
-#if MIN_VERSION_ghc(9,2,1)
     , wrap Development.IDE.Plugin.Plugins.AddArgument.plugin
-#endif
     , wrap suggestDeleteUnusedBinding
     ]
     plId
