@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -13,77 +12,65 @@ module Ide.Plugin.ExplicitFields
   ( descriptor
   ) where
 
-import           Control.Lens                             ((^.))
-import           Control.Monad.IO.Class                   (MonadIO, liftIO)
-import           Control.Monad.Trans.Except               (ExceptT)
-import           Data.Foldable                            (foldl')
-import           Data.Generics                            (GenericQ, everything,
-                                                           extQ, mkQ)
-import qualified Data.HashMap.Strict                      as HashMap
-import           Data.Maybe                               (catMaybes, isJust,
-                                                           mapMaybe,
-                                                           maybeToList)
-import           Data.Text                                (Text)
-import           Development.IDE                          (IdeState,
-                                                           NormalizedFilePath,
-                                                           Pretty (..),
-                                                           Range (..),
-                                                           Recorder (..), Rules,
-                                                           WithPriority (..),
-                                                           srcSpanToRange)
-import           Development.IDE.Core.Rules               (runAction)
-import           Development.IDE.Core.RuleTypes           (TcModuleResult (..),
-                                                           TypeCheck (..))
-import           Development.IDE.Core.Shake               (define, use)
-import qualified Development.IDE.Core.Shake               as Shake
-import           Development.IDE.GHC.Compat               (HsConDetails (RecCon),
-                                                           HsRecFields (..),
-                                                           LPat, Outputable,
-                                                           SrcSpan, getLoc,
-                                                           unLoc)
-import           Development.IDE.GHC.Compat.Core          (Extension (NamedFieldPuns),
-                                                           GhcPass,
-                                                           HsExpr (RecordCon, rcon_flds),
-                                                           LHsExpr, Pass (..),
-                                                           Pat (..),
-                                                           conPatDetails,
-                                                           hfbPun, hs_valds,
-                                                           mapConPatDetail,
-                                                           mapLoc)
-import           Development.IDE.GHC.Util                 (getExtensions,
-                                                           printOutputable)
-import           Development.IDE.Graph                    (RuleResult)
-import           Development.IDE.Graph.Classes            (Hashable,
-                                                           NFData (rnf))
-import           Development.IDE.Spans.Pragmas            (NextPragmaInfo (..),
-                                                           getFirstPragma,
-                                                           insertNewPragma)
-import           Development.IDE.Types.Logger             (Priority (..),
-                                                           cmapWithPrio,
-                                                           logWith, (<+>))
-import           GHC.Generics                             (Generic)
-import qualified HaskellWorks.Data.IntervalMap.FingerTree as IM
-import           Ide.PluginUtils                          (getNormalizedFilePath,
-                                                           handleMaybeM,
-                                                           pluginResponse)
-import           Ide.Types                                (PluginDescriptor (..),
-                                                           PluginId (..),
-                                                           PluginMethodHandler,
-                                                           defaultPluginDescriptor,
-                                                           mkPluginHandler)
-import           Language.LSP.Types                       (CodeAction (..),
-                                                           CodeActionKind (CodeActionRefactorRewrite),
-                                                           CodeActionParams (..),
-                                                           Command, List (..),
-                                                           Method (..),
-                                                           Position,
-                                                           SMethod (..),
-                                                           TextEdit (..),
-                                                           WorkspaceEdit (WorkspaceEdit),
-                                                           fromNormalizedUri,
-                                                           normalizedFilePathToUri,
-                                                           type (|?) (InR))
-import qualified Language.LSP.Types.Lens                  as L
+import           Control.Lens                    ((^.))
+import           Control.Monad.IO.Class          (MonadIO, liftIO)
+import           Control.Monad.Trans.Except      (ExceptT)
+import           Data.Generics                   (GenericQ, everything, extQ,
+                                                  mkQ)
+import qualified Data.HashMap.Strict             as HashMap
+import           Data.Maybe                      (catMaybes, fromJust, isJust,
+                                                  maybeToList)
+import           Data.Text                       (Text)
+import           Development.IDE                 (IdeState, NormalizedFilePath,
+                                                  Pretty (..), Recorder (..),
+                                                  Rules, WithPriority (..),
+                                                  srcSpanToRange)
+import           Development.IDE.Core.Rules      (runAction)
+import           Development.IDE.Core.RuleTypes  (TcModuleResult (..),
+                                                  TypeCheck (..))
+import           Development.IDE.Core.Shake      (define, use)
+import qualified Development.IDE.Core.Shake      as Shake
+import           Development.IDE.GHC.Compat      (HsConDetails (RecCon),
+                                                  HsRecFields (..), LPat,
+                                                  Outputable, SrcSpan, getLoc,
+                                                  unLoc)
+import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
+                                                  GhcPass,
+                                                  HsExpr (RecordCon, rcon_flds),
+                                                  LHsExpr, Pass (..), Pat (..),
+                                                  conPatDetails, hfbPun,
+                                                  hs_valds, mapConPatDetail,
+                                                  mapLoc)
+import           Development.IDE.GHC.Util        (getExtensions,
+                                                  printOutputable)
+import           Development.IDE.Graph           (RuleResult)
+import           Development.IDE.Graph.Classes   (Hashable, NFData (rnf))
+import           Development.IDE.Spans.Pragmas   (NextPragmaInfo (..),
+                                                  getFirstPragma,
+                                                  insertNewPragma)
+import           Development.IDE.Types.Logger    (Priority (..), cmapWithPrio,
+                                                  logWith, (<+>))
+import           GHC.Generics                    (Generic)
+import           Ide.Plugin.RangeMap             (RangeMap)
+import qualified Ide.Plugin.RangeMap             as RangeMap
+import           Ide.PluginUtils                 (getNormalizedFilePath,
+                                                  handleMaybeM, pluginResponse)
+import           Ide.Types                       (PluginDescriptor (..),
+                                                  PluginId (..),
+                                                  PluginMethodHandler,
+                                                  defaultPluginDescriptor,
+                                                  mkPluginHandler)
+import           Language.LSP.Types              (CodeAction (..),
+                                                  CodeActionKind (CodeActionRefactorRewrite),
+                                                  CodeActionParams (..),
+                                                  Command, List (..),
+                                                  Method (..), SMethod (..),
+                                                  TextEdit (..),
+                                                  WorkspaceEdit (WorkspaceEdit),
+                                                  fromNormalizedUri,
+                                                  normalizedFilePathToUri,
+                                                  type (|?) (InR))
+import qualified Language.LSP.Types.Lens         as L
 
 
 data Log
@@ -108,7 +95,7 @@ codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginRes
   nfp <- getNormalizedFilePath (docId ^. L.uri)
   pragma <- getFirstPragma pId ideState nfp
   CRR recMap (map unExt -> exts) <- collectRecords' ideState nfp
-  let actions = map (mkCodeAction nfp exts pragma) (filterRecords range recMap)
+  let actions = map (mkCodeAction nfp exts pragma) (RangeMap.filterByRange range recMap)
   pure $ List actions
 
   where
@@ -154,7 +141,8 @@ collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
       recs = concat $ maybeToList (getRecords <$> tmr)
   logWith recorder Debug (LogCollectedRecords recs)
   let renderedRecs = traverse renderRecordInfo recs
-      recMap = buildIntervalMap <$> renderedRecs
+      -- All spans are supposed to be `RealSrcSpan`, hence the use of `fromJust`.
+      recMap = RangeMap.fromList (fromJust . srcSpanToRange . renderedSrcSpan) <$> renderedRecs
   logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
   pure ([], CRR <$> recMap <*> exts)
   where
@@ -172,7 +160,7 @@ instance Hashable CollectRecords
 instance NFData CollectRecords
 
 data CollectRecordsResult = CRR
-  { recordInfos       :: IM.IntervalMap Position RenderedRecordInfo
+  { recordInfos       :: RangeMap RenderedRecordInfo
   , enabledExtensions :: [GhcExtension]
   }
   deriving (Generic)
@@ -273,17 +261,3 @@ collectRecords' ideState =
     . runAction "ExplicitFields" ideState
     . use CollectRecords
 
-rangeToInterval :: Range -> IM.Interval Position
-rangeToInterval (Range s e) = IM.Interval s e
-
-buildIntervalMap :: [RenderedRecordInfo] -> IM.IntervalMap Position RenderedRecordInfo
-buildIntervalMap recs = toIntervalMap $ mapMaybe (\recInfo -> (,recInfo) <$> srcSpanToInterval (renderedSrcSpan recInfo)) recs
-  where
-    toIntervalMap :: Ord v => [(IM.Interval v, a)] -> IM.IntervalMap v a
-    toIntervalMap = foldl' (\m (i, v) -> IM.insert i v m) IM.empty
-
-    srcSpanToInterval :: SrcSpan -> Maybe (IM.Interval Position)
-    srcSpanToInterval = fmap rangeToInterval . srcSpanToRange
-
-filterRecords :: Range -> IM.IntervalMap Position RenderedRecordInfo -> [RenderedRecordInfo]
-filterRecords range = map snd . IM.dominators (rangeToInterval range)

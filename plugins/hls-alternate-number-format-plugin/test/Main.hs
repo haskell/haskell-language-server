@@ -29,7 +29,7 @@ test :: TestTree
 test = testGroup "alternateNumberFormat" [
     codeActionHex "TIntDtoH" 3 13
     , codeActionOctal "TIntDtoO" 3 13
-    , codeActionBinary "TIntDtoB" 4 12
+    , codeActionBinary "TIntDtoB" 4 13
     , codeActionNumDecimal "TIntDtoND" 5 13
     , codeActionFracExp "TFracDtoE" 3 13
     , codeActionFloatHex "TFracDtoHF" 4 13
