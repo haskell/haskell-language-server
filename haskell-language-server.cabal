@@ -359,6 +359,7 @@ library
                   , pedantic
                   -- plugins
                   , callHierarchy
+                  , cabalfmt
                   , changeTypeSignature
                   , class
                   , haddockComments
