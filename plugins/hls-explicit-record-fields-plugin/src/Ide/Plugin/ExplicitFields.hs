@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -18,13 +19,13 @@ import           Control.Monad.Trans.Except      (ExceptT)
 import           Data.Generics                   (GenericQ, everything, extQ,
                                                   mkQ)
 import qualified Data.HashMap.Strict             as HashMap
-import           Data.Maybe                      (catMaybes, fromJust, isJust,
+import           Data.Maybe                      (isJust, listToMaybe,
                                                   maybeToList)
 import           Data.Text                       (Text)
 import           Development.IDE                 (IdeState, NormalizedFilePath,
                                                   Pretty (..), Recorder (..),
                                                   Rules, WithPriority (..),
-                                                  srcSpanToRange)
+                                                  realSrcSpanToRange)
 import           Development.IDE.Core.Rules      (runAction)
 import           Development.IDE.Core.RuleTypes  (TcModuleResult (..),
                                                   TypeCheck (..))
@@ -32,15 +33,15 @@ import           Development.IDE.Core.Shake      (define, use)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      (HsConDetails (RecCon),
                                                   HsRecFields (..), LPat,
-                                                  Outputable, SrcSpan, getLoc,
-                                                  unLoc)
+                                                  Outputable, getLoc, unLoc)
 import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
                                                   GhcPass,
                                                   HsExpr (RecordCon, rcon_flds),
                                                   LHsExpr, Pass (..), Pat (..),
-                                                  conPatDetails, hfbPun,
-                                                  hs_valds, mapConPatDetail,
-                                                  mapLoc)
+                                                  RealSrcSpan, conPatDetails,
+                                                  hfbPun, hs_valds,
+                                                  mapConPatDetail, mapLoc,
+                                                  pattern RealSrcSpan)
 import           Development.IDE.GHC.Util        (getExtensions,
                                                   printOutputable)
 import           Development.IDE.Graph           (RuleResult)
@@ -111,10 +112,10 @@ codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginRes
       , _xdata = Nothing
       }
       where
-        edits = catMaybes [ mkTextEdit rec , pragmaEdit ]
+        edits = mkTextEdit rec : maybeToList pragmaEdit
 
-        mkTextEdit :: RenderedRecordInfo -> Maybe TextEdit
-        mkTextEdit (RenderedRecordInfo ss r) = TextEdit <$> srcSpanToRange ss <*> pure r
+        mkTextEdit :: RenderedRecordInfo -> TextEdit
+        mkTextEdit (RenderedRecordInfo ss r) = TextEdit (realSrcSpanToRange ss) r
 
         pragmaEdit :: Maybe TextEdit
         pragmaEdit = if NamedFieldPuns `elem` exts
@@ -142,7 +143,7 @@ collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
   logWith recorder Debug (LogCollectedRecords recs)
   let renderedRecs = traverse renderRecordInfo recs
       -- All spans are supposed to be `RealSrcSpan`, hence the use of `fromJust`.
-      recMap = RangeMap.fromList (fromJust . srcSpanToRange . renderedSrcSpan) <$> renderedRecs
+      recMap = RangeMap.fromList (realSrcSpanToRange . renderedSrcSpan) <$> renderedRecs
   logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
   pure ([], CRR <$> recMap <*> exts)
   where
@@ -180,15 +181,15 @@ instance NFData GhcExtension where
   rnf x = x `seq` ()
 
 data RecordInfo
-  = RecordInfoPat SrcSpan (Pat (GhcPass 'Renamed))
-  | RecordInfoCon SrcSpan (HsExpr (GhcPass 'Renamed))
+  = RecordInfoPat RealSrcSpan (Pat (GhcPass 'Renamed))
+  | RecordInfoCon RealSrcSpan (HsExpr (GhcPass 'Renamed))
 
 instance Pretty RecordInfo where
   pretty (RecordInfoPat ss p) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable p)
   pretty (RecordInfoCon ss e) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable e)
 
 data RenderedRecordInfo = RenderedRecordInfo
-  { renderedSrcSpan :: SrcSpan
+  { renderedSrcSpan :: RealSrcSpan
   , renderedRecord  :: Text
   }
   deriving (Generic)
@@ -240,18 +241,20 @@ collectRecords = everything (<>) (maybeToList . (Nothing `mkQ` getRecPatterns `e
 
 getRecCons :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordInfo
 getRecCons e@(unLoc -> RecordCon _ _ flds)
-  | isJust (rec_dotdot flds) = Just $ mkRecInfo e
+  | isJust (rec_dotdot flds) = mkRecInfo e
   where
-    mkRecInfo :: LHsExpr (GhcPass 'Renamed) -> RecordInfo
-    mkRecInfo expr = RecordInfoCon (getLoc expr) (unLoc expr)
+    mkRecInfo :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordInfo
+    mkRecInfo expr = listToMaybe
+      [ RecordInfoCon realSpan (unLoc expr) | RealSrcSpan realSpan _ <- [ getLoc expr ]]
 getRecCons _ = Nothing
 
 getRecPatterns :: LPat (GhcPass 'Renamed) -> Maybe RecordInfo
 getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))
-  | isJust (rec_dotdot flds) = Just $ mkRecInfo conPat
+  | isJust (rec_dotdot flds) = mkRecInfo conPat
   where
-    mkRecInfo :: LPat (GhcPass 'Renamed) -> RecordInfo
-    mkRecInfo pat = RecordInfoPat (getLoc pat) (unLoc pat)
+    mkRecInfo :: LPat (GhcPass 'Renamed) -> Maybe RecordInfo
+    mkRecInfo pat = listToMaybe
+      [ RecordInfoPat realSpan (unLoc pat) | RealSrcSpan realSpan _ <- [ getLoc pat ]]
 getRecPatterns _ = Nothing
 
 collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordsResult
