@@ -48,7 +48,7 @@ main = do
         , Criterion.bench "Size 1000" $ Criterion.nf (filterRangeList targetRange) rangeList1000
         , Criterion.bench "Size 10000" $ Criterion.nf (filterRangeList targetRange) rangeList10000
         ]
-    , Criterion.bgroup "IntervalMap"
+    , Criterion.bgroup "RangeMap"
         [ Criterion.bench "Size 100" $ Criterion.nf (RangeMap.filterByRange targetRange) rangeMap100
         , Criterion.bench "Size 1000" $ Criterion.nf (RangeMap.filterByRange targetRange) rangeMap1000
         , Criterion.bench "Size 10000" $ Criterion.nf (RangeMap.filterByRange targetRange) rangeMap10000
