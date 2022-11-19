@@ -20,7 +20,9 @@ module Test.Hls
     goldenWithHaskellDocFormatter,
     goldenWithCabalDocFormatter,
     def,
+    pluginTestRecorder,
     runSessionWithServer,
+    runSessionWithServerAndRecorder,
     runSessionWithServerFormatter,
     runSessionWithCabalServerFormatter,
     runSessionWithServer',
@@ -35,6 +37,11 @@ module Test.Hls
     getLastBuildKeys,
     waitForKickDone,
     waitForKickStart,
+    -- * Re-export logger types
+    -- Avoids slightly annoying ghcide imports when they are unnecessary.
+    WithPriority(..),
+    Recorder,
+    Priority(..),
     )
 where
 
@@ -99,6 +106,8 @@ import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.Runners              (NumThreads (..))
+import Control.Monad.Extra (forM)
+import Development.IDE.Types.Logger (Doc)
 
 newtype Log = LogIDEMain IDEMain.Log
 
@@ -158,9 +167,33 @@ goldenWithDoc fileType plugin title testDataDir path desc ext act =
     act doc
     documentContents doc
 
+goldenWithHaskellDocAndRecorder
+  :: Pretty a
+  => (Recorder (WithPriority a) -> PluginDescriptor IdeState)
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithHaskellDocAndRecorder plugin title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServerAndRecorder plugin testDataDir
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "haskell"
+    void waitForBuildQueue
+    act doc
+    documentContents doc
 
 runSessionWithServer :: PluginDescriptor IdeState -> FilePath -> Session a -> IO a
 runSessionWithServer plugin = runSessionWithServer' [plugin] def def fullCaps
+
+runSessionWithServerAndRecorder :: Pretty b => (Recorder (WithPriority b) -> PluginDescriptor IdeState) -> FilePath -> Session a -> IO a
+runSessionWithServerAndRecorder pluginF fp act = do
+  recorder <- pluginTestRecorder
+  runSessionWithServer' [pluginF recorder] def def fullCaps fp act
 
 runSessionWithServerFormatter :: PluginDescriptor IdeState -> String -> PluginConfig -> FilePath -> Session a -> IO a
 runSessionWithServerFormatter plugin formatter conf =
@@ -235,6 +268,46 @@ keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
 lock :: Lock
 lock = unsafePerformIO newLock
 
+-- | Initialise a recorder that can be instructed to write to stderr by
+-- setting the environment variable "HLS_TEST_PLUGIN_LOG_STDERR=1" before
+-- running the tests.
+--
+-- On the cli, use for example:
+--
+-- @
+--   HLS_TEST_PLUGIN_LOG_STDERR=1 cabal test <test-suite-of-plugin>
+-- @
+--
+-- to write all logs to stderr.
+pluginTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
+pluginTestRecorder = do
+  (recorder, _) <- initialiseTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR"]
+  pure recorder
+
+-- | Generic recorder initialisation for plugins and the HLS server for test-cases.
+--
+-- The created recorder writes to stderr if any of the given environment variables
+-- have been set to a value different to @0@.
+-- We allow multiple values, to make it possible to define a single environment variable
+-- that instructs all recorders in the test-suite to write to stderr.
+--
+-- We have to return the base logger function for HLS server logging initialisation.
+-- See 'runSessionWithServer'' for details.
+initialiseTestRecorder :: Pretty a => [String] -> IO (Recorder (WithPriority a), WithPriority (Doc ann) -> IO ())
+initialiseTestRecorder envVars = do
+    docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing Debug
+    -- There are potentially multiple environment variables that enable this logger
+    definedEnvVars <- forM envVars (\var -> fromMaybe "0" <$> lookupEnv var)
+    let logStdErr = any (/= "0") definedEnvVars
+
+        docWithFilteredPriorityRecorder =
+          if logStdErr then mempty
+          else cfilter (\WithPriority{ priority } -> priority >= Debug) docWithPriorityRecorder
+
+        Recorder {logger_} = docWithFilteredPriorityRecorder
+
+    pure (cmapWithPrio pretty docWithFilteredPriorityRecorder, logger_)
+
 
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
@@ -253,19 +326,15 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
     (inR, inW) <- createPipe
     (outR, outW) <- createPipe
 
-    docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing Debug
-
-    logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
+    -- Allow two environment variables, because "LSP_TEST_LOG_STDERR" has been used before,
+    -- (thus, backwards compatibility) and "HLS_TEST_SERVER_LOG_STDERR" because it
+    -- uses a more descriptive name.
+    -- It is also in better accordance with 'pluginTestRecorder' which uses "HLS_TEST_PLUGIN_LOG_STDERR"
+    (recorder, logger_) <- initialiseTestRecorder ["LSP_TEST_LOG_STDERR", "HLS_TEST_SERVER_LOG_STDERR"]
 
     let
-        docWithFilteredPriorityRecorder@Recorder{ logger_ } =
-            if logStdErr == "0" then mempty
-            else cfilter (\WithPriority{ priority } -> priority >= Debug) docWithPriorityRecorder
-
         -- exists until old logging style is phased out
         logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
-
-        recorder = cmapWithPrio pretty docWithFilteredPriorityRecorder
 
         arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmapWithPrio LogIDEMain recorder) logger
 
