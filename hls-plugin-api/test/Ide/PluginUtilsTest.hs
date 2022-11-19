@@ -20,7 +20,8 @@ tests :: TestTree
 tests = testGroup "PluginUtils"
     [ unescapeTest
     , localOption (QuickCheckMaxSize 10000) $
-        testProperty "RangeMap-List filtering identical" (prop_rangemapListEq @Int)
+        testProperty "RangeMap-List filtering identical" $
+          prop_rangemapListEq @Int
     ]
 
 unescapeTest :: TestTree
@@ -61,5 +62,9 @@ instance Arbitrary Range where
 
 prop_rangemapListEq :: (Show a, Eq a, Ord a) => Range -> [(Range, a)] -> Property
 prop_rangemapListEq r xs =
-  Set.fromList ((map snd . filter (isSubrangeOf r . fst)) xs)
-    === Set.fromList (RangeMap.filterByRange r (RangeMap.fromList' xs))
+  let filteredList = (map snd . filter (isSubrangeOf r . fst)) xs
+      filteredRangeMap = RangeMap.filterByRange r (RangeMap.fromList' xs)
+   in classify (null filteredList) "no matches" $
+      cover 5 (length filteredList == 1) "1 match" $
+      cover 2 (length filteredList > 1) ">1 matches" $
+      Set.fromList filteredList === Set.fromList filteredRangeMap
