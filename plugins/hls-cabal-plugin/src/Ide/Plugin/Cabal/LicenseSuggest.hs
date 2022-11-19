@@ -33,7 +33,7 @@ licenseErrorAction
   -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
   -> Maybe CodeAction
 licenseErrorAction uri diag =
-  mkCodeAction <$> licenseErrorSuggestion diag
+  mkCodeAction <$> licenseErrorSuggestion (_message diag)
   where
     mkCodeAction (original, suggestion) =
       let
@@ -52,17 +52,17 @@ licenseErrorAction uri diag =
         edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
       in CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing Nothing
 
--- | Given a diagnostic returned by 'Ide.Plugin.Cabal.Diag.errorDiagnostic',
+-- | Given an error message returned by 'Ide.Plugin.Cabal.Diag.errorDiagnostic',
 --   if it represents an "Unknown SPDX license identifier"-error along
 --   with a suggestion then return the suggestion (after the "Do you mean"-text)
 --   along with the incorrect identifier.
 licenseErrorSuggestion
-  :: Diagnostic
+  :: T.Text
   -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
   -> Maybe (T.Text, T.Text)
   -- ^ (Original (incorrect) license identifier, suggested replacement)
-licenseErrorSuggestion diag =
-  mSuggestion (_message diag) >>= \case
+licenseErrorSuggestion message =
+  mSuggestion message >>= \case
     [original, suggestion] -> Just (original, suggestion)
     _                      -> Nothing
   where

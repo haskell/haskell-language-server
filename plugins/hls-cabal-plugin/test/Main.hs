@@ -5,17 +5,19 @@ module Main
   ( main
   ) where
 
-import           Control.Lens                 ((^.))
-import           Data.Either                  (isRight)
+import           Control.Lens                    ((^.))
+import qualified Data.ByteString                 as BS
+import           Data.Either                     (isRight)
 import           Data.Function
-import qualified Data.Text                    as Text
+import qualified Data.Text                       as Text
 import           Development.IDE.Types.Logger
 import           Ide.Plugin.Cabal
-import qualified Ide.Plugin.Cabal.Parse       as Lib
-import qualified Language.LSP.Types.Lens      as J
+import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
+import qualified Ide.Plugin.Cabal.Parse          as Lib
+import qualified Language.LSP.Types.Lens         as J
 import           System.FilePath
 import           Test.Hls
-import qualified Data.ByteString as BS
+
 
 cabalPlugin :: Recorder (WithPriority Log) -> PluginDescriptor IdeState
 cabalPlugin recorder = descriptor recorder "cabal"
@@ -51,11 +53,31 @@ initialiseRecorder False = do
 unitTests :: TestTree
 unitTests =
   testGroup "Unit Tests"
+  [ cabalParserUnitTests,
+    codeActionUnitTests
+  ]
+
+cabalParserUnitTests :: TestTree
+cabalParserUnitTests = testGroup "Parsing Cabal"
   [ testCase "Simple Parsing works" $ do
       (warnings, pm) <- Lib.parseCabalFileContents =<< BS.readFile (testDataDir </> "simple.cabal")
       liftIO $ do
         null warnings @? "Found unexpected warnings"
         isRight pm @? "Failed to parse GenericPackageDescription"
+  ]
+
+codeActionUnitTests :: TestTree
+codeActionUnitTests = testGroup "Code Action Tests"
+  [ testCase "Unknown format" $ do
+      -- the message has the wrong format
+      licenseErrorSuggestion "Unknown license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= Nothing,
+
+    testCase "BSD-3-Clause" $ do
+      licenseErrorSuggestion "Unknown SPDX license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= Just ("BSD3", "BSD-3-Clause"),
+
+    testCase "MIT" $ do
+      -- contains no suggestion
+      licenseErrorSuggestion "Unknown SPDX license identifier: 'MIT3'" @?= Nothing
   ]
 
 -- ------------------------------------------------------------------------

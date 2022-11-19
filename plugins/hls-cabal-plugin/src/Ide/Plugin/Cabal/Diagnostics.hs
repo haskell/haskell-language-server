@@ -1,6 +1,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE OverloadedStrings         #-}
 module Ide.Plugin.Cabal.Diagnostics
 ( errorDiagnostic
 , warningDiagnostic
