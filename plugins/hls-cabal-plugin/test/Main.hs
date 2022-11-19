@@ -21,7 +21,7 @@ cabalPlugin recorder = descriptor recorder "cabal"
 
 main :: IO ()
 main = do
-  recorder <- initialiseRecorder False
+  recorder <- initialiseRecorder True
   defaultTestRunner $
     testGroup "Cabal Plugin Tests"
       [ unitTests
@@ -66,7 +66,7 @@ pluginTests recorder = testGroup "Plugin Tests"
   [ testGroup "Diagnostics"
     [ runCabalTestCaseSession "Publishes Diagnostics on Error" recorder "" $ do
         doc <- openDoc "invalid.cabal" "cabal"
-        diags <- waitForDiagnosticsFromSource doc "parsing"
+        diags <- waitForDiagnosticsFromSource doc "cabal"
         unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
         liftIO $ do
             length diags @?= 1
@@ -108,7 +108,7 @@ pluginTests recorder = testGroup "Plugin Tests"
   , testGroup "Code Actions"
     [ runCabalTestCaseSession "BSD-3" recorder "" $ do
         doc <- openDoc "licenseCodeAction.cabal" "cabal"
-        diags <- waitForDiagnosticsFromSource doc "parsing"
+        diags <- waitForDiagnosticsFromSource doc "cabal"
         reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
         liftIO $ do
             length diags @?= 1

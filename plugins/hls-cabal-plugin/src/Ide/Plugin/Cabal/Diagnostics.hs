@@ -1,5 +1,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE OverloadedStrings         #-}
 module Ide.Plugin.Cabal.Diagnostics
 ( errorDiagnostic
 , warningDiagnostic
@@ -23,14 +24,14 @@ import           Language.LSP.Types     (Diagnostic (..),
 -- | Produce a diagnostic from a Cabal parser error
 errorDiagnostic :: NormalizedFilePath -> Lib.PError -> FileDiagnostic
 errorDiagnostic fp err@(Lib.PError pos _) =
-  mkDiag fp (T.pack "parsing") DsError (toBeginningOfNextLine pos) msg
+  mkDiag fp "cabal" DsError (toBeginningOfNextLine pos) msg
   where
     msg = T.pack $ showPError (fromNormalizedFilePath fp) err
 
 -- | Produce a diagnostic from a Cabal parser warning
 warningDiagnostic :: NormalizedFilePath -> Lib.PWarning -> FileDiagnostic
 warningDiagnostic fp warning@(Lib.PWarning _ pos _) =
-  mkDiag fp (T.pack "parsing") DsWarning (toBeginningOfNextLine pos) msg
+  mkDiag fp "cabal" DsWarning (toBeginningOfNextLine pos) msg
   where
     msg = T.pack $ showPWarning (fromNormalizedFilePath fp) warning
 
