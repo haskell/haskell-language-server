@@ -109,6 +109,11 @@ descriptor recorder plId = (defaultCabalPluginDescriptor plId)
 -- | Helper function to restart the shake session, specifically for modifying .cabal files.
 -- No special logic, just group up a bunch of functions you need for the base
 -- Notification Handlers.
+--
+-- To make sure diagnostics are up to date, we need to tell shake that the file was touched and
+-- needs to be re-parsed. That's what we do when we record the dirty key that our parsing
+-- rule depends on.
+-- Then we restart the shake session, so that changes to our virtual files are actually picked up.
 restartCabalShakeSession :: ShakeExtras -> VFS.VFS -> NormalizedFilePath -> String -> IO ()
 restartCabalShakeSession shakeExtras vfs file actionMsg = do
   join $ atomically $ Shake.recordDirtyKeys shakeExtras GetModificationTime [file]
@@ -131,6 +136,8 @@ cabalRules recorder = do
   ofInterestRules recorder
   -- Rule to produce diagnostics for cabal files.
   define (cmapWithPrio LogShake recorder) $ \ParseCabal file -> do
+    -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
+    -- we rerun this rule because this rule *depends* on GetModificationTime.
     t <- use GetModificationTime file
     log' Debug $ LogModificationTime file t
     mVirtualFile <- Shake.getVirtualFile file
@@ -158,7 +165,7 @@ cabalRules recorder = do
     log' = logWith recorder
 
 -- | This is the kick function for the cabal plugin.
--- We run this action, whenever we need to restart the shake session, which triggers
+-- We run this action, whenever we shake session us run/restarted, which triggers
 -- actions to produce diagnostics for cabal files.
 --
 -- It is paramount that this kick-function can be run quickly, since it is a blocking
