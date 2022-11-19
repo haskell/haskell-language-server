@@ -33,7 +33,18 @@ library
   build-depends:
     , base                  >=4.12     && <5
     , bytestring
-    , Cabal                 ^>=3.2 || ^>=3.4 || ^>=3.6
+    -- Ideally, we only want to support a single Cabal version, supporting
+    -- older versions is completely pointless since Cabal is backwards compatible,
+    -- the latest Cabal version can parse all versions of the Cabal file format.
+    --
+    -- However, stack is making this difficult, if we change the version of Cabal,
+    -- we essentially need to make sure all other packages in the snapshot have their
+    -- Cabal dependency version relaxed.
+    -- Most packages have a Hackage revision, but stack won't pick these up (for sensible reasons)
+    -- automatically, forcing us to manually update the packages revision id.
+    -- This is a lot of work for almost zero benefit, so we just allow more versions here
+    -- and we eventually completely drop support for building HLS with stack.
+    , Cabal                 ^>=3.2 || ^>=3.4 || ^>=3.6 || ^>= 3.8
     , deepseq
     , directory
     , extra                 >=1.7.4
