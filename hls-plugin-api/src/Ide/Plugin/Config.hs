@@ -62,7 +62,10 @@ data Config =
     , plugins                 :: !(Map.Map T.Text PluginConfig)
     } deriving (Show,Eq)
 
--- | Default configuration values
+-- | Default configuration values.
+--   The default values for plugins can be passed by the caller.
+--   This allows plugins to declare their preferred default config values,
+--   which can be useful for plugins that don't want to be enabled by default.
 defConfig :: Map.Map T.Text PluginConfig -> Config
 defConfig defPlugins = Config
     { checkParents                = CheckOnSave
@@ -75,9 +78,6 @@ defConfig defPlugins = Config
     , maxCompletions              = 40
     , plugins                     = defPlugins
     }
-
-instance Default Config where
-    def = defConfig mempty
 
 -- TODO: Add API for plugins to expose their own LSP config options
 parseConfig :: Config -> Value -> A.Parser Config
@@ -95,6 +95,9 @@ parseConfig defValue = A.withObject "Config" $ \v -> do
         <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
         <*> explicitParseFieldMaybe (parsePlugins $ plugins defValue) o "plugin" .!= plugins defValue
 
+-- | Parse the 'PluginConfig'.
+--   Since we need to fall back to default values if we do not find one in the input,
+--   we need the map of plugin-provided defaults, as in 'parseConfig'.
 parsePlugins :: Map.Map T.Text PluginConfig -> Value -> A.Parser (Map.Map T.Text PluginConfig)
 parsePlugins defValue = A.withObject "Config.plugins" $ \o -> do
   let -- parseOne :: Key -> Value -> A.Parser (T.Text, PluginConfig)
@@ -173,7 +176,7 @@ instance A.ToJSON PluginConfig where
                    ]
 
 parsePluginConfig :: PluginConfig -> Value -> A.Parser PluginConfig
-parsePluginConfig def= A.withObject "PluginConfig" $ \o  -> PluginConfig
+parsePluginConfig def = A.withObject "PluginConfig" $ \o  -> PluginConfig
       <$> o .:? "globalOn"         .!= plcGlobalOn def
       <*> o .:? "callHierarchyOn"  .!= plcCallHierarchyOn def
       <*> o .:? "codeActionsOn"    .!= plcCodeActionsOn def

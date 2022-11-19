@@ -221,8 +221,8 @@ data CustomConfig = forall r. CustomConfig (Properties r)
 -- which can be inferred from handlers registered by the plugin.
 -- @config@ is called custom config, which is defined using 'Properties'.
 data ConfigDescriptor = ConfigDescriptor {
-  -- | Initial values for the generic config, if the plugin admits one
-  configInitialGenericConfig :: Maybe PluginConfig,
+  -- | Initial values for the generic config
+  configInitialGenericConfig :: PluginConfig,
   -- | Whether or not to generate @diagnosticsOn@ config.
   -- Diagnostics emit in arbitrary shake rules,
   -- so we can't know statically if the plugin produces diagnostics
@@ -236,7 +236,7 @@ mkCustomConfig = CustomConfig
 
 defaultConfigDescriptor :: ConfigDescriptor
 defaultConfigDescriptor =
-    ConfigDescriptor (Just Data.Default.def) False (mkCustomConfig emptyProperties)
+    ConfigDescriptor Data.Default.def False (mkCustomConfig emptyProperties)
 
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
@@ -752,13 +752,14 @@ pluginEnabledConfig f pid config = plcGlobalOn pluginConfig && f pluginConfig
   where
     pluginConfig = configForPlugin config pid
 
+-- | Constructs a default configuration for the given plugins
 defConfigForPlugins :: IdePlugins ideState -> Config
 defConfigForPlugins (IdePlugins pp) = defConfig $ Map.fromList
             [ (pId, config)
             | PluginDescriptor
                 { pluginId = PluginId pId
                 , pluginConfigDescriptor =
-                    ConfigDescriptor{configInitialGenericConfig = Just config}
+                    ConfigDescriptor{configInitialGenericConfig = config}
                 } <- pp
             ]
 

@@ -60,15 +60,14 @@ pluginsToDefaultConfig plugins@IdePlugins {..} =
         --   "codeLensOn": true
         -- }
         --
-        genericDefaultConfig
-          | Nothing <- configInitialGenericConfig = []
-          | Just config <- configInitialGenericConfig =
-          let x = ["diagnosticsOn" A..= True | configHasDiagnostics] <> nubOrd (mconcat (handlersToGenericDefaultConfig config <$> handlers))
-           in case x of
-                -- if the plugin has only one capability, we produce globalOn instead of the specific one;
-                -- otherwise we don't produce globalOn at all
-                [_] -> ["globalOn" A..= plcGlobalOn config]
-                _   -> x
+        genericDefaultConfig = case configInitialGenericConfig of
+          config ->
+            let x = ["diagnosticsOn" A..= True | configHasDiagnostics] <> nubOrd (mconcat (handlersToGenericDefaultConfig config <$> handlers))
+            in case x of
+                    -- if the plugin has only one capability, we produce globalOn instead of the specific one;
+                    -- otherwise we don't produce globalOn at all
+                    [_] -> ["globalOn" A..= plcGlobalOn config]
+                    _   -> x
         -- Example:
         --
         -- {
