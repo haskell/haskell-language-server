@@ -94,8 +94,10 @@ test-suite tests
     , tasty
     , tasty-hunit
     , tasty-rerun
+    , tasty-quickcheck
     , text
     , lsp-types
+    , containers
 
 benchmark rangemap-benchmark
   type:             exitcode-stdio-1.0
