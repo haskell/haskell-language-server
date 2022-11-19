@@ -40,7 +40,7 @@ import qualified Language.LSP.Types              as LSP
 import qualified Language.LSP.VFS                as VFS
 
 data Log
-  = LogModificationTime NormalizedFilePath (Maybe FileVersion)
+  = LogModificationTime NormalizedFilePath FileVersion
   | LogShake Shake.Log
   | LogDocOpened Uri
   | LogDocModified Uri
@@ -138,11 +138,10 @@ cabalRules recorder = do
   define (cmapWithPrio LogShake recorder) $ \ParseCabal file -> do
     -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
     -- we rerun this rule because this rule *depends* on GetModificationTime.
-    t <- use GetModificationTime file
+    (t, mCabalSource) <- use_ GetFileContents file
     log' Debug $ LogModificationTime file t
-    mVirtualFile <- Shake.getVirtualFile file
-    contents <- case mVirtualFile of
-      Just vfile -> pure $ Encoding.encodeUtf8 $ VFS.virtualFileText vfile
+    contents <- case mCabalSource of
+      Just sources -> pure $ Encoding.encodeUtf8 sources
       Nothing -> do
         liftIO $ BS.readFile $ fromNormalizedFilePath file
 
