@@ -34,6 +34,7 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util      as Util
+import           Development.IDE.GHC.CoreFile         (occNamePrefixes)
 import           Development.IDE.GHC.Util             (printOutputable)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
@@ -231,12 +232,10 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
         isInternal :: (Identifier, IdentifierDetails a) -> Bool
         isInternal (Right n, _) =
           let name = printOutputable n
-              prefix = T.take 2 name
-          in elem prefix ["$d", "$c"]
+          in any (`T.isPrefixOf` name) occNamePrefixes
         isInternal (Left _, _) = False
         filteredNames = filter (not . isInternal) names
         types = nodeType info
-
         prettyNames :: [T.Text]
         prettyNames = map prettyName filteredNames
         prettyName (Right n, dets) = T.unlines $
