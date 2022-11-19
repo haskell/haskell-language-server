@@ -80,7 +80,7 @@ produceCompletions recorder = do
             _ -> return ([], Nothing)
     define (cmapWithPrio LogShake recorder) $ \NonLocalCompletions file -> do
         -- For non local completions we avoid depending on the parsed module,
-        -- synthetizing a fake module with an empty body from the buffer
+        -- synthesizing a fake module with an empty body from the buffer
         -- in the ModSummary, which preserves all the imports
         ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
         sess <- fmap fst <$> useWithStale GhcSessionDeps file

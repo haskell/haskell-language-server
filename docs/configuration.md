@@ -260,11 +260,22 @@ Open `Preferences > Package Settings > LSP > Settings` and add the following "ha
 
 See [the Sublime Text LSP documentation](https://lsp.sublimetext.io) for information on configuring the client. In particular, you can add a "settings" key to the "haskell-language-server" setting to configure specific HLS plugins as described elsewhere in these docs.
 
-### Vim or Neovim
+### [Neovim](https://neovim.io)
+
+Neovim provides a [native LSP implementation with a Lua framework](https://neovim.io/doc/user/lsp).
+Plugins that streamline the setup of `haskell-language-server` using Neovim's built-in LSP framework include:
+
+* [haskell-tools.nvim](https://github.com/MrcJkb/haskell-tools.nvim): A plugin with a focus on Haskell tooling, including `haskell-language-server`.
+* [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig): A collection of quickstart configs for various LSP servers.
+  - Includes a basic [`hls` configuration](https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#hls).
+
+Neovim is also compatible with the [Vim plugins](#vim).
+
+### [Vim](https://www.vim.org)
 
 You can use [Coc](https://github.com/neoclide/coc.nvim), [LanguageClient-neovim](https://github.com/autozimu/LanguageClient-neovim)
 or any other Vim Language server protocol client.
-Coc is recommend since it is the only complete LSP implementation for Vim and Neovim and offers snippets and floating documentation out of the box.
+Coc is recommend since it is the only complete LSP implementation for Vim and offers snippets and floating documentation out of the box.
 
 #### Coc
 

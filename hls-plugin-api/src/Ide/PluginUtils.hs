@@ -173,7 +173,7 @@ idePluginsToPluginDesc (IdePlugins pp) = pp
 
 -- ---------------------------------------------------------------------
 -- | Returns the current client configuration. It is not wise to permanently
--- cache the returned value of this function, as clients can at runitime change
+-- cache the returned value of this function, as clients can at runtime change
 -- their configuration.
 --
 getClientConfig :: MonadLsp Config m => m Config

@@ -155,7 +155,7 @@ data TcModuleResult = TcModuleResult
     , tmrTypechecked     :: TcGblEnv
     , tmrTopLevelSplices :: Splices
     -- ^ Typechecked splice information
-    , tmrDeferedError    :: !Bool
+    , tmrDeferredError    :: !Bool
     -- ^ Did we defer any type errors for this module?
     , tmrRuntimeModules  :: !(ModuleEnv ByteString)
         -- ^ Which modules did we need at runtime while compiling this file?

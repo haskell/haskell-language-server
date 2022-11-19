@@ -156,6 +156,18 @@
         "url": "https://hackage.haskell.org/package/ghc-exactprint-1.5.0/ghc-exactprint-1.5.0.tar.gz"
       }
     },
+    "ghc-exactprint-160": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-6fW4KSmDo7hi5i2C1lbI/rEyFWrowSGTNyaC+f73JaE=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.6.0/ghc-exactprint-1.6.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.6.0/ghc-exactprint-1.6.0.tar.gz"
+      }
+    },
     "gitignore": {
       "flake": false,
       "locked": {
@@ -218,6 +230,18 @@
       "original": {
         "type": "tarball",
         "url": "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz"
+      }
+    },
+    "hw-prim": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-++rg/bx4TjWUDyHSWKm/8ITwQLonPRLXHPLlnhJy8ik=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hw-prim-0.6.3.2/hw-prim-0.6.3.2.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hw-prim-0.6.3.2/hw-prim-0.6.3.2.tar.gz"
       }
     },
     "implicit-hie-cradle": {
@@ -322,11 +346,13 @@
         "ghc-check": "ghc-check",
         "ghc-exactprint": "ghc-exactprint",
         "ghc-exactprint-150": "ghc-exactprint-150",
+        "ghc-exactprint-160": "ghc-exactprint-160",
         "gitignore": "gitignore",
         "hie-bios": "hie-bios",
         "hiedb": "hiedb",
         "hlint": "hlint",
         "hlint-34": "hlint-34",
+        "hw-prim": "hw-prim",
         "implicit-hie-cradle": "implicit-hie-cradle",
         "lsp": "lsp",
         "lsp-test": "lsp-test",

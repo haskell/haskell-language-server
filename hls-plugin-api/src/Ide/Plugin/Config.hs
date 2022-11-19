@@ -47,11 +47,12 @@ data CheckParents
 -- will be surprises relating to config options being ignored, initially though.
 data Config =
   Config
-    { checkParents       :: CheckParents
-    , checkProject       :: !Bool
-    , formattingProvider :: !T.Text
-    , maxCompletions     :: !Int
-    , plugins            :: !(Map.Map T.Text PluginConfig)
+    { checkParents            :: CheckParents
+    , checkProject            :: !Bool
+    , formattingProvider      :: !T.Text
+    , cabalFormattingProvider :: !T.Text
+    , maxCompletions          :: !Int
+    , plugins                 :: !(Map.Map T.Text PluginConfig)
     } deriving (Show,Eq)
 
 instance Default Config where
@@ -62,6 +63,7 @@ instance Default Config where
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
     -- , formattingProvider          = "stylish-haskell"
+    , cabalFormattingProvider     = "cabal-fmt"
     , maxCompletions              = 40
     , plugins                     = Map.empty
     }
@@ -78,6 +80,7 @@ parseConfig defValue = A.withObject "Config" $ \v -> do
         <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents defValue
         <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject defValue
         <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
+        <*> o .:? "cabalFormattingProvider"                 .!= cabalFormattingProvider defValue
         <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
         <*> o .:? "plugin"                                  .!= plugins defValue
 

@@ -13,7 +13,6 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.Pragmas   (getNextPragmaInfo,
                                                   insertNewPragma)
-import           GHC.LanguageExtensions.Type     (Extension)
 import           Ide.PluginUtils
 import           Language.LSP.Types
 
@@ -64,6 +63,6 @@ insertPragmaIfNotPresent state nfp pragma = do
         $ liftIO
         $ runAction "classplugin.insertPragmaIfNotPresent.GetParsedModuleWithComments" state
         $ use GetParsedModuleWithComments nfp
-    let exts = (toList . extensionFlags . ms_hspp_opts . pm_mod_summary) pm
+    let exts = getExtensions pm
         info = getNextPragmaInfo sessionDynFlags fileContents
     pure [insertNewPragma info pragma | pragma `notElem` exts]

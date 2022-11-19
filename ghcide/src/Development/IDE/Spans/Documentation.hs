@@ -128,7 +128,7 @@ getDocumentation
 -- TODO : Build a version of GHC exactprint to extract this information
 -- more accurately.
 -- TODO : Implement this for GHC 9.2 with in-tree annotations
---        (alternatively, just remove it and rely soley on GHC's parsing)
+--        (alternatively, just remove it and rely solely on GHC's parsing)
 getDocumentation sources targetName = fromMaybe [] $ do
 #if MIN_VERSION_ghc(9,2,0)
   Nothing
@@ -137,7 +137,7 @@ getDocumentation sources targetName = fromMaybe [] $ do
   targetNameSpan <- realSpan $ getLoc targetName
   tc <-
     find ((==) (Just $ srcSpanFile targetNameSpan) . annotationFileName)
-      $ reverse sources -- TODO : Is reversing the list here really neccessary?
+      $ reverse sources -- TODO : Is reversing the list here really necessary?
 
   -- Top level names bound by the module
   let bs = [ n | let L _ HsModule{hsmodDecls} = pm_parsed_source tc

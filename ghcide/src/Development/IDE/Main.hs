@@ -318,9 +318,10 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
     outH <- argsHandleOut
 
     numProcessors <- getNumProcessors
+    let numCapabilities = max 1 $ maybe (numProcessors `div` 2) fromIntegral argsThreads
 
     case argCommand of
-        LSP -> withNumCapabilities (maybe (numProcessors `div` 2) fromIntegral argsThreads) $ do
+        LSP -> withNumCapabilities numCapabilities $ do
             t <- offsetTime
             log Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
 

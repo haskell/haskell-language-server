@@ -76,8 +76,8 @@ mkTest
     => String  -- ^ The test name
     -> FilePath  -- ^ The file name stem (without extension) to load
     -> Int  -- ^ Cursor line
-    -> Int  -- ^ Cursor columnn
-    -> t ( Bool -> Bool   -- Use 'not' for actions that shouldnt be present
+    -> Int  -- ^ Cursor column
+    -> t ( Bool -> Bool   -- Use 'not' for actions that shouldn't be present
          , TacticCommand  -- An expected command ...
          , Text           -- ... for this variable
          ) -- ^ A collection of (un)expected code actions.

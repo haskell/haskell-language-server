@@ -17,9 +17,11 @@ module Test.Hls
     goldenGitDiff,
     goldenWithHaskellDoc,
     goldenWithHaskellDocFormatter,
+    goldenWithCabalDocFormatter,
     def,
     runSessionWithServer,
     runSessionWithServerFormatter,
+    runSessionWithCabalServerFormatter,
     runSessionWithServer',
     waitForProgressDone,
     waitForAllProgressDone,
@@ -70,6 +72,7 @@ import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           GHC.Stack                       (emptyCallStack)
 import           Ide.Plugin.Config               (Config, PluginConfig,
+                                                  cabalFormattingProvider,
                                                   formattingProvider, plugins)
 import           Ide.PluginUtils                 (idePluginsToPluginDesc,
                                                   pluginDescToIdePlugins)
@@ -94,6 +97,7 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
+import           Test.Tasty.Runners              (NumThreads (..))
 
 newtype Log = LogIDEMain IDEMain.Log
 
@@ -103,7 +107,7 @@ instance Pretty Log where
 
 -- | Run 'defaultMainWithRerun', limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = defaultMainWithRerun . adjustOption (const $ mkTimeout 600000000)
+defaultTestRunner = defaultMainWithRerun . adjustOption (const $ NumThreads 1) . adjustOption (const $ mkTimeout 600000000)
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
@@ -130,15 +134,30 @@ goldenWithHaskellDoc plugin title testDataDir path desc ext act =
     act doc
     documentContents doc
 
+
+runSessionWithServer :: PluginDescriptor IdeState -> FilePath -> Session a -> IO a
+runSessionWithServer plugin = runSessionWithServer' [plugin] def def fullCaps
+
+runSessionWithServerFormatter :: PluginDescriptor IdeState -> String -> PluginConfig -> FilePath -> Session a -> IO a
+runSessionWithServerFormatter plugin formatter conf =
+  runSessionWithServer'
+    [plugin]
+    def
+      { formattingProvider = T.pack formatter
+      , plugins = M.singleton (T.pack formatter) conf
+      }
+    def
+    fullCaps
+
 goldenWithHaskellDocFormatter
-  :: PluginDescriptor IdeState
-  -> String
+  :: PluginDescriptor IdeState -- ^ Formatter plugin to be used
+  -> String -- ^ Name of the formatter to be used
   -> PluginConfig
-  -> TestName
-  -> FilePath
-  -> FilePath
-  -> FilePath
-  -> FilePath
+  -> TestName -- ^ Title of the test
+  -> FilePath -- ^ Directory of the test data to be used
+  -> FilePath -- ^ Path to the testdata to be used within the directory
+  -> FilePath -- ^ Additional suffix to be appended to the output file
+  -> FilePath -- ^ Extension of the output file
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
 goldenWithHaskellDocFormatter plugin formatter conf title testDataDir path desc ext act =
@@ -151,15 +170,33 @@ goldenWithHaskellDocFormatter plugin formatter conf title testDataDir path desc 
     act doc
     documentContents doc
 
-runSessionWithServer :: PluginDescriptor IdeState -> FilePath -> Session a -> IO a
-runSessionWithServer plugin = runSessionWithServer' [plugin] def def fullCaps
+goldenWithCabalDocFormatter
+  :: PluginDescriptor IdeState -- ^ Formatter plugin to be used
+  -> String -- ^ Name of the formatter to be used
+  -> PluginConfig
+  -> TestName -- ^ Title of the test
+  -> FilePath -- ^ Directory of the test data to be used
+  -> FilePath -- ^ Path to the testdata to be used within the directory
+  -> FilePath -- ^ Additional suffix to be appended to the output file
+  -> FilePath -- ^ Extension of the output file
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithCabalDocFormatter plugin formatter conf title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithCabalServerFormatter plugin formatter conf testDataDir
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "cabal"
+    void waitForBuildQueue
+    act doc
+    documentContents doc
 
-runSessionWithServerFormatter :: PluginDescriptor IdeState -> String -> PluginConfig -> FilePath -> Session a -> IO a
-runSessionWithServerFormatter plugin formatter conf =
+runSessionWithCabalServerFormatter :: PluginDescriptor IdeState -> String -> PluginConfig -> FilePath -> Session a -> IO a
+runSessionWithCabalServerFormatter plugin formatter conf =
   runSessionWithServer'
     [plugin]
     def
-      { formattingProvider = T.pack formatter
+      { cabalFormattingProvider = T.pack formatter
       , plugins = M.singleton (T.pack formatter) conf
       }
     def

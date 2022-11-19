@@ -163,6 +163,11 @@ flag explicitFixity
   default:     True
   manual:      True
 
+flag explicitFields
+  description: Enable explicitFields plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -199,6 +204,16 @@ flag dynamic
   description: Build with the dyn rts
   default:     True
   manual:      True
+
+flag cabalfmt
+  description: Enable cabal-fmt plugin
+  default:     True
+  manual:      True
+
+common cabalfmt
+  if flag(cabalfmt)
+    build-depends: hls-cabal-fmt-plugin ^>= 0.1.0.0
+    cpp-options: -Dhls_cabalfmt
 
 common class
   if flag(class)
@@ -266,7 +281,7 @@ common pragmas
     cpp-options: -Dhls_pragmas
 
 common splice
-  if flag(splice) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(splice) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-splice-plugin ^>=1.0.0.1
     cpp-options: -Dhls_splice
 
@@ -299,6 +314,11 @@ common explicitFixity
   if flag(explicitFixity)
     build-depends: hls-explicit-fixity-plugin ^>= 1.0
     cpp-options: -DexplicitFixity
+
+common explicitFields
+  if flag(explicitFields)
+    build-depends: hls-explicit-record-fields-plugin ^>= 1.0
+    cpp-options: -DexplicitFields
 
 -- formatters
 
@@ -339,6 +359,7 @@ library
                   , pedantic
                   -- plugins
                   , callHierarchy
+                  , cabalfmt
                   , changeTypeSignature
                   , class
                   , haddockComments
@@ -358,6 +379,7 @@ library
                   , codeRange
                   , gadt
                   , explicitFixity
+                  , explicitFields
                   , floskell
                   , fourmolu
                   , ormolu

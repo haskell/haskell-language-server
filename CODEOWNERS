@@ -9,6 +9,7 @@
 # Plugins
 /plugins/hls-alternate-number-format-plugin @drsooch
 /plugins/hls-brittany-plugin @fendor
+/plugins/hls-cabal-fmt-plugin @VeryMilkyJoe @fendor
 /plugins/hls-call-hierarchy-plugin @July541
 /plugins/hls-class-plugin @Ailrun
 /plugins/hls-eval-plugin
@@ -24,12 +25,14 @@
 /plugins/hls-qualify-imported-names-plugin @eddiemundo
 /plugins/hls-refine-imports-plugin
 /plugins/hls-rename-plugin @OliverMadine
+/plugins/hls-refactor-plugin @santiweight
 /plugins/hls-retrie-plugin @pepeiborra
 /plugins/hls-code-range-plugin @kokobd
 /plugins/hls-splice-plugin @konn
 /plugins/hls-stylish-haskell-plugin @Ailrun
 /plugins/hls-tactics-plugin @isovector
 /plugins/hls-stan-plugin @uhbif19
+/plugins/hls-explicit-record-fields-plugin @ozkutuk
 
 # Benchmarking
 /shake-bench @pepeiborra

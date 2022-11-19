@@ -8,6 +8,7 @@ packages:
          ./ghcide/test
          ./hls-plugin-api
          ./hls-test-utils
+         ./plugins/hls-cabal-fmt-plugin
          ./plugins/hls-tactics-plugin
          ./plugins/hls-brittany-plugin
          ./plugins/hls-stylish-haskell-plugin
@@ -33,6 +34,7 @@ packages:
          ./plugins/hls-stan-plugin
          ./plugins/hls-gadt-plugin
          ./plugins/hls-explicit-fixity-plugin
+         ./plugins/hls-explicit-record-fields-plugin
          ./plugins/hls-refactor-plugin
 
 -- Standard location for temporary packages needed for particular environments
@@ -55,6 +57,8 @@ constraints:
   entropy >= 0.4.1.10,
   -- For GHC 9.4
   basement >= 0.0.15,
+  -- For GHC 9.4
+  hw-prim >= 0.6.3.2,
   hyphenation +embed,
   -- remove this when hlint sets ghc-lib to true by default
   -- https://github.com/ndmitchell/hlint/issues/1376

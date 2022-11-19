@@ -106,7 +106,7 @@ jobs:
           os:  ${{ runner.os }}
 
       - name: Build
-        run: cabal build 
+        run: cabal build
 
       - name: Set test options
         # run the tests without parallelism, otherwise tasty will attempt to run
@@ -148,7 +148,7 @@ jobs:
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
-        run: cabal test wrapper-test --test-options="$TEST_OPTS --rerun-log-file .tasty-rerun-log-wrapper" 
+        run: cabal test wrapper-test --test-options="$TEST_OPTS --rerun-log-file .tasty-rerun-log-wrapper"
 
       - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.4.2'
         name: Test hls-brittany-plugin
@@ -178,7 +178,7 @@ jobs:
         name: Test hls-haddock-comments-plugin
         run: cabal test hls-haddock-comments-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-haddock-comments-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.4.2'
         name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-splice-plugin --test-options="$TEST_OPTS"
 
@@ -249,6 +249,15 @@ jobs:
       - if: matrix.test
         name: Test hls-explicit-fixity-plugin test suite
         run: cabal test hls-explicit-fixity-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-explicit-fixity-plugin --test-options="$TEST_OPTS"
+
+      - if: matrix.test
+        name: Test hls-explicit-record-fields-plugin test suite
+        run: cabal test hls-explicit-record-fields-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-explicit-record-fields-plugin --test-options="$TEST_OPTS"
+
+      ## version needs to be limited since the tests depend on cabal-fmt which only builds using specific ghc versions
+      - if: matrix.test && matrix.ghc == '8.10.7'
+        name: Test hls-cabal-fmt-plugin test suite
+        run: cabal test hls-cabal-fmt-plugin --flag=isolateTests --test-options="$TEST_OPTS" || cabal test hls-cabal-fmt-plugin --flag=isolateTests --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-cabal-fmt-plugin --flag=isolateTests --test-options="$TEST_OPTS"
 
   test_post_job:
     if: always()
