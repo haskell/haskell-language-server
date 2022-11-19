@@ -42,7 +42,6 @@ import qualified Language.LSP.VFS                as VFS
 
 data Log
   = LogModificationTime NormalizedFilePath (Maybe FileVersion)
-  | LogDiagnostics NormalizedFilePath [FileDiagnostic]
   | LogShake Shake.Log
   | LogDocOpened Uri
   | LogDocModified Uri
@@ -55,8 +54,6 @@ instance Pretty Log where
     LogShake log' -> pretty log'
     LogModificationTime nfp modTime  ->
       "Modified:" <+> pretty (fromNormalizedFilePath nfp) <+> pretty (show modTime)
-    LogDiagnostics nfp diags ->
-      "Diagnostics for" <+> pretty (fromNormalizedFilePath nfp) <> ":" <+> pretty (show diags)
     LogDocOpened uri ->
       "Opened text document:" <+> pretty (getUri uri)
     LogDocModified uri ->
@@ -145,10 +142,8 @@ cabalRules recorder = do
       Left (_cabalVersion, pErrorNE) -> do
         let errorDiags = NE.toList $ NE.map (Diagnostics.errorDiagnostic file) pErrorNE
             allDiags = errorDiags <> warningDiags
-        log' Debug $ LogDiagnostics file allDiags
         pure (allDiags, Nothing)
       Right _ -> do
-        log' Debug $ LogDiagnostics file warningDiags
         pure (warningDiags, Just ())
 
   action $ do
