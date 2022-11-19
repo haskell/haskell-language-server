@@ -15,6 +15,7 @@ import qualified Ide.Plugin.Cabal.Parse       as Lib
 import qualified Language.LSP.Types.Lens      as J
 import           System.FilePath
 import           Test.Hls
+import qualified Data.ByteString as BS
 
 cabalPlugin :: Recorder (WithPriority Log) -> PluginDescriptor IdeState
 cabalPlugin recorder = descriptor recorder "cabal"
@@ -51,7 +52,7 @@ unitTests :: TestTree
 unitTests =
   testGroup "Unit Tests"
   [ testCase "Simple Parsing works" $ do
-      (warnings, pm) <- Lib.parseCabalFile $ testDataDir </> "simple.cabal"
+      (warnings, pm) <- Lib.parseCabalFileContents =<< BS.readFile (testDataDir </> "simple.cabal")
       liftIO $ do
         null warnings @? "Found unexpected warnings"
         isRight pm @? "Failed to parse GenericPackageDescription"
