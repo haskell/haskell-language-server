@@ -4,6 +4,7 @@
 module Ide.Plugin.Cabal.Diagnostics
 ( errorDiagnostic
 , warningDiagnostic
+, positionFromCabalPosition
   -- * Re-exports
 , FileDiagnostic
 , Diagnostic(..)
@@ -15,6 +16,7 @@ import           Development.IDE        (FileDiagnostic,
                                          ShowDiagnostic (ShowDiag))
 import           Distribution.Fields    (showPError, showPWarning)
 import qualified Ide.Plugin.Cabal.Parse as Lib
+import           Ide.PluginUtils        (extendNextLine)
 import           Language.LSP.Types     (Diagnostic (..),
                                          DiagnosticSeverity (..),
                                          DiagnosticSource, NormalizedFilePath,
@@ -40,10 +42,19 @@ warningDiagnostic fp warning@(Lib.PWarning _ pos _) =
 -- We define the range to be _from_ this position
 -- _to_ the first column of the next line.
 toBeginningOfNextLine :: Lib.Position -> Range
-toBeginningOfNextLine (Lib.Position line column) =
-  Range
-      (Position (fromIntegral line') (fromIntegral col'))
-      (Position (fromIntegral $ line' + 1) 0)
+toBeginningOfNextLine cabalPos = extendNextLine $ Range pos pos
+   where
+    pos = positionFromCabalPosition cabalPos
+
+-- | Convert a 'Lib.Position' from Cabal to a 'Range' that LSP understands.
+--
+-- Prefer this function over hand-rolled unpacking/packing, since LSP is zero-based,
+-- while Cabal is one-based.
+--
+-- >>> positionFromCabalPosition $ Lib.Position 1 1
+-- Position 0 0
+positionFromCabalPosition :: Lib.Position -> Position
+positionFromCabalPosition (Lib.Position line column) = Position (fromIntegral line') (fromIntegral col')
   where
     -- LSP is zero-based, Cabal is one-based
     line' = line-1
