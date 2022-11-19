@@ -23,7 +23,7 @@ plugin recorder = descriptor recorder "codeRange"
 
 main :: IO ()
 main = do
-    recorder <- contramap (fmap pretty) <$> makeDefaultStderrRecorder Nothing Debug
+    recorder <- pluginTestRecorder
     defaultTestRunner $
         testGroup "Code Range" [
             testGroup "Integration Tests" [

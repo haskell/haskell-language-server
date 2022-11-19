@@ -25,8 +25,8 @@ import           Test.Hls
 
 main :: IO ()
 main = do
-    recorder <- makeDefaultStderrRecorder Nothing Debug
-    defaultTestRunner . tests $ contramap (fmap pretty) recorder
+    recorder <- pluginTestRecorder
+    defaultTestRunner . tests $ recorder
 
 classPlugin :: Recorder (WithPriority Class.Log) -> PluginDescriptor IdeState
 classPlugin recorder = Class.descriptor recorder "class"
