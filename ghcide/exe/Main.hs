@@ -121,8 +121,8 @@ main = withTelemetryLogger $ \telemetryLogger -> do
 
     let arguments =
           if argsTesting
-          then IDEMain.testing (cmapWithPrio LogIDEMain recorder) logger
-          else IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) logger
+          then IDEMain.testing (cmapWithPrio LogIDEMain recorder) logger hlsPlugins
+          else IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) logger hlsPlugins
 
     IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) arguments
         { IDEMain.argsProjectRoot = Just argsCwd

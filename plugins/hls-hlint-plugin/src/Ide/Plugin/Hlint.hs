@@ -43,7 +43,6 @@ import           Data.Aeson.Types                                   (FromJSON (.
                                                                      ToJSON (..),
                                                                      Value (..))
 import qualified Data.ByteString                                    as BS
-import           Data.Default
 import           Data.Hashable
 import qualified Data.HashMap.Strict                                as Map
 import           Data.Maybe
@@ -200,7 +199,7 @@ type instance RuleResult GetHlintDiagnostics = ()
 rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plugin = do
   define (cmapWithPrio LogShake recorder) $ \GetHlintDiagnostics file -> do
-    config <- getClientConfigAction def
+    config <- getClientConfigAction
     let hlintOn = pluginEnabledConfig plcDiagnosticsOn plugin config
     ideas <- if hlintOn then getIdeas recorder file else return (Right [])
     return (diagnostics file ideas, Just ())

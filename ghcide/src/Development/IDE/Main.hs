@@ -123,6 +123,7 @@ import           Ide.Types                                (IdeCommand (IdeComman
                                                            IdePlugins,
                                                            PluginDescriptor (PluginDescriptor, pluginCli),
                                                            PluginId (PluginId),
+                                                           defConfigForPlugins,
                                                            ipMap, pluginId)
 import qualified Language.LSP.Server                      as LSP
 import qualified "list-t" ListT
@@ -239,21 +240,21 @@ data Arguments = Arguments
     , argsMonitoring            :: IO Monitoring
     }
 
-defaultArguments :: Recorder (WithPriority Log) -> Logger -> Arguments
-defaultArguments recorder logger = Arguments
+defaultArguments :: Recorder (WithPriority Log) -> Logger -> IdePlugins IdeState -> Arguments
+defaultArguments recorder logger plugins = Arguments
         { argsProjectRoot = Nothing
         , argCommand = LSP
         , argsLogger = pure logger
         , argsRules = mainRule (cmapWithPrio LogRules recorder) def >> action kick
         , argsGhcidePlugin = mempty
-        , argsHlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde recorder))
+        , argsHlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde recorder)) <> plugins
         , argsSessionLoadingOptions = def
         , argsIdeOptions = \config ghcSession -> (defaultIdeOptions ghcSession)
             { optCheckProject = pure $ checkProject config
             , optCheckParents = pure $ checkParents config
             }
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
-        , argsDefaultHlsConfig = def
+        , argsDefaultHlsConfig = defConfigForPlugins plugins
         , argsGetHieDbLoc = getHieDbLoc
         , argsDebouncer = newAsyncDebouncer
         , argsThreads = Nothing
@@ -276,10 +277,11 @@ defaultArguments recorder logger = Arguments
         }
 
 
-testing :: Recorder (WithPriority Log) -> Logger -> Arguments
-testing recorder logger =
+testing :: Recorder (WithPriority Log) -> Logger -> IdePlugins IdeState -> Arguments
+testing recorder logger plugins =
   let
-    arguments@Arguments{ argsHlsPlugins, argsIdeOptions } = defaultArguments recorder logger
+    arguments@Arguments{ argsHlsPlugins, argsIdeOptions } =
+        defaultArguments recorder logger plugins
     hlsPlugins = pluginDescToIdePlugins $
       idePluginsToPluginDesc argsHlsPlugins
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]

@@ -46,6 +46,7 @@ module Ide.Types
 , installSigUsr1Handler
 , responseError
 , lookupCommandProvider
+, defConfigForPlugins
 )
     where
 
@@ -220,21 +221,22 @@ data CustomConfig = forall r. CustomConfig (Properties r)
 -- which can be inferred from handlers registered by the plugin.
 -- @config@ is called custom config, which is defined using 'Properties'.
 data ConfigDescriptor = ConfigDescriptor {
-  -- | Whether or not to generate generic configs.
-  configEnableGenericConfig :: Bool,
+  -- | Initial values for the generic config, if the plugin admits one
+  configInitialGenericConfig :: Maybe PluginConfig,
   -- | Whether or not to generate @diagnosticsOn@ config.
   -- Diagnostics emit in arbitrary shake rules,
   -- so we can't know statically if the plugin produces diagnostics
-  configHasDiagnostics      :: Bool,
+  configHasDiagnostics       :: Bool,
   -- | Custom config.
-  configCustomConfig        :: CustomConfig
+  configCustomConfig         :: CustomConfig
 }
 
 mkCustomConfig :: Properties r -> CustomConfig
 mkCustomConfig = CustomConfig
 
 defaultConfigDescriptor :: ConfigDescriptor
-defaultConfigDescriptor = ConfigDescriptor True False (mkCustomConfig emptyProperties)
+defaultConfigDescriptor =
+    ConfigDescriptor (Just Data.Default.def) False (mkCustomConfig emptyProperties)
 
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
@@ -738,6 +740,7 @@ newtype PluginId = PluginId T.Text
 instance IsString PluginId where
   fromString = PluginId . T.pack
 
+-- | Lookup the current config for a plugin
 configForPlugin :: Config -> PluginId -> PluginConfig
 configForPlugin config (PluginId plugin)
     = Map.findWithDefault Data.Default.def plugin (plugins config)
@@ -748,6 +751,16 @@ pluginEnabledConfig :: (PluginConfig -> Bool) -> PluginId -> Config -> Bool
 pluginEnabledConfig f pid config = plcGlobalOn pluginConfig && f pluginConfig
   where
     pluginConfig = configForPlugin config pid
+
+defConfigForPlugins :: IdePlugins ideState -> Config
+defConfigForPlugins (IdePlugins pp) = defConfig $ Map.fromList
+            [ (pId, config)
+            | PluginDescriptor
+                { pluginId = PluginId pId
+                , pluginConfigDescriptor =
+                    ConfigDescriptor{configInitialGenericConfig = Just config}
+                } <- pp
+            ]
 
 -- ---------------------------------------------------------------------
 

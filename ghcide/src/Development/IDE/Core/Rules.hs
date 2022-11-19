@@ -154,7 +154,7 @@ import qualified Development.IDE.Core.Shake as Shake
 import qualified Development.IDE.Types.Logger as Logger
 import qualified Development.IDE.Types.Shake as Shake
 import           Development.IDE.GHC.CoreFile
-import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
+import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)
 import Control.Monad.IO.Unlift
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Unit.Module.Graph
@@ -341,7 +341,7 @@ getParsedModuleWithCommentsRule recorder =
 getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags f = do
   opts <- getIdeOptions
-  cfg <- getClientConfigAction def
+  cfg <- getClientConfigAction
   pure $ f $ optModifyDynFlags opts cfg
 
 
@@ -1059,9 +1059,11 @@ getClientSettingsRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake 
 
 -- | Returns the client configuration stored in the IdeState.
 -- You can use this function to access it from shake Rules
-getClientConfigAction :: Config -- ^ default value
-                      -> Action Config
-getClientConfigAction defValue = do
+getClientConfigAction :: Action Config
+getClientConfigAction = do
+  lspEnv <- lspEnv <$> getShakeExtras
+  currentConfig <- (`LSP.runLspT` LSP.getConfig) `traverse` lspEnv
+  let defValue = fromMaybe (defConfig mempty) currentConfig
   mbVal <- unhashed <$> useNoFile_ GetClientSettings
   case A.parse (parseConfig defValue) <$> mbVal of
     Just (Success c) -> return c
@@ -1074,7 +1076,7 @@ usePropertyAction ::
   Properties r ->
   Action (ToHsType t)
 usePropertyAction kn plId p = do
-  config <- getClientConfigAction def
+  config <- getClientConfigAction
   let pluginConfig = configForPlugin config plId
   pure $ useProperty kn p $ plcConfig pluginConfig
 

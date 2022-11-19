@@ -73,9 +73,8 @@ import           GHC.IO.Handle
 import           GHC.Stack                       (emptyCallStack)
 import           Ide.Plugin.Config               (Config, PluginConfig,
                                                   cabalFormattingProvider,
-                                                  formattingProvider, plugins)
-import           Ide.PluginUtils                 (idePluginsToPluginDesc,
-                                                  pluginDescToIdePlugins)
+                                                  defConfig, formattingProvider,
+                                                  plugins)
 import           Ide.Types
 import           Language.LSP.Test
 import           Language.LSP.Types              hiding
@@ -195,7 +194,7 @@ runSessionWithCabalServerFormatter :: PluginDescriptor IdeState -> String -> Plu
 runSessionWithCabalServerFormatter plugin formatter conf =
   runSessionWithServer'
     [plugin]
-    def
+    (defConfig mempty)
       { cabalFormattingProvider = T.pack formatter
       , plugins = M.singleton (T.pack formatter) conf
       }
@@ -243,12 +242,11 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
 
         recorder = cmapWithPrio pretty docWithFilteredPriorityRecorder
 
-        arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmapWithPrio LogIDEMain recorder) logger
+        hlsPlugins = IdePlugins $ Test.blockCommandDescriptor "block-command" : plugins
 
-        hlsPlugins =
-            plugins
-            ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
-            ++ idePluginsToPluginDesc argsHlsPlugins
+        arguments@Arguments{ argsIdeOptions, argsLogger } =
+            testing (cmapWithPrio LogIDEMain recorder) logger hlsPlugins
+
         ideOptions config ghcSession =
             let defIdeOptions = argsIdeOptions config ghcSession
             in defIdeOptions
@@ -264,7 +262,6 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
                 , argsDefaultHlsConfig = conf
                 , argsLogger = argsLogger
                 , argsIdeOptions = ideOptions
-                , argsHlsPlugins = pluginDescToIdePlugins hlsPlugins
                 }
 
     x <- runSessionWithHandles inW outR sconf caps root s

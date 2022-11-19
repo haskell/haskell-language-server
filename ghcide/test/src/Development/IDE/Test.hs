@@ -40,7 +40,6 @@ import           Control.Monad.IO.Class
 import           Data.Aeson                      (toJSON)
 import qualified Data.Aeson                      as A
 import           Data.Bifunctor                  (second)
-import           Data.Default
 import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (fromJust)
 import           Data.Text                       (Text)
@@ -49,7 +48,8 @@ import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult,
                                                   ideResultSuccess)
 import           Development.IDE.Test.Diagnostic
-import           Ide.Plugin.Config               (CheckParents, checkProject)
+import           Ide.Plugin.Config               (CheckParents, checkProject,
+                                                  defConfig)
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
 import           Language.LSP.Types              hiding
@@ -244,7 +244,7 @@ configureCheckProject :: Bool -> Session ()
 configureCheckProject overrideCheckProject =
     sendNotification SWorkspaceDidChangeConfiguration
         (DidChangeConfigurationParams $ toJSON
-            def{checkProject = overrideCheckProject})
+            (defConfig mempty){checkProject = overrideCheckProject})
 
 -- | Pattern match a message from ghcide indicating that a file has been indexed
 isReferenceReady :: FilePath -> Session ()
