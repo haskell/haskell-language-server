@@ -53,6 +53,7 @@ module Development.IDE.GHC.ExactPrint
       mapAnchor,
       generatedAnchor,
       modifySmallestDeclWithM_,
+      querySmallestDeclWithM,
     )
 where
 
@@ -482,13 +483,26 @@ modifySmallestDeclWithM validSpan f a = do
             False -> first (DL.singleton ldecl <>) <$> modifyMatchingDecl rest
   modifyDeclsT' (fmap (first DL.toList) . modifyMatchingDecl) a
 
--- | Replace the smallest declaration whose SrcSpan satisfies the given condition with a new
--- list of declarations.
---
--- For example, if you would like to move a where-clause-defined variable to the same
--- level as its parent HsDecl, you could use this function.
-modifySmallestDeclWithM_ ::
+-- | Just like modifySmallestDeclWithM but just find some information about the declaration
+querySmallestDeclWithM ::
   forall a m r.
+  (HasDecls a, Monad m) =>
+  (SrcSpan -> m Bool) ->
+  (LHsDecl GhcPs -> TransformT m r) ->
+  a ->
+  TransformT m (Maybe r)
+querySmallestDeclWithM validSpan f a = do
+  (_, r) <- modifySmallestDeclWithM
+    validSpan
+    (\ decl -> do
+      r <- f decl
+      pure ([decl], r))
+    a
+  pure r
+
+-- | Just like modifySmallestDeclWithM but with no extra result
+modifySmallestDeclWithM_ ::
+  forall a m.
   (HasDecls a, Monad m) =>
   (SrcSpan -> m Bool) ->
   (LHsDecl GhcPs -> TransformT m [LHsDecl GhcPs]) ->

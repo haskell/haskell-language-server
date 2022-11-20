@@ -72,7 +72,8 @@ extractTests =
     , mkGoldenExtractTest "ExtractSimple" (R 0 23 0 28)
     , mkGoldenExtractTest "ExtractFreeVars" (R 3 7 3 19)
     , mkGoldenExtractTest "ExtractFreeVars" (R 1 5 3 19)
-    , mkGoldenExtractTest "ExtractFreeVarsComplex" (R 5 5 7 34)
+    -- TODO this case uses record wild cards, and the current implementation handles it sub-optimally.
+    , mkGoldenExtractTest "ExtractFreeVarsComplex" (R 6 5 8 39)
     , mkGoldenExtractTest "ExtractFromDeclWithSig" (R 1 7 1 28)
     , mkGoldenExtractTest "ExtractFromWhere" (R 2 11 2 16)
     ]

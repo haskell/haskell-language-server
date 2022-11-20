@@ -51,9 +51,51 @@ import           Language.LSP.Types                         (List (..), UInt)
 import           Language.LSP.Types.Capabilities
 import Control.Monad.Identity (Identity(..))
 
--- | Returns True if two SrcSpan occupy the same text region (even if they have different file information)
-isSameSrcSpanModuloFile :: SrcSpan -> SrcSpan -> Bool
-isSameSrcSpanModuloFile span1 span2 = span1 `isSubspanOf` span2 && span2 `isSubspanOf` span1
+-- | Suggest a code action for extracting the expression indicated by the user's current Range selection.
+--
+-- The expression is extracted to the top level of the module, with a new function called `newDefinition`, and with
+-- a best-guess at the newly-free-scoped variables.
+--
+-- Before:
+--   foo = x + y + z
+-- After
+--   newDefinition y + z = y + z
+--   foo = x + newDefinition
+--
+-- Does not work with record wild cards, and subtle bugs relating to shadowed variables, which is documented throughout
+-- this module.
+suggestExtractFunction :: T.Text -> Annotated ParsedSource -> Range -> [(T.Text, [TextEdit])]
+suggestExtractFunction srcText (Annotated parsedSource _) range =
+  case tryFindLargestExprInRange minimalRange parsedSource of
+    Nothing -> []
+    Just (extractSpan, extractExpr) -> execTransform $ do
+      argsList <- findFreeVarsPostExtract extractSpan extractExpr parsedSource
+      newDef <- generateNewDecl newDefName argsList extractExpr
+      let addNewDef = modifySmallestDeclWithM_
+            (pure . (extractSpan `isSubspanOf`))
+            (\case
+              ldecl@(L (SrcSpanAnn (EpAnn anchor _ _) _) _) -> do
+                let lNewDef = L (SrcSpanAnn (EpAnn anchor mempty emptyComments) generatedSrcSpan) newDef
+                pure [lNewDef, setAtLeastNewlineDp ldecl]
+              _ -> error "todo")
+          replaceExtractExprWithVarQ = everywhere $ mkT $ \case
+            L (SrcSpanAnn epAnn span) _e :: LHsExpr GhcPs
+              | extractSpan == span ->
+                let go fExpr argExpr = HsApp
+                      (EpAnn (Anchor (realSrcSpan generatedSrcSpan) $ MovedAnchor $ SameLine 0) NoEpAnns emptyComments)
+                      (noLocA fExpr)
+                      (L (noAnnSrcSpanDP generatedSrcSpan $ SameLine 1) $ HsVar noExtField (noLocA argExpr))
+                in L (SrcSpanAnn epAnn generatedSrcSpan) $ foldl' go (HsVar noExtField newDefName) argsList
+            lexpr -> lexpr
+      let source' = replaceExtractExprWithVarQ parsedSource
+      source'' <- addNewDef $ makeDeltaAst source'
+      let diff = makeDiffTextEdit (T.pack $ exactPrint parsedSource) (T.pack $ exactPrint $ makeDeltaAst source'')
+      pure [("Extract function", fromLspList diff)]
+  where
+    minimalRange = removeWhitespacePadding range srcText
+    newDefName = noLocA $ mkRdrUnqual $ mkVarOcc $ T.unpack "newDefinition"
+    execTransform = (\(a,_,_) -> a) . runTransform
+suggestExtractFunction _ _ _ = [] -- Could not find Annotated ParsedSource
 
 -- | A type-safety-helpful newtype that represents that a Range has had its whitespace padding removed from both sides:
 --
@@ -135,7 +177,7 @@ setAtLeastNewlineDp (L srcSpanAnn decl) = L (mapAnchor (maybe nextLineAnchor set
 rdrNameQ :: GenericQ [RdrName]
 rdrNameQ =everything (<>) $ mkQ [] $ \case name -> [name]
 
-boundVarsQ :: forall a. Data a => a -> [RdrName]
+boundVarsQ :: GenericQ [RdrName]
 boundVarsQ  = everything (<>) $ mkQ []
   (\case
     -- pat@(VarPat _ var :: Pat GhcPs) -> trace (showAst pat) [unLocA var]
@@ -170,51 +212,57 @@ usedVarsQ  = everything (<>) $ mkQ [] $
     (HsVar _ var :: HsExpr GhcPs) -> [unLocA var]
     _                             -> []
 
-suggestExtractFunction :: T.Text -> Annotated ParsedSource -> Range -> [(T.Text, [TextEdit])]
-suggestExtractFunction srcText (Annotated parsedSource _) range =
-  let minimalRange = removeWhitespacePadding range srcText
-      edits = case tryFindLargestExprInRange minimalRange parsedSource of
-          Nothing -> []
-          Just (extractSpan, extractExpr) -> (\(a,_,_) -> a) $ runTransform $ do
-            let newDefName = noLocA $ mkRdrUnqual $ mkVarOcc $ T.unpack "newDefinition"
-            -- We do not actually modify anything, just find the bound variables
-            (_, boundVars) <- modifySmallestDeclWithM (Identity . (extractSpan `isSubspanOf`))
-                 (\ decl -> pure ([decl], boundVarsQ decl))
-                  -- traceM $ "decl" <> showAst decl
-                 parsedSource
-            -- TODO
-            let allVarsInExtracted = usedVarsQ extractExpr
-            let boundVarsInExtracted = boundVarsQ extractExpr
-            let args = (Set.fromList (fromMaybe [] boundVars) `Set.difference` Set.fromList boundVarsInExtracted)
-                  `Set.intersection` Set.fromList allVarsInExtracted
-            let argsList = Set.toList args
-            -- traceM $ "allVarsInExtracted" <> showAst allVarsInExtracted
-            -- traceM $ "boundVars" <> showAst boundVars
-            -- traceM $ "args" <> showAst args
-            -- traceM $ "extracted" <> showAst extractExpr
-            newDef <- generateNewDecl newDefName argsList extractExpr
-            let addNewDef = modifySmallestDeclWithM_
-                  (Identity . (extractSpan `isSubspanOf`))
-                  (\case
-                    ldecl@(L (SrcSpanAnn (EpAnn anchor _ _) _) _) -> do
-                      let lNewDef = L (SrcSpanAnn (EpAnn anchor mempty emptyComments) generatedSrcSpan) newDef
-                      pure [lNewDef, setAtLeastNewlineDp ldecl]
-                    _ -> error "todo")
-                removeExpr = everywhere $ mkT $ \case
-                  L (SrcSpanAnn epAnn span) _e :: LHsExpr GhcPs
-                    | extractSpan == span ->
-                      let go fExpr argExpr = HsApp
-                            (EpAnn (Anchor (realSrcSpan generatedSrcSpan) $ MovedAnchor $ SameLine 0) NoEpAnns emptyComments)
-                            (noLocA fExpr)
-                            (L (noAnnSrcSpanDP generatedSrcSpan $ SameLine 1) $ HsVar noExtField (noLocA argExpr))
-                      in L (SrcSpanAnn epAnn generatedSrcSpan) $ foldl' go (HsVar noExtField newDefName) argsList
-                  lexpr -> lexpr
-            let source' = removeExpr parsedSource
-            source'' <- addNewDef $ makeDeltaAst source'
-            let diff = makeDiffTextEdit (T.pack $ exactPrint parsedSource) (T.pack $ exactPrint $ makeDeltaAst source'')
-            pure [("Extract function", fromLspList diff)]
-    in edits
-suggestExtractFunction _ _ _ = [] -- Could not find Annotated ParsedSource
+-- | This function represents a simple guess of which variables are going to be out of scope after the expression
+-- is extracted.  This strategy will probably work for >90% cases.
+--
+-- The strategy is that we assume that all variables bound in the extracted expr scope over any occurrence of said
+-- variable in the same extracted expr. Assuming this, we can take the intersection of the variables bound in the
+-- expression's scope, and those bound in the surrounding context, and thereby find the newly-free variables
+-- post-extraction.
+--
+-- A simple counter-example to this strategy would occur by extracting the rhs of `foo`:
+--    foo bar = let tmp = bar; bar = 1 in bar
+-- Where bar is used in the rhs of, but is also bound in the same expression. Thankfully this would just cause an
+-- unbound variable error post-extraction.
+--
+-- In order to have a more robust strategy without excessive maintenance burden, we would require output from
+-- GHC's renamer phase, preferably in-tree.
+--
+-- Some known weaknesses:
+-- TODO Some subtle name shadowing issues in the extracted expression. Hard to fix without more GHC help.
+--      In this case, bar is actually a free variable, but this function will find it not to be free.
+-- TODO Record `{..}` pattern matching syntax; we can find the fields in the matching record to fix this. See
+--      hls-explicit-refcord-fields-plugin
+findFreeVarsPostExtract :: (Monad m) => SrcSpan -> LHsExpr GhcPs -> ParsedSource -> TransformT m [RdrName]
+findFreeVarsPostExtract extractSpan extractExpr parsedSource = do
+      -- Find the variables that are bound in this declaration. Not finding the surrounding decl is a bug.
+      -- TODO return error when we cannot find the containing decl
+      (fromMaybe [] -> boundVarsInWholeDecl) <- querySmallestDeclWithM (pure . (extractSpan `isSubspanOf`)) (pure . boundVarsQ) parsedSource
+      let boundVarsInExtractedExpr = boundVarsQ extractExpr
+      let usedVarsInExtractedExpr = usedVarsQ extractExpr
+      let varsThatScopeOverExtractedExpr =
+            Set.fromList boundVarsInWholeDecl `Set.difference` Set.fromList boundVarsInExtractedExpr
+      -- We use intersection, which implicitly assumes that all non-bound variables in the surrounding scope are
+      -- imports. This is where problems with record field wildcards arise.
+      let postExtractFreeVars = varsThatScopeOverExtractedExpr `Set.intersection` Set.fromList usedVarsInExtractedExpr
+      let argsList = Set.toList postExtractFreeVars
+      pure argsList
+
+-- | From a function name and list of arguments, generate a new function with the given LHsExpr as the rhs.
+generateNewDecl :: Monad m =>  LIdP GhcPs -> [RdrName] -> LHsExpr GhcPs -> TransformT m (HsDecl GhcPs)
+generateNewDecl name args expr = do
+  sp1 <- uniqueSrcSpanT
+  let rhs = L generatedSrcSpan $ GRHS (epAnn generatedSrcSpan $ GrhsAnn (Just d1) (AddEpAnn AnnEqual d1)) [] expr
+      grhss = GRHSs emptyComments [rhs] (EmptyLocalBinds noExtField)
+      match = Match mempty (FunRhs name Prefix NoSrcStrict) ((\ arg -> L (noAnnSrcSpanDP generatedSrcSpan $ SameLine 1) (VarPat noExtField (noLocA arg))) <$> args) grhss
+      lmatch = L (noAnnSrcSpanDP generatedSrcSpan $ SameLine 0) match
+      mg = MG noExtField (L (noAnnSrcSpanDP sp1 $ SameLine 0) [lmatch]) FromSource
+      funbind = FunBind noExtField name mg []
+  pure $ ValD noExtField funbind
+
+-- | Returns True if two SrcSpan occupy the same text region (even if they have different file information)
+isSameSrcSpanModuloFile :: SrcSpan -> SrcSpan -> Bool
+isSameSrcSpanModuloFile span1 span2 = span1 `isSubspanOf` span2 && span2 `isSubspanOf` span1
 
 fromLspList :: List a -> [a]
 fromLspList (List a) = a
@@ -236,15 +284,3 @@ textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCo
       GT -> ""
     where
       linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
-
--- | From a function name and list of arguments, generate a new function with the given LHsExpr as the rhs.
-generateNewDecl :: Monad m =>  LIdP GhcPs -> [RdrName] -> LHsExpr GhcPs -> TransformT m (HsDecl GhcPs)
-generateNewDecl name args expr = do
-  sp1 <- uniqueSrcSpanT
-  let rhs = L generatedSrcSpan $ GRHS (epAnn generatedSrcSpan $ GrhsAnn (Just d1) (AddEpAnn AnnEqual d1)) [] expr
-      grhss = GRHSs emptyComments [rhs] (EmptyLocalBinds noExtField)
-      match = Match mempty (FunRhs name Prefix NoSrcStrict) ((\ arg -> L (noAnnSrcSpanDP generatedSrcSpan $ SameLine 1) (VarPat noExtField (noLocA arg))) <$> args) grhss
-      lmatch = L (noAnnSrcSpanDP generatedSrcSpan $ SameLine 0) match
-      mg = MG noExtField (L (noAnnSrcSpanDP sp1 $ SameLine 0) [lmatch]) FromSource
-      funbind = FunBind noExtField name mg []
-  pure $ ValD noExtField funbind
