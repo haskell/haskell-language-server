@@ -2,38 +2,45 @@
 module Development.IDE.Plugin.Plugins.AddArgument (plugin) where
 
 #if !MIN_VERSION_ghc(9,2,1)
-import qualified Data.Text as T
+import qualified Data.Text                                 as T
 import           Language.LSP.Types
+#else
+import           Control.Monad                             (join)
+import           Control.Monad.Except                      (lift)
+import           Data.Bifunctor                            (Bifunctor (..))
+import           Data.Either.Extra                         (maybeToEither)
+import qualified Data.Text                                 as T
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.ExactPrint     (exactPrint,
+                                                            makeDeltaAst)
+import           Development.IDE.GHC.Error                 (spanContainsRange)
+import           Development.IDE.GHC.ExactPrint            (genAnchor1,
+                                                            modifyMgMatchesT',
+                                                            modifySigWithM,
+                                                            modifySmallestDeclWithM)
+import           Development.IDE.Plugin.Plugins.Diagnostic
+import           GHC                                       (EpAnn (..),
+                                                            SrcSpanAnn' (SrcSpanAnn),
+                                                            SrcSpanAnnA,
+                                                            SrcSpanAnnN,
+                                                            TrailingAnn (..),
+                                                            emptyComments,
+                                                            noAnn)
+import           GHC.Hs                                    (IsUnicodeSyntax (..))
+import           GHC.Types.SrcLoc                          (generatedSrcSpan)
+import           Ide.PluginUtils                           (makeDiffTextEdit,
+                                                            responseError)
+import           Language.Haskell.GHC.ExactPrint           (TransformT,
+                                                            noAnnSrcSpanDP1,
+                                                            runTransformT)
+import           Language.Haskell.GHC.ExactPrint.Transform (d1)
+import           Language.LSP.Types
+#endif
 
+#if !MIN_VERSION_ghc(9,2,1)
 plugin :: [(T.Text, [TextEdit])]
 plugin = []
 #else
-import           Data.Either.Extra                                 (maybeToEither)
-import           GHC.Types.SrcLoc                                  (generatedSrcSpan)
-import           Language.Haskell.GHC.ExactPrint                   (noAnnSrcSpanDP1,
-                                                                    runTransformT, TransformT)
-import           Control.Monad.Except                              (lift)
-import           GHC                                               (EpAnn (..),
-                                                                    SrcSpanAnn' (SrcSpanAnn),
-                                                                    SrcSpanAnnA,
-                                                                    SrcSpanAnnN,
-                                                                    TrailingAnn (..),
-                                                                    emptyComments,
-                                                                    noAnn)
-import           GHC.Hs                                            (IsUnicodeSyntax (..))
-import           Language.Haskell.GHC.ExactPrint.Transform         (d1)
-import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error ( spanContainsRange )
-import           Language.LSP.Types
-import qualified Data.Text as T
-import           Development.IDE.GHC.ExactPrint (modifyMgMatchesT', modifySigWithM, modifySmallestDeclWithM, genAnchor1)
-import           Ide.PluginUtils (responseError, makeDiffTextEdit)
-import           Control.Monad (join)
-import           Development.IDE.GHC.Compat.ExactPrint (makeDeltaAst)
-import           Development.IDE.GHC.Compat.ExactPrint (exactPrint)
-import           Data.Bifunctor (Bifunctor(..))
-import           Development.IDE.Plugin.Plugins.Diagnostic
-
 -- When GHC tells us that a variable is not bound, it will tell us either:
 --  - there is an unbound variable with a given type
 --  - there is an unbound variable (GHC provides no type suggestion)
