@@ -1,0 +1,3 @@
+cradle:
+  bios:
+    shell: "cat flags.txt > $HIE_BIOS_OUTPUT"

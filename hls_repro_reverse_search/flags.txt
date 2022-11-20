@@ -1,0 +1,6 @@
+-idirA
+-idirB
+dirA/A.hs
+dirB/B.hs
+C.hs
+D.hs
