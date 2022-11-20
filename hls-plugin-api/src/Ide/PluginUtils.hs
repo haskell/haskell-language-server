@@ -184,7 +184,7 @@ getClientConfig = getConfig
 -- | Returns the current plugin configuration. It is not wise to permanently
 -- cache the returned value of this function, as clients can change their
 -- configuration at runtime.
-getPluginConfig :: MonadLsp Config m => PluginId -> m PluginConfig
+getPluginConfig :: MonadLsp Config m => PluginDescriptor c -> m PluginConfig
 getPluginConfig plugin = do
     config <- getClientConfig
     return $ configForPlugin config plugin
@@ -195,7 +195,7 @@ getPluginConfig plugin = do
 usePropertyLsp ::
   (HasProperty s k t r, MonadLsp Config m) =>
   KeyNameProxy s ->
-  PluginId ->
+  PluginDescriptor c ->
   Properties r ->
   m (ToHsType t)
 usePropertyLsp kn pId p = do

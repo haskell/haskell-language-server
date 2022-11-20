@@ -144,7 +144,7 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                useProperty)
 import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
-                                                               PluginId)
+                                                               PluginId, PluginDescriptor (pluginId), IdePlugins (IdePlugins))
 import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
 import System.Info.Extra (isWindows)
@@ -1057,18 +1057,6 @@ getClientSettingsRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake 
   settings <- clientSettings <$> getIdeConfiguration
   return (LBS.toStrict $ B.encode $ hash settings, settings)
 
--- | Returns the client configuration stored in the IdeState.
--- You can use this function to access it from shake Rules
-getClientConfigAction :: Action Config
-getClientConfigAction = do
-  lspEnv <- lspEnv <$> getShakeExtras
-  currentConfig <- (`LSP.runLspT` LSP.getConfig) `traverse` lspEnv
-  let defValue = fromMaybe (defConfig mempty) currentConfig
-  mbVal <- unhashed <$> useNoFile_ GetClientSettings
-  case A.parse (parseConfig defValue) <$> mbVal of
-    Just (Success c) -> return c
-    _                -> return defValue
-
 usePropertyAction ::
   (HasProperty s k t r) =>
   KeyNameProxy s ->
@@ -1076,8 +1064,7 @@ usePropertyAction ::
   Properties r ->
   Action (ToHsType t)
 usePropertyAction kn plId p = do
-  config <- getClientConfigAction
-  let pluginConfig = configForPlugin config plId
+  pluginConfig <- getPluginConfigAction plId
   pure $ useProperty kn p $ plcConfig pluginConfig
 
 -- ---------------------------------------------------------------------

@@ -6,7 +6,7 @@ import           Control.Lens            hiding ((.=))
 import           Data.Aeson              (object, (.=))
 import           Data.Foldable           (find)
 import qualified Data.Text               as T
-import           Ide.Plugin.Config       (defConfig, maxCompletions)
+import           Ide.Plugin.Config       (maxCompletions)
 import           Language.LSP.Types.Lens hiding (applyEdit)
 import           Test.Hls
 import           Test.Hls.Command
@@ -146,7 +146,7 @@ tests = testGroup "completions" [
          doc <- openDoc "Completion.hs" "haskell"
 
          compls <- getCompletions doc (Position 5 7)
-         liftIO $ length compls @?= maxCompletions (defConfig mempty)
+         liftIO $ length compls @?= maxCompletions def
 
      , testCase "import function completions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "FunctionCompletions.hs" "haskell"

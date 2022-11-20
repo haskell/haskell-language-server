@@ -32,7 +32,6 @@ import           Control.Lens                                 (_1, _3, ix, (%~),
 import           Control.Monad                                (guard, join,
                                                                void, when)
 import           Control.Monad.IO.Class                       (MonadIO (liftIO))
-import           Control.Monad.Trans                          (lift)
 import           Control.Monad.Trans.Except                   (ExceptT (..))
 import           Data.Aeson                                   (toJSON)
 import           Data.Char                                    (isSpace)
@@ -102,7 +101,6 @@ import qualified GHC.LanguageExtensions.Type                  as LangExt (Extens
 
 import           Development.IDE.Core.FileStore               (setSomethingModified)
 import           Development.IDE.Types.Shake                  (toKey)
-import           Ide.Plugin.Config                            (Config)
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
 #endif
@@ -320,7 +318,7 @@ runEvalCmd plId st EvalParams{..} =
                         -- Evaluation takes place 'inside' the module
                         setContext [Compat.IIModule modName]
                         Right <$> getSession
-            evalCfg <- lift $ getEvalConfig plId
+            evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId
 
             -- Get linkables for all modules below us
             -- This can be optimised to only get the linkables for the symbols depended on by

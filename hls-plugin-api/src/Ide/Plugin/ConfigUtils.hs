@@ -9,6 +9,7 @@ import           Control.Lens          (at, ix, (&), (?~))
 import qualified Data.Aeson            as A
 import           Data.Aeson.Lens       (_Object)
 import qualified Data.Aeson.Types      as A
+import           Data.Default
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
 import           Data.List.Extra       (nubOrd)
@@ -26,13 +27,13 @@ import           Language.LSP.Types
 
 -- | Generates a default 'Config', but remains only effective items
 pluginsToDefaultConfig :: IdePlugins a -> A.Value
-pluginsToDefaultConfig plugins@IdePlugins {..} =
+pluginsToDefaultConfig IdePlugins {..} =
   -- Use 'ix' to look at all the "haskell" keys in the outer value (since we're not
   -- setting it if missing), then we use '_Object' and 'at' to get at the "plugin" key
   -- and actually set it.
   A.toJSON defaultConfig & ix "haskell" . _Object . at "plugin" ?~ elems
   where
-    defaultConfig@Config {} = defConfigForPlugins plugins
+    defaultConfig@Config {} = def
     elems = A.object $ mconcat $ singlePlugin <$> ipMap
     -- Splice genericDefaultConfig and dedicatedDefaultConfig
     -- Example:

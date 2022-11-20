@@ -11,7 +11,6 @@ import           Data.Aeson
 import           Data.Hashable
 import qualified Data.HashMap.Strict     as HM
 import qualified Data.Map                as Map
-import           Data.Text               (Text)
 import qualified Data.Text               as T
 import           Data.Typeable           (Typeable)
 import           Development.IDE         (RuleResult, action, define,
@@ -87,7 +86,7 @@ genericConfigTests = testGroup "generic plugin config"
     ,   testCase "custom defaults and non plugin user config" $ runConfigSession "diagnostics" $ do
             _doc <- createDoc "Foo.hs" "haskell" "module Foo where\nfoo = False"
             -- test that the user config doesn't accidentally override the initial config
-            sendConfigurationChanged $ toJSON ((defConfig mempty) {formattingProvider = "foo"})
+            sendConfigurationChanged $ toJSON (def {formattingProvider = "foo"})
             -- getting only the expected diagnostics means the plugin wasn't enabled
             expectDiagnostics standardDiagnostics
     ]
@@ -118,8 +117,8 @@ genericConfigTests = testGroup "generic plugin config"
             configInitialGenericConfig = def{plcGlobalOn = False, plcDiagnosticsOn = False}
         }
         changeConfig :: PluginId -> PluginConfig -> Config
-        changeConfig (PluginId plugin) conf =
-            (defConfig mempty) {plugins = Map.fromList [(plugin, conf)]}
+        changeConfig plugin conf =
+            def{plugins = Map.fromList [(plugin, conf)]}
 
 
 data GetTestDiagnostics = GetTestDiagnostics

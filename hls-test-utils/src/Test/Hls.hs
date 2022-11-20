@@ -73,8 +73,7 @@ import           GHC.IO.Handle
 import           GHC.Stack                       (emptyCallStack)
 import           Ide.Plugin.Config               (Config, PluginConfig,
                                                   cabalFormattingProvider,
-                                                  formattingProvider,
-                                                  plugins)
+                                                  formattingProvider, plugins)
 import           Ide.Types
 import           Language.LSP.Test
 import           Language.LSP.Types              hiding
@@ -135,15 +134,15 @@ goldenWithHaskellDoc plugin title testDataDir path desc ext act =
 
 
 runSessionWithServer :: PluginDescriptor IdeState -> FilePath -> Session a -> IO a
-runSessionWithServer plugin = runSessionWithServer' [plugin] (defConfigForPlugins $ IdePlugins [plugin]) def fullCaps
+runSessionWithServer plugin = runSessionWithServer' [plugin] def def fullCaps
 
 runSessionWithServerFormatter :: PluginDescriptor IdeState -> String -> PluginConfig -> FilePath -> Session a -> IO a
 runSessionWithServerFormatter plugin formatter conf =
   runSessionWithServer'
     [plugin]
-    (defConfigForPlugins $ IdePlugins [plugin])
+    def
       { formattingProvider = T.pack formatter
-      , plugins = M.singleton (T.pack formatter) conf
+      , plugins = M.singleton (PluginId $ T.pack formatter) conf
       }
     def
     fullCaps
@@ -194,9 +193,9 @@ runSessionWithCabalServerFormatter :: PluginDescriptor IdeState -> String -> Plu
 runSessionWithCabalServerFormatter plugin formatter conf =
   runSessionWithServer'
     [plugin]
-    (defConfigForPlugins $ IdePlugins [plugin])
+    def
       { cabalFormattingProvider = T.pack formatter
-      , plugins = M.singleton (T.pack formatter) conf
+      , plugins = M.singleton (PluginId $ T.pack formatter) conf
       }
     def
     fullCaps

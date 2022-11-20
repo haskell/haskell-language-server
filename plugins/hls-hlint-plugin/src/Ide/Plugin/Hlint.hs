@@ -109,7 +109,8 @@ import           Ide.Plugin.Config                                  hiding
                                                                     (Config)
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
-import           Ide.Types
+import           Ide.Types                                          hiding
+                                                                    (Config)
 import           Language.Haskell.HLint                             as Hlint hiding
                                                                              (Error)
 import           Language.LSP.Server                                (ProgressCancellable (Cancellable),
@@ -199,8 +200,8 @@ type instance RuleResult GetHlintDiagnostics = ()
 rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plugin = do
   define (cmapWithPrio LogShake recorder) $ \GetHlintDiagnostics file -> do
-    config <- getClientConfigAction
-    let hlintOn = pluginEnabledConfig plcDiagnosticsOn plugin config
+    config <- getPluginConfigAction plugin
+    let hlintOn = pluginEnabledConfig plcDiagnosticsOn config
     ideas <- if hlintOn then getIdeas recorder file else return (Right [])
     return (diagnostics file ideas, Just ())
 
