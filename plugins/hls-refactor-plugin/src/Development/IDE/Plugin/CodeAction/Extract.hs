@@ -1,55 +1,43 @@
-{-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE GADTs     #-}
 
 module Development.IDE.Plugin.CodeAction.Extract (textInRange, suggestExtractFunction, fromLspList) where
 
-import           Control.Applicative                        ((<|>))
-import           Data.Data                                  (Data)
-import           Data.Foldable                              (foldl')
-import           Data.Function
-import           Data.Generics                              (Typeable,
-                                                             everywhere, mkT)
+import           Control.Applicative                       ((<|>))
+import           Data.Data                                 (Data)
+import           Data.Foldable                             (foldl')
+import           Data.Generics                             (everywhere, mkT)
 import           Data.Maybe
-import           Data.Monoid                                (Sum (..))
-import           Data.Set                                   (Set)
-import qualified Data.Set                                   as Set
-import           Data.String                                (fromString)
-import qualified Data.Text                                  as T
-import           Debug.Trace
+import           Data.Monoid                               (Sum (..))
+import qualified Data.Set                                  as Set
+import           Data.String                               (fromString)
+import qualified Data.Text                                 as T
 import           Development.IDE.GHC.Compat
-import qualified Development.IDE.GHC.Compat.Core            as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.Error                  (positionToRealSrcLoc,
-                                                             rangeToSrcSpan)
+import           Development.IDE.GHC.Error                 (rangeToSrcSpan)
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Types.Location
-import           Generics.SYB                               (GenericQ,
-                                                             everything,
-                                                             everythingBut,
-                                                             extQ)
-import           Generics.SYB.Aliases                       (mkQ)
-import           GHC                                        (AddEpAnn (AddEpAnn),
-                                                             Anchor (..),
-                                                             AnchorOperation (..),
-                                                             DeltaPos (..),
-                                                             EpAnn (..),
-                                                             LocatedN,
-                                                             NoEpAnns (..),
-                                                             SrcSpanAnn' (SrcSpanAnn),
-                                                             emptyComments,
-                                                             realSrcSpan)
-import           GHC.Types.SrcLoc                           (generatedSrcSpan)
-import           Ide.PluginUtils                            (makeDiffTextEdit)
-import           Language.Haskell.GHC.ExactPrint            (noAnnSrcSpanDP,
-                                                             runTransform,
-                                                             runTransformT,
-                                                             uniqueSrcSpanT)
-import           Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
-import           Language.Haskell.GHC.ExactPrint.Transform  (d1)
-import           Language.LSP.Types                         (List (..), UInt)
+import           Generics.SYB                              (GenericQ,
+                                                            everything,
+                                                            everythingBut, extQ)
+import           Generics.SYB.Aliases                      (mkQ)
+import           GHC                                       (AddEpAnn (AddEpAnn),
+                                                            Anchor (..),
+                                                            AnchorOperation (..),
+                                                            DeltaPos (..),
+                                                            EpAnn (..),
+                                                            NoEpAnns (..),
+                                                            SrcSpanAnn' (SrcSpanAnn),
+                                                            emptyComments,
+                                                            realSrcSpan)
+import           GHC.Types.SrcLoc                          (generatedSrcSpan)
+import           Ide.PluginUtils                           (makeDiffTextEdit)
+import           Language.Haskell.GHC.ExactPrint           (noAnnSrcSpanDP,
+                                                            runTransform,
+                                                            uniqueSrcSpanT)
+import           Language.Haskell.GHC.ExactPrint.Transform (d1)
+import           Language.LSP.Types                        (List (..), UInt)
 import           Language.LSP.Types.Capabilities
-import Control.Monad.Identity (Identity(..))
 
 -- | Suggest a code action for extracting the expression indicated by the user's current Range selection.
 --
@@ -96,6 +84,42 @@ suggestExtractFunction srcText (Annotated parsedSource _) range =
     newDefName = noLocA $ mkRdrUnqual $ mkVarOcc $ T.unpack "newDefinition"
     execTransform = (\(a,_,_) -> a) . runTransform
 suggestExtractFunction _ _ _ = [] -- Could not find Annotated ParsedSource
+
+-- | This function represents a simple guess of which variables are going to be out of scope after the expression
+-- is extracted.  This strategy will probably work for >90% cases.
+--
+-- The strategy is that we assume that all variables bound in the extracted expr scope over any occurrence of said
+-- variable in the same extracted expr. Assuming this, we can take the intersection of the variables bound in the
+-- expression's scope, and those bound in the surrounding context, and thereby find the newly-free variables
+-- post-extraction.
+--
+-- A simple counter-example to this strategy would occur by extracting the rhs of `foo`:
+--    foo bar = let tmp = bar; bar = 1 in bar
+-- Where bar is used in the rhs of, but is also bound in the same expression. Thankfully this would just cause an
+-- unbound variable error post-extraction.
+--
+-- In order to have a more robust strategy without excessive maintenance burden, we would require output from
+-- GHC's renamer phase, preferably in-tree.
+--
+-- Some known weaknesses:
+-- TODO Some subtle name shadowing issues in the extracted expression. Hard to fix without more GHC help.
+--      In this case, bar is actually a free variable, but this function will find it not to be free.
+-- TODO Record `{..}` pattern matching syntax; we can find the fields in the matching record to fix this. See
+--      hls-explicit-refcord-fields-plugin
+findFreeVarsPostExtract :: (Monad m) => SrcSpan -> LHsExpr GhcPs -> ParsedSource -> TransformT m [RdrName]
+findFreeVarsPostExtract extractSpan extractExpr parsedSource = do
+      -- Find the variables that are bound in this declaration. Not finding the surrounding decl is a bug.
+      -- TODO return error when we cannot find the containing decl
+      (fromMaybe [] -> boundVarsInWholeDecl) <- querySmallestDeclWithM (pure . (extractSpan `isSubspanOf`)) (pure . boundVarsQ) parsedSource
+      let boundVarsInExtractedExpr = boundVarsQ extractExpr
+      let usedVarsInExtractedExpr = usedVarsQ extractExpr
+      let varsThatScopeOverExtractedExpr =
+            Set.fromList boundVarsInWholeDecl `Set.difference` Set.fromList boundVarsInExtractedExpr
+      -- We use intersection, which implicitly assumes that all non-bound variables in the surrounding scope are
+      -- imports. This is where problems with record field wildcards arise.
+      let postExtractFreeVars = varsThatScopeOverExtractedExpr `Set.intersection` Set.fromList usedVarsInExtractedExpr
+      let argsList = Set.toList postExtractFreeVars
+      pure argsList
 
 -- | A type-safety-helpful newtype that represents that a Range has had its whitespace padding removed from both sides:
 --
@@ -174,25 +198,20 @@ setAtLeastNewlineDp (L srcSpanAnn decl) = L (mapAnchor (maybe nextLineAnchor set
     nextLine2Dp = MovedAnchor (DifferentLine 2 0)
     nextLineAnchor = generatedAnchor nextLine2Dp
 
-rdrNameQ :: GenericQ [RdrName]
-rdrNameQ =everything (<>) $ mkQ [] $ \case name -> [name]
-
+-- | Find all variable bindings in an AST.
 boundVarsQ :: GenericQ [RdrName]
 boundVarsQ  = everything (<>) $ mkQ []
   (\case
-    -- pat@(VarPat _ var :: Pat GhcPs) -> trace (showAst pat) [unLocA var]
-    pat@(VarPat _ var :: Pat GhcPs) -> [unLocA var]
-    -- e -> trace (showAst e) []
-    e                               -> []
+    (VarPat _ var :: Pat GhcPs) -> [unLocA var]
+    _                           -> []
   )
   `extQ`
   (\case
-    -- (FunBind {fun_id, fun_matches} :: HsBindLR GhcPs GhcPs) -> trace (showAst (fun_matches, boundVarsQ fun_matches)) [unLocA fun_id]
-    (FunBind {fun_id, fun_matches} :: HsBindLR GhcPs GhcPs) -> [unLocA fun_id]
-    PatBind {pat_lhs, pat_rhs}                              -> rdrNameQ pat_lhs -- TODO shadowing
-    VarBind {var_id, var_rhs}                               -> [var_id] -- TODO shadowing
-    PatSynBind {}                                           -> [] -- TODO
-    AbsBinds {}                                             -> [] -- TODO
+    (FunBind {fun_id} :: HsBindLR GhcPs GhcPs) -> [unLocA fun_id]
+    PatBind {pat_lhs}                          -> rdrNameQ pat_lhs -- TODO shadowing
+    VarBind {var_id}                           -> [var_id] -- TODO shadowing
+    PatSynBind {}                              -> [] -- TODO
+    AbsBinds {}                                -> [] -- TODO
     )
   `extQ`
   (\case
@@ -200,53 +219,16 @@ boundVarsQ  = everything (<>) $ mkQ []
     HsIPBinds {}                                       -> [] -- TODO
     EmptyLocalBinds {}                                 -> []
   )
-  -- Can't get this to match?
-  -- `extQ`
-  -- (\case
-  --   (Match {m_pats} :: Match GhcPs (LHsExpr GhcPs)) -> trace (showAst m_pats) rdrNameQ m_pats
-  -- )
+  where
+    rdrNameQ :: GenericQ [RdrName]
+    rdrNameQ =everything (<>) $ mkQ [] $ \case name -> [name]
 
-usedVarsQ :: forall a. Data a => a -> [RdrName]
+-- | Find variable usages bindings in an AST.
+usedVarsQ :: GenericQ [RdrName]
 usedVarsQ  = everything (<>) $ mkQ [] $
   \case
     (HsVar _ var :: HsExpr GhcPs) -> [unLocA var]
     _                             -> []
-
--- | This function represents a simple guess of which variables are going to be out of scope after the expression
--- is extracted.  This strategy will probably work for >90% cases.
---
--- The strategy is that we assume that all variables bound in the extracted expr scope over any occurrence of said
--- variable in the same extracted expr. Assuming this, we can take the intersection of the variables bound in the
--- expression's scope, and those bound in the surrounding context, and thereby find the newly-free variables
--- post-extraction.
---
--- A simple counter-example to this strategy would occur by extracting the rhs of `foo`:
---    foo bar = let tmp = bar; bar = 1 in bar
--- Where bar is used in the rhs of, but is also bound in the same expression. Thankfully this would just cause an
--- unbound variable error post-extraction.
---
--- In order to have a more robust strategy without excessive maintenance burden, we would require output from
--- GHC's renamer phase, preferably in-tree.
---
--- Some known weaknesses:
--- TODO Some subtle name shadowing issues in the extracted expression. Hard to fix without more GHC help.
---      In this case, bar is actually a free variable, but this function will find it not to be free.
--- TODO Record `{..}` pattern matching syntax; we can find the fields in the matching record to fix this. See
---      hls-explicit-refcord-fields-plugin
-findFreeVarsPostExtract :: (Monad m) => SrcSpan -> LHsExpr GhcPs -> ParsedSource -> TransformT m [RdrName]
-findFreeVarsPostExtract extractSpan extractExpr parsedSource = do
-      -- Find the variables that are bound in this declaration. Not finding the surrounding decl is a bug.
-      -- TODO return error when we cannot find the containing decl
-      (fromMaybe [] -> boundVarsInWholeDecl) <- querySmallestDeclWithM (pure . (extractSpan `isSubspanOf`)) (pure . boundVarsQ) parsedSource
-      let boundVarsInExtractedExpr = boundVarsQ extractExpr
-      let usedVarsInExtractedExpr = usedVarsQ extractExpr
-      let varsThatScopeOverExtractedExpr =
-            Set.fromList boundVarsInWholeDecl `Set.difference` Set.fromList boundVarsInExtractedExpr
-      -- We use intersection, which implicitly assumes that all non-bound variables in the surrounding scope are
-      -- imports. This is where problems with record field wildcards arise.
-      let postExtractFreeVars = varsThatScopeOverExtractedExpr `Set.intersection` Set.fromList usedVarsInExtractedExpr
-      let argsList = Set.toList postExtractFreeVars
-      pure argsList
 
 -- | From a function name and list of arguments, generate a new function with the given LHsExpr as the rhs.
 generateNewDecl :: Monad m =>  LIdP GhcPs -> [RdrName] -> LHsExpr GhcPs -> TransformT m (HsDecl GhcPs)
