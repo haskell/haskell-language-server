@@ -50,6 +50,10 @@ module Development.IDE.GHC.ExactPrint
       ExceptStringT (..),
       TransformT,
       Log(..),
+      mapAnchor,
+      generatedAnchor,
+      modifySmallestDeclWithM_,
+      querySmallestDeclWithM,
     )
 where
 
@@ -479,13 +483,45 @@ modifySmallestDeclWithM validSpan f a = do
             False -> first (DL.singleton ldecl <>) <$> modifyMatchingDecl rest
   modifyDeclsT' (fmap (first DL.toList) . modifyMatchingDecl) a
 
+-- | Just like modifySmallestDeclWithM but just find some information about the declaration
+querySmallestDeclWithM ::
+  forall a m r.
+  (HasDecls a, Monad m) =>
+  (SrcSpan -> m Bool) ->
+  (LHsDecl GhcPs -> TransformT m r) ->
+  a ->
+  TransformT m (Maybe r)
+querySmallestDeclWithM validSpan f a = do
+  (_, r) <- modifySmallestDeclWithM
+    validSpan
+    (\ decl -> do
+      r <- f decl
+      pure ([decl], r))
+    a
+  pure r
+
+-- | Just like modifySmallestDeclWithM but with no extra result
+modifySmallestDeclWithM_ ::
+  forall a m.
+  (HasDecls a, Monad m) =>
+  (SrcSpan -> m Bool) ->
+  (LHsDecl GhcPs -> TransformT m [LHsDecl GhcPs]) ->
+  a ->
+  TransformT m a
+modifySmallestDeclWithM_ validSpan f a = fst <$> modifySmallestDeclWithM validSpan (fmap (, ()) . f) a
+
 generatedAnchor :: AnchorOperation -> Anchor
 generatedAnchor anchorOp = GHC.Anchor (GHC.realSrcSpan generatedSrcSpan) anchorOp
 
-setAnchor :: Anchor -> SrcSpanAnnN -> SrcSpanAnnN
+setAnchor :: Anchor -> SrcSpanAnn' (EpAnn ann) -> SrcSpanAnn' (EpAnn ann)
 setAnchor anc (SrcSpanAnn (EpAnn _ nameAnn comments) span) =
   SrcSpanAnn (EpAnn anc nameAnn comments) span
 setAnchor _ spanAnnN = spanAnnN
+
+mapAnchor :: Monoid ann => (Maybe Anchor -> Anchor) -> SrcSpanAnn' (EpAnn ann) -> SrcSpanAnn' (EpAnn ann)
+mapAnchor f (SrcSpanAnn (EpAnn anc nameAnn comments) span) =
+  SrcSpanAnn (EpAnn (f $ Just anc) nameAnn comments) span
+mapAnchor f (SrcSpanAnn EpAnnNotUsed span) = SrcSpanAnn (EpAnn (f Nothing) mempty emptyComments) span
 
 removeTrailingAnns :: SrcSpanAnnN -> SrcSpanAnnN
 removeTrailingAnns (SrcSpanAnn (EpAnn anc nameAnn comments) span) =

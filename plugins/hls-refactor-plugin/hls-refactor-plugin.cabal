@@ -29,6 +29,7 @@ library
   exposed-modules:  Development.IDE.GHC.ExactPrint
                     Development.IDE.GHC.Compat.ExactPrint
                     Development.IDE.Plugin.CodeAction
+                    Development.IDE.Plugin.CodeAction.Extract
                     Development.IDE.Plugin.CodeAction.Util
                     Development.IDE.GHC.Dump
   other-modules:    Development.IDE.Plugin.CodeAction.Args
@@ -97,6 +98,7 @@ test-suite tests
   default-language: Haskell2010
   hs-source-dirs:   test
   main-is:          Main.hs
+  other-modules:    Extract
   ghc-options:      -O0 -threaded -rtsopts -with-rtsopts=-N -Wunused-imports
   build-depends:
     , base

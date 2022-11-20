@@ -44,7 +44,7 @@ import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           GHC
-import           Language.LSP.Types                (isSubrangeOf)
+import Language.LSP.Types (isSubrangeOf)
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
@@ -112,16 +112,22 @@ rangeToRealSrcSpan nfp =
         <$> positionToRealSrcLoc nfp . _start
         <*> positionToRealSrcLoc nfp . _end
 
+#if !MIN_VERSION_ghc(9,2,1)
 positionToRealSrcLoc :: NormalizedFilePath -> Position -> RealSrcLoc
 positionToRealSrcLoc nfp (Position l c)=
     Compat.mkRealSrcLoc (fromString $ fromNormalizedFilePath nfp) (fromIntegral $ l + 1) (fromIntegral $ c + 1)
+#else
+positionToRealSrcLoc :: NormalizedFilePath -> Position -> RealSrcLoc
+positionToRealSrcLoc nfp (Position l c)=
+    Compat.mkRealSrcLoc (fromString $ fromNormalizedFilePath nfp) (fromIntegral $ l + 1) (fromIntegral c)
+#endif
 
 isInsideSrcSpan :: Position -> SrcSpan -> Bool
 p `isInsideSrcSpan` r = case srcSpanToRange r of
   Just (Range sp ep) -> sp <= p && p <= ep
   _                  -> False
 
--- Returns Nothing if the SrcSpan does not represent a valid range
+-- | Returns Nothing if the SrcSpan does not represent a valid range
 spanContainsRange :: SrcSpan -> Range -> Maybe Bool
 spanContainsRange srcSpan range = (range `isSubrangeOf`) <$> srcSpanToRange srcSpan
 

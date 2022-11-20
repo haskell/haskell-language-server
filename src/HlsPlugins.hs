@@ -227,6 +227,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "ghcide-code-actions-bindings" in Refactor.bindingsPluginDescriptor (pluginRecorder pId) pId :
       let pId = "ghcide-code-actions-fill-holes" in Refactor.fillHolePluginDescriptor (pluginRecorder pId) pId :
       let pId = "ghcide-extend-import-action" in Refactor.extendImportPluginDescriptor (pluginRecorder pId) pId :
+      let pId = "ghcide-code-actions-extract" in Refactor.extractCodePluginDescriptor (pluginRecorder pId) pId :
 #endif
       GhcIde.descriptors (pluginRecorder "ghcide")
 #if explicitFixity

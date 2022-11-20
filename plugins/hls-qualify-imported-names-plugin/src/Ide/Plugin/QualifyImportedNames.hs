@@ -75,6 +75,7 @@ import           Language.LSP.Types                (CodeAction (CodeAction, _com
                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                     type (|?) (InR),
                                                     uriToNormalizedFilePath)
+import Development.IDE (spanContainsRange)
 
 thenCmp :: Ordering -> Ordering -> Ordering
 {-# INLINE thenCmp #-}
