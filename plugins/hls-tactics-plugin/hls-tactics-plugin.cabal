@@ -33,7 +33,7 @@ library
     buildable: False
   else
     buildable: True
-  hs-source-dirs:     src
+  hs-source-dirs:     old/src
   exposed-modules:
     Ide.Plugin.Tactic
     Refinery.Future
@@ -158,7 +158,7 @@ test-suite tests
     UnificationSpec
     Utils
 
-  hs-source-dirs:     test
+  hs-source-dirs:     old/test
   ghc-options:
     -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
 
