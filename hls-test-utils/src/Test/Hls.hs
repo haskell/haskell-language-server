@@ -16,6 +16,7 @@ module Test.Hls
     defaultTestRunner,
     goldenGitDiff,
     goldenWithHaskellDoc,
+    goldenWithCabalDoc,
     goldenWithHaskellDocFormatter,
     goldenWithCabalDocFormatter,
     def,
@@ -124,12 +125,35 @@ goldenWithHaskellDoc
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithHaskellDoc plugin title testDataDir path desc ext act =
+goldenWithHaskellDoc = goldenWithDoc "haskell"
+
+goldenWithCabalDoc
+  :: PluginDescriptor IdeState
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithCabalDoc = goldenWithDoc "cabal"
+
+goldenWithDoc
+  :: T.Text
+  -> PluginDescriptor IdeState
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithDoc fileType plugin title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
   $ runSessionWithServer plugin testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
-    doc <- openDoc (path <.> ext) "haskell"
+    doc <- openDoc (path <.> ext) fileType
     void waitForBuildQueue
     act doc
     documentContents doc

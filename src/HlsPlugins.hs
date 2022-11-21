@@ -21,7 +21,9 @@ import qualified Ide.Plugin.QualifyImportedNames   as QualifyImportedNames
 #if hls_callHierarchy
 import qualified Ide.Plugin.CallHierarchy          as CallHierarchy
 #endif
-
+#if hls_cabal
+import qualified Ide.Plugin.Cabal                  as Cabal
+#endif
 #if hls_class
 import qualified Ide.Plugin.Class                  as Class
 #endif
@@ -146,6 +148,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
     pluginRecorder :: forall log. (Pretty log) => PluginId -> Recorder (WithPriority log)
     pluginRecorder pluginId = cmapWithPrio (Log pluginId) recorder
     allPlugins =
+#if hls_cabal
+      let pId = "cabal" in Cabal.descriptor (pluginRecorder pId) pId :
+#endif
 #if hls_pragmas
       Pragmas.descriptor  "pragmas" :
 #endif
