@@ -57,8 +57,8 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: [ "9.4.2"
-             , "9.4.1"
+        ghc: [ "9.4.3"
+             , "9.4.2"
              , "9.2.4"
              , "9.2.3"
              , "9.0.2"
@@ -69,6 +69,9 @@ jobs:
             ]
         include:
            # only test supported ghc major versions
+           - os: ubuntu-latest
+             ghc: '9.4.3'
+             test: true
            - os: ubuntu-latest
              ghc: '9.4.2'
              test: true
