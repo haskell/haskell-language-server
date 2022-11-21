@@ -15,9 +15,9 @@ license-file:       LICENSE
 build-type:         Simple
 extra-source-files:
   README.md
-  test/old/golden/*.cabal
-  test/old/golden/*.hs
-  test/old/golden/*.yaml
+  old/test/golden/*.cabal
+  old/test/golden/*.hs
+  old/test/golden/*.yaml
 
 source-repository head
     type:     git
