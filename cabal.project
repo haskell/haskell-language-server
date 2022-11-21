@@ -50,7 +50,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-10-07T12:19:15Z
+index-state: 2022-11-20T20:19:15Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
