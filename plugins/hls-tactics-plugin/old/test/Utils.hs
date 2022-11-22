@@ -252,7 +252,7 @@ failing _ _ = pure ()
 
 
 tacticPath :: FilePath
-tacticPath = "test/old/golden"
+tacticPath = "old/test/golden"
 
 
 executeCommandWithResp :: Command -> Session (ResponseMessage 'WorkspaceExecuteCommand)
