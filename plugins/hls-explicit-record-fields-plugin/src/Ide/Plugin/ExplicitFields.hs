@@ -142,7 +142,6 @@ collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
       recs = concat $ maybeToList (getRecords <$> tmr)
   logWith recorder Debug (LogCollectedRecords recs)
   let renderedRecs = traverse renderRecordInfo recs
-      -- All spans are supposed to be `RealSrcSpan`, hence the use of `fromJust`.
       recMap = RangeMap.fromList (realSrcSpanToRange . renderedSrcSpan) <$> renderedRecs
   logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
   pure ([], CRR <$> recMap <*> exts)
