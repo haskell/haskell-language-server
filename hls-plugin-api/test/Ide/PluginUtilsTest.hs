@@ -43,7 +43,10 @@ unescapeTest = testGroup "unescape"
     ]
 
 genRange :: Gen Range
-genRange = do
+genRange = oneof [ genRangeInline, genRangeMultiline ]
+
+genRangeInline :: Gen Range
+genRangeInline = do
   x1 <- genPosition
   delta <- genRangeLength
   let x2 = x1 { _character = _character x1 + delta }
@@ -51,6 +54,19 @@ genRange = do
   where
     genRangeLength :: Gen UInt
     genRangeLength = fromInteger <$> chooseInteger (5, 50)
+
+genRangeMultiline :: Gen Range
+genRangeMultiline = do
+  x1 <- genPosition
+  let heightDelta = 1
+  secondX <- genSecond
+  let x2 = x1 { _line = _line x1 + heightDelta
+              , _character = secondX
+              }
+  pure $ Range x1 x2
+  where
+    genSecond :: Gen UInt
+    genSecond = fromInteger <$> chooseInteger (0, 10)
 
 genPosition :: Gen Position
 genPosition = Position
