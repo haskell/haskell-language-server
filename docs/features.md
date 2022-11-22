@@ -44,6 +44,12 @@ Provided by: `hls-stan-plugin`
 
 Provides Stan hints as diagnostics.
 
+### Cabal parse errors and warnings
+
+Provided by: `hls-cabal-plugin`
+
+Provides errors and warnings from Cabal as diagnostics
+
 ## Hovers
 
 Provided by: `ghcide`
@@ -307,6 +313,14 @@ Code action kind: `refactor.rewrite`
 Expand record wildcards, explicitly listing all record fields as field puns.
 
 ![Explicit Wildcard Demo](../plugins/hls-explicit-record-fields-plugin/wildcard.gif)
+
+### Unknown SPDX License suggestion
+
+Provided by: `hls-cabal-plugin`
+
+Code action kind: `quickfix`
+
+Correct common misspelling of SPDX Licenses such as `BSD-3-Clause`.
 
 ## Code lenses
 

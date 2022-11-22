@@ -28,6 +28,7 @@ jobs:
       matrix:
         package: ["hie-compat", "hls-graph", "shake-bench",
                   "hls-plugin-api", "ghcide", "hls-test-utils",
+                  "hls-cabal-plugin",
                   "hls-brittany-plugin", "hls-floskell-plugin", "hls-fourmolu-plugin",
                   "hls-ormolu-plugin", "hls-stylish-haskell-plugin",
                   "hls-class-plugin", "hls-eval-plugin", "hls-explicit-imports-plugin",

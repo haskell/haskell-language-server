@@ -8,6 +8,7 @@ packages:
          ./ghcide/test
          ./hls-plugin-api
          ./hls-test-utils
+         ./plugins/hls-cabal-plugin
          ./plugins/hls-cabal-fmt-plugin
          ./plugins/hls-tactics-plugin
          ./plugins/hls-brittany-plugin
