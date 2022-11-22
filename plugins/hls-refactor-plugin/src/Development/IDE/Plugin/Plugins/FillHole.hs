@@ -20,18 +20,24 @@ suggestFillHole Diagnostic{_range=_range,..}
         ++ map (proposeHoleFit holeName True isInfixHole) refFits
     | otherwise = []
     where
-      extractHoleName = fmap head . flip matchRegexUnifySpaces "Found hole: ([^ ]*)"
+      extractHoleName = fmap (headOrThrow "impossible") . flip matchRegexUnifySpaces "Found hole: ([^ ]*)"
       addBackticks text = "`" <> text <> "`"
       addParens text = "(" <> text <> ")"
       proposeHoleFit holeName parenthise isInfixHole name =
-        let isInfixOperator = T.head name == '('
-            name' = getOperatorNotation isInfixHole isInfixOperator name in
-          ( "replace " <> holeName <> " with " <> name
-          , TextEdit _range (if parenthise then addParens name' else name')
-          )
+        case T.uncons name of
+          Nothing -> error "impossible: empty name provided by ghc"
+          Just (firstChr, _) ->
+            let isInfixOperator = firstChr == '('
+                name' = getOperatorNotation isInfixHole isInfixOperator name in
+              ( "replace " <> holeName <> " with " <> name
+              , TextEdit _range (if parenthise then addParens name' else name')
+              )
       getOperatorNotation True False name                    = addBackticks name
       getOperatorNotation True True name                     = T.drop 1 (T.dropEnd 1 name)
       getOperatorNotation _isInfixHole _isInfixOperator name = name
+      headOrThrow msg = \case
+        [] -> error msg
+        (x:_) -> x
 
 processHoleSuggestions :: [T.Text] -> ([T.Text], [T.Text])
 processHoleSuggestions mm = (holeSuggestions, refSuggestions)
@@ -69,11 +75,14 @@ processHoleSuggestions mm = (holeSuggestions, refSuggestions)
       -- get the text indented under Valid refinement hole fits
       refinementSection <-
         getIndentedGroupsBy (=~ t " *Valid refinement hole fits include") mm
-      -- get the text for each hole fit
-      holeFitLines <- getIndentedGroups (tail refinementSection)
-      let holeFit = T.strip $ T.unwords holeFitLines
-      guard $ not $ holeFit =~ t "Some refinement hole fits suppressed"
-      return holeFit
+      case refinementSection of
+        [] -> error "GHC provided invalid hole fit options"
+        (_:refinementSection) -> do
+          -- get the text for each hole fit
+          holeFitLines <- getIndentedGroups refinementSection
+          let holeFit = T.strip $ T.unwords holeFitLines
+          guard $ not $ holeFit =~ t "Some refinement hole fits suppressed"
+          return holeFit
 
     mapHead f (a:aa) = f a : aa
     mapHead _ []     = []

@@ -33,7 +33,10 @@ extractWildCardTypeSignature msg
     -- Parenthesize type applications, e.g. (Maybe Char).
     isApp           = T.any isSpace sig
     -- Do not add extra parentheses to lists, tuples and already parenthesized types.
-    enclosed        = not (T.null sig) && (T.head sig, T.last sig) `elem` [('(', ')'), ('[', ']')]
+    enclosed        =
+      case T.uncons sig of
+        Nothing -> error "GHC provided invalid type"
+        Just (firstChr, _) -> not (T.null sig) && (firstChr, T.last sig) `elem` [('(', ')'), ('[', ']')]
 
 -- | Detect whether user wrote something like @foo :: _@ or @foo :: (_, Int)@.
 -- The former is considered toplevel case for which the function returns 'True',
