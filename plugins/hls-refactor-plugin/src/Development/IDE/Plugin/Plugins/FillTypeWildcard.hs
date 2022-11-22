@@ -3,9 +3,8 @@ module Development.IDE.Plugin.Plugins.FillTypeWildcard
   ) where
 
 import           Data.Char
-import qualified Data.Text                             as T
-import           Language.LSP.Types                    (Diagnostic (..),
-                                                        TextEdit (TextEdit))
+import qualified Data.Text          as T
+import           Language.LSP.Types (Diagnostic (..), TextEdit (TextEdit))
 
 suggestFillTypeWildcard :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillTypeWildcard Diagnostic{_range=_range,..}

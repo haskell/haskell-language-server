@@ -36,6 +36,9 @@ library
                     Development.IDE.Plugin.CodeAction.PositionIndexed
                     Development.IDE.Plugin.Plugins.AddArgument
                     Development.IDE.Plugin.Plugins.Diagnostic
+                    Development.IDE.Plugin.Plugins.FillHole
+                    Development.IDE.Plugin.Plugins.FillTypeWildcard
+                    Development.IDE.Plugin.Plugins.ImportUtils
   default-extensions:
     BangPatterns
     CPP
