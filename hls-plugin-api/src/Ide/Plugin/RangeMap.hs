@@ -1,4 +1,7 @@
 {-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DeriveFoldable             #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveTraversable          #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -22,7 +25,7 @@ import           Development.IDE.Graph.Classes            (NFData)
 import           Language.LSP.Types                       (Position,
                                                            Range (Range),
                                                            isSubrangeOf)
-# ifdef USE_FINGERTREE
+#ifdef USE_FINGERTREE
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IM
 #endif
 
@@ -32,10 +35,13 @@ newtype RangeMap a = RangeMap
   { unRangeMap :: IM.IntervalMap Position a
     -- ^ 'IM.Interval' of 'Position' corresponds to a 'Range'
   }
-  deriving newtype (NFData)
+  deriving newtype (NFData, Semigroup, Monoid)
+  deriving stock (Functor, Foldable, Traversable)
 #else
 newtype RangeMap a = RangeMap
   { unRangeMap :: [(Range, a)] }
+  deriving newtype (NFData, Semigroup, Monoid)
+  deriving stock (Functor, Foldable, Traversable)
 #endif
 
 -- | Construct a 'RangeMap' from a 'Range' accessor and a list of values.
