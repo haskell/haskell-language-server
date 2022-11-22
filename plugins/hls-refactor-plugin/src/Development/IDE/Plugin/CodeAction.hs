@@ -58,6 +58,9 @@ import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.Completions.Types
 import qualified Development.IDE.Plugin.Plugins.AddArgument
 import           Development.IDE.Plugin.Plugins.Diagnostic
+import           Development.IDE.Plugin.Plugins.FillHole           (suggestFillHole)
+import           Development.IDE.Plugin.Plugins.FillTypeWildcard   (suggestFillTypeWildcard)
+import           Development.IDE.Plugin.Plugins.ImportUtils
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
@@ -90,12 +93,8 @@ import           Language.LSP.Types                                (ApplyWorkspa
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import qualified Text.Fuzzy.Parallel                               as TFP
-import           Text.Regex.TDFA                                   (mrAfter,
-                                                                    (=~), (=~~))
+import           Text.Regex.TDFA                                   ((=~), (=~~))
 #if MIN_VERSION_ghc(9,2,0)
-import           Development.IDE.Plugin.Plugins.FillHole           (suggestFillHole)
-import           Development.IDE.Plugin.Plugins.FillTypeWildcard   (suggestFillTypeWildcard)
-import           Development.IDE.Plugin.Plugins.ImportUtils
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
