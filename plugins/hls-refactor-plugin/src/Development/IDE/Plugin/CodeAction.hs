@@ -58,6 +58,9 @@ import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.Completions.Types
 import qualified Development.IDE.Plugin.Plugins.AddArgument
 import           Development.IDE.Plugin.Plugins.Diagnostic
+import           Development.IDE.Plugin.Plugins.FillHole           (suggestFillHole)
+import           Development.IDE.Plugin.Plugins.FillTypeWildcard   (suggestFillTypeWildcard)
+import           Development.IDE.Plugin.Plugins.ImportUtils
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
@@ -72,7 +75,7 @@ import qualified Language.LSP.Server                               as LSP
 import           Language.LSP.Types                                (ApplyWorkspaceEditParams (..),
                                                                     CodeAction (..),
                                                                     CodeActionContext (CodeActionContext, _diagnostics),
-                                                                    CodeActionKind (CodeActionQuickFix, CodeActionUnknown),
+                                                                    CodeActionKind (CodeActionQuickFix),
                                                                     CodeActionParams (CodeActionParams),
                                                                     Command,
                                                                     Diagnostic (..),
@@ -90,8 +93,7 @@ import           Language.LSP.Types                                (ApplyWorkspa
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import qualified Text.Fuzzy.Parallel                               as TFP
-import           Text.Regex.TDFA                                   (mrAfter,
-                                                                    (=~), (=~~))
+import           Text.Regex.TDFA                                   ((=~), (=~~))
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
@@ -915,17 +917,6 @@ newDefinitionAction IdeOptions {..} parsedModule Range {_start} name typ
     ParsedModule {pm_parsed_source = L _ HsModule {hsmodDecls}} = parsedModule
 
 
-suggestFillTypeWildcard :: Diagnostic -> [(T.Text, TextEdit)]
-suggestFillTypeWildcard Diagnostic{_range=_range,..}
--- Foo.hs:3:8: error:
---     * Found type wildcard `_' standing for `p -> p1 -> p'
-
-    | "Found type wildcard" `T.isInfixOf` _message
-    , " standing for " `T.isInfixOf` _message
-    , typeSignature <- extractWildCardTypeSignature _message
-        =  [("Use type signature: ‘" <> typeSignature <> "’", TextEdit _range typeSignature)]
-    | otherwise = []
-
 {- Handles two variants with different formatting
 
 1. Could not find module ‘Data.Cha’
@@ -952,88 +943,6 @@ suggestModuleTypo Diagnostic{_range=_range,..}
         [modul, "(from", _] -> Just modul
         _                   -> Nothing
 
-
-suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
-suggestFillHole Diagnostic{_range=_range,..}
-    | Just holeName <- extractHoleName _message
-    , (holeFits, refFits) <- processHoleSuggestions (T.lines _message) =
-      let isInfixHole = _message =~ addBackticks holeName :: Bool in
-        map (proposeHoleFit holeName False isInfixHole) holeFits
-        ++ map (proposeHoleFit holeName True isInfixHole) refFits
-    | otherwise = []
-    where
-      extractHoleName = fmap head . flip matchRegexUnifySpaces "Found hole: ([^ ]*)"
-      addBackticks text = "`" <> text <> "`"
-      addParens text = "(" <> text <> ")"
-      proposeHoleFit holeName parenthise isInfixHole name =
-        let isInfixOperator = T.head name == '('
-            name' = getOperatorNotation isInfixHole isInfixOperator name in
-          ( "replace " <> holeName <> " with " <> name
-          , TextEdit _range (if parenthise then addParens name' else name')
-          )
-      getOperatorNotation True False name                    = addBackticks name
-      getOperatorNotation True True name                     = T.drop 1 (T.dropEnd 1 name)
-      getOperatorNotation _isInfixHole _isInfixOperator name = name
-
-processHoleSuggestions :: [T.Text] -> ([T.Text], [T.Text])
-processHoleSuggestions mm = (holeSuggestions, refSuggestions)
-{-
-    • Found hole: _ :: LSP.Handlers
-
-      Valid hole fits include def
-      Valid refinement hole fits include
-        fromMaybe (_ :: LSP.Handlers) (_ :: Maybe LSP.Handlers)
-        fromJust (_ :: Maybe LSP.Handlers)
-        haskell-lsp-types-0.22.0.0:Language.LSP.Types.Window.$sel:_value:ProgressParams (_ :: ProgressParams
-                                                                                                        LSP.Handlers)
-        T.foldl (_ :: LSP.Handlers -> Char -> LSP.Handlers)
-                (_ :: LSP.Handlers)
-                (_ :: T.Text)
-        T.foldl' (_ :: LSP.Handlers -> Char -> LSP.Handlers)
-                 (_ :: LSP.Handlers)
-                 (_ :: T.Text)
--}
-  where
-    t = id @T.Text
-    holeSuggestions = do
-      -- get the text indented under Valid hole fits
-      validHolesSection <-
-        getIndentedGroupsBy (=~ t " *Valid (hole fits|substitutions) include") mm
-      -- the Valid hole fits line can contain a hole fit
-      holeFitLine <-
-        mapHead
-            (mrAfter . (=~ t " *Valid (hole fits|substitutions) include"))
-            validHolesSection
-      let holeFit = T.strip $ T.takeWhile (/= ':') holeFitLine
-      guard (not $ T.null holeFit)
-      return holeFit
-    refSuggestions = do -- @[]
-      -- get the text indented under Valid refinement hole fits
-      refinementSection <-
-        getIndentedGroupsBy (=~ t " *Valid refinement hole fits include") mm
-      -- get the text for each hole fit
-      holeFitLines <- getIndentedGroups (tail refinementSection)
-      let holeFit = T.strip $ T.unwords holeFitLines
-      guard $ not $ holeFit =~ t "Some refinement hole fits suppressed"
-      return holeFit
-
-    mapHead f (a:aa) = f a : aa
-    mapHead _ []     = []
-
--- > getIndentedGroups [" H1", "  l1", "  l2", " H2", "  l3"] = [[" H1,", "  l1", "  l2"], [" H2", "  l3"]]
-getIndentedGroups :: [T.Text] -> [[T.Text]]
-getIndentedGroups [] = []
-getIndentedGroups ll@(l:_) = getIndentedGroupsBy ((== indentation l) . indentation) ll
--- |
--- > getIndentedGroupsBy (" H" `isPrefixOf`) [" H1", "  l1", "  l2", " H2", "  l3"] = [[" H1", "  l1", "  l2"], [" H2", "  l3"]]
-getIndentedGroupsBy :: (T.Text -> Bool) -> [T.Text] -> [[T.Text]]
-getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
-    (l:ll) -> case span (\l' -> indentation l < indentation l') ll of
-        (indented, rest) -> (l:indented) : getIndentedGroupsBy pred rest
-    _ -> []
-
-indentation :: T.Text -> Int
-indentation = T.length . T.takeWhile isSpace
 
 #if !MIN_VERSION_ghc(9,3,0)
 suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, Rewrite)]
@@ -1845,64 +1754,6 @@ mkRenameEdit contents range name
       curr <- textInRange range <$> contents
       pure $ "'" `T.isPrefixOf` curr
 
--- | Extract the type and surround it in parentheses except in obviously safe cases.
---
--- Inferring when parentheses are actually needed around the type signature would
--- require understanding both the precedence of the context of the hole and of
--- the signature itself. Inserting them (almost) unconditionally is ugly but safe.
-extractWildCardTypeSignature :: T.Text -> T.Text
-extractWildCardTypeSignature msg
-  | enclosed || not isApp || isToplevelSig = sig
-  | otherwise                              = "(" <> sig <> ")"
-  where
-    msgSigPart      = snd $ T.breakOnEnd "standing for " msg
-    (sig, rest)     = T.span (/='’') . T.dropWhile (=='‘') . T.dropWhile (/='‘') $ msgSigPart
-    -- If we're completing something like ‘foo :: _’ parens can be safely omitted.
-    isToplevelSig   = errorMessageRefersToToplevelHole rest
-    -- Parenthesize type applications, e.g. (Maybe Char).
-    isApp           = T.any isSpace sig
-    -- Do not add extra parentheses to lists, tuples and already parenthesized types.
-    enclosed        = not (T.null sig) && (T.head sig, T.last sig) `elem` [('(', ')'), ('[', ']')]
-
--- | Detect whether user wrote something like @foo :: _@ or @foo :: (_, Int)@.
--- The former is considered toplevel case for which the function returns 'True',
--- the latter is not toplevel and the returned value is 'False'.
---
--- When type hole is at toplevel then there’s a line starting with
--- "• In the type signature" which ends with " :: _" like in the
--- following snippet:
---
--- source/library/Language/Haskell/Brittany/Internal.hs:131:13: error:
---     • Found type wildcard ‘_’ standing for ‘HsDecl GhcPs’
---       To use the inferred type, enable PartialTypeSignatures
---     • In the type signature: decl :: _
---       In an equation for ‘splitAnnots’:
---           splitAnnots m@HsModule {hsmodAnn, hsmodDecls}
---             = undefined
---             where
---                 ann :: SrcSpanAnnA
---                 decl :: _
---                 L ann decl = head hsmodDecls
---     • Relevant bindings include
---       [REDACTED]
---
--- When type hole is not at toplevel there’s a stack of where
--- the hole was located ending with "In the type signature":
---
--- source/library/Language/Haskell/Brittany/Internal.hs:130:20: error:
---     • Found type wildcard ‘_’ standing for ‘GhcPs’
---       To use the inferred type, enable PartialTypeSignatures
---     • In the first argument of ‘HsDecl’, namely ‘_’
---       In the type ‘HsDecl _’
---       In the type signature: decl :: HsDecl _
---     • Relevant bindings include
---       [REDACTED]
-errorMessageRefersToToplevelHole :: T.Text -> Bool
-errorMessageRefersToToplevelHole msg =
-  not (T.null prefix) && " :: _" `T.isSuffixOf` T.takeWhile (/= '\n') rest
-  where
-    (prefix, rest) = T.breakOn "• In the type signature:" msg
-
 extractRenamableTerms :: T.Text -> [T.Text]
 extractRenamableTerms msg
   -- Account for both "Variable not in scope" and "Not in scope"
@@ -2054,71 +1905,3 @@ matchRegExMultipleImports message = do
   imps <- regExImports imports
   return (binding, imps)
 
--- | Possible import styles for an 'IdentInfo'.
---
--- The first 'Text' parameter corresponds to the 'rendered' field of the
--- 'IdentInfo'.
-data ImportStyle
-    = ImportTopLevel T.Text
-      -- ^ Import a top-level export from a module, e.g., a function, a type, a
-      -- class.
-      --
-      -- > import M (?)
-      --
-      -- Some exports that have a parent, like a type-class method or an
-      -- associated type/data family, can still be imported as a top-level
-      -- import.
-      --
-      -- Note that this is not the case for constructors, they must always be
-      -- imported as part of their parent data type.
-
-    | ImportViaParent T.Text T.Text
-      -- ^ Import an export (first parameter) through its parent (second
-      -- parameter).
-      --
-      -- import M (P(?))
-      --
-      -- @P@ and @?@ can be a data type and a constructor, a class and a method,
-      -- a class and an associated type/data family, etc.
-
-    | ImportAllConstructors T.Text
-      -- ^ Import all constructors for a specific data type.
-      --
-      -- import M (P(..))
-      --
-      -- @P@ can be a data type or a class.
-  deriving Show
-
-importStyles :: IdentInfo -> NonEmpty ImportStyle
-importStyles IdentInfo {parent, rendered, isDatacon}
-  | Just p <- parent
-    -- Constructors always have to be imported via their parent data type, but
-    -- methods and associated type/data families can also be imported as
-    -- top-level exports.
-  = ImportViaParent rendered p
-      :| [ImportTopLevel rendered | not isDatacon]
-      <> [ImportAllConstructors p]
-  | otherwise
-  = ImportTopLevel rendered :| []
-
--- | Used for adding new imports
-renderImportStyle :: ImportStyle -> T.Text
-renderImportStyle (ImportTopLevel x)   = x
-renderImportStyle (ImportViaParent x p@(T.uncons -> Just ('(', _))) = "type " <> p <> "(" <> x <> ")"
-renderImportStyle (ImportViaParent x p) = p <> "(" <> x <> ")"
-renderImportStyle (ImportAllConstructors p) = p <> "(..)"
-
--- | Used for extending import lists
-unImportStyle :: ImportStyle -> (Maybe String, String)
-unImportStyle (ImportTopLevel x)        = (Nothing, T.unpack x)
-unImportStyle (ImportViaParent x y)     = (Just $ T.unpack y, T.unpack x)
-unImportStyle (ImportAllConstructors x) = (Just $ T.unpack x, wildCardSymbol)
-
-
-quickFixImportKind' :: T.Text -> ImportStyle -> CodeActionKind
-quickFixImportKind' x (ImportTopLevel _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.topLevel"
-quickFixImportKind' x (ImportViaParent _ _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.withParent"
-quickFixImportKind' x (ImportAllConstructors _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.allConstructors"
-
-quickFixImportKind :: T.Text -> CodeActionKind
-quickFixImportKind x = CodeActionUnknown $ "quickfix.import." <> x
