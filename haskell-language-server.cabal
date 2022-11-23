@@ -498,9 +498,6 @@ executable haskell-language-server
   default-language: Haskell2010
   default-extensions: DataKinds, TypeOperators
   
-  if impl(ghc >= 9.4)
-    build-depends: ghc-exactprint >= 1.6.1
-
 executable haskell-language-server-wrapper
   import:           common-deps
                   , warnings
