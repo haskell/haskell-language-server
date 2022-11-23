@@ -115,7 +115,7 @@ library
         unix
 
     if impl(ghc >= 9.4)
-      build:depends: ghc-exactprint >= 1.6.1
+      build-depends: ghc-exactprint >= 1.6.1
   
     default-extensions:
         BangPatterns
