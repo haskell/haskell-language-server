@@ -80,9 +80,9 @@ jobs:
            - os: ubuntu-latest
              ghc: '8.10.7'
              test: true
-           - os: windows-latest
-             ghc: '9.4.3'
-             test: true
+           #- os: windows-latest
+           #  ghc: '9.4.3' # apparently cannot install GHC-9.4.3 on Windows?
+           #  test: true
            - os: windows-latest
              ghc: '9.2.4'
              test: true
