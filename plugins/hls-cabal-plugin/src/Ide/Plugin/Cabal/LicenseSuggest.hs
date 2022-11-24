@@ -6,6 +6,7 @@
 module Ide.Plugin.Cabal.LicenseSuggest
 ( licenseErrorSuggestion
 , licenseErrorAction
+, licenseNames
   -- * Re-exports
 , T.Text
 , Diagnostic(..)
@@ -23,8 +24,9 @@ import           Language.LSP.Types          (CodeAction (CodeAction),
                                               WorkspaceEdit (WorkspaceEdit))
 import           Text.Regex.TDFA
 
+import qualified Data.List                   as List
 import           Distribution.SPDX.LicenseId (licenseId)
-import           Text.Fuzzy                  (simpleFilter)
+import qualified Text.Fuzzy.Parallel         as Fuzzy
 
 -- | Given a diagnostic returned by 'Ide.Plugin.Cabal.Diag.errorDiagnostic',
 --   if it represents an "Unknown SPDX license identifier"-error along
@@ -61,20 +63,27 @@ licenseNames :: [T.Text]
 licenseNames = map (T.pack . licenseId) [minBound .. maxBound]
 
 -- | Given a diagnostic returned by 'Ide.Plugin.Cabal.Diag.errorDiagnostic',
---   if it represents an "Unknown SPDX license identifier"-error along
---   with a suggestion then return the suggestion (after the "Do you mean"-text)
---   along with the incorrect identifier.
+--   provide possible corrections for SPDX license identifiers
+--   based on the list specified in Cabal.
+--   Results are sorted by best fit, and prefer solutions that have smaller
+--   length distance to the original word.
+--
+-- >>> take 2 $ licenseErrorSuggestion (T.pack "Unknown SPDX license identifier: 'BSD3'")
+-- [("BSD3","BSD-3-Clause"),("BSD3","BSD-3-Clause-LBNL")]
 licenseErrorSuggestion ::
   T.Text
   -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
   -> [(T.Text, T.Text)]
   -- ^ (Original (incorrect) license identifier, suggested replacement)
-licenseErrorSuggestion msg = take 10 $
+licenseErrorSuggestion msg =
    (getMatch <$> msg =~~ regex) >>= \case
-          [original] -> simpleFilter original licenseNames >>= \x -> [(original,x)]
+          [original] ->
+            let matches = map Fuzzy.original $ Fuzzy.simpleFilter 1000 10 original licenseNames
+            in [(original,candidate) | candidate <- List.sortBy (lengthDistance original) matches]
           _ -> []
   where
     regex :: T.Text
     regex = "Unknown SPDX license identifier: '(.*)'"
     getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [T.Text]
     getMatch (_, _, _, results) = results
+    lengthDistance original x1 x2 = abs (T.length original - T.length x1) `compare` abs (T.length original - T.length x2)
