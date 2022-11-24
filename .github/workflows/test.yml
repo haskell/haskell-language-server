@@ -73,9 +73,6 @@ jobs:
              ghc: '9.4.3'
              test: true
            - os: ubuntu-latest
-             ghc: '9.4.2'
-             test: true
-           - os: ubuntu-latest
              ghc: '9.2.4'
              test: true
            - os: ubuntu-latest
