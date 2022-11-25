@@ -20,6 +20,9 @@ flag pedantic
   default:     False
   manual:      True
 
+-- This flag can be used to avoid the dependency on hw-fingertree.
+-- We can set this temporarily if we have problems building hw-fingertree
+-- for a new version of GHC.
 flag use-fingertree
   description: Use fingertree implementation of RangeMap
   default:     True
@@ -108,6 +111,8 @@ test-suite tests
     , containers
 
 benchmark rangemap-benchmark
+  -- Benchmark doesn't make sense if fingertree implementation
+  -- is not used.
   if !flag(use-fingertree)
     buildable: False
   type:             exitcode-stdio-1.0

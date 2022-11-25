@@ -67,6 +67,17 @@ filterByRange range = map snd . filter (isSubrangeOf range . fst) . unRangeMap
 #endif
 
 #ifdef USE_FINGERTREE
+-- NOTE(ozkutuk): In itself, this conversion is wrong. As Michael put it:
+-- "LSP Ranges have exclusive upper bounds, whereas the intervals here are
+-- supposed to be closed (i.e. inclusive at both ends)"
+-- However, in our use-case this turns out not to be an issue (supported
+-- by the accompanying property test).  I think the reason for this is,
+-- even if rangeToInterval isn't a correct 1:1 conversion by itself, it
+-- is used for both the construction of the RangeMap and during the actual
+-- filtering (filterByRange), so it still behaves identical to the list
+-- approach.
+-- This definition isn't exported from the module, therefore we need not
+-- worry about other uses where it potentially makes a difference.
 rangeToInterval :: Range -> IM.Interval Position
 rangeToInterval (Range s e) = IM.Interval s e
 #endif
