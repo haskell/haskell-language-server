@@ -45,6 +45,11 @@ library
     , process-extras  >= 0.7.1
     , text
 
+  if impl(ghc >= 9.2)
+    build-depends: fourmolu ^>= 0.8.2
+  if impl(ghc >= 9.4)
+    build-depends: fourmolu ^>= 0.9
+  
   default-language: Haskell2010
 
 test-suite tests
