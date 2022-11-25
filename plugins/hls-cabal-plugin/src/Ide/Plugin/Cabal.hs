@@ -21,7 +21,6 @@ import           Data.Hashable
 import           Data.HashMap.Strict             (HashMap)
 import qualified Data.HashMap.Strict             as HashMap
 import qualified Data.List.NonEmpty              as NE
-import           Data.Maybe                      (mapMaybe)
 import qualified Data.Text.Encoding              as Encoding
 import           Data.Typeable
 import           Development.IDE                 as D
@@ -184,7 +183,7 @@ licenseSuggestCodeAction
   -> CodeActionParams
   -> LspM Config (Either ResponseError (ResponseResult 'TextDocumentCodeAction))
 licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List diags}) =
-  pure $ Right $ List $ mapMaybe (fmap InR . LicenseSuggest.licenseErrorAction uri) diags
+  pure $ Right $ List $ diags >>= (fmap InR . (LicenseSuggest.licenseErrorAction uri))
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable
