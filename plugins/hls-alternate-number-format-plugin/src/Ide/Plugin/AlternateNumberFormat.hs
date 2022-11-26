@@ -25,6 +25,8 @@ import           Ide.Plugin.Conversion         (AlternateFormat,
                                                 ExtensionNeeded (NeedsExtension, NoExtension),
                                                 alternateFormat)
 import           Ide.Plugin.Literals
+import           Ide.Plugin.RangeMap           (RangeMap)
+import qualified Ide.Plugin.RangeMap           as RangeMap
 import           Ide.PluginUtils               (getNormalizedFilePath,
                                                 handleMaybeM, pluginResponse)
 import           Ide.Types
@@ -52,7 +54,7 @@ instance NFData CollectLiterals
 type instance RuleResult CollectLiterals = CollectLiteralsResult
 
 data CollectLiteralsResult = CLR
-    { literals          :: [Literal]
+    { literals          :: RangeMap Literal
     , enabledExtensions :: [GhcExtension]
     } deriving (Generic)
 
@@ -73,7 +75,8 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
     let exts = map GhcExtension . getExtensions <$> pm
         -- collect all the literals for a file
         lits = collectLiterals . pm_parsed_source <$> pm
-    pure ([], CLR <$> lits <*> exts)
+        litMap = RangeMap.fromList (realSrcSpanToRange . getSrcSpan) <$> lits
+    pure ([], CLR <$> litMap <*> exts)
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = pluginResponse $ do
@@ -81,17 +84,13 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = pluginRes
     CLR{..} <- requestLiterals pId state nfp
     pragma <- getFirstPragma pId state nfp
         -- remove any invalid literals (see validTarget comment)
-    let litsInRange = filter inCurrentRange literals
+    let litsInRange = RangeMap.filterByRange currRange literals
         -- generate alternateFormats and zip with the literal that generated the alternates
         literalPairs = map (\lit -> (lit, alternateFormat lit)) litsInRange
         -- make a code action for every literal and its' alternates (then flatten the result)
         actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit enabledExtensions pragma) alts) literalPairs
     pure $ List actions
     where
-        inCurrentRange :: Literal -> Bool
-        inCurrentRange lit = let srcSpan = getSrcSpan lit
-                              in currRange `contains` srcSpan
-
         mkCodeAction :: NormalizedFilePath -> Literal -> [GhcExtension] -> NextPragmaInfo -> AlternateFormat -> Command |? CodeAction
         mkCodeAction nfp lit enabled npi af@(alt, ext) = InR CodeAction {
             _title = mkCodeActionTitle lit af enabled
@@ -126,13 +125,6 @@ mkCodeActionTitle lit (alt, ext) ghcExts
 -- | Checks whether the extension given is already enabled
 needsExtension :: Extension -> [GhcExtension] -> Bool
 needsExtension ext ghcExts = ext `notElem` map unExt ghcExts
-
--- from HaddockComments.hs
-contains :: Range -> RealSrcSpan -> Bool
-contains Range {_start, _end} x = isInsideRealSrcSpan _start x || isInsideRealSrcSpan _end x
-
-isInsideRealSrcSpan :: Position -> RealSrcSpan -> Bool
-p `isInsideRealSrcSpan` r = let (Range sp ep) = realSrcSpanToRange r in sp <= p && p <= ep
 
 requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
 requestLiterals (PluginId pId) state = handleMaybeM "Could not Collect Literals"
