@@ -38,8 +38,8 @@ tests =
 testDir :: FilePath
 testDir = "test/testdata"
 
-stanPlugin :: PluginDescriptor IdeState
-stanPlugin = Stan.descriptor mempty "stan"
+stanPlugin :: PluginTestDescriptor Stan.Log
+stanPlugin = mkPluginTestDescriptor Stan.descriptor "stan"
 
 runStanSession :: FilePath -> Session a -> IO a
 runStanSession subdir =
