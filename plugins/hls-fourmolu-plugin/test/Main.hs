@@ -15,8 +15,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-fourmoluPlugin :: PluginDescriptor IdeState
-fourmoluPlugin = Fourmolu.descriptor mempty "fourmolu"
+fourmoluPlugin :: PluginTestDescriptor Fourmolu.LogEvent
+fourmoluPlugin = mkPluginTestDescriptor Fourmolu.descriptor "fourmolu"
 
 tests :: TestTree
 tests =
