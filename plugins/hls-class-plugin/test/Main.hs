@@ -12,13 +12,10 @@ module Main
 import           Control.Lens                 (Prism', prism', (^.), (^..),
                                                (^?))
 import           Control.Monad                (void)
-import           Data.Aeson                   (toJSON, (.=))
 import           Data.Functor.Contravariant   (contramap)
 import           Data.Maybe
 import           Development.IDE.Types.Logger
 import qualified Ide.Plugin.Class             as Class
-import           Ide.Plugin.Config            (PluginConfig (plcConfig))
-import qualified Ide.Plugin.Config            as Plugin
 import qualified Language.LSP.Types.Lens      as J
 import           System.FilePath
 import           Test.Hls
@@ -78,6 +75,8 @@ codeActionTests recorder = testGroup
       executeCodeAction eqWithSig
   , goldenWithClass recorder "Only insert pragma once" "InsertPragmaOnce" "" $ \(_:multi:_) -> do
       executeCodeAction multi
+  , goldenWithClass recorder "Creates a placeholder for a default method implementation" "DefaultImplementation" "" $ \(_:fAction:_) -> do
+      executeCodeAction fAction
   ]
 
 codeLensTests :: Recorder (WithPriority Class.Log) -> TestTree
