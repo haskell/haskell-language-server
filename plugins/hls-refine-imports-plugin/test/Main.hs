@@ -23,8 +23,8 @@ main = defaultTestRunner $
     , codeLensGoldenTest "UsualCase" 1
     ]
 
-refineImportsPlugin :: PluginDescriptor IdeState
-refineImportsPlugin = RefineImports.descriptor mempty "refineImports"
+refineImportsPlugin :: PluginTestDescriptor RefineImports.Log
+refineImportsPlugin = mkPluginTestDescriptor RefineImports.descriptor "refineImports"
 
 -- code action tests
 
