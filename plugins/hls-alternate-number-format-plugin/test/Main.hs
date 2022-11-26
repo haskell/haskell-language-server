@@ -19,8 +19,8 @@ import           Text.Regex.TDFA                  ((=~))
 main :: IO ()
 main = defaultTestRunner test
 
-alternateNumberFormatPlugin :: Recorder (WithPriority AlternateNumberFormat.Log) -> PluginDescriptor IdeState
-alternateNumberFormatPlugin recorder = AlternateNumberFormat.descriptor recorder  "alternateNumberFormat"
+alternateNumberFormatPlugin :: PluginTestDescriptor AlternateNumberFormat.Log
+alternateNumberFormatPlugin = mkPluginTestDescriptor AlternateNumberFormat.descriptor "alternateNumberFormat"
 
 -- NOTE: For whatever reason, this plugin does not play nice with creating Code Actions on time.
 -- As a result tests will mostly pass if `import Prelude` is added at the top. We (mostly fendor) surmise this has something
@@ -54,7 +54,7 @@ test = testGroup "alternateNumberFormat" [
 
 codeActionProperties :: TestName -> [(Int, Int)] -> ([CodeAction] -> Session ()) -> TestTree
 codeActionProperties fp locs assertions = testCase fp $ do
-    runSessionWithServerAndRecorder alternateNumberFormatPlugin testDataDir $ do
+    runSessionWithServer alternateNumberFormatPlugin testDataDir $ do
         openDoc (fp <.> ".hs") "haskell" >>= codeActionsFromLocs >>= findAlternateNumberActions >>= assertions
     where
         -- similar to codeActionTest
@@ -75,7 +75,7 @@ testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
 
 goldenAlternateFormat :: FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenAlternateFormat fp = goldenWithHaskellDoc (alternateNumberFormatPlugin mempty) (fp <> " (golden)") testDataDir fp "expected" "hs"
+goldenAlternateFormat fp = goldenWithHaskellDoc alternateNumberFormatPlugin (fp <> " (golden)") testDataDir fp "expected" "hs"
 
 codeActionTest :: (Maybe Text -> Bool) -> FilePath -> Int -> Int -> TestTree
 codeActionTest filter' fp line col = goldenAlternateFormat fp $ \doc -> do
