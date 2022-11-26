@@ -182,7 +182,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       Brittany.descriptor "brittany" :
 #endif
 #if hls_callHierarchy
-      CallHierarchy.descriptor :
+      CallHierarchy.descriptor "callHierarchy" :
 #endif
 #if hls_class
       let pId = "class" in Class.descriptor (pluginRecorder pId) pId:
