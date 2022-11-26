@@ -11,6 +11,7 @@
 
 module Ide.Plugin.ExplicitFields
   ( descriptor
+  , Log
   ) where
 
 import           Control.Lens                             ((^.))
