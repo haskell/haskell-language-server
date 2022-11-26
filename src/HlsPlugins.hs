@@ -85,19 +85,19 @@ import qualified Ide.Plugin.CodeRange              as CodeRange
 #endif
 
 #if hls_changeTypeSignature
-import           Ide.Plugin.ChangeTypeSignature    as ChangeTypeSignature
+import qualified Ide.Plugin.ChangeTypeSignature    as ChangeTypeSignature
 #endif
 
 #if hls_gadt
-import           Ide.Plugin.GADT                   as GADT
+import qualified Ide.Plugin.GADT                   as GADT
 #endif
 
 #if explicitFixity
-import           Ide.Plugin.ExplicitFixity         as ExplicitFixity
+import qualified Ide.Plugin.ExplicitFixity         as ExplicitFixity
 #endif
 
 #if explicitFields
-import           Ide.Plugin.ExplicitFields         as ExplicitFields
+import qualified Ide.Plugin.ExplicitFields         as ExplicitFields
 #endif
 
 -- formatters
