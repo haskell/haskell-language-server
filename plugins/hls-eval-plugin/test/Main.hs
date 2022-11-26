@@ -29,34 +29,34 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-evalPlugin :: Recorder (WithPriority Eval.Log) -> PluginDescriptor IdeState
-evalPlugin recorder = Eval.descriptor recorder "eval"
+evalPlugin :: PluginTestDescriptor Eval.Log
+evalPlugin = mkPluginTestDescriptor Eval.descriptor "eval"
 
 tests :: TestTree
 tests =
   testGroup "eval"
   [ testCase "Produces Evaluate code lenses" $
-      runSessionWithServerAndRecorder evalPlugin testDataDir $ do
+      runSessionWithServer evalPlugin testDataDir $ do
         doc <- openDoc "T1.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Evaluate..."]
   , testCase "Produces Refresh code lenses" $
-      runSessionWithServerAndRecorder evalPlugin testDataDir $ do
+      runSessionWithServer evalPlugin testDataDir $ do
         doc <- openDoc "T2.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Refresh..."]
   , testCase "Code lenses have ranges" $
-      runSessionWithServerAndRecorder evalPlugin testDataDir $ do
+      runSessionWithServer evalPlugin testDataDir $ do
         doc <- openDoc "T1.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
   , testCase "Multi-line expressions have a multi-line range" $ do
-      runSessionWithServerAndRecorder evalPlugin testDataDir $ do
+      runSessionWithServer evalPlugin testDataDir $ do
         doc <- openDoc "T3.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (view range) lenses @?= [Range (Position 3 0) (Position 5 0)]
   , testCase "Executed expressions range covers only the expression" $ do
-      runSessionWithServerAndRecorder evalPlugin testDataDir $ do
+      runSessionWithServer evalPlugin testDataDir $ do
         doc <- openDoc "T2.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
@@ -194,7 +194,7 @@ tests =
         not ("Baz Foo" `isInfixOf` output)          @? "Output includes instance Baz Foo"
     ]
   , testCase "Interfaces are reused after Eval" $ do
-      runSessionWithServerAndRecorder evalPlugin testDataDir $ do
+      runSessionWithServer evalPlugin testDataDir $ do
         doc <- openDoc "TLocalImport.hs" "haskell"
         waitForTypecheck doc
         lenses <- getCodeLenses doc
@@ -213,13 +213,13 @@ tests =
 
 goldenWithEval :: TestName -> FilePath -> FilePath -> TestTree
 goldenWithEval title path ext =
-  goldenWithHaskellDocAndRecorder evalPlugin title testDataDir path "expected" ext executeLensesBackwards
+  goldenWithHaskellDoc evalPlugin title testDataDir path "expected" ext executeLensesBackwards
 
 -- | Similar function as 'goldenWithEval' with an alternate reference file
 -- naming. Useful when reference file may change because of GHC version.
 goldenWithEval' :: TestName -> FilePath -> FilePath -> FilePath -> TestTree
 goldenWithEval' title path ext expected =
-  goldenWithHaskellDocAndRecorder evalPlugin title testDataDir path expected ext executeLensesBackwards
+  goldenWithHaskellDoc evalPlugin title testDataDir path expected ext executeLensesBackwards
 
 -- | Execute lenses backwards, to avoid affecting their position in the source file
 executeLensesBackwards :: TextDocumentIdentifier -> Session ()
@@ -246,7 +246,7 @@ executeCmd cmd = do
   pure ()
 
 evalLenses :: FilePath -> IO [CodeLens]
-evalLenses path = runSessionWithServerAndRecorder evalPlugin testDataDir $ do
+evalLenses path = runSessionWithServer evalPlugin testDataDir $ do
   doc <- openDoc path "haskell"
   executeLensesBackwards doc
   getCodeLenses doc
@@ -280,12 +280,12 @@ exceptionConfig exCfg = changeConfig ["exception" .= exCfg]
 
 goldenWithEvalConfig' :: TestName -> FilePath -> FilePath -> FilePath -> Config -> TestTree
 goldenWithEvalConfig' title path ext expected cfg =
-    goldenWithHaskellDocAndRecorder evalPlugin title testDataDir path expected ext $ \doc -> do
+    goldenWithHaskellDoc evalPlugin title testDataDir path expected ext $ \doc -> do
       sendConfigurationChanged (toJSON cfg)
       executeLensesBackwards doc
 
 evalInFile :: HasCallStack => FilePath -> T.Text -> T.Text -> IO ()
-evalInFile fp e expected = runSessionWithServerAndRecorder evalPlugin testDataDir $ do
+evalInFile fp e expected = runSessionWithServer evalPlugin testDataDir $ do
   doc <- openDoc fp "haskell"
   origin <- documentContents doc
   let withEval = origin <> e
