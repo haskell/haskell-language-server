@@ -64,7 +64,7 @@ mkGoldenAddArgTest' testFileName range varName = do
           liftIO $ actionTitle @?= ("Add argument ‘" <> varName <> "’ to function")
           executeCodeAction action
     goldenWithHaskellDoc
-      (Refactor.bindingsPluginDescriptor mempty "ghcide-code-actions-bindings")
+      (mkPluginTestDescriptor Refactor.bindingsPluginDescriptor "ghcide-code-actions-bindings")
       (testFileName <> " (golden)")
       "test/data/golden/add-arg"
       testFileName

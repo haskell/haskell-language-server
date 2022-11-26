@@ -64,14 +64,17 @@ import qualified Test.AddArgument
 main :: IO ()
 main = defaultTestRunner tests
 
-refactorPlugin :: [PluginDescriptor IdeState]
-refactorPlugin =
-      [ Refactor.iePluginDescriptor mempty "ghcide-code-actions-imports-exports"
-      , Refactor.typeSigsPluginDescriptor mempty "ghcide-code-actions-type-signatures"
-      , Refactor.bindingsPluginDescriptor mempty "ghcide-code-actions-bindings"
-      , Refactor.fillHolePluginDescriptor mempty "ghcide-code-actions-fill-holes"
-      , Refactor.extendImportPluginDescriptor mempty "ghcide-completions-1"
-      ] ++ GhcIde.descriptors mempty
+refactorPlugin :: IO [PluginDescriptor IdeState]
+refactorPlugin = do
+  exactprintLog <- pluginTestRecorder
+  ghcideLog <- pluginTestRecorder
+  pure $
+      [ Refactor.iePluginDescriptor exactprintLog "ghcide-code-actions-imports-exports"
+      , Refactor.typeSigsPluginDescriptor exactprintLog "ghcide-code-actions-type-signatures"
+      , Refactor.bindingsPluginDescriptor exactprintLog "ghcide-code-actions-bindings"
+      , Refactor.fillHolePluginDescriptor exactprintLog "ghcide-code-actions-fill-holes"
+      , Refactor.extendImportPluginDescriptor exactprintLog "ghcide-completions-1"
+      ] ++ GhcIde.descriptors ghcideLog
 
 tests :: TestTree
 tests =
@@ -3729,7 +3732,9 @@ run' :: (FilePath -> Session a) -> IO a
 run' s = withTempDir $ \dir -> runInDir dir (s dir)
 
 runInDir :: FilePath -> Session a -> IO a
-runInDir dir = runSessionWithServer' refactorPlugin def def lspTestCaps dir
+runInDir dir act = do
+  plugin <- refactorPlugin
+  runSessionWithServer' plugin def def lspTestCaps dir act
 
 lspTestCaps :: ClientCapabilities
 lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
