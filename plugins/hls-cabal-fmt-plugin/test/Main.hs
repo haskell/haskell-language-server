@@ -30,8 +30,8 @@ main = do
   foundCabalFmt <- isCabalFmtFound
   defaultTestRunner (tests foundCabalFmt)
 
-cabalFmtPlugin :: Recorder (WithPriority CabalFmt.Log) -> PluginDescriptor IdeState
-cabalFmtPlugin recorder = CabalFmt.descriptor recorder "cabal-fmt"
+cabalFmtPlugin :: PluginTestDescriptor CabalFmt.Log
+cabalFmtPlugin = mkPluginTestDescriptor CabalFmt.descriptor "cabal-fmt"
 
 tests :: CabalFmtFound -> TestTree
 tests found = testGroup "cabal-fmt"
@@ -52,7 +52,7 @@ cabalFmtGolden NotFound title _ _ _ =
   testCase title $
     assertFailure $  "Couldn't find cabal-fmt on PATH or this is not an isolated run. "
                   <> "Use cabal flag 'isolateTests' to make it isolated or install cabal-fmt locally."
-cabalFmtGolden Found title path desc act = goldenWithCabalDocFormatter (cabalFmtPlugin mempty) "cabal-fmt" conf title testDataDir path desc "cabal" act
+cabalFmtGolden Found title path desc act = goldenWithCabalDocFormatter cabalFmtPlugin "cabal-fmt" conf title testDataDir path desc "cabal" act
   where
     conf = def
 
