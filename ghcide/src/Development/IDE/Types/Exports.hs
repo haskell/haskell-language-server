@@ -7,7 +7,6 @@ module Development.IDE.Types.Exports
     ExportsMap(..),
     createExportsMap,
     createExportsMapMg,
-    createExportsMapTc,
     buildModuleExportMapFrom,
     createExportsMapHieDb,
     size,
@@ -120,7 +119,7 @@ createExportsMap modIface = do
   ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
   where
     doOne modIFace = do
-      let getModDetails = unpackAvail $ moduleName $ mi_module modIFace
+      let getModDetails = unpackAvail (moduleName $ mi_module modIFace) (mi_warns modIFace)
       concatMap (fmap (second Set.fromList) . getModDetails) (mi_exports modIFace)
 
 createExportsMapMg :: [ModGuts] -> ExportsMap
@@ -130,8 +129,8 @@ createExportsMapMg modGuts = do
   ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
   where
     doOne mi = do
-      let getModuleName = moduleName $ mg_module mi
-      concatMap (fmap (second Set.fromList) . unpackAvail getModuleName) (mg_exports mi)
+      let getModDetails = unpackAvail (moduleName $ mg_module mi) (mg_warns mi)
+      concatMap (fmap (second Set.fromList) . getModDetails) (mg_exports mi)
 
 updateExportsMapMg :: [ModGuts] -> ExportsMap -> ExportsMap
 updateExportsMapMg modGuts old = old' <> new
@@ -140,25 +139,15 @@ updateExportsMapMg modGuts old = old' <> new
         old' = deleteAll old (Map.keys $ getModuleExportsMap new)
         deleteAll = foldl' (flip deleteEntriesForModule)
 
-createExportsMapTc :: [TcGblEnv] -> ExportsMap
-createExportsMapTc modIface = do
-  let exportList = concatMap doOne modIface
-  let exportsMap = Map.fromListWith (<>) $ map (\(a,_,c) -> (a, c)) exportList
-  ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
-  where
-    doOne mi = do
-      let getModuleName = moduleName $ tcg_mod mi
-      concatMap (fmap (second Set.fromList) . unpackAvail getModuleName) (tcg_exports mi)
-
-nonInternalModules :: ModuleName -> Bool
-nonInternalModules = not . (".Internal" `isSuffixOf`) . moduleNameString
+isInternalModule :: ModuleName -> Bool
+isInternalModule = (".Internal" `isSuffixOf`) . moduleNameString
 
 type WithHieDb = forall a. (HieDb -> IO a) -> IO a
 
 createExportsMapHieDb :: WithHieDb -> IO ExportsMap
 createExportsMapHieDb withHieDb = do
     mods <- withHieDb getAllIndexedMods
-    idents <- forM (filter (nonInternalModules . modInfoName . hieModInfo) mods) $ \m -> do
+    idents <- forM (filter (not . isInternalModule . modInfoName . hieModInfo) mods) $ \m -> do
         let mn = modInfoName $ hieModInfo m
             mText = pack $ moduleNameString mn
         fmap (wrap . unwrap mText) <$> withHieDb (\hieDb -> getExportsForModule hieDb mn)
@@ -172,10 +161,16 @@ createExportsMapHieDb withHieDb = do
           n = pack (occNameString exportName)
           p = pack . occNameString <$> exportParent
 
-unpackAvail :: ModuleName -> IfaceExport -> [(Text, Text, [IdentInfo])]
-unpackAvail mn
-  | nonInternalModules mn = map f . mkIdentInfos mod
-  | otherwise = const []
+unpackAvail :: ModuleName -> Warnings -> IfaceExport -> [(Text, Text, [IdentInfo])]
+unpackAvail mn warnings
+  | isInternalModule mn = const []
+  | otherwise = case warnings of
+      NoWarnings -> map f . mkIdentInfos mod
+      WarnAll {} -> const []
+      WarnSome deprThings -> do
+        let deprNames = Set.fromList $ fst <$> deprThings
+            notDeprecated = not . flip Set.member deprNames
+        map f . filter (notDeprecated . name) . mkIdentInfos mod
   where
     !mod = pack $ moduleNameString mn
     f id@IdentInfo {..} = (printOutputable name, moduleNameText,[id])

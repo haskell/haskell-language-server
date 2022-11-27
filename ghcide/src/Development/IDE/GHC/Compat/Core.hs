@@ -85,6 +85,7 @@ module Development.IDE.GHC.Compat.Core (
     SourceModified(..),
 #endif
     loadModuleInterface,
+    Warnings(..),
     RecompileRequired(..),
     mkPartialIface,
     mkFullIface,
@@ -654,6 +655,7 @@ import           GHC.Unit.Module.ModGuts
 import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface (..),
                                                ModIface_ (..), mi_fix)
 import           GHC.Unit.Module.ModSummary   (ModSummary (..))
+import           GHC.Unit.Module.Warnings     (Warnings (..))
 #endif
 import           GHC.Unit.State               (ModuleOrigin (..))
 import           GHC.Utils.Error              (Severity (..), emptyMessages)
