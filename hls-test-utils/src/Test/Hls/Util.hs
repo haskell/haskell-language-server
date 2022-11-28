@@ -6,37 +6,40 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeOperators         #-}
 module Test.Hls.Util
-  (
+  (  -- * Test Capabilities
       codeActionSupportCaps
     , expectCodeAction
+    -- * Environment specifications
+    -- for ignoring tests
+    , ghcVersion, GhcVersion(..)
+    , hostOS, OS(..)
+    , matchesCurrentEnv, EnvSpec(..)
+    , ignoreForGhcVersions
+    , ignoreInEnv
+    , onlyRunForGhcVersions
+    , knownBrokenOnWindows
+    , knownBrokenForGhcVersions
+    , knownBrokenInEnv
+    , onlyWorkForGhcVersions
+    -- * Extract code actions
+    , fromAction
+    , fromCommand
+    -- * Session Assertion Helpers
     , dontExpectCodeAction
     , expectDiagnostic
     , expectNoMoreDiagnostics
     , expectSameLocations
     , failIfSessionTimeout
-    , flushStackEnvironment
-    , fromAction
-    , fromCommand
     , getCompletionByLabel
-    , ghcVersion, GhcVersion(..)
-    , hostOS, OS(..)
-    , matchesCurrentEnv, EnvSpec(..)
     , noLiteralCaps
-    , ignoreForGhcVersions
-    , ignoreInEnv
-    , onlyRunForGhcVersions
     , inspectCodeAction
     , inspectCommand
     , inspectDiagnostic
-    , knownBrokenOnWindows
-    , knownBrokenForGhcVersions
-    , knownBrokenInEnv
-    , onlyWorkForGhcVersions
-    , setupBuildToolFiles
     , SymbolLocation
     , waitForDiagnosticsFrom
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
+    -- * Temporary directories
     , withCurrentDirectoryInTmp
     , withCurrentDirectoryInTmp'
     , withCanonicalTempDir
