@@ -12,7 +12,6 @@ import           Control.Monad.Trans.Except     (ExceptT)
 import           Data.Foldable                  (asum)
 import qualified Data.HashMap.Strict            as Map
 import           Data.Maybe                     (mapMaybe)
-import           Data.String                    (IsString)
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
 import           Development.IDE                (realSrcSpanToRange)
@@ -25,30 +24,28 @@ import           Generics.SYB                   (extQ, something)
 import           Ide.PluginUtils                (getNormalizedFilePath,
                                                  handleMaybeM, pluginResponse)
 import           Ide.Types                      (PluginDescriptor (..),
+                                                 PluginId (PluginId),
                                                  PluginMethodHandler,
                                                  defaultPluginDescriptor,
                                                  mkPluginHandler)
 import           Language.LSP.Types
 import           Text.Regex.TDFA                ((=~))
 
-changeTypeSignatureId :: IsString a => a
-changeTypeSignatureId = "changeTypeSignature"
+descriptor :: PluginId -> PluginDescriptor IdeState
+descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHandler STextDocumentCodeAction (codeActionHandler plId) }
 
-descriptor :: PluginDescriptor IdeState
-descriptor = (defaultPluginDescriptor changeTypeSignatureId) { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler }
-
-codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = pluginResponse $ do
+codeActionHandler :: PluginId -> PluginMethodHandler IdeState 'TextDocumentCodeAction
+codeActionHandler plId ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = pluginResponse $ do
       nfp <- getNormalizedFilePath uri
-      decls <- getDecls ideState nfp
-      let actions = mapMaybe (generateAction uri decls) diags
+      decls <- getDecls plId ideState nfp
+      let actions = mapMaybe (generateAction plId uri decls) diags
       pure $ List actions
 
-getDecls :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m [LHsDecl GhcPs]
-getDecls state = handleMaybeM "Could not get Parsed Module"
+getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m [LHsDecl GhcPs]
+getDecls (PluginId changeTypeSignatureId) state = handleMaybeM "Could not get Parsed Module"
     . liftIO
     . fmap (fmap (hsmodDecls . unLoc . pm_parsed_source))
-    . runAction (changeTypeSignatureId <> ".GetParsedModule") state
+    . runAction (T.unpack changeTypeSignatureId <> ".GetParsedModule") state
     . use GetParsedModule
 
 -- | Text representing a Declaration's Name
@@ -76,8 +73,8 @@ data ChangeSignature = ChangeSignature {
 type SigName = (HasOccName (IdP GhcPs))
 
 -- | Create a CodeAction from a Diagnostic
-generateAction :: SigName => Uri -> [LHsDecl GhcPs] -> Diagnostic -> Maybe (Command |? CodeAction)
-generateAction uri decls diag = changeSigToCodeAction uri <$> diagnosticToChangeSig decls diag
+generateAction :: SigName => PluginId -> Uri -> [LHsDecl GhcPs] -> Diagnostic -> Maybe (Command |? CodeAction)
+generateAction plId uri decls diag = changeSigToCodeAction plId uri <$> diagnosticToChangeSig decls diag
 
 -- | Convert a diagnostic into a ChangeSignature and add the proper SrcSpan
 diagnosticToChangeSig :: SigName => [LHsDecl GhcPs] -> Diagnostic -> Maybe ChangeSignature
@@ -148,8 +145,8 @@ stripSignature (T.filter (/= '\n') -> sig) = if T.isInfixOf " => " sig
                                                 then T.strip $ snd $ T.breakOnEnd " => " sig
                                                 else T.strip $ snd $ T.breakOnEnd " :: " sig
 
-changeSigToCodeAction :: Uri -> ChangeSignature -> Command |? CodeAction
-changeSigToCodeAction uri ChangeSignature{..} = InR CodeAction { _title       = mkChangeSigTitle declName actualType
+changeSigToCodeAction :: PluginId -> Uri -> ChangeSignature -> Command |? CodeAction
+changeSigToCodeAction (PluginId changeTypeSignatureId) uri ChangeSignature{..} = InR CodeAction { _title       = mkChangeSigTitle declName actualType
                                                                , _kind        = Just (CodeActionUnknown ("quickfix." <> changeTypeSignatureId))
                                                                , _diagnostics = Just $ List [diagnostic]
                                                                , _isPreferred = Nothing

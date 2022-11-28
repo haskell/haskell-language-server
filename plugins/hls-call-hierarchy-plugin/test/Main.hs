@@ -21,8 +21,8 @@ import qualified System.IO.Extra
 import           Test.Hls
 import           Test.Hls.Util            (withCanonicalTempDir)
 
-plugin :: PluginDescriptor IdeState
-plugin = descriptor
+plugin :: PluginTestDescriptor ()
+plugin = mkPluginTestDescriptor' descriptor "call-hierarchy"
 
 main :: IO ()
 main = defaultTestRunner $
