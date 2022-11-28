@@ -30,8 +30,8 @@ main = do
   foundCabalFmt <- isCabalFmtFound
   defaultTestRunner (tests foundCabalFmt)
 
-cabalFmtPlugin :: PluginDescriptor IdeState
-cabalFmtPlugin = CabalFmt.descriptor mempty "cabal-fmt"
+cabalFmtPlugin :: PluginTestDescriptor CabalFmt.Log
+cabalFmtPlugin = mkPluginTestDescriptor CabalFmt.descriptor "cabal-fmt"
 
 tests :: CabalFmtFound -> TestTree
 tests found = testGroup "cabal-fmt"

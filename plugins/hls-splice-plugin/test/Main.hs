@@ -21,8 +21,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-splicePlugin :: PluginDescriptor IdeState
-splicePlugin = Splice.descriptor "splice"
+splicePlugin :: PluginTestDescriptor ()
+splicePlugin = mkPluginTestDescriptor' Splice.descriptor "splice"
 
 tests :: TestTree
 tests = testGroup "splice"

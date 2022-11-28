@@ -85,19 +85,19 @@ import qualified Ide.Plugin.CodeRange              as CodeRange
 #endif
 
 #if hls_changeTypeSignature
-import           Ide.Plugin.ChangeTypeSignature    as ChangeTypeSignature
+import qualified Ide.Plugin.ChangeTypeSignature    as ChangeTypeSignature
 #endif
 
 #if hls_gadt
-import           Ide.Plugin.GADT                   as GADT
+import qualified Ide.Plugin.GADT                   as GADT
 #endif
 
 #if explicitFixity
-import           Ide.Plugin.ExplicitFixity         as ExplicitFixity
+import qualified Ide.Plugin.ExplicitFixity         as ExplicitFixity
 #endif
 
 #if explicitFields
-import           Ide.Plugin.ExplicitFields         as ExplicitFields
+import qualified Ide.Plugin.ExplicitFields         as ExplicitFields
 #endif
 
 -- formatters
@@ -182,7 +182,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       Brittany.descriptor "brittany" :
 #endif
 #if hls_callHierarchy
-      CallHierarchy.descriptor :
+      CallHierarchy.descriptor "callHierarchy" :
 #endif
 #if hls_class
       let pId = "class" in Class.descriptor (pluginRecorder pId) pId:
@@ -221,7 +221,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "codeRange" in CodeRange.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_changeTypeSignature
-      ChangeTypeSignature.descriptor :
+      ChangeTypeSignature.descriptor "changeTypeSignature" :
 #endif
 #if hls_gadt
       GADT.descriptor "gadt" :

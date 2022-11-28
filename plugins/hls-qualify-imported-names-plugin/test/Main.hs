@@ -15,6 +15,7 @@ import           Test.Hls                        (CodeAction (CodeAction, _title
                                                   Command (Command), IdeState,
                                                   MonadIO (liftIO),
                                                   PluginDescriptor,
+                                                  PluginTestDescriptor,
                                                   Position (Position),
                                                   Range (Range), Session,
                                                   TestName, TestTree,
@@ -23,8 +24,10 @@ import           Test.Hls                        (CodeAction (CodeAction, _title
                                                   defaultTestRunner,
                                                   executeCodeAction,
                                                   getCodeActions,
-                                                  goldenWithHaskellDoc, openDoc,
-                                                  rename, runSessionWithServer,
+                                                  goldenWithHaskellDoc,
+                                                  mkPluginTestDescriptor',
+                                                  openDoc, rename,
+                                                  runSessionWithServer,
                                                   testCase, testGroup,
                                                   type (|?) (InR), (@?=))
 
@@ -126,8 +129,8 @@ codeActionGoldenTest testCaseName goldenFilename point =
 testDataDir :: String
 testDataDir = "test" </> "data"
 
-pluginDescriptor :: PluginDescriptor IdeState
-pluginDescriptor = QualifyImportedNames.descriptor "qualifyImportedNames"
+pluginDescriptor :: PluginTestDescriptor ()
+pluginDescriptor = mkPluginTestDescriptor' QualifyImportedNames.descriptor "qualifyImportedNames"
 
 getCodeActionTitle :: (Command |? CodeAction) -> Maybe Text
 getCodeActionTitle commandOrCodeAction

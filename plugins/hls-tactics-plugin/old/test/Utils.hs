@@ -34,8 +34,8 @@ import           Wingman.LanguageServer (mkShowMessageParams)
 import           Wingman.Types
 
 
-plugin :: PluginDescriptor IdeState
-plugin = Tactic.descriptor mempty "tactics"
+plugin :: PluginTestDescriptor Log
+plugin = mkPluginTestDescriptor Tactic.descriptor "tactics"
 
 ------------------------------------------------------------------------------
 -- | Get a range at the given line and column corresponding to having nothing
@@ -61,13 +61,15 @@ resetGlobalHoleRef = writeIORef globalHoleRef 0
 
 
 runSessionForTactics :: Session a -> IO a
-runSessionForTactics =
+runSessionForTactics act = do
+  recorder <- pluginTestRecorder
   runSessionWithServer'
-    [plugin]
+    [plugin recorder]
     def
     (def { messageTimeout = 20 } )
     fullCaps
     tacticPath
+    act
 
 ------------------------------------------------------------------------------
 -- | Make a tactic unit test.

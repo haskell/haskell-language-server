@@ -15,8 +15,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner test
 
-plugin :: PluginDescriptor IdeState
-plugin = ExplicitFields.descriptor mempty "explicit-fields"
+plugin :: PluginTestDescriptor ExplicitFields.Log
+plugin = mkPluginTestDescriptor ExplicitFields.descriptor "explicit-fields"
 
 test :: TestTree
 test = testGroup "explicit-fields"

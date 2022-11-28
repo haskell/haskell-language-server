@@ -9,8 +9,8 @@ import           Ide.Plugin.ChangeTypeSignature (errorMessageRegexes)
 import qualified Ide.Plugin.ChangeTypeSignature as ChangeTypeSignature
 import           System.FilePath                ((<.>), (</>))
 import           Test.Hls                       (CodeAction (..), Command,
-                                                 GhcVersion (..), IdeState,
-                                                 PluginDescriptor,
+                                                 GhcVersion (..),
+                                                 PluginTestDescriptor,
                                                  Position (Position),
                                                  Range (Range), Session,
                                                  TestName, TestTree,
@@ -21,9 +21,11 @@ import           Test.Hls                       (CodeAction (..), Command,
                                                  getCodeActions,
                                                  goldenWithHaskellDoc,
                                                  knownBrokenForGhcVersions,
-                                                 liftIO, openDoc,
-                                                 runSessionWithServer, testCase,
-                                                 testGroup, toEither, type (|?),
+                                                 liftIO,
+                                                 mkPluginTestDescriptor',
+                                                 openDoc, runSessionWithServer,
+                                                 testCase, testGroup, toEither,
+                                                 type (|?),
                                                  waitForAllProgressDone,
                                                  waitForDiagnostics, (@?=))
 import           Text.Regex.TDFA                ((=~))
@@ -31,8 +33,8 @@ import           Text.Regex.TDFA                ((=~))
 main :: IO ()
 main = defaultTestRunner test
 
-changeTypeSignaturePlugin :: PluginDescriptor IdeState
-changeTypeSignaturePlugin = ChangeTypeSignature.descriptor
+changeTypeSignaturePlugin :: PluginTestDescriptor ()
+changeTypeSignaturePlugin = mkPluginTestDescriptor' ChangeTypeSignature.descriptor "changeTypeSignature"
 
 test :: TestTree
 test = testGroup "changeTypeSignature" [
