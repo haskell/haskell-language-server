@@ -19,8 +19,8 @@ import           Text.Regex.TDFA                  ((=~))
 main :: IO ()
 main = defaultTestRunner test
 
-alternateNumberFormatPlugin :: PluginDescriptor IdeState
-alternateNumberFormatPlugin = AlternateNumberFormat.descriptor mempty  "alternateNumberFormat"
+alternateNumberFormatPlugin :: PluginTestDescriptor AlternateNumberFormat.Log
+alternateNumberFormatPlugin = mkPluginTestDescriptor AlternateNumberFormat.descriptor "alternateNumberFormat"
 
 -- NOTE: For whatever reason, this plugin does not play nice with creating Code Actions on time.
 -- As a result tests will mostly pass if `import Prelude` is added at the top. We (mostly fendor) surmise this has something
