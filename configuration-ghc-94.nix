@@ -13,12 +13,6 @@ let
     with pkgs.haskell.lib;
     {
       hlsDisabledPlugins = disabledPlugins;
-      # YOLO
-      mkDerivation = args:
-        hsuper.mkDerivation (args // {
-          jailbreak = true;
-          doCheck = false;
-        });
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
       # ptr-poker breaks on MacOS without SSE2 optimizations
       # https://github.com/nikita-volkov/ptr-poker/issues/11
