@@ -1,22 +1,5 @@
 {
   "nodes": {
-    "all-cabal-hashes-unpacked": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1668997806,
-        "narHash": "sha256-HRTQuIO/MxV5OcbCNsHSCeULa7KAjxIBQk5sAVFzrKk=",
-        "owner": "commercialhaskell",
-        "repo": "all-cabal-hashes",
-        "rev": "934c06ca91eb6ceca8a7c484dfc2862e955489f8",
-        "type": "github"
-      },
-      "original": {
-        "owner": "commercialhaskell",
-        "ref": "current-hackage",
-        "repo": "all-cabal-hashes",
-        "type": "github"
-      }
-    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -178,7 +161,6 @@
     },
     "root": {
       "inputs": {
-        "all-cabal-hashes-unpacked": "all-cabal-hashes-unpacked",
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "fourmolu": "fourmolu",
