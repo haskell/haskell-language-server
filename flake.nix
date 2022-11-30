@@ -19,13 +19,6 @@
       flake = false;
     };
 
-    # cabal hashes contains all the version for different haskell packages, to update:
-    # nix flake lock --update-input all-cabal-hashes-unpacked
-    all-cabal-hashes-unpacked = {
-      url = "github:commercialhaskell/all-cabal-hashes/current-hackage";
-      flake = false;
-    };
-
     # List of hackage dependencies
     ghc-exactprint-160 = {
       url = "https://hackage.haskell.org/package/ghc-exactprint-1.6.1/ghc-exactprint-1.6.1.tar.gz";
@@ -97,7 +90,7 @@
     };
   };
   outputs =
-    inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, all-cabal-hashes-unpacked, ... }:
+    inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, ... }:
     {
       overlays.default = final: prev:
         with prev;
@@ -201,14 +194,6 @@
           });
         in {
           inherit hlsSources;
-
-          all-cabal-hashes = prev.runCommand "all-cabal-hashes.tar.gz"
-            { }
-            ''
-              cd ${all-cabal-hashes-unpacked}
-              cd ..
-              tar czf $out $(basename ${all-cabal-hashes-unpacked})
-            '';
 
           # Haskell packages extended with our packages
           hlsHpkgs = compiler: extended haskell.packages.${compiler};
