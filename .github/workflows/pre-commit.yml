@@ -26,6 +26,8 @@ jobs:
     - uses: actions/checkout@v3
     - uses: ./.github/actions/setup-build
       with:
+        # select a stable GHC version
+        ghc: 9.2.5
         os: ${{ runner.os }}
         shorten-hls: false
 

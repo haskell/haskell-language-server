@@ -80,7 +80,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: [ "9.2.4"
+        # This list of GHC versions must fit to the list of GHC versions
+        # specified in 'test.yml'
+        ghc: [ "9.4.2"
+             , "9.4.1"
+             , "9.2.4"
              , "9.2.3"
              , "9.0.2"
              , "8.10.7"
@@ -89,6 +93,9 @@ jobs:
             , "macOS-latest"
             , "windows-latest"
             ]
+        exclude:
+          - os: windows-latest
+            ghc: '9.4.1'
 
     steps:
       - uses: actions/checkout@v3
