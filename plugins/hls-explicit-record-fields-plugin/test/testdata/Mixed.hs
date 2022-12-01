@@ -8,6 +8,7 @@ data MyRec = MyRec
   { foo :: Int
   , bar :: Int
   , baz :: Char
+  , quux :: Double
   }
 
 convertMe :: MyRec -> String
