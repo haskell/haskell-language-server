@@ -9,7 +9,6 @@ module Development.IDE.GHC.Compat.Outputable (
     ppr, pprPanic, text, vcat, (<+>), ($$), empty, hang, nest, punctuate,
     printSDocQualifiedUnsafe,
     printWithoutUniques,
-    printWithUniques,
     mkPrintUnqualified,
     mkPrintUnqualifiedDefault,
     PrintUnqualified(..),
@@ -103,22 +102,6 @@ printWithoutUniques =
     where
       go sdoc = oldRenderWithStyle dflags sdoc (oldMkUserStyle dflags neverQualify AllTheWay)
       dflags = unsafeGlobalDynFlags `gopt_set` Opt_SuppressUniques
-#endif
-
-printWithUniques :: Outputable a => a -> String
-printWithUniques =
-#if MIN_VERSION_ghc(9,2,0)
-  renderWithContext (defaultSDocContext
-    {
-      sdocStyle = defaultUserStyle
-    , sdocSuppressUniques = False
-    , sdocCanUseUnicode = True
-    }) . ppr
-#else
-  go . ppr
-    where
-      go sdoc = oldRenderWithStyle dflags sdoc (oldMkUserStyle dflags neverQualify AllTheWay)
-      dflags = unsafeGlobalDynFlags `gopt_unset` Opt_SuppressUniques `dopt_set` Opt_D_ppr_debug
 #endif
 
 printSDocQualifiedUnsafe :: PrintUnqualified -> SDoc -> String

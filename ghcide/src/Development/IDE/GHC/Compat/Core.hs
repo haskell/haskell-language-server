@@ -209,6 +209,7 @@ module Development.IDE.GHC.Compat.Core (
     noLocA,
     unLocA,
     LocatedAn,
+    LocatedN,
 #if MIN_VERSION_ghc(9,2,0)
     GHC.AnnListItem(..),
     GHC.NameAnn(..),
@@ -1030,6 +1031,13 @@ type LocatedAn a = GHC.LocatedAn a
 #else
 type LocatedAn a = GHC.Located
 #endif
+
+#if MIN_VERSION_ghc(9,2,0)
+type LocatedN = GHC.LocatedN
+#else
+type LocatedN = GHC.Located
+#endif
+
 
 #if MIN_VERSION_ghc(9,2,0)
 locA :: SrcSpanAnn' a -> SrcSpan
