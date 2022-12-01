@@ -27,6 +27,7 @@ module Development.IDE.GHC.Util(
     dontWriteHieFiles,
     disableWarningsAsErrors,
     printOutputable,
+    printOutputable',
     getExtensions
     ) where
 
@@ -297,6 +298,14 @@ printOutputable =
     -- More discussion at https://github.com/haskell/haskell-language-server/issues/3115.
     unescape . T.pack . printWithoutUniques
 {-# INLINE printOutputable #-}
+
+printOutputable' :: Outputable a => a -> T.Text
+printOutputable' =
+    -- IfaceTyLit from GHC.Iface.Type implements Outputable with 'show'.
+    -- Showing a String escapes non-ascii printable characters. We unescape it here.
+    -- More discussion at https://github.com/haskell/haskell-language-server/issues/3115.
+    unescape . T.pack . printWithUniques
+{-# INLINE printOutputable' #-}
 
 getExtensions :: ParsedModule -> [Extension]
 getExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary

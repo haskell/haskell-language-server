@@ -18,7 +18,7 @@ import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Control.Monad.Trans.Except      (ExceptT)
 import           Data.Generics                   (GenericQ, everything, extQ,
-                                                  mkQ)
+                                                  mkQ, listify)
 import qualified Data.HashMap.Strict             as HashMap
 import           Data.Maybe                      (isJust, listToMaybe,
                                                   maybeToList)
@@ -26,7 +26,7 @@ import           Data.Text                       (Text)
 import           Development.IDE                 (IdeState, NormalizedFilePath,
                                                   Pretty (..), Recorder (..),
                                                   Rules, WithPriority (..),
-                                                  realSrcSpanToRange)
+                                                  realSrcSpanToRange, vcat)
 import           Development.IDE.Core.Rules      (runAction)
 import           Development.IDE.Core.RuleTypes  (TcModuleResult (..),
                                                   TypeCheck (..))
@@ -42,9 +42,9 @@ import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
                                                   RealSrcSpan, conPatDetails,
                                                   hfbPun, hs_valds,
                                                   mapConPatDetail, mapLoc,
-                                                  pattern RealSrcSpan)
+                                                  pattern RealSrcSpan, Name, HsRecField' (..), NamedThing (..), mkVarOcc, nameOccName, FieldOcc, SrcSpan, GenLocated (..), nameUnique, LIdP, nameSrcSpan)
 import           Development.IDE.GHC.Util        (getExtensions,
-                                                  printOutputable)
+                                                  printOutputable, printOutputable')
 import           Development.IDE.Graph           (RuleResult)
 import           Development.IDE.Graph.Classes   (Hashable, NFData (rnf))
 import           Development.IDE.Spans.Pragmas   (NextPragmaInfo (..),
@@ -73,17 +73,24 @@ import           Language.LSP.Types              (CodeAction (..),
                                                   normalizedFilePathToUri,
                                                   type (|?) (InR))
 import qualified Language.LSP.Types.Lens         as L
+import Development.IDE (hcat)
+import Data.Foldable (find)
+import Debug.Trace (trace)
 
 
 data Log
   = LogShake Shake.Log
   | LogCollectedRecords [RecordInfo]
+  | LogCollectedNames [LIdP (GhcPass 'Renamed)]
   | LogRenderedRecords [RenderedRecordInfo]
 
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
     LogCollectedRecords recs -> "Collected records with wildcards:" <+> pretty recs
+    LogCollectedNames names ->
+      let names' = map (\(L l e) -> pretty (show l) <+> pretty (printOutputable' e)) names
+       in "Collected names:" <+> vcat names'
     LogRenderedRecords recs -> "Rendered records:" <+> pretty recs
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
@@ -142,7 +149,9 @@ collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
   let exts = getEnabledExtensions <$> tmr
       recs = concat $ maybeToList (getRecords <$> tmr)
   logWith recorder Debug (LogCollectedRecords recs)
-  let renderedRecs = traverse renderRecordInfo recs
+  let names = concat $ maybeToList (getNames <$> tmr)
+  logWith recorder Info (LogCollectedNames names)
+  let renderedRecs = traverse (renderRecordInfo names) recs
       recMap = RangeMap.fromList (realSrcSpanToRange . renderedSrcSpan) <$> renderedRecs
   logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
   pure ([], CRR <$> recMap <*> exts)
@@ -153,6 +162,9 @@ collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
 getRecords :: TcModuleResult -> [RecordInfo]
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
   collectRecords valBinds
+
+getNames :: TcModuleResult -> [LIdP (GhcPass 'Renamed)]
+getNames (tmrRenamed -> (group,_,_,_)) = collectNames group
 
 data CollectRecords = CollectRecords
                     deriving (Eq, Show, Generic)
@@ -199,9 +211,13 @@ instance Pretty RenderedRecordInfo where
 
 instance NFData RenderedRecordInfo
 
-renderRecordInfo :: RecordInfo -> Maybe RenderedRecordInfo
-renderRecordInfo (RecordInfoPat ss pat) = RenderedRecordInfo ss <$> showRecordPat pat
-renderRecordInfo (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecordCon expr
+renderRecordInfo :: [LIdP (GhcPass 'Renamed)] -> RecordInfo -> Maybe RenderedRecordInfo
+renderRecordInfo names (RecordInfoPat ss pat) = RenderedRecordInfo ss <$> showRecordPat names pat
+renderRecordInfo _ (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecordCon expr
+
+-- mkVarOcc
+-- getFieldName :: HsRecField' id arg -> Name
+-- getFieldName = getName
 
 -- We make use of the `Outputable` instances on AST types to pretty-print
 -- the renamed and expanded records back into source form, to be substituted
@@ -225,9 +241,40 @@ preprocessRecord flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
     puns' = map (mapLoc (\fld -> fld { hfbPun = True })) puns
     rec_flds' = no_puns <> puns'
 
-showRecordPat :: Outputable (Pat (GhcPass c)) => Pat (GhcPass c) -> Maybe Text
-showRecordPat = fmap printOutputable . mapConPatDetail (\case
-  RecCon flds -> Just $ RecCon (preprocessRecord flds)
+preprocessRecord' :: [LIdP (GhcPass 'Renamed)] -> HsRecFields (GhcPass 'Renamed) (LPat (GhcPass 'Renamed)) -> HsRecFields (GhcPass 'Renamed) (LPat (GhcPass 'Renamed))
+preprocessRecord' names flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
+  where
+    no_pun_count = maybe (length (rec_flds flds)) unLoc (rec_dotdot flds)
+    -- Field binds of the explicit form (e.g. `{ a = a' }`) should be
+    -- left as is, hence the split.
+    (no_puns, puns) = splitAt no_pun_count (rec_flds flds)
+    -- `hsRecPun` is set to `True` in order to pretty-print the fields as field
+    -- puns (since there is similar mechanism in the `Outputable` instance as
+    -- explained above).
+    puns' = let v = map (mapLoc (\fld -> fld { hfbPun = True })) puns in trace ("puns before: " <> show v) v
+    -- default to expanding if somehow `Nothing` ends up here
+    f :: Name -> Bool
+    f name = trace ("field: " <> show (printOutputable' name) <> " " <> show (nameSrcSpan name)) $
+      isJust $ find (\n -> unLoc n == name && srcSpanToRealSrcSpan (getLoc n) /= srcSpanToRealSrcSpan (nameSrcSpan name)) names
+    puns'' = let v = filter (\x -> maybe True f (getFieldName (unLoc x))) puns' in trace ("puns after: " <> show v) v
+
+    rec_flds' = no_puns <> puns''
+
+srcSpanToRealSrcSpan :: SrcSpan -> Maybe RealSrcSpan
+srcSpanToRealSrcSpan (RealSrcSpan ss _) = Just ss
+srcSpanToRealSrcSpan _ = Nothing
+
+getFieldName :: HsRecField' (FieldOcc (GhcPass 'Renamed)) (LPat (GhcPass 'Renamed)) -> Maybe Name
+getFieldName x = case unLoc (hsRecFieldArg x) of
+  VarPat _ x' -> Just $ unLoc x'
+  _ -> Nothing
+
+-- getFieldName :: GenLocated SrcSpan (HsRecField' (FieldOcc (GhcPass c)) arg) -> Name
+-- getFieldName = _
+
+showRecordPat :: Outputable (Pat (GhcPass 'Renamed)) => [LIdP (GhcPass 'Renamed)] -> Pat (GhcPass 'Renamed) -> Maybe Text
+showRecordPat names = fmap printOutputable . mapConPatDetail (\case
+  RecCon flds -> Just $ RecCon (preprocessRecord' names flds)
   _           -> Nothing)
 
 showRecordCon :: Outputable (HsExpr (GhcPass c)) => HsExpr (GhcPass c) -> Maybe Text
@@ -238,6 +285,9 @@ showRecordCon _ = Nothing
 
 collectRecords :: GenericQ [RecordInfo]
 collectRecords = everything (<>) (maybeToList . (Nothing `mkQ` getRecPatterns `extQ` getRecCons))
+
+collectNames :: GenericQ [LIdP (GhcPass 'Renamed)]
+collectNames = listify (const True)
 
 getRecCons :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordInfo
 getRecCons e@(unLoc -> RecordCon _ _ flds)
