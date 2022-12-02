@@ -22,6 +22,7 @@ test :: TestTree
 test = testGroup "explicit-fields"
   [ mkTest "WildcardOnly" "WildcardOnly" 12 10 12 20
   , mkTest "Unused" "Unused" 12 10 12 20
+  , mkTest "Unused2" "Unused2" 12 10 12 20
   , mkTest "WithPun" "WithPun" 13 10 13 25
   , mkTest "WithExplicitBind" "WithExplicitBind" 12 10 12 32
   , mkTest "Mixed" "Mixed" 14 10 14 37

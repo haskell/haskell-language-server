@@ -6,7 +6,7 @@ module Unused where
 data MyRec = MyRec
   { foo :: Int
   , bar :: Int
-  , foobar :: Char
+  , baz :: Char
   }
 
 convertMe :: MyRec -> String

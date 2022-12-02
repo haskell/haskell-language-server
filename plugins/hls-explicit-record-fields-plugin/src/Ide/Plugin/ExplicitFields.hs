@@ -27,8 +27,7 @@ import           Data.Text                       (Text)
 import           Development.IDE                 (IdeState, NormalizedFilePath,
                                                   Pretty (..), Recorder (..),
                                                   Rules, WithPriority (..),
-                                                  hcat, hsep, realSpan,
-                                                  realSrcSpanToRange)
+                                                  realSpan, realSrcSpanToRange)
 import           Development.IDE.Core.Rules      (runAction)
 import           Development.IDE.Core.RuleTypes  (TcModuleResult (..),
                                                   TypeCheck (..))
@@ -38,18 +37,14 @@ import           Development.IDE.GHC.Compat      (HsConDetails (RecCon),
                                                   HsRecFields (..), LPat,
                                                   Outputable, getLoc, unLoc)
 import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
-                                                  FieldOcc, GenLocated (..),
-                                                  GhcPass,
+                                                  GenLocated (..), GhcPass,
                                                   HsExpr (RecordCon, rcon_flds),
-                                                  LHsExpr, LIdP, LocatedN, Name,
-                                                  NamedThing (..), Pass (..),
-                                                  Pat (..), RealSrcSpan,
-                                                  SrcSpan, conPatDetails,
+                                                  LHsExpr, LocatedN, Name,
+                                                  Pass (..), Pat (..),
+                                                  RealSrcSpan, conPatDetails,
                                                   hfbPun, hfbRHS, hs_valds,
                                                   mapConPatDetail, mapLoc,
-                                                  mkVarOcc, nameOccName,
-                                                  nameSrcSpan, nameUnique,
-                                                  pattern HsFieldBind,
+                                                  nameSrcSpan,
                                                   pattern RealSrcSpan)
 import           Development.IDE.GHC.Util        (getExtensions,
                                                   printOutputable)
