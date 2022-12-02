@@ -114,7 +114,10 @@
             with haskell.lib; {
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
-              hiedb = hsuper.callCabal2nix "hiedb" inputs.hiedb {};
+              # Tests are broken on 9.2 and 9.4, and we wind up bypassing the
+              # nixpkgs fixes to the test suite by doing this override. So just
+              # turn it off.
+              hiedb = haskell.lib.dontCheck (hsuper.callCabal2nix "hiedb" inputs.hiedb {});
 
               # https://github.com/NixOS/nixpkgs/issues/140774
               ormolu =
@@ -135,21 +138,28 @@
             builtins.mapAttrs (_: haskell.lib.dontCheck)
               (overlay hself hsuper);
 
-          extended = hpkgs: hpkgs.override (old: {
+          applyHaskellOverlays = overlays: hpkgs: hpkgs.override (old: {
             overrides =
               lib.fold
                 lib.composeExtensions
                 (old.overrides or (_: _: { }))
-                [ haskellOverrides
-                  (dontCheck (haskell.lib.packageSourceOverrides hlsSources))
-                  tweaks
-                ];
+                overlays;
           });
+
+          extended = forHlsCI:
+            applyHaskellOverlays
+              (prev.lib.optional forHlsCI haskellOverrides
+               ++ [ (dontCheck (haskell.lib.packageSourceOverrides hlsSources))
+                    tweaks
+                  ]
+              );
         in {
           inherit hlsSources;
 
           # Haskell packages extended with our packages
-          hlsHpkgs = compiler: extended haskell.packages.${compiler};
+          hlsHpkgs = compiler: extended true haskell.packages.${compiler};
+          # Haskell packages extended with our packages; reusing the nixpkgs set as much as possible
+          hlsHpkgsNixpkgs = compiler: extended false haskell.packages.${compiler};
 
           # Support of GenChangelogs.hs
           gen-hls-changelogs = hpkgs:
