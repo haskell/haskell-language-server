@@ -23,7 +23,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: haskell/actions/setup@v1
+    - uses: haskell/actions/setup@v2
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
@@ -74,7 +74,7 @@ runs:
     # We have to restore package sources before `cabal update`
     # because it overwrites the hackage index with the cached one
     - name: Hackage sources cache
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       env:
         cache-name: hackage-sources
       with:
@@ -99,7 +99,7 @@ runs:
 
     - name: Compiled deps cache
       id: compiled-deps
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       env:
         cache-name: compiled-deps
       with:
