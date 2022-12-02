@@ -62,6 +62,7 @@ jobs:
       matrix:
         ghc: [ "9.4.2"
              , "9.4.1"
+             , "9.2.5"
              , "9.2.4"
              , "9.2.3"
              , "9.0.2"
@@ -84,7 +85,7 @@ jobs:
              ghc: '9.4.2'
              test: true
            - os: ubuntu-latest
-             ghc: '9.2.4'
+             ghc: '9.2.5'
              test: true
            - os: ubuntu-latest
              ghc: '9.0.2'
@@ -96,7 +97,7 @@ jobs:
              ghc: '9.4.2'
              test: true
            - os: windows-latest
-             ghc: '9.2.4'
+             ghc: '9.2.5'
              test: true
            - os: windows-latest
              ghc: '9.0.2'
@@ -158,7 +159,7 @@ jobs:
           HLS_WRAPPER_TEST_EXE: hls-wrapper
         run: cabal test wrapper-test --test-options="$TEST_OPTS --rerun-log-file .tasty-rerun-log-wrapper"
 
-      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2'
         name: Test hls-brittany-plugin
         run: cabal test hls-brittany-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-brittany-plugin --test-options="$TEST_OPTS"
 
@@ -182,7 +183,7 @@ jobs:
         name: Test hls-eval-plugin
         run: cabal test hls-eval-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-eval-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2'
         name: Test hls-haddock-comments-plugin
         run: cabal test hls-haddock-comments-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-haddock-comments-plugin --test-options="$TEST_OPTS"
 
@@ -202,7 +203,7 @@ jobs:
         name: Test hls-fourmolu-plugin
         run: cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2'
         name: Test hls-tactics-plugin test suite
         run: cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-tactics-plugin --test-options="$TEST_OPTS"
 
@@ -226,7 +227,7 @@ jobs:
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-hlint-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.0.1' && matrix.ghc != '9.0.2' && matrix.ghc != '9.2.4' && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.0.1' && matrix.ghc != '9.0.2' && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2'
         name: Test hls-stan-plugin test suite
         run: cabal test hls-stan-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-stan-plugin --test-options="$TEST_OPTS"
 
