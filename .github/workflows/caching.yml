@@ -97,6 +97,9 @@ jobs:
         exclude:
           - os: windows-latest
             ghc: '9.4.1'
+          # excluded until haskell/actions works properly
+          - os: windows-latest
+            ghc: '9.2.5'
 
     steps:
       - uses: actions/checkout@v3
