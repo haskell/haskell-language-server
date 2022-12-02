@@ -1841,7 +1841,19 @@ smallerRangesForBindingExport lies b =
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
-rangesForBinding' b (L (locA -> l) x@IEVar{}) | T.unpack (printOutputable x) == b = [l]
+#if !MIN_VERSION_ghc(9,2,0)
+rangesForBinding' b (L (locA -> l) (IEVar _ nm))
+  | L _ (IEPattern (L _ b')) <- nm
+  , T.unpack (printOutputable b') == b
+  = [l]
+#else
+rangesForBinding' b (L (locA -> l) (IEVar _ nm))
+  | L _ (IEPattern _ (L _ b')) <- nm
+  , T.unpack (printOutputable b') == b
+  = [l]
+#endif
+rangesForBinding' b (L (locA -> l) x@IEVar{})
+  | T.unpack (printOutputable x) == b = [l]
 rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | T.unpack (printOutputable x) == b = [l]
 rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | T.unpack (printOutputable x) == b = [l]
 #if !MIN_VERSION_ghc(9,2,0)
