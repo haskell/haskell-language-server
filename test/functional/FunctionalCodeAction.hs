@@ -177,16 +177,21 @@ redundantImportTests = testGroup "redundant import code actions" [
             doc <- openDoc "src/CodeActionRedundant.hs" "haskell"
 
             diags <- waitForDiagnosticsFromSource doc "typecheck"
-            liftIO $ expectDiagnostic diags ["The import of", "Data.List", "is redundant"]
+            liftIO $ expectDiagnostic diags [ "The import of", "Data.List", "is redundant" ]
+            liftIO $ expectDiagnostic diags [ "Empty", "from module", "Data.Sequence" ]
 
             mActions <- getAllCodeActions doc
 
             let allActions = map fromAction mActions
                 actionTitles = map (view L.title) allActions
 
-            liftIO $ actionTitles `shouldContain` ["Remove import", "Remove all redundant imports"]
+            liftIO $ actionTitles `shouldContain`
+              [ "Remove import"
+              , "Remove Empty from import"
+              , "Remove all redundant imports"
+              ]
 
-            let mbRemoveAction = find (\x -> x ^. L.title == "Remove import") allActions
+            let mbRemoveAction = find (\x -> x ^. L.title == "Remove all redundant imports") allActions
 
             case mbRemoveAction of
                 Just removeAction -> do
@@ -203,7 +208,17 @@ redundantImportTests = testGroup "redundant import code actions" [
             -- provides workspace edit property which skips round trip to
             -- the server
             contents <- documentContents doc
-            liftIO $ contents @?= "{-# OPTIONS_GHC -Wunused-imports #-}\nmodule CodeActionRedundant where\nmain :: IO ()\nmain = putStrLn \"hello\"\n"
+            liftIO $ contents @?= T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+              , "{-# LANGUAGE PatternSynonyms #-}"
+              , "module CodeActionRedundant where"
+              , "-- We need a non-reduntant import in the import list"
+              , "-- to properly test the removal of the singular redundant item"
+              , "import Data.Sequence (singleton)"
+              , "main :: IO ()"
+              , "main = putStrLn \"hello\""
+              , "  where unused = Data.Sequence.singleton 42"
+              ]
 
     , testCase "doesn't touch other imports" $ runSession hlsCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
         doc <- openDoc "src/MultipleImports.hs" "haskell"
