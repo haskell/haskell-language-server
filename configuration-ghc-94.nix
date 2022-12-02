@@ -17,8 +17,9 @@ let
       # https://github.com/nikita-volkov/ptr-poker/issues/11
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
+      # Freezes in test for some reason.
       ghc-exactprint =
-        hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-160 { };
+        dontCheck (hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-160 { });
       hlint = hsuper.callCabal2nix "hlint" inputs.hlint-35 {};
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
@@ -26,8 +27,9 @@ let
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
-        (pkgs.lib.concatStringsSep " " [ "-fpedantic" "-f-hlint" ]) { };
-
+        # Pedantic cannot be used due to -Werror=unused-top-binds
+        # Check must be disabled due to some missing required files
+        (pkgs.lib.concatStringsSep " " [ "--no-check" "-f-pedantic" "-f-hlint" ]) { };
     });
 in {
   inherit disabledPlugins;
