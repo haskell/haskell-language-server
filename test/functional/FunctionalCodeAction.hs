@@ -106,7 +106,6 @@ importTests = testGroup "import suggestions" [
 packageTests :: TestTree
 packageTests = testGroup "add package suggestions" [
     ignoreTestBecause "no support for adding dependent packages via code action" $ testCase "adds to .cabal files" $ do
-        flushStackEnvironment
         runSession hlsCommand fullCaps "test/testdata/addPackageTest/cabal-exe" $ do
             doc <- openDoc "AddPackage.hs" "haskell"
 
