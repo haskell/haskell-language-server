@@ -78,7 +78,8 @@ jobs:
         exclude:
            - os: windows-latest
              ghc: '9.4.1'
-           # excluded until haskell/actions works properly
+           # Exclude until https://github.com/haskell/actions/issues/129
+           # is resolved.
            - os: windows-latest
              ghc: '9.2.5'
         # Mark which GHC versions on which platform we want to test.
@@ -99,9 +100,11 @@ jobs:
            - os: windows-latest
              ghc: '9.4.2'
              test: true
-          #  - os: windows-latest
-          #    ghc: '9.2.5'
-          #    test: true
+           # Test on 9.2.4 until https://github.com/haskell/actions/issues/129
+           # is resolved. Then switch to 9.2.5
+           - os: windows-latest
+             ghc: '9.2.4'
+             test: true
            - os: windows-latest
              ghc: '9.0.2'
              test: true

@@ -97,7 +97,8 @@ jobs:
         exclude:
           - os: windows-latest
             ghc: '9.4.1'
-          # excluded until haskell/actions works properly
+          # Exclude until https://github.com/haskell/actions/issues/129
+          # is resolved.
           - os: windows-latest
             ghc: '9.2.5'
 
