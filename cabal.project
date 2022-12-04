@@ -51,7 +51,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-10-07T12:19:15Z
+index-state: 2022-12-04T14:06:02Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
@@ -85,22 +85,5 @@ allow-newer:
   -- ghc-9.4
   Chart-diagrams:lens,
   Chart:lens,
-  co-log-core:base,
-  constraints-extras:base,
-  constraints-extras:template-haskell,
   dependent-sum:some,
-  diagrams-contrib:base,
-  diagrams-contrib:lens,
-  diagrams-postscript:base,
-  diagrams-postscript:lens,
-  diagrams-svg:base,
-  diagrams-svg:lens,
-  ekg-json:base,
-  ghc-paths:Cabal,
-  haddock-library:base,
-  monoid-extras:base,
-  monoid-subclasses:vector,
-  svg-builder:base,
-  uuid:time,
-  vector-space:base,
   ekg-wai:time,
