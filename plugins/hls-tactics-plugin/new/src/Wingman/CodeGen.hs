@@ -10,10 +10,7 @@ module Wingman.CodeGen
   ) where
 
 
-import           Control.Lens ((%~), (<>~), (&))
-import           Control.Monad.Except
-import           Control.Monad.Reader (ask)
-import           Control.Monad.State
+import           Control.Lens ((%~), (&))
 import           Data.Bifunctor (second)
 import           Data.Bool (bool)
 import           Data.Functor ((<&>))
@@ -31,7 +28,6 @@ import           GHC.SourceGen.Pat
 import           Wingman.CodeGen.Utils
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Judgements.Theta
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
@@ -51,18 +47,14 @@ destructMatches
 -- 'destructionFor'. Make sure to change that if you ever change this.
 destructMatches use_field_puns f scrut t jdg = do
   let hy = jEntireHypothesis jdg
-      g  = jGoal jdg
   case tacticsGetDataCons $ unCType t of
     Nothing -> cut -- throwError $ GoalMismatch "destruct" g
     Just (dcs, apps) ->
       fmap unzipTrace $ for dcs $ \dc -> do
         let con = RealDataCon dc
-            ev = concatMap (mkEvidence . scaledThing) $ dataConInstArgTys dc apps
             -- We explicitly do not need to add the method hypothesis to
             -- #syn_scoped
-            method_hy = foldMap evidenceToHypothesis ev
             args = conLikeInstOrigArgTys' con apps
-        ctx <- ask
 
         let names_in_scope = hyNamesInScope hy
             names = mkManyGoodNames (hyNamesInScope hy) args
@@ -72,15 +64,8 @@ destructMatches use_field_puns f scrut t jdg = do
         let hy' = patternHypothesis scrut con jdg
                 $ zip names'
                 $ coerce args
-            j = withNewCoercions (evidenceToCoercions ev)
-              $ introduce ctx hy'
-              $ introduce ctx method_hy
-              $ withNewGoal g jdg
-        ext <- f con j
+        ext <- f con $ introduce hy' jdg
         pure $ ext
-          & #syn_trace %~ rose ("match " <> show dc <> " {" <> intercalate ", " (fmap show names') <> "}")
-                        . pure
-          & #syn_scoped <>~ hy'
           & #syn_val %~ match [destructed] . unLoc
 
 
@@ -207,7 +192,6 @@ patSynExTys ps = patSynExTyVars ps
 
 destruct' :: Bool -> (ConLike -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
 destruct' use_field_puns f hi jdg = do
-  when (isDestructBlacklisted jdg) cut -- throwError NoApplicableTactic
   let term = hi_name hi
   ext
       <- destructMatches
@@ -217,7 +201,6 @@ destruct' use_field_puns f hi jdg = do
            (hi_type hi)
            $ disallowing AlreadyDestructed (S.singleton term) jdg
   pure $ ext
-    & #syn_trace     %~ rose ("destruct " <> show term) . pure
     & #syn_val       %~ noLoc . case' (var' term)
 
 
@@ -226,7 +209,6 @@ destruct' use_field_puns f hi jdg = do
 -- resulting matches.
 destructLambdaCase' :: Bool -> (ConLike -> Judgement -> Rule) -> Judgement -> Rule
 destructLambdaCase' use_field_puns f jdg = do
-  when (isDestructBlacklisted jdg) cut -- throwError NoApplicableTactic
   let g  = jGoal jdg
   case splitFunTy_maybe (unCType g) of
 #if __GLASGOW_HASKELL__ >= 900
@@ -242,18 +224,14 @@ destructLambdaCase' use_field_puns f jdg = do
 ------------------------------------------------------------------------------
 -- | Construct a data con with subgoals for each field.
 buildDataCon
-    :: Bool       -- Should we blacklist destruct?
-    -> Judgement
+    :: Judgement
     -> ConLike            -- ^ The data con to build
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (Synthesized (LHsExpr GhcPs))
-buildDataCon should_blacklist jdg dc tyapps = do
+buildDataCon jdg dc tyapps = do
   args <- case dc of
     RealDataCon dc' -> do
-      let (skolems', theta, args) = dataConInstSig dc' tyapps
-      modify $ \ts ->
-        evidenceToSubst (foldMap mkEvidence theta) ts
-          & #ts_skolems <>~ S.fromList skolems'
+      let (_ , _, args) = dataConInstSig dc' tyapps
       pure args
     _ ->
       -- If we have a 'PatSyn', we can't continue, since there is no
@@ -269,12 +247,10 @@ buildDataCon should_blacklist jdg dc tyapps = do
        $ traverse ( \(arg, n) ->
                     newSubgoal
                   . filterSameTypeFromOtherPositions dc n
-                  . bool id blacklistingDestruct should_blacklist
                   . flip withNewGoal jdg
                   $ CType arg
                   ) $ zip args [0..]
   pure $ ext
-    & #syn_trace %~ rose (show dc) . pure
     & #syn_val   %~ mkCon dc tyapps
 
 
@@ -300,7 +276,6 @@ letForEach rename solve (unHypothesis -> hy) jdg = do
   case hy of
     [] -> newSubgoal jdg
     _ -> do
-      ctx <- ask
       let g = jGoal jdg
       terms <- fmap sequenceA $ for hy $ \hi -> do
         let name = rename $ hi_name hi
@@ -309,7 +284,7 @@ letForEach rename solve (unHypothesis -> hy) jdg = do
         pure $ fmap ((name,) . unLoc) res
       let hy' = fmap (g <$) $ syn_val terms
           matches = fmap (fmap (\(occ, expr) -> valBind (occNameToStr occ) expr)) terms
-      g <- fmap (fmap unLoc) $ newSubgoal $ introduce ctx (userHypothesis hy') jdg
+      g <- fmap (fmap unLoc) $ newSubgoal $ introduce (userHypothesis hy') jdg
       pure $ fmap noLoc $ let' <$> matches <*> g
 
 
@@ -321,9 +296,8 @@ nonrecLet
     -> RuleM (Synthesized (LHsExpr GhcPs))
 nonrecLet occjdgs jdg = do
   occexts <- traverse newSubgoal $ fmap snd occjdgs
-  ctx     <- ask
   ext     <- newSubgoal
-           $ introduce ctx (userHypothesis $ fmap (second jGoal) occjdgs) jdg
+           $ introduce (userHypothesis $ fmap (second jGoal) occjdgs) jdg
   pure $ fmap noLoc $
     let'
       <$> traverse

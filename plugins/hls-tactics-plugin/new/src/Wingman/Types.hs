@@ -49,8 +49,7 @@ import           Data.IORef
 -- actual tactics via 'commandTactic' and are contextually provided to the
 -- editor via 'commandProvider'.
 data TacticCommand
-  = Auto
-  | Intros
+  = Intros
   | IntroAndDestruct
   | Destruct
   | DestructPun
@@ -60,15 +59,12 @@ data TacticCommand
   | DestructAll
   | UseDataCon
   | Refine
-  | BeginMetaprogram
-  | RunMetaprogram
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Generate a title for the command.
 tacticTitle :: TacticCommand -> T.Text -> T.Text
 tacticTitle = (mappend "Wingman: " .) . go
   where
-    go Auto _                   = "Attempt to fill hole"
     go Intros _                 = "Introduce lambda"
     go IntroAndDestruct _       = "Introduce and destruct term"
     go Destruct var             = "Case split on " <> var
@@ -79,8 +75,6 @@ tacticTitle = (mappend "Wingman: " .) . go
     go DestructAll _            = "Split all function arguments"
     go UseDataCon dcon          = "Use constructor " <> dcon
     go Refine _                 = "Refine hole"
-    go BeginMetaprogram _       = "Use custom tactic block"
-    go RunMetaprogram _         = "Run custom tactic"
 
 
 ------------------------------------------------------------------------------
@@ -88,8 +82,6 @@ tacticTitle = (mappend "Wingman: " .) . go
 data Config = Config
   { cfg_max_use_ctor_actions :: Int
   , cfg_timeout_seconds      :: Int
-  , cfg_auto_gas             :: Int
-  , cfg_proofstate_styling   :: Bool
   }
   deriving (Eq, Ord, Show)
 
@@ -97,8 +89,6 @@ emptyConfig :: Config
 emptyConfig = Config
   { cfg_max_use_ctor_actions = 5
   , cfg_timeout_seconds = 2
-  , cfg_auto_gas = 4
-  , cfg_proofstate_styling = True
   }
 
 ------------------------------------------------------------------------------
@@ -211,13 +201,8 @@ data Provenance
       Int       -- ^ of how many arguments total?
     -- | A binding created in a pattern match.
   | PatternMatchPrv PatVal
-    -- | A class method from the given context.
-  | ClassMethodPrv
-      (Uniquely Class)     -- ^ Class
     -- | A binding explicitly written by the user.
   | UserPrv
-    -- | A binding explicitly imported by the user.
-  | ImportPrv
     -- | The recursive hypothesis. Present only in the context of the recursion
     -- tactic.
   | RecursivePrv
@@ -299,8 +284,6 @@ overProvenance f (HyInfo name prv ty) = HyInfo name (f prv) ty
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
   { _jHypothesis        :: !(Hypothesis a)
-  , _jBlacklistDestruct :: !Bool
-  , _jWhitelistSplit    :: !Bool
   , _jIsTopHole         :: !Bool
   , _jGoal              :: !a
   , j_coercion          :: TCvSubst
@@ -310,8 +293,8 @@ data Judgement' a = Judgement
 type Judgement = Judgement' CType
 
 
-newtype ExtractM a = ExtractM { unExtractM :: ReaderT Context IO a }
-    deriving newtype (Functor, Applicative, Monad, MonadReader Context)
+newtype ExtractM a = ExtractM { unExtractM :: ReaderT Config IO a }
+    deriving newtype (Functor, Applicative, Monad, MonadReader Config)
 
 ------------------------------------------------------------------------------
 -- | Used to ensure hole names are unique across invocations of runTactic
@@ -396,43 +379,24 @@ type TacticsM  = TacticT Judgement (Synthesized (LHsExpr GhcPs)) TacticError Tac
 type RuleM     = RuleT Judgement (Synthesized (LHsExpr GhcPs)) TacticError TacticState ExtractM
 type Rule      = RuleM (Synthesized (LHsExpr GhcPs))
 
-type Trace = Rose String
-
 ------------------------------------------------------------------------------
 -- | The extract for refinery. Represents a "synthesized attribute" in the
 -- context of attribute grammars. In essence, 'Synthesized' describes
 -- information we'd like to pass from leaves of the tactics search upwards.
 -- This includes the actual AST we've generated (in 'syn_val').
 data Synthesized a = Synthesized
-  { syn_trace  :: Trace
-    -- ^ A tree describing which tactics were used produce the 'syn_val'.
-    -- Mainly for debugging when you get the wrong answer, to see the other
-    -- things it tried.
-  , syn_scoped :: Hypothesis CType
-    -- ^ All of the bindings created to produce the 'syn_val'.
-  , syn_used_vals :: Set OccName
-    -- ^ The values used when synthesizing the 'syn_val'.
-  , syn_recursion_count :: Sum Int
-    -- ^ The number of recursive calls
-  , syn_val    :: a
+  { syn_val    :: a
   }
   deriving stock (Eq, Show, Functor, Foldable, Traversable, Generic, Data, Typeable)
 
 instance Monad Synthesized where
   return = pure
-  Synthesized tr1 sc1 uv1 rc1 a >>= f =
+  Synthesized a >>= f =
     case f a of
-      Synthesized tr2 sc2 uv2 rc2 b ->
+      Synthesized b ->
         Synthesized
-          { syn_trace = tr1 <> tr2
-          , syn_scoped = sc1 <> sc2
-          , syn_used_vals = uv1 <> uv2
-          , syn_recursion_count = rc1 <> rc2
-          , syn_val = b
+          { syn_val = b
           }
-
-mapTrace :: (Trace -> Trace) -> Synthesized a -> Synthesized a
-mapTrace f (Synthesized tr sc uv rc a) = Synthesized (f tr) sc uv rc a
 
 
 ------------------------------------------------------------------------------
@@ -440,88 +404,17 @@ mapTrace f (Synthesized tr sc uv rc a) = Synthesized (f tr) sc uv rc a
 -- lawful. But that's only for debug output, so it's not anything I'm concerned
 -- about.
 instance Applicative Synthesized where
-  pure = Synthesized mempty mempty mempty mempty
-  Synthesized tr1 sc1 uv1 rc1 f <*> Synthesized tr2 sc2 uv2 rc2 a =
-    Synthesized (tr1 <> tr2) (sc1 <> sc2) (uv1 <> uv2) (rc1 <> rc2) $ f a
-
-
-------------------------------------------------------------------------------
--- | The Reader context of tactics and rules
-data Context = Context
-  { ctxDefiningFuncs :: [(OccName, CType)]
-    -- ^ The functions currently being defined
-  , ctxModuleFuncs   :: [(OccName, CType)]
-    -- ^ Everything defined in the current module
-  , ctxConfig        :: Config
-  , ctxInstEnvs      :: InstEnvs
-  , ctxFamInstEnvs   :: FamInstEnvs
-  , ctxTheta         :: Set CType
-  , ctx_hscEnv       :: HscEnv
-  , ctx_occEnv       :: OccEnv [GlobalRdrElt]
-  , ctx_module       :: Module
-  }
-
-instance Show Context where
-  show Context{..} = mconcat
-    [ "Context "
-    , showsPrec 10 ctxDefiningFuncs ""
-    , showsPrec 10 ctxModuleFuncs ""
-    , showsPrec 10 ctxConfig ""
-    , showsPrec 10 ctxTheta ""
-    ]
-
-
-------------------------------------------------------------------------------
--- | An empty context
-emptyContext :: Context
-emptyContext
-  = Context
-      { ctxDefiningFuncs = mempty
-      , ctxModuleFuncs = mempty
-      , ctxConfig = emptyConfig
-      , ctxFamInstEnvs = mempty
-      , ctxInstEnvs = InstEnvs mempty mempty mempty
-      , ctxTheta = mempty
-      , ctx_hscEnv = error "empty hsc env from emptyContext"
-      , ctx_occEnv = emptyOccEnv
-      , ctx_module = error "empty module from emptyContext"
-      }
-
-
-newtype Rose a = Rose (Tree a)
-  deriving stock (Eq, Functor, Generic, Data, Typeable)
-
-instance Show (Rose String) where
-  show = unlines . dropEveryOther . lines . drawTree . coerce
-
-dropEveryOther :: [a] -> [a]
-dropEveryOther []           = []
-dropEveryOther [a]          = [a]
-dropEveryOther (a : _ : as) = a : dropEveryOther as
-
-------------------------------------------------------------------------------
--- | This might not be lawful! I didn't check, and it feels sketchy.
-instance (Eq a, Monoid a) => Semigroup (Rose a) where
-  Rose (Node a as) <> Rose (Node b bs) = Rose $ Node (a <> b) (as <> bs)
-  sconcat (a :| as) = rose mempty $ a : as
-
-instance (Eq a, Monoid a) => Monoid (Rose a) where
-  mempty = Rose $ Node mempty mempty
-
-rose :: (Eq a, Monoid a) => a -> [Rose a] -> Rose a
-rose a [Rose (Node a' rs)] | a' == mempty = Rose $ Node a rs
-rose a rs = Rose $ Node a $ coerce rs
+  pure = Synthesized
+  Synthesized f <*> Synthesized a =
+    Synthesized $ f a
 
 
 ------------------------------------------------------------------------------
 -- | The results of 'Wingman.Machinery.runTactic'
 data RunTacticResults = RunTacticResults
-  { rtr_trace       :: Trace
-  , rtr_extract     :: LHsExpr GhcPs
-  , rtr_subgoals    :: [Judgement]
-  , rtr_other_solns :: [Synthesized (LHsExpr GhcPs)]
+  { rtr_extract     :: LHsExpr GhcPs
   , rtr_jdg         :: Judgement
-  , rtr_ctx         :: Context
+  , rtr_ctx         :: Config
   , rtr_timed_out   :: Bool
   } deriving Show
 
@@ -549,14 +442,10 @@ instance Show UserFacingMessage where
   show (InfrastructureError t) = "Internal error: " <> T.unpack t
 
 
-data HoleSort = Hole | Metaprogram T.Text
-  deriving (Eq, Ord, Show)
-
 data HoleJudgment = HoleJudgment
   { hj_range     :: Tracked 'Current Range
   , hj_jdg       :: Judgement
-  , hj_ctx       :: Context
+  , hj_ctx       :: Config
   , hj_dflags    :: DynFlags
-  , hj_hole_sort :: HoleSort
   }
 

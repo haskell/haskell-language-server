@@ -4,29 +4,28 @@
 
 module Wingman.AbstractLSP.TacticActions where
 
-import           Control.Monad (when)
-import           Control.Monad.IO.Class (liftIO)
-import           Control.Monad.Trans (lift)
-import           Control.Monad.Trans.Maybe (mapMaybeT)
-import           Data.Foldable
-import           Data.Maybe (listToMaybe)
-import           Data.Proxy
-import           Development.IDE hiding (rangeToRealSrcSpan)
-import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.ExactPrint
-import           Generics.SYB.GHC (mkBindListT, everywhereM')
-import           Wingman.AbstractLSP.Types
-import           Wingman.CaseSplit
-import           Wingman.GHC (liftMaybe, isHole, pattern AMatch)
-import           Wingman.Judgements (jNeedsToBindArgs)
-import           Wingman.LanguageServer (runStaleIde)
-import           Wingman.LanguageServer.TacticProviders
-import           Wingman.Machinery (runTactic, scoreSolution)
-import           Wingman.Range
-import           Wingman.Types
+import Control.Monad (when)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Maybe (mapMaybeT)
+import Data.Maybe (listToMaybe)
+import Data.Proxy
+import Development.IDE hiding (rangeToRealSrcSpan)
 import Development.IDE.Core.Service (getIdeOptionsIO)
+import Development.IDE.Core.UseStale
+import Development.IDE.GHC.Compat
+import Development.IDE.GHC.ExactPrint
 import Development.IDE.Types.Options (IdeTesting(IdeTesting), IdeOptions (IdeOptions, optTesting))
+import Generics.SYB.GHC (mkBindListT, everywhereM')
+import Wingman.AbstractLSP.Types
+import Wingman.CaseSplit
+import Wingman.GHC (liftMaybe, isHole, pattern AMatch)
+import Wingman.Judgements (jNeedsToBindArgs)
+import Wingman.LanguageServer (runStaleIde)
+import Wingman.LanguageServer.TacticProviders
+import Wingman.Machinery (runTactic)
+import Wingman.Range
+import Wingman.Types
 
 
 ------------------------------------------------------------------------------
@@ -41,7 +40,6 @@ makeTacticInteraction cmd =
             TacticProviderData
               { tpd_lspEnv    = env
               , tpd_jdg       = hj_jdg hj
-              , tpd_hole_sort = hj_hole_sort hj
               }
     )
     $ \LspEnv{..} HoleJudgment{..} FileContext{..} var_name -> do
@@ -73,9 +71,6 @@ makeTacticInteraction cmd =
                   $ ErrorMessages
                   $ pure NothingToDo
               _ -> do
-                for_ (rtr_other_solns rtr) $ \soln -> do
-                  traceMX "other solution" $ syn_val soln
-                  traceMX "with score" $ scoreSolution soln (rtr_jdg rtr) []
                 traceMX "solution" $ rtr_extract rtr
                 pure
                   $ addTimeoutMessage rtr

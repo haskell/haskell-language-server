@@ -20,11 +20,9 @@ import           Ide.Types
 import           Language.LSP.Types hiding (SemanticTokenAbsolute (..), SemanticTokenRelative (..))
 import           Prelude hiding (span)
 import           Wingman.AbstractLSP.Types
-import           Wingman.Auto
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Machinery (useNameFromHypothesis, uncoveredDataCons)
-import           Wingman.Metaprogramming.Parser (parseMetaprogram)
 import           Wingman.Tactics
 import           Wingman.Types
 
@@ -32,7 +30,6 @@ import           Wingman.Types
 ------------------------------------------------------------------------------
 -- | A mapping from tactic commands to actual tactics for refinery.
 commandTactic :: TacticCommand -> T.Text -> TacticsM ()
-commandTactic Auto                   = const auto
 commandTactic Intros                 = const intros
 commandTactic IntroAndDestruct       = const introAndDestruct
 commandTactic Destruct               = useNameFromHypothesis destruct . mkVarOcc . T.unpack
@@ -43,14 +40,11 @@ commandTactic HomomorphismLambdaCase = const homoLambdaCase
 commandTactic DestructAll            = const destructAll
 commandTactic UseDataCon             = userSplit . mkVarOcc . T.unpack
 commandTactic Refine                 = const refine
-commandTactic BeginMetaprogram       = const metaprogram
-commandTactic RunMetaprogram         = parseMetaprogram
 
 
 ------------------------------------------------------------------------------
 -- | The LSP kind
 tacticKind :: TacticCommand -> T.Text
-tacticKind Auto                   = "fillHole"
 tacticKind Intros                 = "introduceLambda"
 tacticKind IntroAndDestruct       = "introduceAndDestruct"
 tacticKind Destruct               = "caseSplit"
@@ -61,15 +55,12 @@ tacticKind HomomorphismLambdaCase = "homomorphicLambdaCase"
 tacticKind DestructAll            = "splitFuncArgs"
 tacticKind UseDataCon             = "useConstructor"
 tacticKind Refine                 = "refine"
-tacticKind BeginMetaprogram       = "beginMetaprogram"
-tacticKind RunMetaprogram         = "runMetaprogram"
 
 
 ------------------------------------------------------------------------------
 -- | Whether or not this code action is preferred -- ostensibly refers to
 -- whether or not we can bind it to a key in vs code?
 tacticPreferred :: TacticCommand -> Bool
-tacticPreferred Auto                   = True
 tacticPreferred Intros                 = True
 tacticPreferred IntroAndDestruct       = True
 tacticPreferred Destruct               = True
@@ -80,8 +71,6 @@ tacticPreferred HomomorphismLambdaCase = False
 tacticPreferred DestructAll            = True
 tacticPreferred UseDataCon             = True
 tacticPreferred Refine                 = True
-tacticPreferred BeginMetaprogram       = False
-tacticPreferred RunMetaprogram         = True
 
 
 mkTacticKind :: TacticCommand -> CodeActionKind
@@ -93,47 +82,35 @@ mkTacticKind =
 -- | Mapping from tactic commands to their contextual providers. See 'provide',
 -- 'filterGoalType' and 'filterBindingType' for the nitty gritty.
 commandProvider :: TacticCommand -> TacticProvider
-commandProvider Auto  =
-  requireHoleSort (== Hole) $
-  provide Auto ""
 commandProvider Intros =
-  requireHoleSort (== Hole) $
   filterGoalType isFunction $
     provide Intros ""
 commandProvider IntroAndDestruct =
-  requireHoleSort (== Hole) $
   filterGoalType (liftLambdaCase False (\_ -> isJust . algebraicTyCon)) $
     provide IntroAndDestruct ""
 commandProvider Destruct =
-  requireHoleSort (== Hole) $
   filterBindingType destructFilter $ \occ _ ->
     provide Destruct $ T.pack $ occNameString occ
 commandProvider DestructPun =
-  requireHoleSort (== Hole) $
     filterBindingType destructPunFilter $ \occ _ ->
       provide DestructPun $ T.pack $ occNameString occ
 commandProvider Homomorphism =
-  requireHoleSort (== Hole) $
   filterBindingType homoFilter $ \occ _ ->
     provide Homomorphism $ T.pack $ occNameString occ
 commandProvider DestructLambdaCase =
-  requireHoleSort (== Hole) $
   requireExtension LambdaCase $
     filterGoalType (isJust . lambdaCaseable) $
       provide DestructLambdaCase ""
 commandProvider HomomorphismLambdaCase =
-  requireHoleSort (== Hole) $
   requireExtension LambdaCase $
     filterGoalType (liftLambdaCase False homoFilter) $
       provide HomomorphismLambdaCase ""
 commandProvider DestructAll =
-  requireHoleSort (== Hole) $
     withJudgement $ \jdg ->
       case _jIsTopHole jdg && jHasBoundArgs jdg of
         True  -> provide DestructAll ""
         False -> mempty
 commandProvider UseDataCon =
-  requireHoleSort (== Hole) $
   withConfig $ \cfg ->
     filterTypeProjection
         ( guardLength (<= cfg_max_use_ctor_actions cfg)
@@ -146,14 +123,8 @@ commandProvider UseDataCon =
         . occName
         $ dataConName dcon
 commandProvider Refine =
-  requireHoleSort (== Hole) $
     provide Refine ""
-commandProvider BeginMetaprogram =
-  requireHoleSort (== Hole) $
-    provide BeginMetaprogram ""
-commandProvider RunMetaprogram =
-  withMetaprogram $ \mp ->
-    provide RunMetaprogram mp
+
 
 
 ------------------------------------------------------------------------------
@@ -173,21 +144,8 @@ type TacticProvider
 data TacticProviderData = TacticProviderData
   { tpd_lspEnv :: LspEnv
   , tpd_jdg    :: Judgement
-  , tpd_hole_sort :: HoleSort
   }
 
-
-requireHoleSort :: (HoleSort -> Bool) -> TacticProvider -> TacticProvider
-requireHoleSort p tp tpd =
-  case p $ tpd_hole_sort tpd of
-    True  -> tp tpd
-    False -> []
-
-withMetaprogram :: (T.Text -> TacticProvider) -> TacticProvider
-withMetaprogram tp tpd =
-  case tpd_hole_sort tpd of
-    Metaprogram mp -> tp mp tpd
-    _ -> []
 
 
 ------------------------------------------------------------------------------

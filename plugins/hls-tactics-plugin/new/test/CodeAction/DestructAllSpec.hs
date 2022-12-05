@@ -34,5 +34,4 @@ spec = do
     destructAllTest 4 23 "DestructAllMany"
     destructAllTest 2 18 "DestructAllNonVarTopMatch"
     destructAllTest 2 18 "DestructAllFunc"
-    destructAllTest 19 18 "DestructAllGADTEvidence"
 

@@ -19,7 +19,6 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC.SourceGen (lambda)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
-import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
 
 #if __GLASGOW_HASKELL__ >= 900
@@ -163,7 +162,6 @@ containsHole :: Data a => a -> Bool
 containsHole x = not $ null $ listify (
   \case
     ((HsVar _ (L _ name)) :: HsExpr GhcPs) -> isHole $ occName name
-    MetaprogramSyntax _                    -> True
     _                                      -> False
   ) x
 
@@ -312,24 +310,6 @@ liftMaybe a = MaybeT $ pure a
 typeCheck :: HscEnv -> TcGblEnv -> HsExpr GhcTc -> IO (Maybe Type)
 typeCheck hscenv tcg = fmap snd . initDs hscenv tcg . fmap exprType . dsExpr
 
-------------------------------------------------------------------------------
--- | Expand type and data families
-normalizeType :: Context -> Type -> Type
-normalizeType ctx ty =
-  let ty' = expandTyFam ctx ty
-   in case tcSplitTyConApp_maybe ty' of
-        Just (tc, tys) ->
-          -- try to expand any data families
-          case tcLookupDataFamInst_maybe (ctxFamInstEnvs ctx) tc tys of
-            Just (dtc, dtys, _) -> mkAppTys (mkTyConTy dtc) dtys
-            Nothing -> ty'
-        Nothing -> ty'
-
-------------------------------------------------------------------------------
--- | Expand type families
-expandTyFam :: Context -> Type -> Type
-expandTyFam ctx = snd . normaliseType  (ctxFamInstEnvs ctx) Nominal
-
 
 ------------------------------------------------------------------------------
 -- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
@@ -351,19 +331,4 @@ tryUnifyUnivarsButNotSkolemsMany skolems (unzip -> (goal, inst)) =
 updateSubst :: TCvSubst -> TacticState -> TacticState
 updateSubst subst s = s { ts_unifier = unionTCvSubst subst (ts_unifier s) }
 
-
-------------------------------------------------------------------------------
--- | Get the class methods of a 'PredType', correctly dealing with
--- instantiation of quantified class types.
-methodHypothesis :: PredType -> Maybe [HyInfo CType]
-methodHypothesis ty = do
-  (tc, apps) <- splitTyConApp_maybe ty
-  cls <- tyConClass_maybe tc
-  let methods = classMethods cls
-      tvs     = classTyVars cls
-      subst   = zipTvSubst tvs apps
-  pure $ methods <&> \method ->
-    let (_, _, ty) = tcSplitSigmaTy $ idType method
-    in ( HyInfo (occName method) (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
-       )
 

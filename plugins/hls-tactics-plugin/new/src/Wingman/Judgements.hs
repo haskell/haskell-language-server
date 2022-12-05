@@ -14,8 +14,7 @@ import qualified Data.Set as S
 import           Development.IDE.Core.UseStale (Tracked, unTrack)
 import           Development.IDE.GHC.Compat hiding (isTopLevel)
 import           Development.IDE.Spans.LocalBindings
-import           Wingman.GHC (algebraicTyCon, normalizeType)
-import           Wingman.Judgements.Theta
+import           Wingman.GHC (algebraicTyCon)
 import           Wingman.Types
 
 
@@ -46,23 +45,6 @@ hySingleton :: OccName -> Hypothesis ()
 hySingleton n = Hypothesis . pure $ HyInfo n UserPrv ()
 
 
-blacklistingDestruct :: Judgement -> Judgement
-blacklistingDestruct =
-  field @"_jBlacklistDestruct" .~ True
-
-
-unwhitelistingSplit :: Judgement -> Judgement
-unwhitelistingSplit =
-  field @"_jWhitelistSplit" .~ False
-
-
-isDestructBlacklisted :: Judgement -> Bool
-isDestructBlacklisted = _jBlacklistDestruct
-
-
-isSplitWhitelisted :: Judgement -> Bool
-isSplitWhitelisted = _jWhitelistSplit
-
 
 withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
@@ -74,28 +56,13 @@ withModifiedGoal :: (a -> a) -> Judgement' a -> Judgement' a
 withModifiedGoal f = field @"_jGoal" %~ f
 
 
-------------------------------------------------------------------------------
--- | Add some new type equalities to the local judgement.
-withNewCoercions :: [(CType, CType)] -> Judgement -> Judgement
-withNewCoercions ev j =
-  let subst = allEvidenceToSubst mempty $ coerce ev
-   in fmap (CType . substTyAddInScope subst . unCType) j
-      & field @"j_coercion" %~ unionTCvSubst subst
 
-
-normalizeHypothesis :: Functor f => Context -> f CType -> f CType
-normalizeHypothesis = fmap . coerce . normalizeType
-
-normalizeJudgement :: Functor f => Context -> f CType -> f CType
-normalizeJudgement = normalizeHypothesis
-
-
-introduce :: Context -> Hypothesis CType -> Judgement' CType -> Judgement' CType
+introduce :: Hypothesis CType -> Judgement' CType -> Judgement' CType
 -- NOTE(sandy): It's important that we put the new hypothesis terms first,
 -- since 'jAcceptableDestructTargets' will never destruct a pattern that occurs
 -- after a previously-destructed term.
-introduce ctx hy =
-  field @"_jHypothesis" %~ mappend (normalizeHypothesis ctx hy)
+introduce hy =
+  field @"_jHypothesis" %~ mappend hy
 
 
 ------------------------------------------------------------------------------
@@ -122,11 +89,6 @@ lambdaHypothesis func =
   introduceHypothesis $ \count pos ->
     maybe UserPrv (\x -> TopLevelArgPrv x pos count) func
 
-
-------------------------------------------------------------------------------
--- | Introduce a binding in a recursive context.
-recursiveHypothesis :: [(OccName, a)] -> Hypothesis a
-recursiveHypothesis = introduceHypothesis $ const $ const RecursivePrv
 
 
 ------------------------------------------------------------------------------
@@ -251,22 +213,10 @@ provAncestryOf :: Provenance -> Set OccName
 provAncestryOf (TopLevelArgPrv o _ _) = S.singleton o
 provAncestryOf (PatternMatchPrv (PatVal mo so _ _)) =
   maybe mempty S.singleton mo <> so
-provAncestryOf (ClassMethodPrv _) = mempty
 provAncestryOf UserPrv = mempty
 provAncestryOf RecursivePrv = mempty
-provAncestryOf ImportPrv = mempty
 provAncestryOf (DisallowedPrv _ p2) = provAncestryOf p2
 
-
-------------------------------------------------------------------------------
--- TODO(sandy): THIS THING IS A BIG BIG HACK
---
--- Why? 'ctxDefiningFuncs' is _all_ of the functions currently being defined
--- (eg, we might be in a where block). The head of this list is not guaranteed
--- to be the one we're interested in.
-extremelyStupid__definingFunction :: Context -> OccName
-extremelyStupid__definingFunction =
-  fst . head . ctxDefiningFuncs
 
 
 patternHypothesis
@@ -348,12 +298,6 @@ jAcceptableDestructTargets
   . jEntireHypothesis
 
 
-------------------------------------------------------------------------------
--- | If we're in a top hole, the name of the defining function.
-isTopHole :: Context -> Judgement' a -> Maybe OccName
-isTopHole ctx =
-  bool Nothing (Just $ extremelyStupid__definingFunction ctx) . _jIsTopHole
-
 
 unsetIsTopHole :: Judgement' a -> Judgement' a
 unsetIsTopHole = field @"_jIsTopHole" .~ False
@@ -414,21 +358,17 @@ substJdg subst = fmap $ coerce . substTy subst . coerce
 
 
 mkFirstJudgement
-    :: Context
-    -> Hypothesis CType
+    :: Hypothesis CType
     -> Bool  -- ^ are we in the top level rhs hole?
     -> Type
     -> Judgement' CType
-mkFirstJudgement ctx hy top goal =
-  normalizeJudgement ctx $
-    Judgement
-      { _jHypothesis        = hy
-      , _jBlacklistDestruct = False
-      , _jWhitelistSplit    = True
-      , _jIsTopHole         = top
-      , _jGoal              = CType goal
-      , j_coercion          = emptyTCvSubst
-      }
+mkFirstJudgement hy top goal =
+  Judgement
+    { _jHypothesis        = hy
+    , _jIsTopHole         = top
+    , _jGoal              = CType goal
+    , j_coercion          = emptyTCvSubst
+    }
 
 
 ------------------------------------------------------------------------------

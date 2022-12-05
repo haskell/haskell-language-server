@@ -34,7 +34,7 @@ flag pedantic
   manual:      True
 
 library
-  if impl(ghc >= 9.2.1)
+  if impl(ghc >= 9.3.1)
     buildable: False
   else
     buildable: True
@@ -144,7 +144,7 @@ library
     ViewPatterns
 
 test-suite tests
-  if impl(ghc >= 9.2.1)
+  if impl(ghc >= 9.3.1)
     buildable: False
   else
     buildable: True
@@ -171,6 +171,7 @@ test-suite tests
     hs-source-dirs: new/test
   else
     hs-source-dirs: old/test
+
   ghc-options:
     -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
 
