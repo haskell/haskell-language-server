@@ -19,6 +19,7 @@ import           Test.Hls
 import           Test.Hspec.Expectations
 
 import           Development.IDE.Test    (configureCheckProject)
+import           Ide.Types               (defConfigForPlugins)
 import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
@@ -83,7 +84,7 @@ importTests = testGroup "import suggestions" [
     testCase "works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "CodeActionImport.hs" "haskell"
         -- No Formatting:
-        let config = def { formattingProvider = "none" }
+        let config = (defConfig mempty) { formattingProvider = "none" }
         sendConfigurationChanged (toJSON config)
 
         (diag:_) <- waitForDiagnosticsFrom doc
@@ -375,6 +376,6 @@ expectFailIfGhc92 = knownBrokenForGhcVersions [GHC92]
 
 disableWingman :: Session ()
 disableWingman =
-  sendConfigurationChanged $ toJSON $ def
+  sendConfigurationChanged $ toJSON $ (defConfig mempty)
     { plugins = M.fromList [ ("tactics", def { plcGlobalOn = False }) ]
     }
