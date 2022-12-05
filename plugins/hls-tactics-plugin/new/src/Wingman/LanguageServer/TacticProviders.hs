@@ -126,7 +126,6 @@ commandProvider Refine =
     provide Refine ""
 
 
-
 ------------------------------------------------------------------------------
 -- | Return an empty list if the given predicate doesn't hold over the length
 guardLength :: (Int -> Bool) -> [a] -> [a]

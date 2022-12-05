@@ -1,3 +1,4 @@
+{-# LANGUAGE EmptyCase #-}
 module Wingman.CaseSplit
   ( mkFirstAgda
   , iterateSplit
@@ -5,15 +6,24 @@ module Wingman.CaseSplit
   ) where
 
 import           Data.Bool (bool)
-import           Data.Data
-import           Data.Generics
+import           Data.Data hiding (Prefix, Infix)
+import           Data.Generics hiding (Prefix, Infix)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           GHC.Exts (IsString (fromString))
-import           GHC.SourceGen (funBindsWithFixity, match, wildP)
+import           GHC.SourceGen
 import           Wingman.GHC
 import           Wingman.Types
+import GHC.SourceGen.Binds
+import GHC.SourceGen.Name
+import Development.IDE.GHC.ExactPrint (annotateDecl)
+import Language.Haskell.GHC.ExactPrint (runTransformT)
+import Data.Either (fromRight)
+import Language.Haskell.GHC.ExactPrint.Transform (setEntryDP)
+import GHC (DeltaPos(..), SrcSpanAnn'(..), EpAnn (..), emptyComments, Anchor (..), realSrcSpan, AnchorOperation (..))
+import GHC.Types.SrcLoc (generatedSrcSpan)
+import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
 
 
 
@@ -65,7 +75,7 @@ containsVar name = everything (||) $
     (_ :: Pat GhcPs)   -> False
       )
   `extQ` \case
-    HsRecField lbl _ True ->  eqRdrName name $ unLoc $ rdrNameFieldOcc $ unLoc lbl
+    HsRecField _ lbl _ True ->  eqRdrName name $ unLoc $ rdrNameFieldOcc $ unLoc lbl
     (_ :: HsRecField' (FieldOcc GhcPs) (PatCompat GhcPs)) -> False
 
 
@@ -74,30 +84,38 @@ containsVar name = everything (||) $
 rewriteVarPat :: Data a => RdrName -> Pat GhcPs -> a -> a
 rewriteVarPat name rep = everywhere $
   mkT (\case
-    VarPat _ (L _ var) | eqRdrName name var -> rep
+    VarPat xVarPat (L _ var) | eqRdrName name var -> rep
     (x :: Pat GhcPs)                        -> x
       )
   `extT` \case
-    HsRecField lbl _ True
+    HsRecField ann lbl _ True
       | eqRdrName name $ unLoc $ rdrNameFieldOcc $ unLoc lbl
-          -> HsRecField lbl (toPatCompat rep) False
+          -> HsRecField ann lbl (toPatCompat rep) False
     (x :: HsRecField' (FieldOcc GhcPs) (PatCompat GhcPs)) -> x
 
 
 ------------------------------------------------------------------------------
 -- | Construct an 'HsDecl' from a set of 'AgdaMatch'es.
 splitToDecl
-    :: Maybe LexicalFixity
+    :: DynFlags -> Maybe LexicalFixity
     -> OccName  -- ^ The name of the function
     -> [AgdaMatch]
     -> LHsDecl GhcPs
-splitToDecl fixity name ams = do
-  traceX "fixity" fixity $
-    noLoc $
-      funBindsWithFixity fixity (fromString . occNameString . occName $ name) $ do
-        AgdaMatch pats body <- ams
-        pure $ match pats body
-
+splitToDecl dflags fixity name ams = do
+  let res = -- traceX "fixity" fixity $
+        -- L (SrcSpanAnn (EpAnn (Anchor (realSrcSpan generatedSrcSpan) (MovedAnchor $ DifferentLine 1 0)) mempty emptyComments) generatedSrcSpan) $
+        L (SrcSpanAnn EpAnnNotUsed generatedSrcSpan) $
+          funBindsWithFixity fixity (fromString . occNameString . occName $ name) $ do
+            AgdaMatch pats body <- ams
+            pure $ match pats body
+      res' = either error (\(a,b,c) -> a) $ runTransformT $ annotateDecl dflags res
+      -- There is a bug here such that each match doesn't get a delta to be on the next line, and so we manually set thos
+      -- deltas...
+      res'' = case res' of
+        L l (ValD xValD funBind@FunBind {fun_matches=MG xMg (L lMatches (m:ms)) originMg}) ->
+          L l (ValD xValD (funBind {fun_matches=MG xMg (L lMatches $ (m:(flip setEntryDP (DifferentLine 1 0) <$> ms))) originMg}))
+        _ -> error "bad"
+    in res''
 
 ------------------------------------------------------------------------------
 -- | Sometimes 'agdaSplit' exposes another opportunity to do 'agdaSplit'. This

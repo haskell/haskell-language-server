@@ -4,13 +4,27 @@
 
 module Wingman.AbstractLSP.TacticActions where
 
-import Control.Monad (when)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Maybe (mapMaybeT)
-import Data.Maybe (listToMaybe)
-import Data.Proxy
-import Development.IDE hiding (rangeToRealSrcSpan)
+import           Control.Monad (when)
+import           Control.Monad.IO.Class (liftIO)
+import           Control.Monad.Trans (lift)
+import           Control.Monad.Trans.Maybe (mapMaybeT)
+import           Data.Foldable
+import           Data.Maybe (listToMaybe)
+import           Data.Proxy
+import           Development.IDE hiding (rangeToRealSrcSpan)
+import           Development.IDE.Core.UseStale
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.ExactPrint
+import           Generics.SYB.GHC (mkBindListT, everywhereM')
+import           Wingman.AbstractLSP.Types
+import           Wingman.CaseSplit
+import           Wingman.GHC (liftMaybe, isHole, pattern AMatch)
+import           Wingman.Judgements (jNeedsToBindArgs)
+import           Wingman.LanguageServer (runStaleIde)
+import           Wingman.LanguageServer.TacticProviders
+import           Wingman.Machinery (runTactic, scoreSolution)
+import           Wingman.Range
+import           Wingman.Types
 import Development.IDE.Core.Service (getIdeOptionsIO)
 import Development.IDE.Core.UseStale
 import Development.IDE.GHC.Compat
@@ -26,6 +40,11 @@ import Wingman.LanguageServer.TacticProviders
 import Wingman.Machinery (runTactic)
 import Wingman.Range
 import Wingman.Types
+import GHC (SrcSpanAnn'(SrcSpanAnn))
+import Language.Haskell.GHC.ExactPrint (makeDeltaAst')
+import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
+import Language.Haskell.GHC.ExactPrint.Parsers (parseExpr)
+import GHC.Hs (LocatedL)
 
 
 ------------------------------------------------------------------------------
@@ -71,7 +90,7 @@ makeTacticInteraction cmd =
                   $ ErrorMessages
                   $ pure NothingToDo
               _ -> do
-                traceMX "solution" $ rtr_extract rtr
+                -- traceMX "solution" $ rtr_extract rtr
                 pure
                   $ addTimeoutMessage rtr
                   $ pure
@@ -112,12 +131,13 @@ graftHole
 graftHole span rtr
   | _jIsTopHole (rtr_jdg rtr)
       = genericGraftWithSmallestM
-            (Proxy @(Located [LMatch GhcPs (LHsExpr GhcPs)])) span
+            (Proxy @(LocatedL [LMatch GhcPs (LHsExpr GhcPs)])) span
       $ \dflags matches ->
           everywhereM'
             $ mkBindListT $ \ix ->
               graftDecl dflags span ix $ \name pats ->
               splitToDecl
+                dflags
                 (case not $ jNeedsToBindArgs (rtr_jdg rtr) of
                    -- If the user has explicitly bound arguments, use the
                    -- fixity they wrote.
@@ -153,9 +173,9 @@ graftDecl
     -> (RdrName -> [Pat GhcPs] -> LHsDecl GhcPs)
     -> LMatch GhcPs (LHsExpr GhcPs)
     -> TransformT (Either String) [LMatch GhcPs (LHsExpr GhcPs)]
-graftDecl dflags dst ix make_decl (L src (AMatch (FunRhs (L _ name) _ _) pats _))
+graftDecl dflags dst ix make_decl (L (SrcSpanAnn _ src) (AMatch (FunRhs (L _ name) _ _) pats _))
   | dst `isSubspanOf` src = do
-      L _ dec <- annotateDecl dflags $ make_decl name pats
+      L _ dec <- pure $ make_decl name pats
       case dec of
         ValD _ FunBind{ fun_matches = MG { mg_alts = L _ alts@(first_match : _)}
                       } -> do
@@ -165,8 +185,8 @@ graftDecl dflags dst ix make_decl (L src (AMatch (FunRhs (L _ name) _ _) pats _)
           -- insert a preceding newline (done in 'annotateDecl') on all
           -- matches, except for the first one --- since it gets its newline
           -- from the line above.
-          when (ix == 0) $
-            setPrecedingLinesT first_match 0 0
+          -- when (ix == 0) $
+          --   setPrecedingLinesT first_match 0 0
           pure alts
         _ -> lift $ Left "annotateDecl didn't produce a funbind"
 graftDecl _ _ _ _ x = pure $ pure x

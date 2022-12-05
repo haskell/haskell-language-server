@@ -143,7 +143,7 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                ToHsType,
                                                                useProperty)
 import           Ide.PluginUtils                              (configForPlugin)
-import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
+import           Ide.Types                                    (GhcOptsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
 import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
@@ -338,7 +338,7 @@ getParsedModuleWithCommentsRule recorder =
 
     liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
 
-getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
+getModifyDynFlags :: (GhcOptsModifications -> a) -> Action a
 getModifyDynFlags f = do
   opts <- getIdeOptions
   cfg <- getClientConfigAction def

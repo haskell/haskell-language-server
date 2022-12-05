@@ -65,7 +65,7 @@ intros' params = rule $ \jdg -> do
       ext <- newSubgoal jdg'
       pure $
         ext
-          & #syn_val   %~ noLoc . lambda (fmap bvar' bound_occs) . unLoc
+          & #syn_val   %~ noLocA . lambda (fmap bvar' bound_occs) . unLoc
 
 
 ------------------------------------------------------------------------------

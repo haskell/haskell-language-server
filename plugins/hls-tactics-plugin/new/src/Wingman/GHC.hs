@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Wingman.GHC where
 
@@ -78,7 +79,7 @@ tacticsThetaTy (tcSplitSigmaTy -> (_, theta,  _)) = theta
 -- | Get the data cons of a type, if it has any.
 tacticsGetDataCons :: Type -> Maybe ([DataCon], [Type])
 tacticsGetDataCons ty
-  | Just (_, ty') <- tcSplitForAllTyVarBinder_maybe ty
+  | Just (_, ty') <- GHC.Tc.Utils.TcType.tcSplitForAllTyVarBinder_maybe ty
   = tacticsGetDataCons ty'
 tacticsGetDataCons ty
   | Just _ <- algebraicTyCon ty
@@ -101,7 +102,7 @@ freshTyvars t = do
   pure $
     everywhere
       (mkT $ \tv -> M.findWithDefault tv tv reps
-      ) $ snd $ tcSplitForAllTyVars t
+      ) $ snd $ GHC.Tc.Utils.TcType.tcSplitForAllTyVars t
 
 
 ------------------------------------------------------------------------------
@@ -120,7 +121,7 @@ getRecordFields dc =
 -- | Is this an algebraic type?
 algebraicTyCon :: Type -> Maybe TyCon
 algebraicTyCon ty
-  | Just (_, ty') <- tcSplitForAllTyVarBinder_maybe ty
+  | Just (_, ty') <- GHC.Tc.Utils.TcType.tcSplitForAllTyVarBinder_maybe ty
   = algebraicTyCon ty'
 algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
   | tycon == intTyCon    = Nothing
@@ -217,42 +218,82 @@ pattern Lambda pats body <-
 
 ------------------------------------------------------------------------------
 -- | A GRHS that contains no guards.
-pattern UnguardedRHSs :: LHsExpr p -> GRHSs p (LHsExpr p)
+pattern UnguardedRHSs :: LHsExpr GhcPs -> (GRHSs GhcPs (LHsExpr GhcPs))
 pattern UnguardedRHSs body <-
   GRHSs {grhssGRHSs = [L _ (GRHS _ [] body)]}
+
+------------------------------------------------------------------------------
+-- | A GRHS that caontains no guards.
+pattern UnguardedRHSsTc :: LHsExpr GhcTc -> (GRHSs GhcTc (LHsExpr GhcTc))
+pattern UnguardedRHSsTc body <-
+  GRHSs {grhssGRHSs = [L _ (GRHS _ [] body)]}
+
 
 
 ------------------------------------------------------------------------------
 -- | A match with a single pattern. Case matches are always 'SinglePatMatch'es.
-pattern SinglePatMatch :: PatCompattable p => Pat p -> LHsExpr p -> Match p (LHsExpr p)
+pattern SinglePatMatch :: Pat GhcPs -> LHsExpr GhcPs -> Match GhcPs (LHsExpr GhcPs)
 pattern SinglePatMatch pat body <-
   Match { m_pats = [fromPatCompat -> pat]
         , m_grhss = UnguardedRHSs body
         }
 
+------------------------------------------------------------------------------
+-- | A match with a single pattern. Case matches are always 'SinglePatMatch'es.
+pattern SinglePatMatchTc :: Pat GhcTc -> LHsExpr GhcTc -> Match GhcTc (LHsExpr GhcTc)
+pattern SinglePatMatchTc pat body <-
+  Match { m_pats = [fromPatCompat -> pat]
+        , m_grhss = UnguardedRHSsTc body
+        }
+
+
 
 ------------------------------------------------------------------------------
 -- | Helper function for defining the 'Case' pattern.
-unpackMatches :: PatCompattable p => [Match p (LHsExpr p)] -> Maybe [(Pat p, LHsExpr p)]
+unpackMatches :: [Match GhcPs (LHsExpr GhcPs)] -> Maybe [(Pat GhcPs, LHsExpr GhcPs)]
 unpackMatches [] = Just []
 unpackMatches (SinglePatMatch pat body : matches) =
   ((pat, body):) <$> unpackMatches matches
 unpackMatches _ = Nothing
 
+------------------------------------------------------------------------------
+-- | Helper function for defining the 'Case' pattern.
+unpackMatchesTc :: [Match GhcTc (LHsExpr GhcTc)] -> Maybe [(Pat GhcTc, LHsExpr GhcTc)]
+unpackMatchesTc [] = Just []
+unpackMatchesTc  (SinglePatMatchTc pat body : matches) =
+  ((pat, body):) <$> unpackMatchesTc matches
+unpackMatchesTc  _ = Nothing
+
+
 
 ------------------------------------------------------------------------------
 -- | A pattern over the otherwise (extremely) messy AST for lambdas.
-pattern Case :: PatCompattable p => HsExpr p -> [(Pat p, LHsExpr p)] -> HsExpr p
+pattern Case :: HsExpr GhcPs -> [(Pat GhcPs, LHsExpr GhcPs)] -> HsExpr GhcPs
 pattern Case scrutinee matches <-
   HsCase _ (L _ scrutinee)
     MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)}
 
 ------------------------------------------------------------------------------
+-- | A pattern over the otherwise (extremely) messy AST for lambdas.
+pattern CaseTc :: HsExpr GhcTc -> [(Pat GhcTc, LHsExpr GhcTc)] -> HsExpr GhcTc
+pattern CaseTc scrutinee matches <-
+  HsCase _ (L _ scrutinee)
+    MG {mg_alts = L _ (fmap unLoc -> unpackMatchesTc -> Just matches)}
+
+------------------------------------------------------------------------------
 -- | Like 'Case', but for lambda cases.
-pattern LamCase :: PatCompattable p => [(Pat p, LHsExpr p)] -> HsExpr p
+pattern LamCase :: [(Pat GhcPs, LHsExpr GhcPs)] -> HsExpr GhcPs
 pattern LamCase matches <-
   HsLamCase _
     MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)}
+
+------------------------------------------------------------------------------
+-- | Like 'Case', but for lambda cases.
+pattern LamCaseTc :: [(Pat GhcTc, LHsExpr GhcTc)] -> HsExpr GhcTc
+pattern LamCaseTc matches <-
+  HsLamCase _
+    MG {mg_alts = L _ (fmap unLoc -> unpackMatchesTc -> Just matches)}
+
 
 
 ------------------------------------------------------------------------------
@@ -277,11 +318,11 @@ class PatCompattable p where
 
 instance PatCompattable GhcTc where
   fromPatCompat = unLoc
-  toPatCompat = noLoc
+  toPatCompat = noLocA
 
 instance PatCompattable GhcPs where
   fromPatCompat = unLoc
-  toPatCompat = noLoc
+  toPatCompat = noLocA
 
 type PatCompat pass = LPat pass
 
@@ -298,7 +339,7 @@ pattern TopLevelRHS name ps body where_binds <-
     (FunRhs (L _ (occName -> name)) _ _)
     ps
     (GRHSs _
-      [L _ (GRHS _ [] body)] (L _ where_binds))
+      [L _ (GRHS _ [] body)] where_binds)
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a
@@ -323,7 +364,7 @@ tryUnifyUnivarsButNotSkolems skolems goal inst =
 tryUnifyUnivarsButNotSkolemsMany :: Set TyVar -> [(Type, Type)] -> Maybe TCvSubst
 tryUnifyUnivarsButNotSkolemsMany skolems (unzip -> (goal, inst)) =
   tcUnifyTys
-    (bool BindMe Skolem . flip S.member skolems)
+    (bool (const BindMe) (const Apart) . flip S.member skolems)
     inst
     goal
 

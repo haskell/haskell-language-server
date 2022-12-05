@@ -11,7 +11,7 @@ spec = do
   let test = mkCodeLensTest
       noTest = mkNoCodeLensTest
 
-  describe "golden" $ do
+  describe "code_lenses" $ do
     test "EmptyCaseADT"
     test "EmptyCaseShadow"
     test "EmptyCaseParens"

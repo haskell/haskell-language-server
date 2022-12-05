@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeFamilies      #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Wingman.LanguageServer where
 
@@ -53,6 +54,8 @@ import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Range
 import           Wingman.Types
+import GHC (EpAnn(..), SrcSpanAnn' (..), SrcSpan (RealSrcSpan))
+import GHC.IO (unsafePerformIO)
 
 
 newtype Log
@@ -237,7 +240,7 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
 
   let tcs = fmap tcg_binds tcg
       top_provs = getRhsPosVals tcg_rss tcs
-      already_destructed = getAlreadyDestructed (fmap (`RealSrcSpan` Nothing) tcg_rss) tcs
+      already_destructed = getAlreadyDestructed (fmap (`GHC.RealSrcSpan` Nothing) tcg_rss) tcs
       local_hy = spliceProvenance top_provs
                $ hypothesisFromBindings binds_rss binds
       subst = ts_unifier defaultTacticState
@@ -264,7 +267,7 @@ getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
     (mkQ mempty $ \case
       Case (HsVar _ (L _ (occName -> var))) _ ->
         S.singleton var
-      (_ :: HsExpr GhcTc) -> mempty
+      (_ :: HsExpr GhcPs) -> mempty
     ) binds
 
 
@@ -273,20 +276,16 @@ getSpanAndTypeAtHole
     -> Tracked age (HieASTs Type)
     -> Maybe (Tracked age RealSrcSpan, Type)
 getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
-  join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
+  join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \(HiePath fs) ast -> do
     case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range) ast of
       Nothing -> Nothing
       Just ast' -> do
+        -- !_ <- Just $ unsafePerformIO $ putStrLn $ unsafeRender ast'
         let info = nodeInfo ast'
         ty <- listToMaybe $ nodeType info
-        guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
+        guard $ ("HsUnboundVar", "HsExpr") `S.member` nodeAnnotations info
+        -- TODO filter that this is actually a hole (new GHC api removed identifier info)
         -- Ensure we're actually looking at a hole here
-        occ <- (either (const Nothing) (Just . occName) =<<)
-             . listToMaybe
-             . S.toList
-             . M.keysSet
-             $ nodeIdentifiers info
-        guard $ isHole occ
         pure (unsafeCopyAge r $ nodeSpan ast', ty)
 
 
@@ -312,10 +311,11 @@ getRhsPosVals
 getRhsPosVals (unTrack -> rss) (unTrack -> tcs)
   = everything (<>) (mkQ mempty $ \case
       TopLevelRHS name ps
-          (L (RealSrcSpan span _)  -- body with no guards and a single defn
-            (HsVar _ (L _ hole)))
+          -- (L (RealSrcSpan span _)  -- body with no guards and a single defn
+          --   )
+          (L (SrcSpanAnn _ span) (HsVar _ (L _ hole)))
           _
-        | containsSpan rss span  -- which contains our span
+        | containsSpan rss $ unsafeRealSrcSpan span  -- which contains our span
         , isHole $ occName hole  -- and the span is a hole
         -> flip evalState 0 $ buildTopLevelHypothesis name ps
       _ -> mempty
@@ -370,7 +370,7 @@ buildPatHy prov (fromPatCompat -> p0) =
     ConPatOut {pat_con = (L _ con), pat_arg_tys = args, pat_args = f} ->
 #endif
       case f of
-        PrefixCon l_pgt ->
+        PrefixCon _ l_pgt ->
           mkDerivedConHypothesis prov con args $ zip [0..] l_pgt
         InfixCon pgt pgt5 ->
           mkDerivedConHypothesis prov con args $ zip [0..] [pgt, pgt5]
@@ -392,7 +392,7 @@ mkDerivedRecordHypothesis prov dc args (HsRecFields (fmap unLoc -> fs) _)
   | Just rec_fields <- getRecordFields dc
   = do
     let field_lookup = M.fromList $ zip (fmap (occNameFS . fst) rec_fields) [0..]
-    mkDerivedConHypothesis prov dc args $ fs <&> \(HsRecField (L _ rec_occ) p _) ->
+    mkDerivedConHypothesis prov dc args $ fs <&> \(HsRecField _ (L _ rec_occ) p _) ->
       ( field_lookup M.! (occNameFS $ occName $ unLoc $ rdrNameFieldOcc rec_occ)
       , p
       )
@@ -467,11 +467,14 @@ isRhsHoleWithoutWhere
 isRhsHoleWithoutWhere (unTrack -> rss) (unTrack -> tcs) =
   everything (||) (mkQ False $ \case
       TopLevelRHS _ _
-          (L (RealSrcSpan span _) _)
-          (EmptyLocalBinds _) -> containsSpan rss span
+          -- (L (RealSrcSpan span _) _)
+          (L (SrcSpanAnn _ span) _)
+          (EmptyLocalBinds _) -> containsSpan rss $ unsafeRealSrcSpan span
       _                       -> False
     ) tcs
 
+unsafeRealSrcSpan :: SrcSpan -> RealSrcSpan
+unsafeRealSrcSpan (GHC.RealSrcSpan span _) = span
 
 ufmSeverity :: UserFacingMessage -> MessageType
 ufmSeverity NotEnoughGas            = MtInfo
@@ -513,10 +516,12 @@ wingmanRules recorder plId = do
                 holes =
                   everything (<>)
                     (mkQ mempty $ \case
-                      L span (HsVar _ (L _ name))
+                      L (SrcSpanAnn _ span) (HsVar _ (L _ name))
                         | isHole (occName name) ->
                             maybeToList $ srcSpanToRange span
 #if __GLASGOW_HASKELL__ >= 900
+                      L (SrcSpanAnn _ span) (HsUnboundVar _ occ)
+#elif __GLASGOW_HASKELL__ >= 900
                       L span (HsUnboundVar _ occ)
 #else
                       L span (HsUnboundVar _ (TrueExprHole occ))
@@ -557,7 +562,7 @@ mkWorkspaceEdits
     -> Either UserFacingMessage WorkspaceEdit
 mkWorkspaceEdits dflags ccs uri pm g = do
   let response = transform dflags ccs uri g pm
-   in first (InfrastructureError . T.pack) response
+  first (InfrastructureError . T.pack) response
 
 
 splitId :: Id -> (OccName, CType)

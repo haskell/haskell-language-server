@@ -15,25 +15,25 @@ mkCon con apps (fmap unLoc -> args)
   | RealDataCon dcon <- con
   , dcon == nilDataCon
   , [ty] <- apps
-  , ty `eqType` charTy = noLoc $ string ""
+  , ty `eqType` charTy = noLocA $ string ""
 
   | RealDataCon dcon <- con
   , isTupleDataCon dcon =
-      noLoc $ tuple args
+      noLocA $ tuple args
 
   | RealDataCon dcon <- con
   , dataConIsInfix dcon
   , (lhs : rhs : args') <- args =
-      noLoc $ foldl' (@@) (op lhs (coerceName con_name) rhs) args'
+      noLocA $ foldl' (@@) (op lhs (coerceName con_name) rhs) args'
 
   | Just fields <- getRecordFields con
   , length fields >= 2 =  --  record notation is unnatural on single field ctors
-      noLoc $ recordConE (coerceName con_name) $ do
+      noLocA $ recordConE (coerceName con_name) $ do
         (arg, (field, _)) <- zip args fields
         pure (coerceName field, arg)
 
   | otherwise =
-      noLoc $ foldl' (@@) (bvar' $ occName con_name) args
+      noLocA $ foldl' (@@) (bvar' $ occName con_name) args
   where
     con_name = conLikeName con
 

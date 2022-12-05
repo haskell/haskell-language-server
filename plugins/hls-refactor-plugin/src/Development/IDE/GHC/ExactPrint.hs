@@ -20,6 +20,7 @@ module Development.IDE.GHC.ExactPrint
       transform,
       transformM,
       ExactPrint(..),
+#endif
 #if MIN_VERSION_ghc(9,2,1)
       modifySmallestDeclWithM,
       modifyMgMatchesT,
@@ -54,7 +55,7 @@ module Development.IDE.GHC.ExactPrint
 where
 
 import           Control.Applicative                     (Alternative)
-import           Control.Arrow                           (right, (***))
+import           Control.Arrow                           ((***))
 import           Control.DeepSeq
 import           Control.Monad
 import qualified Control.Monad.Fail                      as Fail
@@ -67,14 +68,12 @@ import           Data.Bool                               (bool)
 import           Data.Default                            (Default)
 import qualified Data.DList                              as DL
 import           Data.Either.Extra                       (mapLeft)
-import           Data.Foldable                           (Foldable (fold))
 import           Data.Functor.Classes
 import           Data.Functor.Contravariant
 import           Data.Monoid                             (All (All), getAll)
 import qualified Data.Text                               as T
 import           Data.Traversable                        (for)
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service            (runAction)
 import           Development.IDE.Core.Shake              hiding (Log)
 import qualified Development.IDE.Core.Shake              as Shake
 import           Development.IDE.GHC.Compat              hiding (parseImport,
@@ -112,6 +111,8 @@ import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           DeltaPos (SameLine),
                                                           EpaLocation (EpaDelta),
                                                           deltaPos)
+import GHC (realSrcSpan)
+import GHC (LocatedL)
 #endif
 
 #if MIN_VERSION_ghc(9,2,1)
@@ -217,7 +218,8 @@ transform ::
 transform dflags ccs uri f a = do
     let src = printA a
     a' <- transformA a $ runGraft f dflags
-    let res = printA a'
+    a'' <- transformA a' (pure . makeDeltaAst)
+    let res = printA a''
     pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
 ------------------------------------------------------------------------------
@@ -277,7 +279,7 @@ needsParensSpace _               = mempty
 -}
 graft' ::
     forall ast a l.
-    (Data a, Typeable l, ASTElement l ast) =>
+    (Data a, Data l, Typeable l, ASTElement l ast, ExactPrint ast) =>
     -- | Do we need to insert a space before this grafting? In do blocks, the
     -- answer is no, or we will break layout. But in function applications,
     -- the answer is yes, or the function call won't get its argument. Yikes!
@@ -288,7 +290,9 @@ graft' ::
     LocatedAn l ast ->
     Graft (Either String) a
 graft' needs_space dst val = Graft $ \dflags a -> do
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,2,1)
+    L src' val' <- annotate dflags needs_space val
+#elif MIN_VERSION_ghc(9,2,0)
     val' <- annotate dflags needs_space val
 #else
     (anns, val') <- annotate dflags needs_space val
@@ -299,7 +303,7 @@ graft' needs_space dst val = Graft $ \dflags a -> do
             ( mkT $
                 \case
                     (L src _ :: LocatedAn l ast)
-                        | locA src `eqSrcSpan` dst -> val'
+                        | locA src `eqSrcSpan` dst -> L src (makeDeltaAst val')
                     l                         -> l
             )
             a
@@ -351,21 +355,24 @@ graftExprWithM ::
     (LHsExpr GhcPs -> TransformT m (Maybe (LHsExpr GhcPs))) ->
     Graft m a
 graftExprWithM dst trans = Graft $ \dflags a -> do
-    let (needs_space, mk_parens) = getNeedsSpaceAndParenthesize dst a
 
+    let (needs_space, mk_parens) = getNeedsSpaceAndParenthesize dst a
     everywhereM'
         ( mkM $
             \case
-                val@(L src _ :: LHsExpr GhcPs)
+                val@(L src@(SrcSpanAnn (EpAnn anchor _ _) _) _ :: LHsExpr GhcPs)
                     | locA src `eqSrcSpan` dst -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
 #if MIN_VERSION_ghc(9,2,0)
-                                val'' <-
+                                (makeDeltaAst -> val'') <-
                                     hoistTransform (either Fail.fail pure)
-                                        (annotate @AnnListItem @(HsExpr GhcPs) dflags needs_space (mk_parens val'))
-                                pure val''
+                                        (annotate @AnnListItem @(HsExpr GhcPs) dflags True (mk_parens val'))
+                                case val'' of
+                                  L (SrcSpanAnn (EpAnn _ extAnn extComments) span) e -> do
+                                    pure $ L (SrcSpanAnn (EpAnn anchor extAnn extComments) span) e
+                                  _ -> error ""
 #else
                                 (anns, val'') <-
                                     hoistTransform (either Fail.fail pure)
@@ -380,7 +387,7 @@ graftExprWithM dst trans = Graft $ \dflags a -> do
 
 graftWithM ::
     forall ast m a l.
-    (Fail.MonadFail m, Data a, Typeable l, ASTElement l ast) =>
+    (Fail.MonadFail m, Data a, Data l, ASTElement l ast) =>
     SrcSpan ->
     (LocatedAn l ast -> TransformT m (Maybe (LocatedAn l ast))) ->
     Graft m a
@@ -416,12 +423,12 @@ genericGraftWithSmallestM ::
     forall m a ast.
     (Monad m, Data a, Typeable ast) =>
     -- | The type of nodes we'd like to consider when finding the smallest.
-    Proxy (Located ast) ->
+    Proxy (LocatedL ast) ->
     SrcSpan ->
     (DynFlags -> ast -> GenericM (TransformT m)) ->
     Graft m a
 genericGraftWithSmallestM proxy dst trans = Graft $ \dflags ->
-    smallestM (genericIsSubspan proxy dst) (trans dflags)
+    smallestM (genericIsSubspanL proxy dst) (trans dflags)
 
 -- | Run the given transformation only on the largest node in the tree that
 -- contains the 'SrcSpan'.
@@ -641,7 +648,7 @@ class
     -}
     graft ::
         forall a.
-        (Data a) =>
+        (Data a, Data l, ExactPrint ast) =>
         SrcSpan ->
         LocatedAn l ast ->
         Graft (Either String) a
@@ -687,7 +694,7 @@ fixAnns ParsedModule {..} =
 
 -- | Given an 'LHSExpr', compute its exactprint annotations.
 --   Note that this function will throw away any existing annotations (and format)
-annotate :: (ASTElement l ast, Outputable l)
+annotate :: (Data l, ASTElement l ast, Outputable l)
 #if MIN_VERSION_ghc(9,2,0)
     => DynFlags -> Bool -> LocatedAn l ast -> TransformT (Either String) (LocatedAn l ast)
 #else
@@ -696,7 +703,10 @@ annotate :: (ASTElement l ast, Outputable l)
 annotate dflags needs_space ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,2,1)
+    expr' <- lift $ mapLeft show $ parseAST dflags uniq rendered
+    pure expr'
+#elif MIN_VERSION_ghc(9,2,0)
     expr' <- lift $ mapLeft show $ parseAST dflags uniq rendered
     pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
 #else
@@ -707,7 +717,6 @@ annotate dflags needs_space ast = do
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.
 annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (LHsDecl GhcPs)
-#if !MIN_VERSION_ghc(9,2,0)
 -- The 'parseDecl' function fails to parse 'FunBind' 'ValD's which contain
 -- multiple matches. To work around this, we split the single
 -- 'FunBind'-of-multiple-'Match'es into multiple 'FunBind's-of-one-'Match',
@@ -720,6 +729,17 @@ annotateDecl dflags
     let set_matches matches =
           ValD ext fb { fun_matches = mg { mg_alts = L alt_src matches }}
 
+#if MIN_VERSION_ghc(9,2,0)
+    alts' <- for alts $ \alt -> do
+      uniq <- show <$> uniqueSrcSpanT
+      let rendered = render dflags $ set_matches [alt]
+      lift (mapLeft show $ parseDecl dflags uniq rendered) >>= \case
+        (L _ (ValD _ FunBind { fun_matches = MG { mg_alts = L _ [alt']}}))
+           -> pure alt'
+        _ ->  lift $ Left "annotateDecl: didn't parse a single FunBind match"
+
+    pure $ L src $ set_matches $ makeDeltaAst <$> alts'
+#else
     (anns', alts') <- fmap unzip $ for alts $ \alt -> do
       uniq <- show <$> uniqueSrcSpanT
       let rendered = render dflags $ set_matches [alt]
@@ -760,8 +780,13 @@ parenthesize = parenthesizeHsExpr appPrec
 
 -- | Equality on SrcSpan's.
 -- Ignores the (Maybe BufSpan) field of SrcSpan's.
+#if MIN_VERSION_ghc(9,2,0)
+eqSrcSpan :: SrcSpan -> SrcSpan -> Bool
+eqSrcSpan (realSrcSpan -> l) (realSrcSpan -> r) = containsSpan l r && containsSpan r l
+#else
 eqSrcSpan :: SrcSpan -> SrcSpan -> Bool
 eqSrcSpan l r = leftmost_smallest l r == EQ
+#endif
 
 -- | Equality on SrcSpan's.
 -- Ignores the (Maybe BufSpan) field of SrcSpan's.
@@ -818,6 +843,4 @@ removeTrailingComma = flip modifyAnns $ \(AnnListItem l) -> AnnListItem $ filter
 isCommaAnn :: TrailingAnn -> Bool
 isCommaAnn AddCommaAnn{} = True
 isCommaAnn _             = False
-#endif
-
 #endif

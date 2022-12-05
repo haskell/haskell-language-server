@@ -125,7 +125,7 @@ rulesPlugins rs = mempty { P.pluginRules = rules }
     where
         rules = foldMap snd rs
 
-dynFlagsPlugins :: [(PluginId, DynFlagsModifications)] -> Plugin Config
+dynFlagsPlugins :: [(PluginId, GhcOptsModifications)] -> Plugin Config
 dynFlagsPlugins rs = mempty
   { P.pluginModifyDynflags =
       flip foldMap rs $ \(plId, dflag_mods) cfg ->

@@ -175,7 +175,7 @@ codeActionProvider
        )
     -> PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider sort k state plId
-                   (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
+                   params@(CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
   fromMaybeT (Right $ List []) $ do
     let fc = FileContext
                 { fc_uri   = uri

@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE RankNTypes  #-}
+{-# LANGUAGE CPP #-}
 
 -- | Custom SYB traversals explicitly designed for operating over the GHC AST.
 module Generics.SYB.GHC
@@ -7,7 +8,10 @@ module Generics.SYB.GHC
       mkBindListT,
       everywhereM',
       smallestM,
-      largestM
+      largestM,
+#if MIN_VERSION_ghc(9,2,1)
+      genericIsSubspanL
+#endif
     ) where
 
 import           Control.Monad
@@ -16,6 +20,10 @@ import           Data.Monoid                   (Any (Any))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph.Classes
 import           Generics.SYB
+#if MIN_VERSION_ghc(9,2,1)
+import           GHC                           (LocatedL)
+import           GHC.Hs                        (SrcSpanAnn' (..))
+#endif
 
 
 -- | A generic query intended to be used for calling 'smallestM' and
@@ -32,6 +40,24 @@ genericIsSubspan ::
     GenericQ (Maybe (Bool, ast))
 genericIsSubspan _ dst = mkQ Nothing $ \case
   (L span ast :: Located ast) -> Just (dst `isSubspanOf` span, ast)
+
+#if MIN_VERSION_ghc(9,2,1)
+-- | A generic query intended to be used for calling 'smallestM' and
+-- 'largestM'. If the current node is a 'Located', returns whether or not the
+-- given 'SrcSpan' is a subspan. For all other nodes, returns 'Nothing', which
+-- indicates uncertainty. The search strategy in 'smallestM' et al. will
+-- continue searching uncertain nodes.
+genericIsSubspanL ::
+    forall ast.
+    Typeable ast =>
+    -- | The type of nodes we'd like to consider.
+    Proxy (LocatedL ast) ->
+    SrcSpan ->
+    GenericQ (Maybe (Bool, ast))
+genericIsSubspanL _ dst = mkQ Nothing $ \case
+  (L (SrcSpanAnn _ span) ast :: LocatedL ast) -> Just (dst `isSubspanOf` span, ast)
+#endif
+
 
 
 -- | Lift a function that replaces a value with several values into a generic
