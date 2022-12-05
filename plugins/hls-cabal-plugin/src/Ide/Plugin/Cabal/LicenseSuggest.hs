@@ -12,15 +12,20 @@ module Ide.Plugin.Cabal.LicenseSuggest
 )
 where
 
-import qualified Data.HashMap.Strict as Map
-import qualified Data.Text           as T
-import           Language.LSP.Types  (CodeAction (CodeAction),
-                                      CodeActionKind (CodeActionQuickFix),
-                                      Diagnostic (..), List (List),
-                                      Position (Position), Range (Range),
-                                      TextEdit (TextEdit), Uri,
-                                      WorkspaceEdit (WorkspaceEdit))
+import qualified Data.HashMap.Strict         as Map
+import qualified Data.Text                   as T
+import           Language.LSP.Types          (CodeAction (CodeAction),
+                                              CodeActionKind (CodeActionQuickFix),
+                                              Diagnostic (..), List (List),
+                                              Position (Position),
+                                              Range (Range),
+                                              TextEdit (TextEdit), Uri,
+                                              WorkspaceEdit (WorkspaceEdit))
 import           Text.Regex.TDFA
+
+import qualified Data.List                   as List
+import           Distribution.SPDX.LicenseId (licenseId)
+import qualified Text.Fuzzy.Parallel         as Fuzzy
 
 -- | Given a diagnostic returned by 'Ide.Plugin.Cabal.Diag.errorDiagnostic',
 --   if it represents an "Unknown SPDX license identifier"-error along
@@ -31,7 +36,7 @@ licenseErrorAction
   -- ^ File for which the diagnostic was generated
   -> Diagnostic
   -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
-  -> Maybe CodeAction
+  -> [CodeAction]
 licenseErrorAction uri diag =
   mkCodeAction <$> licenseErrorSuggestion (_message diag)
   where
@@ -52,22 +57,32 @@ licenseErrorAction uri diag =
         edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
       in CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing Nothing
 
--- | Given an error message returned by 'Ide.Plugin.Cabal.Diag.errorDiagnostic',
---   if it represents an "Unknown SPDX license identifier"-error along
---   with a suggestion then return the suggestion (after the "Do you mean"-text)
---   along with the incorrect identifier.
-licenseErrorSuggestion
-  :: T.Text
+-- | License name of every license supported by cabal
+licenseNames :: [T.Text]
+licenseNames = map (T.pack . licenseId) [minBound .. maxBound]
+
+-- | Given a diagnostic returned by 'Ide.Plugin.Cabal.Diag.errorDiagnostic',
+--   provide possible corrections for SPDX license identifiers
+--   based on the list specified in Cabal.
+--   Results are sorted by best fit, and prefer solutions that have smaller
+--   length distance to the original word.
+--
+-- >>> take 2 $ licenseErrorSuggestion (T.pack "Unknown SPDX license identifier: 'BSD3'")
+-- [("BSD3","BSD-3-Clause"),("BSD3","BSD-3-Clause-LBNL")]
+licenseErrorSuggestion ::
+  T.Text
   -- ^ Output of 'Ide.Plugin.Cabal.Diag.errorDiagnostic'
-  -> Maybe (T.Text, T.Text)
+  -> [(T.Text, T.Text)]
   -- ^ (Original (incorrect) license identifier, suggested replacement)
-licenseErrorSuggestion message =
-  mSuggestion message >>= \case
-    [original, suggestion] -> Just (original, suggestion)
-    _                      -> Nothing
+licenseErrorSuggestion msg =
+   (getMatch <$> msg =~~ regex) >>= \case
+          [original] ->
+            let matches = map Fuzzy.original $ Fuzzy.simpleFilter 1000 10 original licenseNames
+            in [(original,candidate) | candidate <- List.sortBy (lengthDistance original) matches]
+          _ -> []
   where
     regex :: T.Text
-    regex = "Unknown SPDX license identifier: '(.*)' Do you mean (.*)\\?"
-    mSuggestion msg = getMatch <$> (msg :: T.Text) =~~ regex
+    regex = "Unknown SPDX license identifier: '(.*)'"
     getMatch :: (T.Text, T.Text, T.Text, [T.Text]) -> [T.Text]
     getMatch (_, _, _, results) = results
+    lengthDistance original x1 x2 = abs (T.length original - T.length x1) `compare` abs (T.length original - T.length x2)

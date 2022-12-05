@@ -1,16 +1,17 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings        #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE NamedFieldPuns           #-}
+{-# LANGUAGE TypeOperators            #-}
 module Main
   ( main
   ) where
 
 import           Control.Lens                    ((^.))
+import           Control.Monad                   (guard)
 import qualified Data.ByteString                 as BS
 import           Data.Either                     (isRight)
-import           Data.Function
 import qualified Data.Text                       as Text
-import           Development.IDE.Types.Logger
 import           Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
@@ -18,33 +19,16 @@ import qualified Language.LSP.Types.Lens         as J
 import           System.FilePath
 import           Test.Hls
 
-
-cabalPlugin :: Recorder (WithPriority Log) -> PluginDescriptor IdeState
-cabalPlugin recorder = descriptor recorder "cabal"
+cabalPlugin :: PluginTestDescriptor Log
+cabalPlugin = mkPluginTestDescriptor descriptor "cabal"
 
 main :: IO ()
 main = do
-  recorder <- initialiseRecorder True
   defaultTestRunner $
     testGroup "Cabal Plugin Tests"
       [ unitTests
-      , pluginTests recorder
+      , pluginTests
       ]
-
--- | @initialiseRecorder silent@
---
--- If @'silent' == True@, then don't log anything, otherwise
--- the recorder is the standard recorder of HLS. Useful for debugging.
-initialiseRecorder :: Bool -> IO (Recorder (WithPriority Log))
-initialiseRecorder True = pure mempty
-initialiseRecorder False = do
-  docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing Debug
-
-  let docWithFilteredPriorityRecorder =
-        docWithPriorityRecorder
-        & cfilter (\WithPriority{ priority } -> priority >= Debug)
-  pure $ docWithFilteredPriorityRecorder
-               & cmapWithPrio pretty
 
 -- ------------------------------------------------------------------------
 -- Unit Tests
@@ -70,24 +54,26 @@ codeActionUnitTests :: TestTree
 codeActionUnitTests = testGroup "Code Action Tests"
   [ testCase "Unknown format" $ do
       -- the message has the wrong format
-      licenseErrorSuggestion "Unknown license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= Nothing,
+      licenseErrorSuggestion "Unknown license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= [],
 
     testCase "BSD-3-Clause" $ do
-      licenseErrorSuggestion "Unknown SPDX license identifier: 'BSD3' Do you mean BSD-3-Clause?" @?= Just ("BSD3", "BSD-3-Clause"),
+      take 2 (licenseErrorSuggestion "Unknown SPDX license identifier: 'BSD3' Do you mean BSD-3-Clause?")
+        @?= [("BSD3","BSD-3-Clause"),("BSD3","BSD-3-Clause-LBNL")],
 
-    testCase "MIT" $ do
+    testCase "MiT" $ do
       -- contains no suggestion
-      licenseErrorSuggestion "Unknown SPDX license identifier: 'MIT3'" @?= Nothing
+      take 2 (licenseErrorSuggestion "Unknown SPDX license identifier: 'MiT'")
+        @?= [("MiT","MIT"),("MiT","MIT-0")]
   ]
 
 -- ------------------------------------------------------------------------
 -- Integration Tests
 -- ------------------------------------------------------------------------
 
-pluginTests :: Recorder (WithPriority Log) -> TestTree
-pluginTests recorder = testGroup "Plugin Tests"
+pluginTests :: TestTree
+pluginTests = testGroup "Plugin Tests"
   [ testGroup "Diagnostics"
-    [ runCabalTestCaseSession "Publishes Diagnostics on Error" recorder "" $ do
+    [ runCabalTestCaseSession "Publishes Diagnostics on Error" "" $ do
         doc <- openDoc "invalid.cabal" "cabal"
         diags <- waitForDiagnosticsFromSource doc "cabal"
         unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
@@ -95,7 +81,7 @@ pluginTests recorder = testGroup "Plugin Tests"
             length diags @?= 1
             unknownLicenseDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
             unknownLicenseDiag ^. J.severity @?= Just DsError
-    , runCabalTestCaseSession "Clears diagnostics" recorder "" $ do
+    , runCabalTestCaseSession "Clears diagnostics" "" $ do
         doc <- openDoc "invalid.cabal" "cabal"
         diags <- waitForDiagnosticsFrom doc
         unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
@@ -106,13 +92,13 @@ pluginTests recorder = testGroup "Plugin Tests"
         _ <- applyEdit doc $ TextEdit (Range (Position 3 20) (Position 4 0)) "BSD-3-Clause\n"
         newDiags <- waitForDiagnosticsFrom doc
         liftIO $ newDiags @?= []
-    , runCabalTestCaseSession "No Diagnostics in .hs files from valid .cabal file" recorder "simple-cabal" $ do
+    , runCabalTestCaseSession "No Diagnostics in .hs files from valid .cabal file" "simple-cabal" $ do
         hsDoc <- openDoc "A.hs" "haskell"
         expectNoMoreDiagnostics 1 hsDoc "typechecking"
         cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
         expectNoMoreDiagnostics 1 cabalDoc "parsing"
     , ignoreTestBecause "Testcase is flaky for certain GHC versions (e.g. 9.2.4). See #3333 for details." $ do
-      runCabalTestCaseSession "Diagnostics in .hs files from invalid .cabal file" recorder "simple-cabal" $ do
+      runCabalTestCaseSession "Diagnostics in .hs files from invalid .cabal file" "simple-cabal" $ do
         hsDoc <- openDoc "A.hs" "haskell"
         expectNoMoreDiagnostics 1 hsDoc "typechecking"
         cabalDoc <- openDoc "simple-cabal.cabal" "cabal"
@@ -129,7 +115,7 @@ pluginTests recorder = testGroup "Plugin Tests"
             unknownLicenseDiag ^. J.severity @?= Just DsError
     ]
   , testGroup "Code Actions"
-    [ runCabalTestCaseSession "BSD-3" recorder "" $ do
+    [ runCabalTestCaseSession "BSD-3" "" $ do
         doc <- openDoc "licenseCodeAction.cabal" "cabal"
         diags <- waitForDiagnosticsFromSource doc "cabal"
         reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
@@ -137,7 +123,7 @@ pluginTests recorder = testGroup "Plugin Tests"
             length diags @?= 1
             reduceDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
             reduceDiag ^. J.severity @?= Just DsError
-        [InR codeAction] <- getCodeActions doc (Range (Position 3 24) (Position 4 0))
+        [codeAction] <- getLicenseAction "BSD-3-Clause" <$> getCodeActions doc (Range (Position 3 24) (Position 4 0))
         executeCodeAction codeAction
         contents <- documentContents doc
         liftIO $ contents @?= Text.unlines
@@ -150,19 +136,47 @@ pluginTests recorder = testGroup "Plugin Tests"
           , "    build-depends:    base"
           , "    default-language: Haskell2010"
           ]
+    , runCabalTestCaseSession "Apache-2.0" "" $ do
+        doc <- openDoc "licenseCodeAction2.cabal" "cabal"
+        diags <- waitForDiagnosticsFromSource doc "cabal"
+        -- test if it supports typos in license name, here 'apahe'
+        reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'APAHE'"]
+        liftIO $ do
+            length diags @?= 1
+            reduceDiag ^. J.range @?= Range (Position 3 25) (Position 4 0)
+            reduceDiag ^. J.severity @?= Just DsError
+        [codeAction] <- getLicenseAction "Apache-2.0" <$> getCodeActions doc (Range (Position 3 24) (Position 4 0))
+        executeCodeAction codeAction
+        contents <- documentContents doc
+        liftIO $ contents @?= Text.unlines
+          [ "cabal-version:      3.0"
+          , "name:               licenseCodeAction2"
+          , "version:            0.1.0.0"
+          , "license:            Apache-2.0"
+          , ""
+          , "library"
+          , "    build-depends:    base"
+          , "    default-language: Haskell2010"
+          ]
     ]
   ]
+  where
+    getLicenseAction :: Text.Text -> [Command |? CodeAction] -> [CodeAction]
+    getLicenseAction license codeActions = do
+                  InR action@CodeAction{_title} <- codeActions
+                  guard (_title=="Replace with " <> license)
+                  pure action
 
 -- ------------------------------------------------------------------------
 -- Runner utils
 -- ------------------------------------------------------------------------
 
-runCabalTestCaseSession :: TestName -> Recorder (WithPriority Log) -> FilePath -> Session () -> TestTree
-runCabalTestCaseSession title recorder subdir act = testCase title $ runCabalSession recorder subdir act
+runCabalTestCaseSession :: TestName -> FilePath -> Session () -> TestTree
+runCabalTestCaseSession title subdir = testCase title . runCabalSession subdir
 
-runCabalSession :: Recorder (WithPriority Log) -> FilePath -> Session a -> IO a
-runCabalSession recorder subdir  =
-    failIfSessionTimeout . runSessionWithServer (cabalPlugin recorder) (testDataDir </> subdir)
+runCabalSession :: FilePath -> Session a -> IO a
+runCabalSession subdir =
+    failIfSessionTimeout . runSessionWithServer cabalPlugin (testDataDir </> subdir)
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

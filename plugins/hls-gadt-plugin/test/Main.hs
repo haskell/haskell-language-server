@@ -15,8 +15,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-gadtPlugin :: PluginDescriptor IdeState
-gadtPlugin = GADT.descriptor "GADT"
+gadtPlugin :: PluginTestDescriptor ()
+gadtPlugin = mkPluginTestDescriptor' GADT.descriptor "GADT"
 
 tests :: TestTree
 tests = testGroup "GADT"

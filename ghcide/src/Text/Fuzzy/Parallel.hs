@@ -91,8 +91,8 @@ filter chunkSize maxRes pattern ts extract = partialSortByAscScore maxRes perfec
 -- match against the pattern. Runs with default settings where
 -- nothing is added around the matches, as case insensitive.
 --
--- >>> simpleFilter "vm" ["vim", "emacs", "virtual machine"]
--- ["vim","virtual machine"]
+-- >>> simpleFilter 1000 10 "vm" ["vim", "emacs", "virtual machine"]
+-- [Scored {score = 4, original = "vim"},Scored {score = 4, original = "virtual machine"}]
 {-# INLINABLE simpleFilter #-}
 simpleFilter :: Int      -- ^ Chunk size. 1000 works well.
              -> Int      -- ^ Max. number of results wanted

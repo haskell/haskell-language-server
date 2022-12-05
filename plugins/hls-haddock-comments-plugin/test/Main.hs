@@ -18,8 +18,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-haddockCommentsPlugin :: PluginDescriptor IdeState
-haddockCommentsPlugin = HaddockComments.descriptor mempty "haddockComments"
+haddockCommentsPlugin :: PluginTestDescriptor HaddockComments.Log
+haddockCommentsPlugin = mkPluginTestDescriptor HaddockComments.descriptor "haddockComments"
 
 tests :: TestTree
 tests =
