@@ -38,7 +38,6 @@ library
       , transformers
       , ghc-boot-th
       , unordered-containers
-      , hw-fingertree
     hs-source-dirs:   src
     default-language: Haskell2010
 

@@ -15,9 +15,14 @@ license-file:       LICENSE
 build-type:         Simple
 extra-source-files:
   README.md
-  test/golden/*.cabal
-  test/golden/*.hs
-  test/golden/*.yaml
+  new/src/**/*.hs-boot
+  old/src/**/*.hs-boot
+  new/test/golden/*.cabal
+  new/test/golden/*.hs
+  new/test/golden/*.yaml
+  old/test/golden/*.cabal
+  old/test/golden/*.hs
+  old/test/golden/*.yaml
 
 source-repository head
     type:     git
@@ -29,11 +34,15 @@ flag pedantic
   manual:      True
 
 library
-  if impl(ghc >= 9.3)
+  if impl(ghc >= 9.2.1)
     buildable: False
   else
     buildable: True
-  hs-source-dirs:     src
+
+  if impl(ghc >= 9.2.1)
+    hs-source-dirs:     new/src
+  else
+    hs-source-dirs:     old/src
   exposed-modules:
     Ide.Plugin.Tactic
     Refinery.Future
@@ -135,7 +144,7 @@ library
     ViewPatterns
 
 test-suite tests
-  if impl(ghc >= 9.3)
+  if impl(ghc >= 9.2.1)
     buildable: False
   else
     buildable: True
@@ -158,7 +167,10 @@ test-suite tests
     UnificationSpec
     Utils
 
-  hs-source-dirs:     test
+  if impl(ghc >= 9.2.1)
+    hs-source-dirs: new/test
+  else
+    hs-source-dirs: old/test
   ghc-options:
     -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
 

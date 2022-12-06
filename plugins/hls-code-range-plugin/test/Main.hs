@@ -18,19 +18,18 @@ import           Language.LSP.Types.Lens
 import           System.FilePath                ((<.>), (</>))
 import           Test.Hls
 
-plugin :: Recorder (WithPriority Log) -> PluginDescriptor IdeState
-plugin recorder = descriptor recorder "codeRange"
+plugin :: PluginTestDescriptor Log
+plugin = mkPluginTestDescriptor descriptor "codeRange"
 
 main :: IO ()
 main = do
-    recorder <- contramap (fmap pretty) <$> makeDefaultStderrRecorder Nothing Debug
     defaultTestRunner $
         testGroup "Code Range" [
             testGroup "Integration Tests" [
-                selectionRangeGoldenTest recorder "Import" [(4, 36), (1, 8)],
-                selectionRangeGoldenTest recorder "Function" [(5, 19), (5, 12), (4, 4), (3, 5)],
-                selectionRangeGoldenTest recorder "Empty" [(1, 5)],
-                foldingRangeGoldenTest recorder "Function"
+                selectionRangeGoldenTest "Import" [(4, 36), (1, 8)],
+                selectionRangeGoldenTest "Function" [(5, 19), (5, 12), (4, 4), (3, 5)],
+                selectionRangeGoldenTest "Empty" [(1, 5)],
+                foldingRangeGoldenTest "Function"
             ],
             testGroup "Unit Tests" [
                 Ide.Plugin.CodeRangeTest.testTree,
@@ -38,9 +37,9 @@ main = do
             ]
         ]
 
-selectionRangeGoldenTest :: Recorder (WithPriority Log) -> TestName -> [(UInt, UInt)] -> TestTree
-selectionRangeGoldenTest recorder testName positions = goldenGitDiff testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
-    res <- runSessionWithServer (plugin recorder) testDataDir $ do
+selectionRangeGoldenTest :: TestName -> [(UInt, UInt)] -> TestTree
+selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
+    res <- runSessionWithServer plugin testDataDir $ do
         doc <- openDoc (testName <.> "hs") "haskell"
         resp <- request STextDocumentSelectionRange $ SelectionRangeParams Nothing Nothing doc
             (List $ fmap (uncurry Position . (\(x, y) -> (x-1, y-1))) positions)
@@ -67,9 +66,9 @@ selectionRangeGoldenTest recorder testName positions = goldenGitDiff testName (t
         showPosition (Position line col) = "(" <> showLBS (line + 1) <> "," <> showLBS (col + 1) <> ")"
         showLBS = fromString . show
 
-foldingRangeGoldenTest :: Recorder (WithPriority Log) -> TestName -> TestTree
-foldingRangeGoldenTest recorder testName = goldenGitDiff  testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
-    res <- runSessionWithServer (plugin recorder) testDataDir $ do
+foldingRangeGoldenTest :: TestName -> TestTree
+foldingRangeGoldenTest testName = goldenGitDiff  testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
+    res <- runSessionWithServer plugin testDataDir $ do
         doc <- openDoc (testName <.> "hs") "haskell"
         resp <- request STextDocumentFoldingRange $ FoldingRangeParams Nothing Nothing doc
         let res = resp ^. result
