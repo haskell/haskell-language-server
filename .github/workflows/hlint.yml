@@ -15,7 +15,7 @@ jobs:
     - name: 'Installing'
       uses: rwe/actions-hlint-setup@v1
       with:
-        version: '3.4'
+        version: '3.5'
 
     - name: 'Checking code'
       uses: rwe/actions-hlint-run@v2
