@@ -45,7 +45,7 @@ import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
                                                   hfbPun, hfbRHS, hs_valds,
                                                   mapConPatDetail, mapLoc,
                                                   nameSrcSpan,
-                                                  pattern RealSrcSpan)
+                                                  pattern RealSrcSpan, LHsRecField)
 import           Development.IDE.GHC.Util        (getExtensions,
                                                   printOutputable)
 import           Development.IDE.Graph           (RuleResult)
@@ -163,6 +163,8 @@ getRecords :: TcModuleResult -> [RecordInfo]
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
   collectRecords valBinds
 
+-- | Collects all 'Name's of a given source file, to be used
+-- in the variable usage analysis.
 getNames :: TcModuleResult -> [LocatedN Name]
 getNames (tmrRenamed -> (group,_,_,_)) = collectNames group
 
@@ -215,6 +217,33 @@ renderRecordInfo :: [LocatedN Name] -> RecordInfo -> Maybe RenderedRecordInfo
 renderRecordInfo names (RecordInfoPat ss pat) = RenderedRecordInfo ss <$> showRecordPat names pat
 renderRecordInfo _ (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecordCon expr
 
+-- | Checks if a 'Name' is referenced in a given list of names. The 'Eq'
+-- instance of 'Name's makes use of their unique identifiers, hence any
+-- to 'Name' referring to the same entity is considered equal. In order
+-- to ensure that no false-positive is reported (in the case where the
+-- 'name' itself is part of the given list), the inequality of source
+-- locations is also checked.
+referencedIn :: Name -> [LocatedN Name] -> Bool
+referencedIn name names = isJust $
+  find (\n -> unLoc n == name && realSpan (getLoc n) /= realSpan (nameSrcSpan name)) names
+
+-- Default to leaving the element in if somehow a name can't be extracted (i.e.
+-- `getName` returns `Nothing`).
+filterReferenced :: (a -> Maybe Name) -> [LocatedN Name] -> [a] -> [a]
+filterReferenced getName names = filter (\x -> maybe True (`referencedIn` names) (getName x))
+
+preprocessRecordPat :: [LocatedN Name] ->
+  HsRecFields p (LPat (GhcPass 'Renamed)) -> HsRecFields p (LPat (GhcPass 'Renamed))
+preprocessRecordPat = preprocessRecord (getFieldName . unLoc)
+  where
+    getFieldName x = case unLoc (hfbRHS x) of
+      VarPat _ x' -> Just $ unLoc x'
+      _           -> Nothing
+
+-- No need to check the name usage in the record construction case
+preprocessRecordCon :: HsRecFields p arg -> HsRecFields p arg
+preprocessRecordCon = preprocessRecord (const Nothing) []
+
 -- We make use of the `Outputable` instances on AST types to pretty-print
 -- the renamed and expanded records back into source form, to be substituted
 -- with the original record later. However, `Outputable` instance of
@@ -224,8 +253,10 @@ renderRecordInfo _ (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecor
 -- as we want to print the records in their fully expanded form.
 -- Here `rec_dotdot` is set to `Nothing` so that fields are printed without
 -- such post-processing.
-preprocessRecord :: HsRecFields (GhcPass c) arg -> HsRecFields (GhcPass c) arg
-preprocessRecord flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
+preprocessRecord ::
+  (LHsRecField p arg -> Maybe Name) -> [LocatedN Name] ->
+  HsRecFields p arg -> HsRecFields p arg
+preprocessRecord getName names flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
   where
     no_pun_count = maybe (length (rec_flds flds)) unLoc (rec_dotdot flds)
     -- Field binds of the explicit form (e.g. `{ a = a' }`) should be
@@ -235,38 +266,20 @@ preprocessRecord flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
     -- puns (since there is similar mechanism in the `Outputable` instance as
     -- explained above).
     puns' = map (mapLoc (\fld -> fld { hfbPun = True })) puns
-    rec_flds' = no_puns <> puns'
-
-preprocessRecord' :: [LocatedN Name] -> HsRecFields (GhcPass 'Renamed) (LPat (GhcPass 'Renamed)) -> HsRecFields (GhcPass 'Renamed) (LPat (GhcPass 'Renamed))
-preprocessRecord' names flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
-  where
-    no_pun_count = maybe (length (rec_flds flds)) unLoc (rec_dotdot flds)
-    -- Field binds of the explicit form (e.g. `{ a = a' }`) should be
-    -- left as is, hence the split.
-    (no_puns, puns) = splitAt no_pun_count (rec_flds flds)
-    -- `hsRecPun` is set to `True` in order to pretty-print the fields as field
-    -- puns (since there is similar mechanism in the `Outputable` instance as
-    -- explained above).
-    puns' = map (mapLoc (\fld -> fld { hfbPun = True })) puns
-    -- default to expanding if somehow `Nothing` ends up here
-    f name = isJust $ find (\n -> unLoc n == name && realSpan (getLoc n) /= realSpan (nameSrcSpan name)) names
-    puns'' = filter (\x -> maybe True f (getFieldName (unLoc x))) puns'
-
-    rec_flds' = no_puns <> puns''
-
-    getFieldName x = case unLoc (hfbRHS x) of
-      VarPat _ x' -> Just $ unLoc x'
-      _           -> Nothing
+    -- Unused fields are filtered out so that they don't end up in the expanded
+    -- form.
+    punsUsed = filterReferenced getName names puns'
+    rec_flds' = no_puns <> punsUsed
 
 showRecordPat :: Outputable (Pat (GhcPass 'Renamed)) => [LocatedN Name] -> Pat (GhcPass 'Renamed) -> Maybe Text
 showRecordPat names = fmap printOutputable . mapConPatDetail (\case
-  RecCon flds -> Just $ RecCon (preprocessRecord' names flds)
+  RecCon flds -> Just $ RecCon (preprocessRecordPat names flds)
   _           -> Nothing)
 
 showRecordCon :: Outputable (HsExpr (GhcPass c)) => HsExpr (GhcPass c) -> Maybe Text
 showRecordCon expr@(RecordCon _ _ flds) =
   Just $ printOutputable $
-    expr { rcon_flds = preprocessRecord flds }
+    expr { rcon_flds = preprocessRecordCon flds }
 showRecordCon _ = Nothing
 
 collectRecords :: GenericQ [RecordInfo]
