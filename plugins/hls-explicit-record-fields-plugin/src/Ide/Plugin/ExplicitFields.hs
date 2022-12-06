@@ -1,13 +1,15 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PatternSynonyms       #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE DuplicateRecordFields      #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PatternSynonyms            #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 module Ide.Plugin.ExplicitFields
   ( descriptor
@@ -19,9 +21,11 @@ import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Control.Monad.Trans.Except      (ExceptT)
 import           Data.Foldable                   (find)
 import           Data.Generics                   (GenericQ, everything, extQ,
-                                                  listify, mkQ)
+                                                  mkQ)
 import qualified Data.HashMap.Strict             as HashMap
-import           Data.Maybe                      (isJust, listToMaybe,
+import           Data.Map.Strict                 (Map)
+import qualified Data.Map.Strict                 as Map
+import           Data.Maybe                      (fromJust, isJust, listToMaybe,
                                                   maybeToList)
 import           Data.Text                       (Text)
 import           Development.IDE                 (IdeState, NormalizedFilePath,
@@ -39,13 +43,15 @@ import           Development.IDE.GHC.Compat      (HsConDetails (RecCon),
 import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
                                                   GenLocated (..), GhcPass,
                                                   HsExpr (RecordCon, rcon_flds),
-                                                  LHsExpr, LocatedN, Name,
-                                                  Pass (..), Pat (..),
-                                                  RealSrcSpan, conPatDetails,
+                                                  LHsExpr, LHsRecField,
+                                                  LocatedN, Name, Pass (..),
+                                                  Pat (..), RealSrcSpan,
+                                                  conPatDetails, getUnique,
                                                   hfbPun, hfbRHS, hs_valds,
                                                   mapConPatDetail, mapLoc,
-                                                  nameSrcSpan,
-                                                  pattern RealSrcSpan, LHsRecField)
+                                                  nameSrcSpan, nameUnique,
+                                                  pattern RealSrcSpan)
+import           Development.IDE.GHC.Compat.Util (Unique, nonDetCmpUnique)
 import           Development.IDE.GHC.Util        (getExtensions,
                                                   printOutputable)
 import           Development.IDE.Graph           (RuleResult)
@@ -149,8 +155,9 @@ collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
   let exts = getEnabledExtensions <$> tmr
       recs = concat $ maybeToList (getRecords <$> tmr)
   logWith recorder Debug (LogCollectedRecords recs)
-  let names = concat $ maybeToList (getNames <$> tmr)
-  logWith recorder Debug (LogCollectedNames names)
+  -- TODO(ozkutuk): refactor fromJust
+  let names = fromJust $ getNames <$> tmr
+  -- logWith recorder Debug (LogCollectedNames names)
   let renderedRecs = traverse (renderRecordInfo names) recs
       recMap = RangeMap.fromList (realSrcSpanToRange . renderedSrcSpan) <$> renderedRecs
   logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
@@ -165,8 +172,17 @@ getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
 
 -- | Collects all 'Name's of a given source file, to be used
 -- in the variable usage analysis.
-getNames :: TcModuleResult -> [LocatedN Name]
+getNames :: TcModuleResult -> Map UniqueKey [LocatedN Name]
 getNames (tmrRenamed -> (group,_,_,_)) = collectNames group
+
+newtype UniqueKey = UniqueKey Unique
+                       deriving newtype Eq
+
+getUniqueKey :: Name -> UniqueKey
+getUniqueKey = UniqueKey . nameUnique
+
+instance Ord UniqueKey where
+  compare (UniqueKey u1) (UniqueKey u2) = getUnique u1 `nonDetCmpUnique` getUnique u2
 
 data CollectRecords = CollectRecords
                     deriving (Eq, Show, Generic)
@@ -213,7 +229,7 @@ instance Pretty RenderedRecordInfo where
 
 instance NFData RenderedRecordInfo
 
-renderRecordInfo :: [LocatedN Name] -> RecordInfo -> Maybe RenderedRecordInfo
+renderRecordInfo :: Map UniqueKey [LocatedN Name] -> RecordInfo -> Maybe RenderedRecordInfo
 renderRecordInfo names (RecordInfoPat ss pat) = RenderedRecordInfo ss <$> showRecordPat names pat
 renderRecordInfo _ (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecordCon expr
 
@@ -223,16 +239,18 @@ renderRecordInfo _ (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecor
 -- to ensure that no false-positive is reported (in the case where the
 -- 'name' itself is part of the given list), the inequality of source
 -- locations is also checked.
-referencedIn :: Name -> [LocatedN Name] -> Bool
-referencedIn name names = isJust $
-  find (\n -> unLoc n == name && realSpan (getLoc n) /= realSpan (nameSrcSpan name)) names
+referencedIn :: Name -> Map UniqueKey [LocatedN Name] -> Bool
+referencedIn name names = maybe True hasNameRef $ Map.lookup (getUniqueKey name) names
+  where
+    hasNameRef :: [LocatedN Name] -> Bool
+    hasNameRef = isJust . find (\n -> realSpan (getLoc n) /= realSpan (nameSrcSpan name))
 
 -- Default to leaving the element in if somehow a name can't be extracted (i.e.
 -- `getName` returns `Nothing`).
-filterReferenced :: (a -> Maybe Name) -> [LocatedN Name] -> [a] -> [a]
+filterReferenced :: (a -> Maybe Name) -> Map UniqueKey [LocatedN Name] -> [a] -> [a]
 filterReferenced getName names = filter (\x -> maybe True (`referencedIn` names) (getName x))
 
-preprocessRecordPat :: [LocatedN Name] ->
+preprocessRecordPat :: Map UniqueKey [LocatedN Name] ->
   HsRecFields p (LPat (GhcPass 'Renamed)) -> HsRecFields p (LPat (GhcPass 'Renamed))
 preprocessRecordPat = preprocessRecord (getFieldName . unLoc)
   where
@@ -242,7 +260,7 @@ preprocessRecordPat = preprocessRecord (getFieldName . unLoc)
 
 -- No need to check the name usage in the record construction case
 preprocessRecordCon :: HsRecFields p arg -> HsRecFields p arg
-preprocessRecordCon = preprocessRecord (const Nothing) []
+preprocessRecordCon = preprocessRecord (const Nothing) Map.empty
 
 -- We make use of the `Outputable` instances on AST types to pretty-print
 -- the renamed and expanded records back into source form, to be substituted
@@ -254,7 +272,7 @@ preprocessRecordCon = preprocessRecord (const Nothing) []
 -- Here `rec_dotdot` is set to `Nothing` so that fields are printed without
 -- such post-processing.
 preprocessRecord ::
-  (LHsRecField p arg -> Maybe Name) -> [LocatedN Name] ->
+  (LHsRecField p arg -> Maybe Name) -> Map UniqueKey [LocatedN Name] ->
   HsRecFields p arg -> HsRecFields p arg
 preprocessRecord getName names flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
   where
@@ -271,7 +289,7 @@ preprocessRecord getName names flds = flds { rec_dotdot = Nothing , rec_flds = r
     punsUsed = filterReferenced getName names puns'
     rec_flds' = no_puns <> punsUsed
 
-showRecordPat :: Outputable (Pat (GhcPass 'Renamed)) => [LocatedN Name] -> Pat (GhcPass 'Renamed) -> Maybe Text
+showRecordPat :: Outputable (Pat (GhcPass 'Renamed)) => Map UniqueKey [LocatedN Name] -> Pat (GhcPass 'Renamed) -> Maybe Text
 showRecordPat names = fmap printOutputable . mapConPatDetail (\case
   RecCon flds -> Just $ RecCon (preprocessRecordPat names flds)
   _           -> Nothing)
@@ -285,8 +303,8 @@ showRecordCon _ = Nothing
 collectRecords :: GenericQ [RecordInfo]
 collectRecords = everything (<>) (maybeToList . (Nothing `mkQ` getRecPatterns `extQ` getRecCons))
 
-collectNames :: GenericQ [LocatedN Name]
-collectNames = listify (const True)
+collectNames :: GenericQ (Map UniqueKey [LocatedN Name])
+collectNames = everything (Map.unionWith (<>)) (Map.empty `mkQ` (\x -> Map.singleton (getUniqueKey (unLoc x)) [x]))
 
 getRecCons :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordInfo
 getRecCons e@(unLoc -> RecordCon _ _ flds)
