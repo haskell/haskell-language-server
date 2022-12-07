@@ -84,6 +84,7 @@ jobs:
         # specified in 'test.yml'
         ghc: [ "9.4.2"
              , "9.4.1"
+             , "9.2.5"
              , "9.2.4"
              , "9.2.3"
              , "9.0.2"
@@ -96,6 +97,10 @@ jobs:
         exclude:
           - os: windows-latest
             ghc: '9.4.1'
+          # Exclude until https://github.com/haskell/actions/issues/129
+          # is resolved.
+          - os: windows-latest
+            ghc: '9.2.5'
 
     steps:
       - uses: actions/checkout@v3

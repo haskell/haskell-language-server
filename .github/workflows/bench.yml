@@ -46,7 +46,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.7', '9.2.4']
+        ghc: ['8.10.7', '9.2.5']
         os: [ubuntu-latest]
 
     # This code is fitted to the strategy: assumes Linux is used ... etc,
@@ -104,7 +104,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.7', '9.2.4']
+        ghc: ['8.10.7', '9.2.5']
         os: [ubuntu-latest]
         cabal: ['3.6']
         example: ['cabal', 'lsp-types']
