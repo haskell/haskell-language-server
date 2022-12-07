@@ -44,7 +44,6 @@ library
     -- automatically, forcing us to manually update the packages revision id.
     -- This is a lot of work for almost zero benefit, so we just allow more versions here
     -- and we eventually completely drop support for building HLS with stack.
-    , Cabal                 ^>=3.2 || ^>=3.4 || ^>=3.6 || ^>= 3.8
     , Cabal-syntax          ^>= 3.6 || ^>= 3.8
     , deepseq
     , directory
