@@ -17,6 +17,7 @@ module Ide.Plugin.ExplicitFields
   ) where
 
 import           Control.Lens                    ((^.))
+import           Control.Monad.Extra             (maybeM)
 import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Control.Monad.Trans.Except      (ExceptT)
 import           Data.Foldable                   (find)
@@ -25,7 +26,7 @@ import           Data.Generics                   (GenericQ, everything, extQ,
 import qualified Data.HashMap.Strict             as HashMap
 import           Data.Map.Strict                 (Map)
 import qualified Data.Map.Strict                 as Map
-import           Data.Maybe                      (fromJust, isJust, listToMaybe,
+import           Data.Maybe                      (isJust, listToMaybe,
                                                   maybeToList)
 import           Data.Text                       (Text)
 import           Development.IDE                 (IdeState, NormalizedFilePath,
@@ -41,7 +42,7 @@ import           Development.IDE.GHC.Compat      (HsConDetails (RecCon),
                                                   HsRecFields (..), LPat,
                                                   Outputable, getLoc, unLoc)
 import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
-                                                  GenLocated (..), GhcPass,
+                                                  GhcPass,
                                                   HsExpr (RecordCon, rcon_flds),
                                                   LHsExpr, LHsRecField,
                                                   LocatedN, Name, Pass (..),
@@ -87,16 +88,12 @@ import qualified Language.LSP.Types.Lens         as L
 data Log
   = LogShake Shake.Log
   | LogCollectedRecords [RecordInfo]
-  | LogCollectedNames [LocatedN Name]
   | LogRenderedRecords [RenderedRecordInfo]
 
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
     LogCollectedRecords recs -> "Collected records with wildcards:" <+> pretty recs
-    LogCollectedNames names ->
-      let names' = map (\(L l e) -> (printOutputable l, printOutputable e)) names
-       in "Collected names:" <+> pretty names'
     LogRenderedRecords recs -> "Rendered records:" <+> pretty recs
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
@@ -150,21 +147,23 @@ codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginRes
           title = "Expand record wildcard"
 
 collectRecordsRule :: Recorder (WithPriority Log) -> Rules ()
-collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectRecords nfp -> do
-  tmr <- use TypeCheck nfp
-  let exts = getEnabledExtensions <$> tmr
-      recs = concat $ maybeToList (getRecords <$> tmr)
-  logWith recorder Debug (LogCollectedRecords recs)
-  -- TODO(ozkutuk): refactor fromJust
-  let names = fromJust $ getNames <$> tmr
-  -- logWith recorder Debug (LogCollectedNames names)
-  let renderedRecs = traverse (renderRecordInfo names) recs
-      recMap = RangeMap.fromList (realSrcSpanToRange . renderedSrcSpan) <$> renderedRecs
-  logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
-  pure ([], CRR <$> recMap <*> exts)
+collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectRecords nfp ->
+  justOrFail "Unable to TypeCheck" (use TypeCheck nfp) $ \tmr -> do
+    let exts = getEnabledExtensions tmr
+        recs = getRecords tmr
+    logWith recorder Debug (LogCollectedRecords recs)
+    let names = getNames tmr
+        renderedRecs = traverse (renderRecordInfo names) recs
+        recMap = RangeMap.fromList (realSrcSpanToRange . renderedSrcSpan) <$> renderedRecs
+    logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
+    pure ([], CRR <$> recMap <*> Just exts)
+
   where
     getEnabledExtensions :: TcModuleResult -> [GhcExtension]
     getEnabledExtensions = map GhcExtension . getExtensions . tmrParsed
+
+    justOrFail :: MonadFail m => String -> m (Maybe a) -> (a -> m b) -> m b
+    justOrFail = flip . maybeM . fail
 
 getRecords :: TcModuleResult -> [RecordInfo]
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
@@ -176,7 +175,7 @@ getNames :: TcModuleResult -> Map UniqueKey [LocatedN Name]
 getNames (tmrRenamed -> (group,_,_,_)) = collectNames group
 
 newtype UniqueKey = UniqueKey Unique
-                       deriving newtype Eq
+                  deriving newtype Eq
 
 getUniqueKey :: Name -> UniqueKey
 getUniqueKey = UniqueKey . nameUnique
