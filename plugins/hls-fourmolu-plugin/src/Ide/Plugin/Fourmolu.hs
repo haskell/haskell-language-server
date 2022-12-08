@@ -9,6 +9,7 @@
 module Ide.Plugin.Fourmolu (
     descriptor,
     provider,
+    LogEvent,
 ) where
 
 import           Control.Exception               (IOException, try)

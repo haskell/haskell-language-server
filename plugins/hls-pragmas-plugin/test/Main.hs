@@ -15,8 +15,8 @@ import           Test.Hls.Util           (onlyWorkForGhcVersions)
 main :: IO ()
 main = defaultTestRunner tests
 
-pragmasPlugin :: PluginDescriptor IdeState
-pragmasPlugin = descriptor "pragmas"
+pragmasPlugin :: PluginTestDescriptor ()
+pragmasPlugin = mkPluginTestDescriptor' descriptor "pragmas"
 
 tests :: TestTree
 tests =

@@ -1,4 +1,4 @@
-module Ide.Plugin.Stan (descriptor) where
+module Ide.Plugin.Stan (descriptor, Log) where
 
 import           Control.DeepSeq                (NFData)
 import           Control.Monad                  (void)

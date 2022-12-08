@@ -9,7 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 
-module Ide.Plugin.Rename (descriptor) where
+module Ide.Plugin.Rename (descriptor, E.Log) where
 
 #if MIN_VERSION_ghc(9,2,1)
 import           GHC.Parser.Annotation                 (AnnContext, AnnList,

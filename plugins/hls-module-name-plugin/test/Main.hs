@@ -12,8 +12,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-moduleNamePlugin :: PluginDescriptor IdeState
-moduleNamePlugin = ModuleName.descriptor mempty "moduleName"
+moduleNamePlugin :: PluginTestDescriptor ModuleName.Log
+moduleNamePlugin = mkPluginTestDescriptor ModuleName.descriptor "moduleName"
 
 tests :: TestTree
 tests =

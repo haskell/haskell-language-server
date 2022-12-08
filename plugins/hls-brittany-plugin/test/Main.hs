@@ -10,8 +10,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-brittanyPlugin :: PluginDescriptor IdeState
-brittanyPlugin = Brittany.descriptor "brittany"
+brittanyPlugin :: PluginTestDescriptor ()
+brittanyPlugin = mkPluginTestDescriptor' Brittany.descriptor "brittany"
 
 tests :: TestTree
 tests = testGroup "brittany"

@@ -1,32 +1,32 @@
 {-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
-module Ide.Plugin.ExplicitFixity(descriptor) where
+module Ide.Plugin.ExplicitFixity(descriptor, Log) where
 
 import           Control.DeepSeq
-import           Control.Monad.Trans.Maybe
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
+import           Control.Monad.Trans.Maybe
 import           Data.Either.Extra
 import           Data.Hashable
 import qualified Data.Map.Strict                      as M
-import qualified Data.Set                             as S
 import           Data.Maybe
+import qualified Data.Set                             as S
 import qualified Data.Text                            as T
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.PositionMapping (idDelta)
 import           Development.IDE.Core.Shake           (addPersistentRule)
 import qualified Development.IDE.Core.Shake           as Shake
-import           Development.IDE.Spans.AtPoint
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util      as Util
 import           Development.IDE.LSP.Notifications    (ghcideNotificationsPluginPriority)
+import           Development.IDE.Spans.AtPoint
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (getNormalizedFilePath,
                                                        handleMaybeM,
@@ -94,7 +94,7 @@ lookupFixities :: MonadIO m => HscEnv -> TcGblEnv -> S.Set Name -> m (M.Map Name
 lookupFixities hscEnv tcGblEnv names
     = liftIO
     $ fmap (fromMaybe M.empty . snd)
-    $ initTcWithGbl hscEnv tcGblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1) 
+    $ initTcWithGbl hscEnv tcGblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1)
     $ M.traverseMaybeWithKey (\_ v -> v)
     $ M.fromSet lookupFixity names
   where
