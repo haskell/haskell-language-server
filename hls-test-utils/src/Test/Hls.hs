@@ -87,9 +87,6 @@ import           Development.IDE.Types.Logger    (Doc, Logger (Logger),
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           GHC.Stack                       (emptyCallStack)
-import           Ide.Plugin.Config               (Config, PluginConfig,
-                                                  cabalFormattingProvider,
-                                                  formattingProvider, plugins)
 import           Ide.Types
 import           Language.LSP.Test
 import           Language.LSP.Types              hiding
