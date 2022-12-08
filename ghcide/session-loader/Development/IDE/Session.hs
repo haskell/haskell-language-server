@@ -2,6 +2,8 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE TypeFamilies              #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Avoid restricted function" #-}
 
 {-|
 The logic for setting up a ghcide session by tapping into hie-bios.
@@ -17,6 +19,7 @@ module Development.IDE.Session
   ,retryOnSqliteBusy
   ,retryOnException
   ,Log(..)
+  ,ignoredFilesGlobalVar
   ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
@@ -101,6 +104,7 @@ import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing         (withTrace)
 import           Development.IDE.Types.Shake          (WithHieDb)
+import           GHC.IO                               (unsafePerformIO)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
@@ -200,6 +204,10 @@ instance Pretty Log where
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
 hiedbDataVersion = "1"
+
+ignoredFilesGlobalVar :: IORef [FilePath]
+{-# NOINLINE ignoredFilesGlobalVar #-}
+ignoredFilesGlobalVar = unsafePerformIO $ newIORef []
 
 data CacheDirs = CacheDirs
   { hiCacheDir, hieCacheDir, oCacheDir :: Maybe FilePath}
@@ -659,6 +667,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                    session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
              -- Failure case, either a cradle error or the none cradle
              Left err -> do
+               modifyIORef ignoredFilesGlobalVar (cfp :)
                dep_info <- getDependencyInfo (maybeToList hieYaml)
                let ncfp = toNormalizedFilePath' cfp
                let res = (map (renderCradleError ncfp) err, Nothing)
