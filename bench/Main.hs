@@ -42,6 +42,7 @@
  -}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE TypeFamilies       #-}
 {-# OPTIONS -Wno-orphans #-}
 
@@ -53,7 +54,7 @@ import           Data.Default
 import           Data.Foldable               (find)
 import qualified Data.Map.Strict             as Map
 import           Data.Maybe
-import           Data.Text                   (pack, unpack)
+import           Data.Text                   (unpack)
 import           Data.Yaml                   (FromJSON (..), ToJSON (toJSON),
                                               decodeFileThrow)
 import           Development.Benchmark.Rules hiding (parallelism)
@@ -74,7 +75,7 @@ import           GHC.Exts                    (toList)
 import           GHC.Generics                (Generic)
 import           HlsPlugins                  (idePlugins)
 import qualified Ide.Plugin.Config           as Plugin
-import           Ide.Types
+import           Ide.Types                   hiding (Config)
 import           Numeric.Natural             (Natural)
 import           System.Console.GetOpt
 import           System.Directory
@@ -175,13 +176,13 @@ createBuildSystem config = do
 disableAllPluginsBut :: (PluginId -> Bool) -> Plugin.Config
 disableAllPluginsBut pred = def {Plugin.plugins = pluginsMap} where
     pluginsMap = Map.fromList
-        [ (p, def { Plugin.plcGlobalOn = globalOn})
-        | PluginDescriptor{pluginId = plugin@(PluginId p)} <- plugins
+        [ (plugin, def { Plugin.plcGlobalOn = globalOn})
+        | PluginDescriptor{pluginId = plugin} <- plugins
         , let globalOn =
                     -- ghcide-core is required, nothing works without it
-                   plugin == PluginId (pack "ghcide-core")
+                   plugin == "ghcide-core"
                     -- document symbols is required by the benchmark suite
-                || plugin == PluginId (pack "ghcide-hover-and-symbols")
+                || plugin == "ghcide-hover-and-symbols"
                 || pred plugin
         ]
     IdePlugins plugins = idePlugins mempty

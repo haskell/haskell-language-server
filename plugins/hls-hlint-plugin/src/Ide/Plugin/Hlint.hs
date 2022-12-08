@@ -53,8 +53,7 @@ import           Development.IDE                                    hiding
                                                                     (Error,
                                                                      getExtensions)
 import           Development.IDE.Core.Rules                         (defineNoFile,
-                                                                     getParsedModuleWithComments,
-                                                                     usePropertyAction)
+                                                                     getParsedModuleWithComments)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
 import qualified Refact.Apply                                       as Refact
 import qualified Refact.Types                                       as Refact

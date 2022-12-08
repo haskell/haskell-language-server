@@ -16,7 +16,7 @@ import           Data.Monoid
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Development.IDE.GHC.Compat
-import           Ide.Types
+import           Ide.Types hiding (Config)
 import           Language.LSP.Types hiding (SemanticTokenAbsolute (..), SemanticTokenRelative (..))
 import           Prelude hiding (span)
 import           Wingman.AbstractLSP.Types
