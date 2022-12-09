@@ -114,13 +114,16 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
             logWith recorder Info (LogImplementedMethods cls implemented)
             pure
                 $ concatMap mkAction
+                $ nubBy (\(_, x) (_,y) -> x == y)
                 $ filter ((/=) mempty . snd)
                 $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
-                $ (<>) [foo range sigs]
-                $ minDefToMethodGroups range sigs
-                $ classMinimalDef cls
+                $ mkSuggestions range sigs cls
             where
                 range = diag ^. J.range
+                mkSuggestions range sigs cls = minimalDef <> [allClassMethods]
+                    where
+                        minimalDef = minDefToMethodGroups range sigs $ classMinimalDef cls
+                        allClassMethods = foo range sigs
 
                 mkAction :: Suggestion -> [Command |? CodeAction]
                 mkAction (name, methodGroup)
