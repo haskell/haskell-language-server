@@ -13,6 +13,7 @@ import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except           (ExceptT, throwE)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
+import           Data.Bifunctor                       (second)
 import           Data.Either.Extra                    (rights)
 import           Data.List
 import qualified Data.Map.Strict                      as Map
@@ -113,14 +114,16 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
             logWith recorder Info (LogImplementedMethods cls implemented)
             pure
                 $ concatMap mkAction
-                $ fmap (filter (\(bind, _) -> bind `notElem` implemented))
+                $ filter ((/=) mempty . snd)
+                $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
+                $ (<>) [foo range sigs]
                 $ minDefToMethodGroups range sigs
                 $ classMinimalDef cls
             where
                 range = diag ^. J.range
 
-                mkAction :: [(T.Text, T.Text)] -> [Command |? CodeAction]
-                mkAction methodGroup
+                mkAction :: Suggestion -> [Command |? CodeAction]
+                mkAction (name, methodGroup)
                     = [ mkCodeAction title
                             $ mkLspCommand plId codeActionCommandId title
                                 (Just $ mkCmdParams methodGroup False)
@@ -129,14 +132,8 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                                 (Just $ mkCmdParams methodGroup True)
                       ]
                     where
-                        title = mkTitle $ fst <$> methodGroup
-                        titleWithSig = mkTitleWithSig $ fst <$> methodGroup
-
-                mkTitle methodGroup
-                    = "Add placeholders for "
-                        <> mconcat (intersperse ", " (fmap (\m -> "'" <> m <> "'") methodGroup))
-
-                mkTitleWithSig methodGroup = mkTitle methodGroup <> " with signature(s)"
+                        title = "Add placeholders for " <> name
+                        titleWithSig = title <> " with signature(s)"
 
                 mkCmdParams methodGroup withSig =
                     [toJSON (AddMinimalMethodsParams uri range (List methodGroup) withSig)]
@@ -211,11 +208,37 @@ isInstanceValBind :: ContextInfo -> Bool
 isInstanceValBind (ValBind InstanceBind _ _) = True
 isInstanceValBind _                          = False
 
--- Return (name text, signature text)
-minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [[(T.Text, T.Text)]]
-minDefToMethodGroups range sigs = go
+type MethodSig = T.Text
+type MethodName = T.Text
+type MethodGroup = (MethodName, MethodSig)
+type Suggestion = (T.Text, [MethodGroup])
+
+makeMethodGroup :: InstanceBindTypeSig -> MethodGroup
+makeMethodGroup sig = (name, signature) 
     where
-        go (Var mn)   = [[ (T.pack . occNameString . occName $ mn, bindRendered sig)
+        name = T.drop (T.length bindingPrefix) (printOutputable  (bindName sig))
+        signature = bindRendered sig
+
+foo :: Range -> [InstanceBindTypeSig] -> Suggestion
+foo range sigs = ("all missing methods", methodGroups)
+    where
+        methodGroups = [ makeMethodGroup sig
+                        | sig <- sigs
+                        , inRange range (getSrcSpan $ bindName sig)
+                       ]
+
+
+-- Return (name text, signature text)
+minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [Suggestion]
+minDefToMethodGroups range sigs minDef = suggestions
+    where
+        makeSuggestion methodGroup = 
+            let name = mconcat $ intersperse "," $ fst <$> methodGroup
+            in  (name, methodGroup)
+
+        suggestions = makeSuggestion <$> go minDef
+
+        go (Var mn)   = [[ makeMethodGroup sig
                         | sig <- sigs
                         , inRange range (getSrcSpan $ bindName sig)
                         , printOutputable mn == T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
@@ -223,3 +246,4 @@ minDefToMethodGroups range sigs = go
         go (Or ms)    = concatMap (go . unLoc) ms
         go (And ms)   = foldr (liftA2 (<>)) [[]] (fmap (go . unLoc) ms)
         go (Parens m) = go (unLoc m)
+
