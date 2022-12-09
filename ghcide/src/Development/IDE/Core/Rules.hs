@@ -694,8 +694,7 @@ typeCheckRuleDefinition hsc pm = do
 
   unlift <- askUnliftIO
   let dets = TypecheckHelpers
-           { getLinkablesToKeep = unliftIO unlift currentLinkables
-           , getLinkables = unliftIO unlift . uses_ GetLinkable
+           { getLinkables = unliftIO unlift . uses_ GetLinkable
            }
   addUsageDependencies $ liftIO $
     typecheckModule defer hsc dets pm
@@ -1108,7 +1107,10 @@ getLinkableRule recorder =
         -- Record the linkable so we know not to unload it
         whenJust (hm_linkable =<< hmi) $ \(LM time mod _) -> do
             compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
-            liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
+            liftIO $ modifyVar compiledLinkables $ \old -> do
+              let !to_keep = extendModuleEnv old mod time
+              unload (hscEnv session) (map (\(mod, time) -> LM time mod []) $ moduleEnvToList to_keep)
+              return (to_keep, ())
         return (hash <$ hmi, (warns, LinkableResult <$> hmi <*> pure hash))
 
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
