@@ -42,15 +42,16 @@ import           Development.IDE.GHC.Compat      (HsConDetails (RecCon),
                                                   HsRecFields (..), LPat,
                                                   Outputable, getLoc, unLoc)
 import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
-                                                  GhcPass,
+                                                  FieldOcc, GhcPass,
                                                   HsExpr (RecordCon, rcon_flds),
-                                                  LHsExpr, LHsRecField,
-                                                  LocatedN, Name, Pass (..),
-                                                  Pat (..), RealSrcSpan,
-                                                  conPatDetails, getUnique,
-                                                  hfbPun, hfbRHS, hs_valds,
-                                                  mapConPatDetail, mapLoc,
-                                                  nameSrcSpan, nameUnique,
+                                                  HsRecField', LHsExpr,
+                                                  LocatedA, LocatedN, Name,
+                                                  Pass (..), Pat (..),
+                                                  RealSrcSpan, conPatDetails,
+                                                  getUnique, hfbPun, hfbRHS,
+                                                  hs_valds, mapConPatDetail,
+                                                  mapLoc, nameSrcSpan,
+                                                  nameUnique,
                                                   pattern RealSrcSpan)
 import           Development.IDE.GHC.Compat.Util (Unique, nonDetCmpUnique)
 import           Development.IDE.GHC.Util        (getExtensions,
@@ -249,8 +250,11 @@ referencedIn name names = maybe True hasNameRef $ Map.lookup (getUniqueKey name)
 filterReferenced :: (a -> Maybe Name) -> Map UniqueKey [LocatedN Name] -> [a] -> [a]
 filterReferenced getName names = filter (\x -> maybe True (`referencedIn` names) (getName x))
 
-preprocessRecordPat :: Map UniqueKey [LocatedN Name] ->
-  HsRecFields p (LPat (GhcPass 'Renamed)) -> HsRecFields p (LPat (GhcPass 'Renamed))
+preprocessRecordPat
+  :: p ~ GhcPass 'Renamed
+  => Map UniqueKey [LocatedN Name]
+  -> HsRecFields p (LPat p)
+  -> HsRecFields p (LPat p)
 preprocessRecordPat = preprocessRecord (getFieldName . unLoc)
   where
     getFieldName x = case unLoc (hfbRHS x) of
@@ -258,7 +262,7 @@ preprocessRecordPat = preprocessRecord (getFieldName . unLoc)
       _           -> Nothing
 
 -- No need to check the name usage in the record construction case
-preprocessRecordCon :: HsRecFields p arg -> HsRecFields p arg
+preprocessRecordCon :: HsRecFields (GhcPass c) arg -> HsRecFields (GhcPass c) arg
 preprocessRecordCon = preprocessRecord (const Nothing) Map.empty
 
 -- We make use of the `Outputable` instances on AST types to pretty-print
@@ -270,9 +274,12 @@ preprocessRecordCon = preprocessRecord (const Nothing) Map.empty
 -- as we want to print the records in their fully expanded form.
 -- Here `rec_dotdot` is set to `Nothing` so that fields are printed without
 -- such post-processing.
-preprocessRecord ::
-  (LHsRecField p arg -> Maybe Name) -> Map UniqueKey [LocatedN Name] ->
-  HsRecFields p arg -> HsRecFields p arg
+preprocessRecord
+  :: p ~ GhcPass c
+  => (LocatedA (HsRecField' (FieldOcc p) arg) -> Maybe Name)
+  -> Map UniqueKey [LocatedN Name]
+  -> HsRecFields p arg
+  -> HsRecFields p arg
 preprocessRecord getName names flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
   where
     no_pun_count = maybe (length (rec_flds flds)) unLoc (rec_dotdot flds)
