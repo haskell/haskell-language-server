@@ -42,16 +42,15 @@ import           Development.IDE.GHC.Compat      (HsConDetails (RecCon),
                                                   HsRecFields (..), LPat,
                                                   Outputable, getLoc, unLoc)
 import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
-                                                  FieldOcc, GhcPass,
+                                                  GhcPass,
                                                   HsExpr (RecordCon, rcon_flds),
-                                                  HsRecField', LHsExpr,
-                                                  LocatedA, LocatedN, Name,
-                                                  Pass (..), Pat (..),
-                                                  RealSrcSpan, conPatDetails,
-                                                  getUnique, hfbPun, hfbRHS,
-                                                  hs_valds, mapConPatDetail,
-                                                  mapLoc, nameSrcSpan,
-                                                  nameUnique,
+                                                  HsRecField, LHsExpr, LocatedA,
+                                                  LocatedN, Name, Pass (..),
+                                                  Pat (..), RealSrcSpan,
+                                                  conPatDetails, getUnique,
+                                                  hfbPun, hfbRHS, hs_valds,
+                                                  mapConPatDetail, mapLoc,
+                                                  nameSrcSpan, nameUnique,
                                                   pattern RealSrcSpan)
 import           Development.IDE.GHC.Compat.Util (Unique, nonDetCmpUnique)
 import           Development.IDE.GHC.Util        (getExtensions,
@@ -276,7 +275,7 @@ preprocessRecordCon = preprocessRecord (const Nothing) Map.empty
 -- such post-processing.
 preprocessRecord
   :: p ~ GhcPass c
-  => (LocatedA (HsRecField' (FieldOcc p) arg) -> Maybe Name)
+  => (LocatedA (HsRecField p arg) -> Maybe Name)
   -> Map UniqueKey [LocatedN Name]
   -> HsRecFields p arg
   -> HsRecFields p arg
