@@ -1,18 +1,20 @@
 # Releases and distributable binaries
 
 Starting with 0.2.1.0 haskell-language-server provides pre-built binaries on
-each [GitHub
-release](https://github.com/haskell/haskell-language-server/releases). These
-binaries are used by the [vscode-hie-server
-extension](https://github.com/alanz/vscode-hie-server) to provide automatic
-installation for users on VS Code, but they can also be installed manually
+each [GitHub release](https://github.com/haskell/haskell-language-server/releases).
+These binaries are used by the [vscode-haskell extension](https://github.com/haskell/vscode-haskell)
+to provide automatic installation for users on VS Code, but they can also be installed manually
 when added to the path.
 
 Starting with 0.8.0.0 haskell-language-server and all its related packages
-(core libraries like ghcide, plugins and hls itself) is being released in
+(core libraries like ghcide, plugins and hls itself) is being released on
 [hackage](https://hackage.haskell.org/package/haskell-language-server) as well.
-This allow cabal users to install it with `cabal install haskell-language-server`
+This allows cabal users to install it with `cabal install haskell-language-server`
 and it is being used in nix environments.
+
+Since 1.7.0.0, HLS binaries are no longer uploaded to GitHub but to [downloads.haskell.org](https://downloads.haskell.org/~hls/).
+[GHCup](https://www.haskell.org/ghcup/) uses these binaries to enable automatic installation of HLS binaries in
+various lsp-client plugins, such as [vscode-haskell](https://github.com/haskell/vscode-haskell).
 
 ## Minimal checklist
 
