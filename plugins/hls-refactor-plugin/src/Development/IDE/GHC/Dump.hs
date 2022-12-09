@@ -1,7 +1,8 @@
 {-# LANGUAGE CPP #-}
 module Development.IDE.GHC.Dump(showAstDataHtml) where
 import           Data.Data                             hiding (Fixity)
-import           Development.IDE.GHC.Compat            hiding (NameAnn)
+import           Development.IDE.GHC.Compat            hiding (LocatedA,
+                                                        NameAnn)
 import           Development.IDE.GHC.Compat.ExactPrint
 import           GHC.Hs.Dump
 #if MIN_VERSION_ghc(9,2,1)
