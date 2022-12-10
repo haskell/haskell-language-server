@@ -12,8 +12,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-moduleNamePlugin :: PluginDescriptor IdeState
-moduleNamePlugin = ModuleName.descriptor "moduleName"
+moduleNamePlugin :: PluginTestDescriptor ModuleName.Log
+moduleNamePlugin = mkPluginTestDescriptor ModuleName.descriptor "moduleName"
 
 tests :: TestTree
 tests =
@@ -39,10 +39,15 @@ tests =
       void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
   , testCase "Should not show code lens if the module name is correct" $
       runSessionWithServer moduleNamePlugin testDataDir $ do
-          doc <- openDoc "CorrectName.hs" "haskell"
-          lenses <- getCodeLenses doc
-          liftIO $ lenses @?= []
-          closeDoc doc
+        doc <- openDoc "CorrectName.hs" "haskell"
+        lenses <- getCodeLenses doc
+        liftIO $ lenses @?= []
+        closeDoc doc
+  -- https://github.com/haskell/haskell-language-server/issues/3047
+  , goldenWithModuleName "Fix#3047" "canonicalize/Lib/A" $ \doc -> do
+      [CodeLens { _command = Just c }] <- getCodeLenses doc
+      executeCommand c
+      void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
   ]
 
 goldenWithModuleName :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree

@@ -3,41 +3,43 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeOperators         #-}
 module Test.Hls.Util
-  (
+  (  -- * Test Capabilities
       codeActionSupportCaps
     , expectCodeAction
+    -- * Environment specifications
+    -- for ignoring tests
+    , ghcVersion, GhcVersion(..)
+    , hostOS, OS(..)
+    , matchesCurrentEnv, EnvSpec(..)
+    , ignoreForGhcVersions
+    , ignoreInEnv
+    , onlyRunForGhcVersions
+    , knownBrokenOnWindows
+    , knownBrokenForGhcVersions
+    , knownBrokenInEnv
+    , onlyWorkForGhcVersions
+    -- * Extract code actions
+    , fromAction
+    , fromCommand
+    -- * Session Assertion Helpers
     , dontExpectCodeAction
     , expectDiagnostic
     , expectNoMoreDiagnostics
     , expectSameLocations
     , failIfSessionTimeout
-    , flushStackEnvironment
-    , fromAction
-    , fromCommand
     , getCompletionByLabel
-    , ghcVersion, GhcVersion(..)
-    , hostOS, OS(..)
-    , matchesCurrentEnv, EnvSpec(..)
     , noLiteralCaps
-    , ignoreForGhcVersions
-    , ignoreInEnv
-    , onlyRunForGhcVersions
     , inspectCodeAction
     , inspectCommand
     , inspectDiagnostic
-    , knownBrokenOnWindows
-    , knownBrokenForGhcVersions
-    , knownBrokenInEnv
-    , onlyWorkForGhcVersions
-    , setupBuildToolFiles
     , SymbolLocation
     , waitForDiagnosticsFrom
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
+    -- * Temporary directories
     , withCurrentDirectoryInTmp
     , withCurrentDirectoryInTmp'
     , withCanonicalTempDir
@@ -46,7 +48,7 @@ where
 
 import           Control.Applicative.Combinators (skipManyTill, (<|>))
 import           Control.Exception               (catch, throwIO)
-import           Control.Lens                    ((^.))
+import           Control.Lens                    ((&), (?~), (^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Data.Aeson                      as A
@@ -59,9 +61,9 @@ import           Development.IDE                 (GhcVersion (..), ghcVersion)
 import qualified Language.LSP.Test               as Test
 import           Language.LSP.Types              hiding (Reason (..))
 import qualified Language.LSP.Types.Capabilities as C
+import           Language.LSP.Types.Lens         (textDocument)
 import qualified Language.LSP.Types.Lens         as L
 import           System.Directory
-import           System.Environment
 import           System.FilePath
 import           System.Info.Extra               (isMac, isWindows)
 import qualified System.IO.Extra
@@ -74,46 +76,21 @@ import           Test.Tasty.HUnit                (Assertion, assertFailure,
                                                   (@?=))
 
 noLiteralCaps :: C.ClientCapabilities
-noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
+noLiteralCaps = def & textDocument ?~ textDocumentCaps
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
 codeActionSupportCaps :: C.ClientCapabilities
-codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
+codeActionSupportCaps = def & textDocument ?~ textDocumentCaps
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True) Nothing Nothing Nothing Nothing
     literalSupport = CodeActionLiteralSupport def
 
 -- ---------------------------------------------------------------------
-
-setupBuildToolFiles :: IO ()
-setupBuildToolFiles = do
-  forM_ files setupDirectFilesIn
-
-setupDirectFilesIn :: FilePath -> IO ()
-setupDirectFilesIn f =
-  writeFile (f ++ "hie.yaml") hieYamlCradleDirectContents
-
-
+-- Environment specification for ignoring tests
 -- ---------------------------------------------------------------------
-
-files :: [FilePath]
-files =
-  [  "./test/testdata/"
-   -- , "./test/testdata/addPackageTest/cabal-exe/"
-   -- , "./test/testdata/addPackageTest/hpack-exe/"
-   -- , "./test/testdata/addPackageTest/cabal-lib/"
-   -- , "./test/testdata/addPackageTest/hpack-lib/"
-   -- , "./test/testdata/addPragmas/"
-   -- , "./test/testdata/badProjects/cabal/"
-   -- , "./test/testdata/completion/"
-   -- , "./test/testdata/definition/"
-   -- , "./test/testdata/gototest/"
-   -- , "./test/testdata/redundantImportTest/"
-   -- , "./test/testdata/wErrorTest/"
-  ]
 
 data EnvSpec = HostOS OS | GhcVer GhcVersion
     deriving (Show, Eq)
@@ -153,9 +130,9 @@ ignoreForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
 ignoreForGhcVersions vers = ignoreInEnv (map GhcVer vers)
 
 -- | Mark as broken if GHC does not match only work versions.
-onlyWorkForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
-onlyWorkForGhcVersions vers reason =
-    if ghcVersion `elem` vers
+onlyWorkForGhcVersions :: (GhcVersion -> Bool) -> String -> TestTree -> TestTree
+onlyWorkForGhcVersions p reason =
+    if p ghcVersion
         then id
         else expectFailBecause reason
 
@@ -165,30 +142,6 @@ onlyRunForGhcVersions vers =
     if ghcVersion `elem` vers
     then const id
     else ignoreTestBecause
-
--- ---------------------------------------------------------------------
-
-hieYamlCradleDirectContents :: String
-hieYamlCradleDirectContents = unlines
-  [ "# WARNING: THIS FILE IS AUTOGENERATED IN test/utils/TestUtils.hs. IT WILL BE OVERWRITTEN ON EVERY TEST RUN"
-  , "cradle:"
-  , "  direct:"
-  , "    arguments:"
-  , "      - -i."
-  ]
-
-
--- ---------------------------------------------------------------------
-
-flushStackEnvironment :: IO ()
-flushStackEnvironment = do
-  -- We need to clear these environment variables to prevent
-  -- collisions with stack usages
-  -- See https://github.com/commercialhaskell/stack/issues/4875
-  unsetEnv "GHC_PACKAGE_PATH"
-  unsetEnv "GHC_ENVIRONMENT"
-  unsetEnv "HASKELL_PACKAGE_SANDBOX"
-  unsetEnv "HASKELL_PACKAGE_SANDBOXES"
 
 -- ---------------------------------------------------------------------
 
@@ -297,16 +250,7 @@ waitForDiagnosticsFrom doc = do
        else return diags
 
 waitForDiagnosticsFromSource :: TextDocumentIdentifier -> String -> Test.Session [Diagnostic]
-waitForDiagnosticsFromSource doc src = do
-    diagsNot <- skipManyTill Test.anyMessage (Test.message STextDocumentPublishDiagnostics)
-    let (List diags) = diagsNot ^. L.params . L.diagnostics
-    let res = filter matches diags
-    if doc ^. L.uri /= diagsNot ^. L.params . L.uri || null res
-       then waitForDiagnosticsFromSource doc src
-       else return res
-  where
-    matches :: Diagnostic -> Bool
-    matches d = d ^. L.source == Just (T.pack src)
+waitForDiagnosticsFromSource = waitForDiagnosticsFromSourceWithTimeout 5
 
 -- | wait for @timeout@ seconds and report an assertion failure
 -- if any diagnostic messages arrive in that period
@@ -322,38 +266,31 @@ expectNoMoreDiagnostics timeout doc src = do
 -- If timeout is 0 it will wait until the session timeout
 waitForDiagnosticsFromSourceWithTimeout :: Seconds -> TextDocumentIdentifier -> String -> Test.Session [Diagnostic]
 waitForDiagnosticsFromSourceWithTimeout timeout document source = do
-    when (timeout > 0) $ do
+    when (timeout > 0) $
         -- Give any further diagnostic messages time to arrive.
         liftIO $ sleep timeout
         -- Send a dummy message to provoke a response from the server.
         -- This guarantees that we have at least one message to
         -- process, so message won't block or timeout.
-        void $ Test.sendNotification (SCustomMethod "non-existent-method") A.Null
-    handleMessages
+    testId <- Test.sendRequest (SCustomMethod "test") A.Null
+    handleMessages testId
   where
     matches :: Diagnostic -> Bool
     matches d = d ^. L.source == Just (T.pack source)
 
-    handleMessages = handleDiagnostic <|> handleCustomMethodResponse <|> ignoreOthers
-    handleDiagnostic = do
+    handleMessages testId = handleDiagnostic testId <|> handleCustomMethodResponse testId <|> ignoreOthers testId
+    handleDiagnostic testId = do
         diagsNot <- Test.message STextDocumentPublishDiagnostics
         let fileUri = diagsNot ^. L.params . L.uri
             (List diags) = diagsNot ^. L.params . L.diagnostics
             res = filter matches diags
         if fileUri == document ^. L.uri && not (null res)
-            then return diags else handleMessages
-    handleCustomMethodResponse =
-        -- the CustomClientMethod triggers a RspCustomServer
-        -- handle that and then exit
-        void (Test.satisfyMaybe responseForNonExistentMethod) >> return []
+            then return res else handleMessages testId
+    handleCustomMethodResponse testId = do
+        _ <- Test.responseForId (SCustomMethod "test") testId
+        pure []
 
-    responseForNonExistentMethod :: FromServerMessage -> Maybe FromServerMessage
-    responseForNonExistentMethod notif
-        | FromServerMess SWindowLogMessage logMsg <- notif,
-          "non-existent-method" `T.isInfixOf` (logMsg ^. L.params . L.message)  = Just notif
-        | otherwise = Nothing
-
-    ignoreOthers = void Test.anyMessage >> handleMessages
+    ignoreOthers testId = void Test.anyMessage >> handleMessages testId
 
 failIfSessionTimeout :: IO a -> IO a
 failIfSessionTimeout action = action `catch` errorHandler

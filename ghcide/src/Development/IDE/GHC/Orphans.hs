@@ -29,8 +29,6 @@ import           Unique                     (getKey)
 #endif
 
 
-import           Retrie.ExactPrint          (Annotated)
-
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 
@@ -41,9 +39,12 @@ import           Data.Hashable
 import           Data.String                (IsString (fromString))
 import           Data.Text                  (unpack)
 #if MIN_VERSION_ghc(9,0,0)
-import          GHC.ByteCode.Types
+import           GHC.ByteCode.Types
 #else
-import          ByteCodeTypes
+import           ByteCodeTypes
+#endif
+#if MIN_VERSION_ghc(9,3,0)
+import           GHC.Types.PkgQual
 #endif
 
 -- Orphan instances for types from the GHC API.
@@ -57,8 +58,8 @@ instance NFData SafeHaskellMode where rnf = rwhnf
 instance Show Linkable where show = unpack . printOutputable
 instance NFData Linkable where rnf (LM a b c) = rnf a `seq` rnf b `seq` rnf c
 instance NFData Unlinked where
-  rnf (DotO f) = rnf f
-  rnf (DotA f) = rnf f
+  rnf (DotO f)   = rnf f
+  rnf (DotA f)   = rnf f
   rnf (DotDLL f) = rnf f
   rnf (BCOs a b) = seqCompiledByteCode a `seq` liftRnf rwhnf b
 instance Show PackageFlag where show = unpack . printOutputable
@@ -87,7 +88,9 @@ instance NFData SB.StringBuffer where rnf = rwhnf
 instance Show Module where
     show = moduleNameString . moduleName
 
+#if !MIN_VERSION_ghc(9,3,0)
 instance Outputable a => Show (GenLocated SrcSpan a) where show = unpack . printOutputable
+#endif
 
 instance (NFData l, NFData e) => NFData (GenLocated l e) where
     rnf (L l e) = rnf l `seq` rnf e
@@ -100,11 +103,6 @@ instance Show ParsedModule where
 
 instance NFData ModSummary where
     rnf = rwhnf
-
-#if !MIN_VERSION_ghc(8,10,0)
-instance NFData FastString where
-    rnf = rwhnf
-#endif
 
 #if MIN_VERSION_ghc(9,2,0)
 instance Ord FastString where
@@ -128,10 +126,12 @@ instance Show HieFile where
 instance NFData HieFile where
     rnf = rwhnf
 
+#if !MIN_VERSION_ghc(9,3,0)
 deriving instance Eq SourceModified
 deriving instance Show SourceModified
 instance NFData SourceModified where
     rnf = rwhnf
+#endif
 
 #if !MIN_VERSION_ghc(9,2,0)
 instance Show ModuleName where
@@ -195,12 +195,6 @@ instance NFData ModGuts where
 instance NFData (ImportDecl GhcPs) where
     rnf = rwhnf
 
-instance Show (Annotated ParsedSource) where
-  show _ = "<Annotated ParsedSource>"
-
-instance NFData (Annotated ParsedSource) where
-  rnf = rwhnf
-
 #if MIN_VERSION_ghc(9,0,1)
 instance (NFData HsModule) where
 #else
@@ -215,3 +209,16 @@ instance Show HomeModInfo where show = show . mi_module . hm_iface
 
 instance NFData HomeModInfo where
   rnf (HomeModInfo iface dets link) = rwhnf iface `seq` rnf dets `seq` rnf link
+
+#if MIN_VERSION_ghc(9,3,0)
+instance NFData PkgQual where
+  rnf NoPkgQual      = ()
+  rnf (ThisPkg uid)  = rnf uid
+  rnf (OtherPkg uid) = rnf uid
+
+instance NFData UnitId where
+  rnf = rwhnf
+
+instance NFData NodeKey where
+  rnf = rwhnf
+#endif

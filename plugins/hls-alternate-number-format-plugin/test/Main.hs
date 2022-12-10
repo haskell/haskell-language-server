@@ -7,7 +7,6 @@ import           Data.Either                      (rights)
 import           Data.List                        (find)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
-import           Debug.Trace
 import qualified Ide.Plugin.AlternateNumberFormat as AlternateNumberFormat
 import qualified Ide.Plugin.Conversion            as Conversion
 import           Language.LSP.Types               (toEither)
@@ -20,8 +19,8 @@ import           Text.Regex.TDFA                  ((=~))
 main :: IO ()
 main = defaultTestRunner test
 
-alternateNumberFormatPlugin :: PluginDescriptor IdeState
-alternateNumberFormatPlugin = AlternateNumberFormat.descriptor mempty
+alternateNumberFormatPlugin :: PluginTestDescriptor AlternateNumberFormat.Log
+alternateNumberFormatPlugin = mkPluginTestDescriptor AlternateNumberFormat.descriptor "alternateNumberFormat"
 
 -- NOTE: For whatever reason, this plugin does not play nice with creating Code Actions on time.
 -- As a result tests will mostly pass if `import Prelude` is added at the top. We (mostly fendor) surmise this has something
@@ -30,7 +29,7 @@ test :: TestTree
 test = testGroup "alternateNumberFormat" [
     codeActionHex "TIntDtoH" 3 13
     , codeActionOctal "TIntDtoO" 3 13
-    , codeActionBinary "TIntDtoB" 4 12
+    , codeActionBinary "TIntDtoB" 4 13
     , codeActionNumDecimal "TIntDtoND" 5 13
     , codeActionFracExp "TFracDtoE" 3 13
     , codeActionFloatHex "TFracDtoHF" 4 13

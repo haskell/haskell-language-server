@@ -23,101 +23,127 @@ module Ide.Plugin.Eval.CodeLens (
     evalCommand,
 ) where
 
-import           Control.Applicative             (Alternative ((<|>)))
-import           Control.Arrow                   (second, (>>>))
-import           Control.Exception               (try)
-import qualified Control.Exception               as E
-import           Control.Lens                    (_1, _3, ix, (%~), (<&>), (^.))
-import           Control.Monad                   (guard, join, void, when)
-import           Control.Monad.IO.Class          (MonadIO (liftIO))
-import           Control.Monad.Trans             (lift)
-import           Control.Monad.Trans.Except      (ExceptT (..))
-import           Data.Aeson                      (toJSON)
-import           Data.Char                       (isSpace)
+import           Control.Applicative                          (Alternative ((<|>)))
+import           Control.Arrow                                (second, (>>>))
+import           Control.Exception                            (try)
+import qualified Control.Exception                            as E
+import           Control.Lens                                 (_1, _3, ix, (%~),
+                                                               (<&>), (^.))
+import           Control.Monad                                (guard, join,
+                                                               void, when)
+import           Control.Monad.IO.Class                       (MonadIO (liftIO))
+import           Control.Monad.Trans                          (lift)
+import           Control.Monad.Trans.Except                   (ExceptT (..))
+import           Data.Aeson                                   (toJSON)
+import           Data.Char                                    (isSpace)
 import           Data.Default
-import qualified Data.HashMap.Strict             as HashMap
-import           Data.List                       (dropWhileEnd, find,
-                                                  intercalate, intersperse)
-import           Data.Maybe                      (catMaybes, fromMaybe)
-import           Data.String                     (IsString)
-import           Data.Text                       (Text)
-import qualified Data.Text                       as T
-import           Data.Time                       (getCurrentTime)
-import           Data.Typeable                   (Typeable)
-import           Development.IDE                 (GetModSummary (..),
-                                                  GetDependencyInformation (..),
-                                                  GetLinkable (..),
-                                                  GhcSessionIO (..), IdeState,
-                                                  ModSummaryResult (..),
-                                                  NeedsCompilation (NeedsCompilation),
-                                                  VFSModified (..), evalGhcEnv,
-                                                  hscEnvWithImportPaths,
-                                                  printOutputable, runAction,
-                                                  linkableHomeMod,
-                                                  textToStringBuffer,
-                                                  toNormalizedFilePath',
-                                                  uriToFilePath', useNoFile_,
-                                                  useWithStale_, use_, uses_)
-import           Development.IDE.Core.Rules      (GhcSessionDepsConfig (..),
-                                                  ghcSessionDepsDefinition)
-import           Development.IDE.Import.DependencyInformation ( reachableModules )
-import           Development.IDE.GHC.Compat      hiding (typeKind, unitState)
-import qualified Development.IDE.GHC.Compat      as Compat
-import qualified Development.IDE.GHC.Compat      as SrcLoc
-import           Development.IDE.GHC.Compat.Util (GhcException,
-                                                  OverridingBool (..))
+import qualified Data.HashMap.Strict                          as HashMap
+import           Data.List                                    (dropWhileEnd,
+                                                               find,
+                                                               intercalate,
+                                                               intersperse)
+import           Data.Maybe                                   (catMaybes,
+                                                               fromMaybe)
+import           Data.String                                  (IsString)
+import           Data.Text                                    (Text)
+import qualified Data.Text                                    as T
+import           Data.Time                                    (getCurrentTime)
+import           Data.Typeable                                (Typeable)
+import           Development.IDE                              (GetDependencyInformation (..),
+                                                               GetLinkable (..),
+                                                               GetModSummary (..),
+                                                               GhcSessionIO (..),
+                                                               IdeState,
+                                                               ModSummaryResult (..),
+                                                               NeedsCompilation (NeedsCompilation),
+                                                               VFSModified (..),
+                                                               evalGhcEnv,
+                                                               hscEnvWithImportPaths,
+                                                               linkableHomeMod,
+                                                               printOutputable,
+                                                               runAction,
+                                                               textToStringBuffer,
+                                                               toNormalizedFilePath',
+                                                               uriToFilePath',
+                                                               useNoFile_,
+                                                               useWithStale_,
+                                                               use_, uses_)
+import           Development.IDE.Core.Rules                   (GhcSessionDepsConfig (..),
+                                                               ghcSessionDepsDefinition)
+import           Development.IDE.GHC.Compat                   hiding (typeKind,
+                                                               unitState)
+import qualified Development.IDE.GHC.Compat                   as Compat
+import qualified Development.IDE.GHC.Compat                   as SrcLoc
+import           Development.IDE.GHC.Compat.Util              (GhcException,
+                                                               OverridingBool (..))
+import           Development.IDE.Import.DependencyInformation (reachableModules)
 import           Development.IDE.Types.Options
-import           GHC                             (ClsInst,
-                                                  ExecOptions (execLineNumber, execSourceFile),
-                                                  FamInst, GhcMonad,
-                                                  LoadHowMuch (LoadAllTargets),
-                                                  NamedThing (getName),
-                                                  defaultFixity, execOptions,
-                                                  exprType, getInfo,
-                                                  getInteractiveDynFlags,
-                                                  isImport, isStmt, load,
-                                                  parseName, pprFamInst,
-                                                  pprInstance, setTargets,
-                                                  typeKind)
+import           GHC                                          (ClsInst,
+                                                               ExecOptions (execLineNumber, execSourceFile),
+                                                               FamInst,
+                                                               GhcMonad,
+                                                               LoadHowMuch (LoadAllTargets),
+                                                               NamedThing (getName),
+                                                               defaultFixity,
+                                                               execOptions,
+                                                               exprType,
+                                                               getInfo,
+                                                               getInteractiveDynFlags,
+                                                               isImport, isStmt,
+                                                               load, parseName,
+                                                               pprFamInst,
+                                                               pprInstance,
+                                                               setTargets,
+                                                               typeKind)
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC                             (Fixity)
+import           GHC                                          (Fixity)
 #endif
-import qualified GHC.LanguageExtensions.Type     as LangExt (Extension (..))
+import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
-import           Development.IDE.Core.FileStore  (setSomethingModified)
-import           Development.IDE.Types.Shake     (toKey)
-import           Ide.Plugin.Config               (Config)
+import           Development.IDE.Core.FileStore               (setSomethingModified)
+import           Development.IDE.Types.Shake                  (toKey)
+import           Ide.Plugin.Config                            (Config)
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
+import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
 #endif
-import           Ide.Plugin.Eval.Code            (Statement, asStatements,
-                                                  evalSetup, myExecStmt,
-                                                  propSetup, resultRange,
-                                                  testCheck, testRanges)
-import           Ide.Plugin.Eval.Config          (EvalConfig (..),
-                                                  getEvalConfig)
-import           Ide.Plugin.Eval.GHC             (addImport, addPackages,
-                                                  hasPackage, showDynFlags)
-import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
-import           Ide.Plugin.Eval.Parse.Option    (parseSetFlags)
-import           Ide.Plugin.Eval.Rules           (queueForEvaluation)
+import           Ide.Plugin.Eval.Code                         (Statement,
+                                                               asStatements,
+                                                               evalSetup,
+                                                               myExecStmt,
+                                                               propSetup,
+                                                               resultRange,
+                                                               testCheck,
+                                                               testRanges)
+import           Ide.Plugin.Eval.Config                       (EvalConfig (..),
+                                                               getEvalConfig)
+import           Ide.Plugin.Eval.GHC                          (addImport,
+                                                               addPackages,
+                                                               hasPackage,
+                                                               showDynFlags)
+import           Ide.Plugin.Eval.Parse.Comments               (commentsToSections)
+import           Ide.Plugin.Eval.Parse.Option                 (parseSetFlags)
+import           Ide.Plugin.Eval.Rules                        (queueForEvaluation)
 import           Ide.Plugin.Eval.Types
-import           Ide.Plugin.Eval.Util            (gStrictTry, isLiterate,
-                                                  logWith, response', timed)
-import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
-                                                  pluginResponse)
+import           Ide.Plugin.Eval.Util                         (gStrictTry,
+                                                               isLiterate,
+                                                               logWith,
+                                                               response', timed)
+import           Ide.PluginUtils                              (handleMaybe,
+                                                               handleMaybeM,
+                                                               pluginResponse)
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length))
-import           Language.LSP.Types.Lens         (end, line)
-import           Language.LSP.VFS                (virtualFileText)
+import           Language.LSP.Types                           hiding
+                                                              (SemanticTokenAbsolute (length, line),
+                                                               SemanticTokenRelative (length))
+import           Language.LSP.Types.Lens                      (end, line)
+import           Language.LSP.VFS                             (virtualFileText)
 
 #if MIN_VERSION_ghc(9,2,0)
 #elif MIN_VERSION_ghc(9,0,0)
-import           GHC.Driver.Session              (unitDatabases, unitState)
-import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
+import           GHC.Driver.Session                           (unitDatabases,
+                                                               unitState)
+import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
 #else
 import           DynFlags
 #endif
@@ -279,9 +305,6 @@ runEvalCmd plId st EvalParams{..} =
 #endif
 
                 -- Load the module with its current content (as the saved module might not be up to date)
-                -- BUG: this fails for files that requires preprocessors (e.g. CPP) for ghc < 8.8
-                -- see https://gitlab.haskell.org/ghc/ghc/-/issues/17066
-                -- and https://hackage.haskell.org/package/ghc-8.10.1/docs/GHC.html#v:TargetFile
                 eSetTarget <- gStrictTry $ setTargets [thisModuleTarget]
                 dbg "setTarget" eSetTarget
 

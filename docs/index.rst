@@ -9,7 +9,7 @@ Official Haskell Language Server implementation. :ref:`Read more<What is haskell
    what-is-hls
    features
    installation
-   supported-versions
+   support/index
    configuration
    troubleshooting
    contributing/index

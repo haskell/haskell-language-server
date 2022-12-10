@@ -2,7 +2,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# HLINT ignore "Unused LANGUAGE pragma" #-}
 
--- | Parser compaibility module.
+-- | Parser compatibility module.
 module Development.IDE.GHC.Compat.Parser (
     initParserOpts,
     initParserState,
@@ -62,7 +62,11 @@ import           GHC                             (Anchor (anchor),
                                                   pm_mod_summary,
                                                   pm_parsed_source)
 import qualified GHC
+#if MIN_VERSION_ghc(9,3,0)
+import qualified GHC.Driver.Config.Parser        as Config
+#else
 import qualified GHC.Driver.Config               as Config
+#endif
 import           GHC.Hs                          (LEpaComment, hpm_module,
                                                   hpm_src_files)
 import           GHC.Parser.Lexer                hiding (initParserState)

@@ -98,25 +98,7 @@ If you can't get `ghcide` working outside the editor, see [this setup troublesho
 
 ### Optimal project setup
 
-`ghcide` has been designed to handle projects with hundreds or thousands of modules. If `ghci` can handle it, then `ghcide` should be able to handle it. The only caveat is that this currently requires GHC >= 8.6, and that the first time a module is loaded in the editor will trigger generation of support files in the background if those do not already exist.
-
-### Configuration
-
-`ghcide` accepts the following lsp configuration options:
-
-```typescript
-{
-  // When to check the dependents of a module
-  // AlwaysCheck means retypechecking them on every change
-  // CheckOnSave means dependent/parent modules will only be checked when you save
-  // "CheckOnSaveAndClose" by default
-  checkParents : "NeverCheck" | "CheckOnClose" | "CheckOnSaveAndClose" | "AlwaysCheck" | ,
-  // Whether to check the entire project on initial load
-  // true by default
-  checkProject : boolean
-
-}
-```
+`ghcide` has been designed to handle projects with hundreds or thousands of modules. If `ghci` can handle it, then `ghcide` should be able to handle it. The only caveat is that this currently requires GHC >= 8.8, and that the first time a module is loaded in the editor will trigger generation of support files in the background if those do not already exist.
 
 ### Using with VS Code
 

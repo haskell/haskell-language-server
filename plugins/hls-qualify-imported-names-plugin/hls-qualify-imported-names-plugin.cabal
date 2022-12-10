@@ -17,6 +17,10 @@ extra-source-files:
   test/data/*.hs
   test/data/*.yaml
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 library
   exposed-modules:    Ide.Plugin.QualifyImportedNames
   hs-source-dirs:     src
@@ -26,9 +30,9 @@ library
     , containers
     , deepseq
     , ghc
-    , ghcide                ^>=1.6 || ^>=1.7
+    , ghcide                ^>=1.6 || ^>=1.7 || ^>= 1.8
     , hls-graph
-    , hls-plugin-api        ^>=1.3 || ^>=1.4
+    , hls-plugin-api        ^>=1.3 || ^>=1.4 || ^>= 1.5
     , lsp
     , text
     , unordered-containers
@@ -51,4 +55,4 @@ test-suite tests
     , text
     , filepath
     , hls-qualify-imported-names-plugin
-    , hls-test-utils             ^>= 1.2 || ^>=1.3
+    , hls-test-utils             ^>= 1.2 || ^>=1.3 || ^>= 1.4

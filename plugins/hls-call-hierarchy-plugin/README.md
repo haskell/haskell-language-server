@@ -23,6 +23,9 @@ Enabled by default. You can disable it in your editor settings whenever you like
 ```
 
 ## Change log
+### 1.1.0.0
+- Support ghc-9.4.
+- Refactor code base and force four space indent.
 ### 1.0.3.0
 Remove force update `HieDb` logic in queries.
 ### 1.0.1.0

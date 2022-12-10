@@ -11,7 +11,7 @@ where
 
 import           Control.Monad.IO.Class
 import           Data.Functor
-import           Data.Generics
+import           Data.Generics                  hiding (Prefix)
 import           Data.Maybe
 import qualified Data.Text                      as T
 import           Development.IDE.Core.Rules
@@ -122,8 +122,16 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
     }
   where
     cvtFld :: LFieldOcc GhcPs -> Maybe DocumentSymbol
+#if MIN_VERSION_ghc(9,3,0)
+    cvtFld (L (locA -> RealSrcSpan l _) n) = Just $ (defDocumentSymbol l :: DocumentSymbol)
+#else
     cvtFld (L (RealSrcSpan l _) n) = Just $ (defDocumentSymbol l :: DocumentSymbol)
+#endif
+#if MIN_VERSION_ghc(9,3,0)
+                { _name = printOutputable (unLoc (foLabel n))
+#else
                 { _name = printOutputable (unLoc (rdrNameFieldOcc n))
+#endif
                 , _kind = SkField
                 }
     cvtFld _  = Nothing
@@ -161,8 +169,13 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ DataFamInstD { dfi
 documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
 #endif
   = Just (defDocumentSymbol l :: DocumentSymbol)
-    { _name = printOutputable (unLoc feqn_tycon) <> " " <> T.unwords
+    { _name =
+#if MIN_VERSION_ghc(9,3,0)
+        printOutputable $ pprHsArgsApp (unLoc feqn_tycon) Prefix (feqn_pats)
+#else
+        printOutputable (unLoc feqn_tycon) <> " " <> T.unwords
                 (map printOutputable feqn_pats)
+#endif
     , _kind = SkInterface
     }
 #if MIN_VERSION_ghc(9,2,0)
@@ -171,8 +184,13 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ TyFamInstD { tfid_
 documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
 #endif
   = Just (defDocumentSymbol l :: DocumentSymbol)
-    { _name = printOutputable (unLoc feqn_tycon) <> " " <> T.unwords
+    { _name =
+#if MIN_VERSION_ghc(9,3,0)
+        printOutputable $ pprHsArgsApp (unLoc feqn_tycon) Prefix (feqn_pats)
+#else
+        printOutputable (unLoc feqn_tycon) <> " " <> T.unwords
                 (map printOutputable feqn_pats)
+#endif
     , _kind = SkInterface
     }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (DerivD _ DerivDecl { deriv_type })) =
@@ -217,7 +235,7 @@ documentSymbolForImportSummary importSymbols =
     let
       -- safe because if we have no ranges then we don't take this branch
       mergeRanges xs = Range (minimum $ map _start xs) (maximum $ map _end xs)
-      importRange = mergeRanges $ map (_range :: DocumentSymbol -> Range) importSymbols
+      importRange = mergeRanges $ map (\DocumentSymbol{_range} -> _range) importSymbols
     in
       Just (defDocumentSymbol (rangeToRealSrcSpan "" importRange))
           { _name = "imports"
@@ -230,11 +248,7 @@ documentSymbolForImport (L (locA -> (RealSrcSpan l _)) ImportDecl { ideclName, i
   (defDocumentSymbol l :: DocumentSymbol)
     { _name   = "import " <> printOutputable ideclName
     , _kind   = SkModule
-#if MIN_VERSION_ghc(8,10,0)
     , _detail = case ideclQualified of { NotQualified -> Nothing; _ -> Just "qualified" }
-#else
-    , _detail = if ideclQualified then Just "qualified" else Nothing
-#endif
     }
 documentSymbolForImport _ = Nothing
 
@@ -293,7 +307,11 @@ hsConDeclsBinders cons
 
     get_flds_gadt :: HsConDeclGADTDetails GhcPs
                   -> ([LFieldOcc GhcPs])
+#if MIN_VERSION_ghc(9,3,0)
+    get_flds_gadt (RecConGADT flds _) = get_flds (reLoc flds)
+#else
     get_flds_gadt (RecConGADT flds) = get_flds (reLoc flds)
+#endif
     get_flds_gadt _ = []
 
     get_flds :: Located [LConDeclField GhcPs]

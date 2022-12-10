@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-splice-plugin
-version:            1.0.1.0
+version:            1.0.2.0
 synopsis:
   HLS Plugin to expand TemplateHaskell Splices and QuasiQuotes
 
@@ -22,7 +22,15 @@ extra-source-files:
   test/testdata/*.hs
   test/testdata/*.yaml
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 library
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   exposed-modules:
     Ide.Plugin.Splice
     Ide.Plugin.Splice.Types
@@ -38,8 +46,9 @@ library
     , foldl
     , ghc
     , ghc-exactprint
-    , ghcide                ^>=1.6 || ^>=1.7
-    , hls-plugin-api        ^>=1.3 || ^>=1.4
+    , ghcide                ^>=1.8
+    , hls-plugin-api        ^>= 1.5
+    , hls-refactor-plugin
     , lens
     , lsp
     , retrie
@@ -55,6 +64,10 @@ library
     TypeOperators
 
 test-suite tests
+  if impl(ghc >= 9.3)
+    buildable: False
+  else
+    buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
@@ -64,5 +77,5 @@ test-suite tests
     , base
     , filepath
     , hls-splice-plugin
-    , hls-test-utils     ^>=1.2 || ^>=1.3
+    , hls-test-utils ^>= 1.4
     , text

@@ -1,16 +1,19 @@
 -- We deliberately want to ensure the function we add to the rule database
 -- has the constraints we need on it when we get it out.
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# LANGUAGE DeriveFunctor              #-}
+
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
+
+import           Prelude                              hiding (unzip)
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
@@ -27,21 +30,21 @@ import qualified Control.Monad.Trans.State.Strict     as State
 import           Data.Dynamic
 import           Data.Either
 import           Data.Foldable                        (for_, traverse_)
-import           Data.HashSet                         (HashSet)
-import qualified Data.HashSet                         as HSet
 import           Data.IORef.Extra
+import           Data.List.NonEmpty                   (unzip)
 import           Data.Maybe
 import           Data.Traversable                     (for)
 import           Data.Tuple.Extra
-import           Debug.Trace (traceM)
+import           Debug.Trace                          (traceM)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
 import qualified Focus
 import qualified ListT
 import qualified StmContainers.Map                    as SMap
-import           System.Time.Extra                    (duration, sleep)
 import           System.IO.Unsafe
+import           System.Time.Extra                    (duration, sleep)
+
 
 newDatabase :: Dynamic -> TheRules -> IO Database
 newDatabase databaseExtra databaseRules = do
@@ -56,7 +59,7 @@ incDatabase :: Database -> Maybe [Key] -> IO ()
 incDatabase db (Just kk) = do
     atomicallyNamed "incDatabase" $ modifyTVar'  (databaseStep db) $ \(Step i) -> Step $ i + 1
     transitiveDirtyKeys <- transitiveDirtySet db kk
-    for_ transitiveDirtyKeys $ \k ->
+    for_ (toListKeySet transitiveDirtyKeys) $ \k ->
         -- Updating all the keys atomically is not necessary
         -- since we assume that no build is mutating the db.
         -- Therefore run one transaction per key to minimise contention.
@@ -78,13 +81,17 @@ updateDirty = Focus.adjust $ \(KeyDetails status rdeps) ->
             in KeyDetails status' rdeps
 -- | Unwrap and build a list of keys in parallel
 build
-    :: forall key value . (RuleResult key ~ value, Typeable key, Show key, Hashable key, Eq key, Typeable value)
-    => Database -> Stack -> [key] -> IO ([Key], [value])
+    :: forall f key value . (Traversable f, RuleResult key ~ value, Typeable key, Show key, Hashable key, Eq key, Typeable value)
+    => Database -> Stack -> f key -> IO (f Key, f value)
 -- build _ st k | traceShow ("build", st, k) False = undefined
 build db stack keys = do
-    (ids, vs) <- runAIO $ fmap unzip $ either return liftIO =<<
-            builder db stack (map Key keys)
-    pure (ids, map (asV . resultValue) vs)
+    built <- runAIO $ do
+        built <- builder db stack (fmap newKey keys)
+        case built of
+          Left clean  -> return clean
+          Right dirty -> liftIO dirty
+    let (ids, vs) = unzip built
+    pure (ids, fmap (asV . resultValue) vs)
     where
         asV :: Value -> value
         asV (Value x) = unwrapDynamic x
@@ -93,7 +100,7 @@ build db stack keys = do
 --  If none of the keys are dirty, we can return the results immediately.
 --  Otherwise, a blocking computation is returned *which must be evaluated asynchronously* to avoid deadlock.
 builder
-    :: Database -> Stack -> [Key] -> AIO (Either [(Key, Result)] (IO [(Key, Result)]))
+    :: Traversable f => Database -> Stack -> f Key -> AIO (Either (f (Key, Result)) (IO (f (Key, Result))))
 -- builder _ st kk | traceShow ("builder", st,kk) False = undefined
 builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
     -- Things that I need to force before my results are ready
@@ -137,7 +144,7 @@ refresh :: Database -> Stack -> Key -> Maybe Result -> AIO (IO Result)
 -- refresh _ st k _ | traceShow ("refresh", st, k) False = undefined
 refresh db stack key result = case (addStack key stack, result) of
     (Left e, _) -> throw e
-    (Right stack, Just me@Result{resultDeps = ResultDeps deps}) -> do
+    (Right stack, Just me@Result{resultDeps = ResultDeps (toListKeySet -> deps)}) -> do
         res <- builder db stack deps
         let isDirty = any (\(_,dep) -> resultBuilt me < resultChanged dep)
         case res of
@@ -168,8 +175,8 @@ compute db@Database{..} stack key mode result = do
         actualDeps = if runChanged /= ChangedNothing then deps else previousDeps
         previousDeps= maybe UnknownDeps resultDeps result
     let res = Result runValue built' changed built actualDeps execution runStore
-    case getResultDepsDefault [] actualDeps of
-        deps | not(null deps)
+    case getResultDepsDefault mempty actualDeps of
+        deps | not(nullKeySet deps)
             && runChanged /= ChangedNothing
                     -> do
             -- IMPORTANT: record the reverse deps **before** marking the key Clean.
@@ -178,8 +185,8 @@ compute db@Database{..} stack key mode result = do
             -- on the next build.
             void $
                 updateReverseDeps key db
-                    (getResultDepsDefault [] previousDeps)
-                    (HSet.fromList deps)
+                    (getResultDepsDefault mempty previousDeps)
+                    deps
         _ -> pure ()
     atomicallyNamed "compute" $ SMap.focus (updateStatus $ Clean res) key databaseValues
     pure res
@@ -227,16 +234,15 @@ splitIO act = do
 updateReverseDeps
     :: Key        -- ^ Id
     -> Database
-    -> [Key] -- ^ Previous direct dependencies of Id
-    -> HashSet Key -- ^ Current direct dependencies of Id
+    -> KeySet -- ^ Previous direct dependencies of Id
+    -> KeySet -- ^ Current direct dependencies of Id
     -> IO ()
 -- mask to ensure that all the reverse dependencies are updated
 updateReverseDeps myId db prev new = do
-    forM_ prev $ \d ->
-        unless (d `HSet.member` new) $
-            doOne (HSet.delete myId) d
-    forM_ (HSet.toList new) $
-        doOne (HSet.insert myId)
+    forM_ (toListKeySet $ prev `differenceKeySet` new) $ \d ->
+         doOne (deleteKeySet myId) d
+    forM_ (toListKeySet new) $
+        doOne (insertKeySet myId)
     where
         alterRDeps f =
             Focus.adjust (onKeyReverseDeps f)
@@ -246,18 +252,18 @@ updateReverseDeps myId db prev new = do
         doOne f id = atomicallyNamed "updateReverseDeps" $
             SMap.focus (alterRDeps f) id (databaseValues db)
 
-getReverseDependencies :: Database -> Key -> STM (Maybe (HashSet Key))
+getReverseDependencies :: Database -> Key -> STM (Maybe KeySet)
 getReverseDependencies db = (fmap.fmap) keyReverseDeps  . flip SMap.lookup (databaseValues db)
 
-transitiveDirtySet :: Foldable t => Database -> t Key -> IO (HashSet Key)
-transitiveDirtySet database = flip State.execStateT HSet.empty . traverse_ loop
+transitiveDirtySet :: Foldable t => Database -> t Key -> IO KeySet
+transitiveDirtySet database = flip State.execStateT mempty . traverse_ loop
   where
     loop x = do
         seen <- State.get
-        if x `HSet.member` seen then pure () else do
-            State.put (HSet.insert x seen)
+        if x `memberKeySet` seen then pure () else do
+            State.put (insertKeySet x seen)
             next <- lift $ atomically $ getReverseDependencies database x
-            traverse_ loop (maybe mempty HSet.toList next)
+            traverse_ loop (maybe mempty toListKeySet next)
 
 --------------------------------------------------------------------------------
 -- Asynchronous computations with cancellation
@@ -317,7 +323,7 @@ data Wait
     | Spawn {justWait :: !(IO ())}
 
 fmapWait :: (IO () -> IO ()) -> Wait -> Wait
-fmapWait f (Wait io) = Wait (f io)
+fmapWait f (Wait io)  = Wait (f io)
 fmapWait f (Spawn io) = Spawn (f io)
 
 waitOrSpawn :: Wait -> IO (Either (IO ()) (Async ()))

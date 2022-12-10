@@ -12,7 +12,7 @@ import qualified Data.Aeson.Types      as A
 import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
-import           Data.List             (nub)
+import           Data.List.Extra       (nubOrd)
 import           Data.String           (IsString (fromString))
 import qualified Data.Text             as T
 import           Ide.Plugin.Config
@@ -34,7 +34,7 @@ pluginsToDefaultConfig IdePlugins {..} =
   A.toJSON defaultConfig & ix "haskell" . _Object . at "plugin" ?~ elems
   where
     defaultConfig@Config {} = def
-    elems = A.object $ mconcat $ singlePlugin <$> map snd ipMap
+    elems = A.object $ mconcat $ singlePlugin <$> ipMap
     -- Splice genericDefaultConfig and dedicatedDefaultConfig
     -- Example:
     --
@@ -62,7 +62,7 @@ pluginsToDefaultConfig IdePlugins {..} =
         -- }
         --
         genericDefaultConfig =
-          let x = ["diagnosticsOn" A..= True | configHasDiagnostics] <> nub (mconcat (handlersToGenericDefaultConfig <$> handlers))
+          let x = ["diagnosticsOn" A..= True | configHasDiagnostics] <> nubOrd (mconcat (handlersToGenericDefaultConfig <$> handlers))
            in case x of
                 -- if the plugin has only one capability, we produce globalOn instead of the specific one;
                 -- otherwise we don't produce globalOn at all
@@ -96,7 +96,7 @@ pluginsToDefaultConfig IdePlugins {..} =
 -- | Generates json schema used in haskell vscode extension
 -- Similar to 'pluginsToDefaultConfig' but simpler, since schema has a flatten structure
 pluginsToVSCodeExtensionSchema :: IdePlugins a -> A.Value
-pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlugin <$> map snd ipMap
+pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlugin <$> ipMap
   where
     singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {..}, ..} = genericSchema <> dedicatedSchema
       where
@@ -106,7 +106,7 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
         genericSchema =
           let x =
                 [toKey' "diagnosticsOn" A..= schemaEntry "diagnostics" | configHasDiagnostics]
-                  <> nub (mconcat (handlersToGenericSchema <$> handlers))
+                  <> nubOrd (mconcat (handlersToGenericSchema <$> handlers))
            in case x of
                 -- If the plugin has only one capability, we produce globalOn instead of the specific one;
                 -- otherwise we don't produce globalOn at all

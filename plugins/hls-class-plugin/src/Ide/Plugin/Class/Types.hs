@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveGeneric    #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase       #-}
-{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TypeFamilies     #-}
 {-# LANGUAGE ViewPatterns     #-}
 
@@ -20,11 +19,7 @@ import           Development.IDE.GHC.Compat    hiding ((<+>))
 import           Development.IDE.Graph.Classes
 import           GHC.Generics
 import           Ide.Plugin.Class.Utils
-import           Ide.Plugin.Config
-import           Ide.Plugin.Properties
-import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server
 
 typeLensCommandId :: CommandId
 typeLensCommandId = "classplugin.typelens"
@@ -73,7 +68,7 @@ data Log
 instance Pretty Log where
   pretty = \case
     LogImplementedMethods cls methods ->
-      pretty ("Detected implmented methods for class" :: String)
+      pretty ("Detected implemented methods for class" :: String)
         <+> pretty (show (getOccString cls) <> ":") -- 'show' is used here to add quotes around the class name
         <+> pretty methods
     LogShake log -> pretty log
@@ -112,19 +107,3 @@ rules recorder = do
                                 (prettyBindingNameString (printOutputable name) <> " :: " <> T.pack (showDoc ty))
                                 Nothing
         instanceBindType _ _ = pure Nothing
-
-properties :: Properties
-  '[ 'PropertyKey "typelensOn" 'TBoolean]
-properties = emptyProperties
-  & defineBooleanProperty #typelensOn
-    "Enable type lens on instance methods"
-    True
-
-getCompletionsConfig :: (MonadLsp Config m) => PluginId -> m ClassConfig
-getCompletionsConfig plId =
-  ClassConfig
-    <$> usePropertyLsp #typelensOn plId properties
-
-newtype ClassConfig = ClassConfig
-    { enableTypeLens :: Bool
-    }

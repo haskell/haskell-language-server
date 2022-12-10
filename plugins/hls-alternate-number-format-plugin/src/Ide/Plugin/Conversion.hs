@@ -23,6 +23,7 @@ module Ide.Plugin.Conversion (
 
 import           Data.Char                     (toUpper)
 import           Data.List                     (delete)
+import           Data.List.Extra               (enumerate, upper)
 import           Data.Maybe                    (mapMaybe)
 import           Data.Ratio                    (denominator, numerator)
 import           Data.Text                     (Text)
@@ -108,10 +109,10 @@ filterFracFormats = mapMaybe getFracFormat
         getFracFormat _              = Nothing
 
 intFormats :: [IntFormatType]
-intFormats = [minBound .. maxBound]
+intFormats = enumerate
 
 fracFormats :: [FracFormatType]
-fracFormats = [minBound .. maxBound]
+fracFormats = enumerate
 
 -- | Regex to match a Haskell Hex Literal
 hexRegex :: Text
@@ -157,8 +158,8 @@ sourceToFormatType srcText
 
 toBase :: (Num a, Ord a) => (a -> ShowS) -> String -> a -> String
 toBase conv header n
-  | n < 0 = '-' : header <> map toUpper (conv (abs n) "")
-  | otherwise = header <> map toUpper (conv n "")
+  | n < 0 = '-' : header <> upper (conv (abs n) "")
+  | otherwise = header <> upper (conv n "")
 
 toOctal :: (Integral a, Show a) => a -> String
 toOctal = toBase showOct "0o"

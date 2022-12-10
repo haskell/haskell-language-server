@@ -51,26 +51,21 @@ If you are using nix 2.4 style command (enabled by `experimental-features = nix-
 you can use `nix develop` instead of `nix-shell` to enter the development shell. To enter the shell with specific GHC versions:
 
 * `nix develop` or `nix develop .#haskell-language-server-dev` - default GHC version
-* `nix develop .#haskell-language-server-8107-dev` - GHC 8.10.7
-* `nix develop .#haskell-language-server-884-dev` - GHC 8.8.4
-* `nix develop .#haskell-language-server-901-dev` - GHC 9.0.1
+* `nix develop .#haskell-language-server-901-dev` - GHC 9.0.1 (substitute GHC version as appropriate)
 
 If you are looking for a Nix expression to create haskell-language-server binaries, see https://github.com/haskell/haskell-language-server/issues/122
 
 To create binaries:
 
 * `nix build` or `nix build .#haskell-language-server` - default GHC version
-* `nix build .#haskell-language-server-8107` - GHC 8.10.7
-* `nix build .#haskell-language-server-884` - GHC 8.8.4
-* `nix build .#haskell-language-server-901` - GHC 9.0.1
-
-GHC 8.6.5 is not supported here because `nixpkgs-unstable` no longer maintains the corresponding packages set.
+* `nix build .#haskell-language-server-901` - GHC 9.0.1 (substitute GHC version as appropriate)
 
 ## Testing
 
 The tests make use of the [Tasty](https://github.com/feuerbach/tasty) test framework.
 
 There are two test suites in the main haskell-language-server package, functional tests, and wrapper tests.
+Some of the wrapper tests expect `stack` to be present on the system, or else they fail.
 Other project packages, like the core library or plugins, can have their own test suite.
 
 ### Testing with Cabal
@@ -170,49 +165,13 @@ Please, try to follow those basic settings to keep the codebase as uniform as po
 
 ### Formatter pre-commit hook
 
-We are using [pre-commit-hook.nix](https://github.com/cachix/pre-commit-hooks.nix) to configure git pre-commit hook for formatting. Although it is possible to run formatting manually, we recommend you to use it to set pre-commit hook as our CI checks pre-commit hook is applied or not.
+We are using [pre-commit](https://pre-commit.com/) to configure git pre-commit hook for formatting. Although it is possible to run formatting manually, we recommend you to use it to set pre-commit hook as our CI checks pre-commit hook is applied or not.
 
-You can configure the pre-commit-hook by running
+If you are using Nix or Gitpod, pre-commit hook is automatically installed. Otherwise, follow instructions on
+[https://pre-commit.com/](https://pre-commit.com/) to install the `pre-commit` tool, then run the following command:
 
-``` bash
-nix-shell
-```
-
-If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you can instead use [pre-commit](https://pre-commit.com) with the following config.
-
-```json
-{
-  "repos": [
-    {
-      "hooks": [
-        {
-          "entry": "stylish-haskell --inplace",
-          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|test/manual/lhs/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$|^ghcide/src/Development/IDE/GHC/Compat.hs$|^ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs$|^ghcide/src/Development/IDE/GHC/Compat/Core.hs$|^ghcide/src/Development/IDE/Spans/Pragmas.hs$|^ghcide/src/Development/IDE/LSP/Outline.hs$|^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$|^ghcide/test/exe/Main.hs$|ghcide/src/Development/IDE/Core/Rules.hs|^hls-test-utils/src/Test/Hls/Util.hs$)",
-          "files": "\\.l?hs$",
-          "id": "stylish-haskell",
-          "language": "system",
-          "name": "stylish-haskell",
-          "pass_filenames": true,
-          "types": [
-            "file"
-          ]
-        }
-      ],
-      "repo": "local"
-    },
-    {
-       "repo": "https://github.com/pre-commit/pre-commit-hooks",
-       "rev": "v4.1.0",
-       "hooks": [
-          {
-            "id": "mixed-line-ending",
-            "args": ["--fix", "lf"],
-            "exclude": "test/testdata/.*CRLF*.hs$"
-          }
-       ]
-    }
-  ]
-}
+```sh
+pre-commit install
 ```
 
 #### Why some components are excluded from automatic formatting?
@@ -231,7 +190,7 @@ See the [tutorial](./plugin-tutorial.md) on writing a plugin in HLS.
 
 When ghcide is built with the `ekg` flag, HLS opens a metrics server on port 8999 exposing GC and ghcide metrics. The ghcide metrics currently exposed are:
 
-- `ghcide.values_count`- count of build results in the store
+- `ghcide.values_count` - count of build results in the store
 - `ghcide.database_count` - count of build keys in the store (these two would be the same in the absence of GC)
 - `ghcide.build_count` - build count. A key is GC'ed if it is dirty and older than 100 builds
 - `ghcide.dirty_keys_count` - non transitive count of dirty build keys
@@ -244,11 +203,11 @@ If you are touching performance sensitive code, take the time to run a different
 benchmark between HEAD and master using the benchHist script. This assumes that
 "master" points to the upstream master.
 
-Run the benchmarks with `cabal bench ghcide`.
+Run the benchmarks with `cabal bench`.
 
-It should take around 25 minutes and the results will be stored in the `ghcide/bench-results` folder. To interpret the results, see the comments in the `ghcide/bench/hist/Main.hs` module.
+It should take around 25 minutes and the results will be stored in the `bench-results` folder. To interpret the results, see the comments in the `bench/Main.hs` module.
 
-More details in [bench/README](../../ghcide/bench/README.md)
+More details in [bench/README](../../bench/README.md)
 
 ### Tracing
 

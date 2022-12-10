@@ -401,7 +401,7 @@ whereClauseCodeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
 whereClauseCodeLens state plId CodeLensParams{..} = do
   enabled <- usePropertyLsp #whereLensOn plId properties
   if not enabled then pure $ pure $ List [] else pluginResponse $ do
-    nfp <- getNormalizedFilePath plId uri
+    nfp <- getNormalizedFilePath uri
     tmr <- handleMaybeM "Unable to typechecking"
       $ liftIO
       $ runAction "codeLens.local.TypeCheck" state

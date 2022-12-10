@@ -46,7 +46,7 @@ addRule f = do
 runRule
     :: TheRules -> Key -> Maybe BS.ByteString -> RunMode -> Action (RunResult Value)
 runRule rules key@(Key t) bs mode = case Map.lookup (typeOf t) rules of
-    Nothing -> liftIO $ errorIO "Could not find key"
+    Nothing -> liftIO $ errorIO $ "Could not find key: " ++ show key
     Just x  -> unwrapDynamic x key bs mode
 
 runRules :: Dynamic -> Rules () -> IO (TheRules, [Action ()])

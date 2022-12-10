@@ -26,20 +26,22 @@
     ├── binaries
     │   └── <git-reference>
     │        ├── ghc.path                         - path to ghc used to build the executable
-    │        └── <executable>                     - binary for this version
+    │        ├── <executable>                     - binary for this version
     │        └── commitid                         - Git commit id for this reference
     ├─ <example>
-    │   ├── results.csv                           - aggregated results for all the versions
-    │   └── <git-reference>
-    │       ├── <experiment>.gcStats.log          - RTS -s output
-    │       ├── <experiment>.csv                  - stats for the experiment
-    │       ├── <experiment>.svg                  - Graph of bytes over elapsed time
-    │       ├── <experiment>.diff.svg             - idem, including the previous version
-    │       ├── <experiment>.heap.svg             - Heap profile
-    │       ├── <experiment>.log                  - bench stdout
-    │       └── results.csv                       - results of all the experiments for the example
-    ├── results.csv        - aggregated results of all the experiments and versions
-    └── <experiment>.svg   - graph of bytes over elapsed time, for all the included versions
+    │   ├── results.csv                           - aggregated results for all the versions and configurations
+    │   ├── <experiment>.svg                      - graph of bytes over elapsed time, for all the versions and configurations
+    |   └── <git-reference>
+    │       └── <configuration>
+    │           ├── <experiment>.gcStats.log          - RTS -s output
+    │           ├── <experiment>.csv                  - stats for the experiment
+    │           ├── <experiment>.svg                  - Graph of bytes over elapsed time
+    │           ├── <experiment>.diff.svg             - idem, including the previous version
+    │           ├── <experiment>.heap.svg             - Heap profile
+    │           ├── <experiment>.log                  - bench stdout
+    │           └── results.csv                       - results of all the experiments for the example
+    ├── results.csv        - aggregated results of all the examples, experiments, versions and configurations
+    └── <experiment>.svg   - graph of bytes over elapsed time, for all the examples, experiments, versions and configurations
 
    For diff graphs, the "previous version" is the preceding entry in the list of versions
    in the config file. A possible improvement is to obtain this info via `git rev-list`.
@@ -47,7 +49,7 @@
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 module Development.Benchmark.Rules
   (
-      buildRules, MkBuildRules(..),
+      buildRules, MkBuildRules(..), OutputFolder, ProjectRoot,
       benchRules, MkBenchRules(..), BenchProject(..), ProfilingMode(..),
       csvRules,
       svgRules,
@@ -60,6 +62,7 @@ module Development.Benchmark.Rules
       GetVersions(..),
       GetCommitId(..),
       GetBuildSystem(..),
+      GetConfigurations(..), Configuration(..),
       BuildSystem(..), findGhcForBuildSystem,
       Escaped(..), Unescaped(..), escapeExperiment, unescapeExperiment,
       GitCommit
@@ -67,14 +70,16 @@ module Development.Benchmark.Rules
   ) where
 
 import           Control.Applicative
-import           Control.Lens                              ((^.), view, preview)
+import           Control.Lens                              (preview, view, (^.))
 import           Control.Monad
 import qualified Control.Monad.State                       as S
 import           Data.Aeson                                (FromJSON (..),
                                                             ToJSON (..),
                                                             Value (..), object,
                                                             (.!=), (.:?), (.=))
-import           Data.Aeson.Lens                           (_Object, AsJSON (_JSON), _String)
+import           Data.Aeson.Lens                           (AsJSON (_JSON),
+                                                            _Object, _String)
+import           Data.ByteString.Lazy                      (ByteString)
 import           Data.Char                                 (isDigit)
 import           Data.List                                 (find, isInfixOf,
                                                             stripPrefix,
@@ -93,6 +98,7 @@ import           GHC.Generics                              (Generic)
 import           GHC.Stack                                 (HasCallStack)
 import qualified Graphics.Rendering.Chart.Backend.Diagrams as E
 import qualified Graphics.Rendering.Chart.Easy             as E
+import           Numeric.Natural
 import           System.Directory                          (createDirectoryIfMissing,
                                                             findExecutable,
                                                             renameFile)
@@ -111,6 +117,7 @@ newtype GetCommitId = GetCommitId String deriving newtype (Binary, Eq, Hashable,
 newtype GetBuildSystem = GetBuildSystem () deriving newtype (Binary, Eq, Hashable, NFData, Show)
 newtype GetExample = GetExample String deriving newtype (Binary, Eq, Hashable, NFData, Show)
 newtype GetExamples = GetExamples () deriving newtype (Binary, Eq, Hashable, NFData, Show)
+newtype GetConfigurations = GetConfigurations () deriving newtype (Binary, Eq, Hashable, NFData, Show)
 
 type instance RuleResult GetExperiments = [Unescaped String]
 type instance RuleResult GetVersions = [GitCommit]
@@ -123,6 +130,10 @@ type RuleResultForExample e =
     , RuleResult GetExamples ~ [e]
     , IsExample e)
 
+data Configuration = Configuration {confName :: String, confValue :: ByteString}
+    deriving (Binary, Eq, Generic, Hashable, NFData, Show, Typeable)
+type instance RuleResult GetConfigurations = [Configuration]
+
 -- | Knowledge needed to run an example
 class (Binary e, Eq e, Hashable e, NFData e, Show e, Typeable e) => IsExample e where
     getExampleName :: e -> String
@@ -133,6 +144,7 @@ allTargetsForExample :: IsExample e => ProfilingMode -> FilePath -> e -> Action 
 allTargetsForExample prof baseFolder ex = do
     experiments <- askOracle $ GetExperiments ()
     versions    <- askOracle $ GetVersions ()
+    configurations <- askOracle $ GetConfigurations ()
     let buildFolder = baseFolder </> profilingPath prof
     return $
         [buildFolder </> getExampleName ex </> "results.csv"]
@@ -142,9 +154,12 @@ allTargetsForExample prof baseFolder ex = do
         ++ [ buildFolder </>
              getExampleName ex </>
              T.unpack (humanName ver) </>
-             escaped (escapeExperiment e) <.> mode
+             confName </>
+             escaped (escapeExperiment e) <.>
+             mode
              | e <- experiments,
                ver <- versions,
+               Configuration{confName} <- configurations,
                mode <- ["svg", "diff.svg"] ++ ["heap.svg" | prof /= NoProfiling]
            ]
 
@@ -178,6 +193,7 @@ phonyRules prefix executableName prof buildFolder examples = do
     phony (prefix <> "all-binaries") $ need =<< allBinaries buildFolder executableName
 --------------------------------------------------------------------------------
 type OutputFolder = FilePath
+type ProjectRoot = FilePath
 
 data MkBuildRules buildSystem = MkBuildRules
   { -- | Return the path to the GHC executable to use for the project found in the cwd
@@ -186,9 +202,9 @@ data MkBuildRules buildSystem = MkBuildRules
   , executableName     :: String
     -- | An action that captures the source dependencies, used for the HEAD build
   , projectDepends     :: Action ()
-    -- | Build the project found in the cwd and save the build artifacts in the output folder
+    -- | Build the project found in the given path and save the build artifacts in the output folder
   , buildProject       :: buildSystem
-                       -> [CmdOption]
+                       -> ProjectRoot
                        -> OutputFolder
                        -> Action ()
   }
@@ -216,7 +232,7 @@ buildRules build MkBuildRules{..} = do
       projectDepends
       liftIO $ createDirectoryIfMissing True $ dropFileName out
       buildSystem <- askOracle $ GetBuildSystem ()
-      buildProject buildSystem [Cwd "."] (takeDirectory out)
+      buildProject buildSystem "." (takeDirectory out)
       ghcLoc <- liftIO $ findGhc buildSystem "."
       writeFile' ghcpath ghcLoc
 
@@ -231,7 +247,7 @@ buildRules build MkBuildRules{..} = do
       buildSystem <- askOracle $ GetBuildSystem ()
       flip actionFinally (cmd_ ("git worktree remove bench-temp-" <> ver <> " --force" :: String)) $ do
         ghcLoc <- liftIO $ findGhc buildSystem ver
-        buildProject buildSystem [Cwd $ "bench-temp-" <> ver] (".." </> takeDirectory out)
+        buildProject buildSystem ("bench-temp-" <> ver) (".." </> takeDirectory out)
         writeFile' ghcPath ghcLoc
 
 --------------------------------------------------------------------------------
@@ -245,14 +261,17 @@ data MkBenchRules buildSystem example =  forall setup. MkBenchRules
   , warmupProject :: buildSystem -> FilePath -> [CmdOption] -> example -> Action ()
   -- | Name of the executable to benchmark. Should match the one used to 'MkBuildRules'
   , executableName :: String
+  -- | Number of concurrent benchmarks to run
+  , parallelism :: Natural
   }
 
 data BenchProject example = BenchProject
-    { outcsv       :: FilePath         -- ^ where to save the CSV output
-    , exePath      :: FilePath         -- ^ where to find the executable for benchmarking
-    , exeExtraArgs :: [String]         -- ^ extra args for the executable
-    , example      :: example          -- ^ example to benchmark
-    , experiment   :: Escaped String   -- ^ experiment to run
+    { outcsv        :: FilePath         -- ^ where to save the CSV output
+    , exePath       :: FilePath         -- ^ where to find the executable for benchmarking
+    , exeExtraArgs  :: [String]         -- ^ extra args for the executable
+    , example       :: example          -- ^ example to benchmark
+    , experiment    :: Escaped String   -- ^ experiment to run
+    , configuration :: ByteString      -- ^ configuration to use
     }
 
 data ProfilingMode = NoProfiling | CheapHeapProfiling Seconds
@@ -271,7 +290,7 @@ profilingPath (CheapHeapProfiling i) = "profiled-" <> show i
 benchRules :: RuleResultForExample example => FilePattern -> MkBenchRules BuildSystem example -> Rules ()
 benchRules build MkBenchRules{..} = do
 
-  benchResource <- newResource "ghcide-bench" 1
+  benchResource <- newResource "ghcide-bench" (fromIntegral parallelism)
   -- warmup an example
   build -/- "binaries/*/*.warmup" %> \out -> do
         let [_, _, ver, exampleName] = splitDirectories (dropExtension out)
@@ -294,33 +313,38 @@ benchRules build MkBenchRules{..} = do
               example
   -- run an experiment
   priority 0 $
-    [ build -/- "*/*/*/*.csv",
-      build -/- "*/*/*/*.gcStats.log",
-      build -/- "*/*/*/*.output.log",
-      build -/- "*/*/*/*.eventlog",
-      build -/- "*/*/*/*.hp"
+    [ build -/- "*/*/*/*/*.csv",
+      build -/- "*/*/*/*/*.gcStats.log",
+      build -/- "*/*/*/*/*.output.log",
+      build -/- "*/*/*/*/*.eventlog",
+      build -/- "*/*/*/*/*.hp"
     ] &%> \[outcsv, outGc, outLog, outEventlog, outHp] -> do
-        let [_, flavour, exampleName, ver, exp] = splitDirectories outcsv
+        let [_, flavour, exampleName, ver, conf, exp] = splitDirectories outcsv
             prof = fromMaybe (error $ "Not a valid profiling mode: " <> flavour) $ profilingP flavour
         example <- fromMaybe (error $ "Unknown example " <> exampleName)
                     <$> askOracle (GetExample exampleName)
         buildSystem <- askOracle  $ GetBuildSystem ()
+        configurations <- askOracle $ GetConfigurations ()
         setupRes    <- setupProject
         liftIO $ createDirectoryIfMissing True $ dropFileName outcsv
         let exePath    = build </> "binaries" </> ver </> executableName
             exeExtraArgs =
                 [ "+RTS"
                 , "-l"
+                , "-ol" <> outEventlog
                 , "-S" <> outGc]
              ++ concat
                 [[ "-h"
                   , "-i" <> show i
+                  , "-po" <> outHp
                   , "-qg"]
                  | CheapHeapProfiling i <- [prof]]
              ++ ["-RTS"]
             ghcPath    = build </> "binaries" </> ver </> "ghc.path"
             warmupPath = build </> "binaries" </> ver </> exampleName <.> "warmup"
             experiment = Escaped $ dropExtension exp
+            Just Configuration{..} = find (\Configuration{confName} -> confName == conf) configurations
+            configuration = confValue
         need [exePath, ghcPath, warmupPath]
         ghcPath <- readFile' ghcPath
         withResource benchResource 1 $ do
@@ -332,10 +356,9 @@ benchRules build MkBenchRules{..} = do
                 AddPath [takeDirectory ghcPath, "."] []
               ]
               BenchProject {..}
-        liftIO $ renameFile "ghcide.eventlog" outEventlog
         liftIO $ case prof of
-            CheapHeapProfiling{} -> renameFile "ghcide.hp" outHp
-            NoProfiling          -> writeFile outHp dummyHp
+            NoProfiling -> writeFile outHp dummyHp
+            _           -> return ()
 
         -- extend csv output with allocation data
         csvContents <- liftIO $ lines <$> readFile outcsv
@@ -369,7 +392,7 @@ parseMaxResidencyAndAllocations input =
 csvRules :: forall example . RuleResultForExample example => FilePattern -> Rules ()
 csvRules build = do
   -- build results for every experiment*example
-  build -/- "*/*/*/results.csv" %> \out -> do
+  build -/- "*/*/*/*/results.csv" %> \out -> do
       experiments <- askOracle $ GetExperiments ()
 
       let allResultFiles = [takeDirectory out </> escaped (escapeExperiment e) <.> "csv" | e <- experiments]
@@ -378,6 +401,20 @@ csvRules build = do
       let header = head $ head allResults
           results = map tail allResults
       writeFileChanged out $ unlines $ header : concat results
+
+  -- aggregate all configurations for an experiment
+  build -/- "*/*/*/results.csv" %> \out -> do
+    configurations <- map confName <$> askOracle (GetConfigurations ())
+    let allResultFiles = [takeDirectory out </> c </> "results.csv" | c <- configurations ]
+
+    allResults <- traverse readFileLines allResultFiles
+
+    let header = head $ head allResults
+        results = map tail allResults
+        header' = "configuration, " <> header
+        results' = zipWith (\v -> map (\l -> v <> ", " <> l)) configurations results
+
+    writeFileChanged out $ unlines $ header' : interleave results'
 
   -- aggregate all experiments for an example
   build -/- "*/*/results.csv" %> \out -> do
@@ -415,44 +452,60 @@ svgRules build = do
   void $ addOracle $ \(GetParent name) -> findPrev name <$> askOracle (GetVersions ())
   -- chart GC stats for an experiment on a given revision
   priority 1 $
-    build -/- "*/*/*/*.svg" %> \out -> do
-      let [_, _, _example, ver, _exp] = splitDirectories out
-      runLog <- loadRunLog (Escaped $ replaceExtension out "csv") ver
+    build -/- "*/*/*/*/*.svg" %> \out -> do
+      let [_, _, _example, ver, conf, _exp] = splitDirectories out
+      runLog <- loadRunLog (Escaped $ replaceExtension out "csv") ver conf
       let diagram = Diagram Live [runLog] title
           title = ver <> " live bytes over time"
       plotDiagram True diagram out
 
   -- chart of GC stats for an experiment on this and the previous revision
   priority 2 $
-    build -/- "*/*/*/*.diff.svg" %> \out -> do
-      let [b, flav, example, ver, exp_] = splitDirectories out
+    build -/- "*/*/*/*/*.diff.svg" %> \out -> do
+      let [b, flav, example, ver, conf, exp_] = splitDirectories out
           exp = Escaped $ dropExtension2 exp_
       prev <- fmap T.unpack $ askOracle $ GetParent $ T.pack ver
 
-      runLog <- loadRunLog (Escaped $ replaceExtension (dropExtension out) "csv") ver
-      runLogPrev <- loadRunLog (Escaped $ joinPath [b,flav, example, prev, replaceExtension (dropExtension exp_) "csv"]) prev
+      runLog <- loadRunLog (Escaped $ replaceExtension (dropExtension out) "csv") ver conf
+      runLogPrev <- loadRunLog (Escaped $ joinPath [b,flav, example, prev, conf, replaceExtension (dropExtension exp_) "csv"]) prev conf
 
       let diagram = Diagram Live [runLog, runLogPrev] title
           title = show (unescapeExperiment exp) <> " - live bytes over time compared"
       plotDiagram True diagram out
 
+  -- aggregated chart of GC stats for all the configurations
+  build -/- "*/*/*/*.svg" %> \out -> do
+    let exp = Escaped $ dropExtension $ takeFileName out
+        [b, flav, example, ver] = splitDirectories out
+    versions <- askOracle $ GetVersions ()
+    configurations <- askOracle $ GetConfigurations ()
+
+    runLogs <- forM configurations $ \Configuration{confName} -> do
+      loadRunLog (Escaped $ takeDirectory out </> confName </> replaceExtension (takeFileName out) "csv") ver confName
+
+    let diagram = Diagram Live runLogs title
+        title = show (unescapeExperiment exp) <> " - live bytes over time"
+    plotDiagram False diagram out
+
   -- aggregated chart of GC stats for all the revisions
   build -/- "*/*/*.svg" %> \out -> do
     let exp = Escaped $ dropExtension $ takeFileName out
     versions <- askOracle $ GetVersions ()
+    configurations <- askOracle $ GetConfigurations ()
 
-    runLogs <- forM (filter include versions) $ \v -> do
+    runLogs <- forM (filter include versions) $ \v ->
+                forM configurations $ \Configuration{confName} -> do
       let v' = T.unpack (humanName v)
-      loadRunLog (Escaped $ takeDirectory out </> v' </> replaceExtension (takeFileName out) "csv") v'
+      loadRunLog (Escaped $ takeDirectory out </> v' </> confName </> replaceExtension (takeFileName out) "csv") v' confName
 
-    let diagram = Diagram Live runLogs title
+    let diagram = Diagram Live (concat runLogs) title
         title = show (unescapeExperiment exp) <> " - live bytes over time"
     plotDiagram False diagram out
 
 heapProfileRules :: FilePattern -> Rules ()
 heapProfileRules build = do
   priority 3 $
-    build -/- "*/*/*/*.heap.svg" %> \out -> do
+    build -/- "*/*/*/*/*.heap.svg" %> \out -> do
       let hpFile = dropExtension2 out <.> "hp"
       need [hpFile]
       cmd_ ("hp2pretty" :: String) [hpFile]
@@ -562,14 +615,15 @@ instance Read Frame where
 
 -- | A file path containing the output of -S for a given run
 data RunLog = RunLog
-  { runVersion :: !String,
-    runFrames  :: ![Frame],
-    runSuccess :: !Bool,
-    runFirstReponse :: !(Maybe Seconds)
+  { runVersion       :: !String,
+    runConfiguration :: !String,
+    runFrames        :: ![Frame],
+    runSuccess       :: !Bool,
+    runFirstReponse  :: !(Maybe Seconds)
   }
 
-loadRunLog :: HasCallStack => Escaped FilePath -> String -> Action RunLog
-loadRunLog (Escaped csv_fp) ver = do
+loadRunLog :: HasCallStack => Escaped FilePath -> String -> String -> Action RunLog
+loadRunLog (Escaped csv_fp) ver conf = do
   let log_fp = replaceExtension csv_fp "gcStats.log"
   log <- readFileLines log_fp
   csv <- readFileLines csv_fp
@@ -590,7 +644,7 @@ loadRunLog (Escaped csv_fp) ver = do
             , Just s <- readMaybe (T.unpack s)
             -> (s,timeForFirstResponse)
           _ -> error $ "Cannot parse: " <> csv_fp
-  return $ RunLog ver frames success firstResponse
+  return $ RunLog ver conf frames success firstResponse
 
 --------------------------------------------------------------------------------
 
@@ -630,13 +684,13 @@ plotDiagram includeFailed t@Diagram {traceMetric, runLogs} out = do
         ~(c:_) <- E.liftCState $ S.gets (E.view E.colors)
         E.plot $ do
           lplot <- E.line
-              (runVersion rl ++ if runSuccess rl then "" else " (FAILED)")
+              (runVersion rl ++ " " ++ runConfiguration rl ++ if runSuccess rl then "" else " (FAILED)")
               [ [ (totElapsed f, extract f)
                   | f <- runFrames rl
                   ]
               ]
           return (lplot E.& E.plot_lines_style . E.line_width E.*~ 2)
-        case (runFirstReponse rl) of
+        case runFirstReponse rl of
           Just t -> E.plot $ pure $
               E.vlinePlot ("First build: " ++ runVersion rl) (E.defaultPlotLineStyle E.& E.line_color E..~ c) t
           _ -> pure ()

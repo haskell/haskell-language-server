@@ -1,8 +1,10 @@
+{-# LANGUAGE PatternSynonyms #-}
 module Development.IDE.Graph(
-    shakeOptions,
+      shakeOptions,
     Rules,
     Action, action,
-    Key(..),
+    Key(.., Key),
+    newKey, renderKey,
     actionFinally, actionBracket, actionCatch, actionFork,
     -- * Configuration
     ShakeOptions(shakeAllowRedefineRules, shakeExtra),
@@ -18,9 +20,13 @@ module Development.IDE.Graph(
     -- * Actions for inspecting the keys in the database
     getDirtySet,
     getKeysAndVisitedAge,
+    module Development.IDE.Graph.KeyMap,
+    module Development.IDE.Graph.KeySet,
     ) where
 
 import           Development.IDE.Graph.Database
+import           Development.IDE.Graph.KeyMap
+import           Development.IDE.Graph.KeySet
 import           Development.IDE.Graph.Internal.Action
 import           Development.IDE.Graph.Internal.Options
 import           Development.IDE.Graph.Internal.Rules

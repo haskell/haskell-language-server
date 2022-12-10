@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-class-plugin
-version:            1.0.3.0
+version:            1.1.0.0
 synopsis:
   Class/instance management plugin for Haskell Language Server
 
@@ -20,6 +20,10 @@ extra-source-files:
   LICENSE
   test/testdata/*.hs
 
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
 library
   exposed-modules:    Ide.Plugin.Class
   other-modules:      Ide.Plugin.Class.CodeAction
@@ -35,19 +39,19 @@ library
     , deepseq
     , extra
     , ghc
-    , ghcide          ^>=1.7
+    , ghcide          ^>=1.8
     , ghc-boot-th
     , hls-graph
-    , hls-plugin-api  ^>=1.4
+    , hls-plugin-api  ^>=1.5
     , lens
     , lsp
     , text
     , transformers
 
   if impl(ghc >=9.2.1)
-    build-depends: ghc-exactprint ^>= 1.5
+    build-depends: ghc-exactprint >= 1.5
   else
-    build-depends: ghc-exactprint  >= 0.6.4 && <1.1
+    build-depends: ghc-exactprint >= 0.6.4 && <1.1
 
   default-language:   Haskell2010
   default-extensions:
@@ -70,6 +74,6 @@ test-suite tests
     , ghcide
     , hls-class-plugin
     , hls-plugin-api
-    , hls-test-utils     ^>=1.3
+    , hls-test-utils     ^>=1.4
     , lens
     , lsp-types

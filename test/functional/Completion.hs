@@ -84,6 +84,32 @@ tests = testGroup "completions" [
          compls <- getCompletions doc (Position 5 7)
          liftIO $ assertBool "Expected completions" $ not $ null compls
 
+     , expectFailIfBeforeGhc92 "record dot syntax is introduced in GHC 9.2"
+       $ testGroup "recorddotsyntax"
+        [ testCase "shows field selectors" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+            doc <- openDoc "RecordDotSyntax.hs" "haskell"
+
+            let te = TextEdit (Range (Position 25 0) (Position 25 5)) "z = x.a"
+            _ <- applyEdit doc te
+
+            compls <- getCompletions doc (Position 25 6)
+            item <- getCompletionByLabel "a" compls
+
+            liftIO $ do
+                item ^. label @?= "a"
+        , testCase "shows field selectors for nested field" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+            doc <- openDoc "RecordDotSyntax.hs" "haskell"
+
+            let te = TextEdit (Range (Position 27 0) (Position 27 8)) "z2 = x.c.z"
+            _ <- applyEdit doc te
+
+            compls <- getCompletions doc (Position 27 9)
+            item <- getCompletionByLabel "z" compls
+
+            liftIO $ do
+                item ^. label @?= "z"
+        ]
+
      -- See https://github.com/haskell/haskell-ide-engine/issues/903
      , testCase "strips compiler generated stuff from completions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "DupRecFields.hs" "haskell"
@@ -147,6 +173,16 @@ tests = testGroup "completions" [
              item ^. label @?= "liftA"
              item ^. kind @?= Just CiFunction
              item ^. detail @?= Just "Control.Applicative"
+
+     , testCase "completes locally defined associated type family" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "AssociatedTypeFamily.hs" "haskell"
+
+         compls <- getCompletions doc (Position 5 20)
+         item <- getCompletionByLabel "Fam" compls
+         liftIO $ do
+             item ^. label @?= "Fam"
+             item ^. kind @?= Just CiStruct
+
      , contextTests
      , snippetTests
     ]
@@ -338,3 +374,6 @@ shouldNotContainCompl :: [CompletionItem] -> T.Text -> Assertion
 compls `shouldNotContainCompl` lbl =
     all ((/= lbl) . (^. label)) compls
     @? "Should not contain completion: " ++ show lbl
+
+expectFailIfBeforeGhc92 :: String -> TestTree -> TestTree
+expectFailIfBeforeGhc92 = knownBrokenForGhcVersions [GHC810, GHC90]

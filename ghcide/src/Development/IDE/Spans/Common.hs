@@ -23,6 +23,7 @@ import           GHC.Generics
 
 import           GHC
 
+import           Data.Bifunctor               (second)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans  ()
 import           Development.IDE.GHC.Util
@@ -49,8 +50,13 @@ safeTyThingId (AConLike (RealDataCon dataCon)) = Just (dataConWrapId dataCon)
 safeTyThingId _                                = Nothing
 
 -- Possible documentation for an element in the code
+#if MIN_VERSION_ghc(9,3,0)
+data SpanDoc
+  = SpanDocString [HsDocString] SpanDocUris
+#else
 data SpanDoc
   = SpanDocString HsDocString SpanDocUris
+#endif
   | SpanDocText   [T.Text] SpanDocUris
   deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
@@ -86,7 +92,12 @@ emptySpanDoc = SpanDocText [] (SpanDocUris Nothing Nothing)
 spanDocToMarkdown :: SpanDoc -> [T.Text]
 spanDocToMarkdown = \case
     (SpanDocString docs uris) ->
-        let doc = T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $ unpackHDS docs
+        let doc = T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $
+#if MIN_VERSION_ghc(9,3,0)
+                      renderHsDocStrings docs
+#else
+                      unpackHDS docs
+#endif
         in  go [doc] uris
     (SpanDocText txt uris) -> go txt uris
   where
@@ -169,8 +180,12 @@ haddockToMarkdown (H.DocHeader (H.Header level title))
 
 haddockToMarkdown (H.DocUnorderedList things)
   = '\n' : (unlines $ map (("+ " ++) . trimStart . splitForList . haddockToMarkdown) things)
-haddockToMarkdown (H.DocOrderedList things)
-  = '\n' : (unlines $ map (("1. " ++) . trimStart . splitForList . haddockToMarkdown) things)
+haddockToMarkdown (H.DocOrderedList things) =
+#if MIN_VERSION_haddock_library(1,11,0)
+  '\n' : (unlines $ map ((\(num, str) -> show num ++ ". " ++ str) . second (trimStart . splitForList . haddockToMarkdown)) things)
+#else
+  '\n' : (unlines $ map (("1. " ++) . trimStart . splitForList . haddockToMarkdown) things)
+#endif
 haddockToMarkdown (H.DocDefList things)
   = '\n' : (unlines $ map (\(term, defn) -> "+ **" ++ haddockToMarkdown term ++ "**: " ++ haddockToMarkdown defn) things)
 

@@ -1,17 +1,9 @@
 # Installation
 
-A typical haskell-language-server installation consists of:
-
-- One binary file for each supported ghc version: `haskell-language-server-${ghcVersion}`
-- Another binary named `haskell-language-version-wrapper` which analyzes the project or file in the current working dir
-  and calls the appropiate `haskell-language-server-${ghcVersion}` variant.
-  - It accepts all executable arguments from the plain `haskell-language-server`
-
 ## Prerequisites
 
-- For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the PATH. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/ghc) on Windows.
-- For Cabal based projects, both ghc and [cabal-install](https://www.haskell.org/cabal/) must be installed and on the PATH. It can also be installed with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/cabal) on Windows.
-- For Stack based projects, [stack](http://haskellstack.org) must be installed and on the PATH.
+- For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the `PATH`. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/ghc) on Windows.
+- For Cabal based projects, both ghc and [cabal-install](https://www.haskell.org/cabal/) must be installed and on the `PATH`. It can also be installed with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/cabal) on Windows.
 
 ## ghcup
 
@@ -21,45 +13,33 @@ If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your instal
 ghcup install hls
 ```
 
-You can check if HLS is available for your platorm via ghcup here: <https://haskell.org/ghcup/install/#supported-platforms>.
+You can check if HLS is available for your platform via `ghcup` here: <https://haskell.org/ghcup/install/#supported-platforms>.
 
 You can also install HLS from source without checking out the code manually:
 
 ```bash
-ghcup compile hls -v 1.6.1.0 --ghc 8.10.7
+ghcup compile hls -v $HLS_VERSION --ghc $GHC_VERSION
 ```
 
-Install HLS for multiple GHC versions:
-```
-ghcup compile hls -v 1.6.1.0 --ghc 8.10.7 --ghc 8.8.4
-```
-
-Use a different `cabal.project` for a GHC version:
-```
-ghcup compile hls -v 1.6.1.0 --ghc 9.2.1 --cabal-project cabal.project
-```
-
-Check `ghcup compile hls --help` for a full list of compilation options.
+More information here: <https://www.haskell.org/ghcup/guide/#hls>
 
 ## Installation from source
 
-Direct installation from Source, while possible via `cabal install haskell-language-server`
-and `stack install --stack-yaml stack-<GHCVER>.yaml`, is not recommended for most people.
-Said command builds the `haskell-language-server` binary and installs it in the default Cabal binaries folder,
+Direct installation from source, while possible via `cabal install exe:haskell-language-server`, is not recommended for most people.
+Said command builds the `haskell-language-server` binary and installs it in the default `cabal` binaries folder,
 but the binary will only work with projects that use the same GHC version that built it.
 
 ### Common pre-requirements
 
-- `stack` or `cabal` must be in your PATH
-  - You need stack version >= 2.1.1 or cabal >= 2.4.0.0
-- `git` must be in your PATH
-- The directory where `stack`or `cabal` put the binaries must be in you PATH:
-  - For stack you can get it with `stack path --local-bin`
-  - For cabal it is by default `$HOME/.cabal/bin` in linux and `%APPDATA%\cabal\bin` in windows.
+- `cabal` must be in your `PATH`
+  - You need `cabal` >= 2.4.0.0
+- `git` must be in your `PATH`
+- The directory where `cabal` put the binaries must be in you PATH:
+  - For `cabal` it is by default `$HOME/.cabal/bin` in Linux and `%APPDATA%\cabal\bin` in windows.
 
 Tip: you can quickly check if some command is in your path by running the command.
 If you receive some meaningful output instead of "command not found"-like message
-then it means you have the command in PATH.
+then it means you have the command in `PATH`.
 
 ### Linux-specific pre-requirements
 
@@ -87,15 +67,6 @@ sudo apt install libicu-dev libncurses-dev libgmp-dev zlib1g-dev
 sudo dnf install libicu-devel ncurses-devel zlib-devel
 ```
 
-**Gentoo**
-
-Haskell Language Server is available via the Haskell overlay. Follow the instructions [here](https://github.com/gentoo-haskell/gentoo-haskell) to install the overlay, then run:
-
-```bash
-emerge -av dev-util/haskell-language-server
-```
-Depending on your system setup, you may need to enable the unstable flag for this package before install, and possible also for the dependencies. If you enabled the ~testing versions as explained in the gentoo-haskell overlay instructions, then this won't be necessary.
-
 ### Windows-specific pre-requirements
 
 In order to avoid problems with long paths on Windows you can do either one of the following:
@@ -120,7 +91,7 @@ If you are using [`chocolatey`](https://chocolatey.org/) to manage your installa
 
 ```bash
 choco install haskell-language-server
-````
+```
 
 ## Visual Studio Code
 
@@ -131,7 +102,7 @@ If you need to find the binaries, please consult the [documentation](https://git
 ## Pre-built binaries
 
 There are pre-built binaries available from the [releases page](https://github.com/haskell/haskell-language-server/releases) for Linux, Windows and macOS.
-To install, download the `haskell-language-server-wrapper` executable for your platform as well as any `haskell-language-server` executables for the GHC versions you plan on working with, and either put them on your PATH or point your client to them.
+To install, download the `haskell-language-server-wrapper` executable for your platform as well as any `haskell-language-server` executables for the GHC versions you plan on working with, and either put them on your `PATH` or point your client to them.
 
 ## Arch Linux
 
@@ -142,6 +113,7 @@ It is updated regularly, requires no additional dependencies, and is independent
 See [ArchWiki](https://wiki.archlinux.org/index.php/Haskell) for the details of Haskell infrastructure on Arch Linux.
 
 ## Fedora
+
 
 Binary packages for Fedora are available from [this Copr repo](https://copr.fedorainfracloud.org/coprs/petersen/haskell-language-server),
 built against the official Fedora ghc package.
@@ -156,6 +128,15 @@ pkg install hs-haskell-language-server
 
 to install it. At the moment, HLS installed this way only supports the same GHC
 version as the ports one.
+
+## Gentoo
+
+Haskell Language Server is available via the Haskell overlay. Follow the instructions [here](https://github.com/gentoo-haskell/gentoo-haskell) to install the overlay, then run:
+
+```bash
+emerge -av dev-util/haskell-language-server
+```
+Depending on your system setup, you may need to enable the unstable flag for this package before install, and possible also for the dependencies. If you enabled the ~testing versions as explained in the gentoo-haskell overlay instructions, then this won't be necessary.
 
 ## Installation from Hackage
 
@@ -173,7 +154,7 @@ Homebrew users can install `haskell-language-server` using the following command
 brew install haskell-language-server
 ```
 
-This formula contains HLS binaries compiled with GHC versions available via Homebrew; at the moment those are: 8.6.5, 8.8.4, 8.10.7.
+This formula contains HLS binaries compiled with GHC versions available via Homebrew; at the moment those are: 8.10.7.
 
 You need to provide your own GHC/Cabal/Stack as required by your project, possibly via Homebrew.
 

@@ -24,10 +24,10 @@ let
       # https://github.com/nikita-volkov/ptr-poker/issues/11
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
-      ghc-exactprint =
-        hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-150 { };
       # Hlint is still broken
       hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint { });
+
+      stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =

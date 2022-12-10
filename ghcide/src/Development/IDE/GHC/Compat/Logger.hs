@@ -24,6 +24,9 @@ import           GHC.Utils.Logger                      as Logger
 import           DynFlags
 import           Outputable                            (queryQual)
 #endif
+#if MIN_VERSION_ghc(9,3,0)
+import           GHC.Types.Error
+#endif
 
 putLogHook :: Logger -> HscEnv -> HscEnv
 putLogHook logger env =
@@ -41,6 +44,15 @@ pushLogHook f logger =
   logger { Env.log_action = f (Env.log_action logger) }
 #endif
 
+#if MIN_VERSION_ghc(9,3,0)
+type LogActionCompat = LogFlags -> Maybe DiagnosticReason -> Maybe Severity -> SrcSpan -> PrintUnqualified -> SDoc -> IO ()
+
+-- alwaysQualify seems to still do the right thing here, according to the "unqualified warnings" test.
+logActionCompat :: LogActionCompat -> LogAction
+logActionCompat logAction logFlags (MCDiagnostic severity wr) loc = logAction logFlags (Just wr) (Just severity) loc alwaysQualify
+logActionCompat logAction logFlags _cls loc = logAction logFlags Nothing Nothing loc alwaysQualify
+
+#else
 #if MIN_VERSION_ghc(9,0,0)
 type LogActionCompat = DynFlags -> WarnReason -> Severity -> SrcSpan -> PrintUnqualified -> SDoc -> IO ()
 
@@ -53,4 +65,5 @@ type LogActionCompat = DynFlags -> WarnReason -> Severity -> SrcSpan -> PrintUnq
 
 logActionCompat :: LogActionCompat -> LogAction
 logActionCompat logAction dynFlags wr severity loc style = logAction dynFlags wr severity loc (queryQual style)
+#endif
 #endif

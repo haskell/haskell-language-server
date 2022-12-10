@@ -1,21 +1,22 @@
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 
 module ActionSpec where
 
-import Control.Concurrent.STM
-import Development.IDE.Graph (shakeOptions)
-import Development.IDE.Graph.Database (shakeNewDatabase, shakeRunDatabase)
-import Development.IDE.Graph.Internal.Action (apply1)
-import Development.IDE.Graph.Internal.Types
-import Development.IDE.Graph.Rule
-import Example
-import qualified StmContainers.Map as STM
-import Test.Hspec
-import System.Time.Extra (timeout)
+import           Control.Concurrent.STM
+import qualified Data.HashSet                          as HashSet
+import           Development.IDE.Graph                 (shakeOptions)
+import           Development.IDE.Graph.Database        (shakeNewDatabase,
+                                                        shakeRunDatabase)
+import           Development.IDE.Graph.Internal.Action (apply1)
+import           Development.IDE.Graph.Internal.Types
+import           Development.IDE.Graph.Rule
+import           Example
+import qualified StmContainers.Map                     as STM
+import           System.Time.Extra                     (timeout)
+import           Test.Hspec
 
 spec :: Spec
 spec = do
@@ -42,8 +43,8 @@ spec = do
         pure $ do
           apply1 theKey
       res `shouldBe` [True]
-      Just (Clean res) <- lookup (Key theKey) <$> getDatabaseValues theDb
-      resultDeps res `shouldBe` ResultDeps [Key (Rule @())]
+      Just (Clean res) <- lookup (newKey theKey) <$> getDatabaseValues theDb
+      resultDeps res `shouldBe` ResultDeps (singletonKeySet $ newKey (Rule @()))
     it "tracks reverse dependencies" $ do
       db@(ShakeDatabase _ _ Database {..}) <- shakeNewDatabase shakeOptions $ do
         ruleUnit
@@ -53,8 +54,8 @@ spec = do
         pure $ do
           apply1 theKey
       res `shouldBe` [True]
-      Just KeyDetails {..} <- atomically $ STM.lookup (Key (Rule @())) databaseValues
-      keyReverseDeps `shouldBe` [Key theKey]
+      Just KeyDetails {..} <- atomically $ STM.lookup (newKey (Rule @())) databaseValues
+      keyReverseDeps `shouldBe` (singletonKeySet $ newKey theKey)
     it "rethrows exceptions" $ do
       db <- shakeNewDatabase shakeOptions $ do
         addRule $ \(Rule :: Rule ()) old mode -> error "boom"
@@ -73,5 +74,5 @@ spec = do
         pure $ do
           applyWithoutDependency [theKey]
       res `shouldBe` [[True]]
-      Just (Clean res) <- lookup (Key theKey) <$> getDatabaseValues theDb
+      Just (Clean res) <- lookup (newKey theKey) <$> getDatabaseValues theDb
       resultDeps res `shouldBe` UnknownDeps

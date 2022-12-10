@@ -3,7 +3,7 @@
 
 -- Copied from https://github.com/ghc/ghc/blob/master/compiler/main/DriverPipeline.hs on 14 May 2019
 -- Requested to be exposed at https://gitlab.haskell.org/ghc/ghc/merge_requests/944.
--- Update the above MR got merged to master on 31 May 2019. When it becomes avialable to ghc-lib, this file can be removed.
+-- Update the above MR got merged to master on 31 May 2019. When it becomes available to ghc-lib, this file can be removed.
 
 {- HLINT ignore -} -- since copied from upstream
 
@@ -16,24 +16,20 @@ module Development.IDE.GHC.Compat.CPP (
     doCpp
     ) where
 
-import           FileCleanup
-import           Packages
-import           Panic
-import           SysTools
-#if MIN_VERSION_ghc(8,8,2)
-import           LlvmCodeGen                (llvmVersionList)
-#elif MIN_VERSION_ghc(8,8,0)
-import           LlvmCodeGen                (LlvmVersion (..))
-#endif
 import           Control.Monad
 import           Data.List                  (intercalate)
 import           Data.Maybe
 import           Data.Version
 import           DynFlags
+import           FileCleanup
+import           LlvmCodeGen                (llvmVersionList)
 import           Module                     (rtsUnitId, toInstalledUnitId)
+import           Packages
+import           Panic
 import           System.Directory
 import           System.FilePath
 import           System.Info
+import           SysTools
 
 import           Development.IDE.GHC.Compat as Compat
 
@@ -52,11 +48,7 @@ doCpp dflags raw input_fn output_fn = do
     let verbFlags = getVerbFlags dflags
 
     let cpp_prog args | raw       = SysTools.runCpp dflags args
-#if MIN_VERSION_ghc(8,10,0)
                       | otherwise = SysTools.runCc Nothing
-#else
-                      | otherwise = SysTools.runCc
-#endif
                                           dflags (SysTools.Option "-E" : args)
 
     let target_defs =
@@ -136,16 +128,9 @@ getBackendDefs :: DynFlags -> IO [String]
 getBackendDefs dflags | hscTarget dflags == HscLlvm = do
     llvmVer <- figureLlvmVersion dflags
     return $ case llvmVer of
-#if MIN_VERSION_ghc(8,8,2)
                Just v
                  | [m] <- llvmVersionList v -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m, 0) ]
                  | m:n:_   <- llvmVersionList v -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m, n) ]
-#elif MIN_VERSION_ghc(8,8,0)
-               Just (LlvmVersion n) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (n,0) ]
-               Just (LlvmVersionOld m n) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m,n) ]
-#else
-               Just n -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format n ]
-#endif
                _      -> []
   where
     format (major, minor)

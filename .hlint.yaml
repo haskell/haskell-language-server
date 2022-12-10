@@ -23,6 +23,7 @@
 - ignore: {name: "Use camelCase"}
 - ignore: {name: "Use uncurry"}
 - ignore: {name: "Avoid lambda using `infix`"}
+- ignore: {name: "Replace case with fromMaybe"}
 
 # Gives at least one suggestion we don't like.
 - ignore: {name: "Use <=<"}
@@ -54,9 +55,11 @@
     within:
     - Development.IDE.Core.Shake
     - Development.IDE.GHC.Util
+    - Development.IDE.Plugin.CodeAction.Util
     - Development.IDE.Graph.Internal.Database
     - Development.IDE.Graph.Internal.Paths
     - Development.IDE.Graph.Internal.Profile
+    - Development.IDE.Graph.Internal.Types
     - Ide.Types
     - Test.Hls
     - Test.Hls.Command
@@ -64,11 +67,11 @@
     - Wingman.Types
     - AutoTupleSpec
   - name: unsafeInterleaveIO
-    within: 
+    within:
     - Development.IDE.LSP.LanguageServer
   - {name: unsafeDupablePerformIO, within: []}
   - name: unsafeCoerce
-    within: 
+    within:
     - Ide.Plugin.Eval.Code
     - Development.IDE.Core.Compile
     - Development.IDE.Types.Shake
@@ -84,41 +87,64 @@
     - Compat.HieBin
 
   # Partial functions
-  - name: Data.List.head
+
+  # We need to check fucntions which
+  # are typically exported multiple ways under both names,
+  # see https://github.com/ndmitchell/hlint/issues/1389
+  - name: [Prelude.head, Data.List.head]
     within:
     - Main
     - Experiments
-    - Development.IDE.Core.Shake
+    - Development.Benchmark.Rules
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.CodeAction.ExactPrint
-    - Development.IDE.Session
     - Development.IDE.Spans.Documentation
+    - Development.IDE.Session
     - Ide.Plugin.CallHierarchy.Internal
+    - Ide.Plugin.Eval.Code
+    - Ide.Plugin.Eval.Util
+    - Ide.Plugin.Floskell
+    - Ide.Plugin.ModuleName
+    - Ide.Plugin.Rename
+    - Ide.Plugin.Class.ExactPrint
     - TExpectedActual
     - TRigidType
-    - TRigidType
-    - Ide.Plugin.Class
+    - TRigidType2
+    - RightToLeftFixities
+    - Typeclass
+    - Wingman.Judgements
+    - Wingman.Machinery
     - Wingman.Tactics
 
-  - name: Data.List.tail
+  - name: [Prelude.tail, Data.List.tail]
     within:
     - Main
     - Development.Benchmark.Rules
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.CodeAction.ExactPrint
     - Development.IDE.Session
-    - IDE.Plugin.Eval.Code
-    - IDE.Plugin.Eval.Util
     - UnificationSpec
 
-  - name: Data.List.last
-    within: 
-    - GenChangelogs
+  - name: [Prelude.last, Data.List.last]
+    within:
     - Main
+    - Development.IDE.Plugin.CodeAction
+    - Development.IDE.Plugin.CodeAction.ExactPrint
+    - Development.IDE.Spans.Common
+    - Development.IDE.Graph.Internal.Types
+    - Ide.PluginUtils
+    - Ide.Plugin.Eval.Parse.Comments
+    - Ide.Plugin.Eval.CodeLens
 
-  - name: Data.List.init
-    within: []
+  - name: [Prelude.init, Data.List.init]
+    within:
+    - Main
+    - Development.IDE.Spans.Common
+    - Ide.PluginUtils
+    - Wingman.Metaprogramming.Parser
+    - Development.Benchmark.Rules
+    - ErrorGivenPartialSignature
 
   - name: Data.List.foldl1'
     within: []
@@ -126,7 +152,7 @@
   - name: Data.List.foldr1'
     within: []
 
-  - name: "Data.List.!!"
+  - name: ["Prelude.!!", "Data.List.!!"]
     within:
     - Main
     - Experiments
@@ -134,9 +160,9 @@
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.Completions.Logic
     - Development.IDE.Spans.Documentation
+    - TErrorGivenPartialSignature
     - Wingman.CaseSplit
     - Wingman.Simplify
-
 
   - name: Data.Text.head
     within:
@@ -147,11 +173,11 @@
     within: []
 
   - name: Data.Foldable.foldr1
-    within: 
+    within:
     - Wingman.Tactics
 
-  - name: Data.Maybe.fromJust 
-    within: 
+  - name: Data.Maybe.fromJust
+    within:
     - Experiments
     - Main
     - MultipleImports
@@ -162,13 +188,14 @@
     - Development.IDE.Core.Shake
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.CodeAction.ExactPrint
+    - Development.IDE.Plugin.CodeAction
     - Development.IDE.Test
     - Development.IDE.Graph.Internal.Profile
     - Development.IDE.Graph.Internal.Rules
     - Ide.Plugin.Class
 
   - name: "Data.Map.!"
-    within: 
+    within:
     - Wingman.LanguageServer
 
   - name: "Data.IntMap.!"
@@ -179,6 +206,28 @@
 
   - name: "GHC.Arr.!"
     within: []
+
+  # Tracing functions
+  # We ban an explicit list rather than the
+  # Debug.Trace, because that module also
+  # includes the eventlog tracing functions,
+  # which are legitimate to use.
+  - name:
+    - Debug.Trace.trace
+    - Debug.Trace.traceId
+    - Debug.Trace.traceShow
+    - Debug.Trace.traceShowId
+    - Debug.Trace.traceStack
+    - Debug.Trace.traceIO
+    - Debug.Trace.traceM
+    - Debug.Trace.traceShowM
+    - Debug.Trace.putTraceMsg
+    within:
+    - Development.IDE.Core.Compile
+    - Development.IDE.Graph.Internal.Database
+    - Development.IDE.GHC.Util
+    - Development.IDE.Plugin.CodeAction.Util
+    - Wingman.Debug
 
 # We really do not want novel usages of restricted functions, and mere
 # Warning is not enough to prevent those consistently; you need a build failure.

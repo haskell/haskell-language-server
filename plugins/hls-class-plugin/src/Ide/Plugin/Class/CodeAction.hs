@@ -37,10 +37,10 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens              as J
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
-addMethodPlaceholders plId state param@AddMinimalMethodsParams{..} = do
+addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
     caps <- getClientCapabilities
     pluginResponse $ do
-        nfp <- getNormalizedFilePath plId uri
+        nfp <- getNormalizedFilePath uri
         pm <- handleMaybeM "Unable to GetParsedModule"
             $ liftIO
             $ runAction "classplugin.addMethodPlaceholders.GetParsedModule" state
@@ -62,13 +62,13 @@ addMethodPlaceholders plId state param@AddMinimalMethodsParams{..} = do
 
         pure Null
     where
-        toTextDocunemtEdit edit =
+        toTextDocumentEdit edit =
             TextDocumentEdit (VersionedTextDocumentIdentifier uri (Just 0)) (List [InL edit])
 
         mergeEdit :: WorkspaceEdit -> [TextEdit] -> WorkspaceEdit
         mergeEdit WorkspaceEdit{..} edits = WorkspaceEdit
             { _documentChanges =
-                (\(List x) -> List $ x ++ map (InL . toTextDocunemtEdit) edits)
+                (\(List x) -> List $ x ++ map (InL . toTextDocumentEdit) edits)
                     <$> _documentChanges
             , ..
             }
@@ -81,7 +81,7 @@ addMethodPlaceholders plId state param@AddMinimalMethodsParams{..} = do
 -- sensitive to the format of diagnostic messages from GHC.
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState TextDocumentCodeAction
 codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginResponse $ do
-    nfp <- getNormalizedFilePath plId uri
+    nfp <- getNormalizedFilePath uri
     actions <- join <$> mapM (mkActions nfp) methodDiags
     pure $ List actions
     where
@@ -190,7 +190,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                 . liftIO
                 . runAction "classplugin.findClassFromIdentifier.TypeCheck" state
                 $ useWithStale TypeCheck docPath
-            handleMaybeM "Error in TcEnv"
+            handleMaybeM "TcEnv"
                 . liftIO
                 . fmap snd
                 . initTcWithGbl hscenv thisMod ghostSpan $ do

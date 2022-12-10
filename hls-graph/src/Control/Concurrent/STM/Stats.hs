@@ -58,7 +58,7 @@ data TrackSTMConf = TrackSTMConf
     { tryThreshold      :: Maybe Int
         -- ^ If the number of retries of one transaction run reaches this
         -- count, a warning is issued at runtime. If set to @Nothing@, disables the warnings completely.
-    , globalTheshold    :: Maybe Int
+    , globalThreshold   :: Maybe Int
         -- ^ If the total number of retries of one named transaction reaches
         -- this count, a warning is issued. If set to @Nothing@, disables the
         -- warnings completely.
@@ -79,7 +79,7 @@ data TrackSTMConf = TrackSTMConf
 --
 -- > defaultTrackSTMConf = TrackSTMConf
 -- >    { tryThreshold =      Just 10
--- >    , globalTheshold =    Just 3000
+-- >    , globalThreshold =   Just 3000
 -- >    , exception =         True
 -- >    , warnFunction =      hPutStrLn stderr
 -- >    , warnInSTMFunction = \_ -> return ()
@@ -87,7 +87,7 @@ data TrackSTMConf = TrackSTMConf
 defaultTrackSTMConf :: TrackSTMConf
 defaultTrackSTMConf = TrackSTMConf
     { tryThreshold = Just 10
-    , globalTheshold = Just 3000
+    , globalThreshold = Just 3000
     , extendException = True
     , warnFunction = hPutStrLn stderr
     , warnInSTMFunction = \_ -> return ()
@@ -143,7 +143,7 @@ trackSTMConf (TrackSTMConf {..}) name txm = do
                                     (1,i)
                                     m
                 in (m', let j = maybe 0 snd oldVal in (j,j+i))
-        doMB globalTheshold $ \globalRetryThreshold ->
+        doMB globalThreshold $ \globalRetryThreshold ->
             when (k `div` globalRetryThreshold /= k' `div` globalRetryThreshold) $
                 warnFunction $ msgPrefix ++ " reached global retry count of " ++ show k'
 

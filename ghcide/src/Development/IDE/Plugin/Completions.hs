@@ -5,51 +5,51 @@
 module Development.IDE.Plugin.Completions
     ( descriptor
     , Log(..)
+    , ghcideCompletionsPluginPriority
     ) where
 
-import           Control.Concurrent.Async                     (concurrently)
-import           Control.Concurrent.STM.Stats                 (readTVarIO)
+import           Control.Concurrent.Async                 (concurrently)
+import           Control.Concurrent.STM.Stats             (readTVarIO)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import qualified Data.HashMap.Strict                          as Map
-import qualified Data.HashSet                                 as Set
-import           Data.List                                    (find)
+import qualified Data.HashMap.Strict                      as Map
+import qualified Data.HashSet                             as Set
+import           Data.List                                (find)
 import           Data.Maybe
-import qualified Data.Text                                    as T
+import qualified Data.Text                                as T
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service                 hiding (Log,
-                                                               LogShake)
-import           Development.IDE.Core.Shake                   hiding (Log)
-import qualified Development.IDE.Core.Shake                   as Shake
+import           Development.IDE.Core.Service             hiding (Log, LogShake)
+import           Development.IDE.Core.Shake               hiding (Log)
+import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
-import           Development.IDE.GHC.ExactPrint               (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
-import           Development.IDE.GHC.Util                     (printOutputable)
+import           Development.IDE.GHC.Error                (rangeToSrcSpan)
+import           Development.IDE.GHC.Util                 (printOutputable)
 import           Development.IDE.Graph
-import           Development.IDE.Plugin.CodeAction            (newImport,
-                                                               newImportToEdit)
-import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPackageExports),
-                                                               hscEnv)
-import qualified Development.IDE.Types.KnownTargets           as KT
+import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageExports),
+                                                           hscEnv)
+import qualified Development.IDE.Types.KnownTargets       as KT
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger                 (Pretty (pretty),
-                                                               Recorder,
-                                                               WithPriority,
-                                                               cmapWithPrio)
-import           GHC.Exts                                     (fromList, toList)
-import           Ide.Plugin.Config                            (Config)
+import           Development.IDE.Types.Logger             (Pretty (pretty),
+                                                           Recorder,
+                                                           WithPriority,
+                                                           cmapWithPrio)
+import           GHC.Exts                                 (fromList, toList)
+import           Ide.Plugin.Config                        (Config)
 import           Ide.Types
-import qualified Language.LSP.Server                          as LSP
+import qualified Language.LSP.Server                      as LSP
 import           Language.LSP.Types
-import qualified Language.LSP.VFS                             as VFS
-import           Text.Fuzzy.Parallel                          (Scored (..))
+import qualified Language.LSP.VFS                         as VFS
+import           Numeric.Natural
+import           Text.Fuzzy.Parallel                      (Scored (..))
+
+import qualified GHC.LanguageExtensions                   as LangExt
+import           Language.LSP.Types
 
 data Log = LogShake Shake.Log deriving Show
 
@@ -57,12 +57,15 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
+ghcideCompletionsPluginPriority :: Natural
+ghcideCompletionsPluginPriority = defaultPluginPriority
+
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions recorder
   , pluginHandlers = mkPluginHandler STextDocumentCompletion getCompletionsLSP
-  , pluginCommands = [extendImportCommand]
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
+  , pluginPriority = ghcideCompletionsPluginPriority
   }
 
 produceCompletions :: Recorder (WithPriority Log) -> Rules ()
@@ -77,7 +80,7 @@ produceCompletions recorder = do
             _ -> return ([], Nothing)
     define (cmapWithPrio LogShake recorder) $ \NonLocalCompletions file -> do
         -- For non local completions we avoid depending on the parsed module,
-        -- synthetizing a fake module with an empty body from the buffer
+        -- synthesizing a fake module with an empty body from the buffer
         -- in the ModSummary, which preserves all the imports
         ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
         sess <- fmap fst <$> useWithStale GhcSessionDeps file
@@ -120,7 +123,7 @@ getCompletionsLSP ide plId
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
-        (ideOpts, compls, moduleExports) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
+        (ideOpts, compls, moduleExports, astres) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             localCompls <- useWithStaleFast LocalCompletions npath
             nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
@@ -140,17 +143,31 @@ getCompletionsLSP ide plId
                 exportsCompls = mempty{anyQualCompls = exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls <> Just lModules
 
-            pure (opts, fmap (,pm,binds) compls, moduleExports)
+            -- get HieAst if OverloadedRecordDot is enabled
+#if MIN_VERSION_ghc(9,2,0)
+            let uses_overloaded_record_dot (ms_hspp_opts . msrModSummary -> dflags) = xopt LangExt.OverloadedRecordDot dflags
+#else
+            let uses_overloaded_record_dot _ = False
+#endif
+            ms <- fmap fst <$> useWithStaleFast GetModSummaryWithoutTimestamps npath
+            astres <- case ms of
+              Just ms' | uses_overloaded_record_dot ms'
+                ->  useWithStaleFast GetHieAst npath
+              _ -> return Nothing
+
+            pure (opts, fmap (,pm,binds) compls, moduleExports, astres)
         case compls of
           Just (cci', parsedMod, bindMap) -> do
-            pfix <- VFS.getCompletionPrefix position cnts
+            let pfix = getCompletionPrefix position cnts
             case (pfix, completionContext) of
-              (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
+              ((PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
                 -> return (InL $ List [])
-              (Just pfix', _) -> do
+              (_, _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
+                    plugins = idePlugins $ shakeExtras ide
                 config <- getCompletionsConfig plId
-                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config moduleExports
+
+                allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports
                 pure $ InL (List $ orderedCompletions allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])
@@ -195,79 +212,3 @@ toModueNameText :: KT.Target -> T.Text
 toModueNameText target = case target of
   KT.TargetModule m -> T.pack $ moduleNameString m
   _                 -> T.empty
-
-extendImportCommand :: PluginCommand IdeState
-extendImportCommand =
-  PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
-
-extendImportHandler :: CommandFunction IdeState ExtendImport
-extendImportHandler ideState edit@ExtendImport {..} = do
-  res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
-  whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
-    let (_, List (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . toList
-        srcSpan = rangeToSrcSpan nfp _range
-    LSP.sendNotification SWindowShowMessage $
-      ShowMessageParams MtInfo $
-        "Import "
-          <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent
-          <> "’ from "
-          <> importName
-          <> " (at "
-          <> printOutputable srcSpan
-          <> ")"
-    void $ LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right Null
-
-extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
-extendImportHandler' ideState ExtendImport {..}
-  | Just fp <- uriToFilePath doc,
-    nfp <- toNormalizedFilePath' fp =
-    do
-      (ModSummaryResult {..}, ps, contents) <- MaybeT $ liftIO $
-        runAction "extend import" ideState $
-          runMaybeT $ do
-            -- We want accurate edits, so do not use stale data here
-            msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
-            ps <- MaybeT $ use GetAnnotatedParsedSource nfp
-            (_, contents) <- MaybeT $ use GetFileContents nfp
-            return (msr, ps, contents)
-      let df = ms_hspp_opts msrModSummary
-          wantedModule = mkModuleName (T.unpack importName)
-          wantedQual = mkModuleName . T.unpack <$> importQual
-          existingImport = find (isWantedModule wantedModule wantedQual) msrImports
-      case existingImport of
-        Just imp -> do
-            fmap (nfp,) $ liftEither $
-              rewriteToWEdit df doc
-#if !MIN_VERSION_ghc(9,2,0)
-                (annsA ps)
-#endif
-                $
-                  extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
-        Nothing -> do
-            let n = newImport importName sym importQual False
-                sym = if isNothing importQual then Just it else Nothing
-                it = case thingParent of
-                  Nothing -> newThing
-                  Just p  -> p <> "(" <> newThing <> ")"
-            t <- liftMaybe $ snd <$> newImportToEdit
-                n
-                (astA ps)
-                (fromMaybe "" contents)
-            return (nfp, WorkspaceEdit {_changes=Just (fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
-  | otherwise =
-    mzero
-
-isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl GhcPs) -> Bool
-isWantedModule wantedModule Nothing (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
-    not (isQualifiedImport it) && unLoc ideclName == wantedModule
-isWantedModule wantedModule (Just qual) (L _ ImportDecl{ideclAs, ideclName, ideclHiding = Just (False, _)}) =
-    unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc . reLoc <$> ideclAs) == Just qual)
-isWantedModule _ _ _ = False
-
-liftMaybe :: Monad m => Maybe a -> MaybeT m a
-liftMaybe a = MaybeT $ pure a
-
-liftEither :: Monad m => Either e a -> MaybeT m a
-liftEither (Left _)  = mzero
-liftEither (Right x) = return x

@@ -15,8 +15,8 @@ import           Language.LSP.Server   (MonadLsp)
 
 -- | The Eval plugin configuration. (see 'properties')
 data EvalConfig = EvalConfig
-  { eval_cfg_diff       :: Bool
-  , eval_cfg_exception  :: Bool
+  { eval_cfg_diff      :: Bool
+  , eval_cfg_exception :: Bool
   }
   deriving (Eq, Ord, Show)
 

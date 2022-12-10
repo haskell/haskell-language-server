@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               hls-tactics-plugin
-version:            1.6.2.0
+version:            1.7.0.0
 synopsis:           Wingman plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -15,9 +15,18 @@ license-file:       LICENSE
 build-type:         Simple
 extra-source-files:
   README.md
-  test/golden/*.cabal
-  test/golden/*.hs
-  test/golden/*.yaml
+  new/src/**/*.hs-boot
+  old/src/**/*.hs-boot
+  new/test/golden/*.cabal
+  new/test/golden/*.hs
+  new/test/golden/*.yaml
+  old/test/golden/*.cabal
+  old/test/golden/*.hs
+  old/test/golden/*.yaml
+
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
 
 flag pedantic
   description: Enable -Werror
@@ -25,7 +34,15 @@ flag pedantic
   manual:      True
 
 library
-  hs-source-dirs:     src
+  if impl(ghc >= 9.2.1)
+    buildable: False
+  else
+    buildable: True
+
+  if impl(ghc >= 9.2.1)
+    hs-source-dirs:     new/src
+  else
+    hs-source-dirs:     old/src
   exposed-modules:
     Ide.Plugin.Tactic
     Refinery.Future
@@ -82,9 +99,10 @@ library
     , ghc-boot-th
     , ghc-exactprint
     , ghc-source-gen        ^>=0.4.1
-    , ghcide                ^>=1.7
+    , ghcide                ^>= 1.8
     , hls-graph
-    , hls-plugin-api        ^>=1.4
+    , hls-plugin-api        ^>=1.5
+    , hls-refactor-plugin
     , hyphenation
     , lens
     , lsp
@@ -126,6 +144,10 @@ library
     ViewPatterns
 
 test-suite tests
+  if impl(ghc >= 9.2.1)
+    buildable: False
+  else
+    buildable: True
   type:               exitcode-stdio-1.0
   main-is:            Main.hs
   other-modules:
@@ -145,7 +167,10 @@ test-suite tests
     UnificationSpec
     Utils
 
-  hs-source-dirs:     test
+  if impl(ghc >= 9.2.1)
+    hs-source-dirs: new/test
+  else
+    hs-source-dirs: old/test
   ghc-options:
     -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
 
@@ -160,7 +185,7 @@ test-suite tests
     , ghcide
     , hls-plugin-api
     , hls-tactics-plugin
-    , hls-test-utils      ^>=1.3
+    , hls-test-utils      ^>=1.4
     , hspec
     , hspec-expectations
     , lens

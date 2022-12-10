@@ -7,6 +7,9 @@ module Development.IDE.GHC.Compat.Iface (
     ) where
 
 import           GHC
+#if MIN_VERSION_ghc(9,3,0)
+import           GHC.Driver.Session                    (targetProfile)
+#endif
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Iface.Load                        as Iface
 import           GHC.Unit.Finder.Types                 (FindResult)
@@ -24,7 +27,9 @@ import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Outputable
 
 writeIfaceFile :: HscEnv -> FilePath -> ModIface -> IO ()
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,3,0)
+writeIfaceFile env fp iface = Iface.writeIface (hsc_logger env) (targetProfile $ hsc_dflags env) fp iface
+#elif MIN_VERSION_ghc(9,2,0)
 writeIfaceFile env fp iface = Iface.writeIface (hsc_logger env) (hsc_dflags env) fp iface
 #elif MIN_VERSION_ghc(9,0,0)
 writeIfaceFile env = Iface.writeIface (hsc_dflags env)

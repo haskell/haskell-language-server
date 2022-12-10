@@ -5,14 +5,11 @@ import           System.Process
 import           Test.Hls
 
 main :: IO ()
-main = do
-  flushStackEnvironment
-  defaultTestRunner $ testGroup "haskell-language-server-wrapper" [projectGhcVersionTests]
+main = defaultTestRunner $ testGroup "haskell-language-server-wrapper" [projectGhcVersionTests]
 
 projectGhcVersionTests :: TestTree
 projectGhcVersionTests = testGroup "--project-ghc-version"
   [ stackTest "8.10.7"
-  , stackTest "8.8.4"
   , testCase "cabal with global ghc" $ do
       ghcVer <- trimEnd <$> readProcess "ghc" ["--numeric-version"] ""
       testDir "test/wrapper/testdata/cabal-cur-ver" ghcVer
