@@ -68,3 +68,4 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-stan-plugin`                   | 3    | 8.6, 9.0, 9.2, 9.4, 9.6  |
 | `hls-retrie-plugin`                 | 3    |                          |
 | `hls-splice-plugin`                 | 3    |                          |
+| `hls-hectare-plugin`                | 3    | 8.10.7                   |

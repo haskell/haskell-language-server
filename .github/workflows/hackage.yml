@@ -37,6 +37,7 @@ jobs:
                   "hls-refine-imports-plugin", "hls-rename-plugin", "hls-retrie-plugin",
                   "hls-splice-plugin", "hls-tactics-plugin",
                   "hls-call-hierarchy-plugin", "hls-alternate-number-format-plugin",
+                  "hls-hectare-plugin",
                   "hls-qualify-imported-names-plugin", "hls-code-range-plugin",
                   "hls-cabal-fmt-plugin",
                   "haskell-language-server"]

@@ -18,6 +18,7 @@
 /plugins/hls-fourmolu-plugin @georgefst
 /plugins/hls-gadt-plugin @July541
 /plugins/hls-haddock-comments-plugin @berberman @kokobd
+/plugins/hls-hectare-plugin @pepeiborra
 /plugins/hls-hlint-plugin @eddiemundo
 /plugins/hls-module-name-plugin
 /plugins/hls-ormolu-plugin @georgefst

@@ -50,6 +50,12 @@ Provided by: `hls-cabal-plugin`
 
 Provides errors and warnings from Cabal as diagnostics
 
+### Hectare program synthesis
+
+Provided by: `hls-hectare-plugin`
+
+Provides full program suggestions for typed-holes as diagnostics via `ecta-plugin`
+
 ## Hovers
 
 Provided by: `ghcide`
@@ -320,6 +326,7 @@ Provided by: `hls-cabal-plugin`
 Code action kind: `quickfix`
 
 Correct common misspelling of SPDX Licenses such as `BSD-3-Clause`.
+
 
 ## Code lenses
 
