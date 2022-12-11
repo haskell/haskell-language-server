@@ -24,7 +24,7 @@ import qualified Development.IDE.GHC.Compat                      as GHC hiding
 import qualified Development.IDE.GHC.Compat.Util                 as GHC
 import           GHC.LanguageExtensions.Type
 import           Ide.PluginUtils
-import           Ide.Types
+import           Ide.Types                                       hiding (Config)
 import           Language.Haskell.Brittany
 import           Language.LSP.Types                              as J
 import qualified Language.LSP.Types.Lens                         as J

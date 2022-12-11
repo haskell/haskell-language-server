@@ -554,6 +554,8 @@ test-suite func-test
   build-depends:
     , bytestring
     , data-default
+    , deepseq
+    , hashable
     , hspec-expectations
     , lens
     , lens-aeson

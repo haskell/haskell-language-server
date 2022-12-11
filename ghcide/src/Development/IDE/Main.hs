@@ -13,27 +13,22 @@ module Development.IDE.Main
 ,Log(..)
 ) where
 import           Control.Concurrent.Extra                 (withNumCapabilities)
-import           Control.Concurrent.STM.Stats             (atomically,
-                                                           dumpSTMStats)
+import           Control.Concurrent.STM.Stats             (dumpSTMStats)
 import           Control.Exception.Safe                   (SomeException,
                                                            catchAny,
                                                            displayException)
 import           Control.Monad.Extra                      (concatMapM, unless,
                                                            when)
-import qualified Data.Aeson.Encode.Pretty                 as A
 import           Data.Coerce                              (coerce)
 import           Data.Default                             (Default (def))
 import           Data.Foldable                            (traverse_)
 import           Data.Hashable                            (hashed)
 import qualified Data.HashMap.Strict                      as HashMap
 import           Data.List.Extra                          (intercalate,
-                                                           isPrefixOf, nub,
-                                                           nubOrd, partition)
+                                                           isPrefixOf, nubOrd,
+                                                           partition)
 import           Data.Maybe                               (catMaybes, isJust)
 import qualified Data.Text                                as T
-import           Data.Text.Lazy.Encoding                  (decodeUtf8)
-import qualified Data.Text.Lazy.IO                        as LT
-import           Data.Typeable                            (typeOf)
 import           Development.IDE                          (Action,
                                                            GhcVersion (..),
                                                            Priority (Debug, Error),
@@ -47,20 +42,16 @@ import           Development.IDE.Core.IdeConfiguration    (IdeConfiguration (..)
 import           Development.IDE.Core.OfInterest          (FileOfInterestStatus (OnDisk),
                                                            kick,
                                                            setFilesOfInterest)
-import           Development.IDE.Core.Rules               (GhcSessionIO (GhcSessionIO),
-                                                           mainRule)
+import           Development.IDE.Core.Rules               (mainRule)
 import qualified Development.IDE.Core.Rules               as Rules
 import           Development.IDE.Core.RuleTypes           (GenerateCore (GenerateCore),
                                                            GetHieAst (GetHieAst),
-                                                           GhcSession (GhcSession),
-                                                           GhcSessionDeps (GhcSessionDeps),
                                                            TypeCheck (TypeCheck))
 import           Development.IDE.Core.Service             (initialise,
                                                            runAction)
 import qualified Development.IDE.Core.Service             as Service
 import           Development.IDE.Core.Shake               (IdeState (shakeExtras),
                                                            IndexQueue,
-                                                           ShakeExtras (state),
                                                            shakeSessionInit,
                                                            uses)
 import qualified Development.IDE.Core.Shake               as Shake
@@ -102,8 +93,7 @@ import           Development.IDE.Types.Options            (IdeGhcSession,
                                                            defaultIdeOptions,
                                                            optModifyDynFlags,
                                                            optTesting)
-import           Development.IDE.Types.Shake              (WithHieDb,
-                                                           fromKeyType)
+import           Development.IDE.Types.Shake              (WithHieDb)
 import           GHC.Conc                                 (getNumProcessors)
 import           GHC.IO.Encoding                          (setLocaleEncoding)
 import           GHC.IO.Handle                            (hDuplicate)
@@ -113,8 +103,6 @@ import           Ide.Plugin.Config                        (CheckParents (NeverCh
                                                            Config, checkParents,
                                                            checkProject,
                                                            getConfigFromNotification)
-import           Ide.Plugin.ConfigUtils                   (pluginsToDefaultConfig,
-                                                           pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                          (allLspCmdIds',
                                                            getProcessID,
                                                            idePluginsToPluginDesc,
@@ -125,10 +113,8 @@ import           Ide.Types                                (IdeCommand (IdeComman
                                                            PluginId (PluginId),
                                                            ipMap, pluginId)
 import qualified Language.LSP.Server                      as LSP
-import qualified "list-t" ListT
 import           Numeric.Natural                          (Natural)
 import           Options.Applicative                      hiding (action)
-import qualified StmContainers.Map                        as STM
 import qualified System.Directory.Extra                   as IO
 import           System.Exit                              (ExitCode (ExitFailure),
                                                            exitWith)
@@ -239,14 +225,14 @@ data Arguments = Arguments
     , argsMonitoring            :: IO Monitoring
     }
 
-defaultArguments :: Recorder (WithPriority Log) -> Logger -> Arguments
-defaultArguments recorder logger = Arguments
+defaultArguments :: Recorder (WithPriority Log) -> Logger -> IdePlugins IdeState -> Arguments
+defaultArguments recorder logger plugins = Arguments
         { argsProjectRoot = Nothing
         , argCommand = LSP
         , argsLogger = pure logger
         , argsRules = mainRule (cmapWithPrio LogRules recorder) def >> action kick
         , argsGhcidePlugin = mempty
-        , argsHlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde recorder))
+        , argsHlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde recorder)) <> plugins
         , argsSessionLoadingOptions = def
         , argsIdeOptions = \config ghcSession -> (defaultIdeOptions ghcSession)
             { optCheckProject = pure $ checkProject config
@@ -276,10 +262,11 @@ defaultArguments recorder logger = Arguments
         }
 
 
-testing :: Recorder (WithPriority Log) -> Logger -> Arguments
-testing recorder logger =
+testing :: Recorder (WithPriority Log) -> Logger -> IdePlugins IdeState -> Arguments
+testing recorder logger plugins =
   let
-    arguments@Arguments{ argsHlsPlugins, argsIdeOptions } = defaultArguments recorder logger
+    arguments@Arguments{ argsHlsPlugins, argsIdeOptions } =
+        defaultArguments recorder logger plugins
     hlsPlugins = pluginDescToIdePlugins $
       idePluginsToPluginDesc argsHlsPlugins
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
@@ -310,7 +297,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.executeCommandCommands = LSP.executeCommandCommands argsLspOptions <> Just hlsCommands }
-        argsOnConfigChange = getConfigFromNotification
+        argsOnConfigChange = getConfigFromNotification argsHlsPlugins
         rules = argsRules >> pluginRules plugins
 
     debouncer <- argsDebouncer

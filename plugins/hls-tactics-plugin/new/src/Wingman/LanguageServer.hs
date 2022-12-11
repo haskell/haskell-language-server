@@ -184,13 +184,13 @@ properties = emptyProperties
 
 
 -- | Get the the plugin config
-getTacticConfig :: MonadLsp Plugin.Config m => PluginId -> m Config
-getTacticConfig pId =
+getTacticConfigAction :: PluginId -> Action Config
+getTacticConfigAction pId =
   Config
-    <$> usePropertyLsp #max_use_ctor_actions pId properties
-    <*> usePropertyLsp #timeout_duration pId properties
-    <*> usePropertyLsp #auto_gas pId properties
-    <*> usePropertyLsp #proofstate_styling pId properties
+    <$> usePropertyAction #max_use_ctor_actions pId properties
+    <*> usePropertyAction #timeout_duration pId properties
+    <*> usePropertyAction #auto_gas pId properties
+    <*> usePropertyAction #proofstate_styling pId properties
 
 
 getIdeDynflags

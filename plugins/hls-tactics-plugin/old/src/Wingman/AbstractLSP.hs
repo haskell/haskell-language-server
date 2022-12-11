@@ -28,7 +28,7 @@ import qualified Language.LSP.Types as LSP
 import           Language.LSP.Types hiding (CodeLens, CodeAction)
 import           Wingman.AbstractLSP.Types
 import           Wingman.EmptyCase (fromMaybeT)
-import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags, mkWorkspaceEdits, runStaleIde, showLspMessage, mkShowMessageParams)
+import           Wingman.LanguageServer (runIde, getTacticConfigAction, getIdeDynflags, mkWorkspaceEdits, runStaleIde, showLspMessage, mkShowMessageParams)
 import           Wingman.StaticPlugin (enableQuasiQuotes)
 import           Wingman.Types
 
@@ -152,7 +152,7 @@ buildEnv
     -> FileContext
     -> MaybeT (LspM Plugin.Config) LspEnv
 buildEnv state plId fc = do
-  cfg <- lift $ getTacticConfig plId
+  cfg <- liftIO $ runIde "plugin" "config" state $ getTacticConfigAction plId
   nfp <- getNfp $ fc_uri fc
   dflags <- mapMaybeT liftIO $ getIdeDynflags state nfp
   pure $ LspEnv

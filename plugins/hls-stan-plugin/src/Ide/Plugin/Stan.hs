@@ -68,8 +68,8 @@ rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plId = do
   define (cmapWithPrio LogShake recorder) $
     \GetStanDiagnostics file -> do
-      config <- getClientConfigAction def
-      if pluginEnabledConfig plcDiagnosticsOn plId config then do
+      config <- getPluginConfigAction plId
+      if pluginEnabledConfig plcDiagnosticsOn config then do
           maybeHie <- getHieFile file
           case maybeHie of
             Nothing -> return ([], Nothing)

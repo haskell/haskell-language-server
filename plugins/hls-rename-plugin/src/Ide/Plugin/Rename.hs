@@ -29,7 +29,8 @@ import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
 import qualified Data.Text                             as T
-import           Development.IDE                       (Recorder, WithPriority)
+import           Development.IDE                       (Recorder, WithPriority,
+                                                        usePropertyAction)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -77,7 +78,7 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
         refs <- HS.fromList . concat <$> mapM (refsAtName state nfp) oldNames
 
         -- Validate rename
-        crossModuleEnabled <- lift $ usePropertyLsp #crossModule pluginId properties
+        crossModuleEnabled <- liftIO $ runAction "rename: config" state $ usePropertyAction #crossModule pluginId properties
         unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
         when (any isBuiltInSyntax oldNames) $ throwE "Invalid rename of built-in syntax"
 

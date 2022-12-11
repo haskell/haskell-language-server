@@ -9,7 +9,7 @@ import           Control.Lens          (at, ix, (&), (?~))
 import qualified Data.Aeson            as A
 import           Data.Aeson.Lens       (_Object)
 import qualified Data.Aeson.Types      as A
-import           Data.Default          (def)
+import           Data.Default
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
 import           Data.List.Extra       (nubOrd)
@@ -62,12 +62,14 @@ pluginsToDefaultConfig IdePlugins {..} =
         -- }
         --
         genericDefaultConfig =
-          let x = ["diagnosticsOn" A..= True | configHasDiagnostics] <> nubOrd (mconcat (handlersToGenericDefaultConfig <$> handlers))
-           in case x of
-                -- if the plugin has only one capability, we produce globalOn instead of the specific one;
-                -- otherwise we don't produce globalOn at all
-                [_] -> ["globalOn" A..= True]
-                _   -> x
+            let x = ["diagnosticsOn" A..= True | configHasDiagnostics]
+                        <> nubOrd (mconcat
+                            (handlersToGenericDefaultConfig configInitialGenericConfig <$> handlers))
+            in case x of
+                    -- if the plugin has only one capability, we produce globalOn instead of the specific one;
+                    -- otherwise we don't produce globalOn at all
+                    [_] -> ["globalOn" A..= plcGlobalOn configInitialGenericConfig]
+                    _   -> x
         -- Example:
         --
         -- {
@@ -82,15 +84,15 @@ pluginsToDefaultConfig IdePlugins {..} =
         (PluginId pId) = pluginId
 
         -- This function captures ide methods registered by the plugin, and then converts it to kv pairs
-        handlersToGenericDefaultConfig :: DSum.DSum IdeMethod f -> [A.Pair]
-        handlersToGenericDefaultConfig (IdeMethod m DSum.:=> _) = case m of
-          STextDocumentCodeAction           -> ["codeActionsOn" A..= True]
-          STextDocumentCodeLens             -> ["codeLensOn" A..= True]
-          STextDocumentRename               -> ["renameOn" A..= True]
-          STextDocumentHover                -> ["hoverOn" A..= True]
-          STextDocumentDocumentSymbol       -> ["symbolsOn" A..= True]
-          STextDocumentCompletion           -> ["completionOn" A..= True]
-          STextDocumentPrepareCallHierarchy -> ["callHierarchyOn" A..= True]
+        handlersToGenericDefaultConfig :: PluginConfig -> DSum.DSum IdeMethod f -> [A.Pair]
+        handlersToGenericDefaultConfig PluginConfig{..} (IdeMethod m DSum.:=> _) = case m of
+          STextDocumentCodeAction           -> ["codeActionsOn" A..= plcCodeActionsOn]
+          STextDocumentCodeLens             -> ["codeLensOn" A..= plcCodeLensOn]
+          STextDocumentRename               -> ["renameOn" A..= plcRenameOn]
+          STextDocumentHover                -> ["hoverOn" A..= plcHoverOn]
+          STextDocumentDocumentSymbol       -> ["symbolsOn" A..= plcSymbolsOn]
+          STextDocumentCompletion           -> ["completionOn" A..= plcCompletionOn]
+          STextDocumentPrepareCallHierarchy -> ["callHierarchyOn" A..= plcCallHierarchyOn]
           _                                 -> []
 
 -- | Generates json schema used in haskell vscode extension
