@@ -77,3 +77,4 @@ test-suite tests
     , hls-test-utils     ^>=1.4
     , lens
     , lsp-types
+    , text

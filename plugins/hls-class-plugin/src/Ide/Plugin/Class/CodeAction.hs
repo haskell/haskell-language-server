@@ -230,13 +230,12 @@ foo range sigs = ("all missing methods", methodGroups)
                         , inRange range (getSrcSpan $ bindName sig)
                        ]
 
-
 -- Return (name text, signature text)
 minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [Suggestion]
 minDefToMethodGroups range sigs minDef = suggestions
     where
         makeSuggestion methodGroup = 
-            let name = mconcat $ intersperse "," $ fst <$> methodGroup
+            let name = mconcat $ intersperse "," $ (\x -> "'" <> x <> "'") . fst <$> methodGroup
             in  (name, methodGroup)
 
         suggestions = makeSuggestion <$> go minDef
