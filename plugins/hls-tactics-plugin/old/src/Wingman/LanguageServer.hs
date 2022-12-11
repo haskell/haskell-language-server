@@ -43,9 +43,7 @@ import           Development.IDE.Graph.Classes (Hashable, NFData)
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
 import           GHC.Generics (Generic)
 import           Generics.SYB hiding (Generic)
-import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
 import           Language.Haskell.GHC.ExactPrint (Transform, modifyAnnsT, addAnnotationsForPretty)
 import           Language.LSP.Server (MonadLsp, sendNotification)
