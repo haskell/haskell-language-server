@@ -320,7 +320,9 @@ module Development.IDE.GHC.Compat.Core (
     gre_par,
 #if MIN_VERSION_ghc(9,2,0)
     collectHsBindsBinders,
+    NHsValBindsLR(..),
 #endif
+    grhssLocalBindsCompat,
     -- * Util Module re-exports
 #if MIN_VERSION_ghc(9,0,0)
     module GHC.Builtin.Names,
@@ -519,6 +521,7 @@ import qualified GHC.Data.Strict              as Strict
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Data.Bag
 import           GHC.Core.Multiplicity        (scaledThing)
+import           GHC.Hs.Binds                 (NHsValBindsLR(..))
 #else
 import           GHC.Core.Ppr.TyThing         hiding (pprFamInst)
 import           GHC.Core.TyCo.Rep            (scaledThing)
@@ -1091,6 +1094,13 @@ pattern LetStmt xlet localBinds <- GHC.LetStmt xlet (SrcLoc.unLoc -> localBinds)
 #if !MIN_VERSION_ghc(9,2,0)
 rationalFromFractionalLit :: FractionalLit -> Rational
 rationalFromFractionalLit = fl_value
+#endif
+
+grhssLocalBindsCompat :: GRHSs p body -> HsLocalBinds p
+#if MIN_VERSION_ghc(9,2,0)
+grhssLocalBindsCompat = grhssLocalBinds
+#else
+grhssLocalBindsCompat = SrcLoc.unLoc . grhssLocalBinds
 #endif
 
 makeSimpleDetails :: HscEnv -> TcGblEnv -> IO ModDetails
