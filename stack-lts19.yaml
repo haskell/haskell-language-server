@@ -42,7 +42,7 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
-- Cabal-3.6.0.0
+- Cabal-syntax-3.8.1.0
 # needed for tests of hls-cabal-fmt-plugin
 - cabal-fmt-0.1.6@sha256:54041d50c8148c32d1e0a67aef7edeebac50ae33571bef22312f6815908eac19,3626
 - floskell-0.10.6@sha256:e77d194189e8540abe2ace2c7cb8efafc747ca35881a2fefcbd2d40a1292e036,3819

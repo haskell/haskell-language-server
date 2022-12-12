@@ -52,6 +52,7 @@ extra-deps:
 - lsp-types-1.6.0.0
 - lsp-test-0.14.1.0
 - hie-bios-0.11.0
+- Cabal-syntax-3.8.1.0
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true

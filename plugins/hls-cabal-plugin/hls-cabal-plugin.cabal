@@ -33,7 +33,7 @@ library
   build-depends:
     , base                  >=4.12     && <5
     , bytestring
-    , Cabal-syntax          ^>= 3.6 || ^>= 3.8
+    , Cabal-syntax          ^>= 3.8
     , deepseq
     , directory
     , extra                 >=1.7.4
