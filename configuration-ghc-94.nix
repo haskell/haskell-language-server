@@ -35,7 +35,6 @@ let
         (pkgs.lib.concatStringsSep " " [ "-fpedantic" "-f-hlint" ]) { };
 
       apply-refact = hself.apply-refactHEAD;
-      fourmolu = hself.fourmoluHEAD;
 
     });
 in {

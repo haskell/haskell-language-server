@@ -13,7 +13,7 @@ packages:
          ./plugins/hls-tactics-plugin
          ./plugins/hls-brittany-plugin
          ./plugins/hls-stylish-haskell-plugin
-         -- ./plugins/hls-fourmolu-plugin
+         ./plugins/hls-fourmolu-plugin
          ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
@@ -67,19 +67,19 @@ constraints:
   ghc-lib-parser-ex -auto,
   stylish-haskell +ghc-lib
 
--- -- This is benign and won't affect our ability to release to Hackage,
--- -- because we only depend on `ekg-json` when a non-default flag
--- -- is turned on.
--- -- DELETE MARKER FOR CI
--- -- centos7 has an old version of git which cabal doesn't
--- -- support. We delete these lines in gitlab ci to workaround
--- -- this issue, as this is not necessary to build our binaries.
--- source-repository-package
---   type:git
---   location: https://github.com/pepeiborra/ekg-json
---   tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
---   -- https://github.com/tibbe/ekg-json/pull/12
--- -- END DELETE
+-- This is benign and won't affect our ability to release to Hackage,
+-- because we only depend on `ekg-json` when a non-default flag
+-- is turned on.
+-- DELETE MARKER FOR CI
+-- centos7 has an old version of git which cabal doesn't
+-- support. We delete these lines in gitlab ci to workaround
+-- this issue, as this is not necessary to build our binaries.
+source-repository-package
+  type:git
+  location: https://github.com/pepeiborra/ekg-json
+  tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
+  -- https://github.com/tibbe/ekg-json/pull/12
+-- END DELETE
 
 allow-newer:
   -- ghc-9.4

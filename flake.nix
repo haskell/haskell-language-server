@@ -64,7 +64,7 @@
       flake = false;
     };
     fourmolu = {
-      url = "https://hackage.haskell.org/package/fourmolu-0.9.0.0/fourmolu-0.9.0.0.tar.gz";
+      url = "https://hackage.haskell.org/package/fourmolu-0.10.1.0/fourmolu-0.10.1.0.tar.gz";
       flake = false;
     };
     hlint-341 = {
@@ -165,20 +165,11 @@
                 then overrideCabal hsuper.ormolu (_: { enableSeparateBinOutput = false; })
                 else hsuper.ormolu;
 
-              # Fourmolu needs a handful of patches to build on GHC 9.4.
-              fourmoluHEAD =
-                doJailbreak (overrideCabal hsuper.fourmolu_0_9_0_0 (old: {
-                  enableSeparateBinOutput = final.system != "aarch64-darwin";
-                  # Update to Fourmolu 0.9 for GHC 9.4 support.
-                  src = prev.fetchFromGitHub {
-                    owner = "fourmolu";
-                    repo = "fourmolu";
-                    # Branch: `main`
-                    rev = "47017e0f7c333676f3fd588695c1b3d16f2075cc";
-                    hash = "sha256-MPFWDMc9nSpTtCjAIHmjLyENkektm72tCWaKnkAQfuk=";
-                  };
-                }));
-              fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu {};
+              # with fixith-th, OOM is likely to happen in link time.
+              fourmolu =
+                addBuildDepend
+                  (appendConfigureFlag (hself.callCabal2nix "fourmolu" inputs.fourmolu {}) "-f-fixity-th")
+                  hself.file-embed;
             };
 
           hlsSources =
