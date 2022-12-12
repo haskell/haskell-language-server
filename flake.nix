@@ -27,20 +27,8 @@
     };
 
     # List of hackage dependencies
-    lsp = {
-      url = "https://hackage.haskell.org/package/lsp-1.6.0.0/lsp-1.6.0.0.tar.gz";
-      flake = false;
-    };
-    lsp-types = {
-      url = "https://hackage.haskell.org/package/lsp-types-1.6.0.0/lsp-types-1.6.0.0.tar.gz";
-      flake = false;
-    };
-    lsp-test = {
-      url = "https://hackage.haskell.org/package/lsp-test-0.14.1.0/lsp-test-0.14.1.0.tar.gz";
-      flake = false;
-    };
     ghc-exactprint-160 = {
-      url = "https://hackage.haskell.org/package/ghc-exactprint-1.6.0/ghc-exactprint-1.6.0.tar.gz";
+      url = "https://hackage.haskell.org/package/ghc-exactprint-1.6.1/ghc-exactprint-1.6.1.tar.gz";
       flake = false;
     };
     ghc-exactprint-150 = {
@@ -75,6 +63,10 @@
       url = "https://hackage.haskell.org/package/brittany-0.13.1.2/brittany-0.13.1.2.tar.gz";
       flake = false;
     };
+    fourmolu = {
+      url = "https://hackage.haskell.org/package/fourmolu-0.9.0.0/fourmolu-0.9.0.0.tar.gz";
+      flake = false;
+    };
     hlint-341 = {
       url = "https://hackage.haskell.org/package/hlint-3.4.1/hlint-3.4.1.tar.gz";
       flake = false;
@@ -85,22 +77,6 @@
     };
     ptr-poker = {
       url = "https://hackage.haskell.org/package/ptr-poker-0.1.2.8/ptr-poker-0.1.2.8.tar.gz";
-      flake = false;
-    };
-    stylish-haskell = {
-      url = "https://hackage.haskell.org/package/stylish-haskell-0.14.2.0/stylish-haskell-0.14.2.0.tar.gz";
-      flake = false;
-    };
-    implicit-hie-cradle = {
-      url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
-      flake = false;
-    };
-    hie-bios = {
-      url = "https://hackage.haskell.org/package/hie-bios-0.11.0/hie-bios-0.11.0.tar.gz";
-      flake = false;
-    };
-    entropy = {
-      url = "https://hackage.haskell.org/package/entropy-0.4.1.10/entropy-0.4.1.10.tar.gz";
       flake = false;
     };
     hiedb = {
@@ -177,22 +153,12 @@
             with haskell.lib; {
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
-              # GHCIDE requires hie-bios ^>=0.9.1
-              hie-bios = hself.callCabal2nix "hie-bios" inputs.hie-bios {};
-
-              lsp = hsuper.callCabal2nix "lsp" inputs.lsp {};
-              lsp-types = hsuper.callCabal2nix "lsp-types" inputs.lsp-types {};
-              lsp-test = hsuper.callCabal2nix "lsp-test" inputs.lsp-test {};
-
-              entropy = hsuper.callCabal2nix "entropy" inputs.entropy {};
               hiedb = hsuper.callCabal2nix "hiedb" inputs.hiedb {};
               hw-prim = hsuper.callCabal2nix "hw-prim" inputs.hw-prim {};
               retrie = hsuper.callCabal2nix "retrie" inputs.retrie {};
               retrie_1_1_0_0 = hsuper.callCabal2nix "retrie" inputs.retrie_1100 {};
               apply-refactHEAD = hsuper.callCabal2nix "apply-refact" inputs.apply-refact {};
 
-              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.implicit-hie-cradle {};
-              ghc-check = hself.callCabal2nix "ghc-check" inputs.ghc-check {};
               # https://github.com/NixOS/nixpkgs/issues/140774
               ormolu =
                 if final.system == "aarch64-darwin"
@@ -201,7 +167,7 @@
 
               # Fourmolu needs a handful of patches to build on GHC 9.4.
               fourmoluHEAD =
-                doJailbreak (overrideCabal hsuper.fourmolu_0_8_2_0 (old: {
+                doJailbreak (overrideCabal hsuper.fourmolu_0_9_0_0 (old: {
                   enableSeparateBinOutput = final.system != "aarch64-darwin";
                   # Update to Fourmolu 0.9 for GHC 9.4 support.
                   src = prev.fetchFromGitHub {
@@ -212,6 +178,7 @@
                     hash = "sha256-MPFWDMc9nSpTtCjAIHmjLyENkektm72tCWaKnkAQfuk=";
                   };
                 }));
+              fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu {};
             };
 
           hlsSources =
@@ -274,8 +241,8 @@
         };
 
         ghc902Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
-        ghc924Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
-        ghc942Config = (import ./configuration-ghc-94.nix) { inherit pkgs inputs; };
+        ghc925Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
+        ghc943Config = (import ./configuration-ghc-94.nix) { inherit pkgs inputs; };
 
         # GHC versions
         # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached
@@ -284,14 +251,14 @@
           ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
           cases = {
             ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
-            ghc924 = ghc924Config.tweakHpkgs (pkgs.hlsHpkgs "ghc924");
-            ghc942 = ghc942Config.tweakHpkgs (pkgs.hlsHpkgs "ghc942");
+            ghc925 = ghc925Config.tweakHpkgs (pkgs.hlsHpkgs "ghc925");
+            ghc943 = ghc943Config.tweakHpkgs (pkgs.hlsHpkgs "ghc943");
           };
           in { default = cases."${ghcVersion}"; } // cases;
 
         ghc902 = supportedGHCs.ghc902;
-        ghc924 = supportedGHCs.ghc924;
-        ghc942 = supportedGHCs.ghc942;
+        ghc925 = supportedGHCs.ghc925;
+        ghc943 = supportedGHCs.ghc943;
         ghcDefault = supportedGHCs.default;
 
         pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx ps.myst-parser ps.sphinx_rtd_theme ps.pip]);
@@ -408,16 +375,16 @@
         simpleDevShells = {
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
           haskell-language-server-902-dev = mkDevShell ghc902 "cabal.project";
-          haskell-language-server-924-dev = mkDevShell ghc924 "cabal.project";
-          haskell-language-server-942-dev = mkDevShell ghc942 "cabal.project";
+          haskell-language-server-925-dev = mkDevShell ghc925 "cabal.project";
+          haskell-language-server-943-dev = mkDevShell ghc943 "cabal.project";
         };
 
         # Developement shell, haskell packages are also provided by nix
         nixDevShells = {
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
           haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
-          haskell-language-server-924-dev-nix = mkDevShellWithNixDeps ghc924 "cabal.project";
-          haskell-language-server-942-dev-nix = mkDevShellWithNixDeps ghc942 "cabal.project";
+          haskell-language-server-925-dev-nix = mkDevShellWithNixDeps ghc925 "cabal.project";
+          haskell-language-server-943-dev-nix = mkDevShellWithNixDeps ghc943 "cabal.project";
         };
 
         # The default shell provided by Nixpkgs for a Haskell package (i.e. the
@@ -425,15 +392,15 @@
         envShells = {
           haskell-language-server-dev-env = mkEnvShell ghcDefault;
           haskell-language-server-902-dev-env = mkEnvShell ghc902;
-          haskell-language-server-924-dev-env = mkEnvShell ghc924;
-          haskell-language-server-942-dev-env = mkEnvShell ghc942;
+          haskell-language-server-925-dev-env = mkEnvShell ghc925;
+          haskell-language-server-943-dev-env = mkEnvShell ghc943;
         };
 
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-902 = mkExe ghc902;
-          haskell-language-server-924 = mkExe ghc924;
-          haskell-language-server-942 = mkExe ghc942;
+          haskell-language-server-925 = mkExe ghc925;
+          haskell-language-server-943 = mkExe ghc943;
         };
 
         devShells = simpleDevShells // nixDevShells // envShells // {

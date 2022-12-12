@@ -29,8 +29,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-evalPlugin :: PluginDescriptor IdeState
-evalPlugin = Eval.descriptor mempty "eval"
+evalPlugin :: PluginTestDescriptor Eval.Log
+evalPlugin = mkPluginTestDescriptor Eval.descriptor "eval"
 
 tests :: TestTree
 tests =

@@ -16,17 +16,22 @@ module Test.Hls
     defaultTestRunner,
     goldenGitDiff,
     goldenWithHaskellDoc,
+    goldenWithCabalDoc,
     goldenWithHaskellDocFormatter,
     goldenWithCabalDocFormatter,
     def,
+    -- * Running HLS for integration tests
     runSessionWithServer,
+    runSessionWithServerAndCaps,
     runSessionWithServerFormatter,
     runSessionWithCabalServerFormatter,
     runSessionWithServer',
-    waitForProgressDone,
-    waitForAllProgressDone,
+    -- * Helpful re-exports
     PluginDescriptor,
     IdeState,
+    -- * Assertion helper functions
+    waitForProgressDone,
+    waitForAllProgressDone,
     waitForBuildQueue,
     waitForTypecheck,
     waitForAction,
@@ -34,6 +39,16 @@ module Test.Hls
     getLastBuildKeys,
     waitForKickDone,
     waitForKickStart,
+    -- * Plugin descriptor helper functions for tests
+    PluginTestDescriptor,
+    pluginTestRecorder,
+    mkPluginTestDescriptor,
+    mkPluginTestDescriptor',
+    -- * Re-export logger types
+    -- Avoids slightly annoying ghcide imports when they are unnecessary.
+    WithPriority(..),
+    Recorder,
+    Priority(..),
     )
 where
 
@@ -42,6 +57,7 @@ import           Control.Concurrent.Async        (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Base
 import           Control.Monad                   (guard, unless, void)
+import           Control.Monad.Extra             (forM)
 import           Control.Monad.IO.Class
 import           Data.Aeson                      (Result (Success),
                                                   Value (Null), fromJSON,
@@ -61,7 +77,7 @@ import qualified Development.IDE.Main            as IDEMain
 import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
 import qualified Development.IDE.Plugin.Test     as Test
-import           Development.IDE.Types.Logger    (Logger (Logger),
+import           Development.IDE.Types.Logger    (Doc, Logger (Logger),
                                                   Pretty (pretty),
                                                   Priority (Debug),
                                                   Recorder (Recorder, logger_),
@@ -71,11 +87,6 @@ import           Development.IDE.Types.Logger    (Logger (Logger),
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           GHC.Stack                       (emptyCallStack)
-import           Ide.Plugin.Config               (Config, PluginConfig,
-                                                  cabalFormattingProvider,
-                                                  formattingProvider, plugins)
-import           Ide.PluginUtils                 (idePluginsToPluginDesc,
-                                                  pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Test
 import           Language.LSP.Types              hiding
@@ -116,7 +127,8 @@ goldenGitDiff :: TestName -> FilePath -> IO ByteString -> TestTree
 goldenGitDiff name = goldenVsStringDiff name gitDiff
 
 goldenWithHaskellDoc
-  :: PluginDescriptor IdeState
+  :: Pretty b
+  => PluginTestDescriptor b
   -> TestName
   -> FilePath
   -> FilePath
@@ -124,33 +136,154 @@ goldenWithHaskellDoc
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithHaskellDoc plugin title testDataDir path desc ext act =
+goldenWithHaskellDoc = goldenWithDoc "haskell"
+
+goldenWithCabalDoc
+  :: Pretty b
+  => PluginTestDescriptor b
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithCabalDoc = goldenWithDoc "cabal"
+
+goldenWithDoc
+  :: Pretty b
+  => T.Text
+  -> PluginTestDescriptor b
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithDoc fileType plugin title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
   $ runSessionWithServer plugin testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
-    doc <- openDoc (path <.> ext) "haskell"
+    doc <- openDoc (path <.> ext) fileType
     void waitForBuildQueue
     act doc
     documentContents doc
 
+-- ------------------------------------------------------------
+-- Helper function for initialising plugins under test
+-- ------------------------------------------------------------
 
-runSessionWithServer :: PluginDescriptor IdeState -> FilePath -> Session a -> IO a
-runSessionWithServer plugin = runSessionWithServer' [plugin] def def fullCaps
+-- | Plugin under test where a fitting recorder is injected.
+type PluginTestDescriptor b = Recorder (WithPriority b) -> PluginDescriptor IdeState
 
-runSessionWithServerFormatter :: PluginDescriptor IdeState -> String -> PluginConfig -> FilePath -> Session a -> IO a
-runSessionWithServerFormatter plugin formatter conf =
+-- | Wrap a plugin you want to test, and inject a fitting recorder as required.
+--
+-- If you want to write the logs to stderr, run your tests with
+-- "HLS_TEST_PLUGIN_LOG_STDERR=1", e.g.
+--
+-- @
+--   HLS_TEST_PLUGIN_LOG_STDERR=1 cabal test <test-suite-of-plugin>
+-- @
+--
+--
+-- To write all logs to stderr, including logs of the server, use:
+--
+-- @
+--   HLS_TEST_LOG_STDERR=1 cabal test <test-suite-of-plugin>
+-- @
+mkPluginTestDescriptor
+  :: (Recorder (WithPriority b) -> PluginId -> PluginDescriptor IdeState)
+  -> PluginId
+  -> PluginTestDescriptor b
+mkPluginTestDescriptor pluginDesc plId recorder = pluginDesc recorder plId
+
+-- | Wrap a plugin you want to test.
+--
+-- Ideally, try to migrate this plugin to co-log logger style architecture.
+-- Therefore, you should prefer 'mkPluginTestDescriptor' to this if possible.
+mkPluginTestDescriptor'
+  :: (PluginId -> PluginDescriptor IdeState)
+  -> PluginId
+  -> PluginTestDescriptor b
+mkPluginTestDescriptor' pluginDesc plId _recorder = pluginDesc plId
+
+-- | Initialise a recorder that can be instructed to write to stderr by
+-- setting the environment variable "HLS_TEST_PLUGIN_LOG_STDERR=1" before
+-- running the tests.
+--
+-- On the cli, use for example:
+--
+-- @
+--   HLS_TEST_PLUGIN_LOG_STDERR=1 cabal test <test-suite-of-plugin>
+-- @
+--
+-- To write all logs to stderr, including logs of the server, use:
+--
+-- @
+--   HLS_TEST_LOG_STDERR=1 cabal test <test-suite-of-plugin>
+-- @
+pluginTestRecorder :: Pretty a => IO (Recorder (WithPriority a))
+pluginTestRecorder = do
+  (recorder, _) <- initialiseTestRecorder ["HLS_TEST_PLUGIN_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
+  pure recorder
+
+-- | Generic recorder initialisation for plugins and the HLS server for test-cases.
+--
+-- The created recorder writes to stderr if any of the given environment variables
+-- have been set to a value different to @0@.
+-- We allow multiple values, to make it possible to define a single environment variable
+-- that instructs all recorders in the test-suite to write to stderr.
+--
+-- We have to return the base logger function for HLS server logging initialisation.
+-- See 'runSessionWithServer'' for details.
+initialiseTestRecorder :: Pretty a => [String] -> IO (Recorder (WithPriority a), WithPriority (Doc ann) -> IO ())
+initialiseTestRecorder envVars = do
+    docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing Debug
+    -- There are potentially multiple environment variables that enable this logger
+    definedEnvVars <- forM envVars (\var -> fromMaybe "0" <$> lookupEnv var)
+    let logStdErr = any (/= "0") definedEnvVars
+
+        docWithFilteredPriorityRecorder =
+          if logStdErr then cfilter (\WithPriority{ priority } -> priority >= Debug) docWithPriorityRecorder
+          else mempty
+
+        Recorder {logger_} = docWithFilteredPriorityRecorder
+
+    pure (cmapWithPrio pretty docWithFilteredPriorityRecorder, logger_)
+
+-- ------------------------------------------------------------
+-- Run an HLS server testing a specific plugin
+-- ------------------------------------------------------------
+
+runSessionWithServer :: Pretty b => PluginTestDescriptor b -> FilePath -> Session a -> IO a
+runSessionWithServer plugin fp act = do
+  recorder <- pluginTestRecorder
+  runSessionWithServer' [plugin recorder] def def fullCaps fp act
+
+runSessionWithServerAndCaps :: Pretty b => PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
+runSessionWithServerAndCaps plugin caps fp act = do
+  recorder <- pluginTestRecorder
+  runSessionWithServer' [plugin recorder] def def caps fp act
+
+runSessionWithServerFormatter :: Pretty b => PluginTestDescriptor b -> String -> PluginConfig -> FilePath -> Session a -> IO a
+runSessionWithServerFormatter plugin formatter conf fp act = do
+  recorder <- pluginTestRecorder
   runSessionWithServer'
-    [plugin]
+    [plugin recorder]
     def
       { formattingProvider = T.pack formatter
-      , plugins = M.singleton (T.pack formatter) conf
+      , plugins = M.singleton (PluginId $ T.pack formatter) conf
       }
     def
     fullCaps
+    fp
+    act
 
 goldenWithHaskellDocFormatter
-  :: PluginDescriptor IdeState -- ^ Formatter plugin to be used
+  :: Pretty b
+  => PluginTestDescriptor b -- ^ Formatter plugin to be used
   -> String -- ^ Name of the formatter to be used
   -> PluginConfig
   -> TestName -- ^ Title of the test
@@ -171,7 +304,8 @@ goldenWithHaskellDocFormatter plugin formatter conf title testDataDir path desc 
     documentContents doc
 
 goldenWithCabalDocFormatter
-  :: PluginDescriptor IdeState -- ^ Formatter plugin to be used
+  :: Pretty b
+  => PluginTestDescriptor b -- ^ Formatter plugin to be used
   -> String -- ^ Name of the formatter to be used
   -> PluginConfig
   -> TestName -- ^ Title of the test
@@ -191,16 +325,18 @@ goldenWithCabalDocFormatter plugin formatter conf title testDataDir path desc ex
     act doc
     documentContents doc
 
-runSessionWithCabalServerFormatter :: PluginDescriptor IdeState -> String -> PluginConfig -> FilePath -> Session a -> IO a
-runSessionWithCabalServerFormatter plugin formatter conf =
+runSessionWithCabalServerFormatter :: Pretty b => PluginTestDescriptor b -> String -> PluginConfig -> FilePath -> Session a -> IO a
+runSessionWithCabalServerFormatter plugin formatter conf fp act = do
+  recorder <- pluginTestRecorder
   runSessionWithServer'
-    [plugin]
+    [plugin recorder]
     def
       { cabalFormattingProvider = T.pack formatter
-      , plugins = M.singleton (T.pack formatter) conf
+      , plugins = M.singleton (PluginId $ T.pack formatter) conf
       }
     def
     fullCaps
+    fp act
 
 -- | Restore cwd after running an action
 keepCurrentDirectory :: IO a -> IO a
@@ -211,11 +347,13 @@ keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
 lock :: Lock
 lock = unsafePerformIO newLock
 
-
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
 runSessionWithServer' ::
-  -- | plugins to load on the server
+  -- | Plugins to load on the server.
+  --
+  -- For improved logging, make sure these plugins have been initalised with
+  -- the recorder produced by @pluginTestRecorder@.
   [PluginDescriptor IdeState] ->
   -- | lsp config for the server
   Config ->
@@ -229,26 +367,24 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
     (inR, inW) <- createPipe
     (outR, outW) <- createPipe
 
-    docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing Debug
-
-    logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
+    -- Allow three environment variables, because "LSP_TEST_LOG_STDERR" has been used before,
+    -- (thus, backwards compatibility) and "HLS_TEST_SERVER_LOG_STDERR" because it
+    -- uses a more descriptive name.
+    -- It is also in better accordance with 'pluginTestRecorder' which uses "HLS_TEST_PLUGIN_LOG_STDERR".
+    -- At last, "HLS_TEST_LOG_STDERR" is intended to enable all logging for the server and the plugins
+    -- under test.
+    (recorder, logger_) <- initialiseTestRecorder
+      ["LSP_TEST_LOG_STDERR", "HLS_TEST_SERVER_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
 
     let
-        docWithFilteredPriorityRecorder@Recorder{ logger_ } =
-            if logStdErr == "0" then mempty
-            else cfilter (\WithPriority{ priority } -> priority >= Debug) docWithPriorityRecorder
-
         -- exists until old logging style is phased out
         logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
 
-        recorder = cmapWithPrio pretty docWithFilteredPriorityRecorder
+        hlsPlugins = IdePlugins $ Test.blockCommandDescriptor "block-command" : plugins
 
-        arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmapWithPrio LogIDEMain recorder) logger
+        arguments@Arguments{ argsIdeOptions, argsLogger } =
+            testing (cmapWithPrio LogIDEMain recorder) logger hlsPlugins
 
-        hlsPlugins =
-            plugins
-            ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
-            ++ idePluginsToPluginDesc argsHlsPlugins
         ideOptions config ghcSession =
             let defIdeOptions = argsIdeOptions config ghcSession
             in defIdeOptions
@@ -264,7 +400,6 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
                 , argsDefaultHlsConfig = conf
                 , argsLogger = argsLogger
                 , argsIdeOptions = ideOptions
-                , argsHlsPlugins = pluginDescToIdePlugins hlsPlugins
                 }
 
     x <- runSessionWithHandles inW outR sconf caps root s

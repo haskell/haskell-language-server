@@ -17,6 +17,7 @@ import qualified Data.Text               as T
 import           Ide.Plugin.Config       (Config (..), PluginConfig (..))
 import qualified Ide.Plugin.Config       as Plugin
 import qualified Ide.Plugin.Hlint        as HLint
+import           Ide.Types               (PluginId)
 import qualified Language.LSP.Types.Lens as L
 import           System.FilePath         ((</>))
 import           Test.Hls
@@ -24,8 +25,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-hlintPlugin :: PluginDescriptor IdeState
-hlintPlugin = HLint.descriptor mempty "hlint"
+hlintPlugin :: PluginTestDescriptor HLint.Log
+hlintPlugin = mkPluginTestDescriptor HLint.descriptor "hlint"
 
 tests :: TestTree
 tests = testGroup "hlint" [
@@ -101,7 +102,7 @@ suggestionsTests =
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo x = x\n"
 
-    , testCase "falls back to pre 3.8 code actions" $ runSessionWithServer' [hlintPlugin] def def noLiteralCaps "test/testdata" $ do
+    , testCase "falls back to pre 3.8 code actions" $ runSessionWithServerAndCaps hlintPlugin noLiteralCaps "test/testdata" $ do
         doc <- openDoc "Base.hs" "haskell"
 
         _ <- waitForDiagnosticsFromSource doc "hlint"
@@ -340,12 +341,6 @@ testHlintDiagnostics :: TextDocumentIdentifier -> Session ()
 testHlintDiagnostics doc = do
     diags <- waitForDiagnosticsFromSource doc "hlint"
     liftIO $ length diags > 0 @? "There are hlint diagnostics"
-
-pluginGlobalOn :: Config -> T.Text -> Bool -> Config
-pluginGlobalOn config pid state = config'
-  where
-      pluginConfig = def { plcGlobalOn = state }
-      config' = def { plugins = Map.insert pid pluginConfig (plugins config) }
 
 hlintConfigWithFlags :: [T.Text] -> Config
 hlintConfigWithFlags flags =

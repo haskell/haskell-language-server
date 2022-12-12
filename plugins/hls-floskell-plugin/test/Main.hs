@@ -10,8 +10,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-floskellPlugin :: PluginDescriptor IdeState
-floskellPlugin = Floskell.descriptor "floskell"
+floskellPlugin :: PluginTestDescriptor ()
+floskellPlugin = mkPluginTestDescriptor' Floskell.descriptor "floskell"
 
 tests :: TestTree
 tests = testGroup "floskell"

@@ -2,9 +2,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 module Ide.PluginUtils
-  ( WithDeletions(..),
-    getProcessID,
+  ( -- * LSP Range manipulation functions
     normalize,
+    extendNextLine,
+    extendLineStart,
+    WithDeletions(..),
+    getProcessID,
     makeDiffTextEdit,
     makeDiffTextEditAdditive,
     diffText,
@@ -67,9 +70,27 @@ import qualified Text.Megaparsec.Char.Lexer      as P
 -- ---------------------------------------------------------------------
 
 -- | Extend to the line below and above to replace newline character.
+--
+-- >>> normalize (Range (Position 5 5) (Position 5 10))
+-- Range (Position 5 0) (Position 6 0)
 normalize :: Range -> Range
-normalize (Range (Position sl _) (Position el _)) =
-  Range (Position sl 0) (Position (el + 1) 0)
+normalize = extendLineStart . extendNextLine
+
+-- | Extend 'Range' to the start of the next line.
+--
+-- >>> extendNextLine (Range (Position 5 5) (Position 5 10))
+-- Range (Position 5 5) (Position 6 0)
+extendNextLine :: Range -> Range
+extendNextLine (Range s (Position el _)) =
+  Range s (Position (el + 1) 0)
+
+-- | Extend 'Range' to the start of the current line.
+--
+-- >>> extendLineStart (Range (Position 5 5) (Position 5 10))
+-- Range (Position 5 0) (Position 5 10)
+extendLineStart :: Range -> Range
+extendLineStart (Range (Position sl _) e) =
+  Range (Position sl 0) e
 
 -- ---------------------------------------------------------------------
 
@@ -184,7 +205,7 @@ getClientConfig = getConfig
 -- | Returns the current plugin configuration. It is not wise to permanently
 -- cache the returned value of this function, as clients can change their
 -- configuration at runtime.
-getPluginConfig :: MonadLsp Config m => PluginId -> m PluginConfig
+getPluginConfig :: MonadLsp Config m => PluginDescriptor c -> m PluginConfig
 getPluginConfig plugin = do
     config <- getClientConfig
     return $ configForPlugin config plugin
@@ -195,7 +216,7 @@ getPluginConfig plugin = do
 usePropertyLsp ::
   (HasProperty s k t r, MonadLsp Config m) =>
   KeyNameProxy s ->
-  PluginId ->
+  PluginDescriptor c ->
   Properties r ->
   m (ToHsType t)
 usePropertyLsp kn pId p = do

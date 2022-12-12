@@ -127,11 +127,10 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLog
     -- exists so old-style logging works. intended to be phased out
     let logger = Logger $ \p m -> logger_ recorder (WithPriority p emptyCallStack $ LogOther m)
         args = (if argsTesting then IDEMain.testing else IDEMain.defaultArguments)
-                    (cmapWithPrio LogIDEMain recorder) logger
+                    (cmapWithPrio LogIDEMain recorder) logger idePlugins
 
     IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) args
       { IDEMain.argCommand = argsCommand
-      , IDEMain.argsHlsPlugins = IDEMain.argsHlsPlugins args <> idePlugins
       , IDEMain.argsLogger = pure logger <> pure telemetryLogger
       , IDEMain.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
       , IDEMain.argsIdeOptions = \config sessionLoader ->

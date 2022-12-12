@@ -54,6 +54,7 @@ import           Development.IDE.Types.Logger       (Logger (Logger),
                                                      makeDefaultStderrRecorder)
 import           GHC.Stack.Types                    (emptyCallStack)
 import           Ide.Plugin.Config                  (Config)
+import           Ide.Types                          (IdePlugins (IdePlugins))
 import           Language.LSP.Server                (LspM)
 import qualified Language.LSP.Server                as LSP
 import           Language.LSP.Types                 (MessageActionItem (MessageActionItem),
@@ -276,7 +277,7 @@ launchErrorLSP errorMsg = do
 
   let logger = Logger $ \p m -> logger_ recorder (WithPriority p emptyCallStack (pretty m))
 
-  let defaultArguments = Main.defaultArguments (cmapWithPrio pretty recorder) logger
+  let defaultArguments = Main.defaultArguments (cmapWithPrio pretty recorder) logger (IdePlugins [])
 
   inH <- Main.argsHandleIn defaultArguments
 

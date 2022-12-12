@@ -14,6 +14,7 @@ Provide CodeLenses to:
 -}
 module Ide.Plugin.ModuleName (
     descriptor,
+    Log,
 ) where
 
 import           Control.Monad                (forM_, void)

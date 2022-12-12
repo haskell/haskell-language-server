@@ -9,6 +9,7 @@
 # Plugins
 /plugins/hls-alternate-number-format-plugin @drsooch
 /plugins/hls-brittany-plugin @fendor
+/plugins/hls-cabal-plugin @fendor
 /plugins/hls-cabal-fmt-plugin @VeryMilkyJoe @fendor
 /plugins/hls-call-hierarchy-plugin @July541
 /plugins/hls-class-plugin @Ailrun

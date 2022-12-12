@@ -53,7 +53,7 @@ module Development.IDE.Core.Shake(
     getIdeOptionsIO,
     GlobalIdeOptions(..),
     HLS.getClientConfig,
-    getPluginConfig,
+    getPluginConfigAction,
     knownTargets,
     setPriority,
     ideLogger,
@@ -77,7 +77,7 @@ module Development.IDE.Core.Shake(
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
     Log(..),
-    VFSModified(..)
+    VFSModified(..), getClientConfigAction
     ) where
 
 import           Control.Concurrent.Async
@@ -90,7 +90,8 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                             (toJSON)
+import           Data.Aeson                             (Result (Success),
+                                                         toJSON)
 import qualified Data.ByteString.Char8                  as BS
 import qualified Data.ByteString.Char8                  as BS8
 import           Data.Coerce                            (coerce)
@@ -98,7 +99,7 @@ import           Data.Default
 import           Data.Dynamic
 import           Data.EnumMap.Strict                    (EnumMap)
 import qualified Data.EnumMap.Strict                    as EM
-import           Data.Foldable                          (for_, toList)
+import           Data.Foldable                          (find, for_, toList)
 import           Data.Functor                           ((<&>))
 import           Data.Functor.Identity
 import           Data.Hashable
@@ -134,6 +135,7 @@ import           Development.IDE.GHC.Compat             (NameCache,
 #if !MIN_VERSION_ghc(9,3,0)
 import           Development.IDE.GHC.Compat             (upNameCache)
 #endif
+import qualified Data.Aeson.Types                       as A
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
@@ -161,7 +163,9 @@ import           GHC.Stack                              (HasCallStack)
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
-import           Ide.Types                              (IdePlugins, PluginId)
+import           Ide.Types                              (IdePlugins (IdePlugins),
+                                                         PluginDescriptor (pluginId),
+                                                         PluginId)
 import           Language.LSP.Diagnostics
 import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.Types
@@ -311,10 +315,25 @@ getShakeExtrasRules = do
     Just x <- getShakeExtraRules @ShakeExtras
     return x
 
-getPluginConfig
-    :: LSP.MonadLsp Config m => PluginId -> m PluginConfig
-getPluginConfig plugin = do
-    config <- HLS.getClientConfig
+-- | Returns the client configuration, creating a build dependency.
+--   You should always use this function when accessing client configuration
+--   from build rules.
+getClientConfigAction :: Action Config
+getClientConfigAction = do
+  ShakeExtras{lspEnv, idePlugins} <- getShakeExtras
+  currentConfig <- (`LSP.runLspT` LSP.getConfig) `traverse` lspEnv
+  mbVal <- unhashed <$> useNoFile_ GetClientSettings
+  let defValue = fromMaybe def currentConfig
+  case A.parse (parseConfig idePlugins defValue) <$> mbVal of
+    Just (Success c) -> return c
+    _                -> return defValue
+
+getPluginConfigAction :: PluginId -> Action PluginConfig
+getPluginConfigAction plId = do
+    config <- getClientConfigAction
+    ShakeExtras{idePlugins = IdePlugins plugins} <- getShakeExtras
+    let plugin = fromMaybe (error $ "Plugin not found: " <> show plId) $
+                    find (\p -> pluginId p == plId) plugins
     return $ HLS.configForPlugin config plugin
 
 -- | Register a function that will be called to get the "stale" result of a rule, possibly from disk
