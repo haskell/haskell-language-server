@@ -55,6 +55,8 @@ module Development.IDE.GHC.Compat(
     mkAstNode,
     combineRealSrcSpans,
 
+    nonDetOccEnvElts,
+
     isQualifiedImport,
     GhcVersion(..),
     ghcVersion,
@@ -266,6 +268,11 @@ import           GHC.Types.IPE
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Types.Error
 import GHC.Driver.Config.Stg.Pipeline
+#endif
+
+#if !MIN_VERSION_ghc(9,3,0)
+nonDetOccEnvElts :: OccEnv a -> [a]
+nonDetOccEnvElts = occEnvElts
 #endif
 
 type ModIfaceAnnotation = Annotation

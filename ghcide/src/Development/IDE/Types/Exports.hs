@@ -69,7 +69,7 @@ updateExportsMap old new = ExportsMap
                           | m_uniq <- nonDetKeysUFM (getModuleExportsMap new)]
 
 size :: ExportsMap -> Int
-size = sum . map (Set.size) . occEnvElts . getExportsMap
+size = sum . map (Set.size) . nonDetOccEnvElts . getExportsMap
 
 mkVarOrDataOcc :: Text -> OccName
 mkVarOrDataOcc t = mkOcc $ mkFastStringByteString $ encodeUtf8 t
@@ -98,7 +98,8 @@ rendered = occNameText . name
 -- TODO: pattern synonymoccNameText :: OccName -> Text
 occNameText :: OccName -> Text
 occNameText name
-  | isTcOcc name && isSymOcc name = "type " <> renderedOcc
+  | isSymOcc name = "(" <> renderedOcc <> ")"
+  | isTcOcc name && isSymOcc name = "type (" <> renderedOcc <> ")"
   | otherwise = renderedOcc
   where
     renderedOcc = renderOcc name
