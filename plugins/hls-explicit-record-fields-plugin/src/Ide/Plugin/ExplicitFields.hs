@@ -1,15 +1,14 @@
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE DuplicateRecordFields      #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE PatternSynonyms            #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeOperators              #-}
-{-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.ExplicitFields
   ( descriptor
@@ -20,19 +19,16 @@ import           Control.Lens                    ((^.))
 import           Control.Monad.Extra             (maybeM)
 import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Control.Monad.Trans.Except      (ExceptT)
-import           Data.Foldable                   (find)
 import           Data.Generics                   (GenericQ, everything, extQ,
                                                   mkQ)
 import qualified Data.HashMap.Strict             as HashMap
-import           Data.Map.Strict                 (Map)
-import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (isJust, listToMaybe,
                                                   maybeToList)
 import           Data.Text                       (Text)
 import           Development.IDE                 (IdeState, NormalizedFilePath,
                                                   Pretty (..), Recorder (..),
                                                   Rules, WithPriority (..),
-                                                  realSpan, realSrcSpanToRange)
+                                                  realSrcSpanToRange)
 import           Development.IDE.Core.Rules      (runAction)
 import           Development.IDE.Core.RuleTypes  (TcModuleResult (..),
                                                   TypeCheck (..))
@@ -46,13 +42,12 @@ import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
                                                   HsExpr (RecordCon, rcon_flds),
                                                   HsRecField, LHsExpr, LocatedA,
                                                   LocatedN, Name, Pass (..),
-                                                  Pat (..), RealSrcSpan,
-                                                  conPatDetails, getUnique,
+                                                  Pat (..), RealSrcSpan, UniqFM,
+                                                  conPatDetails, emptyUFM,
                                                   hfbPun, hfbRHS, hs_valds,
-                                                  mapConPatDetail, mapLoc,
-                                                  nameSrcSpan, nameUnique,
-                                                  pattern RealSrcSpan)
-import           Development.IDE.GHC.Compat.Util (Unique, nonDetCmpUnique)
+                                                  lookupUFM, mapConPatDetail,
+                                                  mapLoc, pattern RealSrcSpan,
+                                                  plusUFM_C, unitUFM)
 import           Development.IDE.GHC.Util        (getExtensions,
                                                   printOutputable)
 import           Development.IDE.Graph           (RuleResult)
@@ -171,17 +166,8 @@ getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
 
 -- | Collects all 'Name's of a given source file, to be used
 -- in the variable usage analysis.
-getNames :: TcModuleResult -> Map UniqueKey [LocatedN Name]
+getNames :: TcModuleResult -> UniqFM Name [LocatedN Name]
 getNames (tmrRenamed -> (group,_,_,_)) = collectNames group
-
-newtype UniqueKey = UniqueKey Unique
-                  deriving newtype Eq
-
-getUniqueKey :: Name -> UniqueKey
-getUniqueKey = UniqueKey . nameUnique
-
-instance Ord UniqueKey where
-  compare (UniqueKey u1) (UniqueKey u2) = getUnique u1 `nonDetCmpUnique` getUnique u2
 
 data CollectRecords = CollectRecords
                     deriving (Eq, Show, Generic)
@@ -228,30 +214,29 @@ instance Pretty RenderedRecordInfo where
 
 instance NFData RenderedRecordInfo
 
-renderRecordInfo :: Map UniqueKey [LocatedN Name] -> RecordInfo -> Maybe RenderedRecordInfo
+renderRecordInfo :: UniqFM Name [LocatedN Name] -> RecordInfo -> Maybe RenderedRecordInfo
 renderRecordInfo names (RecordInfoPat ss pat) = RenderedRecordInfo ss <$> showRecordPat names pat
 renderRecordInfo _ (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecordCon expr
 
--- | Checks if a 'Name' is referenced in a given list of names. The 'Eq'
--- instance of 'Name's makes use of their unique identifiers, hence any
--- to 'Name' referring to the same entity is considered equal. In order
--- to ensure that no false-positive is reported (in the case where the
--- 'name' itself is part of the given list), the inequality of source
--- locations is also checked.
-referencedIn :: Name -> Map UniqueKey [LocatedN Name] -> Bool
-referencedIn name names = maybe True hasNameRef $ Map.lookup (getUniqueKey name) names
+-- | Checks if a 'Name' is referenced in the given map of names. The
+-- 'hasNonBindingOcc' check is necessary in order to make sure that only the
+-- references at the use-sites are considered (i.e. the binding occurence
+-- is excluded). For more information regarding the structure of the map,
+-- refer to the documentation of 'collectNames'.
+referencedIn :: Name -> UniqFM Name [LocatedN Name] -> Bool
+referencedIn name names = maybe True hasNonBindingOcc $ lookupUFM names name
   where
-    hasNameRef :: [LocatedN Name] -> Bool
-    hasNameRef = isJust . find (\n -> realSpan (getLoc n) /= realSpan (nameSrcSpan name))
+    hasNonBindingOcc :: [LocatedN Name] -> Bool
+    hasNonBindingOcc = (> 1) . length
 
 -- Default to leaving the element in if somehow a name can't be extracted (i.e.
 -- `getName` returns `Nothing`).
-filterReferenced :: (a -> Maybe Name) -> Map UniqueKey [LocatedN Name] -> [a] -> [a]
+filterReferenced :: (a -> Maybe Name) -> UniqFM Name [LocatedN Name] -> [a] -> [a]
 filterReferenced getName names = filter (\x -> maybe True (`referencedIn` names) (getName x))
 
 preprocessRecordPat
   :: p ~ GhcPass 'Renamed
-  => Map UniqueKey [LocatedN Name]
+  => UniqFM Name [LocatedN Name]
   -> HsRecFields p (LPat p)
   -> HsRecFields p (LPat p)
 preprocessRecordPat = preprocessRecord (getFieldName . unLoc)
@@ -262,7 +247,7 @@ preprocessRecordPat = preprocessRecord (getFieldName . unLoc)
 
 -- No need to check the name usage in the record construction case
 preprocessRecordCon :: HsRecFields (GhcPass c) arg -> HsRecFields (GhcPass c) arg
-preprocessRecordCon = preprocessRecord (const Nothing) Map.empty
+preprocessRecordCon = preprocessRecord (const Nothing) emptyUFM
 
 -- We make use of the `Outputable` instances on AST types to pretty-print
 -- the renamed and expanded records back into source form, to be substituted
@@ -276,7 +261,7 @@ preprocessRecordCon = preprocessRecord (const Nothing) Map.empty
 preprocessRecord
   :: p ~ GhcPass c
   => (LocatedA (HsRecField p arg) -> Maybe Name)
-  -> Map UniqueKey [LocatedN Name]
+  -> UniqFM Name [LocatedN Name]
   -> HsRecFields p arg
   -> HsRecFields p arg
 preprocessRecord getName names flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
@@ -294,7 +279,7 @@ preprocessRecord getName names flds = flds { rec_dotdot = Nothing , rec_flds = r
     punsUsed = filterReferenced getName names puns'
     rec_flds' = no_puns <> punsUsed
 
-showRecordPat :: Outputable (Pat (GhcPass 'Renamed)) => Map UniqueKey [LocatedN Name] -> Pat (GhcPass 'Renamed) -> Maybe Text
+showRecordPat :: Outputable (Pat (GhcPass 'Renamed)) => UniqFM Name [LocatedN Name] -> Pat (GhcPass 'Renamed) -> Maybe Text
 showRecordPat names = fmap printOutputable . mapConPatDetail (\case
   RecCon flds -> Just $ RecCon (preprocessRecordPat names flds)
   _           -> Nothing)
@@ -308,8 +293,20 @@ showRecordCon _ = Nothing
 collectRecords :: GenericQ [RecordInfo]
 collectRecords = everything (<>) (maybeToList . (Nothing `mkQ` getRecPatterns `extQ` getRecCons))
 
-collectNames :: GenericQ (Map UniqueKey [LocatedN Name])
-collectNames = everything (Map.unionWith (<>)) (Map.empty `mkQ` (\x -> Map.singleton (getUniqueKey (unLoc x)) [x]))
+-- | Collect 'Name's into a map, indexed by the names' unique identifiers.
+-- The 'Eq' instance of 'Name's makes use of their unique identifiers, hence
+-- any 'Name' referring to the same entity is considered equal. In effect,
+-- each individual list of names contains the binding occurence, along with
+-- all the occurences at the use-sites (if there are any).
+--
+-- @UniqFM Name [LocatedN Name]@ is morally the same as @Map Unique [LocatedN
+-- Name]@. Using 'UniqFM' gains us a bit of performance (in theory) since it
+-- internally uses 'IntMap', and saves us rolling our own newtype wrapper over
+-- 'Unique' (since 'Unique' doesn't have an 'Ord' instance, it can't be used
+-- as 'Map' key as is). More information regarding 'UniqFM' can be found in
+-- the GHC source.
+collectNames :: GenericQ (UniqFM Name [LocatedN Name])
+collectNames = everything (plusUFM_C (<>)) (emptyUFM `mkQ` (\x -> unitUFM (unLoc x) [x]))
 
 getRecCons :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordInfo
 getRecCons e@(unLoc -> RecordCon _ _ flds)
