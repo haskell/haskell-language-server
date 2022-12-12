@@ -292,6 +292,7 @@ fromIdentInfo doc id@IdentInfo{..} q = CI
   , insertText=rend
   , provenance = DefinedIn mod
   , label=rend
+  , typeText = Nothing
   , isInfix=Nothing
   , isTypeCompl= not (isDatacon id) && isUpper (T.head rend)
   , additionalTextEdits= Just $
