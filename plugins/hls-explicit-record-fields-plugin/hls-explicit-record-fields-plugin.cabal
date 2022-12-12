@@ -39,7 +39,6 @@ library
       , ghc-boot-th
       , unordered-containers
       , containers
-      , extra
     hs-source-dirs:   src
     default-language: Haskell2010
 

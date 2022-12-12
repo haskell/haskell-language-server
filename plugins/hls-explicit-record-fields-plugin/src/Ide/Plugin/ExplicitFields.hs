@@ -16,7 +16,6 @@ module Ide.Plugin.ExplicitFields
   ) where
 
 import           Control.Lens                    ((^.))
-import           Control.Monad.Extra             (maybeM)
 import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Control.Monad.Trans.Except      (ExceptT)
 import           Data.Generics                   (GenericQ, everything, extQ,
@@ -143,22 +142,21 @@ codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginRes
 
 collectRecordsRule :: Recorder (WithPriority Log) -> Rules ()
 collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectRecords nfp ->
-  justOrFail "Unable to TypeCheck" (use TypeCheck nfp) $ \tmr -> do
-    let exts = getEnabledExtensions tmr
-        recs = getRecords tmr
-    logWith recorder Debug (LogCollectedRecords recs)
-    let names = getNames tmr
-        renderedRecs = traverse (renderRecordInfo names) recs
-        recMap = RangeMap.fromList (realSrcSpanToRange . renderedSrcSpan) <$> renderedRecs
-    logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
-    pure ([], CRR <$> recMap <*> Just exts)
+  use TypeCheck nfp >>= \case
+    Nothing -> pure ([], Nothing)
+    Just tmr -> do
+      let exts = getEnabledExtensions tmr
+          recs = getRecords tmr
+      logWith recorder Debug (LogCollectedRecords recs)
+      let names = getNames tmr
+          renderedRecs = traverse (renderRecordInfo names) recs
+          recMap = RangeMap.fromList (realSrcSpanToRange . renderedSrcSpan) <$> renderedRecs
+      logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
+      pure ([], CRR <$> recMap <*> Just exts)
 
   where
     getEnabledExtensions :: TcModuleResult -> [GhcExtension]
     getEnabledExtensions = map GhcExtension . getExtensions . tmrParsed
-
-    justOrFail :: MonadFail m => String -> m (Maybe a) -> (a -> m b) -> m b
-    justOrFail = flip . maybeM . fail
 
 getRecords :: TcModuleResult -> [RecordInfo]
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
