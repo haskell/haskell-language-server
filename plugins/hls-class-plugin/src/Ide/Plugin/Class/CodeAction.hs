@@ -117,22 +117,24 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                 $ nubBy (\(_, x) (_,y) -> x == y)
                 $ filter ((/=) mempty . snd)
                 $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
-                $ mkSuggestions range sigs cls
+                $ mkMethodGroups range sigs cls
             where
                 range = diag ^. J.range
-                mkSuggestions range sigs cls = minimalDef <> [allClassMethods]
+
+                mkMethodGroups :: Range -> [InstanceBindTypeSig] -> Class -> [MethodGroup]
+                mkMethodGroups range sigs cls = minimalDef <> [allClassMethods]
                     where
                         minimalDef = minDefToMethodGroups range sigs $ classMinimalDef cls
-                        allClassMethods = foo range sigs
+                        allClassMethods = ("all missing methods", makeMethodDefinitions range sigs)
 
-                mkAction :: Suggestion -> [Command |? CodeAction]
-                mkAction (name, methodGroup)
+                mkAction :: MethodGroup -> [Command |? CodeAction]
+                mkAction (name, methods)
                     = [ mkCodeAction title
                             $ mkLspCommand plId codeActionCommandId title
-                                (Just $ mkCmdParams methodGroup False)
+                                (Just $ mkCmdParams methods False)
                       , mkCodeAction titleWithSig
                             $ mkLspCommand plId codeActionCommandId titleWithSig
-                                (Just $ mkCmdParams methodGroup True)
+                                (Just $ mkCmdParams methods True)
                       ]
                     where
                         title = "Add placeholders for " <> name
@@ -211,40 +213,36 @@ isInstanceValBind :: ContextInfo -> Bool
 isInstanceValBind (ValBind InstanceBind _ _) = True
 isInstanceValBind _                          = False
 
-type MethodSig = T.Text
+type MethodSignature = T.Text
 type MethodName = T.Text
-type MethodGroup = (MethodName, MethodSig)
-type Suggestion = (T.Text, [MethodGroup])
+type MethodDefinition = (MethodName, MethodSignature)
+type MethodGroup = (T.Text, [MethodDefinition])
 
-makeMethodGroup :: InstanceBindTypeSig -> MethodGroup
-makeMethodGroup sig = (name, signature) 
+makeMethodDefinition :: InstanceBindTypeSig -> MethodDefinition
+makeMethodDefinition sig = (name, signature) 
     where
         name = T.drop (T.length bindingPrefix) (printOutputable  (bindName sig))
         signature = bindRendered sig
 
-foo :: Range -> [InstanceBindTypeSig] -> Suggestion
-foo range sigs = ("all missing methods", methodGroups)
+makeMethodDefinitions :: Range -> [InstanceBindTypeSig] -> [MethodDefinition]
+makeMethodDefinitions range sigs = 
+    [ makeMethodDefinition sig
+    | sig <- sigs
+    , inRange range (getSrcSpan $ bindName sig)
+    ]
+
+signatureToName :: InstanceBindTypeSig -> T.Text
+signatureToName sig = T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
+
+-- Return [groupName text, [(methodName text, signature text)]]
+minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [MethodGroup]
+minDefToMethodGroups range sigs minDef = makeMethodGroup <$> go minDef
     where
-        methodGroups = [ makeMethodGroup sig
-                        | sig <- sigs
-                        , inRange range (getSrcSpan $ bindName sig)
-                       ]
+        makeMethodGroup methodDefinitions = 
+            let name = mconcat $ intersperse "," $ (\x -> "'" <> x <> "'") . fst <$> methodDefinitions
+            in  (name, methodDefinitions)
 
--- Return (name text, signature text)
-minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [Suggestion]
-minDefToMethodGroups range sigs minDef = suggestions
-    where
-        makeSuggestion methodGroup = 
-            let name = mconcat $ intersperse "," $ (\x -> "'" <> x <> "'") . fst <$> methodGroup
-            in  (name, methodGroup)
-
-        suggestions = makeSuggestion <$> go minDef
-
-        go (Var mn)   = [[ makeMethodGroup sig
-                        | sig <- sigs
-                        , inRange range (getSrcSpan $ bindName sig)
-                        , printOutputable mn == T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
-                        ]]
+        go (Var mn)   = pure $ makeMethodDefinitions range $ filter ((==) (printOutputable mn) . signatureToName) sigs
         go (Or ms)    = concatMap (go . unLoc) ms
         go (And ms)   = foldr (liftA2 (<>)) [[]] (fmap (go . unLoc) ms)
         go (Parens m) = go (unLoc m)
