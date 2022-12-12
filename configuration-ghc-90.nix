@@ -18,11 +18,10 @@ let
       # https://github.com/nikita-volkov/ptr-poker/issues/11
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
-      ghc-lib = hself.ghc-lib_9_2_4_20220729;
-      ghc-lib-parser = hself.ghc-lib-parser_9_2_4_20220729;
+      ghc-lib = hself.ghc-lib_9_2_5_20221107;
+      ghc-lib-parser = hself.ghc-lib-parser_9_2_5_20221107;
       ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_2_1_1;
 
-      Cabal = hself.Cabal_3_6_3_0;
       ormolu = hself.ormolu_0_5_0_1;
       fourmolu = hself.fourmolu_0_9_0_0;
       hlint = appendConfigureFlag (hself.callCabal2nix "hlint" inputs.hlint-341 {}) "-fghc-lib";

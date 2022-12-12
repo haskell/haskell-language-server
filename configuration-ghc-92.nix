@@ -30,7 +30,6 @@ let
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
-
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
