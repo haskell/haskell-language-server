@@ -299,11 +299,15 @@
             # @guibou: I'm not sure this is needed.
             hlint
             pkgs.haskellPackages.opentelemetry-extra
-            capstone tracy
+            capstone
             # ormolu
             # stylish-haskell
             pre-commit
-            ] ++ lib.optionals stdenv.isDarwin
+            ] ++ lib.optionals (!stdenv.isDarwin)
+                   [ # tracy has a build problem on macos.
+                     tracy
+                   ]
+              ++ lib.optionals stdenv.isDarwin
               (with darwin.apple_sdk.frameworks; [
                 Cocoa
                 CoreServices
