@@ -479,6 +479,7 @@ module Development.IDE.GHC.Compat.Core (
 #else
     Extension(..)
 #endif
+    UniqFM
     ) where
 
 import qualified GHC
@@ -513,7 +514,8 @@ import           GHC.Core.DataCon             hiding (dataConExTyCoVars)
 import qualified GHC.Core.DataCon             as DataCon
 import           GHC.Core.FamInstEnv          hiding (pprFamInst)
 import           GHC.Core.InstEnv
-import           GHC.Types.Unique.FM
+import           GHC.Types.Unique.FM hiding (UniqFM)
+import qualified GHC.Types.Unique.FM          as UniqFM
 #if MIN_VERSION_ghc(9,3,0)
 import qualified GHC.Driver.Config.Tidy       as GHC
 import qualified GHC.Data.Strict              as Strict
@@ -736,7 +738,8 @@ import           Type
 import           TysPrim
 import           TysWiredIn
 import           Unify
-import           UniqFM
+import           UniqFM hiding (UniqFM)
+import qualified UniqFM
 import           UniqSupply
 import           Var                          (Var (varName), setTyVarUnique,
                                                setVarUnique, varType)
@@ -1172,4 +1175,10 @@ pattern HsFieldBind {hfbAnn, hfbLHS, hfbRHS, hfbPun} <- HsRecField hfbAnn (SrcLo
 #if !MIN_VERSION_ghc_boot_th(9,4,1)
 pattern NamedFieldPuns :: Extension
 pattern NamedFieldPuns = RecordPuns
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+type UniqFM = UniqFM.UniqFM
+#else
+type UniqFM k = UniqFM.UniqFM
 #endif
