@@ -144,7 +144,7 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                useProperty)
 import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
-                                                               PluginId)
+                                                               PluginId, PluginDescriptor (pluginId), IdePlugins (IdePlugins))
 import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
 import System.Info.Extra (isWindows)
@@ -154,7 +154,7 @@ import qualified Development.IDE.Core.Shake as Shake
 import qualified Development.IDE.Types.Logger as Logger
 import qualified Development.IDE.Types.Shake as Shake
 import           Development.IDE.GHC.CoreFile
-import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
+import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)
 import Control.Monad.IO.Unlift
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Unit.Module.Graph
@@ -341,7 +341,7 @@ getParsedModuleWithCommentsRule recorder =
 getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags f = do
   opts <- getIdeOptions
-  cfg <- getClientConfigAction def
+  cfg <- getClientConfigAction
   pure $ f $ optModifyDynFlags opts cfg
 
 
@@ -1057,16 +1057,6 @@ getClientSettingsRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake 
   settings <- clientSettings <$> getIdeConfiguration
   return (LBS.toStrict $ B.encode $ hash settings, settings)
 
--- | Returns the client configuration stored in the IdeState.
--- You can use this function to access it from shake Rules
-getClientConfigAction :: Config -- ^ default value
-                      -> Action Config
-getClientConfigAction defValue = do
-  mbVal <- unhashed <$> useNoFile_ GetClientSettings
-  case A.parse (parseConfig defValue) <$> mbVal of
-    Just (Success c) -> return c
-    _                -> return defValue
-
 usePropertyAction ::
   (HasProperty s k t r) =>
   KeyNameProxy s ->
@@ -1074,8 +1064,7 @@ usePropertyAction ::
   Properties r ->
   Action (ToHsType t)
 usePropertyAction kn plId p = do
-  config <- getClientConfigAction def
-  let pluginConfig = configForPlugin config plId
+  pluginConfig <- getPluginConfigAction plId
   pure $ useProperty kn p $ plcConfig pluginConfig
 
 -- ---------------------------------------------------------------------

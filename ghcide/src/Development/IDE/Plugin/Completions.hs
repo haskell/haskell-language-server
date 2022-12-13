@@ -1,6 +1,7 @@
-{-# LANGUAGE CPP          #-}
-{-# LANGUAGE RankNTypes   #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP              #-}
+{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE RankNTypes       #-}
+{-# LANGUAGE TypeFamilies     #-}
 
 module Development.IDE.Plugin.Completions
     ( descriptor
@@ -10,13 +11,9 @@ module Development.IDE.Plugin.Completions
 
 import           Control.Concurrent.Async                 (concurrently)
 import           Control.Concurrent.STM.Stats             (readTVarIO)
-import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Maybe
-import           Data.Aeson
 import qualified Data.HashMap.Strict                      as Map
 import qualified Data.HashSet                             as Set
-import           Data.List                                (find)
 import           Data.Maybe
 import qualified Data.Text                                as T
 import           Development.IDE.Core.PositionMapping
@@ -25,8 +22,6 @@ import           Development.IDE.Core.Service             hiding (Log, LogShake)
 import           Development.IDE.Core.Shake               hiding (Log)
 import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error                (rangeToSrcSpan)
-import           Development.IDE.GHC.Util                 (printOutputable)
 import           Development.IDE.Graph
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
@@ -39,17 +34,15 @@ import           Development.IDE.Types.Logger             (Pretty (pretty),
                                                            Recorder,
                                                            WithPriority,
                                                            cmapWithPrio)
-import           GHC.Exts                                 (fromList, toList)
-import           Ide.Plugin.Config                        (Config)
 import           Ide.Types
 import qualified Language.LSP.Server                      as LSP
 import           Language.LSP.Types
-import qualified Language.LSP.VFS                         as VFS
 import           Numeric.Natural
 import           Text.Fuzzy.Parallel                      (Scored (..))
 
+import           Development.IDE.Core.Rules               (usePropertyAction)
 import qualified GHC.LanguageExtensions                   as LangExt
-import           Language.LSP.Types
+import qualified Ide.Plugin.Config                        as Config
 
 data Log = LogShake Shake.Log deriving Show
 
@@ -165,13 +158,20 @@ getCompletionsLSP ide plId
               (_, _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
                     plugins = idePlugins $ shakeExtras ide
-                config <- getCompletionsConfig plId
+                config <- liftIO $ runAction "" ide $ getCompletionsConfig plId
 
                 allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports
                 pure $ InL (List $ orderedCompletions allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])
       _ -> return (InL $ List [])
+
+getCompletionsConfig :: PluginId -> Action CompletionsConfig
+getCompletionsConfig pId =
+  CompletionsConfig
+    <$> usePropertyAction #snippetsOn pId properties
+    <*> usePropertyAction #autoExtendOn pId properties
+    <*> (Config.maxCompletions <$> getClientConfigAction)
 
 {- COMPLETION SORTING
    We return an ordered set of completions (local -> nonlocal -> global).

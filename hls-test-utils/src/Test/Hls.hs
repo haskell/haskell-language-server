@@ -87,11 +87,6 @@ import           Development.IDE.Types.Logger    (Doc, Logger (Logger),
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           GHC.Stack                       (emptyCallStack)
-import           Ide.Plugin.Config               (Config, PluginConfig,
-                                                  cabalFormattingProvider,
-                                                  formattingProvider, plugins)
-import           Ide.PluginUtils                 (idePluginsToPluginDesc,
-                                                  pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Test
 import           Language.LSP.Types              hiding
@@ -279,7 +274,7 @@ runSessionWithServerFormatter plugin formatter conf fp act = do
     [plugin recorder]
     def
       { formattingProvider = T.pack formatter
-      , plugins = M.singleton (T.pack formatter) conf
+      , plugins = M.singleton (PluginId $ T.pack formatter) conf
       }
     def
     fullCaps
@@ -337,7 +332,7 @@ runSessionWithCabalServerFormatter plugin formatter conf fp act = do
     [plugin recorder]
     def
       { cabalFormattingProvider = T.pack formatter
-      , plugins = M.singleton (T.pack formatter) conf
+      , plugins = M.singleton (PluginId $ T.pack formatter) conf
       }
     def
     fullCaps
@@ -385,12 +380,11 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
         -- exists until old logging style is phased out
         logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
 
-        arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmapWithPrio LogIDEMain recorder) logger
+        hlsPlugins = IdePlugins $ Test.blockCommandDescriptor "block-command" : plugins
 
-        hlsPlugins =
-            plugins
-            ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
-            ++ idePluginsToPluginDesc argsHlsPlugins
+        arguments@Arguments{ argsIdeOptions, argsLogger } =
+            testing (cmapWithPrio LogIDEMain recorder) logger hlsPlugins
+
         ideOptions config ghcSession =
             let defIdeOptions = argsIdeOptions config ghcSession
             in defIdeOptions
@@ -406,7 +400,6 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
                 , argsDefaultHlsConfig = conf
                 , argsLogger = argsLogger
                 , argsIdeOptions = ideOptions
-                , argsHlsPlugins = pluginDescToIdePlugins hlsPlugins
                 }
 
     x <- runSessionWithHandles inW outR sconf caps root s

@@ -43,9 +43,7 @@ import           Development.IDE.Graph.Classes (Hashable, NFData)
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
 import           GHC.Generics (Generic)
 import           Generics.SYB hiding (Generic)
-import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
 import           Language.Haskell.GHC.ExactPrint (Transform, modifyAnnsT, addAnnotationsForPretty)
 import           Language.LSP.Server (MonadLsp, sendNotification)
@@ -184,13 +182,13 @@ properties = emptyProperties
 
 
 -- | Get the the plugin config
-getTacticConfig :: MonadLsp Plugin.Config m => PluginId -> m Config
-getTacticConfig pId =
+getTacticConfigAction :: PluginId -> Action Config
+getTacticConfigAction pId =
   Config
-    <$> usePropertyLsp #max_use_ctor_actions pId properties
-    <*> usePropertyLsp #timeout_duration pId properties
-    <*> usePropertyLsp #auto_gas pId properties
-    <*> usePropertyLsp #proofstate_styling pId properties
+    <$> usePropertyAction #max_use_ctor_actions pId properties
+    <*> usePropertyAction #timeout_duration pId properties
+    <*> usePropertyAction #auto_gas pId properties
+    <*> usePropertyAction #proofstate_styling pId properties
 
 
 getIdeDynflags

@@ -43,7 +43,6 @@ import           Data.Aeson.Types                                   (FromJSON (.
                                                                      ToJSON (..),
                                                                      Value (..))
 import qualified Data.ByteString                                    as BS
-import           Data.Default
 import           Data.Hashable
 import qualified Data.HashMap.Strict                                as Map
 import           Data.Maybe
@@ -54,8 +53,7 @@ import           Development.IDE                                    hiding
                                                                     (Error,
                                                                      getExtensions)
 import           Development.IDE.Core.Rules                         (defineNoFile,
-                                                                     getParsedModuleWithComments,
-                                                                     usePropertyAction)
+                                                                     getParsedModuleWithComments)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
 import qualified Refact.Apply                                       as Refact
 import qualified Refact.Types                                       as Refact
@@ -110,7 +108,8 @@ import           Ide.Plugin.Config                                  hiding
                                                                     (Config)
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
-import           Ide.Types
+import           Ide.Types                                          hiding
+                                                                    (Config)
 import           Language.Haskell.HLint                             as Hlint hiding
                                                                              (Error)
 import           Language.LSP.Server                                (ProgressCancellable (Cancellable),
@@ -200,8 +199,8 @@ type instance RuleResult GetHlintDiagnostics = ()
 rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plugin = do
   define (cmapWithPrio LogShake recorder) $ \GetHlintDiagnostics file -> do
-    config <- getClientConfigAction def
-    let hlintOn = pluginEnabledConfig plcDiagnosticsOn plugin config
+    config <- getPluginConfigAction plugin
+    let hlintOn = pluginEnabledConfig plcDiagnosticsOn config
     ideas <- if hlintOn then getIdeas recorder file else return (Right [])
     return (diagnostics file ideas, Just ())
 

@@ -17,6 +17,7 @@ import qualified Data.Text               as T
 import           Ide.Plugin.Config       (Config (..), PluginConfig (..))
 import qualified Ide.Plugin.Config       as Plugin
 import qualified Ide.Plugin.Hlint        as HLint
+import           Ide.Types               (PluginId)
 import qualified Language.LSP.Types.Lens as L
 import           System.FilePath         ((</>))
 import           Test.Hls
@@ -340,12 +341,6 @@ testHlintDiagnostics :: TextDocumentIdentifier -> Session ()
 testHlintDiagnostics doc = do
     diags <- waitForDiagnosticsFromSource doc "hlint"
     liftIO $ length diags > 0 @? "There are hlint diagnostics"
-
-pluginGlobalOn :: Config -> T.Text -> Bool -> Config
-pluginGlobalOn config pid state = config'
-  where
-      pluginConfig = def { plcGlobalOn = state }
-      config' = def { plugins = Map.insert pid pluginConfig (plugins config) }
 
 hlintConfigWithFlags :: [T.Text] -> Config
 hlintConfigWithFlags flags =

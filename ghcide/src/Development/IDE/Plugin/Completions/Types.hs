@@ -19,12 +19,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph        (RuleResult)
 import           Development.IDE.Spans.Common
 import           GHC.Generics                 (Generic)
-import           Ide.Plugin.Config            (Config)
-import qualified Ide.Plugin.Config            as Config
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils              (getClientConfig, usePropertyLsp)
-import           Ide.Types                    (PluginId)
-import           Language.LSP.Server          (MonadLsp)
 import           Language.LSP.Types           (CompletionItemKind (..), Uri)
 import qualified Language.LSP.Types           as J
 
@@ -60,13 +55,6 @@ properties = emptyProperties
   & defineBooleanProperty #autoExtendOn
     "Extends the import list automatically when completing a out-of-scope identifier"
     True
-
-getCompletionsConfig :: (MonadLsp Config m) => PluginId -> m CompletionsConfig
-getCompletionsConfig pId =
-  CompletionsConfig
-    <$> usePropertyLsp #snippetsOn pId properties
-    <*> usePropertyLsp #autoExtendOn pId properties
-    <*> (Config.maxCompletions <$> getClientConfig)
 
 
 data CompletionsConfig = CompletionsConfig {
