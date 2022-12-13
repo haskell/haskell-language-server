@@ -477,9 +477,9 @@ module Development.IDE.GHC.Compat.Core (
 #if !MIN_VERSION_ghc_boot_th(9,4,1)
     Extension(.., NamedFieldPuns),
 #else
-    Extension(..)
+    Extension(..),
 #endif
-    UniqFM
+    UniqFM,
     ) where
 
 import qualified GHC
