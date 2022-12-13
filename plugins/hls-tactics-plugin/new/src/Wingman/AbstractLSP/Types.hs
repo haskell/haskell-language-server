@@ -17,7 +17,7 @@ import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (Target)
 import           GHC.Generics (Generic)
 import qualified Ide.Plugin.Config as Plugin
-import           Ide.Types
+import           Ide.Types hiding (Config)
 import           Language.LSP.Server (LspM)
 import           Language.LSP.Types hiding (CodeLens, CodeAction)
 import           Wingman.LanguageServer (judgementForHole)

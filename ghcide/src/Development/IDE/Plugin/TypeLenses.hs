@@ -27,7 +27,8 @@ import qualified Data.Text                           as T
 import           Development.IDE                     (GhcSession (..),
                                                       HscEnvEq (hscEnv),
                                                       RuleResult, Rules, define,
-                                                      srcSpanToRange)
+                                                      srcSpanToRange,
+                                                      usePropertyAction)
 import           Development.IDE.Core.Compile        (TcModuleResult (..))
 import           Development.IDE.Core.Rules          (IdeState, runAction)
 import           Development.IDE.Core.RuleTypes      (GetBindings (GetBindings),
@@ -49,8 +50,7 @@ import           Development.IDE.Types.Logger        (Pretty (pretty), Recorder,
 import           GHC.Generics                        (Generic)
 import           Ide.Plugin.Config                   (Config)
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils                     (mkLspCommand,
-                                                      usePropertyLsp)
+import           Ide.PluginUtils                     (mkLspCommand)
 import           Ide.Types                           (CommandFunction,
                                                       CommandId (CommandId),
                                                       PluginCommand (PluginCommand),
@@ -105,7 +105,7 @@ codeLensProvider ::
   CodeLensParams ->
   LSP.LspM Config (Either ResponseError (List CodeLens))
 codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
-  mode <- usePropertyLsp #mode pId properties
+  mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
   fmap (Right . List) $ case uriToFilePath' uri of
     Just (toNormalizedFilePath' -> filePath) -> liftIO $ do
       env <- fmap hscEnv <$> runAction "codeLens.GhcSession" ideState (use GhcSession filePath)

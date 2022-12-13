@@ -35,7 +35,7 @@ hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) (unsafeMkCurr
       let loc = fmap (realSrcLocSpan . positionToRealSrcLoc nfp) pos
           stale = unsafeRunStaleIdeFast "hoverProvider" state nfp
 
-      cfg <- getTacticConfig plId
+      cfg <- liftIO $ runIde "plugin" "config" state (getTacticConfigAction plId)
       liftIO $ fromMaybeT (Right Nothing) $ do
         holes <- stale GetMetaprograms
 
