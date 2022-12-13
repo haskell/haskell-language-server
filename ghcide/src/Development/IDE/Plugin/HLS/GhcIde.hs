@@ -54,7 +54,7 @@ descriptor plId = (defaultPluginDescriptor plId)
                   <> mkPluginHandler STextDocumentReferences (\ide _ params -> references ide params)
                   <> mkPluginHandler SWorkspaceSymbol (\ide _ params -> wsSymbols ide params),
 
-    pluginConfigDescriptor = defaultConfigDescriptor {configEnableGenericConfig = False}
+    pluginConfigDescriptor = defaultConfigDescriptor
   }
 
 -- ---------------------------------------------------------------------

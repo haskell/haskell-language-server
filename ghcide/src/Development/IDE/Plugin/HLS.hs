@@ -106,12 +106,17 @@ asGhcIdePlugin recorder (IdePlugins ls) =
     mkPlugin (executeCommandPlugins recorder) HLS.pluginCommands <>
     mkPlugin (extensiblePlugins recorder) id <>
     mkPlugin (extensibleNotificationPlugins recorder) id <>
-    mkPlugin dynFlagsPlugins HLS.pluginModifyDynflags
+    mkPluginFromDescriptor dynFlagsPlugins HLS.pluginModifyDynflags
     where
+        mkPlugin f = mkPluginFromDescriptor (f . map (first pluginId))
 
-        mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor IdeState -> b) -> Plugin Config
-        mkPlugin maker selector =
-          case map (\p -> (pluginId p, selector p)) ls of
+        mkPluginFromDescriptor
+            :: ([(PluginDescriptor IdeState, b)]
+            -> Plugin Config)
+            -> (PluginDescriptor IdeState -> b)
+            -> Plugin Config
+        mkPluginFromDescriptor maker selector =
+          case map (\p -> (p, selector p)) ls of
             -- If there are no plugins that provide a descriptor, use mempty to
             -- create the plugin – otherwise we we end up declaring handlers for
             -- capabilities that there are no plugins for
@@ -125,7 +130,7 @@ rulesPlugins rs = mempty { P.pluginRules = rules }
     where
         rules = foldMap snd rs
 
-dynFlagsPlugins :: [(PluginId, DynFlagsModifications)] -> Plugin Config
+dynFlagsPlugins :: [(PluginDescriptor c, DynFlagsModifications)] -> Plugin Config
 dynFlagsPlugins rs = mempty
   { P.pluginModifyDynflags =
       flip foldMap rs $ \(plId, dflag_mods) cfg ->

@@ -7,11 +7,9 @@ module Ide.Plugin.Eval.Config
   , EvalConfig(..)
   ) where
 
-import           Ide.Plugin.Config     (Config)
+import           Development.IDE
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils       (usePropertyLsp)
 import           Ide.Types             (PluginId)
-import           Language.LSP.Server   (MonadLsp)
 
 -- | The Eval plugin configuration. (see 'properties')
 data EvalConfig = EvalConfig
@@ -30,8 +28,8 @@ properties = emptyProperties
   & defineBooleanProperty #exception
     "Enable marking exceptions with `*** Exception:` similarly to doctest and GHCi." False
 
-getEvalConfig :: (MonadLsp Config m) => PluginId -> m EvalConfig
+getEvalConfig :: PluginId -> Action EvalConfig
 getEvalConfig plId =
     EvalConfig
-    <$> usePropertyLsp #diff plId properties
-    <*> usePropertyLsp #exception plId properties
+    <$> usePropertyAction #diff plId properties
+    <*> usePropertyAction #exception plId properties
