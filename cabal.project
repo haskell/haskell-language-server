@@ -81,6 +81,12 @@ source-repository-package
   -- https://github.com/tibbe/ekg-json/pull/12
 -- END DELETE
 
+source-repository-package
+  type:git
+  location: https://github.com/wavewave/apply-refact
+  tag: b5594f9a274234879b1c0ce2834c2d5df4b1b48a
+  -- https://github.com/wavewave/apply-refact/pull/1
+
 allow-newer:
   -- ghc-9.4
   Chart-diagrams:lens,
