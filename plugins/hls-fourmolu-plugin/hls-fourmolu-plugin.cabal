@@ -45,6 +45,9 @@ library
     , process-extras  >= 0.7.1
     , text
 
+  -- fourmolu 0.9.0 fails to build on Windows CI for reasons unknown
+  if impl(ghc >= 9.2) && os(windows) && impl(ghc < 9.4)
+     build-depends: fourmolu > 0.9.0.0 || < 0.9.0.0
   default-language: Haskell2010
 
 test-suite tests
