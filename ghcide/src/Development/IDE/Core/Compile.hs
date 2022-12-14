@@ -158,9 +158,9 @@ computePackageDeps env pkg = do
             T.pack $ "unknown package: " ++ show pkg]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
-data TypecheckHelpers
+newtype TypecheckHelpers
   = TypecheckHelpers
-  { getLinkables       :: !([NormalizedFilePath] -> IO [LinkableResult])
+  { getLinkables       :: ([NormalizedFilePath] -> IO [LinkableResult]) -- ^ hls-graph action to get linkables for files
   }
 
 typecheckModule :: IdeDefer
