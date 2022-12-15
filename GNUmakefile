@@ -40,7 +40,9 @@ RM_RF     := $(RM) -rf
 CD        := cd
 
 # by default don't run ghcup
-GHCUP     ?= echo
+GHCUP       ?= echo
+
+CABAL_CACHE_BIN ?= echo
 
 ifeq ($(UNAME), Darwin)
 DLL       := *.dylib
@@ -54,9 +56,13 @@ STORE_DIR        := store
 BINDIST_BASE_DIR := out/bindist
 BINDIST_OUT_DIR  := $(BINDIST_BASE_DIR)/haskell-language-server-$(HLS_VERSION)
 
-CABAL_ARGS         ?= --store-dir=$(ROOT_DIR)/$(STORE_DIR)
-CABAL_INSTALL_ARGS ?= --disable-tests --disable-profiling -O2 --overwrite-policy=always --install-method=copy
-CABAL_INSTALL      := $(CABAL) $(CABAL_ARGS) v2-install
+CABAL_BASE_ARGS         ?= --store-dir=$(ROOT_DIR)/$(STORE_DIR)
+CABAL_ARGS              ?= --disable-tests --disable-profiling -O2
+CABAL_INSTALL_ARGS      ?= --overwrite-policy=always --install-method=copy
+CABAL_INSTALL           := $(CABAL) $(CABAL_BASE_ARGS) v2-install
+
+S3_HOST ?=
+S3_KEY  ?=
 
 # set rpath relative to the current executable
 # TODO: on darwin, this doesn't overwrite rpath, but just adds to it,
@@ -67,26 +73,32 @@ endef
 
 hls: bindist/ghcs
 	for ghc in $(shell [ -e "bindist/ghcs-`uname -o`" ] && cat "bindist/ghcs-`uname -o`" || cat "bindist/ghcs") ; do \
-		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
-		$(GHCUP) -v gc -p -s -c && \
-		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` PROJECT_FILE=`echo $$ghc | $(AWK) -F ',' '{ print $$2 }'` hls-ghc && \
-		$(GHCUP) -v rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
+		$(GHCUP) install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
+		$(GHCUP) gc -p -s -c -t && \
+		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` PROJECT_FILE=`echo $$ghc | $(AWK) -F ',' '{ print $$2 }'` hls-ghc || exit 1 ; \
+		$(GHCUP) rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
 	done
 
 hls-ghc:
 	$(MKDIR_P) out/
 	@if test -z "$(GHC_VERSION)" ; then echo >&2 "GHC_VERSION is not set" ; false ; fi
 	@if test -z "$(PROJECT_FILE)" ; then echo >&2 "PROJECT_FILE is not set" ; false ; fi
-	$(CABAL_INSTALL) --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_INSTALL_ARGS) --installdir="$(ROOT_DIR)/out/$(GHC_VERSION)" exe:haskell-language-server exe:haskell-language-server-wrapper
+	$(CABAL) $(CABAL_BASE_ARGS) configure --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) exe:haskell-language-server exe:haskell-language-server-wrapper
+	$(CABAL) $(CABAL_BASE_ARGS) build --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) --dependencies-only --dry-run exe:haskell-language-server exe:haskell-language-server-wrapper
+	$(CABAL_CACHE_BIN) sync-from-archive --host-name-override=$(S3_HOST) --host-port-override=443 --host-ssl-override=True --region us-west-2 --store-path="$(ROOT_DIR)/$(STORE_DIR)" --archive-uri "s3://haskell-language-server/$(S3_KEY)"
+	$(CABAL) $(CABAL_BASE_ARGS) build --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) --dependencies-only exe:haskell-language-server exe:haskell-language-server-wrapper
+	$(CABAL_CACHE_BIN) sync-to-archive --host-name-override=$(S3_HOST) --host-port-override=443 --host-ssl-override=True --region us-west-2 --store-path="$(ROOT_DIR)/$(STORE_DIR)" --archive-uri "s3://haskell-language-server/$(S3_KEY)"
+	$(CABAL_INSTALL) --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) $(CABAL_INSTALL_ARGS) --installdir="$(ROOT_DIR)/out/$(GHC_VERSION)" exe:haskell-language-server exe:haskell-language-server-wrapper
+	$(CABAL_CACHE_BIN) sync-to-archive --host-name-override=$(S3_HOST) --host-port-override=443 --host-ssl-override=True --region us-west-2 --store-path="$(ROOT_DIR)/$(STORE_DIR)" --archive-uri "s3://haskell-language-server/$(S3_KEY)"
 	$(STRIP_S) "$(ROOT_DIR)/out/$(GHC_VERSION)/haskell-language-server"
 	$(STRIP_S) "$(ROOT_DIR)/out/$(GHC_VERSION)/haskell-language-server-wrapper"
 
 bindist:
 	for ghc in $(shell [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" || cat "bindist/ghcs") ; do \
-		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
-		$(GHCUP) -v gc -p -s -c && \
-		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` bindist-ghc && \
-		$(GHCUP) -v rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
+		$(GHCUP) install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
+		$(GHCUP) gc -p -s -c -t && \
+		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` bindist-ghc || exit 1 ; \
+		$(GHCUP) rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
 	done
 	$(SED) -e "s/@@HLS_VERSION@@/$(HLS_VERSION)/" \
 		bindist/GNUmakefile.in > "$(BINDIST_OUT_DIR)/GNUmakefile"

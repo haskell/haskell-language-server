@@ -1,0 +1,22 @@
+freebsd_instance:
+  image_family: freebsd-13-1
+
+task:
+  timeout_in: 120m
+  env:
+    AWS_ACCESS_KEY_ID: ENCRYPTED[7e381ce808bf572cdde8ea4b7023d06b631844d3dabfdb193b15e76a78555ad7f605afc34d8a51c69ab1b277c3c2e304]
+    AWS_SECRET_ACCESS_KEY: ENCRYPTED[640639db00f954f466c90613b79ae3b364268cd153c7e4f8cab16c75c2bdf72c9ffe18f14b4f0ae2fc0bdf21beadb3f2]
+    S3_HOST: ENCRYPTED[ef3162480f5b404ac20c12fb8cb55b664102463cea1b49cec4260b67e22f0b4b8da51c9c547a5c3da8ef22146459e324]
+    TARBALL_EXT: "tar.xz"
+    ARCH: 64
+    ARTIFACT: "x86_64-freebsd"
+    DISTRO: "na"
+    RUNNER_OS: "FreeBSD"
+    ADD_CABAL_ARGS: "--enable-split-sections"
+    GITHUB_WORKSPACE: ${CIRRUS_WORKING_DIR}
+  install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf
+  script:
+    - bash .github/scripts/build.sh
+  binaries_artifacts:
+    path: "out/*"
+
