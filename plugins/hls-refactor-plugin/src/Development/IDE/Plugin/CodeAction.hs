@@ -68,6 +68,7 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger                      hiding
                                                                    (group)
 import           Development.IDE.Types.Options
+import qualified GHC.Data.EnumSet                                  as ES
 import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
 #if MIN_VERSION_ghc(9,4,0)
@@ -240,7 +241,7 @@ extendImportHandler' ideState ExtendImport {..}
                   extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
 
         Nothing -> do
-            let n = newImport importName sym importQual False
+            let n = newImport importName sym importQual False (isPostQualifiedImport df)
                 sym = if isNothing importQual then Just it else Nothing
                 it = case thingParent of
                   Nothing -> newThing
@@ -249,6 +250,11 @@ extendImportHandler' ideState ExtendImport {..}
             return (nfp, WorkspaceEdit {_changes=Just (GHC.Exts.fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
+
+isPostQualifiedImport :: DynFlags -> Bool
+isPostQualifiedImport df = hasImportQualifedPostEnabled && hasPrePositiveQualifiedWarning
+    where hasImportQualifedPostEnabled = ES.member  ImportQualifiedPost (extensionFlags df)
+          hasPrePositiveQualifiedWarning = ES.member Opt_WarnPrepositiveQualifiedModule (warningFlags df)
 
 isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl GhcPs) -> Bool
 isWantedModule wantedModule Nothing (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
@@ -1417,8 +1423,8 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
             | otherwise -> []
         where moduleText = moduleNameText identInfo
 
-suggestNewImport :: ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
-suggestNewImport packageExportsMap ps fileContents Diagnostic{_message}
+suggestNewImport :: DynFlags -> ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
+suggestNewImport df packageExportsMap ps fileContents Diagnostic{_message}
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
   , qual <- extractQualifiedModuleName msg
@@ -1431,15 +1437,15 @@ suggestNewImport packageExportsMap ps fileContents Diagnostic{_message}
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
   = let suggestions = nubSortBy simpleCompareImportSuggestion
-          (constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions) in
+          (constructNewImportSuggestions df packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions) in
     map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
     L _ HsModule {..} = astA ps
-suggestNewImport _ _ _ _ = []
+suggestNewImport _ _ _ _ _ = []
 
 constructNewImportSuggestions
-  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [ImportSuggestion]
-constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrdBy simpleCompareImportSuggestion
+  :: DynFlags -> ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [ImportSuggestion]
+constructNewImportSuggestions df exportsMap (qual, thingMissing) notTheseModules = nubOrdBy simpleCompareImportSuggestion
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing] -- strip away qualified module names from the unknown name
   , identInfo <- maybe [] Set.toList $ (lookupOccEnv (getExportsMap exportsMap) (mkVarOrDataOcc name)) <> (lookupOccEnv (getExportsMap exportsMap) (mkTypeOcc name)) -- look up the modified unknown name in the export map
@@ -1451,7 +1457,7 @@ constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = 
   renderNewImport :: IdentInfo -> [ImportSuggestion]
   renderNewImport identInfo
     | Just q <- qual
-    = [ImportSuggestion importanceScore (quickFixImportKind "new.qualified") (newQualImport m q)]
+    = [ImportSuggestion importanceScore (quickFixImportKind "new.qualified") (newQualImport m q $ isPostQualifiedImport df)]
     | otherwise
     = [ImportSuggestion importanceScore (quickFixImportKind' "new" importStyle) (newUnqualImport m (renderImportStyle importStyle) False)
       | importStyle <- NE.toList $ importStyles identInfo] ++
@@ -1631,8 +1637,9 @@ newImport
   -> Maybe T.Text -- ^  the symbol
   -> Maybe T.Text -- ^ qualified name
   -> Bool -- ^ the symbol is to be imported or hidden
+  -> Bool -- ^ the qualified name is to be imported in postfix position
   -> NewImport
-newImport modName mSymbol mQual hiding = NewImport impStmt
+newImport modName mSymbol mQual hiding postfix = NewImport impStmt
   where
      symImp
             | Just symbol <- mSymbol
@@ -1641,20 +1648,22 @@ newImport modName mSymbol mQual hiding = NewImport impStmt
             | otherwise = ""
      impStmt =
        "import "
-         <> maybe "" (const "qualified ") mQual
-         <> modName
+         <> qualifiedModName
          <> (if hiding then " hiding" else "")
          <> symImp
          <> maybe "" (\qual -> if modName == qual then "" else " as " <> qual) mQual
+     qualifiedModName | isJust mQual && postfix = modName <> " qualified"
+                      | isJust mQual = "qualified " <> modName
+                      | otherwise = ""
 
-newQualImport :: T.Text -> T.Text -> NewImport
-newQualImport modName qual = newImport modName Nothing (Just qual) False
+newQualImport :: T.Text -> T.Text -> Bool -> NewImport
+newQualImport modName qual postfix = newImport modName Nothing (Just qual) False postfix
 
 newUnqualImport :: T.Text -> T.Text -> Bool -> NewImport
-newUnqualImport modName symbol = newImport modName (Just symbol) Nothing
+newUnqualImport modName symbol hiding  = newImport modName (Just symbol) Nothing hiding False
 
 newImportAll :: T.Text -> NewImport
-newImportAll modName = newImport modName Nothing Nothing False
+newImportAll modName = newImport modName Nothing Nothing False False
 
 hideImplicitPreludeSymbol :: T.Text -> NewImport
 hideImplicitPreludeSymbol symbol = newUnqualImport "Prelude" symbol True
