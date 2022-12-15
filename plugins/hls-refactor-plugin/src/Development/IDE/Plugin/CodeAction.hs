@@ -68,7 +68,6 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger                      hiding
                                                                    (group)
 import           Development.IDE.Types.Options
-import qualified GHC.Data.EnumSet                                  as ES
 import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
 #if MIN_VERSION_ghc(9,4,0)
@@ -253,8 +252,8 @@ extendImportHandler' ideState ExtendImport {..}
 
 isPostQualifiedImport :: DynFlags -> Bool
 isPostQualifiedImport df = hasImportQualifedPostEnabled && hasPrePositiveQualifiedWarning
-    where hasImportQualifedPostEnabled = ES.member  ImportQualifiedPost (extensionFlags df)
-          hasPrePositiveQualifiedWarning = ES.member Opt_WarnPrepositiveQualifiedModule (warningFlags df)
+    where hasImportQualifedPostEnabled = xopt ImportQualifiedPost df
+          hasPrePositiveQualifiedWarning = wopt Opt_WarnPrepositiveQualifiedModule df
 
 isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl GhcPs) -> Bool
 isWantedModule wantedModule Nothing (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
