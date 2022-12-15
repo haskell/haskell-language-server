@@ -1,0 +1,78 @@
+# release CI for FreeBSD
+compute_engine_instance:
+  image_project: freebsd-org-cloud-dev
+  image: family/freebsd-13-1
+  platform: freebsd
+  disk: 100 # Gb
+
+build_task:
+  name: build
+  timeout_in: 120m
+  only_if: $CIRRUS_TAG != ''
+  env:
+    AWS_ACCESS_KEY_ID: ENCRYPTED[25d5e1d29570da70ceeb75e842b98be63d110824997b3c6b7bc0735b8acc686fbe0e9995cfe4d22a61d707a2e705d48b]
+    AWS_SECRET_ACCESS_KEY: ENCRYPTED[7fc23de7b958e671dcb485ff0baef777b83fb472f0afdde940122c994bc1586710d69b9d25855768bfd201904f3654dd]
+    S3_HOST: ENCRYPTED[d3fef1b5850e85d80dd1684370b53183df2218f2d36509108a2703371afd9ebd3f9596ad4de52487c15ea29baed606b7]
+    TARBALL_EXT: "tar.xz"
+    ARCH: 64
+    ARTIFACT: "x86_64-freebsd"
+    DISTRO: "na"
+    RUNNER_OS: "FreeBSD"
+    ADD_CABAL_ARGS: "--enable-split-sections"
+    GITHUB_WORKSPACE: ${CIRRUS_WORKING_DIR}
+  install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree
+  script:
+    - tzsetup Etc/GMT
+    - adjkerntz -a
+    - bash .github/scripts/build.sh
+    - bash .github/scripts/test.sh
+      # binaries_cache: &binaries_cache
+      #   folder: out
+      #   fingerprint_script:
+      #     - ghc --numeric-version
+      #     - cat cabal.project
+      #     - cat haskell-language-server.cabal
+      #     - cat dist-newstyle/cache/plan.json
+  binaries_artifacts:
+    path: "out/*"
+
+    # release_task:
+    #   name: "Release"
+    #   only_if: $CIRRUS_TAG != ''
+    #   depends_on: build
+    #   env:
+    #     GITHUB_TOKEN: ENCRYPTED[9d9b54424cb18abc9067436c729a77e0486805eff1903bc5b2c591696850f8db7cebac3f29cfa3b119ebb6fd2e98a839]
+    #   install_script: pkg install -y curl bash jq
+    #   binaries_cache: *binaries_cache
+    #   upload_script: |
+    #     #!/bin/bash
+    #
+    #     if [[ "$CIRRUS_RELEASE" == "" ]]; then
+    #       NUM_TRIES=0
+    #       until [ $NUM_TRIES -eq 20 ]
+    #       do
+    #         echo "Retrying to find a release associated with this tag"
+    #         CIRRUS_RELEASE=$(curl -sL https://api.github.com/repos/$CIRRUS_REPO_FULL_NAME/releases/tags/$CIRRUS_TAG | jq -r '.id')
+    #         [[ "$CIRRUS_RELEASE" != "null" ]] && break
+    #         NUM_TRIES=$((NUM_TRIES+1))
+    #         sleep 30
+    #       done
+    #     fi
+    #
+    #     if [[ "$GITHUB_TOKEN" == "" ]]; then
+    #       echo "Please provide GitHub access token via GITHUB_TOKEN environment variable!"
+    #       exit 1
+    #     fi
+    #
+    #     for fpath in out/*
+    #     do
+    #       echo "Uploading $fpath..."
+    #       name=$(basename "$fpath")
+    #       url_to_upload="https://uploads.github.com/repos/$CIRRUS_REPO_FULL_NAME/releases/$CIRRUS_RELEASE/assets?name=$name"
+    #       echo "Uploading to $url_to_upload"
+    #       curl -X POST \
+    #         --data-binary @$fpath \
+    #         --header "Authorization: token $GITHUB_TOKEN" \
+    #         --header "Content-Type: application/x-xz-compressed-tar" \
+    #         $url_to_upload
+    #     done
