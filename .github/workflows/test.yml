@@ -76,6 +76,8 @@ jobs:
         # they are broken for good reasons, e.g. compiler is bugged
         # on that platform.
         exclude:
+           - os: windows-latest
+             ghc: '9.4.1'
            # Exclude until https://github.com/haskell/actions/issues/129
            # is resolved.
            - os: windows-latest
