@@ -65,7 +65,10 @@ constraints:
   -- https://github.com/ndmitchell/hlint/issues/1376
   hlint +ghc-lib,
   ghc-lib-parser-ex -auto,
-  stylish-haskell +ghc-lib
+  stylish-haskell +ghc-lib,
+  -- implicit-hie 0.1.3.0 introduced an unexpected behavioral change.
+  -- https://github.com/Avi-D-coder/implicit-hie/issues/50
+  implicit-hie < 0.1.3
 
 -- This is benign and won't affect our ability to release to Hackage,
 -- because we only depend on `ekg-json` when a non-default flag

@@ -91,6 +91,10 @@
       url = "github:July541/apply-refact/ghc-9.4";
       flake = false;
     };
+    implicit-hie = {
+      url = "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz";
+      flake = false;
+    };
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, all-cabal-hashes-unpacked, ... }:
@@ -158,6 +162,7 @@
               retrie = hsuper.callCabal2nix "retrie" inputs.retrie {};
               retrie_1_1_0_0 = hsuper.callCabal2nix "retrie" inputs.retrie_1100 {};
               apply-refactHEAD = hsuper.callCabal2nix "apply-refact" inputs.apply-refact {};
+              implicit-hie = hsuper.callCabal2nix "implicit-hie" inputs.implicit-hie {};
 
               # https://github.com/NixOS/nixpkgs/issues/140774
               ormolu =
