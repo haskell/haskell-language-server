@@ -9,6 +9,7 @@
 module Ide.Plugin.Fourmolu (
     descriptor,
     provider,
+    LogEvent,
 ) where
 
 import           Control.Exception               (IOException, try)
@@ -26,8 +27,7 @@ import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
 import           Ide.Plugin.Fourmolu.Shim
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils                 (makeDiffTextEdit,
-                                                  usePropertyLsp)
+import           Ide.PluginUtils                 (makeDiffTextEdit)
 import           Ide.Types
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types              hiding (line)
@@ -59,7 +59,7 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
     fileOpts <-
         maybe [] (convertDynFlags . hsc_dflags . hscEnv)
             <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
-    useCLI <- usePropertyLsp #external plId properties
+    useCLI <- liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #external plId properties
     if useCLI
         then liftIO
             . fmap (join . first (mkError . show))

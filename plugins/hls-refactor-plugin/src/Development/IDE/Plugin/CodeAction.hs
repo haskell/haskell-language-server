@@ -38,12 +38,12 @@ import           Data.Ord                                          (comparing)
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Utf16.Rope                              as Rope
-import           Data.Tuple.Extra                                  (first)
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake                        hiding (Log)
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat                        hiding
+                                                                   (ImplicitPrelude)
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
@@ -56,6 +56,11 @@ import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
 import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.Completions.Types
+import qualified Development.IDE.Plugin.Plugins.AddArgument
+import           Development.IDE.Plugin.Plugins.Diagnostic
+import           Development.IDE.Plugin.Plugins.FillHole           (suggestFillHole)
+import           Development.IDE.Plugin.Plugins.FillTypeWildcard   (suggestFillTypeWildcard)
+import           Development.IDE.Plugin.Plugins.ImportUtils
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
@@ -64,14 +69,13 @@ import           Development.IDE.Types.Logger                      hiding
 import           Development.IDE.Types.Options
 import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
-import           Ide.PluginUtils                                   (makeDiffTextEdit,
-                                                                    subRange)
+import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
 import           Language.LSP.Types                                (ApplyWorkspaceEditParams (..),
                                                                     CodeAction (..),
                                                                     CodeActionContext (CodeActionContext, _diagnostics),
-                                                                    CodeActionKind (CodeActionQuickFix, CodeActionUnknown),
+                                                                    CodeActionKind (CodeActionQuickFix),
                                                                     CodeActionParams (CodeActionParams),
                                                                     Command,
                                                                     Diagnostic (..),
@@ -89,15 +93,8 @@ import           Language.LSP.Types                                (ApplyWorkspa
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import qualified Text.Fuzzy.Parallel                               as TFP
-import           Text.Regex.TDFA                                   (mrAfter,
-                                                                    (=~), (=~~))
-#if MIN_VERSION_ghc(9,2,1)
-import           GHC.Types.SrcLoc                                  (generatedSrcSpan)
-import           Language.Haskell.GHC.ExactPrint                   (noAnnSrcSpanDP1,
-                                                                    runTransformT)
-#endif
+import           Text.Regex.TDFA                                   ((=~), (=~~))
 #if MIN_VERSION_ghc(9,2,0)
-import           Extra                                             (maybeToEither)
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
@@ -160,7 +157,7 @@ typeSigsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
   mkGhcideCAsPlugin [
       wrap $ suggestSignature True
     , wrap suggestFillTypeWildcard
-    , wrap suggestAddTypeAnnotationToSatisfyContraints
+    , wrap suggestAddTypeAnnotationToSatisfyConstraints
 #if !MIN_VERSION_ghc(9,3,0)
     , wrap removeRedundantConstraints
     , wrap suggestConstraint
@@ -176,9 +173,7 @@ bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestImplicitParameter
 #endif
     , wrap suggestNewDefinition
-#if MIN_VERSION_ghc(9,2,1)
-    , wrap suggestAddArgument
-#endif
+    , wrap Development.IDE.Plugin.Plugins.AddArgument.plugin
     , wrap suggestDeleteUnusedBinding
     ]
     plId
@@ -396,7 +391,7 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
     Just matched <- allMatchRegexUnifySpaces _message "imported from ‘([^’]+)’ at ([^ ]*)",
     mods <- [(modName, s) | [_, modName, s] <- matched],
     result <- nubOrdBy (compare `on` fst) $ mods >>= uncurry (suggests identifier),
-    hideAll <- ("Hide " <> identifier <> " from all occurence imports", concatMap snd result) =
+    hideAll <- ("Hide " <> identifier <> " from all occurrence imports", concatMap snd result) =
     result <> [hideAll]
   | otherwise = []
   where
@@ -793,8 +788,8 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportFamily, reLoc $ fdLName tcdFam)
     exportsAs _                                = Nothing
 
-suggestAddTypeAnnotationToSatisfyContraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAddTypeAnnotationToSatisfyContraints sourceOpt Diagnostic{_range=_range,..}
+suggestAddTypeAnnotationToSatisfyConstraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,..}
 -- File.hs:52:41: warning:
 --     * Defaulting the following constraint to type ‘Integer’
 --        Num p0 arising from the literal ‘1’
@@ -892,34 +887,6 @@ suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
         = [ ("Replace with ‘" <> name <> "’", [mkRenameEdit contents _range name]) | name <- renameSuggestions ]
     | otherwise = []
 
-matchVariableNotInScope :: T.Text -> Maybe (T.Text, Maybe T.Text)
-matchVariableNotInScope message
-  --     * Variable not in scope:
-  --         suggestAcion :: Maybe T.Text -> Range -> Range
-  --     * Variable not in scope:
-  --         suggestAcion
-  | Just (name, typ) <- matchVariableNotInScopeTyped message = Just (name, Just typ)
-  | Just name <- matchVariableNotInScopeUntyped message = Just (name, Nothing)
-  | otherwise = Nothing
-  where
-    matchVariableNotInScopeTyped message
-      | Just [name, typ] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+) :: ([^*•]+)" =
-          Just (name, typ)
-      | otherwise = Nothing
-    matchVariableNotInScopeUntyped message
-      | Just [name] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+)" =
-          Just name
-      | otherwise = Nothing
-
-matchFoundHole :: T.Text -> Maybe (T.Text, T.Text)
-matchFoundHole message
-  | Just [name, typ] <- matchRegexUnifySpaces message "Found hole: _([^ ]+) :: ([^*•]+) Or perhaps" =
-      Just (name, typ)
-  | otherwise = Nothing
-
-matchFoundHoleIncludeUnderscore :: T.Text -> Maybe (T.Text, T.Text)
-matchFoundHoleIncludeUnderscore message = first ("_" <>) <$> matchFoundHole message
-
 suggestNewDefinition :: IdeOptions -> ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestNewDefinition ideOptions parsedModule contents Diagnostic {_message, _range}
   | Just (name, typ) <- matchVariableNotInScope message =
@@ -949,65 +916,6 @@ newDefinitionAction IdeOptions {..} parsedModule Range {_start} name typ
     sig = name <> colon <> T.dropWhileEnd isSpace (fromMaybe "_" typ)
     ParsedModule {pm_parsed_source = L _ HsModule {hsmodDecls}} = parsedModule
 
-#if MIN_VERSION_ghc(9,2,1)
--- When GHC tells us that a variable is not bound, it will tell us either:
---  - there is an unbound variable with a given type
---  - there is an unbound variable (GHC provides no type suggestion)
---
--- When we receive either of these errors, we produce a text edit that will add a new argument (as a new pattern in the
--- last position of each LHS of the top-level bindings for this HsDecl).
---
--- TODO Include logic to also update the type signature of a binding
---
--- NOTE When adding a new argument to a declaration, the corresponding argument's type in declaration's signature might
---      not be the last type in the signature, such as:
---         foo :: a -> b -> c -> d
---         foo a b = \c -> ...
---      In this case a new argument would have to add its type between b and c in the signature.
-suggestAddArgument :: ParsedModule -> Diagnostic -> Either ResponseError [(T.Text, [TextEdit])]
-suggestAddArgument parsedModule Diagnostic {_message, _range}
-  | Just (name, typ) <- matchVariableNotInScope message = addArgumentAction parsedModule _range name typ
-  | Just (name, typ) <- matchFoundHoleIncludeUnderscore message = addArgumentAction parsedModule _range name (Just typ)
-  | otherwise = pure []
-  where
-    message = unifySpaces _message
-
--- TODO use typ to modify type signature
-addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> Either ResponseError [(T.Text, [TextEdit])]
-addArgumentAction (ParsedModule _ parsedSource _ _) range name _typ =
-  do
-    let addArgToMatch (L locMatch (Match xMatch ctxMatch pats rhs)) = do
-          let unqualName = mkRdrUnqual $ mkVarOcc $ T.unpack name
-          let newPat = L (noAnnSrcSpanDP1 generatedSrcSpan) $ VarPat NoExtField (noLocA unqualName)
-          pure $ L locMatch (Match xMatch ctxMatch (pats <> [newPat]) rhs)
-        insertArg = \case
-          (L locDecl (ValD xVal (FunBind xFunBind idFunBind mg coreFunBind))) -> do
-            mg' <- modifyMgMatchesT mg addArgToMatch
-            let decl' = L locDecl (ValD xVal (FunBind xFunBind idFunBind mg' coreFunBind))
-            pure [decl']
-          decl -> pure [decl]
-    case runTransformT $ modifySmallestDeclWithM spanContainsRangeOrErr insertArg (makeDeltaAst parsedSource) of
-      Left err -> Left err
-      Right (newSource, _, _) ->
-        let diff = makeDiffTextEdit (T.pack $ exactPrint parsedSource) (T.pack $ exactPrint newSource)
-         in pure [("Add argument ‘" <> name <> "’ to function", fromLspList diff)]
-      where
-        spanContainsRangeOrErr = maybeToEither (responseError "SrcSpan was not valid range") . (`spanContainsRange` range)
-#endif
-
-fromLspList :: List a -> [a]
-fromLspList (List a) = a
-
-suggestFillTypeWildcard :: Diagnostic -> [(T.Text, TextEdit)]
-suggestFillTypeWildcard Diagnostic{_range=_range,..}
--- Foo.hs:3:8: error:
---     * Found type wildcard `_' standing for `p -> p1 -> p'
-
-    | "Found type wildcard" `T.isInfixOf` _message
-    , " standing for " `T.isInfixOf` _message
-    , typeSignature <- extractWildCardTypeSignature _message
-        =  [("Use type signature: ‘" <> typeSignature <> "’", TextEdit _range typeSignature)]
-    | otherwise = []
 
 {- Handles two variants with different formatting
 
@@ -1035,88 +943,6 @@ suggestModuleTypo Diagnostic{_range=_range,..}
         [modul, "(from", _] -> Just modul
         _                   -> Nothing
 
-
-suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
-suggestFillHole Diagnostic{_range=_range,..}
-    | Just holeName <- extractHoleName _message
-    , (holeFits, refFits) <- processHoleSuggestions (T.lines _message) =
-      let isInfixHole = _message =~ addBackticks holeName :: Bool in
-        map (proposeHoleFit holeName False isInfixHole) holeFits
-        ++ map (proposeHoleFit holeName True isInfixHole) refFits
-    | otherwise = []
-    where
-      extractHoleName = fmap head . flip matchRegexUnifySpaces "Found hole: ([^ ]*)"
-      addBackticks text = "`" <> text <> "`"
-      addParens text = "(" <> text <> ")"
-      proposeHoleFit holeName parenthise isInfixHole name =
-        let isInfixOperator = T.head name == '('
-            name' = getOperatorNotation isInfixHole isInfixOperator name in
-          ( "replace " <> holeName <> " with " <> name
-          , TextEdit _range (if parenthise then addParens name' else name')
-          )
-      getOperatorNotation True False name                    = addBackticks name
-      getOperatorNotation True True name                     = T.drop 1 (T.dropEnd 1 name)
-      getOperatorNotation _isInfixHole _isInfixOperator name = name
-
-processHoleSuggestions :: [T.Text] -> ([T.Text], [T.Text])
-processHoleSuggestions mm = (holeSuggestions, refSuggestions)
-{-
-    • Found hole: _ :: LSP.Handlers
-
-      Valid hole fits include def
-      Valid refinement hole fits include
-        fromMaybe (_ :: LSP.Handlers) (_ :: Maybe LSP.Handlers)
-        fromJust (_ :: Maybe LSP.Handlers)
-        haskell-lsp-types-0.22.0.0:Language.LSP.Types.Window.$sel:_value:ProgressParams (_ :: ProgressParams
-                                                                                                        LSP.Handlers)
-        T.foldl (_ :: LSP.Handlers -> Char -> LSP.Handlers)
-                (_ :: LSP.Handlers)
-                (_ :: T.Text)
-        T.foldl' (_ :: LSP.Handlers -> Char -> LSP.Handlers)
-                 (_ :: LSP.Handlers)
-                 (_ :: T.Text)
--}
-  where
-    t = id @T.Text
-    holeSuggestions = do
-      -- get the text indented under Valid hole fits
-      validHolesSection <-
-        getIndentedGroupsBy (=~ t " *Valid (hole fits|substitutions) include") mm
-      -- the Valid hole fits line can contain a hole fit
-      holeFitLine <-
-        mapHead
-            (mrAfter . (=~ t " *Valid (hole fits|substitutions) include"))
-            validHolesSection
-      let holeFit = T.strip $ T.takeWhile (/= ':') holeFitLine
-      guard (not $ T.null holeFit)
-      return holeFit
-    refSuggestions = do -- @[]
-      -- get the text indented under Valid refinement hole fits
-      refinementSection <-
-        getIndentedGroupsBy (=~ t " *Valid refinement hole fits include") mm
-      -- get the text for each hole fit
-      holeFitLines <- getIndentedGroups (tail refinementSection)
-      let holeFit = T.strip $ T.unwords holeFitLines
-      guard $ not $ holeFit =~ t "Some refinement hole fits suppressed"
-      return holeFit
-
-    mapHead f (a:aa) = f a : aa
-    mapHead _ []     = []
-
--- > getIndentedGroups [" H1", "  l1", "  l2", " H2", "  l3"] = [[" H1,", "  l1", "  l2"], [" H2", "  l3"]]
-getIndentedGroups :: [T.Text] -> [[T.Text]]
-getIndentedGroups [] = []
-getIndentedGroups ll@(l:_) = getIndentedGroupsBy ((== indentation l) . indentation) ll
--- |
--- > getIndentedGroupsBy (" H" `isPrefixOf`) [" H1", "  l1", "  l2", " H2", "  l3"] = [[" H1", "  l1", "  l2"], [" H2", "  l3"]]
-getIndentedGroupsBy :: (T.Text -> Bool) -> [T.Text] -> [[T.Text]]
-getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
-    (l:ll) -> case span (\l' -> indentation l < indentation l') ll of
-        (indented, rest) -> (l:indented) : getIndentedGroupsBy pred rest
-    _ -> []
-
-indentation :: T.Text -> Int
-indentation = T.length . T.takeWhile isSpace
 
 #if !MIN_VERSION_ghc(9,3,0)
 suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, Rewrite)]
@@ -1734,7 +1560,7 @@ findPositionAfterModuleName ps hsmodName' = do
     prevSrcSpan = maybe (getLoc hsmodName') getLoc hsmodExports
 
     -- The relative position of 'where' keyword (in lines, relative to the previous AST node).
-    -- The exact-print API changed a lot in ghc-9.2, so we need to handle it seperately for different compiler versions.
+    -- The exact-print API changed a lot in ghc-9.2, so we need to handle it separately for different compiler versions.
     whereKeywordLineOffset :: Maybe Int
 #if MIN_VERSION_ghc(9,2,0)
     whereKeywordLineOffset = case hsmodAnn of
@@ -1767,7 +1593,7 @@ findPositionAfterModuleName ps hsmodName' = do
         deltaPos <- fmap NE.head . NE.nonEmpty .mapMaybe filterWhere $ annsDP ann
         pure $ deltaRow deltaPos
 
-    -- Before ghc 9.2, DeltaPos doesn't take comment into acccount, so we don't need to sum line offset of comments.
+    -- Before ghc 9.2, DeltaPos doesn't take comment into account, so we don't need to sum line offset of comments.
     filterWhere :: (KeywordId, DeltaPos) -> Maybe DeltaPos
     filterWhere (keywordId, deltaPos) =
         if keywordId == G AnnWhere then Just deltaPos else Nothing
@@ -1928,64 +1754,6 @@ mkRenameEdit contents range name
       curr <- textInRange range <$> contents
       pure $ "'" `T.isPrefixOf` curr
 
--- | Extract the type and surround it in parentheses except in obviously safe cases.
---
--- Inferring when parentheses are actually needed around the type signature would
--- require understanding both the precedence of the context of the hole and of
--- the signature itself. Inserting them (almost) unconditionally is ugly but safe.
-extractWildCardTypeSignature :: T.Text -> T.Text
-extractWildCardTypeSignature msg
-  | enclosed || not isApp || isToplevelSig = sig
-  | otherwise                              = "(" <> sig <> ")"
-  where
-    msgSigPart      = snd $ T.breakOnEnd "standing for " msg
-    (sig, rest)     = T.span (/='’') . T.dropWhile (=='‘') . T.dropWhile (/='‘') $ msgSigPart
-    -- If we're completing something like ‘foo :: _’ parens can be safely omitted.
-    isToplevelSig   = errorMessageRefersToToplevelHole rest
-    -- Parenthesize type applications, e.g. (Maybe Char).
-    isApp           = T.any isSpace sig
-    -- Do not add extra parentheses to lists, tuples and already parenthesized types.
-    enclosed        = not (T.null sig) && (T.head sig, T.last sig) `elem` [('(', ')'), ('[', ']')]
-
--- | Detect whether user wrote something like @foo :: _@ or @foo :: (_, Int)@.
--- The former is considered toplevel case for which the function returns 'True',
--- the latter is not toplevel and the returned value is 'False'.
---
--- When type hole is at toplevel then there’s a line starting with
--- "• In the type signature" which ends with " :: _" like in the
--- following snippet:
---
--- source/library/Language/Haskell/Brittany/Internal.hs:131:13: error:
---     • Found type wildcard ‘_’ standing for ‘HsDecl GhcPs’
---       To use the inferred type, enable PartialTypeSignatures
---     • In the type signature: decl :: _
---       In an equation for ‘splitAnnots’:
---           splitAnnots m@HsModule {hsmodAnn, hsmodDecls}
---             = undefined
---             where
---                 ann :: SrcSpanAnnA
---                 decl :: _
---                 L ann decl = head hsmodDecls
---     • Relevant bindings include
---       [REDACTED]
---
--- When type hole is not at toplevel there’s a stack of where
--- the hole was located ending with "In the type signature":
---
--- source/library/Language/Haskell/Brittany/Internal.hs:130:20: error:
---     • Found type wildcard ‘_’ standing for ‘GhcPs’
---       To use the inferred type, enable PartialTypeSignatures
---     • In the first argument of ‘HsDecl’, namely ‘_’
---       In the type ‘HsDecl _’
---       In the type signature: decl :: HsDecl _
---     • Relevant bindings include
---       [REDACTED]
-errorMessageRefersToToplevelHole :: T.Text -> Bool
-errorMessageRefersToToplevelHole msg =
-  not (T.null prefix) && " :: _" `T.isSuffixOf` T.takeWhile (/= '\n') rest
-  where
-    (prefix, rest) = T.breakOn "• In the type signature:" msg
-
 extractRenamableTerms :: T.Text -> [T.Text]
 extractRenamableTerms msg
   -- Account for both "Variable not in scope" and "Not in scope"
@@ -2073,7 +1841,19 @@ smallerRangesForBindingExport lies b =
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
-rangesForBinding' b (L (locA -> l) x@IEVar{}) | T.unpack (printOutputable x) == b = [l]
+#if !MIN_VERSION_ghc(9,2,0)
+rangesForBinding' b (L (locA -> l) (IEVar _ nm))
+  | L _ (IEPattern (L _ b')) <- nm
+  , T.unpack (printOutputable b') == b
+  = [l]
+#else
+rangesForBinding' b (L (locA -> l) (IEVar _ nm))
+  | L _ (IEPattern _ (L _ b')) <- nm
+  , T.unpack (printOutputable b') == b
+  = [l]
+#endif
+rangesForBinding' b (L (locA -> l) x@IEVar{})
+  | T.unpack (printOutputable x) == b = [l]
 rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | T.unpack (printOutputable x) == b = [l]
 rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | T.unpack (printOutputable x) == b = [l]
 #if !MIN_VERSION_ghc(9,2,0)
@@ -2089,28 +1869,15 @@ rangesForBinding' b (L (locA -> l) (IEThingWith _ thing _  inners))
 #endif
 rangesForBinding' _ _ = []
 
--- | 'matchRegex' combined with 'unifySpaces'
-matchRegexUnifySpaces :: T.Text -> T.Text -> Maybe [T.Text]
-matchRegexUnifySpaces message = matchRegex (unifySpaces message)
-
 -- | 'allMatchRegex' combined with 'unifySpaces'
 allMatchRegexUnifySpaces :: T.Text -> T.Text -> Maybe [[T.Text]]
 allMatchRegexUnifySpaces message =
     allMatchRegex (unifySpaces message)
 
--- | Returns Just (the submatches) for the first capture, or Nothing.
-matchRegex :: T.Text -> T.Text -> Maybe [T.Text]
-matchRegex message regex = case message =~~ regex of
-    Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
-    Nothing                                                -> Nothing
-
 -- | Returns Just (all matches) for the first capture, or Nothing.
 allMatchRegex :: T.Text -> T.Text -> Maybe [[T.Text]]
 allMatchRegex message regex = message =~~ regex
 
-
-unifySpaces :: T.Text -> T.Text
-unifySpaces    = T.unwords . T.words
 
 -- functions to help parse multiple import suggestions
 
@@ -2150,71 +1917,3 @@ matchRegExMultipleImports message = do
   imps <- regExImports imports
   return (binding, imps)
 
--- | Possible import styles for an 'IdentInfo'.
---
--- The first 'Text' parameter corresponds to the 'rendered' field of the
--- 'IdentInfo'.
-data ImportStyle
-    = ImportTopLevel T.Text
-      -- ^ Import a top-level export from a module, e.g., a function, a type, a
-      -- class.
-      --
-      -- > import M (?)
-      --
-      -- Some exports that have a parent, like a type-class method or an
-      -- associated type/data family, can still be imported as a top-level
-      -- import.
-      --
-      -- Note that this is not the case for constructors, they must always be
-      -- imported as part of their parent data type.
-
-    | ImportViaParent T.Text T.Text
-      -- ^ Import an export (first parameter) through its parent (second
-      -- parameter).
-      --
-      -- import M (P(?))
-      --
-      -- @P@ and @?@ can be a data type and a constructor, a class and a method,
-      -- a class and an associated type/data family, etc.
-
-    | ImportAllConstructors T.Text
-      -- ^ Import all constructors for a specific data type.
-      --
-      -- import M (P(..))
-      --
-      -- @P@ can be a data type or a class.
-  deriving Show
-
-importStyles :: IdentInfo -> NonEmpty ImportStyle
-importStyles IdentInfo {parent, rendered, isDatacon}
-  | Just p <- parent
-    -- Constructors always have to be imported via their parent data type, but
-    -- methods and associated type/data families can also be imported as
-    -- top-level exports.
-  = ImportViaParent rendered p
-      :| [ImportTopLevel rendered | not isDatacon]
-      <> [ImportAllConstructors p]
-  | otherwise
-  = ImportTopLevel rendered :| []
-
--- | Used for adding new imports
-renderImportStyle :: ImportStyle -> T.Text
-renderImportStyle (ImportTopLevel x)   = x
-renderImportStyle (ImportViaParent x p@(T.uncons -> Just ('(', _))) = "type " <> p <> "(" <> x <> ")"
-renderImportStyle (ImportViaParent x p) = p <> "(" <> x <> ")"
-renderImportStyle (ImportAllConstructors p) = p <> "(..)"
-
--- | Used for extending import lists
-unImportStyle :: ImportStyle -> (Maybe String, String)
-unImportStyle (ImportTopLevel x)        = (Nothing, T.unpack x)
-unImportStyle (ImportViaParent x y)     = (Just $ T.unpack y, T.unpack x)
-unImportStyle (ImportAllConstructors x) = (Just $ T.unpack x, wildCardSymbol)
-
-
-quickFixImportKind' :: T.Text -> ImportStyle -> CodeActionKind
-quickFixImportKind' x (ImportTopLevel _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.topLevel"
-quickFixImportKind' x (ImportViaParent _ _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.withParent"
-quickFixImportKind' x (ImportAllConstructors _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.allConstructors"
-
-quickFixImportKind :: T.Text -> CodeActionKind
-quickFixImportKind x = CodeActionUnknown $ "quickfix.import." <> x

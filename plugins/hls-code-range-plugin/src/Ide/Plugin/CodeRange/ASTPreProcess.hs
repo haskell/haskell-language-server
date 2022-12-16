@@ -168,7 +168,7 @@ identifierForTypeSig node =
         (fmap fst . find (\(_, detail) -> TyDecl `Set.member` identInfo detail)
         . Map.toList . nodeIdentifiers)
 
--- | Determines if the given occurence of an identifier is a function/variable definition in the outer span
+-- | Determines if the given occurrence of an identifier is a function/variable definition in the outer span
 isIdentADef :: Span -> (Span, IdentifierDetails a) -> Bool
 isIdentADef outerSpan (span, detail) =
     realSrcSpanStart span >= realSrcSpanStart outerSpan && realSrcSpanEnd span <= realSrcSpanEnd outerSpan

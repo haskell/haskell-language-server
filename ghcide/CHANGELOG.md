@@ -3,8 +3,8 @@
 * Progress reporting improvements (#1784) - Pepe Iborra
 * Unify session loading using implicit-hie (#1783) - fendor
 * Fix remove constraint (#1578) - Kostas Dermentzis
-* Fix wrong extend import while type constuctor and data constructor have the same name (#1775) - Lei Zhu
-* Imporve vscode extension schema generation (#1742) - Potato Hatsue
+* Fix wrong extend import while type constructor and data constructor have the same name (#1775) - Lei Zhu
+* Improve vscode extension schema generation (#1742) - Potato Hatsue
 * Add hls-graph abstracting over shake (#1748) - Neil Mitchell
 * Tease apart the custom SYB from ExactPrint (#1746) - Sandy Maguire
 * fix class method completion (#1741) - Lei Zhu

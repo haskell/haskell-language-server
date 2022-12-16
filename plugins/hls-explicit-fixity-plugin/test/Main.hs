@@ -3,12 +3,12 @@
 module Main where
 
 import qualified Data.Text                 as T
-import           Ide.Plugin.ExplicitFixity (descriptor)
+import           Ide.Plugin.ExplicitFixity (Log, descriptor)
 import           System.FilePath
 import           Test.Hls
 
-plugin :: PluginDescriptor IdeState
-plugin = descriptor mempty "explicit-fixity"
+plugin :: PluginTestDescriptor Log
+plugin = mkPluginTestDescriptor descriptor "explicit-fixity"
 
 main :: IO ()
 main = defaultTestRunner tests

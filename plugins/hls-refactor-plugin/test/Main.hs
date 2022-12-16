@@ -39,7 +39,6 @@ import           Language.LSP.Types                       hiding
                                                            SemanticTokenRelative (length),
                                                            SemanticTokensEdit (_start),
                                                            mkRange)
-import qualified Language.LSP.Types                       as LSP
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.Types.Lens                  as L
 import           System.Directory
@@ -60,18 +59,22 @@ import           Test.Hls
 import           Control.Applicative                      (liftA2)
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
+import qualified Test.AddArgument
 
 main :: IO ()
 main = defaultTestRunner tests
 
-refactorPlugin :: [PluginDescriptor IdeState]
-refactorPlugin =
-      [ Refactor.iePluginDescriptor mempty "ghcide-code-actions-imports-exports"
-      , Refactor.typeSigsPluginDescriptor mempty "ghcide-code-actions-type-signatures"
-      , Refactor.bindingsPluginDescriptor mempty "ghcide-code-actions-bindings"
-      , Refactor.fillHolePluginDescriptor mempty "ghcide-code-actions-fill-holes"
-      , Refactor.extendImportPluginDescriptor mempty "ghcide-completions-1"
-      ] ++ GhcIde.descriptors mempty
+refactorPlugin :: IO [PluginDescriptor IdeState]
+refactorPlugin = do
+  exactprintLog <- pluginTestRecorder
+  ghcideLog <- pluginTestRecorder
+  pure $
+      [ Refactor.iePluginDescriptor exactprintLog "ghcide-code-actions-imports-exports"
+      , Refactor.typeSigsPluginDescriptor exactprintLog "ghcide-code-actions-type-signatures"
+      , Refactor.bindingsPluginDescriptor exactprintLog "ghcide-code-actions-bindings"
+      , Refactor.fillHolePluginDescriptor exactprintLog "ghcide-code-actions-fill-holes"
+      , Refactor.extendImportPluginDescriptor exactprintLog "ghcide-completions-1"
+      ] ++ GhcIde.descriptors ghcideLog
 
 tests :: TestTree
 tests =
@@ -321,7 +324,7 @@ codeActionTests = testGroup "code actions"
   , addImplicitParamsConstraintTests
   , removeExportTests
 #if MIN_VERSION_ghc(9,2,1)
-  , addFunctionArgumentTests
+  , Test.AddArgument.tests
 #endif
   ]
 
@@ -469,12 +472,12 @@ insertImportTests = testGroup "insert import"
       "NoExplicitExports.expected.hs"
       "import Data.Monoid"
   , checkImport
-      "add to correctly placed exisiting import"
+      "add to correctly placed existing import"
       "ImportAtTop.hs"
       "ImportAtTop.expected.hs"
       "import Data.Monoid"
   , checkImport
-      "add to multiple correctly placed exisiting imports"
+      "add to multiple correctly placed existing imports"
       "MultipleImportsAtTop.hs"
       "MultipleImportsAtTop.expected.hs"
       "import Data.Monoid"
@@ -1843,7 +1846,6 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
     auxFiles = ["AVec.hs", "BVec.hs", "CVec.hs", "DVec.hs", "EVec.hs", "FVec.hs"]
     withTarget file locs k = runWithExtraFiles "hiding" $ \dir -> do
         doc <- openDoc file "haskell"
-        waitForProgressDone
         void $ expectDiagnostics [(file, [(DsError, loc, "Ambiguous occurrence") | loc <- locs])]
         actions <- getAllCodeActions doc
         k dir doc actions
@@ -1856,7 +1858,7 @@ suggestHideShadowTests =
     [ testGroup
         "single"
         [ testOneCodeAction
-            "hide unsued"
+            "hide unused"
             "Hide on from Data.Function"
             (1, 2)
             (1, 4)
@@ -1869,7 +1871,7 @@ suggestHideShadowTests =
             , "g on = on"
             ]
         , testOneCodeAction
-            "extend hiding unsued"
+            "extend hiding unused"
             "Hide on from Data.Function"
             (1, 2)
             (1, 4)
@@ -1880,7 +1882,7 @@ suggestHideShadowTests =
             , "f on = on"
             ]
         , testOneCodeAction
-            "delete unsued"
+            "delete unused"
             "Hide on from Data.Function"
             (1, 2)
             (1, 4)
@@ -1982,7 +1984,7 @@ suggestHideShadowTests =
             ]
         , testOneCodeAction
             "auto hide all"
-            "Hide ++ from all occurence imports"
+            "Hide ++ from all occurrence imports"
             (2, 2)
             (2, 6)
             [ "import B"
@@ -2166,214 +2168,6 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
   ]
 
 #if MIN_VERSION_ghc(9,2,1)
-addFunctionArgumentTests :: TestTree
-addFunctionArgumentTests =
-  testGroup
-    "add function argument"
-    [ testSession "simple" $ do
-        let foo =
-              [ "foo True = select [True]",
-                "",
-                "foo False = False"
-              ]
-            foo' =
-              [ "foo True select = select [True]",
-                "",
-                "foo False select = False"
-              ]
-            someOtherCode =
-              [ "",
-                "someOtherCode = ()"
-              ]
-        docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ foo ++ someOtherCode)
-        _ <- waitForDiagnostics
-        InR action@CodeAction {_title = actionTitle} : _ <-
-          filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
-            <$> getCodeActions docB (R 0 0 0 50)
-        liftIO $ actionTitle @?= "Add argument ‘select’ to function"
-        executeCodeAction action
-        contentAfterAction <- documentContents docB
-        liftIO $ contentAfterAction @?= T.unlines (foo' ++ someOtherCode),
-      testSession "comments" $ do
-        let foo =
-              [ "foo -- c1",
-                "  True -- c2",
-                "  = -- c3",
-                "    select [True]",
-                "",
-                "foo False = False"
-              ]
-            -- TODO improve behavior slightly?
-            foo' =
-              [ "foo -- c1",
-                "  True select -- c2",
-                "  = -- c3",
-                "    select [True]",
-                "",
-                "foo False select = False"
-              ]
-            someOtherCode =
-              [ "",
-                "someOtherCode = ()"
-              ]
-        docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ foo ++ someOtherCode)
-        _ <- waitForDiagnostics
-        InR action@CodeAction {_title = actionTitle} : _ <-
-          filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
-            <$> getCodeActions docB (R 3 0 3 50)
-        liftIO $ actionTitle @?= "Add argument ‘select’ to function"
-        executeCodeAction action
-        contentAfterAction <- documentContents docB
-        liftIO $ contentAfterAction @?= T.unlines (foo' ++ someOtherCode),
-      testSession "leading decls" $ do
-        let foo =
-              [ "module Foo where",
-                "",
-                "bar = 1",
-                "",
-                "foo True = select [True]",
-                "",
-                "foo False = False"
-              ]
-            foo' =
-              [ "module Foo where",
-                "",
-                "bar = 1",
-                "",
-                "foo True select = select [True]",
-                "",
-                "foo False select = False"
-              ]
-        docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ foo)
-        _ <- waitForDiagnostics
-        InR action@CodeAction {_title = actionTitle} : _ <-
-          filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
-            <$> getCodeActions docB (R 4 0 4 50)
-        liftIO $ actionTitle @?= "Add argument ‘select’ to function"
-        executeCodeAction action
-        contentAfterAction <- documentContents docB
-        liftIO $ contentAfterAction @?= T.unlines foo',
-      testSession "hole" $ do
-        let foo =
-              [ "module Foo where",
-                "",
-                "bar = 1",
-                "",
-                "foo True = _select [True]",
-                "",
-                "foo False = False"
-              ]
-            foo' =
-              [ "module Foo where",
-                "",
-                "bar = 1",
-                "",
-                "foo True _select = _select [True]",
-                "",
-                "foo False _select = False"
-              ]
-        docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ foo)
-        _ <- waitForDiagnostics
-        InR action@CodeAction {_title = actionTitle} : _ <-
-          filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
-            <$> getCodeActions docB (R 4 0 4 50)
-        liftIO $ actionTitle @?= "Add argument ‘_select’ to function"
-        executeCodeAction action
-        contentAfterAction <- documentContents docB
-        liftIO $ contentAfterAction @?= T.unlines foo',
-      testSession "untyped error" $ do
-        let foo =
-              [ "foo = select"
-              ]
-            foo' =
-              [ "foo select = select"
-              ]
-            someOtherCode =
-              [ "",
-                "someOtherCode = ()"
-              ]
-        docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ foo ++ someOtherCode)
-        _ <- waitForDiagnostics
-        InR action@CodeAction {_title = actionTitle} : _ <-
-          filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
-            <$> getCodeActions docB (R 0 0 0 50)
-        liftIO $ actionTitle @?= "Add argument ‘select’ to function"
-        executeCodeAction action
-        contentAfterAction <- documentContents docB
-        liftIO $ contentAfterAction @?= T.unlines (foo' ++ someOtherCode),
-      testSession "untyped error" $ do
-        let foo =
-              [ "foo = select"
-              ]
-            foo' =
-              [ "foo select = select"
-              ]
-            someOtherCode =
-              [ "",
-                "someOtherCode = ()"
-              ]
-        docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ foo ++ someOtherCode)
-        _ <- waitForDiagnostics
-        InR action@CodeAction {_title = actionTitle} : _ <-
-          filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
-            <$> getCodeActions docB (R 0 0 0 50)
-        liftIO $ actionTitle @?= "Add argument ‘select’ to function"
-        executeCodeAction action
-        contentAfterAction <- documentContents docB
-        liftIO $ contentAfterAction @?= T.unlines (foo' ++ someOtherCode),
-      testSession "where clause" $ do
-        let foo =
-              [ "foo True = False ",
-                "  where",
-                "    bar = select",
-                "",
-                "foo False = False"
-              ]
-            -- TODO improve this behaviour (should add select to bar, not foo)
-            foo' =
-              [ "foo True select = False ",
-                "  where",
-                "    bar = select",
-                "",
-                "foo False select = False"
-              ]
-        docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ foo)
-        _ <- waitForDiagnostics
-        InR action@CodeAction {_title = actionTitle} : _ <-
-          filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
-            <$> getCodeActions docB (R 2 0 2 50)
-        liftIO $ actionTitle @?= "Add argument ‘select’ to function"
-        executeCodeAction action
-        contentAfterAction <- documentContents docB
-        liftIO $ contentAfterAction @?= T.unlines foo',
-      testSession "where clause" $ do
-        let foo =
-              [ "foo -- c1",
-                "  -- | c2",
-                "  {- c3 -} True -- c4",
-                "  = select",
-                "",
-                "foo False = False"
-              ]
-            -- TODO could use improvement here...
-            foo' =
-              [ "foo -- c1",
-                "  -- | c2",
-                "  {- c3 -} True select -- c4",
-                "  = select",
-                "",
-                "foo False select = False"
-              ]
-        docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ foo)
-        _ <- waitForDiagnostics
-        InR action@CodeAction {_title = actionTitle} : _ <-
-          filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
-            <$> getCodeActions docB (R 3 0 3 50)
-        liftIO $ actionTitle @?= "Add argument ‘select’ to function"
-        executeCodeAction action
-        contentAfterAction <- documentContents docB
-        liftIO $ contentAfterAction @?= T.unlines foo'
-    ]
 #endif
 
 deleteUnusedDefinitionTests :: TestTree
@@ -3938,7 +3732,9 @@ run' :: (FilePath -> Session a) -> IO a
 run' s = withTempDir $ \dir -> runInDir dir (s dir)
 
 runInDir :: FilePath -> Session a -> IO a
-runInDir dir = runSessionWithServer' refactorPlugin def def lspTestCaps dir
+runInDir dir act = do
+  plugin <- refactorPlugin
+  runSessionWithServer' plugin def def lspTestCaps dir act
 
 lspTestCaps :: ClientCapabilities
 lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }

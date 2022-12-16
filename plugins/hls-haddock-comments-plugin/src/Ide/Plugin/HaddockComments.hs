@@ -7,7 +7,7 @@
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ViewPatterns              #-}
 
-module Ide.Plugin.HaddockComments (descriptor) where
+module Ide.Plugin.HaddockComments (descriptor, E.Log) where
 
 import           Control.Monad                         (join, when)
 import           Control.Monad.IO.Class

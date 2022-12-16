@@ -15,8 +15,8 @@ import qualified Ide.Plugin.ExplicitImports as ExplicitImports
 import           System.FilePath            ((<.>), (</>))
 import           Test.Hls
 
-explicitImportsPlugin :: PluginDescriptor IdeState
-explicitImportsPlugin = ExplicitImports.descriptor mempty "explicitImports"
+explicitImportsPlugin :: PluginTestDescriptor ExplicitImports.Log
+explicitImportsPlugin = mkPluginTestDescriptor ExplicitImports.descriptor "explicitImports"
 
 longModule :: T.Text
 longModule = "F" <> T.replicate 80 "o"

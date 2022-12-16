@@ -8,30 +8,26 @@
 {-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.GADT (descriptor) where
 
-import           Control.Lens                    ((^.))
+import           Control.Lens                  ((^.))
 import           Control.Monad.Except
-import           Data.Aeson                      (FromJSON, ToJSON,
-                                                  Value (Null), toJSON)
-import           Data.Either.Extra               (maybeToEither)
-import qualified Data.HashMap.Lazy               as HashMap
-import qualified Data.Text                       as T
+import           Data.Aeson                    (FromJSON, ToJSON, Value (Null),
+                                                toJSON)
+import           Data.Either.Extra             (maybeToEither)
+import qualified Data.HashMap.Lazy             as HashMap
+import qualified Data.Text                     as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
 
-import           Control.Monad.Trans.Except      (throwE)
-import           Data.Maybe                      (mapMaybe)
-import           Development.IDE.GHC.Compat.Util (toList)
-import           Development.IDE.Spans.Pragmas   (NextPragmaInfo,
-                                                  getNextPragmaInfo,
-                                                  insertNewPragma)
-import           GHC.Generics                    (Generic)
-import           GHC.LanguageExtensions.Type     (Extension (GADTSyntax, GADTs))
+import           Control.Monad.Trans.Except    (throwE)
+import           Data.Maybe                    (mapMaybe)
+import           Development.IDE.Spans.Pragmas (getFirstPragma, insertNewPragma)
+import           GHC.Generics                  (Generic)
 import           Ide.Plugin.GHC
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server             (sendRequest)
+import           Language.LSP.Server           (sendRequest)
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens         as L
+import qualified Language.LSP.Types.Lens       as L
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -52,20 +48,20 @@ toGADTSyntaxCommandId = "GADT.toGADT"
 
 -- | A command replaces H98 data decl with GADT decl in place
 toGADTCommand :: PluginId -> CommandFunction IdeState ToGADTParams
-toGADTCommand _ state ToGADTParams{..} = pluginResponse $ do
+toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
     (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
     (L ann decl) <- case decls of
         [d] -> pure d
         _   -> throwE $ "Expected 1 declaration, but got " <> show (Prelude.length decls)
-    deps <- liftIO $ runAction "GADT.GhcSessionDeps" state $ use GhcSessionDeps nfp
+    deps <- liftIO $ runAction (T.unpack pId' <> ".GhcSessionDeps") state $ use GhcSessionDeps nfp
     (hsc_dflags . hscEnv -> df) <- liftEither
         $ maybeToEither "Get GhcSessionDeps failed" deps
     txt <- liftEither $ T.pack <$> (prettyGADTDecl df . h98ToGADTDecl) decl
     range <- liftEither
         $ maybeToEither "Unable to get data decl range"
         $ srcSpanToRange $ locA ann
-    pragma <- getNextPragma state nfp
+    pragma <- getFirstPragma pId state nfp
     let insertEdit = [insertNewPragma pragma GADTs | all (`notElem` exts) [GADTSyntax, GADTs]]
 
     _ <- lift $ sendRequest
@@ -118,14 +114,5 @@ getInRangeH98DeclsAndExts state range nfp = do
         decls = filter isH98DataDecl
             $ mapMaybe getDataDecl
             $ filter (inRange range) hsDecls
-        exts = (toList . extensionFlags . ms_hspp_opts . pm_mod_summary) pm
+        exts = getExtensions pm
     pure (decls, exts)
-
--- Copy from hls-alternate-number-format-plugin
-getNextPragma :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
-getNextPragma state nfp = handleMaybeM "Error: Could not get NextPragmaInfo" $ do
-      ghcSession <- liftIO $ runAction "GADT.GhcSession" state $ useWithStale GhcSession nfp
-      (_, fileContents) <- liftIO $ runAction "GADT.GetFileContents" state $ getFileContents nfp
-      case ghcSession of
-        Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
-        Nothing -> pure Nothing

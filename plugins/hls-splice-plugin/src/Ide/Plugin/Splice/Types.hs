@@ -51,4 +51,4 @@ inplaceCmdName :: T.Text
 inplaceCmdName = "expand TemplateHaskell Splice (in-place)"
 
 commentedCmdName :: T.Text
-commentedCmdName = "expand TemplateHaskell Splice (comented-out)"
+commentedCmdName = "expand TemplateHaskell Splice (commented-out)"

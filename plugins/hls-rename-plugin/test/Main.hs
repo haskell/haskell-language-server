@@ -12,8 +12,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-renamePlugin :: PluginDescriptor IdeState
-renamePlugin = Rename.descriptor mempty "rename"
+renamePlugin :: PluginTestDescriptor Rename.Log
+renamePlugin = mkPluginTestDescriptor Rename.descriptor "rename"
 
 -- See https://github.com/wz1000/HieDb/issues/45
 recordConstructorIssue :: String

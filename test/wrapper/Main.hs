@@ -5,9 +5,7 @@ import           System.Process
 import           Test.Hls
 
 main :: IO ()
-main = do
-  flushStackEnvironment
-  defaultTestRunner $ testGroup "haskell-language-server-wrapper" [projectGhcVersionTests]
+main = defaultTestRunner $ testGroup "haskell-language-server-wrapper" [projectGhcVersionTests]
 
 projectGhcVersionTests :: TestTree
 projectGhcVersionTests = testGroup "--project-ghc-version"

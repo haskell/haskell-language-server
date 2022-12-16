@@ -144,7 +144,7 @@ getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT SelectionRange
 getSelectionRanges file positions = do
     (codeRange, positionMapping) <- maybeToExceptT (SelectionRangeBadDependency GetCodeRange) . MaybeT $
         useWithStaleFast GetCodeRange file
-    -- 'positionMapping' should be appied to the input before using them
+    -- 'positionMapping' should be applied to the input before using them
     positions' <- maybeToExceptT SelectionRangeInputPositionMappingFailure . MaybeT . pure $
         traverse (fromCurrentPosition positionMapping) positions
 

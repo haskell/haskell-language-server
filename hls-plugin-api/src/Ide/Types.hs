@@ -28,6 +28,7 @@ module Ide.Types
 , IdeNotification(..)
 , IdePlugins(IdePlugins, ipMap)
 , DynFlagsModifications(..)
+, Config(..), PluginConfig(..), CheckParents(..)
 , ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin, pluginEnabledConfig
 , CustomConfig(..), mkCustomConfig
 , FallbackCodeActionParams(..)
@@ -60,7 +61,7 @@ import           Control.Applicative             ((<|>))
 import           Control.Arrow                   ((&&&))
 import           Control.Lens                    ((^.))
 import           Data.Aeson                      hiding (defaultOptions)
-import qualified Data.Default
+import           Data.Default
 import           Data.Dependent.Map              (DMap)
 import qualified Data.Dependent.Map              as DMap
 import qualified Data.DList                      as DList
@@ -80,7 +81,6 @@ import           Data.Text.Encoding              (encodeUtf8)
 import           Development.IDE.Graph
 import           GHC                             (DynFlags)
 import           GHC.Generics
-import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Language.LSP.Server             (LspM, getVirtualFile)
 import           Language.LSP.Types              hiding
@@ -167,6 +167,107 @@ instance Show (IdeCommand st) where show _ = "<ide command>"
 
 -- ---------------------------------------------------------------------
 
+-- | We (initially anyway) mirror the hie configuration, so that existing
+-- clients can simply switch executable and not have any nasty surprises.  There
+-- will be surprises relating to config options being ignored, initially though.
+data Config =
+  Config
+    { checkParents            :: CheckParents
+    , checkProject            :: !Bool
+    , formattingProvider      :: !T.Text
+    , cabalFormattingProvider :: !T.Text
+    , maxCompletions          :: !Int
+    , plugins                 :: !(Map.Map PluginId PluginConfig)
+    } deriving (Show,Eq)
+
+instance ToJSON Config where
+  toJSON Config{..} =
+      object [ "haskell" .= r ]
+    where
+      r = object [ "checkParents"                .= checkParents
+                 , "checkProject"                .= checkProject
+                 , "formattingProvider"          .= formattingProvider
+                 , "maxCompletions"              .= maxCompletions
+                 , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
+                 ]
+
+instance Default Config where
+  def = Config
+    { checkParents                = CheckOnSave
+    , checkProject                = True
+    -- , formattingProvider          = "brittany"
+    , formattingProvider          = "ormolu"
+    -- , formattingProvider          = "floskell"
+    -- , formattingProvider          = "stylish-haskell"
+    , cabalFormattingProvider     = "cabal-fmt"
+    , maxCompletions              = 40
+    , plugins                     = mempty
+    }
+
+data CheckParents
+    -- Note that ordering of constructors is meaningful and must be monotonically
+    -- increasing in the scenarios where parents are checked
+    = NeverCheck
+    | CheckOnSave
+    | AlwaysCheck
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
+-- | A PluginConfig is a generic configuration for a given HLS plugin.  It
+-- provides a "big switch" to turn it on or off as a whole, as well as small
+-- switches per feature, and a slot for custom config.
+-- This provides a regular naming scheme for all plugin config.
+data PluginConfig =
+    PluginConfig
+      { plcGlobalOn         :: !Bool
+      , plcCallHierarchyOn  :: !Bool
+      , plcCodeActionsOn    :: !Bool
+      , plcCodeLensOn       :: !Bool
+      , plcDiagnosticsOn    :: !Bool
+      , plcHoverOn          :: !Bool
+      , plcSymbolsOn        :: !Bool
+      , plcCompletionOn     :: !Bool
+      , plcRenameOn         :: !Bool
+      , plcSelectionRangeOn :: !Bool
+      , plcFoldingRangeOn   :: !Bool
+      , plcConfig           :: !Object
+      } deriving (Show,Eq)
+
+instance Default PluginConfig where
+  def = PluginConfig
+      { plcGlobalOn         = True
+      , plcCallHierarchyOn  = True
+      , plcCodeActionsOn    = True
+      , plcCodeLensOn       = True
+      , plcDiagnosticsOn    = True
+      , plcHoverOn          = True
+      , plcSymbolsOn        = True
+      , plcCompletionOn     = True
+      , plcRenameOn         = True
+      , plcSelectionRangeOn = True
+      , plcFoldingRangeOn = True
+      , plcConfig           = mempty
+      }
+
+instance ToJSON PluginConfig where
+    toJSON (PluginConfig g ch ca cl d h s c rn sr fr cfg) = r
+      where
+        r = object [ "globalOn"         .= g
+                   , "callHierarchyOn"  .= ch
+                   , "codeActionsOn"    .= ca
+                   , "codeLensOn"       .= cl
+                   , "diagnosticsOn"    .= d
+                   , "hoverOn"          .= h
+                   , "symbolsOn"        .= s
+                   , "completionOn"     .= c
+                   , "renameOn"         .= rn
+                   , "selectionRangeOn" .= sr
+                   , "foldingRangeOn"   .= fr
+                   , "config"           .= cfg
+                   ]
+
+-- ---------------------------------------------------------------------
+
 data PluginDescriptor (ideState :: *) =
   PluginDescriptor { pluginId           :: !PluginId
                    -- ^ Unique identifier of the plugin.
@@ -220,21 +321,22 @@ data CustomConfig = forall r. CustomConfig (Properties r)
 -- which can be inferred from handlers registered by the plugin.
 -- @config@ is called custom config, which is defined using 'Properties'.
 data ConfigDescriptor = ConfigDescriptor {
-  -- | Whether or not to generate generic configs.
-  configEnableGenericConfig :: Bool,
+  -- | Initial values for the generic config
+  configInitialGenericConfig :: PluginConfig,
   -- | Whether or not to generate @diagnosticsOn@ config.
   -- Diagnostics emit in arbitrary shake rules,
   -- so we can't know statically if the plugin produces diagnostics
-  configHasDiagnostics      :: Bool,
+  configHasDiagnostics       :: Bool,
   -- | Custom config.
-  configCustomConfig        :: CustomConfig
+  configCustomConfig         :: CustomConfig
 }
 
 mkCustomConfig :: Properties r -> CustomConfig
 mkCustomConfig = CustomConfig
 
 defaultConfigDescriptor :: ConfigDescriptor
-defaultConfigDescriptor = ConfigDescriptor True False (mkCustomConfig emptyProperties)
+defaultConfigDescriptor =
+    ConfigDescriptor Data.Default.def False (mkCustomConfig emptyProperties)
 
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
@@ -281,7 +383,7 @@ class HasTracing (MessageParams m) => PluginMethod (k :: MethodType) (m :: Metho
 
   default pluginEnabled :: (HasTextDocument (MessageParams m) doc, HasUri doc Uri)
                               => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> Bool
-  pluginEnabled _ params desc conf = pluginResponsible uri desc && plcGlobalOn (configForPlugin conf (pluginId desc))
+  pluginEnabled _ params desc conf = pluginResponsible uri desc && plcGlobalOn (configForPlugin conf desc)
     where
         uri = params ^. J.textDocument . J.uri
 
@@ -313,7 +415,7 @@ class PluginMethod Request m => PluginRequestMethod (m :: Method FromClient Requ
 
 instance PluginMethod Request TextDocumentCodeAction where
   pluginEnabled _ msgParams pluginDesc config =
-    pluginResponsible uri pluginDesc && pluginEnabledConfig plcCodeActionsOn (pluginId pluginDesc) config
+    pluginResponsible uri pluginDesc && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
 
@@ -374,79 +476,73 @@ instance PluginMethod Request WorkspaceSymbol where
 
 instance PluginMethod Request TextDocumentCodeLens where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcCodeLensOn (pluginId pluginDesc) config
+      && pluginEnabledConfig plcCodeLensOn (configForPlugin config pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
 
 instance PluginMethod Request TextDocumentRename where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcRenameOn (pluginId pluginDesc) config
+      && pluginEnabledConfig plcRenameOn (configForPlugin config pluginDesc)
    where
       uri = msgParams ^. J.textDocument . J.uri
 instance PluginMethod Request TextDocumentHover where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcHoverOn (pluginId pluginDesc) config
+      && pluginEnabledConfig plcHoverOn (configForPlugin config pluginDesc)
    where
       uri = msgParams ^. J.textDocument . J.uri
 
 instance PluginMethod Request TextDocumentDocumentSymbol where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcSymbolsOn (pluginId pluginDesc) config
+      && pluginEnabledConfig plcSymbolsOn (configForPlugin config pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
 
 instance PluginMethod Request TextDocumentCompletion where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcCompletionOn (pluginId pluginDesc) config
+      && pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
 
 instance PluginMethod Request TextDocumentFormatting where
   pluginEnabled STextDocumentFormatting msgParams pluginDesc conf =
-    pluginResponsible uri pluginDesc && PluginId (formattingProvider conf) == pid
+    pluginResponsible uri pluginDesc
+      && (PluginId (formattingProvider conf) == pid || PluginId (cabalFormattingProvider conf) == pid)
     where
       uri = msgParams ^. J.textDocument . J.uri
       pid = pluginId pluginDesc
 
 instance PluginMethod Request TextDocumentRangeFormatting where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && PluginId (formattingProvider conf) == pid
+      && (PluginId (formattingProvider conf) == pid || PluginId (cabalFormattingProvider conf) == pid)
     where
       uri = msgParams ^. J.textDocument . J.uri
       pid = pluginId pluginDesc
 
 instance PluginMethod Request TextDocumentPrepareCallHierarchy where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcCallHierarchyOn pid conf
+      && pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
-      pid = pluginId pluginDesc
 
 instance PluginMethod Request TextDocumentSelectionRange where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcSelectionRangeOn pid conf
+      && pluginEnabledConfig plcSelectionRangeOn (configForPlugin conf pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
-      pid = pluginId pluginDesc
 
 instance PluginMethod Request TextDocumentFoldingRange where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcFoldingRangeOn pid conf
+      && pluginEnabledConfig plcFoldingRangeOn (configForPlugin conf pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
-      pid = pluginId pluginDesc
 
 instance PluginMethod Request CallHierarchyIncomingCalls where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'
-  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn pid conf
-    where
-      pid = pluginId pluginDesc
+  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
 
 instance PluginMethod Request CallHierarchyOutgoingCalls where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'
-  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn pid conf
-    where
-      pid = pluginId pluginDesc
+  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
 
 instance PluginMethod Request CustomMethod where
   pluginEnabled _ _ _ _ = True
@@ -565,19 +661,19 @@ instance PluginMethod Notification TextDocumentDidClose where
 
 instance PluginMethod Notification WorkspaceDidChangeWatchedFiles where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
 
 instance PluginMethod Notification WorkspaceDidChangeWorkspaceFolders where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
 
 instance PluginMethod Notification WorkspaceDidChangeConfiguration where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
 
 instance PluginMethod Notification Initialized where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
 
 
 instance PluginNotificationMethod TextDocumentDidOpen where
@@ -737,16 +833,15 @@ newtype PluginId = PluginId T.Text
 instance IsString PluginId where
   fromString = PluginId . T.pack
 
-configForPlugin :: Config -> PluginId -> PluginConfig
-configForPlugin config (PluginId plugin)
-    = Map.findWithDefault Data.Default.def plugin (plugins config)
+-- | Lookup the current config for a plugin
+configForPlugin :: Config -> PluginDescriptor c -> PluginConfig
+configForPlugin config PluginDescriptor{..}
+    = Map.findWithDefault (configInitialGenericConfig pluginConfigDescriptor) pluginId (plugins config)
 
 -- | Checks that a given plugin is both enabled and the specific feature is
 -- enabled
-pluginEnabledConfig :: (PluginConfig -> Bool) -> PluginId -> Config -> Bool
-pluginEnabledConfig f pid config = plcGlobalOn pluginConfig && f pluginConfig
-  where
-    pluginConfig = configForPlugin config pid
+pluginEnabledConfig :: (PluginConfig -> Bool) -> PluginConfig -> Bool
+pluginEnabledConfig f pluginConfig = plcGlobalOn pluginConfig && f pluginConfig
 
 -- ---------------------------------------------------------------------
 

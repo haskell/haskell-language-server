@@ -362,7 +362,7 @@ runWithDb recorder fp k = do
 
   withHieDb fp $ \writedb -> do
     -- the type signature is necessary to avoid concretizing the tyvar
-    -- e.g. `withWriteDbRetrable initConn` without type signature will
+    -- e.g. `withWriteDbRetryable initConn` without type signature will
     -- instantiate tyvar `a` to `()`
     let withWriteDbRetryable :: WithHieDb
         withWriteDbRetryable = makeWithHieDbRetryable recorder rng writedb

@@ -11,7 +11,6 @@ module Ide.Plugin.CallHierarchy.Internal (
   prepareCallHierarchy
 , incomingCalls
 , outgoingCalls
-, callHierarchyId
 ) where
 
 import           Control.Lens                   ((^.))
@@ -37,9 +36,6 @@ import           Ide.Types
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens        as L
 import           Text.Read                      (readMaybe)
-
-callHierarchyId :: PluginId
-callHierarchyId = PluginId "callHierarchy"
 
 -- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHierarchy
