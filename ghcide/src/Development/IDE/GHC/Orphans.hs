@@ -91,10 +91,14 @@ instance Show Module where
 
 #if !MIN_VERSION_ghc(9,3,0)
 instance Outputable a => Show (GenLocated SrcSpan a) where show = unpack . printOutputable
-#endif
 
 instance (NFData l, NFData e) => NFData (GenLocated l e) where
     rnf (L l e) = rnf l `seq` rnf e
+
+instance NFData HsDocString where
+    rnf = rwhnf
+
+#endif
 
 instance Show ModSummary where
     show = show . ms_mod
@@ -184,9 +188,6 @@ instance NFData Type where
 
 instance Show a => Show (Bag a) where
     show = show . bagToList
-
-instance NFData HsDocString where
-    rnf = rwhnf
 
 instance Show ModGuts where
     show _ = "modguts"

@@ -51,10 +51,11 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-10-07T12:19:15Z
+index-state: 2022-12-13T21:00:15Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
+  ghc-exactprint >= 1.6.1,
   entropy >= 0.4.1.10,
   -- For GHC 9.4
   basement >= 0.0.15,
