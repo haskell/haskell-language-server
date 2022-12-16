@@ -1658,7 +1658,7 @@ lookupName :: HscEnv
            -> IO (Maybe TyThing)
 lookupName _ name
   | Nothing <- nameModule_maybe name = pure Nothing
-lookupName hsc_env name = do
+lookupName hsc_env name = handle $ do
 #if MIN_VERSION_ghc(9,2,0)
   mb_thing <- liftIO $ lookupType hsc_env name
 #else
@@ -1677,6 +1677,8 @@ lookupName hsc_env name = do
         case res of
           Util.Succeeded x -> return (Just x)
           _ -> return Nothing
+  where
+    handle x = x `catch` \(_ :: IOEnvFailure) -> pure Nothing
 
 pathToModuleName :: FilePath -> ModuleName
 pathToModuleName = mkModuleName . map rep
