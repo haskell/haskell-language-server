@@ -129,7 +129,10 @@
                 then overrideCabal hsuper.ormolu (_: { enableSeparateBinOutput = false; })
                 else hsuper.ormolu;
 
-              fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu {};
+              fourmolu =
+                addBuildDepend
+                  (appendConfigureFlag (hself.callCabal2nix "fourmolu" inputs.fourmolu {}) "-f-fixity-th")
+                  hself.file-embed;
             };
 
           hlsSources =
