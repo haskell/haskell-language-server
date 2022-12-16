@@ -1983,7 +1983,7 @@ completionDocTests =
         , "foo = ()"
         , "bar = fo"
         ]
-      test doc (Position 3 8) "foo" Nothing ["*Defined at line 3, column 1 in this module*\n* * *\ndocdoc\n"]
+      test doc (Position 3 8) "foo" Nothing ["*Defined at line 3, column 1 in this module*\n* * *\n\n\ndocdoc\n"]
   , testSession "local multi line doc with '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
@@ -1992,7 +1992,7 @@ completionDocTests =
         , "foo = ()"
         , "bar = fo"
         ]
-      test doc (Position 4 8) "foo" Nothing ["*Defined at line 4, column 1 in this module*\n* * *\n abcabc\n"]
+      test doc (Position 4 8) "foo" Nothing ["*Defined at line 4, column 1 in this module*\n* * *\n\n\nabcabc\n"]
   , testSession "local multi line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
@@ -2002,7 +2002,7 @@ completionDocTests =
         , "foo = ()"
         , "bar = fo"
         ]
-      test doc (Position 5 8) "foo" Nothing ["*Defined at line 5, column 1 in this module*\n* * *\n     abcabc\n\ndef\n"]
+      test doc (Position 5 8) "foo" Nothing ["*Defined at line 5, column 1 in this module*\n* * *\n\n\nabcabc \n\ndef\n"]
   , testSession "extern empty doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"

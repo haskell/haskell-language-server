@@ -79,7 +79,9 @@ lookupKind env =
     fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env
 
 getDocumentationTryGhc :: HscEnv -> Name -> IO SpanDoc
-getDocumentationTryGhc env n = fromMaybe emptySpanDoc . listToMaybe <$> getDocumentationsTryGhc env [n]
+getDocumentationTryGhc env n =
+  (fromMaybe emptySpanDoc . listToMaybe <$> getDocumentationsTryGhc env [n])
+    `catch` (\(_ :: IOEnvFailure) -> pure emptySpanDoc)
 
 getDocumentationsTryGhc :: HscEnv -> [Name] -> IO [SpanDoc]
 getDocumentationsTryGhc env names = do
