@@ -4,6 +4,7 @@
 #     - Edit `sourceDirs` to update the set of local packages
 #
 # For more details: https://nixos.wiki/wiki/Flakes
+#
 {
   description = "haskell language server flake";
 
