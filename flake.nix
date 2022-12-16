@@ -170,7 +170,8 @@
                 then overrideCabal hsuper.ormolu (_: { enableSeparateBinOutput = false; })
                 else hsuper.ormolu;
 
-              # with fixith-th, OOM is likely to happen in link time.
+              # Due to the following issue, fixity-th should be disabled, especially for darwin.
+              # https://github.com/fourmolu/fourmolu/issues/238
               fourmolu =
                 addBuildDepend
                   (appendConfigureFlag (hself.callCabal2nix "fourmolu" inputs.fourmolu {}) "-f-fixity-th")
