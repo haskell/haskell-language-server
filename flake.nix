@@ -129,7 +129,12 @@
                 then overrideCabal hsuper.ormolu (_: { enableSeparateBinOutput = false; })
                 else hsuper.ormolu;
 
-              fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu {};
+              # Due to the following issue, fixity-th should be disabled, especially for darwin.
+              # https://github.com/fourmolu/fourmolu/issues/238
+              fourmolu =
+                addBuildDepend
+                  (appendConfigureFlag (hself.callCabal2nix "fourmolu" inputs.fourmolu {}) "-f-fixity-th")
+                  hself.file-embed;
             };
 
           hlsSources =
