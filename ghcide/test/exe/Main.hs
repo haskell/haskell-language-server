@@ -1688,7 +1688,7 @@ localCompletionTests = [
 
 nonLocalCompletionTests :: [TestTree]
 nonLocalCompletionTests =
-  [ completionTest
+  [ brokenForWinGhc $ completionTest
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
@@ -1699,7 +1699,7 @@ nonLocalCompletionTests =
       (Position 2 8)
       [ ("True", CiConstructor, "True", True, True, Nothing)
       ],
-    completionTest
+    brokenForWinGhc $ completionTest
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Boo", "f = True"]
       (Position 2 8)
@@ -1745,6 +1745,8 @@ nonLocalCompletionTests =
       (Position 0 13)
       []
   ]
+  where
+    brokenForWinGhc = knownBrokenFor (BrokenSpecific Windows [GHC810, GHC90, GHC92, GHC94]) "Windows has strange things in scope for some reason"
 
 otherCompletionTests :: [TestTree]
 otherCompletionTests = [
