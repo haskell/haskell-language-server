@@ -3,6 +3,7 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE PolyKinds             #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
@@ -34,7 +35,13 @@ extractTests =
     , mkGoldenExtractTest "ExtractSimple" (R 0 23 0 28)
     , mkGoldenExtractTest "ExtractFreeVars" (R 3 7 3 19)
     , mkGoldenExtractTest "ExtractFreeVars" (R 1 5 3 19)
-    -- TODO this case uses record wild cards, and the current implementation handles it sub-optimally.
+    -- TODO this case uses record wild cards, and the current implementation handles it sub-optimally. Notice how
+    -- the field selectors bound in the wildcard pattern are not found to be free variables.
+    , mkGoldenExtractTest "ExtractBad" (R 4 16 4 21)
+    -- TODO current implementation considers "bar" to be in scope post extraction because the variable was
+    -- bound in both the surrounding context and the extracted expression.
+    , mkGoldenExtractTest "ExtractBad" (R 6 12 6 47)
+    -- TODO this case also has the record wildcard problem.
     , mkGoldenExtractTest "ExtractFreeVarsComplex" (R 6 5 8 39)
     , mkGoldenExtractTest "ExtractFromDeclWithSig" (R 1 7 1 28)
     , mkGoldenExtractTest "ExtractFromWhere" (R 2 11 2 16)

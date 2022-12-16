@@ -44,8 +44,8 @@ import           Language.LSP.Types.Capabilities
 -- Before:
 --   foo = x + y + z
 -- After
---   newDefinition y + z = y + z
---   foo = x + newDefinition
+--   newDefinition y z = y + z
+--   foo = x + newDefinition y z
 --
 -- Does not work with record wild cards, and subtle bugs relating to shadowed variables, which is documented throughout
 -- this module.
@@ -86,14 +86,19 @@ suggestExtractFunction _ _ _ = [] -- Could not find Annotated ParsedSource
 -- is extracted.  This strategy will probably work for >90% cases.
 --
 -- The strategy is that we assume that all variables bound in the extracted expr scope over any occurrence of said
--- variable in the same extracted expr. Assuming this, we can take the intersection of the variables bound in the
--- expression's scope, and those bound in the surrounding context, and thereby find the newly-free variables
--- post-extraction.
+-- variable in the same extracted expr. Assuming this, we can take the variables bound in the surrounding context minus
+-- the variables bound in the expression. This gives us variables that were in scope that will no longer be in scope
+-- post-extraction. Then we find the utilized variables by finding the intersection of in-scope variable and utilized
+-- variables.
 --
--- A simple counter-example to this strategy would occur by extracting the rhs of `foo`:
---    foo bar = let tmp = bar; bar = 1 in bar
--- Where bar is used in the rhs of, but is also bound in the same expression. Thankfully this would just cause an
--- unbound variable error post-extraction.
+-- A simple counter-example to this strategy would occur by extracting the rhs of `foo`, "let tmp = ... in bar":
+
+--    foo bar = let tmp = bar in let bar = 1 in bar
+
+-- `bar` is used in the rhs of, but is also bound in the same expression, and so this strategy will detect the variable
+-- not being out of scope post-extraction (even though it will be).
+--
+-- Thankfully this would just cause an unbound variable error post-extraction.
 --
 -- In order to have a more robust strategy without excessive maintenance burden, we would require output from
 -- GHC's renamer phase, preferably in-tree.
@@ -102,22 +107,44 @@ suggestExtractFunction _ _ _ = [] -- Could not find Annotated ParsedSource
 -- TODO Some subtle name shadowing issues in the extracted expression. Hard to fix without more GHC help.
 --      In this case, bar is actually a free variable, but this function will find it not to be free.
 -- TODO Record `{..}` pattern matching syntax; we can find the fields in the matching record to fix this. See
---      hls-explicit-record-fields-plugin
+--      hls-explicit-record-fields-plugin.
+-- TODO When finding bound variables in the whole declaration, we find bound variables in the _whole_ declaration,
+--      not just the surrounding Match. Therefore, as far as this implementation is concerned, variables in other
+--      Match's scoped over the Match that contains the extracted expression.
 findFreeVarsPostExtract :: (Monad m) => SrcSpan -> LHsExpr GhcPs -> ParsedSource -> TransformT m [RdrName]
 findFreeVarsPostExtract extractSpan extractExpr parsedSource = do
-      -- Find the variables that are bound in this declaration. Not finding the surrounding decl is a bug.
-      -- TODO return error when we cannot find the containing decl
+      -- Find the variables that are bound in this declaration. Not finding the surrounding decl is a bug
+      -- (since an expression) must necessarily occur in a top-level declaration.
+      --
+      -- TODO log error when we cannot find the containing decl
       boundVarsInWholeDeclMay <- querySmallestDeclWithM (pure . (extractSpan `isSubspanOf`)) (pure . boundVarsQ) parsedSource
+      -- Variables bound in the entire declaration that contains the extracted expression
       let boundVarsInWholeDecl = fromMaybe [] boundVarsInWholeDeclMay
+      -- Variables bound in the extracted expression
       let boundVarsInExtractedExpr = boundVarsQ extractExpr
+      -- Variables used in the extracted expression. Note this does not detect record wildcards for record construction,
+      -- such as `foo x y = Rec {..}`, in the case that Rec has a field x and/or y.
       let usedVarsInExtractedExpr = usedVarsQ extractExpr
-      let varsThatScopeOverExtractedExpr =
+      -- The bound variables that scope over the extracted expression is, in most cases, all bindings in the
+      -- declarations minus the bindings in the extracted expression. This is a simplifying assumption.
+      let boundVarsThatScopeOverExtractedExpr =
             Set.fromList boundVarsInWholeDecl `Set.difference` Set.fromList boundVarsInExtractedExpr
-      -- We use intersection, which implicitly assumes that all non-bound variables in the surrounding scope are
-      -- imports. This is where problems with record field wildcards arise.
-      let postExtractFreeVars = varsThatScopeOverExtractedExpr `Set.intersection` Set.fromList usedVarsInExtractedExpr
-      let argsList = Set.toList postExtractFreeVars
-      pure argsList
+      -- The newly freed variables of the extracted expression are, most of the time, those variables scoping over
+      -- the extracted expression that also exist in the extracted expression.
+      --
+      -- Anything else is assumed to be an import, which could be wrong in a case such as:
+      --
+      --   data Rec = Rec {x :: Int}
+      --   foo Rec {..} y = x + y
+      --
+      -- This implementation erroneously produces:
+      --
+      --   data Rec = Rec {x :: Int}
+      --   newDefinition y = x + y
+      --   foo Rec {..} y = newDefinition y
+      let postExtractFreeVars =
+            boundVarsThatScopeOverExtractedExpr `Set.intersection` Set.fromList usedVarsInExtractedExpr
+      pure $ Set.toList postExtractFreeVars
 
 -- | A type-safety-helpful newtype that represents that a Range has had its whitespace padding removed from both sides:
 --
@@ -135,23 +162,25 @@ newtype UnpaddedRange = UnpaddedRange {unUnpaddedRange :: Range}
 -- | This function removes whitespace padding from the Range provided by the user.
 --
 -- When the user selects their range that they would like to extract, we would like to ignore whitespace in their
--- selection, so that we can find expressions that are contained fully by said range. Consider the following selection:
+-- selection, so that we can find expressions that are contained fully by said range, but without accepting false
+-- positives. Therefore, we remove whitespace padding, and then during matching of ranges, we only match expression
+-- that have exactly the range selected by the user (whitespace agnostic) by performing a range _equality_ check.
+--
+-- If we were to check whether we can extract an expression with a subspan check (instead of equality), then we would
+-- accept selections that are not valid extractions. For example:
 --
 --   foo = 1    +    2
 --           ^       ^
 -- In this case, while the range fully wraps `2`, it is not a valid extract function query, since it also wraps `+ 2`,
 -- which is not an expression.
 --
--- Therefore, in order to catch this case, we narrow the selection to:
+-- Therefore, in order to ensure that we do not suggest an extraction in this case, we narrow the selection to:
 --
 --   foo = 1    +    2
 --              ^    ^
--- and look for LHsExprs that precisely match the given Range, which ensures that we only accept a range if:
+-- and look for LHsExprs that match the given Range using _equality_, which ensures that we only accept a range if:
 --  1. the range wraps an entire LHsExpr
---  2. the range wraps an LHsExpr exactly
---
--- More explanation of (2)... If a range does exactly match any LHsExpr, then we know it is an invalid range for
--- extract, since there is no whitespace padding in the range.
+--  2. the range wraps an LHsExpr exactly (so as to not suggest false positives)
 removeWhitespacePadding :: Range -> T.Text -> UnpaddedRange
 removeWhitespacePadding range@(Range (Position sl sc) (Position el ec)) source =
   let selectedTxt = textInRange range source
@@ -193,14 +222,9 @@ tryFindLargestExprInRange range = everythingBut (<|>) $ mkQ (Nothing, False) fir
     -- When we find an LHsExpr that is fully contained by this range, we return the LHsExpr and early-exit the
     -- syb traversal (by returning True)
     firstContainedExprQ = \case
-      -- lexpr@(L (SrcSpanAnn _ span@(RealSrcSpan realSrcSpan _)) _) :: LHsExpr GhcPs
-      --   | rangeSrcSpan <- rangeToSrcSpan (fromString $ unpackFS $ srcSpanFile realSrcSpan) (unUnpaddedRange range)
-      --   , isSameSrcSpanModuloFile rangeSrcSpan span
-      --   -> (Just (span, lexpr), True)
       lexpr@(L (SrcSpanAnn _ span) _) :: LHsExpr GhcPs
         | Just spanRange <- srcSpanToUnpaddedRange span,
           range == spanRange
-          -- traceShow (range, spanRange) True
           -> (Just (span, lexpr), True)
       _ -> (Nothing, False)
 
