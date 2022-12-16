@@ -94,10 +94,10 @@ jobs:
         extra_nix_config: |
           experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
-    - uses: cachix/cachix-action@v12
-      with:
-        name: haskell-language-server
-        authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
+    #- uses: cachix/cachix-action@v12
+    #  with:
+    #    name: haskell-language-server
+    #    authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
     - name: Build development shell
       run: nix develop --print-build-logs --profile dev
     - name: Build all development shell (without nix dependencies)
