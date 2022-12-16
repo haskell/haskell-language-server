@@ -55,7 +55,7 @@ type GhcideCodeAction = ExceptT ResponseError (ReaderT CodeActionArgs IO) Ghcide
 
 {-# ANN runGhcideCodeAction ("HLint: ignore Move guards forward" :: String) #-}
 runGhcideCodeAction :: LSP.MonadLsp Config m => IdeState -> MessageParams TextDocumentCodeAction -> GhcideCodeAction -> m GhcideCodeActionResult
-runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) (Just -> caaRange) CodeActionContext {_diagnostics = List diags}) codeAction = do
+runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) range CodeActionContext {_diagnostics = List diags}) codeAction = do
   let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
       runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure mbFile) >>= MaybeT . use key
   caaGhcSession <- onceIO $ runRule GhcSession
@@ -82,11 +82,13 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) (Ju
   caaHar <- onceIO $ runRule GetHieAst
   caaBindings <- onceIO $ runRule GetBindings
   caaGblSigs <- onceIO $ runRule GetGlobalBindingTypeSigs
+  let caaRange = Just range
   results <- liftIO $
 
       sequence
         ([ runReaderT (runExceptT codeAction) caa
-          | (Just -> caaDiagnostic) <- diags,
+          | diagnostic <- diags,
+            let caaDiagnostic = Just diagnostic,
             let caa = CodeActionArgs {..}
         ] <> [let caaDiagnostic = Nothing in runReaderT (runExceptT codeAction) CodeActionArgs{..}])
   let (errs, successes) = partitionEithers results
@@ -101,9 +103,7 @@ mkGhcideCAPlugin codeAction plId =
   (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentCodeAction $
         \state _ params@(CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext {_diagnostics = List diags}) -> do
-          -- traceM "pre-runAction"
           results <- runGhcideCodeAction state params codeAction
-          -- traceM "post-runAction"
           pure $
             Right $
               List

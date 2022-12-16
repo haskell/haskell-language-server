@@ -3,61 +3,23 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE ImplicitParams        #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE PolyKinds             #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
 module Extract (extractTests) where
 
-import           Control.Applicative.Combinators
-import           Control.Lens                             ((^.))
-import           Control.Monad
-import           Data.Default
-import           Data.Foldable
 import           Data.List.Extra
-import           Data.Maybe
-import qualified Data.Text                                as T
-import           Data.Tuple.Extra
-import           Development.IDE.GHC.Util
-import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
-import           Development.IDE.Test
+import qualified Data.Text                         as T
+import qualified Development.IDE.Plugin.CodeAction as Refactor
 import           Development.IDE.Types.Location
-import           Development.Shake                        (getDirectoryFilesIO)
-import           Ide.Types
 import           Language.LSP.Test
-import           Language.LSP.Types                       hiding
-                                                          (SemanticTokenAbsolute (length, line),
-                                                           SemanticTokenRelative (length),
-                                                           SemanticTokensEdit (_start),
-                                                           mkRange)
-import qualified Language.LSP.Types                       as LSP
-import           Language.LSP.Types.Capabilities
-import qualified Language.LSP.Types.Lens                  as L
-import           System.Directory
-import           System.FilePath
-import           System.Info.Extra                        (isMac, isWindows)
-import qualified System.IO.Extra
-import           System.IO.Extra                          hiding (withTempDir)
-import           System.Time.Extra
-import           Test.Tasty
-import           Test.Tasty.ExpectedFailure
-import           Test.Tasty.HUnit
-import           Text.Regex.TDFA                          ((=~))
-
-
-import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports, bindingsPluginDescriptor)
+import           Language.LSP.Types                hiding
+                                                   (SemanticTokenAbsolute (length, line),
+                                                    SemanticTokenRelative (length),
+                                                    SemanticTokensEdit (_start),
+                                                    mkRange)
 import           Test.Hls
-
-import qualified Development.IDE.Plugin.CodeAction        as Refactor
-import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
-import Debug.Trace (traceM, traceShowM)
 
 
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range

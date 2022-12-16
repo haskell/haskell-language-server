@@ -518,7 +518,7 @@ setAnchor anc (SrcSpanAnn (EpAnn _ nameAnn comments) span) =
   SrcSpanAnn (EpAnn anc nameAnn comments) span
 setAnchor _ spanAnnN = spanAnnN
 
-mapAnchor :: Monoid ann => (Maybe Anchor -> Anchor) -> SrcSpanAnn' (EpAnn ann) -> SrcSpanAnn' (EpAnn ann)
+mapAnchor :: (Maybe Anchor -> Anchor) -> SrcSpanAnnA -> SrcSpanAnnA
 mapAnchor f (SrcSpanAnn (EpAnn anc nameAnn comments) span) =
   SrcSpanAnn (EpAnn (f $ Just anc) nameAnn comments) span
 mapAnchor f (SrcSpanAnn EpAnnNotUsed span) = SrcSpanAnn (EpAnn (f Nothing) mempty emptyComments) span

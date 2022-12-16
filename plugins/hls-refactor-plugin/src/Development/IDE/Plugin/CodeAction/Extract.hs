@@ -1,20 +1,17 @@
-{-# LANGUAGE GADTs     #-}
+{-# LANGUAGE GADTs #-}
 
 module Development.IDE.Plugin.CodeAction.Extract (textInRange, suggestExtractFunction, fromLspList) where
 
 import           Control.Applicative                       ((<|>))
-import           Data.Data                                 (Data)
 import           Data.Foldable                             (foldl')
 import           Data.Generics                             (everywhere, mkT)
 import           Data.Maybe
 import           Data.Monoid                               (Sum (..))
 import qualified Data.Set                                  as Set
-import           Data.String                               (fromString)
 import qualified Data.Text                                 as T
 import           Development.IDE.GHC.Compat
+import qualified Development.IDE.GHC.Compat                as Compat
 import           Development.IDE.GHC.Compat.ExactPrint
-import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.Error                 (rangeToSrcSpan)
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Types.Location
 import           Generics.SYB                              (GenericQ,
@@ -105,12 +102,13 @@ suggestExtractFunction _ _ _ = [] -- Could not find Annotated ParsedSource
 -- TODO Some subtle name shadowing issues in the extracted expression. Hard to fix without more GHC help.
 --      In this case, bar is actually a free variable, but this function will find it not to be free.
 -- TODO Record `{..}` pattern matching syntax; we can find the fields in the matching record to fix this. See
---      hls-explicit-refcord-fields-plugin
+--      hls-explicit-record-fields-plugin
 findFreeVarsPostExtract :: (Monad m) => SrcSpan -> LHsExpr GhcPs -> ParsedSource -> TransformT m [RdrName]
 findFreeVarsPostExtract extractSpan extractExpr parsedSource = do
       -- Find the variables that are bound in this declaration. Not finding the surrounding decl is a bug.
       -- TODO return error when we cannot find the containing decl
-      (fromMaybe [] -> boundVarsInWholeDecl) <- querySmallestDeclWithM (pure . (extractSpan `isSubspanOf`)) (pure . boundVarsQ) parsedSource
+      boundVarsInWholeDeclMay <- querySmallestDeclWithM (pure . (extractSpan `isSubspanOf`)) (pure . boundVarsQ) parsedSource
+      let boundVarsInWholeDecl = fromMaybe [] boundVarsInWholeDeclMay
       let boundVarsInExtractedExpr = boundVarsQ extractExpr
       let usedVarsInExtractedExpr = usedVarsQ extractExpr
       let varsThatScopeOverExtractedExpr =
@@ -132,6 +130,7 @@ findFreeVarsPostExtract extractSpan extractExpr parsedSource = do
 --            ^   ^
 -- See `removeWhitespacePadding` for more info
 newtype UnpaddedRange = UnpaddedRange {unUnpaddedRange :: Range}
+  deriving stock (Show, Eq)
 
 -- | This function removes whitespace padding from the Range provided by the user.
 --
@@ -169,6 +168,24 @@ removeWhitespacePadding range@(Range (Position sl sc) (Position el ec)) source =
       (getSum -> rowsR, getSum -> colsR) = paddingToDelta paddingRight
      in UnpaddedRange $ Range (Position (sl - rowsL) (sc - colsL)) (Position (el - rowsR) (ec - colsR))
 
+-- | Convert a GHC SrcSpan to an UnpaddedRange
+--
+-- TODO consolidate with Range as found in the rest of HLS. For some reason, the Range provided to code actions has
+-- a character value of one less than the same Range used in the rest of HLS. Therefore, the typical Range <-> SrcSpan
+-- conversions don't work because of an off-by-one.
+srcSpanToUnpaddedRange :: SrcSpan -> Maybe UnpaddedRange
+srcSpanToUnpaddedRange (UnhelpfulSpan _)           = Nothing
+srcSpanToUnpaddedRange (Compat.RealSrcSpan real _) = Just $ realSrcSpanToUnpaddedRange real
+  where
+    realSrcSpanToUnpaddedRange :: RealSrcSpan -> UnpaddedRange
+    realSrcSpanToUnpaddedRange real =
+      UnpaddedRange $ Range (realSrcLocToPositionForUnpaddedRange $ Compat.realSrcSpanStart real)
+            (realSrcLocToPositionForUnpaddedRange $ Compat.realSrcSpanEnd   real)
+    realSrcLocToPositionForUnpaddedRange :: RealSrcLoc -> Position
+    realSrcLocToPositionForUnpaddedRange real =
+      Position (fromIntegral $ srcLocLine real - 1) (fromIntegral $ srcLocCol real)
+
+
 -- | Queries an AST for the topmost LHsExpr that exactly matches the given UnpaddedRange.
 tryFindLargestExprInRange :: UnpaddedRange -> GenericQ (Maybe (SrcSpan, LHsExpr GhcPs))
 tryFindLargestExprInRange range = everythingBut (<|>) $ mkQ (Nothing, False) firstContainedExprQ
@@ -176,10 +193,15 @@ tryFindLargestExprInRange range = everythingBut (<|>) $ mkQ (Nothing, False) fir
     -- When we find an LHsExpr that is fully contained by this range, we return the LHsExpr and early-exit the
     -- syb traversal (by returning True)
     firstContainedExprQ = \case
-      lexpr@(L (SrcSpanAnn _ span@(RealSrcSpan realSrcSpan _)) _) :: LHsExpr GhcPs
-        | rangeSrcSpan <- rangeToSrcSpan (fromString $ unpackFS $ srcSpanFile realSrcSpan) (unUnpaddedRange range)
-        , isSameSrcSpanModuloFile rangeSrcSpan span
-        -> (Just (span, lexpr), True)
+      -- lexpr@(L (SrcSpanAnn _ span@(RealSrcSpan realSrcSpan _)) _) :: LHsExpr GhcPs
+      --   | rangeSrcSpan <- rangeToSrcSpan (fromString $ unpackFS $ srcSpanFile realSrcSpan) (unUnpaddedRange range)
+      --   , isSameSrcSpanModuloFile rangeSrcSpan span
+      --   -> (Just (span, lexpr), True)
+      lexpr@(L (SrcSpanAnn _ span) _) :: LHsExpr GhcPs
+        | Just spanRange <- srcSpanToUnpaddedRange span,
+          range == spanRange
+          -- traceShow (range, spanRange) True
+          -> (Just (span, lexpr), True)
       _ -> (Nothing, False)
 
 -- | Ensures that there is at least one newline's difference between this LHsDecl and the previous decl. If the
@@ -199,6 +221,10 @@ setAtLeastNewlineDp (L srcSpanAnn decl) = L (mapAnchor (maybe nextLineAnchor set
     nextLineAnchor = generatedAnchor nextLine2Dp
 
 -- | Find all variable bindings in an AST.
+--
+-- NOTE As with the rest of the extract plugin, shadowing is considered out of scope, and we do a best guess.
+-- TODO improve shadowing here if we decide to do it ourselves. Be careful, as there is certainly more to do than
+-- just the TODOs that have already been added...
 boundVarsQ :: GenericQ [RdrName]
 boundVarsQ  = everything (<>) $ mkQ []
   (\case
@@ -210,18 +236,18 @@ boundVarsQ  = everything (<>) $ mkQ []
     (FunBind {fun_id} :: HsBindLR GhcPs GhcPs) -> [unLocA fun_id]
     PatBind {pat_lhs}                          -> rdrNameQ pat_lhs -- TODO shadowing
     VarBind {var_id}                           -> [var_id] -- TODO shadowing
-    PatSynBind {}                              -> [] -- TODO
-    AbsBinds {}                                -> [] -- TODO
+    PatSynBind {}                              -> [] -- TODO shadowing
+    AbsBinds {}                                -> [] -- TODO shadowing
     )
   `extQ`
   (\case
     (HsValBinds _ binds :: HsLocalBindsLR GhcPs GhcPs) -> boundVarsQ binds
-    HsIPBinds {}                                       -> [] -- TODO
+    HsIPBinds {}                                       -> [] -- TODO shadowing
     EmptyLocalBinds {}                                 -> []
   )
   where
     rdrNameQ :: GenericQ [RdrName]
-    rdrNameQ =everything (<>) $ mkQ [] $ \case name -> [name]
+    rdrNameQ =everything (<>) $ mkQ [] $ \name -> [name]
 
 -- | Find variable usages bindings in an AST.
 usedVarsQ :: GenericQ [RdrName]
@@ -241,10 +267,6 @@ generateNewDecl name args expr = do
       mg = MG noExtField (L (noAnnSrcSpanDP sp1 $ SameLine 0) [lmatch]) FromSource
       funbind = FunBind noExtField name mg []
   pure $ ValD noExtField funbind
-
--- | Returns True if two SrcSpan occupy the same text region (even if they have different file information)
-isSameSrcSpanModuloFile :: SrcSpan -> SrcSpan -> Bool
-isSameSrcSpanModuloFile span1 span2 = span1 `isSubspanOf` span2 && span2 `isSubspanOf` span1
 
 fromLspList :: List a -> [a]
 fromLspList (List a) = a

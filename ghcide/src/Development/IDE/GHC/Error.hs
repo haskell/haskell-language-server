@@ -112,15 +112,9 @@ rangeToRealSrcSpan nfp =
         <$> positionToRealSrcLoc nfp . _start
         <*> positionToRealSrcLoc nfp . _end
 
-#if !MIN_VERSION_ghc(9,2,1)
 positionToRealSrcLoc :: NormalizedFilePath -> Position -> RealSrcLoc
 positionToRealSrcLoc nfp (Position l c)=
     Compat.mkRealSrcLoc (fromString $ fromNormalizedFilePath nfp) (fromIntegral $ l + 1) (fromIntegral $ c + 1)
-#else
-positionToRealSrcLoc :: NormalizedFilePath -> Position -> RealSrcLoc
-positionToRealSrcLoc nfp (Position l c)=
-    Compat.mkRealSrcLoc (fromString $ fromNormalizedFilePath nfp) (fromIntegral $ l + 1) (fromIntegral c)
-#endif
 
 isInsideSrcSpan :: Position -> SrcSpan -> Bool
 p `isInsideSrcSpan` r = case srcSpanToRange r of

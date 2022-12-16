@@ -55,7 +55,6 @@ import           Development.IDE.GHC.Util                          (printOutputa
                                                                     printRdrName)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
-import           Development.IDE.Plugin.CodeAction.Util
 import           Development.IDE.Plugin.CodeAction.Extract
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
 import           Development.IDE.Plugin.CodeAction.Util
@@ -120,7 +119,7 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     addTrailingAnnToA,
                                                                     emptyComments,
                                                                     noAnn,
-                                                                    LocatedA, spans)
+                                                                    spans)
 import           GHC.Hs                                            (IsUnicodeSyntax (..))
 import           Language.Haskell.GHC.ExactPrint.Transform         (d1)
 
@@ -207,7 +206,6 @@ extendImportPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> Plu
 extendImportPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor plId)
   { pluginCommands = [extendImportCommand] }
 
--- | Add the ability for a plugin to call GetAnnotatedParsedSource
 extractCodePluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
 extractCodePluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
   mkGhcideCAsPlugin [

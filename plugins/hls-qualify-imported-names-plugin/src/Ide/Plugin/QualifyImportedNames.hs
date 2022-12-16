@@ -21,7 +21,6 @@ import qualified Data.Map.Strict                   as Map
 import           Data.Maybe                        (fromMaybe, mapMaybe)
 import           Data.Text                         (Text)
 import qualified Data.Text                         as Text
-import           Development.IDE                   (spanContainsRange)
 import           Development.IDE.Core.RuleTypes    (GetFileContents (GetFileContents),
                                                     GetHieAst (GetHieAst),
                                                     HieAstResult (HAR, refMap),
