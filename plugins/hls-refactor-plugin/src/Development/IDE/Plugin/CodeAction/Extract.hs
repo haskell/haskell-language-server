@@ -105,7 +105,8 @@ suggestExtractFunction _ _ _ = [] -- Could not find Annotated ParsedSource
 --
 -- Some known weaknesses:
 -- TODO Some subtle name shadowing issues in the extracted expression. Hard to fix without more GHC help.
---      In this case, bar is actually a free variable, but this function will find it not to be free.
+--      You can see this in the above example, where `bar` is actually a free variable, but the implementation will
+--      not realize that the variable will be free post-extraction.
 -- TODO Record `{..}` pattern matching syntax; we can find the fields in the matching record to fix this. See
 --      hls-explicit-record-fields-plugin.
 -- TODO When finding bound variables in the whole declaration, we find bound variables in the _whole_ declaration,
