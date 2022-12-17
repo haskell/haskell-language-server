@@ -148,6 +148,18 @@
         "url": "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz"
       }
     },
+    "implicit-hie": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-bFPhAuQe5IjKYQIz1OEC/j/imDESAv3H1nLNVM3lZF4=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1668650906,
@@ -189,6 +201,7 @@
         "hiedb": "hiedb",
         "hlint": "hlint",
         "hlint-34": "hlint-34",
+        "implicit-hie": "implicit-hie",
         "nixpkgs": "nixpkgs",
         "ptr-poker": "ptr-poker"
       }
