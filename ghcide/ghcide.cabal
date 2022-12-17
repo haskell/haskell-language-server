@@ -104,6 +104,11 @@ library
         ghc-paths,
         cryptohash-sha1 >=0.11.100 && <0.12,
         hie-bios ^>= 0.11.0,
+        -- implicit-hie 0.1.3.0 introduced an unexpected behavioral change.
+        -- https://github.com/Avi-D-coder/implicit-hie/issues/50
+        -- to make sure ghcide behaves in a desirable way, we put implicit-hie
+        -- fake dependency here.
+        implicit-hie < 0.1.3,
         implicit-hie-cradle ^>= 0.3.0.5 || ^>= 0.5,
         base16-bytestring >=0.1.1 && <1.1
     if os(windows)
