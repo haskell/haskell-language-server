@@ -16,6 +16,7 @@ import           Data.Aeson
 import           Data.Bifunctor                       (second)
 import           Data.Either.Extra                    (rights)
 import           Data.List
+import           Data.List.Extra                      (nubOrdOn)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (isNothing, listToMaybe,
                                                        mapMaybe)
@@ -114,7 +115,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
             logWith recorder Info (LogImplementedMethods cls implemented)
             pure
                 $ concatMap mkAction
-                $ nubBy (\(_, x) (_,y) -> x == y)
+                $ nubOrdOn snd
                 $ filter ((/=) mempty . snd)
                 $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
                 $ mkMethodGroups range sigs cls
@@ -219,13 +220,13 @@ type MethodDefinition = (MethodName, MethodSignature)
 type MethodGroup = (T.Text, [MethodDefinition])
 
 makeMethodDefinition :: InstanceBindTypeSig -> MethodDefinition
-makeMethodDefinition sig = (name, signature) 
+makeMethodDefinition sig = (name, signature)
     where
         name = T.drop (T.length bindingPrefix) (printOutputable  (bindName sig))
         signature = bindRendered sig
 
 makeMethodDefinitions :: Range -> [InstanceBindTypeSig] -> [MethodDefinition]
-makeMethodDefinitions range sigs = 
+makeMethodDefinitions range sigs =
     [ makeMethodDefinition sig
     | sig <- sigs
     , inRange range (getSrcSpan $ bindName sig)
@@ -238,7 +239,7 @@ signatureToName sig = T.drop (T.length bindingPrefix) (printOutputable (bindName
 minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [MethodGroup]
 minDefToMethodGroups range sigs minDef = makeMethodGroup <$> go minDef
     where
-        makeMethodGroup methodDefinitions = 
+        makeMethodGroup methodDefinitions =
             let name = mconcat $ intersperse "," $ (\x -> "'" <> x <> "'") . fst <$> methodDefinitions
             in  (name, methodDefinitions)
 

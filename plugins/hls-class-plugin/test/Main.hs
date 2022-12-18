@@ -70,7 +70,7 @@ codeActionTests = testGroup
   , goldenWithClass "Only insert pragma once" "InsertPragmaOnce" "" $ \(_:multi:_) -> do
       executeCodeAction multi
   , expectCodeActionsAvailable "No code action available when minimal requirements meet" "MinimalDefinitionMeet" []
-  , expectCodeActionsAvailable "Add placeholders for all missing methods is unavailable when all methods are required" "AllMethodsRequired" 
+  , expectCodeActionsAvailable "Add placeholders for all missing methods is unavailable when all methods are required" "AllMethodsRequired"
       [ "Add placeholders for 'f','g'"
       , "Add placeholders for 'f','g' with signature(s)"
       ]
@@ -119,9 +119,9 @@ goldenWithClass title path desc act =
     void $ skipManyTill anyMessage (getDocumentEdit doc)
 
 expectCodeActionsAvailable :: TestName -> FilePath -> [T.Text] -> TestTree
-expectCodeActionsAvailable title path actionTitles = 
+expectCodeActionsAvailable title path actionTitles =
   testCase title $ do
-    runSessionWithServer classPlugin testDataDir $ do 
+    runSessionWithServer classPlugin testDataDir $ do
       doc <- openDoc (path <.> "hs") "haskell"
       _ <- waitForDiagnosticsFromSource doc "typecheck"
       caResults <- getAllCodeActions doc
