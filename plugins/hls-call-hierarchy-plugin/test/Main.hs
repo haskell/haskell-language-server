@@ -9,12 +9,13 @@ import           Control.Lens             (set, (^.))
 import           Control.Monad.Extra
 import           Data.Aeson
 import           Data.Functor             ((<&>))
-import           Data.List                (sort)
+import           Data.List                (sort, tails)
 import qualified Data.Map                 as M
 import qualified Data.Text                as T
 import           Ide.Plugin.CallHierarchy
 import qualified Language.LSP.Test        as Test
 import qualified Language.LSP.Types.Lens  as L
+import Development.IDE.Test
 import           System.Directory.Extra
 import           System.FilePath
 import qualified System.IO.Extra
@@ -198,7 +199,7 @@ incomingCallsTests =
       testCase "xdata unavailable" $
         runSessionWithServer plugin testDataDir $ do
           doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
-          waitForKickDone
+          waitForIndex (testDataDir </> "A.hs")
           [item] <- Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0)
           let expected = [CallHierarchyIncomingCall item (List [mkRange 1 2 1 3])]
           Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 0) >>=
@@ -323,7 +324,7 @@ outgoingCallsTests =
       testCase "xdata unavailable" $ withCanonicalTempDir $ \dir ->
         runSessionWithServer plugin dir $ do
           doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
-          waitForKickDone
+          waitForIndex (dir </> "A.hs")
           [item] <- Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 1)
           let expected = [CallHierarchyOutgoingCall item (List [mkRange 1 2 1 3])]
           Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0) >>=
@@ -427,7 +428,7 @@ incomingCallTestCase :: T.Text -> Int -> Int -> [(Int, Int)] -> [Range] -> Asser
 incomingCallTestCase contents queryX queryY positions ranges = withCanonicalTempDir $ \dir ->
   runSessionWithServer plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
-    waitForKickDone
+    waitForIndex (dir </> "A.hs")
     items <- concatMapM (\((x, y), range) ->
       Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc x y)
           <&> map (, range)
@@ -447,7 +448,7 @@ incomingCallMultiFileTestCase :: FilePath -> Int -> Int -> M.Map FilePath [((Int
 incomingCallMultiFileTestCase filepath queryX queryY mp =
   runSessionWithServer plugin testDataDir $ do
     doc <- openDoc filepath "haskell"
-    waitForKickDone
+    waitForIndex (testDataDir </> filepath)
     items <- fmap concat $ sequence $ M.elems $ M.mapWithKey (\fp pr -> do
               p <- openDoc fp "haskell"
               waitForKickDone
@@ -469,7 +470,7 @@ outgoingCallTestCase :: T.Text -> Int -> Int -> [(Int, Int)] -> [Range] -> Asser
 outgoingCallTestCase contents queryX queryY positions ranges = withCanonicalTempDir $ \dir ->
   runSessionWithServer plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
-    waitForKickDone
+    waitForIndex (dir </> "A.hs")
     items <- concatMapM (\((x, y), range) ->
       Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc x y)
           <&> map (, range)
@@ -488,7 +489,7 @@ outgoingCallMultiFileTestCase :: FilePath -> Int -> Int -> M.Map FilePath [((Int
 outgoingCallMultiFileTestCase filepath queryX queryY mp =
   runSessionWithServer plugin testDataDir $ do
     doc <- openDoc filepath "haskell"
-    waitForKickDone
+    waitForIndex (testDataDir </> filepath)
     items <- fmap concat $ sequence $ M.elems $ M.mapWithKey (\fp pr -> do
               p <- openDoc fp "haskell"
               waitForKickDone
@@ -509,7 +510,7 @@ oneCaseWithCreate :: T.Text -> Int -> Int -> (Uri -> CallHierarchyItem) -> Asser
 oneCaseWithCreate contents queryX queryY expected = withCanonicalTempDir $ \dir ->
   runSessionWithServer plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
-    waitForKickDone
+    waitForIndex (dir </> "A.hs")
     Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
       \case
         [item] -> liftIO $ item @?= expected (doc ^. L.uri)
@@ -545,3 +546,16 @@ mkIncomingCallsParam = CallHierarchyIncomingCallsParams Nothing Nothing
 
 mkOutgoingCallsParam :: CallHierarchyItem -> CallHierarchyOutgoingCallsParams
 mkOutgoingCallsParam = CallHierarchyOutgoingCallsParams Nothing Nothing
+
+-- Wait for a special test message emitted by ghcide when a file is indexed,
+-- so that call hierarchy can safely query the database.
+waitForIndex :: FilePath -> Session ()
+waitForIndex fp1 = skipManyTill anyMessage $ void $ referenceReady lenientEquals
+  where
+    -- fp1 may be relative, in that case we check that it is a suffix of the
+    -- filepath from the message
+    lenientEquals :: FilePath -> Bool
+    lenientEquals fp2
+      | isRelative fp1 = any (equalFilePath fp1) (map (foldr (</>) "") $ tails $ splitDirectories fp2)
+      | otherwise = equalFilePath fp1 fp2
+
