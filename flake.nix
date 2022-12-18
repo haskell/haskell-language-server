@@ -59,6 +59,10 @@
       url = "https://hackage.haskell.org/package/hiedb-0.4.2.0/hiedb-0.4.2.0.tar.gz";
       flake = false;
     };
+    implicit-hie = {
+      url = "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz";
+      flake = false;
+    };
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, all-cabal-hashes-unpacked, ... }:
@@ -122,6 +126,7 @@
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
               hiedb = hsuper.callCabal2nix "hiedb" inputs.hiedb {};
+              implicit-hie = hsuper.callCabal2nix "implicit-hie" inputs.implicit-hie {};
 
               # https://github.com/NixOS/nixpkgs/issues/140774
               ormolu =
