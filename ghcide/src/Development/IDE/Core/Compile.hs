@@ -133,6 +133,9 @@ import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
 import Development.IDE.Import.DependencyInformation
 #endif
+import GHC.Unit.Module.ModIface
+import GHC.Iface.Load ( readIface )
+
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -432,11 +435,19 @@ mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
 mkHiFileResultNoCompile session tcm = do
   let hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) session
       ms = pm_mod_summary $ tmrParsed tcm
+      fp = ml_hi_file $ ms_location ms
       tcGblEnv = tmrTypechecked tcm
-  details <- makeSimpleDetails hsc_env_tmp tcGblEnv
+  details' <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
-  iface <- mkIfaceTc hsc_env_tmp sf details ms tcGblEnv
+  iface' <- mkIfaceTc hsc_env_tmp sf details' ms tcGblEnv
+
+  writeIfaceFile hsc_env_tmp fp iface'
+  iface <- panicMaybeErr <$> readIface (hsc_dflags hsc_env_tmp) (hsc_NC hsc_env_tmp) (ms_mod ms) fp
+  details <- mkDetailsFromIface session iface
+
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
+
+panicMaybeErr (Util.Succeeded val) = val -- TODo
 
 mkHiFileResultCompile
     :: ShakeExtras
@@ -448,8 +459,9 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
   let session = hscSetFlags (ms_hspp_opts ms) session'
       ms = pm_mod_summary $ tmrParsed tcm
       tcGblEnv = tmrTypechecked tcm
+      fp = ml_hi_file $ ms_location ms
 
-  (details, mguts) <-
+  (details', mguts) <-
     if mg_hsc_src simplified_guts == HsBootFile
     then do
         details <- mkBootModDetailsTc session tcGblEnv
@@ -462,21 +474,24 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
         pure (details, Just guts)
 
 #if MIN_VERSION_ghc(9,0,1)
-  let !partial_iface = force $ mkPartialIface session details
+  let !partial_iface = force $ mkPartialIface session details'
 #if MIN_VERSION_ghc(9,3,0)
                                               ms
 #endif
                                               simplified_guts
 
-  final_iface <- mkFullIface session partial_iface Nothing
+  final_iface' <- mkFullIface session partial_iface Nothing
 #if MIN_VERSION_ghc(9,4,2)
                     Nothing
 #endif
 
 #else 
-  let !partial_iface = force (mkPartialIface session details simplified_guts)
+  let !partial_iface = force (mkPartialIface session details' simplified_guts)
   final_iface <- mkFullIface session partial_iface
 #endif
+  writeIfaceFile session fp final_iface'
+  final_iface <- panicMaybeErr <$> readIface (hsc_dflags session) (hsc_NC session) (ms_mod ms) fp
+  details <- mkDetailsFromIface session final_iface
 
   -- Write the core file now
   core_file <- case mguts of
