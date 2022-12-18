@@ -158,10 +158,9 @@ computePackageDeps env pkg = do
             T.pack $ "unknown package: " ++ show pkg]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
-data TypecheckHelpers
+newtype TypecheckHelpers
   = TypecheckHelpers
-  { getLinkablesToKeep :: !(IO (ModuleEnv UTCTime))
-  , getLinkables       :: !([NormalizedFilePath] -> IO [LinkableResult])
+  { getLinkables       :: ([NormalizedFilePath] -> IO [LinkableResult]) -- ^ hls-graph action to get linkables for files
   }
 
 typecheckModule :: IdeDefer
@@ -326,11 +325,6 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                                          _ -> panic "hscCompileCoreExprHook: module not found"
                                  ]
            ; let hsc_env' = loadModulesHome (map linkableHomeMod lbs) hsc_env
-
-             -- Essential to do this here after we load the linkables
-           ; keep_lbls <- getLinkablesToKeep
-
-           ; unload hsc_env' $ map (\(mod, time) -> LM time mod []) $ moduleEnvToList keep_lbls
 
 #if MIN_VERSION_ghc(9,3,0)
              {- load it -}
