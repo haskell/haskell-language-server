@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name:          shake-bench
-version:       0.1.1.0
+version:       0.2.0.0
 synopsis:      Build rules for historical benchmarking
 license:       Apache-2.0
 license-file:  LICENSE
