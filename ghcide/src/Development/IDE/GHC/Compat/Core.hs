@@ -579,7 +579,7 @@ import           GHC.Parser.Header            hiding (getImports)
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Linker.Loader            as Linker
 import           GHC.Linker.Types
-import           GHC.Parser.Lexer             hiding (initParserState)
+import           GHC.Parser.Lexer             hiding (initParserState, getPsMessages)
 import           GHC.Parser.Annotation        (EpAnn (..))
 import           GHC.Platform.Ways
 import           GHC.Runtime.Context          (InteractiveImport (..))

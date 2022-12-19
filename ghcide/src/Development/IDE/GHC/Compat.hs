@@ -25,7 +25,7 @@ module Development.IDE.GHC.Compat(
     disableWarningsAsErrors,
     reLoc,
     reLocA,
-    getMessages',
+    getPsMessages,
     renderMessages,
     pattern PFailedWithErrorMessages,
     isObjectLinkable,
@@ -371,31 +371,6 @@ corePrepExpr :: DynFlags -> HscEnv -> CoreExpr -> IO CoreExpr
 corePrepExpr _ = GHC.corePrepExpr
 #else
 simplifyExpr df _ = GHC.simplifyExpr df
-#endif
-
-#if MIN_VERSION_ghc(9,2,0)
-type ErrMsg  = MsgEnvelope DecoratedSDoc
-#endif
-#if MIN_VERSION_ghc(9,3,0)
-type WarnMsg  = MsgEnvelope DecoratedSDoc
-#endif
-
-#if !MIN_VERSION_ghc(9,3,0)
-type PsMessages = (Bag WarnMsg, Bag ErrMsg)
-#endif
-
-getMessages' :: PState -> DynFlags -> PsMessages
-getMessages' pst dflags =
-#if MIN_VERSION_ghc(9,3,0)
-  uncurry PsMessages $ getPsMessages pst
-#else
-#if MIN_VERSION_ghc(9,2,0)
-                 bimap (fmap pprWarning) (fmap pprError) $
-#endif
-                 getMessages pst
-#if !MIN_VERSION_ghc(9,2,0)
-                   dflags
-#endif
 #endif
 
 renderMessages :: PsMessages -> (Bag WarnMsg, Bag ErrMsg)
