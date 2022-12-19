@@ -98,7 +98,7 @@ initializePlugins env = do
     pure $ hscSetFlags newDf env
 #endif
 
--- Plugins aren't stored in ModSummary anymore since GHC 9.0, but this
+-- | Plugins aren't stored in ModSummary anymore since GHC 9.2, but this
 -- function still returns it for compatibility with 8.10
 initPlugins :: HscEnv -> ModSummary -> IO (ModSummary, HscEnv)
 initPlugins session modSummary = do
