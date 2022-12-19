@@ -45,7 +45,6 @@ library
     -- This is a lot of work for almost zero benefit, so we just allow more versions here
     -- and we eventually completely drop support for building HLS with stack.
     , Cabal                 ^>=3.2 || ^>=3.4 || ^>=3.6 || ^>= 3.8
-    , Cabal-syntax          ^>= 3.6
     , deepseq
     , directory
     , extra                 >=1.7.4

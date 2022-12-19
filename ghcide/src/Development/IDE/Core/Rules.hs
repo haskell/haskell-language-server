@@ -694,8 +694,7 @@ typeCheckRuleDefinition hsc pm = do
 
   unlift <- askUnliftIO
   let dets = TypecheckHelpers
-           { getLinkablesToKeep = unliftIO unlift currentLinkables
-           , getLinkables = unliftIO unlift . uses_ GetLinkable
+           { getLinkables = unliftIO unlift . uses_ GetLinkable
            }
   addUsageDependencies $ liftIO $
     typecheckModule defer hsc dets pm
@@ -1105,10 +1104,23 @@ getLinkableRule recorder =
               Just obj_t
                 | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (Just $ LM (posixSecondsToUTCTime obj_t) (ms_mod ms) [DotO obj_file]))
               _ -> liftIO $ coreFileToLinkable linkableType (hscEnv session) ms hirModIface hirModDetails bin_core (error "object doesn't have time")
-        -- Record the linkable so we know not to unload it
+        -- Record the linkable so we know not to unload it, and unload old versions
         whenJust (hm_linkable =<< hmi) $ \(LM time mod _) -> do
             compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
-            liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
+            liftIO $ modifyVar compiledLinkables $ \old -> do
+              let !to_keep = extendModuleEnv old mod time
+              --We need to unload old linkables before we can load in new linkables. However,
+              --the unload function in the GHC API takes a list of linkables to keep (i.e.
+              --not unload). Earlier we unloaded right before loading in new linkables, which
+              --is effectively once per splice. This can be slow as unload needs to walk over
+              --the list of all loaded linkables, for each splice.
+              --
+              --Solution: now we unload old linkables right after we generate a new linkable and
+              --just before returning it to be loaded. This has a substantial effect on recompile
+              --times as the number of loaded modules and splices increases.
+              --
+              unload (hscEnv session) (map (\(mod, time) -> LM time mod []) $ moduleEnvToList to_keep)
+              return (to_keep, ())
         return (hash <$ hmi, (warns, LinkableResult <$> hmi <*> pure hash))
 
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH

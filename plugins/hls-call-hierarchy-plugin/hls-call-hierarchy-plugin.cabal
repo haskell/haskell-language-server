@@ -60,6 +60,7 @@ test-suite tests
     , filepath
     , hls-call-hierarchy-plugin
     , hls-test-utils              ^>=1.4
+    , ghcide-test-utils
     , lens
     , lsp
     , lsp-test

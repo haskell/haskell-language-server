@@ -60,8 +60,8 @@ jobs:
       # **don't forget**
       # to update the ghc versions in 'caching.yml'.
       matrix:
-        ghc: [ "9.4.2"
-             , "9.4.1"
+        ghc: [ "9.4.3"
+             , "9.4.2"
              , "9.2.5"
              , "9.2.4"
              , "9.2.3"
@@ -76,17 +76,17 @@ jobs:
         # they are broken for good reasons, e.g. compiler is bugged
         # on that platform.
         exclude:
-           - os: windows-latest
-             ghc: '9.4.1'
            # Exclude until https://github.com/haskell/actions/issues/129
            # is resolved.
+           - os: windows-latest
+             ghc: '9.4.3' # Excluded because github action cannot install it
            - os: windows-latest
              ghc: '9.2.5'
         # Mark which GHC versions on which platform we want to test.
         include:
            # only test supported ghc major versions
            - os: ubuntu-latest
-             ghc: '9.4.2'
+             ghc: '9.4.3'
              test: true
            - os: ubuntu-latest
              ghc: '9.2.5'
@@ -165,15 +165,15 @@ jobs:
           HLS_WRAPPER_TEST_EXE: hls-wrapper
         run: cabal test wrapper-test --test-options="$TEST_OPTS --rerun-log-file .tasty-rerun-log-wrapper"
 
-      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-brittany-plugin
         run: cabal test hls-brittany-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-brittany-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-refactor-plugin
         run: cabal test hls-refactor-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-refactor-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-floskell-plugin
         run: cabal test hls-floskell-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-floskell-plugin --test-options="$TEST_OPTS"
 
@@ -185,31 +185,31 @@ jobs:
         name: Test hls-pragmas-plugin
         run: cabal test hls-pragmas-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-pragmas-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-eval-plugin
         run: cabal test hls-eval-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-eval-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-haddock-comments-plugin
         run: cabal test hls-haddock-comments-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-haddock-comments-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-splice-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-stylish-haskell-plugin
         run: cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-ormolu-plugin
         run: cabal test hls-ormolu-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-ormolu-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-fourmolu-plugin
         run: cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-tactics-plugin test suite
         run: cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-tactics-plugin --test-options="$TEST_OPTS"
 
@@ -225,15 +225,15 @@ jobs:
         name: Test hls-call-hierarchy-plugin test suite
         run: cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.os != 'windows-latest' && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.os != 'windows-latest' && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-rename-plugin test suite
         run: cabal test hls-rename-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-rename-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-hlint-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.0.1' && matrix.ghc != '9.0.2' && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.0.1' && matrix.ghc != '9.0.2' && matrix.ghc != '9.2.4' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-stan-plugin test suite
         run: cabal test hls-stan-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-stan-plugin --test-options="$TEST_OPTS"
 
@@ -249,7 +249,7 @@ jobs:
         name: Test hls-qualify-imported-names-plugin test suite
         run: cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-code-range-plugin test suite
         run: cabal test hls-code-range-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-code-range-plugin --test-options="$TEST_OPTS"
 
@@ -257,7 +257,7 @@ jobs:
         name: Test hls-change-type-signature test suite
         run: cabal test hls-change-type-signature-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-change-type-signature-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.4.2'
+      - if: matrix.test && matrix.ghc != '9.4.2' && matrix.ghc != '9.4.3'
         name: Test hls-gadt-plugin test suit
         run: cabal test hls-gadt-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-gadt-plugin --test-options="$TEST_OPTS"
 

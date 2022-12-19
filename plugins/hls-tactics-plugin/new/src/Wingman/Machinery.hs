@@ -394,7 +394,7 @@ getTyThing occ = do
       mvar <- lift
             $ ExtractM
             $ lift
-            $ lookupName (ctx_hscEnv ctx) (ctx_module ctx)
+            $ lookupName (ctx_hscEnv ctx)
             $ gre_name elt
       pure mvar
     _ -> pure Nothing
