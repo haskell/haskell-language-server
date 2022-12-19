@@ -357,6 +357,12 @@ data ModSummaryResult = ModSummaryResult
   { msrModSummary  :: !ModSummary
   , msrImports     :: [LImportDecl GhcPs]
   , msrFingerprint :: !Fingerprint
+  , msrHscEnv      :: !HscEnv
+  -- ^ HscEnv for this particular ModSummary.
+  -- Contains initialised plugins, parsed options, etc...
+  --
+  -- Implicit assumption: DynFlags in 'msrModSummary' are the same as
+  -- the DynFlags in 'msrHscEnv'.
   }
 
 instance Show ModSummaryResult where

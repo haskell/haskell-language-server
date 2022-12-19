@@ -1151,9 +1151,9 @@ getModSummaryFromImports env fp modTime contents = do
         then mkHomeModLocation dflags (pathToModuleName fp) fp
         else mkHomeModLocation dflags mod fp
 
-    let modl = mkHomeModule (hscHomeUnit (hscSetFlags dflags env)) mod
+    let modl = mkHomeModule (hscHomeUnit env) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
-        msrModSummary =
+        msrModSummary2 =
             ModSummary
                 { ms_mod          = modl
                 , ms_hie_date     = Nothing
@@ -1178,7 +1178,8 @@ getModSummaryFromImports env fp modTime contents = do
                 , ms_textual_imps = textualImports
                 }
 
-    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
+    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary2
+    (msrModSummary, msrHscEnv) <- liftIO $ initPlugins env msrModSummary2
     return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
