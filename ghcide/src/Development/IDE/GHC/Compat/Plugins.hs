@@ -2,6 +2,7 @@
 
 -- | Plugin Compat utils.
 module Development.IDE.GHC.Compat.Plugins (
+    -- * Plugin Compat Types, and initialisation
     Plugin(..),
     defaultPlugin,
     PluginWithArgs(..),
@@ -12,32 +13,58 @@ module Development.IDE.GHC.Compat.Plugins (
     -- * Static plugins
     StaticPlugin(..),
     hsc_static_plugins,
+
+    -- * Plugin messages
+    PsMessages(..),
+    getPsMessages
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Driver.Env                    as Env
+import qualified GHC.Driver.Env                        as Env
 #endif
-import           GHC.Driver.Plugins                (Plugin (..),
-                                                    PluginWithArgs (..),
-                                                    StaticPlugin (..),
-                                                    defaultPlugin, withPlugins)
+import           GHC.Driver.Plugins                    (Plugin (..),
+                                                        PluginWithArgs (..),
+                                                        StaticPlugin (..),
+                                                        defaultPlugin,
+                                                        withPlugins)
 #if MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Plugins                (ParsedResult (..),
-                                                    PsMessages (..),
-                                                    staticPlugins)
-#endif
-import qualified GHC.Runtime.Loader                as Loader
+import           GHC.Driver.Plugins                    (ParsedResult (..),
+                                                        PsMessages (..),
+                                                        staticPlugins)
+import qualified GHC.Parser.Lexer                      as Lexer
 #else
-import qualified DynamicLoading                    as Loader
+import           Data.Bifunctor                        (bimap)
+#endif
+import qualified GHC.Runtime.Loader                    as Loader
+#else
+import qualified DynamicLoading                        as Loader
 import           Plugins
 #endif
 import           Development.IDE.GHC.Compat.Core
-import           Development.IDE.GHC.Compat.Env    (hscSetFlags, hsc_dflags)
-import           Development.IDE.GHC.Compat.Parser as Parser
-import Debug.Trace
-import GHC.Driver.Env (hsc_plugins)
-import GHC.Driver.Plugins
+import           Development.IDE.GHC.Compat.Env        (hscSetFlags, hsc_dflags)
+import           Development.IDE.GHC.Compat.Outputable as Out
+import           Development.IDE.GHC.Compat.Parser     as Parser
+import           Development.IDE.GHC.Compat.Util       (Bag)
+
+
+#if !MIN_VERSION_ghc(9,3,0)
+type PsMessages = (Bag WarnMsg, Bag ErrMsg)
+#endif
+
+getPsMessages :: PState -> DynFlags -> PsMessages
+getPsMessages pst dflags =
+#if MIN_VERSION_ghc(9,3,0)
+  uncurry PsMessages $ Lexer.getPsMessages pst
+#else
+#if MIN_VERSION_ghc(9,2,0)
+                 bimap (fmap pprWarning) (fmap pprError) $
+#endif
+                 getMessages pst
+#if !MIN_VERSION_ghc(9,2,0)
+                   dflags
+#endif
+#endif
 
 applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> Parser.ApiAnns -> ParsedSource -> PsMessages -> IO (ParsedSource, PsMessages)
 applyPluginsParsedResultAction env dflags ms hpm_annotations parsed msgs = do
@@ -46,7 +73,7 @@ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed msgs = do
 #if MIN_VERSION_ghc(9,3,0)
   fmap (\result -> (hpm_module (parsedResultModule result), (parsedResultMessages result))) $ runHsc env $ withPlugins
 #else
-  fmap ((, msgs), hpm_module) $ runHsc env $ withPlugins
+  fmap (\parsed_module -> (hpm_module parsed_module, msgs)) $ runHsc env $ withPlugins
 #endif
 #if MIN_VERSION_ghc(9,3,0)
       (Env.hsc_plugins env)

@@ -132,9 +132,6 @@ import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
 #endif
-#if MIN_VERSION_ghc(9,3,0)
-import GHC.Driver.Plugins                          (PsMessages (..))
-#endif
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -475,7 +472,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
                     Nothing
 #endif
 
-#else 
+#else
   let !partial_iface = force (mkPartialIface session details simplified_guts)
   final_iface <- mkFullIface session partial_iface
 #endif
@@ -1222,7 +1219,7 @@ parseHeader dflags filename contents = do
      PFailedWithErrorMessages msgs ->
         throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
      POk pst rdr_module -> do
-        let (warns, errs) = renderMessages $ getMessages' pst dflags
+        let (warns, errs) = renderMessages $ getPsMessages pst dflags
 
         -- Just because we got a `POk`, it doesn't mean there
         -- weren't errors! To clarify, the GHC parser
@@ -1257,7 +1254,7 @@ parseFileContents env customPreprocessor filename ms = do
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
-             psMessages = getMessages' pst dflags
+             psMessages = getPsMessages pst dflags
          in
            do
                let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
