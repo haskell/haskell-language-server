@@ -663,6 +663,6 @@ benchmark benchmark
         lens-aeson,
         optparse-applicative,
         shake,
-        shake-bench == 0.1.*,
+        shake-bench == 0.2.*,
         text,
         yaml

@@ -218,19 +218,19 @@ completionTests =
             "not imported"
             ["module A where", "import Text.Printf ()", "FormatParse"]
             (Position 2 10)
-            "FormatParse {"
-            ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
+            "FormatParse"
+            ["module A where", "import Text.Printf (FormatParse)", "FormatParse"]
         , completionCommandTest
             "parent imported"
             ["module A where", "import Text.Printf (FormatParse)", "FormatParse"]
             (Position 2 10)
-            "FormatParse {"
+            "FormatParse"
             ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
         , completionNoCommandTest
             "already imported"
             ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
             (Position 2 10)
-            "FormatParse {"
+            "FormatParse"
         ]
         , testGroup "Package completion"
           [ completionCommandTest
@@ -261,7 +261,8 @@ completionCommandTest name src pos wanted expected = testSession name $ do
   _ <- waitForDiagnostics
   compls <- skipManyTill anyMessage (getCompletions docId pos)
   let wantedC = find ( \case
-            CompletionItem {_insertText = Just x} -> wanted `T.isPrefixOf` x
+            CompletionItem {_insertText = Just x
+                           ,_command    = Just _} -> wanted `T.isPrefixOf` x
             _                                     -> False
             ) compls
   case wantedC of
