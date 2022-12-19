@@ -82,12 +82,12 @@ source-repository-package
   -- https://github.com/tibbe/ekg-json/pull/12
 -- END DELETE
 
+-- THIS WILL BE DELETED WHEN apply-refact-0.11 is released.
 if (impl(ghc >= 9.2))
   source-repository-package
     type:git
-    location: https://github.com/wavewave/apply-refact
-    tag: 2f346adb54ae3d911c9055b48fb62eb4ceab583a
-    -- https://github.com/wavewave/apply-refact/pull/1
+    location: https://github.com/mpickering/apply-refact
+    tag: 671b02946f8cb2b5062f4d314ec902a8e0989938
 
 allow-newer:
   -- ghc-9.4
