@@ -41,8 +41,8 @@ import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
                                                   GhcPass,
                                                   HsExpr (RecordCon, rcon_flds),
                                                   HsRecField, LHsExpr, LocatedA,
-                                                  LocatedN, Name, Pass (..),
-                                                  Pat (..), RealSrcSpan, UniqFM,
+                                                  Name, Pass (..), Pat (..),
+                                                  RealSrcSpan, UniqFM,
                                                   conPatDetails, emptyUFM,
                                                   hfbPun, hfbRHS, hs_valds,
                                                   lookupUFM, mapConPatDetail,
@@ -221,7 +221,7 @@ instance NFData GhcExtension where
 
 -- As with `GhcExtension`, this newtype exists mostly to attach
 -- an `NFData` instance to `UniqFM`.
-newtype NameMap = NameMap (UniqFM Name [LocatedN Name])
+newtype NameMap = NameMap (UniqFM Name [Name])
 
 instance NFData NameMap where
   rnf (NameMap (ufmToIntMap -> m)) = rnf m
@@ -257,7 +257,7 @@ renderRecordInfo _ (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecor
 referencedIn :: Name -> NameMap -> Bool
 referencedIn name (NameMap names) = maybe True hasNonBindingOcc $ lookupUFM names name
   where
-    hasNonBindingOcc :: [LocatedN Name] -> Bool
+    hasNonBindingOcc :: [Name] -> Bool
     hasNonBindingOcc = (> 1) . length
 
 -- Default to leaving the element in if somehow a name can't be extracted (i.e.
@@ -280,6 +280,13 @@ preprocessRecordPat = preprocessRecord (getFieldName . unLoc)
 preprocessRecordCon :: HsRecFields (GhcPass c) arg -> HsRecFields (GhcPass c) arg
 preprocessRecordCon = preprocessRecord (const Nothing) (NameMap emptyUFM)
 
+-- This function does two things:
+-- 1) Tweak the AST type so that the pretty-printed record is in the
+--    expanded form
+-- 2) Determine the unused record fields so that they are filtered out
+--    of the final output
+--
+-- Regarding first point:
 -- We make use of the `Outputable` instances on AST types to pretty-print
 -- the renamed and expanded records back into source form, to be substituted
 -- with the original record later. However, `Outputable` instance of
@@ -330,14 +337,14 @@ collectRecords = everything (<>) (maybeToList . (Nothing `mkQ` getRecPatterns `e
 -- each individual list of names contains the binding occurence, along with
 -- all the occurences at the use-sites (if there are any).
 --
--- @UniqFM Name [LocatedN Name]@ is morally the same as @Map Unique [LocatedN
--- Name]@. Using 'UniqFM' gains us a bit of performance (in theory) since it
+-- @UniqFM Name [Name]@ is morally the same as @Map Unique [Name]@.
+-- Using 'UniqFM' gains us a bit of performance (in theory) since it
 -- internally uses 'IntMap', and saves us rolling our own newtype wrapper over
 -- 'Unique' (since 'Unique' doesn't have an 'Ord' instance, it can't be used
 -- as 'Map' key as is). More information regarding 'UniqFM' can be found in
 -- the GHC source.
-collectNames :: GenericQ (UniqFM Name [LocatedN Name])
-collectNames = everything (plusUFM_C (<>)) (emptyUFM `mkQ` (\x -> unitUFM (unLoc x) [x]))
+collectNames :: GenericQ (UniqFM Name [Name])
+collectNames = everything (plusUFM_C (<>)) (emptyUFM `mkQ` (\x -> unitUFM x [x]))
 
 getRecCons :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordInfo
 getRecCons e@(unLoc -> RecordCon _ _ flds)
