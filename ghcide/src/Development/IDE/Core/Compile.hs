@@ -135,6 +135,8 @@ import Development.IDE.Import.DependencyInformation
 #endif
 import GHC.Unit.Module.ModIface
 import GHC.Iface.Load ( readIface )
+import GHC.Unit.Module.Deps
+import GHC.Exts
 
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
@@ -440,14 +442,19 @@ mkHiFileResultNoCompile session tcm = do
   details' <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
   iface' <- mkIfaceTc hsc_env_tmp sf details' ms tcGblEnv
-
-  writeIfaceFile hsc_env_tmp fp iface'
-  iface <- panicMaybeErr <$> readIface (hsc_dflags hsc_env_tmp) (hsc_NC hsc_env_tmp) (ms_mod ms) fp
+  let iface = iface' {mi_usages = filterUsages (mi_usages iface'), mi_globals = Nothing }
+  forceModIface iface
   details <- mkDetailsFromIface session iface
 
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 
 panicMaybeErr (Util.Succeeded val) = val -- TODo
+
+filterUsages :: [Usage] -> [Usage]
+filterUsages = noinline filter $ \case
+  UsageHomeModuleInterface{} -> False
+  UsageFile{} -> False
+  _ -> True
 
 mkHiFileResultCompile
     :: ShakeExtras
@@ -478,7 +485,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
 #if MIN_VERSION_ghc(9,3,0)
                                               ms
 #endif
-                                              simplified_guts
+                                              simplified_guts{mg_usages = filterUsages (mg_usages simplified_guts)}
 
   final_iface' <- mkFullIface session partial_iface Nothing
 #if MIN_VERSION_ghc(9,4,2)
@@ -487,10 +494,10 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
 
 #else 
   let !partial_iface = force (mkPartialIface session details' simplified_guts)
-  final_iface <- mkFullIface session partial_iface
+  final_iface' <- mkFullIface session partial_iface
 #endif
-  writeIfaceFile session fp final_iface'
-  final_iface <- panicMaybeErr <$> readIface (hsc_dflags session) (hsc_NC session) (ms_mod ms) fp
+  let final_iface = final_iface' {mi_globals = Nothing}
+  forceModIface final_iface
   details <- mkDetailsFromIface session final_iface
 
   -- Write the core file now
@@ -1447,22 +1454,11 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
           setTag "Module" $ moduleNameString $ moduleName mod
           setTag "Reason" $ showReason _reason
           liftIO $ traceMarkerIO $ "regenerate interface " ++ show (moduleNameString $ moduleName mod, showReason _reason)
+          liftIO $ traceIO $ "regenerate interface " ++ show (moduleNameString $ moduleName mod, showReason _reason)
           regenerate linkableNeeded
 
     case (mb_checked_iface, recomp_iface_reqd) of
       (Just iface, UpToDate) -> do
-         -- If we have an old value, just return it
-         case old_value of
-           Just (old_hir, _)
-             | isNothing linkableNeeded || isJust (hirCoreFp old_hir)
-             -> do
-             -- Peform the fine grained recompilation check for TH
-             maybe_recomp <- checkLinkableDependencies session get_linkable_hashes (hirRuntimeModules old_hir)
-             case maybe_recomp of
-               Just msg -> do_regenerate msg
-               Nothing  -> return ([], Just old_hir)
-           -- Otherwise use the value from disk, provided the core file is up to date if required
-           _ -> do
              details <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface
              -- parse the runtime dependencies from the annotations
              let runtime_deps

@@ -291,6 +291,7 @@ fromIdentInfo doc id@IdentInfo{..} q = CI
   { compKind= occNameToComKind name
   , insertText=rend
   , provenance = DefinedIn mod
+  , typeText = Nothing
   , label=rend
   , isInfix=Nothing
   , isTypeCompl= not (isDatacon id) && isUpper (T.head rend)
