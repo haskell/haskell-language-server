@@ -18,6 +18,7 @@ module Ide.Plugin.ExplicitFields
 import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Control.Monad.Trans.Except      (ExceptT)
+import           Data.Functor                    ((<&>))
 import           Data.Generics                   (GenericQ, everything, extQ,
                                                   mkQ)
 import qualified Data.HashMap.Strict             as HashMap
@@ -46,7 +47,8 @@ import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
                                                   hfbPun, hfbRHS, hs_valds,
                                                   lookupUFM, mapConPatDetail,
                                                   mapLoc, pattern RealSrcSpan,
-                                                  plusUFM_C, unitUFM)
+                                                  plusUFM_C, ufmToIntMap,
+                                                  unitUFM)
 import           Development.IDE.GHC.Util        (getExtensions,
                                                   printOutputable)
 import           Development.IDE.Graph           (RuleResult)
@@ -93,7 +95,7 @@ instance Pretty Log where
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
-  , pluginRules = collectRecordsRule recorder
+  , pluginRules = collectRecordsRule recorder *> collectNamesRule
   }
 
 codeActionProvider :: PluginMethodHandler IdeState 'TextDocumentCodeAction
@@ -148,11 +150,13 @@ collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
       let exts = getEnabledExtensions tmr
           recs = getRecords tmr
       logWith recorder Debug (LogCollectedRecords recs)
-      let names = getNames tmr
-          renderedRecs = traverse (renderRecordInfo names) recs
-          recMap = RangeMap.fromList (realSrcSpanToRange . renderedSrcSpan) <$> renderedRecs
-      logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
-      pure ([], CRR <$> recMap <*> Just exts)
+      use CollectNames nfp >>= \case
+        Nothing -> pure ([], Nothing)
+        Just (CNR names) -> do
+          let renderedRecs = traverse (renderRecordInfo names) recs
+              recMap = RangeMap.fromList (realSrcSpanToRange . renderedSrcSpan) <$> renderedRecs
+          logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
+          pure ([], CRR <$> recMap <*> Just exts)
 
   where
     getEnabledExtensions :: TcModuleResult -> [GhcExtension]
@@ -162,10 +166,16 @@ getRecords :: TcModuleResult -> [RecordInfo]
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
   collectRecords valBinds
 
+collectNamesRule :: Rules ()
+collectNamesRule = define mempty $ \CollectNames nfp ->
+  use TypeCheck nfp <&> \case
+    Nothing  -> ([], Nothing)
+    Just tmr -> ([], Just (CNR (getNames tmr)))
+
 -- | Collects all 'Name's of a given source file, to be used
 -- in the variable usage analysis.
-getNames :: TcModuleResult -> UniqFM Name [LocatedN Name]
-getNames (tmrRenamed -> (group,_,_,_)) = collectNames group
+getNames :: TcModuleResult -> NameMap
+getNames (tmrRenamed -> (group,_,_,_)) = NameMap (collectNames group)
 
 data CollectRecords = CollectRecords
                     deriving (Eq, Show, Generic)
@@ -186,12 +196,35 @@ instance Show CollectRecordsResult where
 
 type instance RuleResult CollectRecords = CollectRecordsResult
 
+data CollectNames = CollectNames
+                  deriving (Eq, Show, Generic)
+
+instance Hashable CollectNames
+instance NFData CollectNames
+
+data CollectNamesResult = CNR NameMap
+  deriving (Generic)
+
+instance NFData CollectNamesResult
+
+instance Show CollectNamesResult where
+  show _ = "<CollectNamesResult>"
+
+type instance RuleResult CollectNames = CollectNamesResult
+
 -- `Extension` is wrapped so that we can provide an `NFData` instance
 -- (without resorting to creating an orphan instance).
 newtype GhcExtension = GhcExtension { unExt :: Extension }
 
 instance NFData GhcExtension where
   rnf x = x `seq` ()
+
+-- As with `GhcExtension`, this newtype exists mostly to attach
+-- an `NFData` instance to `UniqFM`.
+newtype NameMap = NameMap (UniqFM Name [LocatedN Name])
+
+instance NFData NameMap where
+  rnf (NameMap (ufmToIntMap -> m)) = rnf m
 
 data RecordInfo
   = RecordInfoPat RealSrcSpan (Pat (GhcPass 'Renamed))
@@ -212,7 +245,7 @@ instance Pretty RenderedRecordInfo where
 
 instance NFData RenderedRecordInfo
 
-renderRecordInfo :: UniqFM Name [LocatedN Name] -> RecordInfo -> Maybe RenderedRecordInfo
+renderRecordInfo :: NameMap -> RecordInfo -> Maybe RenderedRecordInfo
 renderRecordInfo names (RecordInfoPat ss pat) = RenderedRecordInfo ss <$> showRecordPat names pat
 renderRecordInfo _ (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecordCon expr
 
@@ -221,20 +254,20 @@ renderRecordInfo _ (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecor
 -- references at the use-sites are considered (i.e. the binding occurence
 -- is excluded). For more information regarding the structure of the map,
 -- refer to the documentation of 'collectNames'.
-referencedIn :: Name -> UniqFM Name [LocatedN Name] -> Bool
-referencedIn name names = maybe True hasNonBindingOcc $ lookupUFM names name
+referencedIn :: Name -> NameMap -> Bool
+referencedIn name (NameMap names) = maybe True hasNonBindingOcc $ lookupUFM names name
   where
     hasNonBindingOcc :: [LocatedN Name] -> Bool
     hasNonBindingOcc = (> 1) . length
 
 -- Default to leaving the element in if somehow a name can't be extracted (i.e.
 -- `getName` returns `Nothing`).
-filterReferenced :: (a -> Maybe Name) -> UniqFM Name [LocatedN Name] -> [a] -> [a]
+filterReferenced :: (a -> Maybe Name) -> NameMap -> [a] -> [a]
 filterReferenced getName names = filter (\x -> maybe True (`referencedIn` names) (getName x))
 
 preprocessRecordPat
   :: p ~ GhcPass 'Renamed
-  => UniqFM Name [LocatedN Name]
+  => NameMap
   -> HsRecFields p (LPat p)
   -> HsRecFields p (LPat p)
 preprocessRecordPat = preprocessRecord (getFieldName . unLoc)
@@ -245,7 +278,7 @@ preprocessRecordPat = preprocessRecord (getFieldName . unLoc)
 
 -- No need to check the name usage in the record construction case
 preprocessRecordCon :: HsRecFields (GhcPass c) arg -> HsRecFields (GhcPass c) arg
-preprocessRecordCon = preprocessRecord (const Nothing) emptyUFM
+preprocessRecordCon = preprocessRecord (const Nothing) (NameMap emptyUFM)
 
 -- We make use of the `Outputable` instances on AST types to pretty-print
 -- the renamed and expanded records back into source form, to be substituted
@@ -259,7 +292,7 @@ preprocessRecordCon = preprocessRecord (const Nothing) emptyUFM
 preprocessRecord
   :: p ~ GhcPass c
   => (LocatedA (HsRecField p arg) -> Maybe Name)
-  -> UniqFM Name [LocatedN Name]
+  -> NameMap
   -> HsRecFields p arg
   -> HsRecFields p arg
 preprocessRecord getName names flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
@@ -277,7 +310,7 @@ preprocessRecord getName names flds = flds { rec_dotdot = Nothing , rec_flds = r
     punsUsed = filterReferenced getName names puns'
     rec_flds' = no_puns <> punsUsed
 
-showRecordPat :: Outputable (Pat (GhcPass 'Renamed)) => UniqFM Name [LocatedN Name] -> Pat (GhcPass 'Renamed) -> Maybe Text
+showRecordPat :: Outputable (Pat (GhcPass 'Renamed)) => NameMap -> Pat (GhcPass 'Renamed) -> Maybe Text
 showRecordPat names = fmap printOutputable . mapConPatDetail (\case
   RecCon flds -> Just $ RecCon (preprocessRecordPat names flds)
   _           -> Nothing)
