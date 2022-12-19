@@ -34,8 +34,6 @@ let
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         (pkgs.lib.concatStringsSep " " [ "-fpedantic" "-f-hlint" ]) { };
 
-      apply-refact = hself.apply-refactHEAD;
-
     });
 in {
   inherit disabledPlugins;

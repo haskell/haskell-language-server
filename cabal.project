@@ -51,7 +51,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-12-13T21:00:15Z
+index-state: 2022-12-19T19:08:33Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
@@ -81,13 +81,6 @@ source-repository-package
   tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
   -- https://github.com/tibbe/ekg-json/pull/12
 -- END DELETE
-
--- THIS WILL BE DELETED WHEN apply-refact-0.11 is released.
-if (impl(ghc >= 9.2))
-  source-repository-package
-    type:git
-    location: https://github.com/mpickering/apply-refact
-    tag: 671b02946f8cb2b5062f4d314ec902a8e0989938
 
 allow-newer:
   -- ghc-9.4

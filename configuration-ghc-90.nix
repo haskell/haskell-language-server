@@ -38,6 +38,7 @@ let
         { };
 
       retrie = hself.retrie_1_1_0_0;
+      apply-refact = hself.apply-refact_0_9_3_0;
 
     });
 in {

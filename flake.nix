@@ -47,7 +47,7 @@
       url = "https://hackage.haskell.org/package/constraints-extras-0.3.2.1/constraints-extras-0.3.2.1.tar.gz";
       flake = false;
     };
-    retrie_1100 = {
+    retrie-1100 = {
       url = "https://hackage.haskell.org/package/retrie-1.1.0.0/retrie-1.1.0.0.tar.gz";
       flake = false;
     };
@@ -88,7 +88,11 @@
       flake = false;
     };
     apply-refact = {
-      url = "github:July541/apply-refact/ghc-9.4";
+      url = "https://hackage.haskell.org/package/apply-refact-0.11.0.0/apply-refact-0.11.0.0.tar.gz";
+      flake = false;
+    };
+    apply-refact-0930 = {
+      url = "https://hackage.haskell.org/package/apply-refact-0.9.3.0/apply-refact-0.9.3.0.tar.gz";
       flake = false;
     };
     implicit-hie = {
@@ -160,8 +164,9 @@
               hiedb = hsuper.callCabal2nix "hiedb" inputs.hiedb {};
               hw-prim = hsuper.callCabal2nix "hw-prim" inputs.hw-prim {};
               retrie = hsuper.callCabal2nix "retrie" inputs.retrie {};
-              retrie_1_1_0_0 = hsuper.callCabal2nix "retrie" inputs.retrie_1100 {};
-              apply-refactHEAD = hsuper.callCabal2nix "apply-refact" inputs.apply-refact {};
+              retrie_1_1_0_0 = hsuper.callCabal2nix "retrie" inputs.retrie-1100 {};
+              apply-refact = hsuper.callCabal2nix "apply-refact" inputs.apply-refact {};
+              apply-refact_0_9_3_0 = hsuper.callCabal2nix "apply-refact" inputs.apply-refact-0930 {};
               implicit-hie = hsuper.callCabal2nix "implicit-hie" inputs.implicit-hie {};
 
               # https://github.com/NixOS/nixpkgs/issues/140774

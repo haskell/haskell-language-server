@@ -32,18 +32,25 @@
     "apply-refact": {
       "flake": false,
       "locked": {
-        "lastModified": 1666418383,
-        "narHash": "sha256-a/qTzS1dgDfjT1vnOkaMHegKtBo6F1j3q62HY8g0V/Y=",
-        "owner": "July541",
-        "repo": "apply-refact",
-        "rev": "1943b3848e10f9824806c4a3a286fcaec22b4bb8",
-        "type": "github"
+        "narHash": "sha256-cK+rsko/aydlvr7di9XS9XEP9tq3SwFWTRrwYrhfCLs=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/apply-refact-0.11.0.0/apply-refact-0.11.0.0.tar.gz"
       },
       "original": {
-        "owner": "July541",
-        "ref": "ghc-9.4",
-        "repo": "apply-refact",
-        "type": "github"
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/apply-refact-0.11.0.0/apply-refact-0.11.0.0.tar.gz"
+      }
+    },
+    "apply-refact-0930": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-EosZM++NRncMEr1KM+UIEjGivknqWFvwpTa6kLgK2Mk=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/apply-refact-0.9.3.0/apply-refact-0.9.3.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/apply-refact-0.9.3.0/apply-refact-0.9.3.0.tar.gz"
       }
     },
     "brittany-01312": {
@@ -237,30 +244,6 @@
         "url": "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz"
       }
     },
-    "implicit-hie": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-bFPhAuQe5IjKYQIz1OEC/j/imDESAv3H1nLNVM3lZF4=",
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz"
-      }
-    },
-    "implicit-hie": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-bFPhAuQe5IjKYQIz1OEC/j/imDESAv3H1nLNVM3lZF4=",
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz"
-      }
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1670827406,
@@ -301,7 +284,7 @@
         "url": "https://hackage.haskell.org/package/retrie-1.2.1/retrie-1.2.1.tar.gz"
       }
     },
-    "retrie_1100": {
+    "retrie-1100": {
       "flake": false,
       "locked": {
         "narHash": "sha256-yn8gguMdBtrB3fCa+4Rq6GHtPSyxYlriENPTgOvjeHE=",
@@ -318,6 +301,7 @@
         "aeson-1520": "aeson-1520",
         "all-cabal-hashes-unpacked": "all-cabal-hashes-unpacked",
         "apply-refact": "apply-refact",
+        "apply-refact-0930": "apply-refact-0930",
         "brittany-01312": "brittany-01312",
         "constraints-extras": "constraints-extras",
         "flake-compat": "flake-compat",
@@ -336,7 +320,7 @@
         "nixpkgs": "nixpkgs",
         "ptr-poker": "ptr-poker",
         "retrie": "retrie",
-        "retrie_1100": "retrie_1100"
+        "retrie-1100": "retrie-1100"
       }
     }
   },

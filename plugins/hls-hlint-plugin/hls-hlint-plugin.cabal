@@ -59,9 +59,12 @@ library
     , text
     , transformers
     , unordered-containers
-    , apply-refact          >=0.9.0.0
     , ghc-lib-parser
     , ghc-lib-parser-ex
+  if impl(ghc >= 9.2)
+    build-depends: apply-refact ^>= 0.11.0.0
+  else
+    build-depends: apply-refact ^>= 0.9.0.0
 
   cpp-options:   -DHLINT_ON_GHC_LIB
   ghc-options:
