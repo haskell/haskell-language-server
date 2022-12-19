@@ -62,27 +62,30 @@ mkDocMap env rm this_mod =
     getDocs n map
       | maybe True (mod ==) $ nameModule_maybe n = pure map -- we already have the docs in this_docs, or they do not exist
       | otherwise = do
-      doc <- getDocumentationTryGhc env mod n
+      doc <- getDocumentationTryGhc env n
       pure $ extendNameEnv map n doc
     getType n map
-      | isTcOcc $ occName n = do
-        kind <- lookupKind env mod n
-        pure $ maybe map (extendNameEnv map n) kind
+      | isTcOcc $ occName n
+      , Nothing <- lookupNameEnv map n
+      = do kind <- lookupKind env n
+           pure $ maybe map (extendNameEnv map n) kind
       | otherwise = pure map
     names = rights $ S.toList idents
     idents = M.keysSet rm
     mod = tcg_mod this_mod
 
-lookupKind :: HscEnv -> Module -> Name -> IO (Maybe TyThing)
-lookupKind env mod =
-    fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env mod
+lookupKind :: HscEnv -> Name -> IO (Maybe TyThing)
+lookupKind env =
+    fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env
 
-getDocumentationTryGhc :: HscEnv -> Module -> Name -> IO SpanDoc
-getDocumentationTryGhc env mod n = fromMaybe emptySpanDoc . listToMaybe <$> getDocumentationsTryGhc env mod [n]
+getDocumentationTryGhc :: HscEnv -> Name -> IO SpanDoc
+getDocumentationTryGhc env n =
+  (fromMaybe emptySpanDoc . listToMaybe <$> getDocumentationsTryGhc env [n])
+    `catch` (\(_ :: IOEnvFailure) -> pure emptySpanDoc)
 
-getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO [SpanDoc]
-getDocumentationsTryGhc env mod names = do
-  res <- catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env mod names
+getDocumentationsTryGhc :: HscEnv -> [Name] -> IO [SpanDoc]
+getDocumentationsTryGhc env names = do
+  res <- catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env names
   case res of
       Left _    -> return []
       Right res -> zipWithM unwrap res names
