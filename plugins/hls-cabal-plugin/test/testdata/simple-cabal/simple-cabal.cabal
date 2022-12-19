@@ -1,0 +1,10 @@
+cabal-version:      3.0
+name:               simple-cabal
+version:            0.1.0.0
+license:            MIT
+
+library
+    build-depends:    base
+    hs-source-dirs:   .
+    exposed-modules:  A
+    default-language: Haskell2010

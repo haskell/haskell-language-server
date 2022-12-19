@@ -20,11 +20,19 @@ module Development.IDE.GHC.ExactPrint
       transform,
       transformM,
       ExactPrint(..),
+#if MIN_VERSION_ghc(9,2,1)
+      modifySmallestDeclWithM,
+      modifyMgMatchesT,
+      modifyMgMatchesT',
+      modifySigWithM,
+      genAnchor1,
+#endif
 #if !MIN_VERSION_ghc(9,2,0)
       Anns,
       Annotate,
       setPrecedingLinesT,
 #else
+      setPrecedingLines,
       addParens,
       addParensToCtxt,
       modifyAnns,
@@ -56,6 +64,7 @@ import           Control.Monad.Trans.Except
 import           Control.Monad.Zip
 import           Data.Bifunctor
 import           Data.Bool                               (bool)
+import           Data.Default                            (Default)
 import qualified Data.DList                              as DL
 import           Data.Either.Extra                       (mapLeft)
 import           Data.Foldable                           (Foldable (fold))
@@ -101,9 +110,22 @@ import           GHC                                     (EpAnn (..),
                                                           spanAsAnchor)
 import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           DeltaPos (SameLine),
-                                                          EpaLocation (EpaDelta))
+                                                          EpaLocation (EpaDelta),
+                                                          deltaPos)
 #endif
 
+#if MIN_VERSION_ghc(9,2,1)
+import Data.List (partition)
+import GHC (Anchor(..), realSrcSpan, AnchorOperation, DeltaPos(..), SrcSpanAnnN)
+import GHC.Types.SrcLoc (generatedSrcSpan)
+import Control.Lens ((&), _last)
+import Control.Lens.Operators ((%~))
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+setPrecedingLines :: Default t => LocatedAn t a -> Int -> Int -> LocatedAn t a
+setPrecedingLines ast n c = setEntryDP ast (deltaPos n c)
+#endif
 ------------------------------------------------------------------------------
 
 data Log = LogShake Shake.Log deriving Show
@@ -114,10 +136,10 @@ instance Pretty Log where
 
 instance Show (Annotated ParsedSource) where
   show _ = "<Annotated ParsedSource>"
- 
+
 instance NFData (Annotated ParsedSource) where
   rnf = rwhnf
- 
+
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
   deriving (Eq, Show, Typeable, GHC.Generic)
 
@@ -307,7 +329,7 @@ getNeedsSpaceAndParenthesize ::
 getNeedsSpaceAndParenthesize dst a =
   -- Traverse the tree, looking for our replacement node. But keep track of
   -- the context (parent HsExpr constructor) we're in while we do it. This
-  -- lets us determine wehther or not we need parentheses.
+  -- lets us determine whether or not we need parentheses.
   let (needs_parens, needs_space) =
           everythingWithContext (Nothing, Nothing) (<>)
             ( mkQ (mempty, ) $ \x s -> case x of
@@ -374,7 +396,7 @@ graftWithM dst trans = Graft $ \dflags a -> do
 #if MIN_VERSION_ghc(9,2,0)
                                 val'' <-
                                     hoistTransform (either Fail.fail pure) $
-                                        annotate dflags True $ maybeParensAST val'
+                                        annotate dflags False $ maybeParensAST val'
                                 pure val''
 #else
                                 (anns, val'') <-
@@ -430,6 +452,138 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
             | otherwise = DL.singleton (L src e) <> go rest
     modifyDeclsT (pure . DL.toList . go) a
 
+#if MIN_VERSION_ghc(9,2,1)
+
+-- | Replace the smallest declaration whose SrcSpan satisfies the given condition with a new
+-- list of declarations.
+--
+-- For example, if you would like to move a where-clause-defined variable to the same
+-- level as its parent HsDecl, you could use this function.
+--
+-- When matching declaration is found in the sub-declarations of `a`, `Just r` is also returned with the new `a`. If
+-- not declaration matched, then `Nothing` is returned.
+modifySmallestDeclWithM ::
+  forall a m r.
+  (HasDecls a, Monad m) =>
+  (SrcSpan -> m Bool) ->
+  (LHsDecl GhcPs -> TransformT m ([LHsDecl GhcPs], r)) ->
+  a ->
+  TransformT m (a, Maybe r)
+modifySmallestDeclWithM validSpan f a = do
+  let modifyMatchingDecl [] = pure (DL.empty, Nothing)
+      modifyMatchingDecl (ldecl@(L src _) : rest) =
+        lift (validSpan $ locA src) >>= \case
+            True -> do
+              (decs', r) <- f ldecl
+              pure $ (DL.fromList decs' <> DL.fromList rest, Just r)
+            False -> first (DL.singleton ldecl <>) <$> modifyMatchingDecl rest
+  modifyDeclsT' (fmap (first DL.toList) . modifyMatchingDecl) a
+
+generatedAnchor :: AnchorOperation -> Anchor
+generatedAnchor anchorOp = GHC.Anchor (GHC.realSrcSpan generatedSrcSpan) anchorOp
+
+setAnchor :: Anchor -> SrcSpanAnnN -> SrcSpanAnnN
+setAnchor anc (SrcSpanAnn (EpAnn _ nameAnn comments) span) =
+  SrcSpanAnn (EpAnn anc nameAnn comments) span
+setAnchor _ spanAnnN = spanAnnN
+
+removeTrailingAnns :: SrcSpanAnnN -> SrcSpanAnnN
+removeTrailingAnns (SrcSpanAnn (EpAnn anc nameAnn comments) span) =
+  let nameAnnSansTrailings = nameAnn {nann_trailing = []}
+  in SrcSpanAnn (EpAnn anc nameAnnSansTrailings comments) span
+removeTrailingAnns spanAnnN = spanAnnN
+
+-- | Modify the type signature for the given IdP. This function handles splitting a multi-sig
+-- SigD into multiple SigD if the type signature is changed.
+--
+-- For example, update the type signature for `foo` from `Int` to `Bool`:
+--
+-- - foo :: Int
+-- + foo :: Bool
+--
+-- - foo, bar :: Int
+-- + bar :: Int
+-- + foo :: Bool
+--
+-- - foo, bar, baz :: Int
+-- + bar, baz :: Int
+-- + foo :: Bool
+modifySigWithM ::
+  forall a m.
+  (HasDecls a, Monad m) =>
+  IdP GhcPs ->
+  (LHsSigType GhcPs -> LHsSigType GhcPs) ->
+  a ->
+  TransformT m a
+modifySigWithM queryId f a = do
+  let modifyMatchingSigD :: [LHsDecl GhcPs] -> TransformT m (DL.DList (LHsDecl GhcPs))
+      modifyMatchingSigD [] = pure (DL.empty)
+      modifyMatchingSigD (ldecl@(L annSigD (SigD xsig (TypeSig xTypeSig ids (HsWC xHsWc lHsSig)))) : rest)
+        | queryId `elem` (unLoc <$> ids) = do
+            let newSig = f lHsSig
+            -- If this signature update caused no change, then we don't need to split up multi-signatures
+            if newSig `geq` lHsSig
+              then pure $ DL.singleton ldecl <> DL.fromList rest
+              else case partition ((== queryId) . unLoc) ids of
+                ([L annMatchedId matchedId], otherIds) ->
+                  let matchedId' = L (setAnchor genAnchor0 $ removeTrailingAnns annMatchedId) matchedId
+                      matchedIdSig =
+                        let sig' = SigD xsig (TypeSig xTypeSig [matchedId'] (HsWC xHsWc newSig))
+                            epAnn = bool (noAnnSrcSpanDP generatedSrcSpan (DifferentLine 1 0)) annSigD (null otherIds)
+                        in L epAnn sig'
+                      otherSig = case otherIds of
+                        [] -> []
+                        (L (SrcSpanAnn epAnn span) id1:ids) -> [
+                          let epAnn' = case epAnn of
+                                EpAnn _ nameAnn commentsId1 -> EpAnn genAnchor0 nameAnn commentsId1
+                                EpAnnNotUsed -> EpAnn genAnchor0 mempty emptyComments
+                              ids' = L (SrcSpanAnn epAnn' span) id1:ids
+                              ids'' = ids' & _last %~ first removeTrailingAnns
+                            in L annSigD (SigD xsig (TypeSig xTypeSig ids'' (HsWC xHsWc lHsSig)))
+                            ]
+                  in pure $ DL.fromList otherSig <> DL.singleton matchedIdSig <> DL.fromList rest
+                _ -> error "multiple ids matched"
+      modifyMatchingSigD (ldecl : rest) = (DL.singleton ldecl <>) <$> modifyMatchingSigD rest
+  modifyDeclsT (fmap DL.toList . modifyMatchingSigD) a
+
+genAnchor0 :: Anchor
+genAnchor0 = generatedAnchor m0
+
+genAnchor1 :: Anchor
+genAnchor1 = generatedAnchor m1
+
+-- | Apply a transformation to the decls contained in @t@
+modifyDeclsT' :: (HasDecls t, HasTransform m)
+             => ([LHsDecl GhcPs] -> m ([LHsDecl GhcPs], r))
+             -> t -> m (t, r)
+modifyDeclsT' action t = do
+  decls <- liftT $ hsDecls t
+  (decls', r) <- action decls
+  t' <- liftT $ replaceDecls t decls'
+  pure (t', r)
+
+-- | Modify each LMatch in a MatchGroup
+modifyMgMatchesT ::
+  Monad m =>
+  MatchGroup GhcPs (LHsExpr GhcPs) ->
+  (LMatch GhcPs (LHsExpr GhcPs) -> TransformT m (LMatch GhcPs (LHsExpr GhcPs))) ->
+  TransformT m (MatchGroup GhcPs (LHsExpr GhcPs))
+modifyMgMatchesT mg f = fst <$> modifyMgMatchesT' mg (fmap (, ()) . f) () ((.) pure . const)
+
+-- | Modify the each LMatch in a MatchGroup
+modifyMgMatchesT' ::
+  Monad m =>
+  MatchGroup GhcPs (LHsExpr GhcPs) ->
+  (LMatch GhcPs (LHsExpr GhcPs) -> TransformT m (LMatch GhcPs (LHsExpr GhcPs), r)) ->
+  r ->
+  (r -> r -> m r) ->
+  TransformT m (MatchGroup GhcPs (LHsExpr GhcPs), r)
+modifyMgMatchesT' (MG xMg (L locMatches matches) originMg) f def combineResults = do
+  (unzip -> (matches', rs)) <- mapM f matches
+  r' <- lift $ foldM combineResults def rs
+  pure $ (MG xMg (L locMatches matches') originMg, r')
+#endif
+
 graftSmallestDeclsWithM ::
     forall a.
     (HasDecls a) =>
@@ -468,7 +622,17 @@ graftDeclsWithM dst toDecls = Graft $ \dflags a -> do
     modifyDeclsT (fmap DL.toList . go) a
 
 
-class (Data ast, Typeable l, Outputable l, Outputable ast) => ASTElement l ast | ast -> l where
+-- In 9.2+, we need `Default l` to do `setPrecedingLines` on annotated elements.
+-- In older versions, we pass around annotations explicitly, so the instance isn't needed.
+class
+    ( Data ast
+    , Typeable l
+    , Outputable l
+    , Outputable ast
+#if MIN_VERSION_ghc(9,2,0)
+    , Default l
+#endif
+    ) => ASTElement l ast | ast -> l where
     parseAST :: Parser (LocatedAn l ast)
     maybeParensAST :: LocatedAn l ast -> LocatedAn l ast
     {- | Construct a 'Graft', replacing the node at the given 'SrcSpan' with
@@ -520,6 +684,7 @@ fixAnns ParsedModule {..} =
 
 ------------------------------------------------------------------------------
 
+
 -- | Given an 'LHSExpr', compute its exactprint annotations.
 --   Note that this function will throw away any existing annotations (and format)
 annotate :: (ASTElement l ast, Outputable l)
@@ -533,7 +698,7 @@ annotate dflags needs_space ast = do
     let rendered = render dflags ast
 #if MIN_VERSION_ghc(9,2,0)
     expr' <- lift $ mapLeft show $ parseAST dflags uniq rendered
-    pure expr'
+    pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
 #else
     (anns, expr') <- lift $ mapLeft show $ parseAST dflags uniq rendered
     let anns' = setPrecedingLines expr' 0 (bool 0 1 needs_space) anns
@@ -542,6 +707,7 @@ annotate dflags needs_space ast = do
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.
 annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (LHsDecl GhcPs)
+#if !MIN_VERSION_ghc(9,2,0)
 -- The 'parseDecl' function fails to parse 'FunBind' 'ValD's which contain
 -- multiple matches. To work around this, we split the single
 -- 'FunBind'-of-multiple-'Match'es into multiple 'FunBind's-of-one-'Match',
@@ -554,17 +720,6 @@ annotateDecl dflags
     let set_matches matches =
           ValD ext fb { fun_matches = mg { mg_alts = L alt_src matches }}
 
-#if MIN_VERSION_ghc(9,2,0)
-    alts' <- for alts $ \alt -> do
-      uniq <- show <$> uniqueSrcSpanT
-      let rendered = render dflags $ set_matches [alt]
-      lift (mapLeft show $ parseDecl dflags uniq rendered) >>= \case
-        (L _ (ValD _ FunBind { fun_matches = MG { mg_alts = L _ [alt']}}))
-           -> pure alt'
-        _ ->  lift $ Left "annotateDecl: didn't parse a single FunBind match"
-
-    pure $ L src $ set_matches alts'
-#else
     (anns', alts') <- fmap unzip $ for alts $ \alt -> do
       uniq <- show <$> uniqueSrcSpanT
       let rendered = render dflags $ set_matches [alt]
@@ -580,7 +735,8 @@ annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
 #if MIN_VERSION_ghc(9,2,0)
-    lift $ mapLeft show $ parseDecl dflags uniq rendered
+    expr' <- lift $ mapLeft show $ parseDecl dflags uniq rendered
+    pure $ setPrecedingLines expr' 1 0
 #else
     (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     let anns' = setPrecedingLines expr' 1 0 anns

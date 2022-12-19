@@ -5,8 +5,8 @@ import qualified Ide.Plugin.CallHierarchy.Internal as X
 import           Ide.Types
 import           Language.LSP.Types
 
-descriptor :: PluginDescriptor IdeState
-descriptor = (defaultPluginDescriptor X.callHierarchyId)
+descriptor :: PluginId -> PluginDescriptor IdeState
+descriptor plId = (defaultPluginDescriptor plId)
     { Ide.Types.pluginHandlers =
         mkPluginHandler STextDocumentPrepareCallHierarchy X.prepareCallHierarchy
      <> mkPluginHandler SCallHierarchyIncomingCalls X.incomingCalls

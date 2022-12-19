@@ -20,7 +20,7 @@
   number of iterations. There is ample room for improvement:
      - Statistical analysis to detect outliers and auto infer the number of iterations needed
      - GC stats analysis (currently -S is printed as part of the experiment)
-     - Analyisis of performance over the commit history of the project
+     - Analysis of performance over the commit history of the project
 
   How to run:
      1. `cabal exec cabal run ghcide-bench -- -- ghcide-bench-options`

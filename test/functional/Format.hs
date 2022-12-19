@@ -55,7 +55,6 @@ providerTests = testGroup "formatting provider" [
             _ -> assertFailure $ "strange response from formatting provider:" ++ show result
           result -> assertFailure $ "strange response from formatting provider:" ++ show result
 
-
     , requiresOrmoluPlugin . requiresFloskellPlugin $ testCase "can change on the fly" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
         formattedFloskell <- liftIO $ T.readFile "test/testdata/format/Format.floskell.formatted.hs"

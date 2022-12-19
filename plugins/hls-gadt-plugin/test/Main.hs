@@ -15,8 +15,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-gadtPlugin :: PluginDescriptor IdeState
-gadtPlugin = GADT.descriptor "GADT"
+gadtPlugin :: PluginTestDescriptor ()
+gadtPlugin = mkPluginTestDescriptor' GADT.descriptor "GADT"
 
 tests :: TestTree
 tests = testGroup "GADT"
@@ -32,7 +32,7 @@ tests = testGroup "GADT"
     , runTest "DataContext" "DataContext" 2 0 2 31
     , runTest "DataContextParen" "DataContextParen" 2 0 3 6
     , runTest "Forall" "Forall" 2 0 2 44
-    , runTest "ConstuctorContext" "ConstructorContext" 2 0 2 38
+    , runTest "ConstructorContext" "ConstructorContext" 2 0 2 38
     , runTest "Context" "Context" 2 0 4 41
     , runTest "Pragma" "Pragma" 2 0 3 29
     , onlyWorkForGhcVersions (==GHC92) "Single deriving has different output on ghc9.2" $

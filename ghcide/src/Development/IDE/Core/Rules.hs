@@ -144,7 +144,7 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                useProperty)
 import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
-                                                               PluginId)
+                                                               PluginId, PluginDescriptor (pluginId), IdePlugins (IdePlugins))
 import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
 import System.Info.Extra (isWindows)
@@ -154,7 +154,7 @@ import qualified Development.IDE.Core.Shake as Shake
 import qualified Development.IDE.Types.Logger as Logger
 import qualified Development.IDE.Types.Shake as Shake
 import           Development.IDE.GHC.CoreFile
-import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
+import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)
 import Control.Monad.IO.Unlift
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Unit.Module.Graph
@@ -342,7 +342,7 @@ getParsedModuleWithCommentsRule recorder =
 getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags f = do
   opts <- getIdeOptions
-  cfg <- getClientConfigAction def
+  cfg <- getClientConfigAction
   pure $ f $ optModifyDynFlags opts cfg
 
 
@@ -695,8 +695,7 @@ typeCheckRuleDefinition hsc pm = do
 
   unlift <- askUnliftIO
   let dets = TypecheckHelpers
-           { getLinkablesToKeep = unliftIO unlift currentLinkables
-           , getLinkables = unliftIO unlift . uses_ GetLinkable
+           { getLinkables = unliftIO unlift . uses_ GetLinkable
            }
   addUsageDependencies $ liftIO $
     typecheckModule defer hsc dets pm
@@ -783,7 +782,7 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
             let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails Nothing) ifaces
 #if MIN_VERSION_ghc(9,3,0)
             -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
-            -- also points to all the direct descendents of the current module. To get the keys for the descendents
+            -- also points to all the direct descendants of the current module. To get the keys for the descendants
             -- we must get their `ModSummary`s
             !final_deps <- do
               dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
@@ -951,7 +950,7 @@ getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ 
       hiDiags <- case hiFile of
         Just hiFile
           | OnDisk <- status
-          , not (tmrDeferedError tmr) -> liftIO $ writeHiFile se hsc hiFile
+          , not (tmrDeferredError tmr) -> liftIO $ writeHiFile se hsc hiFile
         _ -> pure []
       return (fp, (diags++hiDiags, hiFile))
     NotFOI -> do
@@ -1023,9 +1022,9 @@ regenerateHiFile sess f ms compNeeded = do
                     wDiags <- forM masts $ \asts ->
                       liftIO $ writeAndIndexHieFile hsc se (tmrModSummary tmr) f (tcg_exports $ tmrTypechecked tmr) asts source
 
-                    -- We don't write the `.hi` file if there are defered errors, since we won't get
+                    -- We don't write the `.hi` file if there are deferred errors, since we won't get
                     -- accurate diagnostics next time if we do
-                    hiDiags <- if not $ tmrDeferedError tmr
+                    hiDiags <- if not $ tmrDeferredError tmr
                                then liftIO $ writeHiFile se hsc hiFile
                                else pure []
 
@@ -1058,16 +1057,6 @@ getClientSettingsRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake 
   settings <- clientSettings <$> getIdeConfiguration
   return (LBS.toStrict $ B.encode $ hash settings, settings)
 
--- | Returns the client configurarion stored in the IdeState.
--- You can use this function to access it from shake Rules
-getClientConfigAction :: Config -- ^ default value
-                      -> Action Config
-getClientConfigAction defValue = do
-  mbVal <- unhashed <$> useNoFile_ GetClientSettings
-  case A.parse (parseConfig defValue) <$> mbVal of
-    Just (Success c) -> return c
-    _                -> return defValue
-
 usePropertyAction ::
   (HasProperty s k t r) =>
   KeyNameProxy s ->
@@ -1075,8 +1064,7 @@ usePropertyAction ::
   Properties r ->
   Action (ToHsType t)
 usePropertyAction kn plId p = do
-  config <- getClientConfigAction def
-  let pluginConfig = configForPlugin config plId
+  pluginConfig <- getPluginConfigAction plId
   pure $ useProperty kn p $ plcConfig pluginConfig
 
 -- ---------------------------------------------------------------------
@@ -1117,10 +1105,23 @@ getLinkableRule recorder =
               Just obj_t
                 | obj_t >= core_t -> pure ([], Just $ HomeModInfo hirModIface hirModDetails (Just $ LM (posixSecondsToUTCTime obj_t) (ms_mod ms) [DotO obj_file]))
               _ -> liftIO $ coreFileToLinkable linkableType (hscEnv session) ms hirModIface hirModDetails bin_core (error "object doesn't have time")
-        -- Record the linkable so we know not to unload it
+        -- Record the linkable so we know not to unload it, and unload old versions
         whenJust (hm_linkable =<< hmi) $ \(LM time mod _) -> do
             compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
-            liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
+            liftIO $ modifyVar compiledLinkables $ \old -> do
+              let !to_keep = extendModuleEnv old mod time
+              --We need to unload old linkables before we can load in new linkables. However,
+              --the unload function in the GHC API takes a list of linkables to keep (i.e.
+              --not unload). Earlier we unloaded right before loading in new linkables, which
+              --is effectively once per splice. This can be slow as unload needs to walk over
+              --the list of all loaded linkables, for each splice.
+              --
+              --Solution: now we unload old linkables right after we generate a new linkable and
+              --just before returning it to be loaded. This has a substantial effect on recompile
+              --times as the number of loaded modules and splices increases.
+              --
+              unload (hscEnv session) (map (\(mod, time) -> LM time mod []) $ moduleEnvToList to_keep)
+              return (to_keep, ())
         return (hash <$ hmi, (warns, LinkableResult <$> hmi <*> pure hash))
 
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH

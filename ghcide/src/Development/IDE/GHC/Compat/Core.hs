@@ -130,6 +130,8 @@ module Development.IDE.GHC.Compat.Core (
       ),
     pattern FunTy,
     pattern ConPatIn,
+    conPatDetails,
+    mapConPatDetail,
 #if !MIN_VERSION_ghc(9,2,0)
     Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
 #endif
@@ -253,6 +255,7 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.noSrcSpan,
     SrcLoc.noSrcLoc,
     SrcLoc.noLoc,
+    SrcLoc.mapLoc,
     -- * Finder
     FindResult(..),
     mkHomeModLocation,
@@ -461,6 +464,18 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Unit.Finder.Types,
     module GHC.Unit.Env,
     module GHC.Driver.Phases,
+#endif
+# if !MIN_VERSION_ghc(9,4,0)
+    pattern HsFieldBind,
+    hfbAnn,
+    hfbLHS,
+    hfbRHS,
+    hfbPun,
+#endif
+#if !MIN_VERSION_ghc_boot_th(9,4,1)
+    Extension(.., NamedFieldPuns),
+#else
+    Extension(..)
 #endif
     ) where
 
@@ -710,12 +725,12 @@ import           TcRnMonad                    hiding (Applicative (..), IORef,
                                                allM, anyM, concatMapM, foldrM,
                                                mapMaybeM, (<$>))
 import           TcRnTypes
-import           TcType                       
+import           TcType
 import qualified TcType
 import           TidyPgm                     as GHC
 import qualified TyCoRep
 import           TyCon
-import           Type                         
+import           Type
 import           TysPrim
 import           TysWiredIn
 import           Unify
@@ -754,6 +769,11 @@ import qualified GHC.Driver.Finder as GHC
 #else
 import qualified Finder as GHC
 #endif
+
+-- NOTE(ozkutuk): Cpp clashes Phase.Cpp, so we hide it.
+-- Not the greatest solution, but gets the job done
+-- (until the CPP extension is actually needed).
+import GHC.LanguageExtensions.Type hiding (Cpp)
 
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
@@ -936,6 +956,25 @@ pattern ConPatIn con args = ConPat NoExtField con args
 #endif
 #endif
 
+conPatDetails :: Pat p -> Maybe (HsConPatDetails p)
+#if MIN_VERSION_ghc(9,0,0)
+conPatDetails (ConPat _ _ args) = Just args
+conPatDetails _ = Nothing
+#else
+conPatDetails (ConPatIn _ args) = Just args
+conPatDetails _ = Nothing
+#endif
+
+mapConPatDetail :: (HsConPatDetails p -> Maybe (HsConPatDetails p)) -> Pat p -> Maybe (Pat p)
+#if MIN_VERSION_ghc(9,0,0)
+mapConPatDetail f pat@(ConPat _ _ args) = (\args' -> pat { pat_args = args'}) <$> f args
+mapConPatDetail _ _ = Nothing
+#else
+mapConPatDetail f (ConPatIn ss args) = ConPatIn ss <$> f args
+mapConPatDetail _ _ = Nothing
+#endif
+
+
 initDynLinker, initObjLinker :: HscEnv -> IO ()
 initDynLinker =
 #if !MIN_VERSION_ghc(9,0,0)
@@ -1100,4 +1139,22 @@ driverNoStop =
 #if !MIN_VERSION_ghc(9,3,0)
 hscUpdateHPT :: (HomePackageTable -> HomePackageTable) -> HscEnv -> HscEnv
 hscUpdateHPT k session = session { hsc_HPT = k (hsc_HPT session) }
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+match :: HsRecField' id arg -> ((), id, arg, Bool)
+match (HsRecField lhs rhs pun) = ((), SrcLoc.unLoc lhs, rhs, pun)
+
+pattern HsFieldBind :: () -> id -> arg -> Bool -> HsRecField' id arg
+pattern HsFieldBind {hfbAnn, hfbLHS, hfbRHS, hfbPun} <- (match -> (hfbAnn, hfbLHS, hfbRHS, hfbPun)) where
+  HsFieldBind _ lhs rhs pun = HsRecField (SrcLoc.noLoc lhs) rhs pun
+#elif !MIN_VERSION_ghc(9,4,0)
+pattern HsFieldBind :: XHsRecField id -> id -> arg -> Bool -> HsRecField' id arg
+pattern HsFieldBind {hfbAnn, hfbLHS, hfbRHS, hfbPun} <- HsRecField hfbAnn (SrcLoc.unLoc -> hfbLHS) hfbRHS hfbPun where
+  HsFieldBind ann lhs rhs pun = HsRecField ann (SrcLoc.noLoc lhs) rhs pun
+#endif
+
+#if !MIN_VERSION_ghc_boot_th(9,4,1)
+pattern NamedFieldPuns :: Extension
+pattern NamedFieldPuns = RecordPuns
 #endif

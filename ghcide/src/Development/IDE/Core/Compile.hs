@@ -161,10 +161,9 @@ computePackageDeps env pkg = do
             T.pack $ "unknown package: " ++ show pkg]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
-data TypecheckHelpers
+newtype TypecheckHelpers
   = TypecheckHelpers
-  { getLinkablesToKeep :: !(IO (ModuleEnv UTCTime))
-  , getLinkables       :: !([NormalizedFilePath] -> IO [LinkableResult])
+  { getLinkables       :: ([NormalizedFilePath] -> IO [LinkableResult]) -- ^ hls-graph action to get linkables for files
   }
 
 typecheckModule :: IdeDefer
@@ -190,10 +189,10 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
                     tcRnModule session tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
             let errorPipeline = unDefer . hideDiag dflags . tagDiag
                 diags = map errorPipeline warnings
-                deferedError = any fst diags
+                deferredError = any fst diags
             case etcm of
               Left errs -> return (map snd diags ++ errs, Nothing)
-              Right tcm -> return (map snd diags, Just $ tcm{tmrDeferedError = deferedError})
+              Right tcm -> return (map snd diags, Just $ tcm{tmrDeferredError = deferredError})
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
@@ -329,11 +328,6 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                                          _ -> panic "hscCompileCoreExprHook: module not found"
                                  ]
            ; let hsc_env' = loadModulesHome (map linkableHomeMod lbs) hsc_env
-
-             -- Essential to do this here after we load the linkables
-           ; keep_lbls <- getLinkablesToKeep
-
-           ; unload hsc_env' $ map (\(mod, time) -> LM time mod []) $ moduleEnvToList keep_lbls
 
 #if MIN_VERSION_ghc(9,3,0)
              {- load it -}
@@ -497,7 +491,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
           writeBinCoreFile fp core_file
         -- We want to drop references to guts and read in a serialized, compact version
         -- of the core file from disk (as it is deserialised lazily)
-        -- This is because we don't want to keep the guts in memeory for every file in
+        -- This is because we don't want to keep the guts in memory for every file in
         -- the project as it becomes prohibitively expensive
         -- The serialized file however is much more compact and only requires a few
         -- hundred megabytes of memory total even in a large project with 1000s of
@@ -506,7 +500,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
         pure $ assert (core_hash1 == core_hash2)
              $ Just (core_file, fingerprintToBS core_hash2)
 
-  -- Verify core file by rountrip testing and comparison
+  -- Verify core file by roundtrip testing and comparison
   IdeOptions{optVerifyCoreFile} <- getIdeOptionsIO se
   case core_file of
     Just (core, _) | optVerifyCoreFile -> do
@@ -771,7 +765,7 @@ generateHieAsts hscEnv tcm =
     -- These varBinds use unitDataConId but it could be anything as the id name is not used
     -- during the hie file generation process. It's a workaround for the fact that the hie modules
     -- don't export an interface which allows for additional information to be added to hie files.
-    let fake_splice_binds = Util.listToBag (map (mkVarBind unitDataConId) (spliceExpresions $ tmrTopLevelSplices tcm))
+    let fake_splice_binds = Util.listToBag (map (mkVarBind unitDataConId) (spliceExpressions $ tmrTopLevelSplices tcm))
         real_binds = tcg_binds $ tmrTypechecked tcm
 #if MIN_VERSION_ghc(9,0,1)
         ts = tmrTypechecked tcm :: TcGblEnv
@@ -799,8 +793,8 @@ generateHieAsts hscEnv tcm =
 #endif
 #endif
 
-spliceExpresions :: Splices -> [LHsExpr GhcTc]
-spliceExpresions Splices{..} =
+spliceExpressions :: Splices -> [LHsExpr GhcTc]
+spliceExpressions Splices{..} =
     DL.toList $ mconcat
         [ DL.fromList $ map fst exprSplices
         , DL.fromList $ map fst patSplices
@@ -810,7 +804,7 @@ spliceExpresions Splices{..} =
         ]
 
 -- | In addition to indexing the `.hie` file, this function is responsible for
--- maintaining the 'IndexQueue' state and notfiying the user about indexing
+-- maintaining the 'IndexQueue' state and notifying the user about indexing
 -- progress.
 --
 -- We maintain a record of all pending index operations in the 'indexPending'
@@ -1410,7 +1404,7 @@ instance NFData IdeLinkable where
 ml_core_file :: ModLocation -> FilePath
 ml_core_file ml = ml_hi_file ml <.> "core"
 
--- | Retuns an up-to-date module interface, regenerating if needed.
+-- | Returns an up-to-date module interface, regenerating if needed.
 --   Assumes file exists.
 --   Requires the 'HscEnv' to be set up with dependencies
 -- See Note [Recompilation avoidance in the presence of TH]
@@ -1438,7 +1432,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
     -- The source is modified if it is newer than the destination (iface file)
     -- A more precise check for the core file is performed later
     let sourceMod = case mb_dest_version of
-          Nothing -> SourceModified -- desitination file doesn't exist, assume modified source
+          Nothing -> SourceModified -- destination file doesn't exist, assume modified source
           Just dest_version
             | source_version <= dest_version -> SourceUnmodified
             | otherwise -> SourceModified
@@ -1467,7 +1461,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
            Just (old_hir, _)
              | isNothing linkableNeeded || isJust (hirCoreFp old_hir)
              -> do
-             -- Peform the fine grained recompilation check for TH
+             -- Perform the fine grained recompilation check for TH
              maybe_recomp <- checkLinkableDependencies get_linkable_hashes (hsc_mod_graph sessionWithMsDynFlags) (hirRuntimeModules old_hir)
              case maybe_recomp of
                Just msg -> do_regenerate msg
@@ -1479,7 +1473,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
              let runtime_deps
                    | not (mi_used_th iface) = emptyModuleEnv
                    | otherwise = parseRuntimeDeps (md_anns details)
-             -- Peform the fine grained recompilation check for TH
+             -- Perform the fine grained recompilation check for TH
              maybe_recomp <- checkLinkableDependencies get_linkable_hashes (hsc_mod_graph sessionWithMsDynFlags) runtime_deps
              case maybe_recomp of
                Just msg -> do_regenerate msg
@@ -1599,7 +1593,7 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
 --- and leads to fun errors like "Cannot continue after interface file error".
 getDocsBatch
   :: HscEnv
-  -> Module  -- ^ a moudle where the names are in scope
+  -> Module  -- ^ a module where the names are in scope
   -> [Name]
 #if MIN_VERSION_ghc(9,3,0)
   -> IO [Either String (Maybe [HsDoc GhcRn], IntMap (HsDoc GhcRn))]

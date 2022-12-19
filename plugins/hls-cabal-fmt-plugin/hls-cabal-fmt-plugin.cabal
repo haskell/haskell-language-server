@@ -1,0 +1,59 @@
+cabal-version:      2.4
+name:               hls-cabal-fmt-plugin
+version:            0.1.0.0
+synopsis:           Integration with the cabal-fmt code formatter
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
+license:            Apache-2.0
+license-file:       LICENSE
+author:             The Haskell IDE Team
+copyright:          The Haskell IDE Team
+maintainer:         jana.chadt@nets.at
+category:           Development
+build-type:         Simple
+extra-source-files: LICENSE
+
+flag isolateTests
+  description: Should tests search for 'cabal-fmt' on the $PATH or shall we install it via build-tool-depends?
+  -- By default, search on the PATH
+  default:     False
+  manual:      True
+
+common warnings
+  ghc-options: -Wall
+
+library
+  import:           warnings
+  exposed-modules:  Ide.Plugin.CabalFmt
+  hs-source-dirs:   src
+  build-depends:
+    , base            >=4.12 && <5
+    , directory
+    , filepath
+    , ghcide          ^>=1.7 || ^>=1.8
+    , hls-plugin-api  ^>=1.5
+    , lens
+    , lsp-types
+    , process
+    , text
+    , transformers
+
+  default-language: Haskell2010
+
+test-suite tests
+  import:             warnings
+  type:               exitcode-stdio-1.0
+  default-language:   Haskell2010
+  hs-source-dirs:     test
+  main-is:            Main.hs
+  ghc-options:        -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    , base
+    , directory
+    , filepath
+    , hls-cabal-fmt-plugin
+    , hls-test-utils        ^>=1.4
+
+  if flag(isolateTests)
+    build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6

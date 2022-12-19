@@ -53,7 +53,7 @@ module Development.IDE.Core.Shake(
     getIdeOptionsIO,
     GlobalIdeOptions(..),
     HLS.getClientConfig,
-    getPluginConfig,
+    getPluginConfigAction,
     knownTargets,
     setPriority,
     ideLogger,
@@ -77,7 +77,7 @@ module Development.IDE.Core.Shake(
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
     Log(..),
-    VFSModified(..)
+    VFSModified(..), getClientConfigAction
     ) where
 
 import           Control.Concurrent.Async
@@ -90,7 +90,8 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                             (toJSON)
+import           Data.Aeson                             (Result (Success),
+                                                         toJSON)
 import qualified Data.ByteString.Char8                  as BS
 import qualified Data.ByteString.Char8                  as BS8
 import           Data.Coerce                            (coerce)
@@ -98,7 +99,7 @@ import           Data.Default
 import           Data.Dynamic
 import           Data.EnumMap.Strict                    (EnumMap)
 import qualified Data.EnumMap.Strict                    as EM
-import           Data.Foldable                          (for_, toList)
+import           Data.Foldable                          (find, for_, toList)
 import           Data.Functor                           ((<&>))
 import           Data.Functor.Identity
 import           Data.Hashable
@@ -134,6 +135,7 @@ import           Development.IDE.GHC.Compat             (NameCache,
 #if !MIN_VERSION_ghc(9,3,0)
 import           Development.IDE.GHC.Compat             (upNameCache)
 #endif
+import qualified Data.Aeson.Types                       as A
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
@@ -161,7 +163,9 @@ import           GHC.Stack                              (HasCallStack)
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
-import           Ide.Types                              (IdePlugins, PluginId)
+import           Ide.Types                              (IdePlugins (IdePlugins),
+                                                         PluginDescriptor (pluginId),
+                                                         PluginId)
 import           Language.LSP.Diagnostics
 import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.Types
@@ -256,7 +260,7 @@ data ShakeExtras = ShakeExtras
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
-    -- accumlation of all previous mappings.
+    -- accumulation of all previous mappings.
     ,progress :: ProgressReporting
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
@@ -280,12 +284,12 @@ data ShakeExtras = ShakeExtras
     , withHieDb :: WithHieDb -- ^ Use only to read.
     , hiedbWriter :: HieDbWriter -- ^ use to write
     , persistentKeys :: TVar (KeyMap GetStalePersistent)
-      -- ^ Registery for functions that compute/get "stale" results for the rule
+      -- ^ Registry for functions that compute/get "stale" results for the rule
       -- (possibly from disk)
     , vfsVar :: TVar VFS
     -- ^ A snapshot of the current state of the virtual file system. Updated on shakeRestart
     -- VFS state is managed by LSP. However, the state according to the lsp library may be newer than the state of the current session,
-    -- leaving us vulnerable to suble race conditions. To avoid this, we take a snapshot of the state of the VFS on every
+    -- leaving us vulnerable to subtle race conditions. To avoid this, we take a snapshot of the state of the VFS on every
     -- restart, so that the whole session sees a single consistent view of the VFS.
     -- We don't need a STM.Map because we never update individual keys ourselves.
     , defaultConfig :: Config
@@ -311,10 +315,25 @@ getShakeExtrasRules = do
     Just x <- getShakeExtraRules @ShakeExtras
     return x
 
-getPluginConfig
-    :: LSP.MonadLsp Config m => PluginId -> m PluginConfig
-getPluginConfig plugin = do
-    config <- HLS.getClientConfig
+-- | Returns the client configuration, creating a build dependency.
+--   You should always use this function when accessing client configuration
+--   from build rules.
+getClientConfigAction :: Action Config
+getClientConfigAction = do
+  ShakeExtras{lspEnv, idePlugins} <- getShakeExtras
+  currentConfig <- (`LSP.runLspT` LSP.getConfig) `traverse` lspEnv
+  mbVal <- unhashed <$> useNoFile_ GetClientSettings
+  let defValue = fromMaybe def currentConfig
+  case A.parse (parseConfig idePlugins defValue) <$> mbVal of
+    Just (Success c) -> return c
+    _                -> return defValue
+
+getPluginConfigAction :: PluginId -> Action PluginConfig
+getPluginConfigAction plId = do
+    config <- getClientConfigAction
+    ShakeExtras{idePlugins = IdePlugins plugins} <- getShakeExtras
+    let plugin = fromMaybe (error $ "Plugin not found: " <> show plId) $
+                    find (\p -> pluginId p == plId) plugins
     return $ HLS.configForPlugin config plugin
 
 -- | Register a function that will be called to get the "stale" result of a rule, possibly from disk
@@ -662,7 +681,7 @@ getStateKeys = (fmap.fmap) fst . atomically . ListT.toList . STM.listT . state
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()
 shakeSessionInit recorder ide@IdeState{..} = do
-    -- Take a snapshot of the VFS - it should be empty as we've recieved no notifications
+    -- Take a snapshot of the VFS - it should be empty as we've received no notifications
     -- till now, but it can't hurt to be in sync with the `lsp` library.
     vfs <- vfsSnapshot (lspEnv shakeExtras)
     initSession <- newSession recorder shakeExtras (VFSModified vfs) shakeDb [] "shakeSessionInit"
@@ -831,7 +850,7 @@ instantiateDelayedAction (DelayedAction _ s p a) = do
   b <- newBarrier
   let a' = do
         -- work gets reenqueued when the Shake session is restarted
-        -- it can happen that a work item finished just as it was reenqueud
+        -- it can happen that a work item finished just as it was reenqueued
         -- in that case, skipping the work is fine
         alreadyDone <- liftIO $ isJust <$> waitBarrierMaybe b
         unless alreadyDone $ do
@@ -1199,7 +1218,7 @@ updateFileDiagnostics :: MonadIO m
   -> ShakeExtras
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> m ()
-updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, debouncer, lspEnv} current =
+updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, debouncer, lspEnv, ideTesting} current0 =
   liftIO $ withTrace ("update diagnostics " <> fromString(fromNormalizedFilePath fp)) $ \ addTag -> do
     addTag "key" (show k)
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
@@ -1208,6 +1227,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
         addTagUnsafe msg t x v = unsafePerformIO(addTag (msg <> t) x) `seq` v
         update :: (forall a. String -> String -> a -> a) -> [Diagnostic] -> STMDiagnosticStore -> STM [Diagnostic]
         update addTagUnsafe new store = addTagUnsafe "count" (show $ Prelude.length new) $ setStageDiagnostics addTagUnsafe uri ver (renderKey k) new store
+        current = second diagsFromRule <$> current0
     addTag "version" (show ver)
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
@@ -1230,6 +1250,22 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
                                 LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
                  return action
+    where
+        diagsFromRule :: Diagnostic -> Diagnostic
+        diagsFromRule c@Diagnostic{_range}
+            | coerce ideTesting = c
+                {_relatedInformation =
+                    Just $ List [
+                        DiagnosticRelatedInformation
+                            (Location
+                                (filePathToUri $ fromNormalizedFilePath fp)
+                                _range
+                            )
+                            (T.pack $ show k)
+                            ]
+                }
+            | otherwise = c
+
 
 newtype Priority = Priority Double
 

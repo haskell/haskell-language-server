@@ -21,7 +21,9 @@ import qualified Ide.Plugin.QualifyImportedNames   as QualifyImportedNames
 #if hls_callHierarchy
 import qualified Ide.Plugin.CallHierarchy          as CallHierarchy
 #endif
-
+#if hls_cabal
+import qualified Ide.Plugin.Cabal                  as Cabal
+#endif
 #if hls_class
 import qualified Ide.Plugin.Class                  as Class
 #endif
@@ -83,15 +85,19 @@ import qualified Ide.Plugin.CodeRange              as CodeRange
 #endif
 
 #if hls_changeTypeSignature
-import           Ide.Plugin.ChangeTypeSignature    as ChangeTypeSignature
+import qualified Ide.Plugin.ChangeTypeSignature    as ChangeTypeSignature
 #endif
 
 #if hls_gadt
-import           Ide.Plugin.GADT                   as GADT
+import qualified Ide.Plugin.GADT                   as GADT
 #endif
 
 #if explicitFixity
-import           Ide.Plugin.ExplicitFixity         as ExplicitFixity
+import qualified Ide.Plugin.ExplicitFixity         as ExplicitFixity
+#endif
+
+#if explicitFields
+import qualified Ide.Plugin.ExplicitFields         as ExplicitFields
 #endif
 
 -- formatters
@@ -102,6 +108,10 @@ import qualified Ide.Plugin.Floskell               as Floskell
 
 #if hls_fourmolu
 import qualified Ide.Plugin.Fourmolu               as Fourmolu
+#endif
+
+#if hls_cabalfmt
+import qualified Ide.Plugin.CabalFmt               as CabalFmt
 #endif
 
 #if hls_ormolu
@@ -138,6 +148,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
     pluginRecorder :: forall log. (Pretty log) => PluginId -> Recorder (WithPriority log)
     pluginRecorder pluginId = cmapWithPrio (Log pluginId) recorder
     allPlugins =
+#if hls_cabal
+      let pId = "cabal" in Cabal.descriptor (pluginRecorder pId) pId :
+#endif
 #if hls_pragmas
       Pragmas.descriptor  "pragmas" :
 #endif
@@ -146,6 +159,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_fourmolu
       let pId = "fourmolu" in Fourmolu.descriptor (pluginRecorder pId) pId:
+#endif
+#if hls_cabalfmt
+      let pId = "cabalfmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_tactic
       let pId = "tactics" in Tactic.descriptor (pluginRecorder pId) pId:
@@ -166,7 +182,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       Brittany.descriptor "brittany" :
 #endif
 #if hls_callHierarchy
-      CallHierarchy.descriptor :
+      CallHierarchy.descriptor "callHierarchy" :
 #endif
 #if hls_class
       let pId = "class" in Class.descriptor (pluginRecorder pId) pId:
@@ -205,7 +221,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "codeRange" in CodeRange.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_changeTypeSignature
-      ChangeTypeSignature.descriptor :
+      ChangeTypeSignature.descriptor "changeTypeSignature" :
 #endif
 #if hls_gadt
       GADT.descriptor "gadt" :
@@ -220,5 +236,8 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       GhcIde.descriptors (pluginRecorder "ghcide")
 #if explicitFixity
       ++ [let pId = "explicit-fixity" in ExplicitFixity.descriptor (pluginRecorder pId) pId]
+#endif
+#if explicitFields
+      ++ [let pId = "explicit-fields" in ExplicitFields.descriptor (pluginRecorder pId) pId]
 #endif
 

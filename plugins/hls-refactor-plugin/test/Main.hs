@@ -39,7 +39,6 @@ import           Language.LSP.Types                       hiding
                                                            SemanticTokenRelative (length),
                                                            SemanticTokensEdit (_start),
                                                            mkRange)
-import qualified Language.LSP.Types                       as LSP
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.Types.Lens                  as L
 import           System.Directory
@@ -57,20 +56,25 @@ import           Text.Regex.TDFA                          ((=~))
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
 import           Test.Hls
 
+import           Control.Applicative                      (liftA2)
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
+import qualified Test.AddArgument
 
 main :: IO ()
 main = defaultTestRunner tests
 
-refactorPlugin :: [PluginDescriptor IdeState]
-refactorPlugin =
-      [ Refactor.iePluginDescriptor mempty "ghcide-code-actions-imports-exports"
-      , Refactor.typeSigsPluginDescriptor mempty "ghcide-code-actions-type-signatures"
-      , Refactor.bindingsPluginDescriptor mempty "ghcide-code-actions-bindings"
-      , Refactor.fillHolePluginDescriptor mempty "ghcide-code-actions-fill-holes"
-      , Refactor.extendImportPluginDescriptor mempty "ghcide-completions-1"
-      ] ++ GhcIde.descriptors mempty
+refactorPlugin :: IO [PluginDescriptor IdeState]
+refactorPlugin = do
+  exactprintLog <- pluginTestRecorder
+  ghcideLog <- pluginTestRecorder
+  pure $
+      [ Refactor.iePluginDescriptor exactprintLog "ghcide-code-actions-imports-exports"
+      , Refactor.typeSigsPluginDescriptor exactprintLog "ghcide-code-actions-type-signatures"
+      , Refactor.bindingsPluginDescriptor exactprintLog "ghcide-code-actions-bindings"
+      , Refactor.fillHolePluginDescriptor exactprintLog "ghcide-code-actions-fill-holes"
+      , Refactor.extendImportPluginDescriptor exactprintLog "ghcide-completions-1"
+      ] ++ GhcIde.descriptors ghcideLog
 
 tests :: TestTree
 tests =
@@ -319,6 +323,9 @@ codeActionTests = testGroup "code actions"
   , exportUnusedTests
   , addImplicitParamsConstraintTests
   , removeExportTests
+#if MIN_VERSION_ghc(9,2,1)
+  , Test.AddArgument.tests
+#endif
   ]
 
 insertImportTests :: TestTree
@@ -465,12 +472,12 @@ insertImportTests = testGroup "insert import"
       "NoExplicitExports.expected.hs"
       "import Data.Monoid"
   , checkImport
-      "add to correctly placed exisiting import"
+      "add to correctly placed existing import"
       "ImportAtTop.hs"
       "ImportAtTop.expected.hs"
       "import Data.Monoid"
   , checkImport
-      "add to multiple correctly placed exisiting imports"
+      "add to multiple correctly placed existing imports"
       "MultipleImportsAtTop.hs"
       "MultipleImportsAtTop.expected.hs"
       "import Data.Monoid"
@@ -1507,7 +1514,7 @@ extendImportTests = testGroup "extend import actions"
             actionsOrCommands <- getCodeActions docB range
             let codeActions =
                   filter
-                    (T.isPrefixOf "Add" . codeActionTitle)
+                    (liftA2 (&&) (T.isPrefixOf "Add") (not . T.isPrefixOf "Add argument") . codeActionTitle)
                     [ca | InR ca <- actionsOrCommands]
                 actualTitles = codeActionTitle <$> codeActions
             -- Note that we are not testing the order of the actions, as the
@@ -1839,7 +1846,6 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
     auxFiles = ["AVec.hs", "BVec.hs", "CVec.hs", "DVec.hs", "EVec.hs", "FVec.hs"]
     withTarget file locs k = runWithExtraFiles "hiding" $ \dir -> do
         doc <- openDoc file "haskell"
-        waitForProgressDone
         void $ expectDiagnostics [(file, [(DsError, loc, "Ambiguous occurrence") | loc <- locs])]
         actions <- getAllCodeActions doc
         k dir doc actions
@@ -1852,7 +1858,7 @@ suggestHideShadowTests =
     [ testGroup
         "single"
         [ testOneCodeAction
-            "hide unsued"
+            "hide unused"
             "Hide on from Data.Function"
             (1, 2)
             (1, 4)
@@ -1865,7 +1871,7 @@ suggestHideShadowTests =
             , "g on = on"
             ]
         , testOneCodeAction
-            "extend hiding unsued"
+            "extend hiding unused"
             "Hide on from Data.Function"
             (1, 2)
             (1, 4)
@@ -1876,7 +1882,7 @@ suggestHideShadowTests =
             , "f on = on"
             ]
         , testOneCodeAction
-            "delete unsued"
+            "delete unused"
             "Hide on from Data.Function"
             (1, 2)
             (1, 4)
@@ -1978,7 +1984,7 @@ suggestHideShadowTests =
             ]
         , testOneCodeAction
             "auto hide all"
-            "Hide ++ from all occurence imports"
+            "Hide ++ from all occurrence imports"
             (2, 2)
             (2, 6)
             [ "import B"
@@ -2047,7 +2053,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
       docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ txtB ++ txtB')
       _ <- waitForDiagnostics
       InR action@CodeAction { _title = actionTitle } : _
-                  <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
+                  <- filter (\(InR CodeAction{_title=x}) -> "Define" `T.isPrefixOf` x) <$>
                      getCodeActions docB (R 0 0 0 50)
       liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
       executeCodeAction action
@@ -2071,7 +2077,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
       docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ txtB ++ txtB')
       _ <- waitForDiagnostics
       InR action@CodeAction { _title = actionTitle } : _
-                  <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
+                  <- filter (\(InR CodeAction{_title=x}) -> "Define" `T.isPrefixOf` x) <$>
                      getCodeActions docB (R 0 0 0 50)
       liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
       executeCodeAction action
@@ -2105,7 +2111,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
     docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
     _ <- waitForDiagnostics
     InR action@CodeAction { _title = actionTitle } : _
-                <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
+                <- filter (\(InR CodeAction{_title=x}) -> "Define" `T.isPrefixOf` x) <$>
                     getCodeActions docB (R 1 0 0 50)
     liftIO $ actionTitle @?= "Define select :: Int -> Bool"
     executeCodeAction action
@@ -2131,14 +2137,38 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
     docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
     _ <- waitForDiagnostics
     InR action@CodeAction { _title = actionTitle } : _
-                <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
+                <- filter (\(InR CodeAction{_title=x}) -> "Define" `T.isPrefixOf` x) <$>
                     getCodeActions docB (R 1 0 0 50)
     liftIO $ actionTitle @?= "Define select :: Int -> Bool"
     executeCodeAction action
     contentAfterAction <- documentContents docB
     liftIO $ contentAfterAction @?= T.unlines expected
+    , testSession "insert new function definition - untyped error" $ do
+      let txtB =
+            ["foo = select"
+            ]
+          txtB' =
+            [""
+            ,"someOtherCode = ()"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ txtB ++ txtB')
+      _ <- waitForDiagnostics
+      InR action@CodeAction { _title = actionTitle } : _
+                  <- filter (\(InR CodeAction{_title=x}) -> "Define" `T.isPrefixOf` x) <$>
+                     getCodeActions docB (R 0 0 0 50)
+      liftIO $ actionTitle @?= "Define select :: _"
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ contentAfterAction @?= T.unlines (txtB ++
+        [ ""
+        , "select :: _"
+        , "select = _"
+        ]
+        ++ txtB')
   ]
 
+#if MIN_VERSION_ghc(9,2,1)
+#endif
 
 deleteUnusedDefinitionTests :: TestTree
 deleteUnusedDefinitionTests = testGroup "delete unused definition action"
@@ -3702,7 +3732,9 @@ run' :: (FilePath -> Session a) -> IO a
 run' s = withTempDir $ \dir -> runInDir dir (s dir)
 
 runInDir :: FilePath -> Session a -> IO a
-runInDir dir = runSessionWithServer' refactorPlugin def def lspTestCaps dir
+runInDir dir act = do
+  plugin <- refactorPlugin
+  runSessionWithServer' plugin def def lspTestCaps dir act
 
 lspTestCaps :: ClientCapabilities
 lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }

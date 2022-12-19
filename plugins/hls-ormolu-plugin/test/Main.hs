@@ -11,8 +11,8 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
-ormoluPlugin :: PluginDescriptor IdeState
-ormoluPlugin = Ormolu.descriptor "ormolu"
+ormoluPlugin :: PluginTestDescriptor ()
+ormoluPlugin = mkPluginTestDescriptor' Ormolu.descriptor "ormolu"
 
 tests :: TestTree
 tests = testGroup "ormolu"

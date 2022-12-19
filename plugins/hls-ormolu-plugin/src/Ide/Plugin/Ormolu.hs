@@ -16,7 +16,7 @@ import qualified Development.IDE.GHC.Compat      as D
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type
 import           Ide.PluginUtils
-import           Ide.Types
+import           Ide.Types                       hiding (Config)
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types
 import           Ormolu

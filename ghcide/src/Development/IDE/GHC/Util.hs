@@ -26,10 +26,12 @@ module Development.IDE.GHC.Util(
     setHieDir,
     dontWriteHieFiles,
     disableWarningsAsErrors,
-    printOutputable
+    printOutputable,
+    getExtensions
     ) where
 
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Data.EnumSet
 import           GHC.Data.FastString
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Env                    hiding (hscSetFlags)
@@ -73,7 +75,7 @@ import           Development.IDE.Types.Location
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
 import           Foreign.Storable
-import           GHC
+import           GHC                               hiding (ParsedModule (..))
 import           GHC.IO.BufferedIO                 (BufferedIO)
 import           GHC.IO.Device                     as IODevice
 import           GHC.IO.Encoding
@@ -295,3 +297,6 @@ printOutputable =
     -- More discussion at https://github.com/haskell/haskell-language-server/issues/3115.
     unescape . T.pack . printWithoutUniques
 {-# INLINE printOutputable #-}
+
+getExtensions :: ParsedModule -> [Extension]
+getExtensions = toList . extensionFlags . ms_hspp_opts . pm_mod_summary
