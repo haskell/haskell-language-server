@@ -14,10 +14,6 @@ module Development.IDE.Core.Rules(
     IdeState, GetParsedModule(..), TransitiveDependencies(..),
     Priority(..), GhcSessionIO(..), GetClientSettings(..),
     -- * Functions
-    --
-    --
-    --
-    -- 
     priorityTypeCheck,
     priorityGenerateCore,
     priorityFilesOfInterest,
@@ -674,7 +670,11 @@ knownFilesRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorde
 getModuleGraphRule :: Recorder (WithPriority Log) -> Rules ()
 getModuleGraphRule recorder = defineNoFile (cmapWithPrio LogShake recorder) $ \GetModuleGraph -> do
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
-  (rawDepInfo, bm) <- rawDependencyInformation (HashSet.toList fs)
+  dependencyInfoForFiles (HashSet.toList fs)
+
+dependencyInfoForFiles :: [NormalizedFilePath] -> Action DependencyInformation
+dependencyInfoForFiles fs = do
+  (rawDepInfo, bm) <- rawDependencyInformation fs
   let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
   mss <- map (fmap msrModSummary) <$> uses GetModSummaryWithoutTimestamps all_fs
 #if MIN_VERSION_ghc(9,3,0)
@@ -767,11 +767,11 @@ loadGhcSession recorder ghcSessionDepsConfig = do
         ghcSessionDepsDefinition fullModSummary ghcSessionDepsConfig env file
 
 newtype GhcSessionDepsConfig = GhcSessionDepsConfig
-    { checkForImportCycles :: Bool
+    { fullModuleGraph :: Bool
     }
 instance Default GhcSessionDepsConfig where
   def = GhcSessionDepsConfig
-    { checkForImportCycles = True
+    { fullModuleGraph = True
     }
 
 -- | Note [GhcSessionDeps]
@@ -790,7 +790,7 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
     case mbdeps of
         Nothing -> return Nothing
         Just deps -> do
-            when checkForImportCycles $ void $ uses_ ReportImportCycles deps
+            when fullModuleGraph $ void $ uses_ ReportImportCycles deps
             ms <- msrModSummary <$> if fullModSummary
                 then use_ GetModSummary file
                 else use_ GetModSummaryWithoutTimestamps file
@@ -798,7 +798,10 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
             let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
-            mg <- depModuleGraph <$> useNoFile_ GetModuleGraph
+            mg <- depModuleGraph <$>
+              if fullModuleGraph
+              then useNoFile_ GetModuleGraph
+              else dependencyInfoForFiles [file]
             session' <- liftIO $ mergeEnvs hsc mg ms inLoadOrder depSessions
 
             -- Here we avoid a call to to `newHscEnvEqWithImportPaths`, which creates a new
@@ -1203,8 +1206,16 @@ newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (Mod
 instance IsIdeGlobal CompiledLinkables
 
 data RulesConfig = RulesConfig
-    { -- | Disable import cycle checking for improved performance in large codebases
-      checkForImportCycles :: Bool
+    { -- | Share the computation for the entire module graph
+      -- We usually compute the full module graph for the project
+      -- and share it for all files.
+      -- However, in large projects it might not be desirable to wait
+      -- for computing the entire module graph before starting to
+      -- typecheck a particular file.
+      -- Disabling this drastically decreases sharing and is likely to
+      -- increase memory usage if you have multiple files open
+      -- Disabling this also disables checking for import cycles
+      fullModuleGraph :: Bool
     -- | Disable TH for improved performance in large codebases
     , enableTemplateHaskell :: Bool
     -- | Warning to show when TH is not supported by the current HLS binary
@@ -1241,7 +1252,7 @@ mainRule recorder RulesConfig{..} = do
     reportImportCyclesRule recorder
     typeCheckRule recorder
     getDocMapRule recorder
-    loadGhcSession recorder def{checkForImportCycles}
+    loadGhcSession recorder def{fullModuleGraph}
     getModIfaceFromDiskRule recorder
     getModIfaceFromDiskAndIndexRule recorder
     getModIfaceRule recorder
