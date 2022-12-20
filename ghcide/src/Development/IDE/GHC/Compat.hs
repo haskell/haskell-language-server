@@ -22,6 +22,7 @@ module Development.IDE.GHC.Compat(
 #else
     upNameCache,
 #endif
+    lookupNameCache,
     disableWarningsAsErrors,
     reLoc,
     reLocA,
@@ -406,6 +407,25 @@ hieExportNames = nameListFromAvails . hie_exports
 #if MIN_VERSION_ghc(9,3,0)
 type NameCacheUpdater = NameCache
 #else
+
+lookupNameCache :: Module -> OccName -> NameCache -> (NameCache, Name)
+-- Lookup up the (Module,OccName) in the NameCache
+-- If you find it, return it; if not, allocate a fresh original name and extend
+-- the NameCache.
+-- Reason: this may the first occurrence of (say) Foo.bar we have encountered.
+-- If we need to explore its value we will load Foo.hi; but meanwhile all we
+-- need is a Name for it.
+lookupNameCache mod occ name_cache =
+  case lookupOrigNameCache (nsNames name_cache) mod occ of {
+    Just name -> (name_cache, name);
+    Nothing   ->
+        case takeUniqFromSupply (nsUniqs name_cache) of {
+          (uniq, us) ->
+              let
+                name      = mkExternalName uniq mod occ noSrcSpan
+                new_cache = extendNameCache (nsNames name_cache) mod occ name
+              in (name_cache{ nsUniqs = us, nsNames = new_cache }, name) }}
+
 upNameCache :: IORef NameCache -> (NameCache -> (NameCache, c)) -> IO c
 upNameCache = updNameCache
 #endif

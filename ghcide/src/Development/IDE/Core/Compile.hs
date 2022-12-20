@@ -1591,15 +1591,14 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
 --- and leads to fun errors like "Cannot continue after interface file error".
 getDocsBatch
   :: HscEnv
-  -> Module  -- ^ a module where the names are in scope
   -> [Name]
 #if MIN_VERSION_ghc(9,3,0)
   -> IO [Either String (Maybe [HsDoc GhcRn], IntMap (HsDoc GhcRn))]
 #else
   -> IO [Either String (Maybe HsDocString, IntMap HsDocString)]
 #endif
-getDocsBatch hsc_env _mod _names = do
-    (msgs, res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
+getDocsBatch hsc_env _names = do
+    res <- initIfaceLoad hsc_env $ forM _names $ \name ->
         case nameModule_maybe name of
             Nothing -> return (Left $ NameHasNoModule name)
             Just mod -> do
@@ -1614,7 +1613,7 @@ getDocsBatch hsc_env _mod _names = do
                       , mi_decl_docs = DeclDocMap dmap
                       , mi_arg_docs = ArgDocMap amap
 #endif
-                      } <- loadModuleInterface "getModuleInterface" mod
+                      } <- loadSysInterface (text "getModuleInterface") mod
 #if MIN_VERSION_ghc(9,3,0)
              if isNothing mb_doc_hdr && isNullUniqMap dmap && isNullUniqMap amap
 #else
@@ -1635,44 +1634,44 @@ getDocsBatch hsc_env _mod _names = do
 #else
                                   Map.findWithDefault mempty name amap))
 #endif
-    case res of
-        Just x  -> return $ map (first $ T.unpack . printOutputable)
-                          $ x
-        Nothing -> throwErrors
-#if MIN_VERSION_ghc(9,3,0)
-                     $ fmap GhcTcRnMessage msgs
-#elif MIN_VERSION_ghc(9,2,0)
-                     $ Error.getErrorMessages msgs
-#else
-                     $ snd msgs
-#endif
+    return $ map (first $ T.unpack . printOutputable)
+           $ res
   where
-    throwErrors = liftIO . throwIO . mkSrcErr
     compiled n =
       -- TODO: Find a more direct indicator.
       case nameSrcLoc n of
         RealSrcLoc {}   -> False
         UnhelpfulLoc {} -> True
 
-fakeSpan :: RealSrcSpan
-fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
-
 -- | Non-interactive, batch version of 'InteractiveEval.lookupNames'.
 --   The interactive paths create problems in ghc-lib builds
 --- and leads to fun errors like "Cannot continue after interface file error".
 lookupName :: HscEnv
-           -> Module -- ^ A module where the Names are in scope
            -> Name
            -> IO (Maybe TyThing)
-lookupName hsc_env mod name = do
-    (_messages, res) <- initTc hsc_env HsSrcFile False mod fakeSpan $ do
-        tcthing <- tcLookup name
-        case tcthing of
-            AGlobal thing    -> return thing
-            ATcId{tct_id=id} -> return (AnId id)
-            _                -> panic "tcRnLookupName'"
-    return res
-
+lookupName _ name
+  | Nothing <- nameModule_maybe name = pure Nothing
+lookupName hsc_env name = handle $ do
+#if MIN_VERSION_ghc(9,2,0)
+  mb_thing <- liftIO $ lookupType hsc_env name
+#else
+  eps <- liftIO $ readIORef (hsc_EPS hsc_env)
+  let mb_thing = lookupType (hsc_dflags hsc_env) (hsc_HPT hsc_env) (eps_PTE eps) name
+#endif
+  case mb_thing of
+    x@(Just _) -> return x
+    Nothing
+      | x@(Just thing) <- wiredInNameTyThing_maybe name
+      -> do when (needWiredInHomeIface thing)
+                 (initIfaceLoad hsc_env (loadWiredInHomeIface name))
+            return x
+      | otherwise -> do
+        res <- initIfaceLoad hsc_env $ importDecl name
+        case res of
+          Util.Succeeded x -> return (Just x)
+          _ -> return Nothing
+  where
+    handle x = x `catch` \(_ :: IOEnvFailure) -> pure Nothing
 
 pathToModuleName :: FilePath -> ModuleName
 pathToModuleName = mkModuleName . map rep
