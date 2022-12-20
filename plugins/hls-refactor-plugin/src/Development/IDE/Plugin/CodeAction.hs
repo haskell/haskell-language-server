@@ -105,8 +105,7 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     DeltaPos (..),
                                                                     EpAnn (..),
                                                                     EpaLocation (..),
-                                                                    LEpaComment,
-                                                                    LocatedA)
+                                                                    LEpaComment)
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
                                                                     DeltaPos,
@@ -1530,11 +1529,7 @@ findPositionNoImports ps fileContents =
 
 -- | find line number right after module ... where
 findPositionAfterModuleName :: Annotated ParsedSource
-#if MIN_VERSION_ghc(9,2,0)
                             -> LocatedA ModuleName
-#else
-                            -> Located ModuleName
-#endif
                             -> Maybe Int
 findPositionAfterModuleName ps hsmodName' = do
     -- Note that 'where' keyword and comments are not part of the AST. They belongs to
