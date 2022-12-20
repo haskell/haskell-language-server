@@ -37,6 +37,7 @@ import           Data.Maybe
 import           Data.Ord                                          (comparing)
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
+import qualified Data.Text.Encoding                                as T
 import qualified Data.Text.Utf16.Rope                              as Rope
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
@@ -974,23 +975,23 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
             ]
           | otherwise = []
         lookupExportMap binding mod
-          | Just match <- Map.lookup binding (getExportsMap exportsMap)
+          | let em = getExportsMap exportsMap
+                match1 = lookupOccEnv em (mkVarOrDataOcc binding)
+                match2 = lookupOccEnv em (mkTypeOcc binding)
+          , Just match <- match1 <> match2
           -- Only for the situation that data constructor name is same as type constructor name,
           -- let ident with parent be in front of the one without.
           , sortedMatch <- sortBy (\ident1 ident2 -> parent ident2 `compare` parent ident1) (Set.toList match)
           , idents <- filter (\ident -> moduleNameText ident == mod && (canUseDatacon || not (isDatacon ident))) sortedMatch
-          , (not . null) idents -- Ensure fallback while `idents` is empty
-          , ident <- head idents
+          , (ident:_) <- idents -- Ensure fallback while `idents` is empty
           = Just ident
 
             -- fallback to using GHC suggestion even though it is not always correct
           | otherwise
           = Just IdentInfo
-                { name = mkVarOcc $ T.unpack binding
-                , rendered = binding
+                { name = mkVarOrDataOcc binding
                 , parent = Nothing
-                , isDatacon = False
-                , moduleNameText = mod}
+                , identModuleName  = mkModuleNameFS $ mkFastStringByteString $ T.encodeUtf8 mod}
 #endif
 
 data HidingMode
@@ -1390,18 +1391,18 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
         _message
         "‘([^’]*)’ is not a \\(visible\\) method of class ‘([^’]*)’",
     idents <-
-      maybe [] (Set.toList . Set.filter (\x -> parent x == Just className)) $
-        Map.lookup methodName $ getExportsMap packageExportsMap =
+      maybe [] (Set.toList . Set.filter (\x -> fmap occNameText (parent x) == Just className)) $
+        lookupOccEnv (getExportsMap packageExportsMap) (mkVarOrDataOcc methodName) =
     mconcat $ suggest <$> idents
   | otherwise = []
   where
-    suggest identInfo@IdentInfo {moduleNameText}
+    suggest identInfo
       | importStyle <- NE.toList $ importStyles identInfo,
-        mImportDecl <- findImportDeclByModuleName (hsmodImports . unLoc . astA $ ps) (T.unpack moduleNameText) =
+        mImportDecl <- findImportDeclByModuleName (hsmodImports . unLoc . astA $ ps) (T.unpack moduleText) =
         case mImportDecl of
           -- extend
           Just decl ->
-            [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleNameText,
+            [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleText,
                 quickFixImportKind' "extend" style,
                 [Right $ uncurry extendImport (unImportStyle style) decl]
               )
@@ -1412,12 +1413,13 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
             | Just (range, indent) <- newImportInsertRange ps fileContents
             ->
              (\(kind, unNewImport -> x) -> (x, kind, [Left $ TextEdit range (x <> "\n" <> T.replicate indent " ")])) <$>
-            [ (quickFixImportKind' "new" style, newUnqualImport moduleNameText rendered False)
+            [ (quickFixImportKind' "new" style, newUnqualImport moduleText rendered False)
               | style <- importStyle,
                 let rendered = renderImportStyle style
             ]
-              <> [(quickFixImportKind "new.all", newImportAll moduleNameText)]
+              <> [(quickFixImportKind "new.all", newImportAll moduleText)]
             | otherwise -> []
+        where moduleText = moduleNameText identInfo
 #endif
 
 suggestNewImport :: ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
@@ -1445,7 +1447,7 @@ constructNewImportSuggestions
 constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrdBy simpleCompareImportSuggestion
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing] -- strip away qualified module names from the unknown name
-  , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)   -- look up the modified unknown name in the export map
+  , identInfo <- maybe [] Set.toList $ (lookupOccEnv (getExportsMap exportsMap) (mkVarOrDataOcc name)) <> (lookupOccEnv (getExportsMap exportsMap) (mkTypeOcc name)) -- look up the modified unknown name in the export map
   , canUseIdent thingMissing identInfo                                              -- check if the identifier information retrieved can be used
   , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules                 -- check if the module of the identifier is allowed
   , suggestion <- renderNewImport identInfo                                         -- creates a list of import suggestions for the retrieved identifier information
@@ -1911,4 +1913,3 @@ matchRegExMultipleImports message = do
                             _            -> Nothing
   imps <- regExImports imports
   return (binding, imps)
-

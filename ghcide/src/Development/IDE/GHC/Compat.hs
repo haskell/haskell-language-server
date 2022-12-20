@@ -43,6 +43,8 @@ module Development.IDE.GHC.Compat(
 #endif
 
     FastStringCompat,
+    bytesFS,
+    mkFastStringByteString,
     nodeInfo',
     getNodeIds,
     sourceNodeInfo,
@@ -52,6 +54,8 @@ module Development.IDE.GHC.Compat(
     nodeAnnotations,
     mkAstNode,
     combineRealSrcSpans,
+
+    nonDetOccEnvElts,
 
     isQualifiedImport,
     GhcVersion(..),
@@ -206,6 +210,7 @@ import           VarEnv                                (emptyInScopeSet,
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
+import           GHC.Data.FastString
 import           GHC.Core
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                    hiding (ExposePackage)
@@ -224,6 +229,7 @@ import           GHC.Iface.Make                        (mkIfaceExports)
 import qualified GHC.SysTools.Tasks                    as SysTools
 import qualified GHC.Types.Avail                       as Avail
 #else
+import           FastString
 import qualified Avail
 import           DynFlags                              hiding (ExposePackage)
 import           HscTypes
@@ -262,6 +268,11 @@ import           GHC.Types.IPE
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Types.Error
 import GHC.Driver.Config.Stg.Pipeline
+#endif
+
+#if !MIN_VERSION_ghc(9,3,0)
+nonDetOccEnvElts :: OccEnv a -> [a]
+nonDetOccEnvElts = occEnvElts
 #endif
 
 type ModIfaceAnnotation = Annotation
