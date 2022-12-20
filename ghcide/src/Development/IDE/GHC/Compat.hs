@@ -26,7 +26,8 @@ module Development.IDE.GHC.Compat(
     disableWarningsAsErrors,
     reLoc,
     reLocA,
-    getMessages',
+    getPsMessages,
+    renderMessages,
     pattern PFailedWithErrorMessages,
     isObjectLinkable,
 
@@ -43,6 +44,8 @@ module Development.IDE.GHC.Compat(
 #endif
 
     FastStringCompat,
+    bytesFS,
+    mkFastStringByteString,
     nodeInfo',
     getNodeIds,
     sourceNodeInfo,
@@ -52,6 +55,8 @@ module Development.IDE.GHC.Compat(
     nodeAnnotations,
     mkAstNode,
     combineRealSrcSpans,
+
+    nonDetOccEnvElts,
 
     isQualifiedImport,
     GhcVersion(..),
@@ -206,6 +211,7 @@ import           VarEnv                                (emptyInScopeSet,
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
+import           GHC.Data.FastString
 import           GHC.Core
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                    hiding (ExposePackage)
@@ -224,6 +230,7 @@ import           GHC.Iface.Make                        (mkIfaceExports)
 import qualified GHC.SysTools.Tasks                    as SysTools
 import qualified GHC.Types.Avail                       as Avail
 #else
+import           FastString
 import qualified Avail
 import           DynFlags                              hiding (ExposePackage)
 import           HscTypes
@@ -262,6 +269,12 @@ import           GHC.Types.IPE
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Types.Error
 import GHC.Driver.Config.Stg.Pipeline
+import GHC.Driver.Plugins                              (PsMessages (..))
+#endif
+
+#if !MIN_VERSION_ghc(9,3,0)
+nonDetOccEnvElts :: OccEnv a -> [a]
+nonDetOccEnvElts = occEnvElts
 #endif
 
 type ModIfaceAnnotation = Annotation
@@ -372,25 +385,13 @@ corePrepExpr _ = GHC.corePrepExpr
 simplifyExpr df _ = GHC.simplifyExpr df
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
-type ErrMsg  = MsgEnvelope DecoratedSDoc
-#endif
+renderMessages :: PsMessages -> (Bag WarnMsg, Bag ErrMsg)
+renderMessages msgs =
 #if MIN_VERSION_ghc(9,3,0)
-type WarnMsg  = MsgEnvelope DecoratedSDoc
-#endif
-
-getMessages' :: PState -> DynFlags -> (Bag WarnMsg, Bag ErrMsg)
-getMessages' pst dflags =
-#if MIN_VERSION_ghc(9,3,0)
-  bimap (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) $ getPsMessages pst
+  let renderMsgs extractor = (fmap . fmap) renderDiagnosticMessageWithHints . getMessages $ extractor msgs
+  in (renderMsgs psWarnings, renderMsgs psErrors)
 #else
-#if MIN_VERSION_ghc(9,2,0)
-                 bimap (fmap pprWarning) (fmap pprError) $
-#endif
-                 getMessages pst
-#if !MIN_VERSION_ghc(9,2,0)
-                   dflags
-#endif
+  msgs
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
