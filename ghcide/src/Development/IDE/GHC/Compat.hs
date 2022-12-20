@@ -513,7 +513,7 @@ getModuleHash = mi_mod_hash . mi_final_exts
 
 disableWarningsAsErrors :: DynFlags -> DynFlags
 disableWarningsAsErrors df =
-    flip gopt_unset Opt_WarnIsError $ foldl' wopt_unset_fatal df [toEnum 0 ..]
+    flip gopt_unset Opt_WarnIsError $! foldl' wopt_unset_fatal df [toEnum 0 ..]
 
 isQualifiedImport :: ImportDecl a -> Bool
 isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
