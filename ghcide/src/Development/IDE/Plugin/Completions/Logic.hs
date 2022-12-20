@@ -287,25 +287,27 @@ mkExtCompl label =
 
 
 fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
-fromIdentInfo doc IdentInfo{..} q = CI
+fromIdentInfo doc id@IdentInfo{..} q = CI
   { compKind= occNameToComKind name
-  , insertText=rendered
-  , provenance = DefinedIn moduleNameText
-  , label=rendered
+  , insertText=rend
+  , provenance = DefinedIn mod
+  , label=rend
   , typeText = Nothing
   , isInfix=Nothing
-  , isTypeCompl= not isDatacon && isUpper (T.head rendered)
+  , isTypeCompl= not (isDatacon id) && isUpper (T.head rend)
   , additionalTextEdits= Just $
         ExtendImport
           { doc,
-            thingParent = parent,
-            importName = moduleNameText,
+            thingParent = occNameText <$> parent,
+            importName = mod,
             importQual = q,
-            newThing = rendered
+            newThing = rend
           }
   , nameDetails = Nothing
   , isLocalCompletion = False
   }
+  where rend = rendered id
+        mod = moduleNameText id
 
 cacheDataProducer :: Uri -> [ModuleName] -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> CachedCompletions
 cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
@@ -528,7 +530,7 @@ getCompletions
     -> PosPrefixInfo
     -> ClientCapabilities
     -> CompletionsConfig
-    -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
+    -> ModuleNameEnv (HashSet.HashSet IdentInfo)
     -> Uri
     -> IO [Scored CompletionItem]
 getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
@@ -660,10 +662,10 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
       && (List.length (words (T.unpack fullLine)) >= 2)
       && "(" `isInfixOf` T.unpack fullLine
     -> do
-      let moduleName = T.pack $ words (T.unpack fullLine) !! 1
-          funcs = HM.lookupDefault HashSet.empty moduleName moduleExportsMap
-          funs = map (show . name) $ HashSet.toList funcs
-      return $ filterModuleExports moduleName $ map T.pack funs
+      let moduleName = words (T.unpack fullLine) !! 1
+          funcs = lookupWithDefaultUFM moduleExportsMap HashSet.empty $ mkModuleName moduleName
+          funs = map (renderOcc . name) $ HashSet.toList funcs
+      return $ filterModuleExports (T.pack moduleName) funs
     | "import " `T.isPrefixOf` fullLine
     -> return filtImportCompls
     -- we leave this condition here to avoid duplications and return empty list
