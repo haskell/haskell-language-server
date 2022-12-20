@@ -88,6 +88,7 @@ import           Control.Concurrent.STM.TVar
 import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
 import           Data.List
+import           Data.List.Extra                              (nubOrdOn)
 import qualified Data.Map                                     as M
 import           Data.Maybe
 import           Data.Proxy
@@ -166,6 +167,7 @@ import GHC.Unit.Env
 #if MIN_VERSION_ghc(9,5,0)
 import GHC.Unit.Home.ModInfo
 #endif
+import GHC (mgModSummaries)
 
 data Log
   = LogShake Shake.Log
@@ -798,10 +800,31 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
             depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
             let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
-            mg <- depModuleGraph <$>
+            mg <- do
               if fullModuleGraph
-              then useNoFile_ GetModuleGraph
-              else dependencyInfoForFiles [file]
+              then depModuleGraph <$> useNoFile_ GetModuleGraph
+              else do
+                let mgs = map hsc_mod_graph depSessions
+#if MIN_VERSION_ghc(9,3,0)
+                -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
+                -- also points to all the direct descendants of the current module. To get the keys for the descendants
+                -- we must get their `ModSummary`s
+                !final_deps <- do
+                  dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
+                  return $!! map (NodeKey_Module . msKey) dep_mss
+                let module_graph_nodes =
+                      nubOrdOn mkNodeKey (ModuleNode final_deps ms : concatMap mgModSummaries' mgs)
+#else
+                let module_graph_nodes =
+#if MIN_VERSION_ghc(9,2,0)
+                      -- We don't do any instantiation for backpack at this point of time, so it is OK to use
+                      -- 'extendModSummaryNoDeps'.
+                      -- This may have to change in the future.
+                      map extendModSummaryNoDeps $
+#endif
+                      nubOrdOn ms_mod (ms : concatMap mgModSummaries mgs)
+#endif
+                pure $ mkModuleGraph module_graph_nodes
             session' <- liftIO $ mergeEnvs hsc mg ms inLoadOrder depSessions
 
             -- Here we avoid a call to to `newHscEnvEqWithImportPaths`, which creates a new
