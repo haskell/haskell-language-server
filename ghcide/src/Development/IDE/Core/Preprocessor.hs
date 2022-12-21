@@ -8,6 +8,7 @@ module Development.IDE.Core.Preprocessor
 
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util   as Util
+import qualified Development.IDE.GHC.Util          as Util
 import           Development.IDE.GHC.CPP
 import           Development.IDE.GHC.Orphans       ()
 
@@ -36,7 +37,7 @@ import           GHC.Utils.Outputable              (renderWithContext)
 
 -- | Given a file and some contents, apply any necessary preprocessors,
 --   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.
-preprocessor :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> ExceptT [FileDiagnostic] IO (Util.StringBuffer, [String], HscEnv)
+preprocessor :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> ExceptT [FileDiagnostic] IO (Util.StringBuffer, [String], HscEnv, Util.Fingerprint)
 preprocessor env filename mbContents = do
     -- Perform unlit
     (isOnDisk, contents) <-
@@ -47,6 +48,10 @@ preprocessor env filename mbContents = do
             contents <- liftIO $ maybe (Util.hGetStringBuffer filename) return mbContents
             let isOnDisk = isNothing mbContents
             return (isOnDisk, contents)
+
+    -- Compute the source hash before the preprocessor because this is
+    -- how GHC does it.
+    !src_hash <- liftIO $ Util.fingerprintFromStringBuffer contents
 
     -- Perform cpp
     (opts, env) <- ExceptT $ parsePragmasIntoHscEnv env filename contents
@@ -73,11 +78,11 @@ preprocessor env filename mbContents = do
 
     -- Perform preprocessor
     if not $ gopt Opt_Pp dflags then
-        return (contents, opts, env)
+        return (contents, opts, env, src_hash)
     else do
         contents <- liftIO $ runPreprocessor env filename $ if isOnDisk then Nothing else Just contents
         (opts, env) <- ExceptT $ parsePragmasIntoHscEnv env filename contents
-        return (contents, opts, env)
+        return (contents, opts, env, src_hash)
   where
     logAction :: IORef [CPPLog] -> LogActionCompat
     logAction cppLogs dflags _reason severity srcSpan _style msg = do
