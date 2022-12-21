@@ -11,24 +11,26 @@ variables:
 
   CABAL_INSTALL_VERSION: 3.8.1.0
 
-.windows_matrix: &windows_matrix
+.matrix: &matrix
   matrix:
     - GHC_VERSION: 8.10.7
       CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.0.2
       CABAL_PROJECT: cabal.project
-    - GHC_VERSION: 9.2.3
-      CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.2.4
       CABAL_PROJECT: cabal.project
-    - GHC_VERSION: 9.4.1
+    - GHC_VERSION: 9.2.5
       CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.4.2
+      CABAL_PROJECT: cabal.project
+    - GHC_VERSION: 9.4.3
       CABAL_PROJECT: cabal.project
 
 workflow:
   rules:
     - if: $CI_COMMIT_TAG
+      when: always
+    - if: $CI_PIPELINE_SOURCE == "web"
       when: always
     - when: never
 
@@ -47,6 +49,7 @@ workflow:
 .build:
   extends: .artifacts:short
   stage: build
+  parallel: *matrix
   script:
     - bash .gitlab/ci.sh
 
@@ -74,6 +77,16 @@ workflow:
   tags:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb9:$DOCKER_REV"
+
+.x86_64-linux-ubuntu18.04:
+  tags:
+    - x86_64-linux
+  image: "ubuntu:18.04"
+
+.x86_64-linux-ubuntu20.04:
+  tags:
+    - x86_64-linux
+  image: "ubuntu:20.04"
 
 .x86_64-linux-centos7:
   tags:
@@ -161,6 +174,84 @@ test-armv7-linux-deb10:
   before_script:
     - sudo apt update
     - sudo apt install -y tree
+
+
+###########################
+# x86_64 linux ubuntu18.04
+###########################
+
+build-x86_64-linux-ubuntu18.04:
+  extends:
+    - .build
+    - .x86_64-linux-ubuntu18.04
+  before_script:
+    - apt update
+    - apt install -y build-essential curl libffi-dev libffi6 libgmp-dev libgmp10 libncurses-dev libncurses5 libtinfo5 zlib1g-dev patchelf tree
+  variables:
+    ADD_CABAL_ARGS: "--enable-split-sections"
+
+tar-x86_64-linux-ubuntu18.04:
+  extends:
+    - .artifacts
+    - .x86_64-linux-ubuntu18.04
+  stage: tar
+  needs: ["build-x86_64-linux-ubuntu18.04"]
+  script:
+    - ./.gitlab/tar.sh
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-ubuntu18.04-linux
+    TARBALL_EXT: tar.xz
+  before_script:
+    - apt update
+    - apt install -y make tar xz-utils curl
+
+test-x86_64-linux-ubuntu18.04:
+  extends:
+    - .test
+    - .x86_64-linux-ubuntu18.04
+  needs: ["tar-x86_64-linux-ubuntu18.04"]
+  before_script:
+    - apt update
+    - apt install -y tree patchelf make curl build-essential
+
+
+###########################
+# x86_64 linux ubuntu20.04
+###########################
+
+build-x86_64-linux-ubuntu20.04:
+  extends:
+    - .build
+    - .x86_64-linux-ubuntu20.04
+  before_script:
+    - apt update
+    - apt install -y build-essential curl libffi-dev libffi7 libgmp-dev libgmp10 libncurses-dev libncurses5 libtinfo5 zlib1g-dev patchelf tree
+  variables:
+    ADD_CABAL_ARGS: "--enable-split-sections"
+
+tar-x86_64-linux-ubuntu20.04:
+  extends:
+    - .artifacts
+    - .x86_64-linux-ubuntu20.04
+  stage: tar
+  needs: ["build-x86_64-linux-ubuntu20.04"]
+  script:
+    - ./.gitlab/tar.sh
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-ubuntu20.04-linux
+    TARBALL_EXT: tar.xz
+  before_script:
+    - apt update
+    - apt install -y make tar xz-utils curl
+
+test-x86_64-linux-ubuntu20.04:
+  extends:
+    - .test
+    - .x86_64-linux-ubuntu20.04
+  needs: ["tar-x86_64-linux-ubuntu20.04"]
+  before_script:
+    - apt update
+    - apt install -y tree patchelf make curl build-essential
 
 
 ######################
@@ -418,46 +509,35 @@ test-x86_64-freebsd13:
 build-x86_64-darwin:
   extends: .build
   tags:
-    - x86_64-darwin
+    - x86_64-darwin-m1
   variables:
     ADD_CABAL_ARGS: ""
-  before_script:
-    - /bin/bash ./.gitlab/brew.sh autoconf automake coreutils make tree
+    NIX_SYSTEM: x86_64-darwin
   script: |
-    export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     /bin/bash ./.gitlab/ci.sh
-  after_script:
-    - rm -Rf /private/tmp/.brew_tmp
 
 tar-x86_64-darwin:
   extends: .artifacts
   stage: tar
   needs: ["build-x86_64-darwin"]
   tags:
-    - x86_64-darwin
-  before_script:
-    - /bin/bash ./.gitlab/brew.sh autoconf automake coreutils make tree
+    - x86_64-darwin-m1
   script: |
-    export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     /bin/bash ./.gitlab/tar.sh
-  after_script:
-    - rm -Rf /private/tmp/.brew_tmp
   variables:
     TARBALL_ARCHIVE_SUFFIX: x86_64-apple-darwin
     TARBALL_EXT: tar.xz
+    NIX_SYSTEM: x86_64-darwin
 
 test-x86_64-darwin:
   extends: .test
   needs: ["tar-x86_64-darwin"]
   tags:
-    - x86_64-darwin
-  before_script:
-    - /bin/bash ./.gitlab/brew.sh make tree
+    - x86_64-darwin-m1
   script: |
-    export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     /bin/bash .gitlab/test.sh
-  after_script:
-    - rm -Rf /private/tmp/.brew_tmp
+  variables:
+    NIX_SYSTEM: x86_64-darwin
 
 
 ######################
@@ -465,26 +545,16 @@ test-x86_64-darwin:
 ######################
 
 build-aarch64-darwin:
-  extends: .artifacts:short
+  extends: .build
   stage: build
   tags:
     - aarch64-darwin-m1
-  before_script:
-    - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
-    - arch -arm64 /bin/bash ./.gitlab/brew.sh llvm autoconf automake coreutils make tree
   script: |
-    export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
-    export CC=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang
-    export CXX=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang++
-    export LD=ld
-    export AR=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ar
-    export RANLIB=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ranlib
     arch -arm64 /bin/bash ./.gitlab/ci.sh
-  after_script:
-    - rm -Rf /private/tmp/.brew_tmp
   variables:
     MACOSX_DEPLOYMENT_TARGET: "10.7"
     ADD_CABAL_ARGS: ""
+    NIX_SYSTEM: aarch64-darwin
 
 tar-aarch64-darwin:
   extends: .artifacts
@@ -497,20 +567,17 @@ tar-aarch64-darwin:
   variables:
     TARBALL_ARCHIVE_SUFFIX: aarch64-apple-darwin
     TARBALL_EXT: tar.xz
+    NIX_SYSTEM: aarch64-darwin
 
 test-aarch64-darwin:
   extends: .test
   needs: ["tar-aarch64-darwin"]
   tags:
     - aarch64-darwin-m1
-  before_script:
-    - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
-    - arch -arm64 /bin/bash ./.gitlab/brew.sh make tree
   script: |
-    export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     arch -arm64 /bin/bash ./.gitlab/test.sh
-  after_script:
-    - rm -Rf /private/tmp/.brew_tmp
+  variables:
+    NIX_SYSTEM: aarch64-darwin
 
 
 ######################
@@ -521,7 +588,6 @@ build-x86_64-windows:
   extends: .build
   tags:
     - new-x86_64-windows
-  parallel: *windows_matrix
   script:
     - $env:CHERE_INVOKING = "yes"
     - bash '-lc' "ADD_CABAL_ARGS=$env:ADD_CABAL_ARGS GHC_VERSION=$env:GHC_VERSION CABAL_INSTALL_VERSION=$CABAL_INSTALL_VERSION .gitlab/ci.sh"

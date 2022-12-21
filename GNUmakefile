@@ -11,9 +11,10 @@ UNAME := $(shell uname)
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 GHC_VERSION  ?=
+TARBALL_ARCHIVE_SUFFIX ?=
 
 HLS_VERSION := $(shell grep '^version:' haskell-language-server.cabal | awk '{ print $$2 }')
-TARBALL     ?= haskell-language-server-$(HLS_VERSION).tar.xz
+TARBALL     ?= haskell-language-server-$(HLS_VERSION)-$(TARBALL_ARCHIVE_SUFFIX).tar.xz
 
 CHMOD     := chmod
 CHMOD_X   := $(CHMOD) 755
@@ -65,29 +66,15 @@ define set_rpath
 	$(if $(filter Darwin,$(UNAME)), $(INSTALL_NAME_TOOL) -add_rpath "@executable_path/$(1)" "$(2)", $(PATCHELF) --force-rpath --set-rpath "\$$ORIGIN/$(1)" "$(2)")
 endef
 
-hls: bindist/ghcs
-	for ghc in $(shell [ -e "bindist/ghcs-`uname -o`" ] && cat "bindist/ghcs-`uname -o`" || cat "bindist/ghcs") ; do \
-		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
-		$(GHCUP) -v gc -p -s -c && \
-		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` PROJECT_FILE=`echo $$ghc | $(AWK) -F ',' '{ print $$2 }'` hls-ghc && \
-		$(GHCUP) -v rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
-	done
-
 hls-ghc:
 	$(MKDIR_P) out/
 	@if test -z "$(GHC_VERSION)" ; then echo >&2 "GHC_VERSION is not set" ; false ; fi
-	@if test -z "$(PROJECT_FILE)" ; then echo >&2 "PROJECT_FILE is not set" ; false ; fi
-	$(CABAL_INSTALL) --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_INSTALL_ARGS) --installdir="$(ROOT_DIR)/out/$(GHC_VERSION)" exe:haskell-language-server exe:haskell-language-server-wrapper
+	@if test -z "$(CABAL_PROJECT)" ; then echo >&2 "CABAL_PROJECT is not set" ; false ; fi
+	$(CABAL_INSTALL) --project-file="$(CABAL_PROJECT)" -w "ghc-$(GHC_VERSION)" $(CABAL_INSTALL_ARGS) --installdir="$(ROOT_DIR)/out/$(GHC_VERSION)" exe:haskell-language-server exe:haskell-language-server-wrapper
 	$(STRIP_S) "$(ROOT_DIR)/out/$(GHC_VERSION)/haskell-language-server"
 	$(STRIP_S) "$(ROOT_DIR)/out/$(GHC_VERSION)/haskell-language-server-wrapper"
 
 bindist:
-	for ghc in $(shell [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" || cat "bindist/ghcs") ; do \
-		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
-		$(GHCUP) -v gc -p -s -c && \
-		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` bindist-ghc && \
-		$(GHCUP) -v rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
-	done
 	$(SED) -e "s/@@HLS_VERSION@@/$(HLS_VERSION)/" \
 		bindist/GNUmakefile.in > "$(BINDIST_OUT_DIR)/GNUmakefile"
 	$(INSTALL_D) "$(BINDIST_OUT_DIR)/scripts/"
@@ -125,4 +112,4 @@ clean:
 clean-all:
 	$(RM_RF) out/* $(STORE_DIR)
 
-.PHONY: hls hls-ghc bindist bindist-ghc bindist-tar clean clean-all install-ghcs
+.PHONY: hls-ghc bindist bindist-ghc bindist-tar clean clean-all install-ghcs version
