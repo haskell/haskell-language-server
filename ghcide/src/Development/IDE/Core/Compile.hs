@@ -427,6 +427,15 @@ tcRnModule hsc_env tc_helpers pmod = do
       tc_gbl_env = tc_gbl_env' { tcg_ann_env = extendAnnEnvList (tcg_ann_env tc_gbl_env') mod_env_anns }
   pure (TcModuleResult pmod rn_info tc_gbl_env splices False mod_env)
 
+
+-- Note [Clearing mi_globals after generating an iface]
+-- GHC populates the mi_global field in interfaces for GHCi if we are using the bytecode
+-- interpreter.
+-- However, this field is expensive in terms of heap usage, and we don't use it in HLS
+-- anywhere. So we zero it out.
+-- The field is not serialized or deserialised from disk, so we don't need to remove it
+-- while reading an iface from disk, only if we just generated an iface in memory
+
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
 mkHiFileResultNoCompile session tcm = do
   let hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) session
@@ -434,7 +443,8 @@ mkHiFileResultNoCompile session tcm = do
       tcGblEnv = tmrTypechecked tcm
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
-  iface <- mkIfaceTc hsc_env_tmp sf details ms tcGblEnv
+  iface' <- mkIfaceTc hsc_env_tmp sf details ms tcGblEnv
+  let iface = iface' { mi_globals = Nothing } -- See Note [Clearing mi_globals after generating an iface]
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 
 mkHiFileResultCompile
@@ -467,15 +477,16 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
 #endif
                                               simplified_guts
 
-  final_iface <- mkFullIface session partial_iface Nothing
+  final_iface' <- mkFullIface session partial_iface Nothing
 #if MIN_VERSION_ghc(9,4,2)
                     Nothing
 #endif
 
 #else
   let !partial_iface = force (mkPartialIface session details simplified_guts)
-  final_iface <- mkFullIface session partial_iface
+  final_iface' <- mkFullIface session partial_iface
 #endif
+  let final_iface = final_iface' {mi_globals = Nothing} -- See Note [Clearing mi_globals after generating an iface]
 
   -- Write the core file now
   core_file <- case mguts of
@@ -986,7 +997,7 @@ loadModulesHome
     -> HscEnv
 loadModulesHome mod_infos e =
 #if MIN_VERSION_ghc(9,3,0)
-  hscUpdateHUG (\hug -> foldr addHomeModInfoToHug hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
+  hscUpdateHUG (\hug -> foldl' (flip addHomeModInfoToHug) hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
 #else
   let !new_modules = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
   in e { hsc_HPT = new_modules
@@ -1090,7 +1101,8 @@ getModSummaryFromImports
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
 getModSummaryFromImports env fp modTime contents = do
-    (contents, opts, env) <- preprocessor env fp contents
+
+    (contents, opts, env, src_hash) <- preprocessor env fp contents
 
     let dflags = hsc_dflags env
 
@@ -1141,9 +1153,6 @@ getModSummaryFromImports env fp modTime contents = do
     liftIO $ evaluate $ rnf srcImports
     liftIO $ evaluate $ rnf textualImports
 
-#if MIN_VERSION_ghc (9,3,0)
-    !src_hash <- liftIO $ fingerprintFromStringBuffer contents
-#endif
 
     modLoc <- liftIO $ if mod == mAIN_NAME
         -- specially in tests it's common to have lots of nameless modules
@@ -1454,18 +1463,6 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
 
     case (mb_checked_iface, recomp_iface_reqd) of
       (Just iface, UpToDate) -> do
-         -- If we have an old value, just return it
-         case old_value of
-           Just (old_hir, _)
-             | isNothing linkableNeeded || isJust (hirCoreFp old_hir)
-             -> do
-             -- Perform the fine grained recompilation check for TH
-             maybe_recomp <- checkLinkableDependencies get_linkable_hashes (hsc_mod_graph sessionWithMsDynFlags) (hirRuntimeModules old_hir)
-             case maybe_recomp of
-               Just msg -> do_regenerate msg
-               Nothing  -> return ([], Just old_hir)
-           -- Otherwise use the value from disk, provided the core file is up to date if required
-           _ -> do
              details <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface
              -- parse the runtime dependencies from the annotations
              let runtime_deps
@@ -1552,7 +1549,7 @@ showReason (RecompBecause s) = s
 mkDetailsFromIface :: HscEnv -> ModIface -> IO ModDetails
 mkDetailsFromIface session iface = do
   fixIO $ \details -> do
-    let hsc' = hscUpdateHPT (\hpt -> addToHpt hpt (moduleName $ mi_module iface) (HomeModInfo iface details Nothing)) session
+    let !hsc' = hscUpdateHPT (\hpt -> addToHpt hpt (moduleName $ mi_module iface) (HomeModInfo iface details Nothing)) session
     initIfaceLoad hsc' (typecheckIface iface)
 
 coreFileToCgGuts :: HscEnv -> ModIface -> ModDetails -> CoreFile -> IO CgGuts
