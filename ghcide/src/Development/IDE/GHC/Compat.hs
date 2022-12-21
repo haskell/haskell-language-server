@@ -26,7 +26,8 @@ module Development.IDE.GHC.Compat(
     disableWarningsAsErrors,
     reLoc,
     reLocA,
-    getMessages',
+    getPsMessages,
+    renderMessages,
     pattern PFailedWithErrorMessages,
     isObjectLinkable,
 
@@ -268,6 +269,7 @@ import           GHC.Types.IPE
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Types.Error
 import GHC.Driver.Config.Stg.Pipeline
+import GHC.Driver.Plugins                              (PsMessages (..))
 #endif
 
 #if !MIN_VERSION_ghc(9,3,0)
@@ -383,25 +385,13 @@ corePrepExpr _ = GHC.corePrepExpr
 simplifyExpr df _ = GHC.simplifyExpr df
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
-type ErrMsg  = MsgEnvelope DecoratedSDoc
-#endif
+renderMessages :: PsMessages -> (Bag WarnMsg, Bag ErrMsg)
+renderMessages msgs =
 #if MIN_VERSION_ghc(9,3,0)
-type WarnMsg  = MsgEnvelope DecoratedSDoc
-#endif
-
-getMessages' :: PState -> DynFlags -> (Bag WarnMsg, Bag ErrMsg)
-getMessages' pst dflags =
-#if MIN_VERSION_ghc(9,3,0)
-  bimap (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) $ getPsMessages pst
+  let renderMsgs extractor = (fmap . fmap) renderDiagnosticMessageWithHints . getMessages $ extractor msgs
+  in (renderMsgs psWarnings, renderMsgs psErrors)
 #else
-#if MIN_VERSION_ghc(9,2,0)
-                 bimap (fmap pprWarning) (fmap pprError) $
-#endif
-                 getMessages pst
-#if !MIN_VERSION_ghc(9,2,0)
-                   dflags
-#endif
+  msgs
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
