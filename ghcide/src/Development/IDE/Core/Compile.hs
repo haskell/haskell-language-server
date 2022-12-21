@@ -427,6 +427,15 @@ tcRnModule hsc_env tc_helpers pmod = do
       tc_gbl_env = tc_gbl_env' { tcg_ann_env = extendAnnEnvList (tcg_ann_env tc_gbl_env') mod_env_anns }
   pure (TcModuleResult pmod rn_info tc_gbl_env splices False mod_env)
 
+
+-- Note [Clearing mi_globals after generating an iface]
+-- GHC populates the mi_global field in interfaces for GHCi if we are using the bytecode
+-- interpreter.
+-- However, this field is expensive in terms of heap usage, and we don't use it in HLS
+-- anywhere. So we zero it out.
+-- The field is not serialized or deserialised from disk, so we don't need to remove it
+-- while reading an iface from disk, only if we just generated an iface in memory
+
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
 mkHiFileResultNoCompile session tcm = do
   let hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) session
@@ -434,7 +443,8 @@ mkHiFileResultNoCompile session tcm = do
       tcGblEnv = tmrTypechecked tcm
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
-  iface <- mkIfaceTc hsc_env_tmp sf details ms tcGblEnv
+  iface' <- mkIfaceTc hsc_env_tmp sf details ms tcGblEnv
+  let iface = iface' { mi_globals = Nothing } -- See Note [Clearing mi_globals after generating an iface]
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 
 mkHiFileResultCompile
@@ -467,15 +477,16 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
 #endif
                                               simplified_guts
 
-  final_iface <- mkFullIface session partial_iface Nothing
+  final_iface' <- mkFullIface session partial_iface Nothing
 #if MIN_VERSION_ghc(9,4,2)
                     Nothing
 #endif
 
 #else
   let !partial_iface = force (mkPartialIface session details simplified_guts)
-  final_iface <- mkFullIface session partial_iface
+  final_iface' <- mkFullIface session partial_iface
 #endif
+  let final_iface = final_iface' {mi_globals = Nothing} -- See Note [Clearing mi_globals after generating an iface]
 
   -- Write the core file now
   core_file <- case mguts of
