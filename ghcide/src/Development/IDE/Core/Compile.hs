@@ -171,11 +171,11 @@ typecheckModule :: IdeDefer
 typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
-        mmodSummary' <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
+        initialized <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
                                       (initPlugins hsc modSummary)
-        case mmodSummary' of
+        case initialized of
           Left errs -> return (errs, Nothing)
-          Right modSummary' -> do
+          Right (modSummary', hsc) -> do
             (warnings, etcm) <- withWarnings "typecheck" $ \tweak ->
                 let
                   session = tweak (hscSetFlags dflags hsc)
@@ -482,7 +482,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
                     Nothing
 #endif
 
-#else 
+#else
   let !partial_iface = force (mkPartialIface session details simplified_guts)
   final_iface' <- mkFullIface session partial_iface
 #endif
@@ -573,11 +573,6 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
       , Handler $ return . (,Nothing) . diagFromString source DsError (noSpan "<internal>")
       . (("Error during " ++ T.unpack source) ++) . show @SomeException
       ]
-
-initPlugins :: HscEnv -> ModSummary -> IO ModSummary
-initPlugins session modSummary = do
-    session1 <- liftIO $ initializePlugins (hscSetFlags (ms_hspp_opts modSummary) session)
-    return modSummary{ms_hspp_opts = hsc_dflags session1}
 
 -- | Whether we should run the -O0 simplifier when generating core.
 --
@@ -1106,7 +1101,9 @@ getModSummaryFromImports
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
 getModSummaryFromImports env fp modTime contents = do
-    (contents, opts, dflags) <- preprocessor env fp contents
+    (contents, opts, env) <- preprocessor env fp contents
+
+    let dflags = hsc_dflags env
 
     -- The warns will hopefully be reported when we actually parse the module
     (_warns, L main_loc hsmod) <- parseHeader dflags fp contents
@@ -1165,9 +1162,9 @@ getModSummaryFromImports env fp modTime contents = do
         then mkHomeModLocation dflags (pathToModuleName fp) fp
         else mkHomeModLocation dflags mod fp
 
-    let modl = mkHomeModule (hscHomeUnit (hscSetFlags dflags env)) mod
+    let modl = mkHomeModule (hscHomeUnit env) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
-        msrModSummary =
+        msrModSummary2 =
             ModSummary
                 { ms_mod          = modl
                 , ms_hie_date     = Nothing
@@ -1192,7 +1189,8 @@ getModSummaryFromImports env fp modTime contents = do
                 , ms_textual_imps = textualImports
                 }
 
-    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
+    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary2
+    (msrModSummary, msrHscEnv) <- liftIO $ initPlugins env msrModSummary2
     return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
@@ -1233,7 +1231,7 @@ parseHeader dflags filename contents = do
      PFailedWithErrorMessages msgs ->
         throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
      POk pst rdr_module -> do
-        let (warns, errs) = getMessages' pst dflags
+        let (warns, errs) = renderMessages $ getPsMessages pst dflags
 
         -- Just because we got a `POk`, it doesn't mean there
         -- weren't errors! To clarify, the GHC parser
@@ -1268,9 +1266,18 @@ parseFileContents env customPreprocessor filename ms = do
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
-             (warns, errs) = getMessages' pst dflags
+             psMessages = getPsMessages pst dflags
          in
            do
+               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
+
+               unless (null errs) $
+                  throwE $ diagFromStrings "parser" DsError errs
+
+               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
+               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed psMessages
+               let (warns, errs) = renderMessages msgs
+
                -- Just because we got a `POk`, it doesn't mean there
                -- weren't errors! To clarify, the GHC parser
                -- distinguishes between fatal and non-fatal
@@ -1283,14 +1290,6 @@ parseFileContents env customPreprocessor filename ms = do
                unless (null errs) $
                  throwE $ diagFromErrMsgs "parser" dflags errs
 
-               -- Ok, we got here. It's safe to continue.
-               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
-
-               unless (null errs) $
-                  throwE $ diagFromStrings "parser" DsError errs
-
-               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               parsed' <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed
 
                -- To get the list of extra source files, we take the list
                -- that the parser gave us,
