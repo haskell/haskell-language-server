@@ -158,10 +158,9 @@ computePackageDeps env pkg = do
             T.pack $ "unknown package: " ++ show pkg]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
-data TypecheckHelpers
+newtype TypecheckHelpers
   = TypecheckHelpers
-  { getLinkablesToKeep :: !(IO (ModuleEnv UTCTime))
-  , getLinkables       :: !([NormalizedFilePath] -> IO [LinkableResult])
+  { getLinkables       :: ([NormalizedFilePath] -> IO [LinkableResult]) -- ^ hls-graph action to get linkables for files
   }
 
 typecheckModule :: IdeDefer
@@ -172,11 +171,11 @@ typecheckModule :: IdeDefer
 typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
-        mmodSummary' <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
+        initialized <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
                                       (initPlugins hsc modSummary)
-        case mmodSummary' of
+        case initialized of
           Left errs -> return (errs, Nothing)
-          Right modSummary' -> do
+          Right (modSummary', hsc) -> do
             (warnings, etcm) <- withWarnings "typecheck" $ \tweak ->
                 let
                   session = tweak (hscSetFlags dflags hsc)
@@ -327,11 +326,6 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                                  ]
            ; let hsc_env' = loadModulesHome (map linkableHomeMod lbs) hsc_env
 
-             -- Essential to do this here after we load the linkables
-           ; keep_lbls <- getLinkablesToKeep
-
-           ; unload hsc_env' $ map (\(mod, time) -> LM time mod []) $ moduleEnvToList keep_lbls
-
 #if MIN_VERSION_ghc(9,3,0)
              {- load it -}
            ; (fv_hvs, lbss, pkgs) <- loadDecls (hscInterp hsc_env') hsc_env' srcspan bcos
@@ -478,7 +472,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
                     Nothing
 #endif
 
-#else 
+#else
   let !partial_iface = force (mkPartialIface session details simplified_guts)
   final_iface <- mkFullIface session partial_iface
 #endif
@@ -568,11 +562,6 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
       , Handler $ return . (,Nothing) . diagFromString source DsError (noSpan "<internal>")
       . (("Error during " ++ T.unpack source) ++) . show @SomeException
       ]
-
-initPlugins :: HscEnv -> ModSummary -> IO ModSummary
-initPlugins session modSummary = do
-    session1 <- liftIO $ initializePlugins (hscSetFlags (ms_hspp_opts modSummary) session)
-    return modSummary{ms_hspp_opts = hsc_dflags session1}
 
 -- | Whether we should run the -O0 simplifier when generating core.
 --
@@ -1101,7 +1090,9 @@ getModSummaryFromImports
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
 getModSummaryFromImports env fp modTime contents = do
-    (contents, opts, dflags) <- preprocessor env fp contents
+    (contents, opts, env) <- preprocessor env fp contents
+
+    let dflags = hsc_dflags env
 
     -- The warns will hopefully be reported when we actually parse the module
     (_warns, L main_loc hsmod) <- parseHeader dflags fp contents
@@ -1160,9 +1151,9 @@ getModSummaryFromImports env fp modTime contents = do
         then mkHomeModLocation dflags (pathToModuleName fp) fp
         else mkHomeModLocation dflags mod fp
 
-    let modl = mkHomeModule (hscHomeUnit (hscSetFlags dflags env)) mod
+    let modl = mkHomeModule (hscHomeUnit env) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
-        msrModSummary =
+        msrModSummary2 =
             ModSummary
                 { ms_mod          = modl
                 , ms_hie_date     = Nothing
@@ -1187,7 +1178,8 @@ getModSummaryFromImports env fp modTime contents = do
                 , ms_textual_imps = textualImports
                 }
 
-    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
+    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary2
+    (msrModSummary, msrHscEnv) <- liftIO $ initPlugins env msrModSummary2
     return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
@@ -1228,7 +1220,7 @@ parseHeader dflags filename contents = do
      PFailedWithErrorMessages msgs ->
         throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
      POk pst rdr_module -> do
-        let (warns, errs) = getMessages' pst dflags
+        let (warns, errs) = renderMessages $ getPsMessages pst dflags
 
         -- Just because we got a `POk`, it doesn't mean there
         -- weren't errors! To clarify, the GHC parser
@@ -1263,9 +1255,18 @@ parseFileContents env customPreprocessor filename ms = do
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
-             (warns, errs) = getMessages' pst dflags
+             psMessages = getPsMessages pst dflags
          in
            do
+               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
+
+               unless (null errs) $
+                  throwE $ diagFromStrings "parser" DsError errs
+
+               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
+               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed psMessages
+               let (warns, errs) = renderMessages msgs
+
                -- Just because we got a `POk`, it doesn't mean there
                -- weren't errors! To clarify, the GHC parser
                -- distinguishes between fatal and non-fatal
@@ -1278,14 +1279,6 @@ parseFileContents env customPreprocessor filename ms = do
                unless (null errs) $
                  throwE $ diagFromErrMsgs "parser" dflags errs
 
-               -- Ok, we got here. It's safe to continue.
-               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
-
-               unless (null errs) $
-                  throwE $ diagFromStrings "parser" DsError errs
-
-               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               parsed' <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed
 
                -- To get the list of extra source files, we take the list
                -- that the parser gave us,
@@ -1598,15 +1591,14 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
 --- and leads to fun errors like "Cannot continue after interface file error".
 getDocsBatch
   :: HscEnv
-  -> Module  -- ^ a module where the names are in scope
   -> [Name]
 #if MIN_VERSION_ghc(9,3,0)
   -> IO [Either String (Maybe [HsDoc GhcRn], IntMap (HsDoc GhcRn))]
 #else
   -> IO [Either String (Maybe HsDocString, IntMap HsDocString)]
 #endif
-getDocsBatch hsc_env _mod _names = do
-    (msgs, res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
+getDocsBatch hsc_env _names = do
+    res <- initIfaceLoad hsc_env $ forM _names $ \name ->
         case nameModule_maybe name of
             Nothing -> return (Left $ NameHasNoModule name)
             Just mod -> do
@@ -1621,7 +1613,7 @@ getDocsBatch hsc_env _mod _names = do
                       , mi_decl_docs = DeclDocMap dmap
                       , mi_arg_docs = ArgDocMap amap
 #endif
-                      } <- loadModuleInterface "getModuleInterface" mod
+                      } <- loadSysInterface (text "getModuleInterface") mod
 #if MIN_VERSION_ghc(9,3,0)
              if isNothing mb_doc_hdr && isNullUniqMap dmap && isNullUniqMap amap
 #else
@@ -1642,44 +1634,44 @@ getDocsBatch hsc_env _mod _names = do
 #else
                                   Map.findWithDefault mempty name amap))
 #endif
-    case res of
-        Just x  -> return $ map (first $ T.unpack . printOutputable)
-                          $ x
-        Nothing -> throwErrors
-#if MIN_VERSION_ghc(9,3,0)
-                     $ fmap GhcTcRnMessage msgs
-#elif MIN_VERSION_ghc(9,2,0)
-                     $ Error.getErrorMessages msgs
-#else
-                     $ snd msgs
-#endif
+    return $ map (first $ T.unpack . printOutputable)
+           $ res
   where
-    throwErrors = liftIO . throwIO . mkSrcErr
     compiled n =
       -- TODO: Find a more direct indicator.
       case nameSrcLoc n of
         RealSrcLoc {}   -> False
         UnhelpfulLoc {} -> True
 
-fakeSpan :: RealSrcSpan
-fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
-
 -- | Non-interactive, batch version of 'InteractiveEval.lookupNames'.
 --   The interactive paths create problems in ghc-lib builds
 --- and leads to fun errors like "Cannot continue after interface file error".
 lookupName :: HscEnv
-           -> Module -- ^ A module where the Names are in scope
            -> Name
            -> IO (Maybe TyThing)
-lookupName hsc_env mod name = do
-    (_messages, res) <- initTc hsc_env HsSrcFile False mod fakeSpan $ do
-        tcthing <- tcLookup name
-        case tcthing of
-            AGlobal thing    -> return thing
-            ATcId{tct_id=id} -> return (AnId id)
-            _                -> panic "tcRnLookupName'"
-    return res
-
+lookupName _ name
+  | Nothing <- nameModule_maybe name = pure Nothing
+lookupName hsc_env name = handle $ do
+#if MIN_VERSION_ghc(9,2,0)
+  mb_thing <- liftIO $ lookupType hsc_env name
+#else
+  eps <- liftIO $ readIORef (hsc_EPS hsc_env)
+  let mb_thing = lookupType (hsc_dflags hsc_env) (hsc_HPT hsc_env) (eps_PTE eps) name
+#endif
+  case mb_thing of
+    x@(Just _) -> return x
+    Nothing
+      | x@(Just thing) <- wiredInNameTyThing_maybe name
+      -> do when (needWiredInHomeIface thing)
+                 (initIfaceLoad hsc_env (loadWiredInHomeIface name))
+            return x
+      | otherwise -> do
+        res <- initIfaceLoad hsc_env $ importDecl name
+        case res of
+          Util.Succeeded x -> return (Just x)
+          _ -> return Nothing
+  where
+    handle x = x `catch` \(_ :: IOEnvFailure) -> pure Nothing
 
 pathToModuleName :: FilePath -> ModuleName
 pathToModuleName = mkModuleName . map rep

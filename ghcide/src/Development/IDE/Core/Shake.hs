@@ -662,7 +662,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
     let readValuesCounter = fromIntegral . countRelevantKeys checkParents <$> getStateKeys shakeExtras
         readDirtyKeys = fromIntegral . countRelevantKeys checkParents . toListKeySet <$> readTVarIO(dirtyKeys shakeExtras)
         readIndexPending = fromIntegral . HMap.size <$> readTVarIO (indexPending $ hiedbWriter shakeExtras)
-        readExportsMap = fromIntegral . HMap.size . getExportsMap <$> readTVarIO (exportsMap shakeExtras)
+        readExportsMap = fromIntegral . ExportsMap.exportsMapSize <$> readTVarIO (exportsMap shakeExtras)
         readDatabaseCount = fromIntegral . countRelevantKeys checkParents . map fst <$> shakeGetDatabaseKeys shakeDb
         readDatabaseStep =  fromIntegral <$> shakeGetBuildStep shakeDb
 

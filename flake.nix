@@ -39,16 +39,40 @@
       url = "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz";
       flake = false;
     };
+    ghc-check = {
+      url = "https://hackage.haskell.org/package/ghc-check-0.5.0.8/ghc-check-0.5.0.8.tar.gz";
+      flake = false;
+    };
+    constraints-extras = {
+      url = "https://hackage.haskell.org/package/constraints-extras-0.3.2.1/constraints-extras-0.3.2.1.tar.gz";
+      flake = false;
+    };
+    retrie-1100 = {
+      url = "https://hackage.haskell.org/package/retrie-1.1.0.0/retrie-1.1.0.0.tar.gz";
+      flake = false;
+    };
+    retrie = {
+      url = "https://hackage.haskell.org/package/retrie-1.2.1/retrie-1.2.1.tar.gz";
+      flake = false;
+    };
+    aeson-1520= {
+      url = "https://hackage.haskell.org/package/aeson-1.5.2.0/aeson-1.5.2.0.tar.gz";
+      flake = false;
+    };
+    brittany-01312 = {
+      url = "https://hackage.haskell.org/package/brittany-0.13.1.2/brittany-0.13.1.2.tar.gz";
+      flake = false;
+    };
     fourmolu = {
-      url = "https://hackage.haskell.org/package/fourmolu-0.9.0.0/fourmolu-0.9.0.0.tar.gz";
+      url = "https://hackage.haskell.org/package/fourmolu-0.10.1.0/fourmolu-0.10.1.0.tar.gz";
       flake = false;
     };
-    hlint = {
-      url = "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz";
+    hlint-341 = {
+      url = "https://hackage.haskell.org/package/hlint-3.4.1/hlint-3.4.1.tar.gz";
       flake = false;
     };
-    hlint-34 = {
-      url = "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz";
+    hlint-35 = {
+      url = "https://hackage.haskell.org/package/hlint-3.5/hlint-3.5.tar.gz";
       flake = false;
     };
     ptr-poker = {
@@ -57,6 +81,22 @@
     };
     hiedb = {
       url = "https://hackage.haskell.org/package/hiedb-0.4.2.0/hiedb-0.4.2.0.tar.gz";
+      flake = false;
+    };
+    hw-prim = {
+      url = "https://hackage.haskell.org/package/hw-prim-0.6.3.2/hw-prim-0.6.3.2.tar.gz";
+      flake = false;
+    };
+    apply-refact = {
+      url = "https://hackage.haskell.org/package/apply-refact-0.11.0.0/apply-refact-0.11.0.0.tar.gz";
+      flake = false;
+    };
+    apply-refact-0930 = {
+      url = "https://hackage.haskell.org/package/apply-refact-0.9.3.0/apply-refact-0.9.3.0.tar.gz";
+      flake = false;
+    };
+    implicit-hie = {
+      url = "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz";
       flake = false;
     };
   };
@@ -122,6 +162,12 @@
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
               hiedb = hsuper.callCabal2nix "hiedb" inputs.hiedb {};
+              hw-prim = hsuper.callCabal2nix "hw-prim" inputs.hw-prim {};
+              retrie = hsuper.callCabal2nix "retrie" inputs.retrie {};
+              retrie_1_1_0_0 = hsuper.callCabal2nix "retrie" inputs.retrie-1100 {};
+              apply-refact = hsuper.callCabal2nix "apply-refact" inputs.apply-refact {};
+              apply-refact_0_9_3_0 = hsuper.callCabal2nix "apply-refact" inputs.apply-refact-0930 {};
+              implicit-hie = hsuper.callCabal2nix "implicit-hie" inputs.implicit-hie {};
 
               # https://github.com/NixOS/nixpkgs/issues/140774
               ormolu =
@@ -129,7 +175,12 @@
                 then overrideCabal hsuper.ormolu (_: { enableSeparateBinOutput = false; })
                 else hsuper.ormolu;
 
-              fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu {};
+              # Due to the following issue, fixity-th should be disabled, especially for darwin.
+              # https://github.com/fourmolu/fourmolu/issues/238
+              fourmolu =
+                addBuildDepend
+                  (appendConfigureFlag (hself.callCabal2nix "fourmolu" inputs.fourmolu {}) "-f-fixity-th")
+                  hself.file-embed;
             };
 
           hlsSources =
@@ -250,11 +301,15 @@
             # @guibou: I'm not sure this is needed.
             hlint
             pkgs.haskellPackages.opentelemetry-extra
-            capstone tracy
+            capstone
             # ormolu
             # stylish-haskell
             pre-commit
-            ] ++ lib.optionals stdenv.isDarwin
+            ] ++ lib.optionals (!stdenv.isDarwin)
+                   [ # tracy has a build problem on macos.
+                     tracy
+                   ]
+              ++ lib.optionals stdenv.isDarwin
               (with darwin.apple_sdk.frameworks; [
                 Cocoa
                 CoreServices

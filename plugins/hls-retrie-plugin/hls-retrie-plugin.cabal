@@ -17,10 +17,6 @@ source-repository head
     location: https://github.com/haskell/haskell-language-server.git
 
 library
-  if impl(ghc >= 9.3)
-    buildable: False
-  else
-    buildable: True
   exposed-modules:    Ide.Plugin.Retrie
   hs-source-dirs:     src
   build-depends:

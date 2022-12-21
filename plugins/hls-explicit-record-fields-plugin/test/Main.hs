@@ -21,9 +21,11 @@ plugin = mkPluginTestDescriptor ExplicitFields.descriptor "explicit-fields"
 test :: TestTree
 test = testGroup "explicit-fields"
   [ mkTest "WildcardOnly" "WildcardOnly" 12 10 12 20
+  , mkTest "Unused" "Unused" 12 10 12 20
+  , mkTest "Unused2" "Unused2" 12 10 12 20
   , mkTest "WithPun" "WithPun" 13 10 13 25
   , mkTest "WithExplicitBind" "WithExplicitBind" 12 10 12 32
-  , mkTest "Mixed" "Mixed" 13 10 13 37
+  , mkTest "Mixed" "Mixed" 14 10 14 37
   , mkTest "Construction" "Construction" 16 5 16 15
   , mkTestNoAction "ExplicitBinds" "ExplicitBinds" 11 10 11 52
   , mkTestNoAction "Puns" "Puns" 12 10 12 31
