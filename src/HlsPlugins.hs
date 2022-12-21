@@ -48,6 +48,10 @@ import qualified Ide.Plugin.RefineImports          as RefineImports
 import qualified Ide.Plugin.Rename                 as Rename
 #endif
 
+#if hls_latex
+import qualified Ide.Plugin.Latex                  as Latex
+#endif
+
 #if hls_retrie
 import qualified Ide.Plugin.Retrie                 as Retrie
 #endif
@@ -174,6 +178,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_rename
       let pId = "rename" in Rename.descriptor (pluginRecorder pId) pId:
+#endif
+#if hls_latex
+      let pId = "latex" in Latex.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_retrie
       Retrie.descriptor "retrie" :

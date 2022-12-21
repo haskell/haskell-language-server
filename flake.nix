@@ -9,6 +9,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    unstablePkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-compat = {
       url = "github:edolstra/flake-compat";
       flake = false;
@@ -65,7 +66,7 @@
     };
   };
   outputs =
-    inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, all-cabal-hashes-unpacked, ... }:
+    inputs@{ self, nixpkgs, unstablePkgs, flake-compat, flake-utils, gitignore, all-cabal-hashes-unpacked, ... }:
     {
       overlays.default = final: prev:
         with prev;
@@ -264,6 +265,10 @@
             # ormolu
             # stylish-haskell
             pre-commit
+            (import unstablePkgs {}).haskell-language-server
+            pkgs.imagemagick
+            pkgs.texlive.combined.scheme-full
+
             ] ++ lib.optionals stdenv.isDarwin
               (with darwin.apple_sdk.frameworks; [
                 Cocoa
