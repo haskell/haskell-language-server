@@ -2,7 +2,6 @@
 
 let
   disabledPlugins = [
-    "hls-hlint-plugin"
     # That one is not technically a plugin, but by putting it in this list, we
     # get it removed from the top level list of requirement and it is not pull
     # in the nix shell.
@@ -24,8 +23,10 @@ let
       # https://github.com/nikita-volkov/ptr-poker/issues/11
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
-      # Hlint is still broken
-      hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint { });
+      ghc-exactprint =
+        hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-150 { };
+      fourmolu = hself.fourmolu_0_9_0_0;
+      hlint = appendConfigureFlag (hself.callCabal2nix "hlint" inputs.hlint-341 {}) "-fghc-lib";
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
@@ -33,6 +34,7 @@ let
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         (pkgs.lib.concatStringsSep " " [ "-fpedantic" "-f-hlint" ]) { };
+
     });
 in {
   inherit disabledPlugins;

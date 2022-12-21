@@ -2,7 +2,6 @@
 
 let
   disabledPlugins = [
-    "hls-hlint-plugin"
     # That one is not technically a plugin, but by putting it in this list, we
     # get it removed from the top level list of requirement and it is not pull
     # in the nix shell.
@@ -26,8 +25,7 @@ let
 
       ghc-exactprint =
         hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-160 { };
-      # Hlint is still broken
-      hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint { });
+      hlint = hsuper.callCabal2nix "hlint" inputs.hlint-35 {};
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
@@ -35,6 +33,7 @@ let
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         (pkgs.lib.concatStringsSep " " [ "-fpedantic" "-f-hlint" ]) { };
+
     });
 in {
   inherit disabledPlugins;

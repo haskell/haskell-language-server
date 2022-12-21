@@ -111,7 +111,12 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
         renderDetails :: HsConDeclH98Details GP -> HsConDeclGADTDetails GP
         renderDetails (PrefixCon _ args)   = PrefixConGADT args
         renderDetails (InfixCon arg1 arg2) = PrefixConGADT [arg1, arg2]
+#if MIN_VERSION_ghc(9,3,0)
+        renderDetails (RecCon recs)        = RecConGADT recs noHsUniTok
+#else
         renderDetails (RecCon recs)        = RecConGADT recs
+#endif
+
 #else
         renderDetails (PrefixCon args)     = PrefixCon args
         renderDetails (InfixCon arg1 arg2) = PrefixCon [arg1, arg2]
@@ -185,7 +190,11 @@ prettyGADTDecl df decl =
         adjustTyClD = \case
                 Right (L _ (TyClD _ tycld)) -> Right $ adjustDataDecl tycld
                 Right x -> Left $ "Expect TyClD but got " <> showAst x
+#if MIN_VERSION_ghc(9,3,0)
+                Left err -> Left $ printWithoutUniques err
+#else
                 Left err -> Left $ show err
+#endif
 
         adjustDataDecl DataDecl{..} = DataDecl
             { tcdDExt = adjustWhere tcdDExt

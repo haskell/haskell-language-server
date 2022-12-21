@@ -27,10 +27,6 @@ source-repository head
     location: https://github.com/haskell/haskell-language-server.git
 
 library
-  if impl(ghc >= 9.3)
-    buildable: False
-  else
-    buildable: True
   exposed-modules:
     Ide.Plugin.Splice
     Ide.Plugin.Splice.Types
@@ -64,10 +60,6 @@ library
     TypeOperators
 
 test-suite tests
-  if impl(ghc >= 9.3)
-    buildable: False
-  else
-    buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
