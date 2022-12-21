@@ -253,9 +253,7 @@ getParsedModuleRule :: Recorder (WithPriority Log) -> Rules ()
 getParsedModuleRule recorder =
   -- this rule does not have early cutoff since all its dependencies already have it
   define (cmapWithPrio LogShake recorder) $ \GetParsedModule file -> do
-    ModSummaryResult{msrModSummary = ms'} <- use_ GetModSummary file
-    sess <- use_ GhcSession file
-    let hsc = hscEnv sess
+    ModSummaryResult{msrModSummary = ms', msrHscEnv = hsc} <- use_ GetModSummary file
     opt <- getIdeOptions
     modify_dflags <- getModifyDynFlags dynFlagsModifyParser
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
@@ -327,8 +325,7 @@ getParsedModuleWithCommentsRule recorder =
   -- The parse diagnostics are owned by the GetParsedModule rule
   -- For this reason, this rule does not produce any diagnostics
   defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetParsedModuleWithComments file -> do
-    ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
-    sess <- use_ GhcSession file
+    ModSummaryResult{msrModSummary = ms, msrHscEnv = hsc} <- use_ GetModSummary file
     opt <- getIdeOptions
 
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
@@ -336,7 +333,7 @@ getParsedModuleWithCommentsRule recorder =
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
+    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition hsc opt file ms
 
 getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags f = do
