@@ -1,13 +1,25 @@
 {
   "nodes": {
+    "aeson-1520": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-btKp7CTOgC0wT33lROffARW9qr1jx9oKE5EWydaR52c=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/aeson-1.5.2.0/aeson-1.5.2.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/aeson-1.5.2.0/aeson-1.5.2.0.tar.gz"
+      }
+    },
     "all-cabal-hashes-unpacked": {
       "flake": false,
       "locked": {
-        "lastModified": 1668997806,
-        "narHash": "sha256-HRTQuIO/MxV5OcbCNsHSCeULa7KAjxIBQk5sAVFzrKk=",
+        "lastModified": 1670865018,
+        "narHash": "sha256-ygmGi0Y2So/DS74PEtBw+ozUoSiN2NM8D8OpjJxwNLc=",
         "owner": "commercialhaskell",
         "repo": "all-cabal-hashes",
-        "rev": "934c06ca91eb6ceca8a7c484dfc2862e955489f8",
+        "rev": "dbe1f3f215709c53df234197497cf9a5cc1d95a7",
         "type": "github"
       },
       "original": {
@@ -15,6 +27,54 @@
         "ref": "current-hackage",
         "repo": "all-cabal-hashes",
         "type": "github"
+      }
+    },
+    "apply-refact": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-cK+rsko/aydlvr7di9XS9XEP9tq3SwFWTRrwYrhfCLs=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/apply-refact-0.11.0.0/apply-refact-0.11.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/apply-refact-0.11.0.0/apply-refact-0.11.0.0.tar.gz"
+      }
+    },
+    "apply-refact-0930": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-EosZM++NRncMEr1KM+UIEjGivknqWFvwpTa6kLgK2Mk=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/apply-refact-0.9.3.0/apply-refact-0.9.3.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/apply-refact-0.9.3.0/apply-refact-0.9.3.0.tar.gz"
+      }
+    },
+    "brittany-01312": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-4rDE2bu4C8cv1D6lkTtLxMwLRyDfIK70BnptSrygK60=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/brittany-0.13.1.2/brittany-0.13.1.2.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/brittany-0.13.1.2/brittany-0.13.1.2.tar.gz"
+      }
+    },
+    "constraints-extras": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-WGDSpT37RrHwpQtExGkL5eEmBk/s9b0rxtT9DYqSGg4=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/constraints-extras-0.3.2.1/constraints-extras-0.3.2.1.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/constraints-extras-0.3.2.1/constraints-extras-0.3.2.1.tar.gz"
       }
     },
     "flake-compat": {
@@ -51,13 +111,25 @@
     "fourmolu": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-vbqgYaAd/JUPFGv6O2+OosBXFceKah9OYrjTuEkEZ3E=",
+        "narHash": "sha256-nmMz6kgI9cRljNSH9lbuozKJ7nd5pM4EKfUs0+x5N4U=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/fourmolu-0.9.0.0/fourmolu-0.9.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/fourmolu-0.10.1.0/fourmolu-0.10.1.0.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/fourmolu-0.9.0.0/fourmolu-0.9.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/fourmolu-0.10.1.0/fourmolu-0.10.1.0.tar.gz"
+      }
+    },
+    "ghc-check": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-pmmQMrk6X00+zbsstV49w/Es9+V9gssrXzJoub2ReEs=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-check-0.5.0.8/ghc-check-0.5.0.8.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-check-0.5.0.8/ghc-check-0.5.0.8.tar.gz"
       }
     },
     "ghc-exactprint": {
@@ -124,28 +196,40 @@
         "url": "https://hackage.haskell.org/package/hiedb-0.4.2.0/hiedb-0.4.2.0.tar.gz"
       }
     },
-    "hlint": {
+    "hlint-341": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-Kz6adx97kY7ojoDlw3y0R6LQ0h/EtXGR5+N07/b6uGk=",
+        "narHash": "sha256-qJF5mDe4N5MG7C1x62Aumo2b49tIUvQE3wQe8nBUx4U=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz"
+        "url": "https://hackage.haskell.org/package/hlint-3.4.1/hlint-3.4.1.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz"
+        "url": "https://hackage.haskell.org/package/hlint-3.4.1/hlint-3.4.1.tar.gz"
       }
     },
-    "hlint-34": {
+    "hlint-35": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-mDncRtVkjWnUbZc1fgDMGcGjy8CFNxUF8z2HGuuN7GU=",
+        "narHash": "sha256-qQNUlQQnahUGEO92Lm0RwjTGBGr2Yaw0KRuFRMoc5No=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz"
+        "url": "https://hackage.haskell.org/package/hlint-3.5/hlint-3.5.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz"
+        "url": "https://hackage.haskell.org/package/hlint-3.5/hlint-3.5.tar.gz"
+      }
+    },
+    "hw-prim": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-++rg/bx4TjWUDyHSWKm/8ITwQLonPRLXHPLlnhJy8ik=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hw-prim-0.6.3.2/hw-prim-0.6.3.2.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hw-prim-0.6.3.2/hw-prim-0.6.3.2.tar.gz"
       }
     },
     "implicit-hie": {
@@ -162,11 +246,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1668650906,
-        "narHash": "sha256-JuiYfDO23O8oxUUOmhQflmOoJovyC5G4RjcYQMQjrRE=",
+        "lastModified": 1670827406,
+        "narHash": "sha256-nLNk7uiLbhbvb4TVz67XK7+Ezr1zcWYDWmNrWGmEUqA=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "3a86856a13c88c8c64ea32082a851fefc79aa700",
+        "rev": "ffca9ffaaafb38c8979068cee98b2644bd3f14cb",
         "type": "github"
       },
       "original": {
@@ -188,22 +272,55 @@
         "url": "https://hackage.haskell.org/package/ptr-poker-0.1.2.8/ptr-poker-0.1.2.8.tar.gz"
       }
     },
+    "retrie": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-yokMPa3T7gO3YGwaE0CwCO+vG4IVvObSo+q8fzGbAvc=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/retrie-1.2.1/retrie-1.2.1.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/retrie-1.2.1/retrie-1.2.1.tar.gz"
+      }
+    },
+    "retrie-1100": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-yn8gguMdBtrB3fCa+4Rq6GHtPSyxYlriENPTgOvjeHE=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/retrie-1.1.0.0/retrie-1.1.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/retrie-1.1.0.0/retrie-1.1.0.0.tar.gz"
+      }
+    },
     "root": {
       "inputs": {
+        "aeson-1520": "aeson-1520",
         "all-cabal-hashes-unpacked": "all-cabal-hashes-unpacked",
+        "apply-refact": "apply-refact",
+        "apply-refact-0930": "apply-refact-0930",
+        "brittany-01312": "brittany-01312",
+        "constraints-extras": "constraints-extras",
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "fourmolu": "fourmolu",
+        "ghc-check": "ghc-check",
         "ghc-exactprint": "ghc-exactprint",
         "ghc-exactprint-150": "ghc-exactprint-150",
         "ghc-exactprint-160": "ghc-exactprint-160",
         "gitignore": "gitignore",
         "hiedb": "hiedb",
-        "hlint": "hlint",
-        "hlint-34": "hlint-34",
+        "hlint-341": "hlint-341",
+        "hlint-35": "hlint-35",
+        "hw-prim": "hw-prim",
         "implicit-hie": "implicit-hie",
         "nixpkgs": "nixpkgs",
-        "ptr-poker": "ptr-poker"
+        "ptr-poker": "ptr-poker",
+        "retrie": "retrie",
+        "retrie-1100": "retrie-1100"
       }
     }
   },

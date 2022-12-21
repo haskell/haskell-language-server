@@ -96,6 +96,11 @@ import           Language.LSP.Types                   as J hiding
 import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
 import           Retrie.ExactPrint                    (Annotated, fix,
                                                        transformA, unsafeMkA)
+
+#if MIN_VERSION_ghc(9,3,0)
+import GHC.Types.PkgQual
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import           Retrie.ExactPrint                    (makeDeltaAst)
 #else
@@ -548,7 +553,11 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
     ideclSource' = if ideclSource then IsBoot else NotBoot
     toMod = noLocA . GHC.mkModuleName
     ideclName = toMod ideclNameString
+#if MIN_VERSION_ghc(9,3,0)
+    ideclPkgQual = NoRawPkgQual
+#else
     ideclPkgQual = Nothing
+#endif
     ideclSafe = False
     ideclImplicit = False
     ideclHiding = Nothing

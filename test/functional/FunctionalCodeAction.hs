@@ -260,15 +260,15 @@ typedHoleTests = testGroup "typed hole code actions" [
                     , "foo x = maxBound"
                     ]
 
-      , expectFailIfGhc92 "The wingman plugin doesn't yet compile in GHC92" $
-        testCase "doesn't work when wingman is active" $
-        runSession hlsCommand fullCaps "test/testdata" $ do
-            doc <- openDoc "TypedHoles.hs" "haskell"
-            _ <- waitForDiagnosticsFromSource doc "typecheck"
-            cas <- getAllCodeActions doc
-            liftIO $ do
-                dontExpectCodeAction cas ["replace _ with minBound"]
-                dontExpectCodeAction cas ["replace _ with foo _"]
+      , knownBrokenForGhcVersions [GHC92, GHC94] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
+          testCase "doesn't work when wingman is active" $
+          runSession hlsCommand fullCaps "test/testdata" $ do
+              doc <- openDoc "TypedHoles.hs" "haskell"
+              _ <- waitForDiagnosticsFromSource doc "typecheck"
+              cas <- getAllCodeActions doc
+              liftIO $ do
+                  dontExpectCodeAction cas ["replace _ with minBound"]
+                  dontExpectCodeAction cas ["replace _ with foo _"]
 
       , testCase "shows more suggestions" $
             runSession hlsCommand fullCaps "test/testdata" $ do
@@ -295,7 +295,7 @@ typedHoleTests = testGroup "typed hole code actions" [
                         , "    stuff (A a) = A (a + 1)"
                         ]
 
-      , expectFailIfGhc92 "The wingman plugin doesn't yet compile in GHC92" $
+      , knownBrokenForGhcVersions [GHC92, GHC94] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
           testCase "doesnt show more suggestions when wingman is active" $
             runSession hlsCommand fullCaps "test/testdata" $ do
                 doc <- openDoc "TypedHoles2.hs" "haskell"
@@ -383,9 +383,6 @@ unusedTermTests = testGroup "unused term code actions" [
             assertBool "Quick fixes should have been filtered out"
               $ Just CodeActionQuickFix `notElem` kinds
     ]
-
-expectFailIfGhc92 :: String -> TestTree -> TestTree
-expectFailIfGhc92 = knownBrokenForGhcVersions [GHC92]
 
 disableWingman :: Session ()
 disableWingman =
