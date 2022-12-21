@@ -997,7 +997,7 @@ loadModulesHome
     -> HscEnv
 loadModulesHome mod_infos e =
 #if MIN_VERSION_ghc(9,3,0)
-  hscUpdateHUG (\hug -> foldr addHomeModInfoToHug hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
+  hscUpdateHUG (\hug -> foldl' (flip addHomeModInfoToHug) hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
 #else
   let !new_modules = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
   in e { hsc_HPT = new_modules
@@ -1465,18 +1465,6 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
 
     case (mb_checked_iface, recomp_iface_reqd) of
       (Just iface, UpToDate) -> do
-         -- If we have an old value, just return it
-         case old_value of
-           Just (old_hir, _)
-             | isNothing linkableNeeded || isJust (hirCoreFp old_hir)
-             -> do
-             -- Perform the fine grained recompilation check for TH
-             maybe_recomp <- checkLinkableDependencies get_linkable_hashes (hsc_mod_graph sessionWithMsDynFlags) (hirRuntimeModules old_hir)
-             case maybe_recomp of
-               Just msg -> do_regenerate msg
-               Nothing  -> return ([], Just old_hir)
-           -- Otherwise use the value from disk, provided the core file is up to date if required
-           _ -> do
              details <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface
              -- parse the runtime dependencies from the annotations
              let runtime_deps
@@ -1563,7 +1551,7 @@ showReason (RecompBecause s) = s
 mkDetailsFromIface :: HscEnv -> ModIface -> IO ModDetails
 mkDetailsFromIface session iface = do
   fixIO $ \details -> do
-    let hsc' = hscUpdateHPT (\hpt -> addToHpt hpt (moduleName $ mi_module iface) (HomeModInfo iface details Nothing)) session
+    let !hsc' = hscUpdateHPT (\hpt -> addToHpt hpt (moduleName $ mi_module iface) (HomeModInfo iface details Nothing)) session
     initIfaceLoad hsc' (typecheckIface iface)
 
 coreFileToCgGuts :: HscEnv -> ModIface -> ModDetails -> CoreFile -> IO CgGuts
