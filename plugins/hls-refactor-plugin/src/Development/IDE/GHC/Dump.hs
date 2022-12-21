@@ -9,10 +9,10 @@ import           GHC.Hs.Dump
 import qualified Data.ByteString                       as B
 import           Development.IDE.GHC.Compat.Util
 import           Generics.SYB                          (ext1Q, ext2Q, extQ)
-import           GHC.Hs
+import           GHC.Hs                                hiding (AnnLet)
 #endif
 #if MIN_VERSION_ghc(9,0,1)
-import           GHC.Plugins
+import           GHC.Plugins                           hiding (AnnLet)
 #else
 import           GhcPlugins
 #endif
@@ -232,8 +232,13 @@ showAstDataHtml a0 = html $
             annotationEpAnnHsCase :: EpAnn EpAnnHsCase -> SDoc
             annotationEpAnnHsCase = annotation' (text "EpAnn EpAnnHsCase")
 
+#if MIN_VERSION_ghc(9,4,0)
+            annotationEpAnnHsLet :: EpAnn NoEpAnns -> SDoc
+            annotationEpAnnHsLet = annotation' (text "EpAnn NoEpAnns")
+#else
             annotationEpAnnHsLet :: EpAnn AnnsLet -> SDoc
             annotationEpAnnHsLet = annotation' (text "EpAnn AnnsLet")
+#endif
 
             annotationAnnList :: EpAnn AnnList -> SDoc
             annotationAnnList = annotation' (text "EpAnn AnnList")
