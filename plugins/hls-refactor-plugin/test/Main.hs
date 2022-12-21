@@ -103,7 +103,8 @@ initializeTests = withResource acquire release tests
               doTest = do
                   ir <- getInitializeResponse
                   let Just ExecuteCommandOptions {_commands = List commands} = getActual $ innerCaps ir
-                  zipWithM_ (\e o -> T.isSuffixOf e o @? show (e,o)) expected commands
+                  -- Check if expected exists in commands. Note that commands can arrive in different order.
+                  mapM_ (\e -> any (\o -> T.isSuffixOf e o) commands @? show (expected, show commands)) expected
 
     acquire :: IO (ResponseMessage Initialize)
     acquire = run initializeResponse
@@ -746,6 +747,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         contentAfterAction <- documentContents doc
         liftIO $ expectedContentAfterAction @=? contentAfterAction
 
+
 {-# HLINT ignore "Use nubOrd" #-}
 removeImportTests :: TestTree
 removeImportTests = testGroup "remove import actions"
@@ -1291,7 +1293,8 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
-        , testSession "extend single line qualified import with value" $ template
+        , ignoreForGHC94 "On GHC 9.4, the error messages with -fdefer-type-errors don't have necessary imported target srcspan info." $
+          testSession "extend single line qualified import with value" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "stuffA :: Double"
@@ -1462,7 +1465,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
-        , ignoreForGHC92 "Diagnostic message has no suggestions" $
+        , ignoreFor (BrokenForGHC [GHC92, GHC94]) "Diagnostic message has no suggestions" $
           testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
@@ -2324,7 +2327,11 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = 1"
                ])
+#if MIN_VERSION_ghc(9,4,0)
+    [ (DsWarning, (3, 4), "Defaulting the type variable") ]
+#else
     [ (DsWarning, (3, 4), "Defaulting the following constraint") ]
+#endif
     "Add type annotation ‘Integer’ to ‘1’"
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A (f) where"
@@ -2341,7 +2348,11 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = 3"
                , "    in x"
                ])
+#if MIN_VERSION_ghc(9,4,0)
+    [ (DsWarning, (4, 12), "Defaulting the type variable") ]
+#else
     [ (DsWarning, (4, 12), "Defaulting the following constraint") ]
+#endif
     "Add type annotation ‘Integer’ to ‘3’"
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A where"
@@ -2359,7 +2370,11 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = let y = 5 in y"
                , "    in x"
                ])
+#if MIN_VERSION_ghc(9,4,0)
+    [ (DsWarning, (4, 20), "Defaulting the type variable") ]
+#else
     [ (DsWarning, (4, 20), "Defaulting the following constraint") ]
+#endif
     "Add type annotation ‘Integer’ to ‘5’"
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A where"
@@ -2378,9 +2393,15 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = seq \"debug\" traceShow \"debug\""
                ])
+#if MIN_VERSION_ghc(9,4,0)
+    [ (DsWarning, (6, 8), "Defaulting the type variable")
+    , (DsWarning, (6, 16), "Defaulting the type variable")
+    ]
+#else
     [ (DsWarning, (6, 8), "Defaulting the following constraint")
     , (DsWarning, (6, 16), "Defaulting the following constraint")
     ]
+#endif
     ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2390,7 +2411,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = seq (\"debug\" :: " <> listOfChar <> ") traceShow \"debug\""
                ])
-  , knownBrokenForGhcVersions [GHC92] "GHC 9.2 only has 'traceShow' in error span" $
+  , knownBrokenForGhcVersions [GHC92, GHC94] "GHC 9.2 only has 'traceShow' in error span" $
     testSession "add default type to satisfy two constraints" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
@@ -2401,7 +2422,11 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f a = traceShow \"debug\" a"
                ])
+#if MIN_VERSION_ghc(9,4,0)
+    [ (DsWarning, (6, 6), "Defaulting the type variable") ]
+#else
     [ (DsWarning, (6, 6), "Defaulting the following constraint") ]
+#endif
     ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2411,7 +2436,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f a = traceShow (\"debug\" :: " <> listOfChar <> ") a"
                ])
-  , knownBrokenForGhcVersions [GHC92] "GHC 9.2 only has 'traceShow' in error span" $
+  , knownBrokenForGhcVersions [GHC92, GHC94] "GHC 9.2 only has 'traceShow' in error span" $
     testSession "add default type to satisfy two constraints with duplicate literals" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
@@ -2422,7 +2447,11 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
                ])
+#if MIN_VERSION_ghc(9,4,0)
+    [ (DsWarning, (6, 54), "Defaulting the type variable") ]
+#else
     [ (DsWarning, (6, 54), "Defaulting the following constraint") ]
+#endif
     ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -3039,15 +3068,15 @@ removeRedundantConstraintsTests = let
     "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
     (typeSignatureSpaces $ Just "Monoid a, Show a")
     (typeSignatureSpaces Nothing)
-    , check
+  , check
     "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
     typeSignatureLined1
     typeSignatureOneLine
-    , check
+  , check
     "Remove redundant constraints `(Eq a, Show a)` from the context of the type signature for `foo`"
     typeSignatureLined2
     typeSignatureOneLine
-    , check
+  , check
     "Remove redundant constraint `Show a` from the context of the type signature for `foo`"
     typeSignatureLined3
     typeSignatureLined3'
@@ -3117,7 +3146,7 @@ exportUnusedTests = testGroup "export unused actions"
         (R 2 0 2 11)
         "Export ‘bar’"
         Nothing
-    , ignoreForGHC92 "Diagnostic message has no suggestions" $
+    , ignoreFor (BrokenForGHC [GHC92, GHC94]) "Diagnostic message has no suggestions" $
       testSession "type is exported but not the constructor of same name" $ template
         (T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
@@ -3754,6 +3783,9 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
 ignoreForGHC92 :: String -> TestTree -> TestTree
 ignoreForGHC92 = ignoreFor (BrokenForGHC [GHC92])
 
+ignoreForGHC94 :: String -> TestTree -> TestTree
+ignoreForGHC94 = ignoreFor (BrokenForGHC [GHC94])
+
 data BrokenTarget =
     BrokenSpecific OS [GhcVersion]
     -- ^Broken for `BrokenOS` with `GhcVersion`
@@ -3799,4 +3831,3 @@ assertJust s = \case
 listOfChar :: T.Text
 listOfChar | ghcVersion >= GHC90 = "String"
            | otherwise = "[Char]"
-
