@@ -262,7 +262,7 @@ common rename
     cpp-options: -Dhls_rename
 
 common retrie
-  if flag(retrie) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(retrie)
     build-depends: hls-retrie-plugin ^>= 1.0
     cpp-options: -Dhls_retrie
 
@@ -317,7 +317,7 @@ common changeTypeSignature
     cpp-options: -Dhls_changeTypeSignature
 
 common gadt
-  if flag(gadt) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(gadt)
     build-depends: hls-gadt-plugin ^>= 1.0
     cpp-options: -Dhls_gadt
 
