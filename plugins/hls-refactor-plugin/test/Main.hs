@@ -608,7 +608,7 @@ renameActionTests = testGroup "rename actions"
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
       actionsOrCommands <- getCodeActions doc (Range (Position 3 12) (Position 3 20))
-      [fixTypo] <- pure [action | InR action@CodeAction{ _title = actionTitle } <- actionsOrCommands, "monus" `T.isInfixOf` actionTitle ]
+      [fixTypo] <- pure [action | InR action@CodeAction{ _title = actionTitle } <- actionsOrCommands, "monus" `T.isInfixOf` actionTitle , "Replace" `T.isInfixOf` actionTitle]
       executeCodeAction fixTypo
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -1669,8 +1669,10 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = empty"                   []                "import Control.Applicative (empty)"
     , test True []          "f = empty"                   []                "import Control.Applicative"
     , test True []          "f = (&)"                     []                "import Data.Function ((&))"
-    , test True []          "f = NE.nonEmpty"             []                "import qualified Data.List.NonEmpty as NE"
-    , test True []          "f = Data.List.NonEmpty.nonEmpty" []            "import qualified Data.List.NonEmpty"
+    , ignoreForGHC94 "On GHC 9.4 the error message doesn't contain the qualified module name"
+      $ test True []          "f = NE.nonEmpty"             []                "import qualified Data.List.NonEmpty as NE"
+    , ignoreForGHC94 "On GHC 9.4 the error message doesn't contain the qualified module name"
+      $ test True []          "f = Data.List.NonEmpty.nonEmpty" []            "import qualified Data.List.NonEmpty"
     , test True []          "f :: Typeable a => a"        ["f = undefined"] "import Data.Typeable (Typeable)"
     , test True []          "f = pack"                    []                "import Data.Text (pack)"
     , test True []          "f :: Text"                   ["f = undefined"] "import Data.Text (Text)"
@@ -1679,14 +1681,17 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits((.|.)))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits ((.|.))"
     , test True []          "f :: a ~~ b"                 []                "import Data.Type.Equality ((~~))"
-    , test True
+    , ignoreForGHC94 "On GHC 9.4 the error message doesn't contain the qualified module name"
+      $ test True
       ["qualified Data.Text as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
-    , test True
+    , ignoreForGHC94 "On GHC 9.4 the error message doesn't contain the qualified module name"
+      $ test True
       [ "qualified Data.Text as T"
       , "qualified Data.Function as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
-    , test True
+    , ignoreForGHC94 "On GHC 9.4 the error message doesn't contain the qualified module name"
+      $ test True
       [ "qualified Data.Text as T"
       , "qualified Data.Function as T"
       , "qualified Data.Functor as T"
@@ -3784,7 +3789,7 @@ ignoreForGHC92 :: String -> TestTree -> TestTree
 ignoreForGHC92 = ignoreFor (BrokenForGHC [GHC92])
 
 ignoreForGHC94 :: String -> TestTree -> TestTree
-ignoreForGHC94 = ignoreFor (BrokenForGHC [GHC94])
+ignoreForGHC94 = knownIssueFor Broken (BrokenForGHC [GHC94])
 
 data BrokenTarget =
     BrokenSpecific OS [GhcVersion]
