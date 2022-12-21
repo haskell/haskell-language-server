@@ -1101,7 +1101,8 @@ getModSummaryFromImports
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
 getModSummaryFromImports env fp modTime contents = do
-    (contents, opts, env) <- preprocessor env fp contents
+
+    (contents, opts, env, src_hash) <- preprocessor env fp contents
 
     let dflags = hsc_dflags env
 
@@ -1152,9 +1153,6 @@ getModSummaryFromImports env fp modTime contents = do
     liftIO $ evaluate $ rnf srcImports
     liftIO $ evaluate $ rnf textualImports
 
-#if MIN_VERSION_ghc (9,3,0)
-    !src_hash <- liftIO $ fingerprintFromStringBuffer contents
-#endif
 
     modLoc <- liftIO $ if mod == mAIN_NAME
         -- specially in tests it's common to have lots of nameless modules
