@@ -13,3 +13,15 @@ pull_request_rules:
       queue:
         method: squash
         name: default
+  # The queue action automatically updates PRs that
+  # have entered the queue, but in order to do that
+  # they must have passed CI. Since our CI is a bit
+  # flaky, PRs can fail to get in, which then means
+  # they don't get updated, which is extra annoying.
+  # This just adds the updating as an independent 
+  # step.
+  - name: Automatically update pull requests
+    conditions:
+      - label=merge me
+    actions:
+      update:
