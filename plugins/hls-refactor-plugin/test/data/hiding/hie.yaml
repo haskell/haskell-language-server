@@ -2,7 +2,6 @@ cradle:
     direct:
         arguments:
         - -Wall
-        - HideFunction.hs
         - AVec.hs
         - BVec.hs
         - CVec.hs
