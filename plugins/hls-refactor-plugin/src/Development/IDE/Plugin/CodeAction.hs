@@ -240,7 +240,8 @@ extendImportHandler' ideState ExtendImport {..}
                   extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
 
         Nothing -> do
-            let n = newImport importName sym importQual False (isPostQualifiedImport df)
+            let qns = (,) <$> importQual <*> Just (qualifiedImportStyle df)
+                n = newImport importName sym qns False
                 sym = if isNothing importQual then Just it else Nothing
                 it = case thingParent of
                   Nothing -> newThing
@@ -249,11 +250,6 @@ extendImportHandler' ideState ExtendImport {..}
             return (nfp, WorkspaceEdit {_changes=Just (GHC.Exts.fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
-
-isPostQualifiedImport :: DynFlags -> Bool
-isPostQualifiedImport df = hasImportQualifedPostEnabled && hasPrePositiveQualifiedWarning
-    where hasImportQualifedPostEnabled = xopt ImportQualifiedPost df
-          hasPrePositiveQualifiedWarning = wopt Opt_WarnPrepositiveQualifiedModule df
 
 isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl GhcPs) -> Bool
 isWantedModule wantedModule Nothing (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
@@ -1435,16 +1431,17 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{_message}
   , Just (range, indent) <- newImportInsertRange ps fileContents
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
-  = let suggestions = nubSortBy simpleCompareImportSuggestion
-          (constructNewImportSuggestions df packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions) in
+  = let qis = qualifiedImportStyle df
+        suggestions = nubSortBy simpleCompareImportSuggestion
+          (constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions qis) in
     map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
     L _ HsModule {..} = astA ps
 suggestNewImport _ _ _ _ _ = []
 
 constructNewImportSuggestions
-  :: DynFlags -> ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [ImportSuggestion]
-constructNewImportSuggestions df exportsMap (qual, thingMissing) notTheseModules = nubOrdBy simpleCompareImportSuggestion
+  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> QualifiedImportStyle -> [ImportSuggestion]
+constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules qis = nubOrdBy simpleCompareImportSuggestion
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing] -- strip away qualified module names from the unknown name
   , identInfo <- maybe [] Set.toList $ (lookupOccEnv (getExportsMap exportsMap) (mkVarOrDataOcc name)) <> (lookupOccEnv (getExportsMap exportsMap) (mkTypeOcc name)) -- look up the modified unknown name in the export map
@@ -1456,7 +1453,7 @@ constructNewImportSuggestions df exportsMap (qual, thingMissing) notTheseModules
   renderNewImport :: IdentInfo -> [ImportSuggestion]
   renderNewImport identInfo
     | Just q <- qual
-    = [ImportSuggestion importanceScore (quickFixImportKind "new.qualified") (newQualImport m q $ isPostQualifiedImport df)]
+    = [ImportSuggestion importanceScore (quickFixImportKind "new.qualified") (newQualImport m q qis)]
     | otherwise
     = [ImportSuggestion importanceScore (quickFixImportKind' "new" importStyle) (newUnqualImport m (renderImportStyle importStyle) False)
       | importStyle <- NE.toList $ importStyles identInfo] ++
@@ -1634,11 +1631,10 @@ checkPragma name = check
 newImport
   :: T.Text -- ^ module name
   -> Maybe T.Text -- ^  the symbol
-  -> Maybe T.Text -- ^ qualified name
+  -> Maybe (T.Text, QualifiedImportStyle) -- ^ qualified name and style
   -> Bool -- ^ the symbol is to be imported or hidden
-  -> Bool -- ^ the qualified name is to be imported in postfix position
   -> NewImport
-newImport modName mSymbol mQual hiding postfix = NewImport impStmt
+newImport modName mSymbol mQualNameStyle hiding = NewImport impStmt
   where
      symImp
             | Just symbol <- mSymbol
@@ -1647,22 +1643,24 @@ newImport modName mSymbol mQual hiding postfix = NewImport impStmt
             | otherwise = ""
      impStmt =
        "import "
-         <> qualifiedModName
+         <> qualifiedModName (snd <$> mQualNameStyle)
          <> (if hiding then " hiding" else "")
          <> symImp
          <> maybe "" (\qual -> if modName == qual then "" else " as " <> qual) mQual
-     qualifiedModName | isJust mQual && postfix = modName <> " qualified"
-                      | isJust mQual = "qualified " <> modName
-                      | otherwise = ""
+     mQual = fst <$> mQualNameStyle
+     qualifiedModName Nothing                       = modName
+     qualifiedModName (Just QualifiedImportPrefix)  = "qualified " <> modName
+     qualifiedModName (Just QualifiedImportPostfix) = modName <> " qualified"
 
-newQualImport :: T.Text -> T.Text -> Bool -> NewImport
-newQualImport modName qual postfix = newImport modName Nothing (Just qual) False postfix
+
+newQualImport :: T.Text -> T.Text -> QualifiedImportStyle -> NewImport
+newQualImport modName qual qis = newImport modName Nothing (Just (qual, qis)) False
 
 newUnqualImport :: T.Text -> T.Text -> Bool -> NewImport
-newUnqualImport modName symbol hiding  = newImport modName (Just symbol) Nothing hiding False
+newUnqualImport modName symbol = newImport modName (Just symbol) Nothing
 
 newImportAll :: T.Text -> NewImport
-newImportAll modName = newImport modName Nothing Nothing False False
+newImportAll modName = newImport modName Nothing Nothing False
 
 hideImplicitPreludeSymbol :: T.Text -> NewImport
 hideImplicitPreludeSymbol symbol = newUnqualImport "Prelude" symbol True
