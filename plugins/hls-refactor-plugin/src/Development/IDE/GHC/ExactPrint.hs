@@ -698,7 +698,7 @@ annotate dflags needs_space ast = do
     let rendered = render dflags ast
 #if MIN_VERSION_ghc(9,4,0)
     expr' <- lift $ mapLeft (showSDoc dflags . ppr) $ parseAST dflags uniq rendered
-    pure expr'
+    pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
 #elif MIN_VERSION_ghc(9,2,0)
     expr' <- lift $ mapLeft show $ parseAST dflags uniq rendered
     pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
