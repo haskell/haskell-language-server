@@ -27,6 +27,7 @@ tests :: TestTree
 tests = testGroup "code actions" [
 #if hls_refactor
       importTests
+    , importQualifiedTests
     , packageTests
     , redundantImportTests
     , renameTests
@@ -101,6 +102,32 @@ importTests = testGroup "import suggestions" [
 
         contents <- documentContents doc
         liftIO $ contents @?= "import Control.Monad\nmain :: IO ()\nmain = when True $ putStrLn \"hello\""
+    ]
+
+importQualifiedTests :: TestTree
+importQualifiedTests = testGroup "import qualified suggestions" [
+    testCase "works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
+        doc <- openDoc "CodeActionImportQualified.hs" "haskell"
+        -- No Formatting:
+        let config = def { formattingProvider = "none" }
+        sendConfigurationChanged (toJSON config)
+
+        (diag:_) <- waitForDiagnosticsFrom doc
+        liftIO $ diag ^. L.message @?= "Not in scope: ‘Control.when’\nNo module named ‘Control’ is imported."
+
+        actionsOrCommands <- getAllCodeActions doc
+        let actns = map fromAction actionsOrCommands
+
+        let importQualifiedSuggestion = "import qualified Control.Monad "
+        importControlMonadQualified <- liftIO $ inspectCodeAction actionsOrCommands [importQualifiedSuggestion]
+        liftIO $ do
+            dontExpectCodeAction actionsOrCommands ["import Control.Monad (when)"]
+            length actns >= 10 @? "There are some actions"
+
+        executeCodeAction importControlMonadQualified
+
+        contents <- documentContents doc
+        liftIO $ contents @?= "import qualified Control.Monad as Control\nmain :: IO ()\nmain = Control.when True $ putStrLn \"hello\"\n"
     ]
 
 packageTests :: TestTree
