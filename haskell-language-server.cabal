@@ -247,7 +247,7 @@ common haddockComments
     cpp-options: -Dhls_haddockComments
 
 common hectare
-  if flag(hectare) && ((impl(ghc > 8.10) && impl(ghc < 9)) || flag(ignore-plugins-ghc-bounds))
+  if flag(hectare) && ((impl(ghc >= 8.10) && impl(ghc < 9)) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-hectare-plugin
     cpp-options: -Dhls_hectare
 
