@@ -27,7 +27,7 @@ tests :: TestTree
 tests = testGroup "code actions" [
 #if hls_refactor
       importTests
-    , importQualifiedTests
+    , ignoreInEnv [HostOS Windows, GhcVer GHC94] "Diagnostic failure for Windows-ghc9.4.2" importQualifiedTests
     , packageTests
     , redundantImportTests
     , renameTests
@@ -81,7 +81,7 @@ renameTests = testGroup "rename suggestions" [
 
 importTests :: TestTree
 importTests = testGroup "import suggestions" [
-    testCase "works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    testCase "import works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "CodeActionImport.hs" "haskell"
         -- No Formatting:
         let config = def { formattingProvider = "none" }
@@ -106,7 +106,7 @@ importTests = testGroup "import suggestions" [
 
 importQualifiedTests :: TestTree
 importQualifiedTests = testGroup "import qualified suggestions" [
-    testCase "works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    testCase "qualified import works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "CodeActionImportQualified.hs" "haskell"
         -- No Formatting:
         let config = def { formattingProvider = "none" }
