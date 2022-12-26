@@ -2,7 +2,7 @@
 
 ## 1.9.0.0
 
-- Binaries for GHC 9.4.3 and GHC 9.2.5.
+- Binaries for GHC 9.4.3, GHC 9.4.4 and GHC 9.2.5.
 - Dropped support for GHC 8.8 and GHC 8.10.
 - New plugins including:
   - Expanding record wild cards using hls-explicit-record-fields-plugin (#3304).
