@@ -176,7 +176,7 @@ goldenWithDoc fileType plugin title testDataDir path desc ext act =
 -- ------------------------------------------------------------
 
 -- | Plugin under test where a fitting recorder is injected.
-type PluginTestDescriptor b = Recorder (WithPriority b) -> PluginDescriptor IdeState
+type PluginTestDescriptor b = Recorder (WithPriority b) -> IdePlugins IdeState
 
 -- | Wrap a plugin you want to test, and inject a fitting recorder as required.
 --
@@ -197,7 +197,7 @@ mkPluginTestDescriptor
   :: (Recorder (WithPriority b) -> PluginId -> PluginDescriptor IdeState)
   -> PluginId
   -> PluginTestDescriptor b
-mkPluginTestDescriptor pluginDesc plId recorder = pluginDesc recorder plId
+mkPluginTestDescriptor pluginDesc plId recorder = IdePlugins [pluginDesc recorder plId]
 
 -- | Wrap a plugin you want to test.
 --
@@ -207,7 +207,7 @@ mkPluginTestDescriptor'
   :: (PluginId -> PluginDescriptor IdeState)
   -> PluginId
   -> PluginTestDescriptor b
-mkPluginTestDescriptor' pluginDesc plId _recorder = pluginDesc plId
+mkPluginTestDescriptor' pluginDesc plId _recorder = IdePlugins [pluginDesc plId]
 
 -- | Initialise a recorder that can be instructed to write to stderr by
 -- setting the environment variable "HLS_TEST_PLUGIN_LOG_STDERR=1" before
@@ -260,18 +260,18 @@ initialiseTestRecorder envVars = do
 runSessionWithServer :: Pretty b => PluginTestDescriptor b -> FilePath -> Session a -> IO a
 runSessionWithServer plugin fp act = do
   recorder <- pluginTestRecorder
-  runSessionWithServer' [plugin recorder] def def fullCaps fp act
+  runSessionWithServer' (plugin recorder) def def fullCaps fp act
 
 runSessionWithServerAndCaps :: Pretty b => PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
 runSessionWithServerAndCaps plugin caps fp act = do
   recorder <- pluginTestRecorder
-  runSessionWithServer' [plugin recorder] def def caps fp act
+  runSessionWithServer' (plugin recorder) def def caps fp act
 
 runSessionWithServerFormatter :: Pretty b => PluginTestDescriptor b -> String -> PluginConfig -> FilePath -> Session a -> IO a
 runSessionWithServerFormatter plugin formatter conf fp act = do
   recorder <- pluginTestRecorder
   runSessionWithServer'
-    [plugin recorder]
+    (plugin recorder)
     def
       { formattingProvider = T.pack formatter
       , plugins = M.singleton (PluginId $ T.pack formatter) conf
@@ -329,7 +329,7 @@ runSessionWithCabalServerFormatter :: Pretty b => PluginTestDescriptor b -> Stri
 runSessionWithCabalServerFormatter plugin formatter conf fp act = do
   recorder <- pluginTestRecorder
   runSessionWithServer'
-    [plugin recorder]
+    (plugin recorder)
     def
       { cabalFormattingProvider = T.pack formatter
       , plugins = M.singleton (PluginId $ T.pack formatter) conf
@@ -354,7 +354,7 @@ runSessionWithServer' ::
   --
   -- For improved logging, make sure these plugins have been initalised with
   -- the recorder produced by @pluginTestRecorder@.
-  [PluginDescriptor IdeState] ->
+  IdePlugins IdeState ->
   -- | lsp config for the server
   Config ->
   -- | config for the test session
@@ -380,7 +380,7 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
         -- exists until old logging style is phased out
         logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
 
-        hlsPlugins = IdePlugins $ Test.blockCommandDescriptor "block-command" : plugins
+        hlsPlugins = IdePlugins [Test.blockCommandDescriptor "block-command"] <> plugins
 
         arguments@Arguments{ argsIdeOptions, argsLogger } =
             testing (cmapWithPrio LogIDEMain recorder) logger hlsPlugins

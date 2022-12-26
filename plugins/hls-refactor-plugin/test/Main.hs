@@ -64,11 +64,11 @@ import qualified Test.AddArgument
 main :: IO ()
 main = defaultTestRunner tests
 
-refactorPlugin :: IO [PluginDescriptor IdeState]
+refactorPlugin :: IO (IdePlugins IdeState)
 refactorPlugin = do
   exactprintLog <- pluginTestRecorder
   ghcideLog <- pluginTestRecorder
-  pure $
+  pure $ IdePlugins $
       [ Refactor.iePluginDescriptor exactprintLog "ghcide-code-actions-imports-exports"
       , Refactor.typeSigsPluginDescriptor exactprintLog "ghcide-code-actions-type-signatures"
       , Refactor.bindingsPluginDescriptor exactprintLog "ghcide-code-actions-bindings"
