@@ -66,6 +66,7 @@ import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception.Safe
+import           Control.Exception                            (evaluate)
 import           Control.Monad.Extra
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -824,7 +825,8 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
 #endif
                       nubOrdOn ms_mod (ms : concatMap mgModSummaries mgs)
 #endif
-                pure $ mkModuleGraph module_graph_nodes
+                liftIO $ evaluate $ liftRnf rwhnf module_graph_nodes
+                return $ mkModuleGraph module_graph_nodes
             session' <- liftIO $ mergeEnvs hsc mg ms inLoadOrder depSessions
 
             -- Here we avoid a call to to `newHscEnvEqWithImportPaths`, which creates a new
