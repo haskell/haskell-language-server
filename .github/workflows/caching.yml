@@ -82,8 +82,7 @@ jobs:
       matrix:
         # This list of GHC (including the "exclude" list) versions must match
         # to the list of GHC versions specified in 'test.yml'
-        ghc: [ "9.4.3"
-             , "9.4.2"
+        ghc: [ "9.4.4"
              , "9.2.5"
              , "9.2.4"
              , "9.0.2"
