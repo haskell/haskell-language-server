@@ -257,7 +257,7 @@ common refineImports
     cpp-options: -Dhls_refineImports
 
 common rename
-  if flag(rename) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(rename)
     build-depends: hls-rename-plugin ^>= 1.0
     cpp-options: -Dhls_rename
 
