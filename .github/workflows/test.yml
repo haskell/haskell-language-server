@@ -60,11 +60,9 @@ jobs:
       # **don't forget**
       # to update the ghc versions in 'caching.yml'.
       matrix:
-        ghc: [ "9.4.3"
-             , "9.4.2"
+        ghc: [ "9.4.4"
              , "9.2.5"
              , "9.2.4"
-             , "9.2.3"
              , "9.0.2"
              , "8.10.7"
              ]
@@ -86,7 +84,7 @@ jobs:
         include:
            # only test supported ghc major versions
            - os: ubuntu-latest
-             ghc: '9.4.3'
+             ghc: '9.4.4'
              test: true
            - os: ubuntu-latest
              ghc: '9.2.5'
@@ -98,7 +96,7 @@ jobs:
              ghc: '8.10.7'
              test: true
            - os: windows-latest
-             ghc: '9.4.2'
+             ghc: '9.4.4'
              test: true
            # Test on 9.2.4 until https://github.com/haskell/actions/issues/129
            # is resolved. Then switch to 9.2.5
