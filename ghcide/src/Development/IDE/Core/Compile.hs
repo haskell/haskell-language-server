@@ -171,11 +171,11 @@ typecheckModule :: IdeDefer
 typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
-        mmodSummary' <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
+        initialized <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
                                       (initPlugins hsc modSummary)
-        case mmodSummary' of
+        case initialized of
           Left errs -> return (errs, Nothing)
-          Right modSummary' -> do
+          Right (modSummary', hsc) -> do
             (warnings, etcm) <- withWarnings "typecheck" $ \tweak ->
                 let
                   session = tweak (hscSetFlags dflags hsc)
@@ -427,6 +427,15 @@ tcRnModule hsc_env tc_helpers pmod = do
       tc_gbl_env = tc_gbl_env' { tcg_ann_env = extendAnnEnvList (tcg_ann_env tc_gbl_env') mod_env_anns }
   pure (TcModuleResult pmod rn_info tc_gbl_env splices False mod_env)
 
+
+-- Note [Clearing mi_globals after generating an iface]
+-- GHC populates the mi_global field in interfaces for GHCi if we are using the bytecode
+-- interpreter.
+-- However, this field is expensive in terms of heap usage, and we don't use it in HLS
+-- anywhere. So we zero it out.
+-- The field is not serialized or deserialised from disk, so we don't need to remove it
+-- while reading an iface from disk, only if we just generated an iface in memory
+
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
 mkHiFileResultNoCompile session tcm = do
   let hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) session
@@ -434,7 +443,8 @@ mkHiFileResultNoCompile session tcm = do
       tcGblEnv = tmrTypechecked tcm
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
-  iface <- mkIfaceTc hsc_env_tmp sf details ms tcGblEnv
+  iface' <- mkIfaceTc hsc_env_tmp sf details ms tcGblEnv
+  let iface = iface' { mi_globals = Nothing } -- See Note [Clearing mi_globals after generating an iface]
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 
 mkHiFileResultCompile
@@ -467,15 +477,16 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
 #endif
                                               simplified_guts
 
-  final_iface <- mkFullIface session partial_iface Nothing
+  final_iface' <- mkFullIface session partial_iface Nothing
 #if MIN_VERSION_ghc(9,4,2)
                     Nothing
 #endif
 
-#else 
+#else
   let !partial_iface = force (mkPartialIface session details simplified_guts)
-  final_iface <- mkFullIface session partial_iface
+  final_iface' <- mkFullIface session partial_iface
 #endif
+  let final_iface = final_iface' {mi_globals = Nothing} -- See Note [Clearing mi_globals after generating an iface]
 
   -- Write the core file now
   core_file <- case mguts of
@@ -562,11 +573,6 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
       , Handler $ return . (,Nothing) . diagFromString source DsError (noSpan "<internal>")
       . (("Error during " ++ T.unpack source) ++) . show @SomeException
       ]
-
-initPlugins :: HscEnv -> ModSummary -> IO ModSummary
-initPlugins session modSummary = do
-    session1 <- liftIO $ initializePlugins (hscSetFlags (ms_hspp_opts modSummary) session)
-    return modSummary{ms_hspp_opts = hsc_dflags session1}
 
 -- | Whether we should run the -O0 simplifier when generating core.
 --
@@ -991,7 +997,7 @@ loadModulesHome
     -> HscEnv
 loadModulesHome mod_infos e =
 #if MIN_VERSION_ghc(9,3,0)
-  hscUpdateHUG (\hug -> foldr addHomeModInfoToHug hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
+  hscUpdateHUG (\hug -> foldl' (flip addHomeModInfoToHug) hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
 #else
   let !new_modules = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
   in e { hsc_HPT = new_modules
@@ -1095,7 +1101,10 @@ getModSummaryFromImports
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
 getModSummaryFromImports env fp modTime contents = do
-    (contents, opts, dflags) <- preprocessor env fp contents
+
+    (contents, opts, env, src_hash) <- preprocessor env fp contents
+
+    let dflags = hsc_dflags env
 
     -- The warns will hopefully be reported when we actually parse the module
     (_warns, L main_loc hsmod) <- parseHeader dflags fp contents
@@ -1144,9 +1153,6 @@ getModSummaryFromImports env fp modTime contents = do
     liftIO $ evaluate $ rnf srcImports
     liftIO $ evaluate $ rnf textualImports
 
-#if MIN_VERSION_ghc (9,3,0)
-    !src_hash <- liftIO $ fingerprintFromStringBuffer contents
-#endif
 
     modLoc <- liftIO $ if mod == mAIN_NAME
         -- specially in tests it's common to have lots of nameless modules
@@ -1154,9 +1160,9 @@ getModSummaryFromImports env fp modTime contents = do
         then mkHomeModLocation dflags (pathToModuleName fp) fp
         else mkHomeModLocation dflags mod fp
 
-    let modl = mkHomeModule (hscHomeUnit (hscSetFlags dflags env)) mod
+    let modl = mkHomeModule (hscHomeUnit env) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
-        msrModSummary =
+        msrModSummary2 =
             ModSummary
                 { ms_mod          = modl
                 , ms_hie_date     = Nothing
@@ -1181,7 +1187,8 @@ getModSummaryFromImports env fp modTime contents = do
                 , ms_textual_imps = textualImports
                 }
 
-    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
+    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary2
+    (msrModSummary, msrHscEnv) <- liftIO $ initPlugins env msrModSummary2
     return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
@@ -1222,7 +1229,7 @@ parseHeader dflags filename contents = do
      PFailedWithErrorMessages msgs ->
         throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
      POk pst rdr_module -> do
-        let (warns, errs) = getMessages' pst dflags
+        let (warns, errs) = renderMessages $ getPsMessages pst dflags
 
         -- Just because we got a `POk`, it doesn't mean there
         -- weren't errors! To clarify, the GHC parser
@@ -1257,9 +1264,18 @@ parseFileContents env customPreprocessor filename ms = do
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
-             (warns, errs) = getMessages' pst dflags
+             psMessages = getPsMessages pst dflags
          in
            do
+               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
+
+               unless (null errs) $
+                  throwE $ diagFromStrings "parser" DsError errs
+
+               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
+               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed psMessages
+               let (warns, errs) = renderMessages msgs
+
                -- Just because we got a `POk`, it doesn't mean there
                -- weren't errors! To clarify, the GHC parser
                -- distinguishes between fatal and non-fatal
@@ -1272,14 +1288,6 @@ parseFileContents env customPreprocessor filename ms = do
                unless (null errs) $
                  throwE $ diagFromErrMsgs "parser" dflags errs
 
-               -- Ok, we got here. It's safe to continue.
-               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
-
-               unless (null errs) $
-                  throwE $ diagFromStrings "parser" DsError errs
-
-               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               parsed' <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed
 
                -- To get the list of extra source files, we take the list
                -- that the parser gave us,
@@ -1455,18 +1463,6 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
 
     case (mb_checked_iface, recomp_iface_reqd) of
       (Just iface, UpToDate) -> do
-         -- If we have an old value, just return it
-         case old_value of
-           Just (old_hir, _)
-             | isNothing linkableNeeded || isJust (hirCoreFp old_hir)
-             -> do
-             -- Perform the fine grained recompilation check for TH
-             maybe_recomp <- checkLinkableDependencies get_linkable_hashes (hsc_mod_graph sessionWithMsDynFlags) (hirRuntimeModules old_hir)
-             case maybe_recomp of
-               Just msg -> do_regenerate msg
-               Nothing  -> return ([], Just old_hir)
-           -- Otherwise use the value from disk, provided the core file is up to date if required
-           _ -> do
              details <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface
              -- parse the runtime dependencies from the annotations
              let runtime_deps
@@ -1553,7 +1549,7 @@ showReason (RecompBecause s) = s
 mkDetailsFromIface :: HscEnv -> ModIface -> IO ModDetails
 mkDetailsFromIface session iface = do
   fixIO $ \details -> do
-    let hsc' = hscUpdateHPT (\hpt -> addToHpt hpt (moduleName $ mi_module iface) (HomeModInfo iface details Nothing)) session
+    let !hsc' = hscUpdateHPT (\hpt -> addToHpt hpt (moduleName $ mi_module iface) (HomeModInfo iface details Nothing)) session
     initIfaceLoad hsc' (typecheckIface iface)
 
 coreFileToCgGuts :: HscEnv -> ModIface -> ModDetails -> CoreFile -> IO CgGuts
@@ -1592,15 +1588,14 @@ coreFileToLinkable linkableType session ms iface details core_file t = do
 --- and leads to fun errors like "Cannot continue after interface file error".
 getDocsBatch
   :: HscEnv
-  -> Module  -- ^ a module where the names are in scope
   -> [Name]
 #if MIN_VERSION_ghc(9,3,0)
   -> IO [Either String (Maybe [HsDoc GhcRn], IntMap (HsDoc GhcRn))]
 #else
   -> IO [Either String (Maybe HsDocString, IntMap HsDocString)]
 #endif
-getDocsBatch hsc_env _mod _names = do
-    (msgs, res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
+getDocsBatch hsc_env _names = do
+    res <- initIfaceLoad hsc_env $ forM _names $ \name ->
         case nameModule_maybe name of
             Nothing -> return (Left $ NameHasNoModule name)
             Just mod -> do
@@ -1615,7 +1610,7 @@ getDocsBatch hsc_env _mod _names = do
                       , mi_decl_docs = DeclDocMap dmap
                       , mi_arg_docs = ArgDocMap amap
 #endif
-                      } <- loadModuleInterface "getModuleInterface" mod
+                      } <- loadSysInterface (text "getModuleInterface") mod
 #if MIN_VERSION_ghc(9,3,0)
              if isNothing mb_doc_hdr && isNullUniqMap dmap && isNullUniqMap amap
 #else
@@ -1636,44 +1631,44 @@ getDocsBatch hsc_env _mod _names = do
 #else
                                   Map.findWithDefault mempty name amap))
 #endif
-    case res of
-        Just x  -> return $ map (first $ T.unpack . printOutputable)
-                          $ x
-        Nothing -> throwErrors
-#if MIN_VERSION_ghc(9,3,0)
-                     $ fmap GhcTcRnMessage msgs
-#elif MIN_VERSION_ghc(9,2,0)
-                     $ Error.getErrorMessages msgs
-#else
-                     $ snd msgs
-#endif
+    return $ map (first $ T.unpack . printOutputable)
+           $ res
   where
-    throwErrors = liftIO . throwIO . mkSrcErr
     compiled n =
       -- TODO: Find a more direct indicator.
       case nameSrcLoc n of
         RealSrcLoc {}   -> False
         UnhelpfulLoc {} -> True
 
-fakeSpan :: RealSrcSpan
-fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
-
 -- | Non-interactive, batch version of 'InteractiveEval.lookupNames'.
 --   The interactive paths create problems in ghc-lib builds
 --- and leads to fun errors like "Cannot continue after interface file error".
 lookupName :: HscEnv
-           -> Module -- ^ A module where the Names are in scope
            -> Name
            -> IO (Maybe TyThing)
-lookupName hsc_env mod name = do
-    (_messages, res) <- initTc hsc_env HsSrcFile False mod fakeSpan $ do
-        tcthing <- tcLookup name
-        case tcthing of
-            AGlobal thing    -> return thing
-            ATcId{tct_id=id} -> return (AnId id)
-            _                -> panic "tcRnLookupName'"
-    return res
-
+lookupName _ name
+  | Nothing <- nameModule_maybe name = pure Nothing
+lookupName hsc_env name = handle $ do
+#if MIN_VERSION_ghc(9,2,0)
+  mb_thing <- liftIO $ lookupType hsc_env name
+#else
+  eps <- liftIO $ readIORef (hsc_EPS hsc_env)
+  let mb_thing = lookupType (hsc_dflags hsc_env) (hsc_HPT hsc_env) (eps_PTE eps) name
+#endif
+  case mb_thing of
+    x@(Just _) -> return x
+    Nothing
+      | x@(Just thing) <- wiredInNameTyThing_maybe name
+      -> do when (needWiredInHomeIface thing)
+                 (initIfaceLoad hsc_env (loadWiredInHomeIface name))
+            return x
+      | otherwise -> do
+        res <- initIfaceLoad hsc_env $ importDecl name
+        case res of
+          Util.Succeeded x -> return (Just x)
+          _ -> return Nothing
+  where
+    handle x = x `catch` \(_ :: IOEnvFailure) -> pure Nothing
 
 pathToModuleName :: FilePath -> ModuleName
 pathToModuleName = mkModuleName . map rep

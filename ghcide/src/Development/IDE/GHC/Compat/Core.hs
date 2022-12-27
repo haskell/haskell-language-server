@@ -36,7 +36,14 @@ module Development.IDE.GHC.Compat.Core (
     maxRefHoleFits,
     maxValidHoleFits,
     setOutputFile,
+    lookupType,
+    needWiredInHomeIface,
+    loadWiredInHomeIface,
+    loadSysInterface,
+    importDecl,
+#if MIN_VERSION_ghc(8,8,0)
     CommandLineOption,
+#endif
 #if !MIN_VERSION_ghc(9,2,0)
     staticPlugins,
 #endif
@@ -209,6 +216,7 @@ module Development.IDE.GHC.Compat.Core (
     noLocA,
     unLocA,
     LocatedAn,
+    LocatedA,
 #if MIN_VERSION_ghc(9,2,0)
     GHC.AnnListItem(..),
     GHC.NameAnn(..),
@@ -475,8 +483,9 @@ module Development.IDE.GHC.Compat.Core (
 #if !MIN_VERSION_ghc_boot_th(9,4,1)
     Extension(.., NamedFieldPuns),
 #else
-    Extension(..)
+    Extension(..),
 #endif
+    UniqFM,
     ) where
 
 import qualified GHC
@@ -511,7 +520,8 @@ import           GHC.Core.DataCon             hiding (dataConExTyCoVars)
 import qualified GHC.Core.DataCon             as DataCon
 import           GHC.Core.FamInstEnv          hiding (pprFamInst)
 import           GHC.Core.InstEnv
-import           GHC.Types.Unique.FM
+import           GHC.Types.Unique.FM hiding (UniqFM)
+import qualified GHC.Types.Unique.FM          as UniqFM
 #if MIN_VERSION_ghc(9,3,0)
 import qualified GHC.Driver.Config.Tidy       as GHC
 import qualified GHC.Data.Strict              as Strict
@@ -579,7 +589,7 @@ import           GHC.Parser.Header            hiding (getImports)
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Linker.Loader            as Linker
 import           GHC.Linker.Types
-import           GHC.Parser.Lexer             hiding (initParserState)
+import           GHC.Parser.Lexer             hiding (initParserState, getPsMessages)
 import           GHC.Parser.Annotation        (EpAnn (..))
 import           GHC.Platform.Ways
 import           GHC.Runtime.Context          (InteractiveImport (..))
@@ -734,7 +744,8 @@ import           Type
 import           TysPrim
 import           TysWiredIn
 import           Unify
-import           UniqFM
+import           UniqFM hiding (UniqFM)
+import qualified UniqFM
 import           UniqSupply
 import           Var                          (Var (varName), setTyVarUnique,
                                                setVarUnique, varType)
@@ -1032,6 +1043,12 @@ type LocatedAn a = GHC.Located
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
+type LocatedA = GHC.LocatedA
+#else
+type LocatedA = GHC.Located
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
 locA :: SrcSpanAnn' a -> SrcSpan
 locA = GHC.locA
 #else
@@ -1157,4 +1174,10 @@ pattern HsFieldBind {hfbAnn, hfbLHS, hfbRHS, hfbPun} <- HsRecField hfbAnn (SrcLo
 #if !MIN_VERSION_ghc_boot_th(9,4,1)
 pattern NamedFieldPuns :: Extension
 pattern NamedFieldPuns = RecordPuns
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+type UniqFM = UniqFM.UniqFM
+#else
+type UniqFM k = UniqFM.UniqFM
 #endif

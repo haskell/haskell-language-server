@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-code-range-plugin
-version:            1.0.0.0
+version:            1.1.0.0
 synopsis:
   HLS Plugin to support smart selection range and Folding range
 
@@ -39,9 +39,9 @@ library
     , containers
     , deepseq
     , extra
-    , ghcide           ^>=1.8
+    , ghcide           ^>=1.9
     , hashable
-    , hls-plugin-api   ^>=1.5
+    , hls-plugin-api   ^>=1.6
     , lens
     , lsp
     , mtl
@@ -64,9 +64,9 @@ test-suite tests
     , bytestring
     , containers
     , filepath
-    , ghcide                     ^>=1.8
+    , ghcide                     ^>=1.8 || ^>= 1.9
     , hls-code-range-plugin
-    , hls-test-utils             ^>=1.4
+    , hls-test-utils             ^>=1.5
     , lens
     , lsp
     , lsp-test

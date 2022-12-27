@@ -3,6 +3,7 @@
 set -Eeuxo pipefail
 
 source "$CI_PROJECT_DIR/.gitlab/common.sh"
+source "$CI_PROJECT_DIR/.gitlab/setup.sh"
 
 export GHCUP_INSTALL_BASE_PREFIX="$CI_PROJECT_DIR/toolchain"
 export CABAL_DIR="$CI_PROJECT_DIR/cabal"

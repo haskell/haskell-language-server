@@ -33,9 +33,9 @@ library
     , base                  >=4.12 && <5
     , containers
     , extra
-    , ghcide                ^>= 1.8
+    , ghcide                ^>= 1.9
     , hiedb
-    , hls-plugin-api        ^>= 1.5
+    , hls-plugin-api        ^>= 1.6
     , lens
     , lsp                    >=1.2.0.1
     , sqlite-simple
@@ -59,7 +59,8 @@ test-suite tests
     , extra
     , filepath
     , hls-call-hierarchy-plugin
-    , hls-test-utils              ^>=1.4
+    , hls-test-utils              ^>=1.5
+    , ghcide-test-utils
     , lens
     , lsp
     , lsp-test

@@ -2,14 +2,13 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
-module Mixed where
+module Unused2 where
 
 data MyRec = MyRec
   { foo :: Int
   , bar :: Int
   , baz :: Char
-  , quux :: Double
   }
 
 convertMe :: MyRec -> String
-convertMe MyRec {foo, bar = bar', ..} = show foo ++ show bar' ++ show baz
+convertMe MyRec {foo, bar} = let baz = "baz" in show foo ++ show bar ++ baz

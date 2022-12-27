@@ -22,10 +22,12 @@ module Development.IDE.GHC.Compat(
 #else
     upNameCache,
 #endif
+    lookupNameCache,
     disableWarningsAsErrors,
     reLoc,
     reLocA,
-    getMessages',
+    getPsMessages,
+    renderMessages,
     pattern PFailedWithErrorMessages,
     isObjectLinkable,
 
@@ -42,6 +44,8 @@ module Development.IDE.GHC.Compat(
 #endif
 
     FastStringCompat,
+    bytesFS,
+    mkFastStringByteString,
     nodeInfo',
     getNodeIds,
     sourceNodeInfo,
@@ -51,6 +55,8 @@ module Development.IDE.GHC.Compat(
     nodeAnnotations,
     mkAstNode,
     combineRealSrcSpans,
+
+    nonDetOccEnvElts,
 
     isQualifiedImport,
     GhcVersion(..),
@@ -205,6 +211,7 @@ import           VarEnv                                (emptyInScopeSet,
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
+import           GHC.Data.FastString
 import           GHC.Core
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                    hiding (ExposePackage)
@@ -223,6 +230,7 @@ import           GHC.Iface.Make                        (mkIfaceExports)
 import qualified GHC.SysTools.Tasks                    as SysTools
 import qualified GHC.Types.Avail                       as Avail
 #else
+import           FastString
 import qualified Avail
 import           DynFlags                              hiding (ExposePackage)
 import           HscTypes
@@ -261,6 +269,12 @@ import           GHC.Types.IPE
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Types.Error
 import GHC.Driver.Config.Stg.Pipeline
+import GHC.Driver.Plugins                              (PsMessages (..))
+#endif
+
+#if !MIN_VERSION_ghc(9,3,0)
+nonDetOccEnvElts :: OccEnv a -> [a]
+nonDetOccEnvElts = occEnvElts
 #endif
 
 type ModIfaceAnnotation = Annotation
@@ -371,25 +385,13 @@ corePrepExpr _ = GHC.corePrepExpr
 simplifyExpr df _ = GHC.simplifyExpr df
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
-type ErrMsg  = MsgEnvelope DecoratedSDoc
-#endif
+renderMessages :: PsMessages -> (Bag WarnMsg, Bag ErrMsg)
+renderMessages msgs =
 #if MIN_VERSION_ghc(9,3,0)
-type WarnMsg  = MsgEnvelope DecoratedSDoc
-#endif
-
-getMessages' :: PState -> DynFlags -> (Bag WarnMsg, Bag ErrMsg)
-getMessages' pst dflags =
-#if MIN_VERSION_ghc(9,3,0)
-  bimap (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) $ getPsMessages pst
+  let renderMsgs extractor = (fmap . fmap) renderDiagnosticMessageWithHints . getMessages $ extractor msgs
+  in (renderMsgs psWarnings, renderMsgs psErrors)
 #else
-#if MIN_VERSION_ghc(9,2,0)
-                 bimap (fmap pprWarning) (fmap pprError) $
-#endif
-                 getMessages pst
-#if !MIN_VERSION_ghc(9,2,0)
-                   dflags
-#endif
+  msgs
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -416,6 +418,25 @@ hieExportNames = nameListFromAvails . hie_exports
 #if MIN_VERSION_ghc(9,3,0)
 type NameCacheUpdater = NameCache
 #else
+
+lookupNameCache :: Module -> OccName -> NameCache -> (NameCache, Name)
+-- Lookup up the (Module,OccName) in the NameCache
+-- If you find it, return it; if not, allocate a fresh original name and extend
+-- the NameCache.
+-- Reason: this may the first occurrence of (say) Foo.bar we have encountered.
+-- If we need to explore its value we will load Foo.hi; but meanwhile all we
+-- need is a Name for it.
+lookupNameCache mod occ name_cache =
+  case lookupOrigNameCache (nsNames name_cache) mod occ of {
+    Just name -> (name_cache, name);
+    Nothing   ->
+        case takeUniqFromSupply (nsUniqs name_cache) of {
+          (uniq, us) ->
+              let
+                name      = mkExternalName uniq mod occ noSrcSpan
+                new_cache = extendNameCache (nsNames name_cache) mod occ name
+              in (name_cache{ nsUniqs = us, nsNames = new_cache }, name) }}
+
 upNameCache :: IORef NameCache -> (NameCache -> (NameCache, c)) -> IO c
 upNameCache = updNameCache
 #endif
@@ -482,7 +503,7 @@ getModuleHash = mi_mod_hash . mi_final_exts
 
 disableWarningsAsErrors :: DynFlags -> DynFlags
 disableWarningsAsErrors df =
-    flip gopt_unset Opt_WarnIsError $ foldl' wopt_unset_fatal df [toEnum 0 ..]
+    flip gopt_unset Opt_WarnIsError $! foldl' wopt_unset_fatal df [toEnum 0 ..]
 
 isQualifiedImport :: ImportDecl a -> Bool
 isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False

@@ -13,6 +13,8 @@ module Development.IDE.Plugin.CodeAction.Args
 where
 
 import           Control.Concurrent.STM.Stats                 (readTVarIO)
+import           Control.Monad.Except                         (ExceptT (..),
+                                                               runExceptT)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
 import           Data.Either                                  (fromRight,
@@ -27,12 +29,8 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.GHC.ExactPrint
-#if !MIN_VERSION_ghc(9,3,0)
 import           Development.IDE.Plugin.CodeAction.ExactPrint (Rewrite,
                                                                rewriteToEdit)
-#endif
-import           Control.Monad.Except                         (ExceptT (..),
-                                                               runExceptT)
 import           Development.IDE.Plugin.TypeLenses            (GetGlobalBindingTypeSigs (GetGlobalBindingTypeSigs),
                                                                GlobalBindingTypeSigsResult)
 import           Development.IDE.Spans.LocalBindings          (Bindings)
@@ -75,9 +73,7 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
         Just (_, txt) -> pure txt
         _             -> pure Nothing
   caaDf <- onceIO $ fmap (ms_hspp_opts . pm_mod_summary) <$> caaParsedModule
-#if !MIN_VERSION_ghc(9,3,0)
   caaAnnSource <- onceIO $ runRule GetAnnotatedParsedSource
-#endif
   caaTmr <- onceIO $ runRule TypeCheck
   caaHar <- onceIO $ runRule GetHieAst
   caaBindings <- onceIO $ runRule GetBindings
@@ -122,7 +118,6 @@ class ToTextEdit a where
 instance ToTextEdit TextEdit where
   toTextEdit _ = pure . pure
 
-#if !MIN_VERSION_ghc(9,3,0)
 instance ToTextEdit Rewrite where
   toTextEdit CodeActionArgs {..} rw = fmap (fromMaybe []) $
     runMaybeT $ do
@@ -134,7 +129,6 @@ instance ToTextEdit Rewrite where
       let r = rewriteToEdit df rw
 #endif
       pure $ fromRight [] r
-#endif
 
 instance ToTextEdit a => ToTextEdit [a] where
   toTextEdit caa = foldMap (toTextEdit caa)
@@ -154,11 +148,7 @@ data CodeActionArgs = CodeActionArgs
     caaParsedModule :: IO (Maybe ParsedModule),
     caaContents     :: IO (Maybe T.Text),
     caaDf           :: IO (Maybe DynFlags),
-#if MIN_VERSION_ghc(9,3,0)
-    caaAnnSource    :: IO (Maybe ParsedSource),
-#else
     caaAnnSource    :: IO (Maybe (Annotated ParsedSource)),
-#endif
     caaTmr          :: IO (Maybe TcModuleResult),
     caaHar          :: IO (Maybe HieAstResult),
     caaBindings     :: IO (Maybe Bindings),
@@ -238,10 +228,10 @@ instance ToCodeAction r => ToCodeAction (ParsedSource -> r) where
       Just s -> flip runReaderT caa . runExceptT . toCodeAction . f . astA $ s
       _      -> pure $ Right []
 #else
-  toCodeAction f = ReaderT $ \caa@CodeActionArgs {caaParsedModule = x} ->
+  toCodeAction f = ExceptT . ReaderT $ \caa@CodeActionArgs {caaParsedModule = x} ->
     x >>= \case
-      Just s -> flip runReaderT caa . toCodeAction . f . pm_parsed_source $ s
-      _      -> pure []
+      Just s -> flip runReaderT caa . runExceptT . toCodeAction . f . pm_parsed_source $ s
+      _      -> pure $ Right []
 #endif
 
 instance ToCodeAction r => ToCodeAction (ExportsMap -> r) where
@@ -271,13 +261,11 @@ instance ToCodeAction r => ToCodeAction (Maybe DynFlags -> r) where
 instance ToCodeAction r => ToCodeAction (DynFlags -> r) where
   toCodeAction = toCodeAction2 caaDf
 
-#if !MIN_VERSION_ghc(9,3,0)
 instance ToCodeAction r => ToCodeAction (Maybe (Annotated ParsedSource) -> r) where
   toCodeAction = toCodeAction1 caaAnnSource
 
 instance ToCodeAction r => ToCodeAction (Annotated ParsedSource -> r) where
   toCodeAction = toCodeAction2 caaAnnSource
-#endif
 
 instance ToCodeAction r => ToCodeAction (Maybe TcModuleResult -> r) where
   toCodeAction = toCodeAction1 caaTmr

@@ -51,8 +51,11 @@ import           Development.IDE.GHC.Compat      as Compat hiding (getLoc)
 import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util as Util
 import           Development.IDE.GHC.ExactPrint
+#if MIN_VERSION_ghc(9,4,1)
+import           GHC.Data.Bag (Bag)
+#endif
 import           GHC.Exts
-#if __GLASGOW_HASKELL__ >= 902
+#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Parser.Annotation (SrcSpanAnn'(..))
 import qualified GHC.Types.Error as Error
 #endif
@@ -271,7 +274,7 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
 -- `GenLocated`. In GHC >= 9.2 this will be a SrcSpanAnn', with annotations;
 -- earlier it will just be a plain `SrcSpan`.
 {-# COMPLETE AsSrcSpan #-}
-#if __GLASGOW_HASKELL__ >= 902
+#if MIN_VERSION_ghc(9,2,0)
 pattern AsSrcSpan :: SrcSpan -> SrcSpanAnn' a
 pattern AsSrcSpan locA <- SrcSpanAnn {locA}
 #else
@@ -369,12 +372,12 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                                             Right y -> unRenamedE dflags y
                                     _ -> pure Nothing
             let (warns, errs) =
-#if __GLASGOW_HASKELL__ >= 902
+#if MIN_VERSION_ghc(9,2,0)
                                 (Error.getWarningMessages msgs, Error.getErrorMessages msgs)
 #else
                                 msgs
 #endif
-            pure $ (warns,) <$> fromMaybe (Left $ show errs) eresl
+            pure $ (warns,) <$> fromMaybe (Left $ showErrors errs) eresl
 
     unless
         (null warns)
@@ -382,11 +385,30 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
             MtWarning
             [ "Warning during expanding: "
             , ""
-            , T.pack (show warns)
+            , T.pack (showErrors warns)
             ]
     pure resl
     where
         dflags = hsc_dflags hscEnv
+
+#if MIN_VERSION_ghc(9,4,1)
+        showErrors = showBag
+#else
+        showErrors = show
+#endif
+
+#if MIN_VERSION_ghc(9,4,1)
+showBag :: Error.Diagnostic a => Bag (Error.MsgEnvelope a) -> String
+showBag = show . fmap (fmap toDiagnosticMessage)
+
+toDiagnosticMessage :: Error.Diagnostic a => a -> Error.DiagnosticMessage
+toDiagnosticMessage message =
+    Error.DiagnosticMessage
+        { diagMessage = Error.diagnosticMessage message
+        , diagReason  = Error.diagnosticReason  message
+        , diagHints   = Error.diagnosticHints   message
+        }
+#endif
 
 -- | FIXME:  Is thereAny "clever" way to do this exploiting TTG?
 unRenamedE ::
@@ -397,15 +419,21 @@ unRenamedE ::
     TransformT m (LocatedAn l (ast GhcPs))
 unRenamedE dflags expr = do
     uniq <- show <$> uniqueSrcSpanT
-#if __GLASGOW_HASKELL__ >= 902
+#if MIN_VERSION_ghc(9,2,0)
     expr' <-
 #else
     (_anns, expr') <-
 #endif
-        either (fail . show) pure $
+        either (fail . showErrors) pure $
         parseAST @_ @(ast GhcPs) dflags uniq $
             showSDoc dflags $ ppr expr
     pure expr'
+  where
+#if MIN_VERSION_ghc(9,4,1)
+    showErrors = showBag . Error.getMessages
+#else
+    showErrors = show
+#endif
 
 data SearchResult r =
     Continue | Stop | Here r

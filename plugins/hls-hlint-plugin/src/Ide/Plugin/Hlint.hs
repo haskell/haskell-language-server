@@ -67,6 +67,9 @@ import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      wopt)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 
+#if MIN_GHC_API_VERSION(9,4,0)
+import qualified "ghc-lib-parser" GHC.Data.Strict                   as Strict
+#endif
 #if MIN_GHC_API_VERSION(9,0,0)
 import           "ghc-lib-parser" GHC.Types.SrcLoc                  hiding
                                                                     (RealSrcSpan)
@@ -158,12 +161,20 @@ instance Pretty Log where
 type BufSpan = ()
 #endif
 pattern RealSrcSpan :: GHC.RealSrcSpan -> Maybe BufSpan -> GHC.SrcSpan
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_GHC_API_VERSION(9,4,0)
+pattern RealSrcSpan x y <- GHC.RealSrcSpan x (fromStrictMaybe -> y)
+#elif MIN_GHC_API_VERSION(9,0,0)
 pattern RealSrcSpan x y = GHC.RealSrcSpan x y
 #else
 pattern RealSrcSpan x y <- ((,Nothing) -> (GHC.RealSrcSpan x, y))
 #endif
 {-# COMPLETE RealSrcSpan, UnhelpfulSpan #-}
+#endif
+
+#if MIN_GHC_API_VERSION(9,4,0)
+fromStrictMaybe :: Strict.Maybe a -> Maybe a
+fromStrictMaybe (Strict.Just a ) = Just a
+fromStrictMaybe  Strict.Nothing  = Nothing
 #endif
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState

@@ -155,7 +155,7 @@ data TcModuleResult = TcModuleResult
     , tmrTypechecked     :: TcGblEnv
     , tmrTopLevelSplices :: Splices
     -- ^ Typechecked splice information
-    , tmrDeferredError    :: !Bool
+    , tmrDeferredError   :: !Bool
     -- ^ Did we defer any type errors for this module?
     , tmrRuntimeModules  :: !(ModuleEnv ByteString)
         -- ^ Which modules did we need at runtime while compiling this file?
@@ -357,6 +357,12 @@ data ModSummaryResult = ModSummaryResult
   { msrModSummary  :: !ModSummary
   , msrImports     :: [LImportDecl GhcPs]
   , msrFingerprint :: !Fingerprint
+  , msrHscEnv      :: !HscEnv
+  -- ^ HscEnv for this particular ModSummary.
+  -- Contains initialised plugins, parsed options, etc...
+  --
+  -- Implicit assumption: DynFlags in 'msrModSummary' are the same as
+  -- the DynFlags in 'msrHscEnv'.
   }
 
 instance Show ModSummaryResult where

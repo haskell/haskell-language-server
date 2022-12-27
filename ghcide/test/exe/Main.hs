@@ -264,7 +264,7 @@ initializeResponseTests = withResource acquire release tests where
     testGroup "initialize response capabilities"
     [ chk "   text doc sync"             _textDocumentSync  tds
     , chk "   hover"                         _hoverProvider (Just $ InL True)
-    , chk "   completion"               _completionProvider (Just $ CompletionOptions Nothing (Just ["."]) Nothing (Just False))
+    , chk "   completion"               _completionProvider (Just $ CompletionOptions Nothing (Just ["."]) Nothing (Just True))
     , chk "NO signature help"        _signatureHelpProvider Nothing
     , chk "   goto definition"          _definitionProvider (Just $ InL True)
     , chk "   goto type definition" _typeDefinitionProvider (Just $ InL True)
@@ -1209,10 +1209,32 @@ checkFileCompiles fp diag =
     void (openTestDataDoc (dir </> fp))
     diag
 
+
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
   ignoreInWindowsForGHC810 $
-  ignoreForGHC92Plus "blocked on ghc-typelits-natnormalise" $
+  -- Build profile: -w ghc-9.4.2 -O1
+  -- In order, the following will be built (use -v for more details):
+  -- - ghc-typelits-natnormalise-0.7.7 (lib) (requires build)
+  -- - ghc-typelits-knownnat-0.7.7 (lib) (requires build)
+  -- - plugin-1.0.0 (lib) (first run)
+  -- Starting     ghc-typelits-natnormalise-0.7.7 (lib)
+  -- Building     ghc-typelits-natnormalise-0.7.7 (lib)
+
+  -- Failed to build ghc-typelits-natnormalise-0.7.7.
+  -- Build log (
+  -- C:\cabal\logs\ghc-9.4.2\ghc-typelits-_-0.7.7-3f036a52a0d9bfc3389d1852a87da2e87c6de2e4.log
+  -- ):
+  -- Preprocessing library for ghc-typelits-natnormalise-0.7.7..
+  -- Building library for ghc-typelits-natnormalise-0.7.7..
+  -- [1 of 3] Compiling GHC.TypeLits.Normalise.SOP ( src\GHC\TypeLits\Normalise\SOP.hs, dist\build\GHC\TypeLits\Normalise\SOP.o )
+  -- [2 of 3] Compiling GHC.TypeLits.Normalise.Unify ( src\GHC\TypeLits\Normalise\Unify.hs, dist\build\GHC\TypeLits\Normalise\Unify.o )
+  -- [3 of 3] Compiling GHC.TypeLits.Normalise ( src-ghc-9.4\GHC\TypeLits\Normalise.hs, dist\build\GHC\TypeLits\Normalise.o )
+  -- C:\tools\ghc-9.4.2\lib\../mingw/bin/llvm-ar.exe: error: dist\build\objs-5156\libHSghc-typelits-_-0.7.7-3f036a52a0d9bfc3389d1852a87da2e87c6de2e4.a: No such file or directory
+
+  -- Error: cabal: Failed to build ghc-typelits-natnormalise-0.7.7 (which is
+  -- required by plugin-1.0.0). See the build log above for details.
+  ignoreFor (BrokenSpecific Windows [GHC94]) "ghc-typelist-natnormalise fails to build on GHC 9.4.2 for windows only" $
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
@@ -1517,22 +1539,29 @@ completionTests
     , testGroup "doc" completionDocTests
     ]
 
-completionTest :: String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe (List TextEdit))] -> TestTree
+completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe (List TextEdit))] -> TestTree
 completionTest name src pos expected = testSessionWait name $ do
     docId <- createDoc "A.hs" "haskell" (T.unlines src)
     _ <- waitForDiagnostics
     compls <- getCompletions docId pos
     let compls' = [ (_label, _kind, _insertText, _additionalTextEdits) | CompletionItem{..} <- compls]
-    liftIO $ do
-        let emptyToMaybe x = if T.null x then Nothing else Just x
-        sortOn (Lens.view Lens._1) (take (length expected) compls') @?=
-            sortOn (Lens.view Lens._1)
-              [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
-        forM_ (zip compls expected) $ \(CompletionItem{..}, (_,_,_,expectedSig, expectedDocs, _)) -> do
-            when expectedSig $
-                assertBool ("Missing type signature: " <> T.unpack _label) (isJust _detail)
-            when expectedDocs $
-                assertBool ("Missing docs: " <> T.unpack _label) (isJust _documentation)
+    let emptyToMaybe x = if T.null x then Nothing else Just x
+    liftIO $ sortOn (Lens.view Lens._1) (take (length expected) compls') @?=
+        sortOn (Lens.view Lens._1)
+          [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
+    forM_ (zip compls expected) $ \(item, (_,_,_,expectedSig, expectedDocs, _)) -> do
+        CompletionItem{..} <-
+          if expectedSig || expectedDocs
+          then do
+            rsp <- request SCompletionItemResolve item
+            case rsp ^. L.result of
+              Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
+              Right x -> pure x
+          else pure item
+        when expectedSig $
+            liftIO $ assertBool ("Missing type signature: " <> T.unpack _label) (isJust _detail)
+        when expectedDocs $
+            liftIO $ assertBool ("Missing docs: " <> T.unpack _label) (isJust _documentation)
 
 
 topLevelCompletionTests :: [TestTree]
@@ -1556,14 +1585,14 @@ topLevelCompletionTests = [
         [("xxx", CiFunction, "xxx", True, True, Nothing)],
     completionTest
         "type"
-        ["bar :: Xx", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
+        ["bar :: Xz", "zzz = ()", "-- | haddock", "data Xzz = XzzCon"]
         (Position 0 9)
-        [("Xxx", CiStruct, "Xxx", False, True, Nothing)],
+        [("Xzz", CiStruct, "Xzz", False, True, Nothing)],
     completionTest
         "class"
-        ["bar :: Xx", "xxx = ()", "-- | haddock", "class Xxx a"]
+        ["bar :: Xz", "zzz = ()", "-- | haddock", "class Xzz a"]
         (Position 0 9)
-        [("Xxx", CiInterface, "Xxx", False, True, Nothing)],
+        [("Xzz", CiInterface, "Xzz", False, True, Nothing)],
     completionTest
         "records"
         ["data Person = Person { _personName:: String, _personAge:: Int}", "bar = Person { _pers }" ]
@@ -1681,18 +1710,18 @@ localCompletionTests = [
 
 nonLocalCompletionTests :: [TestTree]
 nonLocalCompletionTests =
-  [ completionTest
+  [ brokenForWinGhc $ completionTest
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
-      [("head", CiFunction, "head ${1:([a])}", True, True, Nothing)],
+      [("head", CiFunction, "head", True, True, Nothing)],
     completionTest
       "constructor"
       ["{-# OPTIONS_GHC -Wall #-}", "module A where", "f = True"]
       (Position 2 8)
       [ ("True", CiConstructor, "True", True, True, Nothing)
       ],
-    completionTest
+    brokenForWinGhc $ completionTest
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Boo", "f = True"]
       (Position 2 8)
@@ -1702,13 +1731,13 @@ nonLocalCompletionTests =
       "qualified"
       ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = Prelude.hea"]
       (Position 2 15)
-      [ ("head", CiFunction, "head ${1:([a])}", True, True, Nothing)
+      [ ("head", CiFunction, "head", True, True, Nothing)
       ],
     completionTest
       "duplicate import"
       ["module A where", "import Data.List", "import Data.List", "f = permu"]
       (Position 3 9)
-      [ ("permutations", CiFunction, "permutations ${1:([a])}", False, False, Nothing)
+      [ ("permutations", CiFunction, "permutations", False, False, Nothing)
       ],
     completionTest
        "dont show hidden items"
@@ -1726,7 +1755,7 @@ nonLocalCompletionTests =
         ,"f = BS.read"
         ]
         (Position 2 10)
-        [("readFile", CiFunction, "readFile ${1:FilePath}", True, True, Nothing)]
+        [("readFile", CiFunction, "readFile", True, True, Nothing)]
         ],
       -- we need this test to make sure the ghcide completions module does not return completions for language pragmas. this functionality is turned on in hls
      completionTest
@@ -1738,6 +1767,8 @@ nonLocalCompletionTests =
       (Position 0 13)
       []
   ]
+  where
+    brokenForWinGhc = knownBrokenFor (BrokenSpecific Windows [GHC810, GHC90, GHC92, GHC94]) "Windows has strange things in scope for some reason"
 
 otherCompletionTests :: [TestTree]
 otherCompletionTests = [
@@ -1778,7 +1809,7 @@ otherCompletionTests = [
       _ <- waitForDiagnostics
       compls <- getCompletions docA $ Position 2 4
       let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
-      liftIO $ take 2 compls' @?= ["member ${1:Bar}", "member ${1:Foo}"],
+      liftIO $ take 2 compls' @?= ["member"],
 
     testSessionWait "maxCompletions" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
@@ -1845,7 +1876,7 @@ packageCompletionTests =
         _ <- waitForDiagnostics
         compls <- getCompletions doc (Position 3 13)
         let duplicate =
-              find
+              filter
                 (\case
                   CompletionItem
                     { _insertText = Just "fromList"
@@ -1855,7 +1886,7 @@ packageCompletionTests =
                     "GHC.Exts" `T.isInfixOf` d
                   _ -> False
                 ) compls
-        liftIO $ duplicate @?= Nothing
+        liftIO $ length duplicate @?= 1
 
   , testSessionWait "non-local before global" $ do
     -- non local completions are more specific
@@ -1873,7 +1904,7 @@ packageCompletionTests =
               , _label == "fromList"
               ]
         liftIO $ take 3 compls' @?=
-          map Just ["fromList ${1:([Item l])}"]
+          map Just ["fromList"]
   ]
 
 projectCompletionTests :: [TestTree]
@@ -1969,15 +2000,15 @@ completionDocTests =
         , "bar = fo"
         ]
       test doc (Position 2 8) "foo" Nothing ["*Defined at line 2, column 1 in this module*\n"]
-  , brokenForGhc9 $ testSession "local single line doc without '\\n'" $ do
+  , testSession "local single line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- |docdoc"
         , "foo = ()"
         , "bar = fo"
         ]
-      test doc (Position 3 8) "foo" Nothing ["*Defined at line 3, column 1 in this module*\n* * *\ndocdoc\n"]
-  , brokenForGhc9 $ testSession "local multi line doc with '\\n'" $ do
+      test doc (Position 3 8) "foo" Nothing ["*Defined at line 3, column 1 in this module*\n* * *\n\n\ndocdoc\n"]
+  , testSession "local multi line doc with '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- | abcabc"
@@ -1985,8 +2016,8 @@ completionDocTests =
         , "foo = ()"
         , "bar = fo"
         ]
-      test doc (Position 4 8) "foo" Nothing ["*Defined at line 4, column 1 in this module*\n* * *\n abcabc\n"]
-  , brokenForGhc9 $ testSession "local multi line doc without '\\n'" $ do
+      test doc (Position 4 8) "foo" Nothing ["*Defined at line 4, column 1 in this module*\n* * *\n\n\nabcabc\n"]
+  , testSession "local multi line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- |     abcabc"
@@ -1995,7 +2026,7 @@ completionDocTests =
         , "foo = ()"
         , "bar = fo"
         ]
-      test doc (Position 5 8) "foo" Nothing ["*Defined at line 5, column 1 in this module*\n* * *\n     abcabc\n\ndef\n"]
+      test doc (Position 5 8) "foo" Nothing ["*Defined at line 5, column 1 in this module*\n* * *\n\n\nabcabc \n\ndef\n"]
   , testSession "extern empty doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
@@ -2033,12 +2064,17 @@ completionDocTests =
     test doc pos label mn expected = do
       _ <- waitForDiagnostics
       compls <- getCompletions doc pos
+      rcompls <- forM compls $ \item -> do
+        rsp <- request SCompletionItemResolve item
+        case rsp ^. L.result of
+          Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
+          Right x -> pure x
       let compls' = [
             -- We ignore doc uris since it points to the local path which determined by specific machines
             case mn of
                 Nothing -> txt
                 Just n  -> T.take n txt
-            | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown txt)), ..} <- compls
+            | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown txt)), ..} <- rcompls
             , _label == label
             ]
       liftIO $ compls' @?= expected

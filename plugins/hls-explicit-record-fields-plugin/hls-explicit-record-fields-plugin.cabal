@@ -28,8 +28,8 @@ library
     -- other-extensions:
     build-depends:
       , base                  >=4.12 && <5
-      , ghcide                ^>=1.7 || ^>=1.8
-      , hls-plugin-api        ^>=1.4 || ^>=1.5
+      , ghcide                ^>=1.9
+      , hls-plugin-api        ^>=1.6
       , lsp
       , lens
       , hls-graph
@@ -38,6 +38,7 @@ library
       , transformers
       , ghc-boot-th
       , unordered-containers
+      , containers
     hs-source-dirs:   src
     default-language: Haskell2010
 
