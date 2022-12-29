@@ -66,5 +66,5 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-brittany-plugin`               | 3    | 9.2, 9.4                 |
 | `hls-haddock-comments-plugin`       | 3    | 9.2, 9.4                 |
 | `hls-stan-plugin`                   | 3    | 8.6, 9.0, 9.2, 9.4       |
-| `hls-retrie-plugin`                 | 3    | 9.2                      |
+| `hls-retrie-plugin`                 | 3    |                          |
 | `hls-splice-plugin`                 | 3    |                          |
