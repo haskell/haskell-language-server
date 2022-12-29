@@ -44,7 +44,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-code-range-plugin`             | 1    |                          |
 | `hls-explicit-imports-plugin`       | 1    |                          |
 | `hls-pragmas-plugin`                | 1    |                          |
-| `hls-refactor-plugin`               | 1    | 9.4                      |
+| `hls-refactor-plugin`               | 1    |                          |
 | `hls-alternate-number-plugin`       | 2    |                          |
 | `hls-cabal-fmt-plugin`              | 2    |                          |
 | `hls-class-plugin`                  | 2    |                          |
@@ -53,9 +53,9 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-explicit-fixity-plugin`        | 2    |                          |
 | `hls-explicit-record-fields-plugin` | 2    |                          |
 | `hls-floskell-plugin`               | 2    | 9.4                      |
-| `hls-fourmolu-plugin`               | 2    | 9.4                      |
-| `hls-gadt-plugin`                   | 2    | 9.4                      |
-| `hls-hlint-plugin`                  | 2    | 9.4                      |
+| `hls-fourmolu-plugin`               | 2    |                          |
+| `hls-gadt-plugin`                   | 2    |                          |
+| `hls-hlint-plugin`                  | 2    |                          |
 | `hls-module-name-plugin`            | 2    |                          |
 | `hls-qualify-imported-names-plugin` | 2    |                          |
 | `hls-ormolu-plugin`                 | 2    | 9.4                      |
@@ -66,5 +66,5 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-brittany-plugin`               | 3    | 9.2, 9.4                 |
 | `hls-haddock-comments-plugin`       | 3    | 9.2, 9.4                 |
 | `hls-stan-plugin`                   | 3    | 8.6, 9.0, 9.2, 9.4       |
-| `hls-retrie-plugin`                 | 3    | 9.2, 9.4                 |
-| `hls-splice-plugin`                 | 3    | 9.4                      |
+| `hls-retrie-plugin`                 | 3    | 9.2                      |
+| `hls-splice-plugin`                 | 3    |                          |
