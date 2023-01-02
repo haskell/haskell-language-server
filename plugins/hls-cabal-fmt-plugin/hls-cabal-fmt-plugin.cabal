@@ -12,7 +12,9 @@ copyright:          The Haskell IDE Team
 maintainer:         jana.chadt@nets.at
 category:           Development
 build-type:         Simple
-extra-source-files: LICENSE
+extra-source-files:
+  LICENSE
+  test/testdata/**/*.hs
 
 flag isolateTests
   description: Should tests search for 'cabal-fmt' on the $PATH or shall we install it via build-tool-depends?
