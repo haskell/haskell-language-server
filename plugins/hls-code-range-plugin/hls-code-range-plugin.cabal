@@ -16,9 +16,7 @@ category:           Development
 build-type:         Simple
 extra-source-files:
   LICENSE
-  test/testdata/selection-range/*.hs
-  test/testdata/selection-range/*.yaml
-  test/testdata/selection-range/*.txt
+  test/testdata/**/*.hs
 
 source-repository head
     type:     git
