@@ -307,13 +307,17 @@ type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,Positi
 
 getShakeExtras :: Action ShakeExtras
 getShakeExtras = do
+    -- Will fail the action with a pattern match failure, but be caught
     Just x <- getShakeExtra @ShakeExtras
     return x
 
 getShakeExtrasRules :: Rules ShakeExtras
 getShakeExtrasRules = do
-    Just x <- getShakeExtraRules @ShakeExtras
-    return x
+    mExtras <- getShakeExtraRules @ShakeExtras
+    case mExtras of
+      Just x -> return x
+      -- This will actually crash HLS
+      Nothing -> liftIO $ fail "missing ShakeExtras"
 
 -- | Returns the client configuration, creating a build dependency.
 --   You should always use this function when accessing client configuration
