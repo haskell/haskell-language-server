@@ -4,11 +4,14 @@ module Development.IDE.Plugin.Plugins.ImportUtils
     quickFixImportKind,
     renderImportStyle,
     unImportStyle,
-    importStyles
+    importStyles,
+    QualifiedImportStyle(..),
+    qualifiedImportStyle
   ) where
 
 import           Data.List.NonEmpty                           (NonEmpty ((:|)))
 import qualified Data.Text                                    as T
+import           Development.IDE.GHC.Compat
 import           Development.IDE.Plugin.CodeAction.ExactPrint (wildCardSymbol)
 import           Development.IDE.Types.Exports
 import           Language.LSP.Types                           (CodeActionKind (..))
@@ -83,3 +86,13 @@ quickFixImportKind' x (ImportAllConstructors _) = CodeActionUnknown $ "quickfix.
 
 quickFixImportKind :: T.Text -> CodeActionKind
 quickFixImportKind x = CodeActionUnknown $ "quickfix.import." <> x
+
+-- | Possible import styles for qualified imports
+data QualifiedImportStyle = QualifiedImportPostfix | QualifiedImportPrefix
+    deriving Show
+
+qualifiedImportStyle :: DynFlags -> QualifiedImportStyle
+qualifiedImportStyle df | hasImportQualifedPostEnabled && hasPrePositiveQualifiedWarning = QualifiedImportPostfix
+                        | otherwise = QualifiedImportPrefix
+  where hasImportQualifedPostEnabled = xopt ImportQualifiedPost df
+        hasPrePositiveQualifiedWarning = wopt Opt_WarnPrepositiveQualifiedModule df
