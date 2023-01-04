@@ -75,7 +75,11 @@ Major versions of GHC which are not supported by HLS on master are extremely unl
 
 ## GHC version deprecation policy
 
-### Major versions
+### Base policy
+
+This is the static part of the policy that can be checked by a machine.
+
+#### Major versions
 
 A major GHC version is a "legacy" version if it is 3 or more major versions behind the latest GHC version that is
 
@@ -86,11 +90,42 @@ For example, if 9.2 is the latest major version fully supported by HLS and used 
 
 HLS will support all non-legacy major versions of GHC.
 
-### Minor versions
+#### Minor versions
 
 For the latest supported major GHC version we will support at least 2 minor versions.
 
 For the rest of the supported major GHC versions, we will support at least the latest minor version in Stackage LTS (so 1 minor version).
+
+### Extended policy
+
+This is the part of the policy that needs evaluation by a human and possibly followed
+by a discussion.
+
+#### Ecosystem factors
+
+To establish and apply the policy we also take into account:
+
+- Completeness: support includes all plugins and features
+- The most recent [stackage](https://www.stackage.org/) LTS snapshot
+- The GHC versions used in the most popular [linux distributions](https://repology.org/project/ghc/versions)
+- The reliability of different ghc versions on the major operating systems (Linux, Windows, MacOS)
+- The [Haskell Survey results](https://taylor.fausak.me/2022/11/18/haskell-survey-results/#s2q4)
+
+### Supporting a GHC version beyond its shelf life
+
+In cases where the base policy demands a deprecation, but ecosystem factors
+suggest that it's still widely used (e.g. last [Haskell Survey results](https://taylor.fausak.me/2022/11/18/haskell-survey-results/#s2q4)), the deprecation should be suspended for the next release and the situation be re-evaluated for the release after that.
+
+In case of maintenance burden concerns, the following process should be followed:
+
+1. open a ticket on HLS issue tracker wrt discussing to deprecate said GHC version
+    - explain the reason the GHC version wasn't deprecated (context)
+    - explain the maintenance burden it causes (reason)
+    - evaluate whether it impacts the next HLS release (impact)
+2. discuss whether ecosystem factors changed
+    - e.g. if Haskell Survey results show that 25% or more of users are still on the GHC version in question, then dropping should be avoided
+3. if dropping is still undesired, but maintenance burden is also high, then set out a call-for-help and contact HF for additional funding to support this GHC version
+4. if no help or funding was received within 2 releases (say, e.g. 3-6 months), then drop the version regardless
 
 ### Announcements
 
@@ -107,12 +142,3 @@ We will warn users about the upcoming deprecation of a GHC version in the notes 
 So we need to limit the GHC support to save maintainers and contributors time and reduce CI resources.
 
 At same time we aim to support the right balance of GHC versions to minimize the impact on users.
-
-### What factors do we take into account when deprecating a version?
-
-To establish and apply the policy we take into account:
-
-- Completeness: support includes all plugins and features
-- The most recent [stackage](https://www.stackage.org/) LTS snapshot
-- The GHC versions used in the most popular [linux distributions](https://repology.org/project/ghc/versions)
-- The reliability of different ghc versions on the major operating systems (Linux, Windows, MacOS)
