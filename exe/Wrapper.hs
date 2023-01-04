@@ -83,7 +83,7 @@ main = do
           putStrLn "Tool versions found on the $PATH"
           putStrLn $ showProgramVersionOfInterest programsOfInterest
           putStrLn "Tool versions in your project"
-          cradle <- findProjectCradle' False
+          cradle <- findProjectCradle' recorder False
           ghcVersion <- runExceptT $ getRuntimeGhcVersion' recorder cradle
           putStrLn $ showProgramVersion "ghc" $ mkVersion =<< eitherToMaybe ghcVersion
 
@@ -94,10 +94,10 @@ main = do
           putStrLn haskellLanguageServerNumericVersion
 
       BiosMode PrintCradleType ->
-          print =<< findProjectCradle
+          print =<< findProjectCradle recorder
       PrintLibDir -> do
-          cradle <- findProjectCradle' False
-          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir (toCologActionWithPrio (cmapWithPrio pretty recorder)) cradle
+          cradle <- findProjectCradle' recorder False
+          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
           putStr libdir
       _ -> launchHaskellLanguageServer recorder args >>= \case
             Right () -> pure ()
@@ -116,7 +116,7 @@ launchHaskellLanguageServer recorder parsedArgs = do
   d <- getCurrentDirectory
 
   -- search for the project cradle type
-  cradle <- findProjectCradle
+  cradle <- findProjectCradle recorder
 
   -- Get the root directory from the cradle
   setCurrentDirectory $ cradleRootDir cradle
@@ -172,10 +172,10 @@ launchHaskellLanguageServer recorder parsedArgs = do
 
           let cradleName = actionName (cradleOptsProg cradle)
           -- we need to be compatible with NoImplicitPrelude
-          ghcBinary <- liftIO (fmap trim <$> runGhcCmd (toCologActionWithPrio (cmapWithPrio pretty recorder)) ["-v0", "-package-env=-", "-ignore-dot-ghci", "-e", "Control.Monad.join (Control.Monad.fmap System.IO.putStr System.Environment.getExecutablePath)"])
+          ghcBinary <- liftIO (fmap trim <$> runGhcCmd ["-v0", "-package-env=-", "-ignore-dot-ghci", "-e", "Control.Monad.join (Control.Monad.fmap System.IO.putStr System.Environment.getExecutablePath)"])
                          >>= cradleResult cradleName
 
-          libdir <- liftIO (HieBios.getRuntimeGhcLibDir (toCologActionWithPrio (cmapWithPrio pretty recorder)) cradle)
+          libdir <- liftIO (HieBios.getRuntimeGhcLibDir cradle)
                       >>= cradleResult cradleName
 
           env <- Map.fromList <$> liftIO getEnvironment
@@ -204,7 +204,7 @@ getRuntimeGhcVersion' recorder cradle = do
     Direct  -> checkToolExists "ghc"
     _       -> pure ()
 
-  ghcVersionRes <- liftIO $ HieBios.getRuntimeGhcVersion (toCologActionWithPrio (cmapWithPrio pretty recorder)) cradle
+  ghcVersionRes <- liftIO $ HieBios.getRuntimeGhcVersion cradle
   cradleResult cradleName ghcVersionRes
 
   where
@@ -214,11 +214,11 @@ getRuntimeGhcVersion' recorder cradle = do
         Just _ -> pure ()
         Nothing -> throwE $ ToolRequirementMissing exe (actionName (cradleOptsProg cradle))
 
-findProjectCradle :: IO (Cradle Void)
-findProjectCradle = findProjectCradle' True
+findProjectCradle :: Recorder (WithPriority (Doc ())) -> IO (Cradle Void)
+findProjectCradle recorder = findProjectCradle' recorder True
 
-findProjectCradle' :: Bool -> IO (Cradle Void)
-findProjectCradle' log = do
+findProjectCradle' :: Recorder (WithPriority (Doc ())) -> Bool -> IO (Cradle Void)
+findProjectCradle' recorder log = do
   d <- getCurrentDirectory
 
   let initialFp = d </> "a"
@@ -230,7 +230,7 @@ findProjectCradle' log = do
         Just yaml -> hPutStrLn stderr $ "Found \"" ++ yaml ++ "\" for \"" ++ initialFp ++ "\""
         Nothing -> hPutStrLn stderr "No 'hie.yaml' found. Try to discover the project type!"
 
-  Session.loadCradle def hieYaml d
+  Session.loadCradle def (cmapWithPrio pretty recorder) hieYaml d
 
 trim :: String -> String
 trim s = case lines s of
