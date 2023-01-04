@@ -39,8 +39,10 @@ import           Data.Either.Extra
 import           Data.Function
 import           Data.Hashable
 import qualified Data.HashMap.Strict                  as HM
+import qualified Data.Set                             as OS
 import           Data.IORef
 import           Data.List
+import qualified Data.List                            as L
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe
 import qualified Data.Text                            as T
@@ -61,7 +63,7 @@ import           Development.IDE.Graph                (Action)
 import           Development.IDE.Session.VersionCheck
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
+import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq, envImportPaths,
                                                        newHscEnvEqPreserveImportPaths)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger         (Pretty (pretty),
@@ -106,6 +108,20 @@ import           HieDb.Types
 import           HieDb.Utils
 import qualified System.Random                        as Random
 import           System.Random                        (RandomGen)
+
+import Development.IDE.GHC.Compat.CmdLine
+
+#if MIN_VERSION_ghc(9,3,0)
+import GHC.Driver.Errors.Types
+import GHC.Driver.Env (hscSetActiveUnitId, hsc_all_home_unit_ids)
+import GHC.Driver.Make (checkHomeUnitsClosed)
+#endif
+import GHC.Unit.State
+import qualified Data.List.NonEmpty as NE
+import GHC.ResponseFile
+import GHC.Unit.Env
+import GHC.Types.Error (errMsgDiagnostic)
+import GHC.Data.Bag
 
 data Log
   = LogSettingInitialDynFlags
@@ -479,11 +495,11 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
     -- combined with the components in the old HscEnv into a new HscEnv
     -- which contains the union.
     let packageSetup :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)
-                     -> IO (HscEnv, ComponentInfo, [ComponentInfo])
+                     -> IO ([ComponentInfo], [ComponentInfo])
         packageSetup (hieYaml, cfp, opts, libDir) = do
           -- Parse DynFlags for the newly discovered component
           hscEnv <- emptyHscEnv ideNc libDir
-          (df, targets) <- evalGhcEnv hscEnv $ setOptions opts (hsc_dflags hscEnv)
+          newTargetDfs <- evalGhcEnv hscEnv $ setOptions opts (hsc_dflags hscEnv)
           let deps = componentDependencies opts ++ maybeToList hieYaml
           dep_info <- getDependencyInfo deps
           -- Now lookup to see whether we are combining with an existing HscEnv
@@ -498,12 +514,12 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   -- We will modify the unitId and DynFlags used for
                   -- compilation but these are the true source of
                   -- information.
-                  new_deps = RawComponentInfo (homeUnitId_ df) df targets cfp opts dep_info
-                                : maybe [] snd oldDeps
+                  new_deps = map (\(df, targets) -> RawComponentInfo (homeUnitId_ df) df targets cfp opts dep_info) (NE.toList newTargetDfs)
+                  all_deps = new_deps ++ maybe [] id oldDeps
                   -- Get all the unit-ids for things in this component
-                  inplace = map rawComponentUnitId new_deps
+                  inplace = map rawComponentUnitId all_deps
 
-              new_deps' <- forM new_deps $ \RawComponentInfo{..} -> do
+              all_deps' <- forM all_deps $ \RawComponentInfo{..} -> do
                   -- Remove all inplace dependencies from package flags for
                   -- components in this HscEnv
 #if MIN_VERSION_ghc(9,3,0)
@@ -527,22 +543,6 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                                        rawComponentFP
                                        rawComponentCOptions
                                        rawComponentDependencyInfo
-              -- Make a new HscEnv, we have to recompile everything from
-              -- scratch again (for now)
-              -- It's important to keep the same NameCache though for reasons
-              -- that I do not fully understand
-              log Info $ LogMakingNewHscEnv inplace
-              hscEnv <- emptyHscEnv ideNc libDir
-              !newHscEnv <-
-                -- Add the options for the current component to the HscEnv
-                evalGhcEnv hscEnv $ do
-                  _ <- setSessionDynFlags
-#if !MIN_VERSION_ghc(9,3,0)
-                          $ setHomeUnitId_ fakeUid
-#endif
-                          df
-                  getSession
-
               -- Modify the map so the hieYaml now maps to the newly created
               -- HscEnv
               -- Returns
@@ -551,49 +551,30 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
               -- . The information for the new component which caused this cache miss
               -- . The modified information (without -inplace flags) for
               --   existing packages
-              pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
+              let (new,old) = splitAt (Data.List.length new_deps) (all_deps')
+              pure (Map.insert hieYaml all_deps m, (new,old))
 
 
     let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)
                 -> IO (IdeResult HscEnvEq,[FilePath])
         session args@(hieYaml, _cfp, _opts, _libDir) = do
-          (hscEnv, new, old_deps) <- packageSetup args
-
-          -- Whenever we spin up a session on Linux, dynamically load libm.so.6
-          -- in. We need this in case the binary is statically linked, in which
-          -- case the interactive session will fail when trying to load
-          -- ghc-prim, which happens whenever Template Haskell is being
-          -- evaluated or haskell-language-server's eval plugin tries to run
-          -- some code. If the binary is dynamically linked, then this will have
-          -- no effect.
-          -- See https://github.com/haskell/haskell-language-server/issues/221
-          when (os == "linux") $ do
-            initObjLinker hscEnv
-            res <- loadDLL hscEnv "libm.so.6"
-            case res of
-              Nothing  -> pure ()
-              Just err -> log Error $ LogDLLLoadError err
-
-
-          -- Make a map from unit-id to DynFlags, this is used when trying to
-          -- resolve imports. (especially PackageImports)
-          let uids = map (\ci -> (componentUnitId ci, componentDynFlags ci)) (new : old_deps)
+          (new_deps, old_deps) <- packageSetup args
 
           -- For each component, now make a new HscEnvEq which contains the
           -- HscEnv for the hie.yaml file but the DynFlags for that component
+          -- For GHC's supporting multi component sessions, we create a shared
+          -- HscEnv but set the active component accordingly
+          hscEnv <- emptyHscEnv ideNc _libDir
+          let new_cache = newComponentCache recorder optExtensions hieYaml _cfp hscEnv
+          all_target_details <- new_cache old_deps new_deps
 
-          -- New HscEnv for the component in question, returns the new HscEnvEq and
-          -- a mapping from FilePath to the newly created HscEnvEq.
-          let new_cache = newComponentCache recorder optExtensions hieYaml _cfp hscEnv uids
-          (cs, res) <- new_cache new
-          -- Modified cache targets for everything else in the hie.yaml file
-          -- which now uses the same EPS and so on
-          cached_targets <- concatMapM (fmap fst . new_cache) old_deps
+          let new_envs = take (L.length new_deps) all_target_details
+              all_targets = concatMap fst all_target_details
 
-          let all_targets = cs ++ cached_targets
+          let this_flags_map = HM.fromList (concatMap toFlagsMap all_targets)
 
           void $ modifyVar' fileToFlags $
-              Map.insert hieYaml (HM.fromList (concatMap toFlagsMap all_targets))
+              Map.insert hieYaml this_flags_map
           void $ modifyVar' filesMap $
               flip HM.union (HM.fromList (zip (map fst $ concatMap toFlagsMap all_targets) (repeat hieYaml)))
 
@@ -607,8 +588,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject
-          unless (null cs || not checkProject) $ do
-                cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations cs)
+          unless (null new_envs || not checkProject) $ do
+                cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap (concatMap targetLocations) $ fmap fst new_envs)
                 void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
                     mmt <- uses GetModificationTime cfps'
                     let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
@@ -618,7 +599,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                     let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
                     liftIO $ atomically $ modifyTVar' (exportsMap extras) (exportsMap' <>)
 
-          return (second Map.keys res)
+          return $ second Map.keys $ this_flags_map HM.! _cfp
 
     let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         consultCradle hieYaml cfp = do
@@ -683,7 +664,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   -- again.
                   modifyVar_ fileToFlags (const (return Map.empty))
                   -- Keep the same name cache
-                  modifyVar_ hscEnvs (return . Map.adjust (\(h, _) -> (h, [])) hieYaml )
+                  modifyVar_ hscEnvs (return . Map.adjust (\_ -> []) hieYaml )
                   consultCradle hieYaml cfp
                 else return (opts, Map.keys old_di)
             Nothing -> consultCradle hieYaml cfp
@@ -745,7 +726,7 @@ emptyHscEnv :: NameCache -> FilePath -> IO HscEnv
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 #endif
 emptyHscEnv nc libDir = do
-    env <- runGhc (Just libDir) getSession
+    env <- runGhc (Just libDir) $ getSessionDynFlags >>= setSessionDynFlags >> getSession
     initDynLinker env
     pure $ setNameCache nc (hscSetFlags ((hsc_dflags env){useUnicode = True }) env)
 
@@ -796,49 +777,104 @@ newComponentCache
          -> Maybe FilePath -- Path to cradle
          -> NormalizedFilePath -- Path to file that caused the creation of this component
          -> HscEnv
-         -> [(UnitId, DynFlags)]
-         -> ComponentInfo
-         -> IO ( [TargetDetails], (IdeResult HscEnvEq, DependencyInfo))
-newComponentCache recorder exts cradlePath cfp hsc_env uids ci = do
-    let df = componentDynFlags ci
-    hscEnv' <-
+         -> [ComponentInfo]
+         -> [ComponentInfo]
+         -> IO [ ([TargetDetails], (IdeResult HscEnvEq, DependencyInfo))]
+newComponentCache recorder exts cradlePath cfp hsc_env old_cis new_cis = do
+    let cis = old_cis ++ new_cis
+    let uids = map (\ci -> (componentUnitId ci, componentDynFlags ci)) cis
+    hscEnv' <- -- Set up a multi component session with the other units on GHC 9.4
+              Compat.initUnits (map snd uids) hsc_env
+
 #if MIN_VERSION_ghc(9,3,0)
-      -- Set up a multi component session with the other units on GHC 9.4
-        Compat.initUnits (map snd uids) (hscSetFlags df hsc_env)
-#elif MIN_VERSION_ghc(9,2,0)
-      -- This initializes the units for GHC 9.2
-      -- Add the options for the current component to the HscEnv
-      -- We want to call `setSessionDynFlags` instead of `hscSetFlags`
-      -- because `setSessionDynFlags` also initializes the package database,
-      -- which we need for any changes to the package flags in the dynflags
-      -- to be visible.
-      -- See #2693
-      evalGhcEnv hsc_env $ do
-        _ <- setSessionDynFlags $ df
-        getSession
+    let closure_errs = checkHomeUnitsClosed (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv') pkg_deps
+        pkg_deps = do
+          (home_unit_id,home_unit_env) <- unitEnv_elts $ hsc_HUG hscEnv'
+          map (home_unit_id,) (Map.keys $ unitInfoMap $ homeUnitEnv_units home_unit_env)
+
+    case closure_errs of
+      errs@(_:_) -> do
+        let rendered = map (ideErrorWithSource (Just "cradle") (Just DsError) cfp . T.pack . Compat.printWithoutUniques) errs
+            res = (rendered,Nothing)
+            dep_info = foldMap componentDependencyInfo (filter isBad cis)
+            bad_units = OS.fromList $ concat $ do
+              x <- bagToList $ mapBag errMsgDiagnostic $ unionManyBags $ map Compat.getMessages errs
+              DriverHomePackagesNotClosed us <- pure x
+              pure us
+            isBad ci = (homeUnitId_ (componentDynFlags ci)) `OS.member` bad_units
+        return [([TargetDetails (TargetFile cfp) res dep_info [cfp]],(res,dep_info))]
+      [] -> do
 #else
-      -- getOptions is enough to initialize units on GHC <9.2
-      pure $ hscSetFlags df hsc_env { hsc_IC = (hsc_IC hsc_env) { ic_dflags = df } }
+    do
 #endif
+        -- Whenever we spin up a session on Linux, dynamically load libm.so.6
+        -- in. We need this in case the binary is statically linked, in which
+        -- case the interactive session will fail when trying to load
+        -- ghc-prim, which happens whenever Template Haskell is being
+        -- evaluated or haskell-language-server's eval plugin tries to run
+        -- some code. If the binary is dynamically linked, then this will have
+        -- no effect.
+        -- See https://github.com/haskell/haskell-language-server/issues/221
+        when (os == "linux") $ do
+          initObjLinker hscEnv'
+          res <- loadDLL hscEnv' "libm.so.6"
+          case res of
+            Nothing  -> pure ()
 
-    let newFunc = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
-    henv <- newFunc hscEnv' uids
-    let targetEnv = ([], Just henv)
-        targetDepends = componentDependencyInfo ci
-        res = (targetEnv, targetDepends)
-    logWith recorder Debug $ LogNewComponentCache res
-    evaluate $ liftRnf rwhnf $ componentTargets ci
+        fmap (addSpecial cfp) $ forM cis $ \ci -> do
+          let df = componentDynFlags ci
+          let newFunc = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
+          thisEnv <- do
+#if MIN_VERSION_ghc(9,3,0)
+                -- In GHC 9.4 we have multi component support, and we have initialised all the units
+                -- above.
+                -- We just need to set the current unit here
+                pure $ hscSetActiveUnitId (homeUnitId_ df) hscEnv'
+#elif MIN_VERSION_ghc(9,2,0)
+                -- This initializes the units for GHC 9.2
+                -- Add the options for the current component to the HscEnv
+                -- We want to call `setSessionDynFlags` instead of `hscSetFlags`
+                -- because `setSessionDynFlags` also initializes the package database,
+                -- which we need for any changes to the package flags in the dynflags
+                -- to be visible.
+                -- See #2693
+                evalGhcEnv hsc_env $ do
+                  _ <- setSessionDynFlags df
+                  getSession
+#else
+                -- getOptions is enough to initialize units on GHC <9.2
+                pure $ hscSetFlags df hsc_env { hsc_IC = (hsc_IC hsc_env) { ic_dflags = init_df } }
+#endif
+          henv <- newFunc thisEnv uids
+          let targetEnv = ([], Just henv)
+              targetDepends = componentDependencyInfo ci
+              res = ( targetEnv, targetDepends)
+          logWith recorder Debug $ LogNewComponentCache res
+          evaluate $ liftRnf rwhnf $ componentTargets ci
 
-    let mk t = fromTargetId (importPaths df) exts (targetId t) targetEnv targetDepends
-    ctargets <- concatMapM mk (componentTargets ci)
+          let mk t = fromTargetId (importPaths df) exts (targetId t) targetEnv targetDepends
+          ctargets <- concatMapM mk (componentTargets ci)
 
+          return (ctargets, res)
+  where
     -- A special target for the file which caused this wonderful
     -- component to be created. In case the cradle doesn't list all the targets for
     -- the component, in which case things will be horribly broken anyway.
     -- Otherwise, we will immediately attempt to reload this module which
     -- causes an infinite loop and high CPU usage.
-    let special_target = TargetDetails (TargetFile cfp) targetEnv targetDepends [componentFP ci]
-    return (special_target:ctargets, res)
+    addSpecial cfp xs
+      | alreadyIncluded = xs
+      | otherwise = let (as,bs) = break inIncludePath xs
+                    in case bs of
+                         [] -> as
+                         ((ctargets,res@(targetEnv, targetDepends)):bs) ->
+                           let b = (TargetDetails (TargetFile cfp) targetEnv targetDepends [cfp] : ctargets, res) -- todo what is componentFP used for
+                           in as ++ (b:bs)
+      where
+        alreadyIncluded = any (any (cfp ==) . concatMap targetLocations . fst) xs
+        inIncludePath (_,((_, Just env),_)) = any (isParent $ fromNormalizedFilePath cfp) $ maybe [] OS.toList $ envImportPaths env
+          where
+            isParent fp parent = any (equalFilePath parent) (map (foldr (</>) "") $ inits $ splitPath fp)
 
 {- Note [Avoiding bad interface files]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -910,7 +946,7 @@ renderCradleError nfp (CradleError _ _ec t) =
 
 -- See Note [Multi Cradle Dependency Info]
 type DependencyInfo = Map.Map FilePath (Maybe UTCTime)
-type HieMap = Map.Map (Maybe FilePath) (HscEnv, [RawComponentInfo])
+type HieMap = Map.Map (Maybe FilePath) [RawComponentInfo]
 -- | Maps a "hie.yaml" location to all its Target Filepaths and options.
 type FlagsMap = Map.Map (Maybe FilePath) (HM.HashMap NormalizedFilePath (IdeResult HscEnvEq, DependencyInfo))
 -- | Maps a Filepath to its respective "hie.yaml" location.
@@ -1016,31 +1052,53 @@ memoIO op = do
                 return (Map.insert k res mp, res)
             Just res -> return (mp, res)
 
+unit_flags :: [Flag (CmdLineP [String])]
+unit_flags = [defFlag "unit"  (SepArg addUnit)]
+
+addUnit :: String -> EwM (CmdLineP [String]) ()
+addUnit unit_str = liftEwM $ do
+  units <- getCmdLineState
+  putCmdLineState (unit_str : units)
+
 -- | Throws if package flags are unsatisfiable
-setOptions :: GhcMonad m => ComponentOptions -> DynFlags -> m (DynFlags, [GHC.Target])
+setOptions :: GhcMonad m => ComponentOptions -> DynFlags -> m (NE.NonEmpty (DynFlags, [GHC.Target]))
 setOptions (ComponentOptions theOpts compRoot _) dflags = do
-    (dflags', targets') <- addCmdOpts theOpts dflags
-    let targets = makeTargetsAbsolute compRoot targets'
-    let dflags'' =
-          disableWarningsAsErrors $
-          -- disabled, generated directly by ghcide instead
-          flip gopt_unset Opt_WriteInterface $
-          -- disabled, generated directly by ghcide instead
-          -- also, it can confuse the interface stale check
-          dontWriteHieFiles $
-          setIgnoreInterfacePragmas $
-          setBytecodeLinkerOptions $
-          disableOptimisation $
-          Compat.setUpTypedHoles $
-          makeDynFlagsAbsolute compRoot dflags'
-    -- initPackages parses the -package flags and
-    -- sets up the visibility for each component.
-    -- Throws if a -package flag cannot be satisfied.
-    -- This only works for GHC <9.2
-    -- For GHC >= 9.2, we need to modify the unit env in the hsc_dflags, which
-    -- is done later in newComponentCache
-    final_flags <- liftIO $ wrapPackageSetupException $ Compat.oldInitUnits dflags''
-    return (final_flags, targets)
+    ((theOpts',errs,warns),units) <- processCmdLineP unit_flags [] (map noLoc theOpts)
+    case NE.nonEmpty units of
+      Just us -> initMulti us
+      Nothing -> NE.singleton <$> initOne (map unLoc theOpts')
+    where
+      initMulti unitArgFiles =
+        forM unitArgFiles $ \f -> do
+          args <- liftIO $ expandResponse [f]
+          initOne args
+      initOne theOpts = do
+        (dflags', targets') <- addCmdOpts theOpts dflags
+        let targets = makeTargetsAbsolute root targets' -- TODO
+            root = case workingDirectory dflags' of
+              Nothing -> compRoot
+              Just wdir -> compRoot </> wdir
+        let dflags'' =
+              disableWarningsAsErrors $
+              -- disabled, generated directly by ghcide instead
+              flip gopt_unset Opt_WriteInterface $
+              -- disabled, generated directly by ghcide instead
+              -- also, it can confuse the interface stale check
+              dontWriteHieFiles $
+              setIgnoreInterfacePragmas $
+              setBytecodeLinkerOptions $
+              disableOptimisation $
+              Compat.setUpTypedHoles $
+              makeDynFlagsAbsolute compRoot
+              dflags'
+        -- initPackages parses the -package flags and
+        -- sets up the visibility for each component.
+        -- Throws if a -package flag cannot be satisfied.
+        -- This only works for GHC <9.2
+        -- For GHC >= 9.2, we need to modify the unit env in the hsc_dflags, which
+        -- is done later in newComponentCache
+        final_flags <- liftIO $ wrapPackageSetupException $ Compat.oldInitUnits dflags''
+        return (final_flags, targets)
 
 setIgnoreInterfacePragmas :: DynFlags -> DynFlags
 setIgnoreInterfacePragmas df =

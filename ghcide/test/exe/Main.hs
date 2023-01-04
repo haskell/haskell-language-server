@@ -2515,7 +2515,7 @@ cradleTests = testGroup "cradle"
     [testGroup "dependencies" [sessionDepsArePickedUp]
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
-    ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2, simpleMultiTest3, simpleMultiDefTest]
+    ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2, simpleMultiTest3, simpleMultiDefTest, simpleMultiUnitTest]
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
     ]
 
@@ -2643,6 +2643,24 @@ simpleMultiTest = testCase "simple-multi-test" $ withLongTimeout $ runWithExtraF
     liftIO $ assertBool "B should typecheck" ideResultSuccess
     locs <- getDefinitions bdoc (Position 2 7)
     let fooL = mkL (adoc ^. L.uri) 2 0 2 3
+    checkDefs locs (pure [fooL])
+    expectNoMoreDiagnostics 0.5
+
+-- Test support for loading multiple components as -unit flags as
+-- implemented in GHC 9.4
+simpleMultiUnitTest :: TestTree
+simpleMultiUnitTest = testCase "simple-multi-unit-test" $ withLongTimeout $ runWithExtraFiles "multi-unit" $ \dir -> do
+    let aPath = dir </> "a/A.hs"
+        bPath = dir </> "b/B.hs"
+        cPath = dir </> "c/C.hs"
+    bdoc <- openDoc bPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" bdoc
+    TextDocumentIdentifier auri <- openDoc aPath "haskell"
+    skipManyTill anyMessage $ isReferenceReady aPath
+    cdoc <- openDoc cPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" cdoc
+    locs <- getDefinitions cdoc (Position 2 7)
+    let fooL = mkL auri 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
 

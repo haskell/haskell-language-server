@@ -51,6 +51,7 @@ module Development.IDE.GHC.Compat.Env (
     Backend,
     setBackend,
     Development.IDE.GHC.Compat.Env.platformDefaultBackend,
+    workingDirectory
     ) where
 
 import           GHC                  (setInteractiveDynFlags)
@@ -107,6 +108,11 @@ import           Data.IORef
 #if MIN_VERSION_ghc(9,3,0)
 hsc_EPS :: HscEnv -> UnitEnv
 hsc_EPS = hsc_unit_env
+#endif
+
+#if !MIN_VERSION_ghc(9,3,0)
+workingDirectory :: a -> Maybe b
+workingDirectory _ = Nothing
 #endif
 
 #if !MIN_VERSION_ghc(9,2,0)
