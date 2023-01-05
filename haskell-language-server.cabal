@@ -196,11 +196,6 @@ flag stylishHaskell
   default:     True
   manual:      True
 
-flag brittany
-  description: Enable brittany plugin
-  default:     True
-  manual:      True
-
 flag refactor
   description: Enable refactor plugin
   default:     True
@@ -353,11 +348,6 @@ common stylishHaskell
     build-depends: hls-stylish-haskell-plugin ^>= 1.0
     cpp-options: -Dhls_stylishHaskell
 
-common brittany
-  if flag(brittany) && (impl(ghc < 9.0.2) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-brittany-plugin ^>= 1.1
-    cpp-options: -Dhls_brittany
-
 common refactor
   if flag(refactor)
     build-depends: hls-refactor-plugin ^>= 1.1
@@ -396,7 +386,6 @@ library
                   , fourmolu
                   , ormolu
                   , stylishHaskell
-                  , brittany
                   , refactor
 
   exposed-modules:
