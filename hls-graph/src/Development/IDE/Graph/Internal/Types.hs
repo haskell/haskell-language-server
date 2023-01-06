@@ -54,8 +54,13 @@ unwrapDynamic x = fromMaybe (error msg) $ fromDynamic x
 
 type TheRules = Map.HashMap TypeRep Dynamic
 
+-- | A computation that defines all the rules that form part of the computation graph.
+--
+-- 'Rules' has access to 'IO' through 'MonadIO'. Use of 'IO' is at your own risk: if
+-- you write 'Rules' that throw exceptions, then you need to make sure to handle them
+-- yourself when you run the resulting 'Rules'.
 newtype Rules a = Rules (ReaderT SRules IO a)
-    deriving newtype (Monad, Applicative, Functor, MonadIO, MonadFail)
+    deriving newtype (Monad, Applicative, Functor, MonadIO)
 
 data SRules = SRules {
     rulesExtra   :: !Dynamic,
@@ -67,6 +72,12 @@ data SRules = SRules {
 ---------------------------------------------------------------------
 -- ACTIONS
 
+-- | An action representing something that can be run as part of a 'Rule'.
+-- 
+-- 'Action's can be pure functions but also have access to 'IO' via 'MonadIO' and 'MonadUnliftIO.
+-- It should be assumed that actions throw exceptions, these can be caught with
+-- 'Development.IDE.Graph.Internal.Action.actionCatch'. In particular, it is 
+-- permissible to use the 'MonadFail' instance, which will lead to an 'IOException'.
 newtype Action a = Action {fromAction :: ReaderT SAction IO a}
     deriving newtype (Monad, Applicative, Functor, MonadIO, MonadFail, MonadThrow, MonadCatch, MonadMask, MonadUnliftIO)
 

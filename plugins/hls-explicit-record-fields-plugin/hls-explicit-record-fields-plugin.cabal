@@ -12,7 +12,8 @@ maintainer:         berk.ozkutuk@tweag.io
 category:           Development
 build-type:         Simple
 extra-doc-files:    CHANGELOG.md
--- extra-source-files:
+extra-source-files:
+  test/testdata/**/*.hs
 
 source-repository head
   type:     git
