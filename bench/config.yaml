@@ -144,7 +144,6 @@ configurations:
   - rename
   - stylish-haskell
 # - alternateNumberFormat
-# # - brittany
 # - callHierarchy
 # - changeTypeSignature
 # - class

@@ -59,10 +59,6 @@
       url = "https://hackage.haskell.org/package/aeson-1.5.2.0/aeson-1.5.2.0.tar.gz";
       flake = false;
     };
-    brittany-01312 = {
-      url = "https://hackage.haskell.org/package/brittany-0.13.1.2/brittany-0.13.1.2.tar.gz";
-      flake = false;
-    };
     fourmolu = {
       url = "https://hackage.haskell.org/package/fourmolu-0.10.1.0/fourmolu-0.10.1.0.tar.gz";
       flake = false;

@@ -1,7 +1,7 @@
 { pkgs, inputs }:
 
 let
-  disabledPlugins = [ "hls-brittany-plugin" "hls-stylish-haskell-plugin" ];
+  disabledPlugins = [ "hls-stylish-haskell-plugin" ];
 
   hpkgsOverride = hself: hsuper:
     with pkgs.haskell.lib;
@@ -34,7 +34,7 @@ let
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
-        (pkgs.lib.concatStringsSep " " [ "-f-brittany" "-f-stylishhaskell" ])
+        (pkgs.lib.concatStringsSep " " [ "-f-stylishhaskell" ])
         { };
 
       retrie = hself.retrie_1_1_0_0;

@@ -107,7 +107,6 @@ Format your code with various Haskell code formatters.
 
 | Formatter       | Provided by                  |
 | --------------- | ---------------------------- |
-| Brittany        | `hls-brittany-plugin`        |
 | Floskell        | `hls-floskell-plugin`        |
 | Fourmolu        | `hls-fourmolu-plugin`        |
 | Ormolu          | `hls-ormolu-plugin`          |
