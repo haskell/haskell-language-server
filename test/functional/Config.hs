@@ -96,11 +96,12 @@ genericConfigTests = testGroup "generic plugin config"
         testPluginDiagnostics = [("Foo.hs", [(DsError, (0,0), "testplugin")])]
 
         runConfigSession subdir =
-            failIfSessionTimeout . runSessionWithServer @() (const plugin) ("test/testdata" </> subdir)
+            failIfSessionTimeout . runSessionWithServer @() plugin ("test/testdata" </> subdir)
 
         testPluginId = "testplugin"
         -- A disabled-by-default plugin that creates diagnostics
-        plugin = (defaultPluginDescriptor testPluginId)
+        plugin = mkPluginTestDescriptor' pd testPluginId
+        pd plId = (defaultPluginDescriptor plId)
           {
             pluginConfigDescriptor = configDisabled
           , pluginRules = do
