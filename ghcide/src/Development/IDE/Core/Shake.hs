@@ -315,7 +315,7 @@ getShakeExtrasRules :: Rules ShakeExtras
 getShakeExtrasRules = do
     mExtras <- getShakeExtraRules @ShakeExtras
     case mExtras of
-      Just x -> return x
+      Just x  -> return x
       -- This will actually crash HLS
       Nothing -> liftIO $ fail "missing ShakeExtras"
 
