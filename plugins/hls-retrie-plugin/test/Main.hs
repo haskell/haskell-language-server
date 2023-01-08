@@ -88,7 +88,7 @@ goldenWithRetrie title path act =
 runWithRetrie :: Session a -> IO a
 runWithRetrie = runSessionWithServer testPlugins testDataDir
 
-testPlugins :: PluginTestDescriptor _
+testPlugins :: PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log
 testPlugins =
     retriePlugin <>
     refactorPlugin  -- needed for the GetAnnotatedParsedSource rule
