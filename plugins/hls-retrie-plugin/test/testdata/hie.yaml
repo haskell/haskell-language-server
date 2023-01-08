@@ -1,4 +1,11 @@
 cradle:
-  bios:
-    shell: |
-      find . -name "*.hs" > $HIE_BIOS_OUTPUT
+    direct:
+      arguments:
+        - Class.hs
+        - Identity.hs
+        - Imported.hs
+        - Nested.hs
+        - NestedLet.hs
+        - NestedNested.hs
+        - NestedWhere.hs
+        - Operator.hs
