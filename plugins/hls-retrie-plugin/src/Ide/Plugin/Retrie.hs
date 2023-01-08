@@ -1,9 +1,3 @@
--- TODO Find out why inlining fromCurrentPosition and friends has no effect
--- ANSWER it's a Retrie problem, not a plugin problem
--- TODO Fix missing things in ExactPrint 9.2
--- TODO Support inlining local definitions
--- TODO class methods (defaults)
--- TODO instance methods
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric         #-}
