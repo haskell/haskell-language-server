@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP               #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 
@@ -8,8 +9,10 @@ module Ide.Plugin.Ormolu
   )
 where
 
-import           Control.Exception               (try)
+import           Control.Exception               (Handler (..), IOException,
+                                                  SomeException (..), catches)
 import           Control.Monad.IO.Class          (liftIO)
+import           Data.Functor                    ((<&>))
 import qualified Data.Text                       as T
 import           Development.IDE                 hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat      (hsc_dflags, moduleNameString)
@@ -44,13 +47,26 @@ provider ideState typ contents fp _ = withIndefiniteProgress title Cancellable $
     fullRegion = RegionIndices Nothing Nothing
     rangeRegion s e = RegionIndices (Just $ s + 1) (Just $ e + 1)
     mkConf o region = defaultConfig { cfgDynOptions = o, cfgRegion = region }
-    fmt :: T.Text -> Config RegionIndices -> IO (Either OrmoluException T.Text)
-    fmt cont conf =
+    fmt :: T.Text -> Config RegionIndices -> IO (Either SomeException T.Text)
+    fmt cont conf = flip catches handlers $ do
+      let fp' = fromNormalizedFilePath fp
 #if MIN_VERSION_ormolu(0,5,3)
-      try @OrmoluException $ ormolu conf (fromNormalizedFilePath fp) cont
+      cabalInfo <- getCabalInfoForSourceFile fp' <&> \case
+        CabalNotFound                -> Nothing
+        CabalDidNotMention cabalInfo -> Just cabalInfo
+        CabalFound cabalInfo         -> Just cabalInfo
+      fixityOverrides <- traverse getFixityOverridesForSourceFile cabalInfo
+      let conf' = refineConfig ModuleSource cabalInfo fixityOverrides conf
+          cont' = cont
 #else
-      try @OrmoluException $ ormolu conf (fromNormalizedFilePath fp) $ T.unpack cont
+      let conf' = conf
+          cont' = T.unpack cont
 #endif
+      Right <$> ormolu conf' fp' cont'
+    handlers =
+      [ Handler $ pure . Left . SomeException @OrmoluException
+      , Handler $ pure . Left . SomeException @IOException
+      ]
 
   case typ of
     FormatText -> ret <$> fmt contents (mkConf fileOpts fullRegion)
@@ -59,7 +75,7 @@ provider ideState typ contents fp _ = withIndefiniteProgress title Cancellable $
  where
    title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
 
-   ret :: Either OrmoluException T.Text -> Either ResponseError (List TextEdit)
+   ret :: Either SomeException T.Text -> Either ResponseError (List TextEdit)
    ret (Left err)  = Left . responseError . T.pack $ "ormoluCmd: " ++ show err
    ret (Right new) = Right $ makeDiffTextEdit contents new
 
