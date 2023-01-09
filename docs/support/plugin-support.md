@@ -52,14 +52,14 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-eval-plugin`                   | 2    | 9.4                      |
 | `hls-explicit-fixity-plugin`        | 2    |                          |
 | `hls-explicit-record-fields-plugin` | 2    |                          |
-| `hls-floskell-plugin`               | 2    | 9.4                      |
+| `hls-floskell-plugin`               | 2    |                          |
 | `hls-fourmolu-plugin`               | 2    |                          |
 | `hls-gadt-plugin`                   | 2    |                          |
 | `hls-hlint-plugin`                  | 2    |                          |
 | `hls-module-name-plugin`            | 2    |                          |
 | `hls-qualify-imported-names-plugin` | 2    |                          |
 | `hls-ormolu-plugin`                 | 2    |                          |
-| `hls-rename-plugin`                 | 2    | 9.4                      |
+| `hls-rename-plugin`                 | 2    |                          |
 | `hls-refine-imports-plugin`         | 2    |                          |
 | `hls-stylish-haskell-plugin`        | 2    |                          |
 | `hls-tactics-plugin`                | 2    | 9.2, 9.4                 |

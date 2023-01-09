@@ -329,7 +329,7 @@ common explicitFields
 -- formatters
 
 common floskell
-  if flag(floskell) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(floskell) 
     build-depends: hls-floskell-plugin ^>= 1.0
     cpp-options: -Dhls_floskell
 
