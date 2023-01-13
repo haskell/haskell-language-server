@@ -18,6 +18,7 @@ module Development.IDE.Core.FileStore(
     getModTime,
     isWatchSupported,
     registerFileWatches,
+    shareFilePath,
     Log(..)
     ) where
 
@@ -28,6 +29,8 @@ import           Control.Exception
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Data.ByteString                              as BS
+import qualified Data.HashMap.Strict                          as HashMap
+import           Data.IORef
 import qualified Data.Text                                    as T
 import qualified Data.Text.Utf16.Rope                         as Rope
 import           Data.Time
@@ -76,6 +79,7 @@ import qualified Language.LSP.Types                           as LSP
 import qualified Language.LSP.Types.Capabilities              as LSP
 import           Language.LSP.VFS
 import           System.FilePath
+import           System.IO.Unsafe
 
 data Log
   = LogCouldNotIdentifyReverseDeps !NormalizedFilePath
@@ -297,3 +301,17 @@ isWatchSupported = do
               , Just True <- _dynamicRegistration
                 -> True
               | otherwise -> False
+
+filePathMap :: IORef (HashMap.HashMap FilePath FilePath)
+filePathMap = unsafePerformIO $ newIORef HashMap.empty
+{-# NOINLINE filePathMap #-}
+
+shareFilePath :: FilePath -> FilePath
+shareFilePath k = unsafePerformIO $ do
+  atomicModifyIORef' filePathMap $ \km ->
+    let new_key = HashMap.lookup k km
+    in case new_key of
+          Just v -> (km, v)
+          Nothing -> (HashMap.insert k k km, k)
+{-# NOINLINE shareFilePath  #-}
+ 
