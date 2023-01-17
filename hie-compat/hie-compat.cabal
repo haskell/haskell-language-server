@@ -33,7 +33,7 @@ library
   if flag(ghc-lib) && impl(ghc < 9)
     build-depends: ghc-lib < 9.0
   else
-    build-depends: ghc, ghc-boot
+    build-depends: ghc >= 8.10, ghc-boot
   if (impl(ghc >= 9.0) && impl(ghc < 9.1))
     ghc-options: -Wall -Wno-name-shadowing
   else
