@@ -111,7 +111,7 @@ To establish and apply the policy we also take into account:
 - The reliability of different ghc versions on the major operating systems (Linux, Windows, MacOS)
 - The [Haskell Survey results](https://taylor.fausak.me/2022/11/18/haskell-survey-results/#s2q4)
 
-### Supporting a GHC version beyond its shelf life
+### Supporting a GHC version beyond normal deprecation time
 
 In cases where the base policy demands a deprecation, but ecosystem factors
 suggest that it's still widely used (e.g. last [Haskell Survey results](https://taylor.fausak.me/2022/11/18/haskell-survey-results/#s2q4)), the deprecation should be suspended for the next release and the situation be re-evaluated for the release after that.
