@@ -116,7 +116,7 @@ To establish and apply the policy we also take into account:
 In cases where the base policy demands a deprecation, but ecosystem factors
 suggest that it's still widely used (e.g. last [Haskell Survey results](https://taylor.fausak.me/2022/11/18/haskell-survey-results/#s2q4)), the deprecation should be suspended for the next release and the situation be re-evaluated for the release after that.
 
-In case of maintenance burden concerns, the following process should be followed:
+When we decide to keep on an old version, we should track it as follows:
 
 1. open a ticket on HLS issue tracker wrt discussing to deprecate said GHC version
     - explain the reason the GHC version wasn't deprecated (context)
