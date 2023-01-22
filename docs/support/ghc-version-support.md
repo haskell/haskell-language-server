@@ -17,10 +17,10 @@ Support status (see the support policy below for more details):
 
 | GHC version  | Last supporting HLS version                                                        | Support status                                                              |
 |--------------|------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
-| 9.4.4        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)       | basic support                                                               |
-| 9.4.3        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)       | basic support                                                               |
-| 9.4.2        | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0) | basic support                                                               |
-| 9.4.1        | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0) | basic support                                                               |
+| 9.4.4        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)       | full support                                                                |
+| 9.4.3        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)       | full support                                                                |
+| 9.4.2        | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0) | full support                                                                |
+| 9.4.1        | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0) | full support                                                                |
 | 9.2.5        | [latest](https://github.com/haskell/haskell-language-server/releases/latest)       | full support                                                                |
 | 9.2.4        | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0) | full support                                                                |
 | 9.2.3        | [1.8.0.0](https://github.com/haskell/haskell-language-server/releases/tag/1.8.0.0) | full support                                                                |

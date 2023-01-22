@@ -329,7 +329,7 @@ common explicitFields
 -- formatters
 
 common floskell
-  if flag(floskell) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(floskell) 
     build-depends: hls-floskell-plugin ^>= 1.0
     cpp-options: -Dhls_floskell
 
@@ -339,12 +339,12 @@ common fourmolu
     cpp-options: -Dhls_fourmolu
 
 common ormolu
-  if flag(ormolu) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(ormolu) 
     build-depends: hls-ormolu-plugin ^>= 1.0
     cpp-options: -Dhls_ormolu
 
 common stylishHaskell
-  if flag(stylishHaskell) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(stylishHaskell) 
     build-depends: hls-stylish-haskell-plugin ^>= 1.0
     cpp-options: -Dhls_stylishHaskell
 
