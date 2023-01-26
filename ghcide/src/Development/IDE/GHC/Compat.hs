@@ -43,6 +43,8 @@ module Development.IDE.GHC.Compat(
     myCoreToStgExpr,
 #endif
 
+    Usage(..),
+
     FastStringCompat,
     bytesFS,
     mkFastStringByteString,
@@ -167,9 +169,9 @@ import           GHC.Runtime.Context                   (icInteractiveModule)
 import           GHC.Unit.Home.ModInfo                 (HomePackageTable,
                                                         lookupHpt)
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Unit.Module.Deps (Dependencies(dep_direct_mods))
+import GHC.Unit.Module.Deps (Dependencies(dep_direct_mods), Usage(..))
 #else
-import GHC.Unit.Module.Deps (Dependencies(dep_mods))
+import GHC.Unit.Module.Deps (Dependencies(dep_mods), Usage(..))
 #endif
 #else
 import           GHC.CoreToByteCode                    (coreExprToBCOs)
