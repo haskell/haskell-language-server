@@ -565,15 +565,7 @@ applyHint recorder ide nfp mhint =
     oldContent <- maybe (liftIO $ fmap T.decodeUtf8 (BS.readFile fp)) return mbOldContent
     modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
     let dflags = ms_hspp_opts $ msrModSummary modsum
-    -- Setting a environment variable with the libdir used by ghc-exactprint.
-    -- It is a workaround for an error caused by the use of a hardcoded at compile time libdir
-    -- in ghc-exactprint that makes dependent executables non portables.
-    -- See https://github.com/alanz/ghc-exactprint/issues/96.
-    -- WARNING: this code is not thread safe, so if you try to apply several async refactorings
-    -- it could fail. That case is not very likely so we assume the risk.
-    let withRuntimeLibdir :: IO a -> IO a
-        withRuntimeLibdir = bracket_ (setEnv key $ topDir dflags) (unsetEnv key)
-            where key = "GHC_EXACTPRINT_GHC_LIBDIR"
+
     -- set Nothing as "position" for "applyRefactorings" because
     -- applyRefactorings expects the provided position to be _within_ the scope
     -- of each refactoring it will apply.
@@ -594,7 +586,7 @@ applyHint recorder ide nfp mhint =
             -- We have to reparse extensions to remove the invalid ones
             let (enabled, disabled, _invalid) = Refact.parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled
-            (Right <$> withRuntimeLibdir (Refact.applyRefactorings position commands temp refactExts))
+            (Right <$> applyRefactorings (topDir dflags) position commands temp refactExts)
                 `catches` errorHandlers
 #else
     mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
@@ -609,7 +601,7 @@ applyHint recorder ide nfp mhint =
                 (anns', modu') <-
                     ExceptT $ mapM (uncurry Refact.applyFixities)
                             $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
-                liftIO $ (Right <$> withRuntimeLibdir (Refact.applyRefactorings' position commands anns' modu'))
+                liftIO $ (Right <$> Refact.applyRefactorings' position commands anns' modu')
                             `catches` errorHandlers
 #endif
     case res of
@@ -641,3 +633,55 @@ bimapExceptT f g (ExceptT m) = ExceptT (fmap h m) where
   h (Left e)  = Left (f e)
   h (Right a) = Right (g a)
 {-# INLINE bimapExceptT #-}
+
+-- ---------------------------------------------------------------------------
+-- Apply-refact compatability, documentation copied from upstream apply-refact
+-- ---------------------------------------------------------------------------
+
+-- | Apply a set of refactorings as supplied by HLint
+--
+-- This compatibility function abstracts over https://github.com/mpickering/apply-refact/issues/133
+-- for backwards compatability.
+applyRefactorings ::
+  -- | FilePath to [GHC's libdir](https://downloads.haskell.org/ghc/latest/docs/users_guide/using.html#ghc-flag---print-libdir).
+  --
+  -- It is possible to use @libdir@ from [ghc-paths package](https://hackage.haskell.org/package/ghc-paths), but note
+  -- this will make it difficult to provide a binary distribution of your program.
+  FilePath ->
+  -- | Apply hints relevant to a specific position
+  Maybe (Int, Int) ->
+  -- | 'Refactoring's to apply. Each inner list corresponds to an HLint
+  -- <https://hackage.haskell.org/package/hlint/docs/Language-Haskell-HLint.html#t:Idea Idea>.
+  -- An @Idea@ may have more than one 'Refactoring'.
+  --
+  -- The @Idea@s are sorted in ascending order of starting location, and are applied
+  -- in that order. If two @Idea@s start at the same location, the one with the larger
+  -- source span comes first. An @Idea@ is filtered out (ignored) if there is an @Idea@
+  -- prior to it which has an overlapping source span and is not filtered out.
+  [[Refact.Refactoring Refact.SrcSpan]] ->
+  -- | Target file
+  FilePath ->
+  -- | GHC extensions, e.g., @LambdaCase@, @NoStarIsType@. The list is processed from left
+  -- to right. An extension (e.g., @StarIsType@) may be overridden later (e.g., by @NoStarIsType@).
+  --
+  -- These are in addition to the @LANGUAGE@ pragmas in the target file. When they conflict
+  -- with the @LANGUAGE@ pragmas, pragmas win.
+  [String] ->
+  IO String
+applyRefactorings =
+#if MIN_VERSION_apply_refact(0,12,0)
+  Refact.applyRefactorings
+#else
+  \libdir pos refacts fp exts -> withRuntimeLibdir libdir (Refact.applyRefactorings pos refacts fp exts)
+
+  where
+    -- Setting a environment variable with the libdir used by ghc-exactprint.
+    -- It is a workaround for an error caused by the use of a hardcoded at compile time libdir
+    -- in ghc-exactprint that makes dependent executables non portables.
+    -- See https://github.com/alanz/ghc-exactprint/issues/96.
+    -- WARNING: this code is not thread safe, so if you try to apply several async refactorings
+    -- it could fail. That case is not very likely so we assume the risk.
+    withRuntimeLibdir :: FilePath -> IO a -> IO a
+    withRuntimeLibdir libdir = bracket_ (setEnv key libdir) (unsetEnv key)
+        where key = "GHC_EXACTPRINT_GHC_LIBDIR"
+#endif
