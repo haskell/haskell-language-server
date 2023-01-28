@@ -70,7 +70,7 @@ import           Data.Time                         (UTCTime (..))
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Debug.Trace
-import           Development.IDE.Core.FileStore    (resetInterfaceStore)
+import           Development.IDE.Core.FileStore    (resetInterfaceStore, shareFilePath)
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
@@ -435,6 +435,30 @@ tcRnModule hsc_env tc_helpers pmod = do
 -- anywhere. So we zero it out.
 -- The field is not serialized or deserialised from disk, so we don't need to remove it
 -- while reading an iface from disk, only if we just generated an iface in memory
+--
+
+
+
+-- | See https://github.com/haskell/haskell-language-server/issues/3450
+-- GHC's recompilation avoidance in the presense of TH is less precise than
+-- HLS. To avoid GHC from pessimising HLS, we filter out certain dependency information
+-- that we track ourselves. See also Note [Recompilation avoidance in the presence of TH]
+filterUsages :: [Usage] -> [Usage]
+#if MIN_VERSION_ghc(9,3,0)
+filterUsages = filter $ \case UsageHomeModuleInterface{} -> False
+                              _ -> True
+#else
+filterUsages = id
+#endif
+
+-- | Mitigation for https://gitlab.haskell.org/ghc/ghc/-/issues/22744
+shareUsages :: ModIface -> ModIface
+shareUsages iface = iface {mi_usages = usages}
+  where usages = map go (mi_usages iface)
+        go usg@UsageFile{} = usg {usg_file_path = fp}
+          where !fp = shareFilePath (usg_file_path usg)
+        go usg = usg
+
 
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
 mkHiFileResultNoCompile session tcm = do
@@ -444,7 +468,7 @@ mkHiFileResultNoCompile session tcm = do
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
   iface' <- mkIfaceTc hsc_env_tmp sf details ms tcGblEnv
-  let iface = iface' { mi_globals = Nothing } -- See Note [Clearing mi_globals after generating an iface]
+  let iface = iface' { mi_globals = Nothing, mi_usages = filterUsages (mi_usages iface') } -- See Note [Clearing mi_globals after generating an iface]
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 
 mkHiFileResultCompile
@@ -486,7 +510,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
   let !partial_iface = force (mkPartialIface session details simplified_guts)
   final_iface' <- mkFullIface session partial_iface
 #endif
-  let final_iface = final_iface' {mi_globals = Nothing} -- See Note [Clearing mi_globals after generating an iface]
+  let final_iface = final_iface' {mi_globals = Nothing, mi_usages = filterUsages (mi_usages final_iface')} -- See Note [Clearing mi_globals after generating an iface]
 
   -- Write the core file now
   core_file <- case mguts of
@@ -1462,7 +1486,8 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
           regenerate linkableNeeded
 
     case (mb_checked_iface, recomp_iface_reqd) of
-      (Just iface, UpToDate) -> do
+      (Just iface', UpToDate) -> do
+             let iface = shareUsages iface'
              details <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface
              -- parse the runtime dependencies from the annotations
              let runtime_deps
