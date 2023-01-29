@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 case "$(uname -s)" in
 	MSYS_*|MINGW*)
@@ -9,11 +9,12 @@ case "$(uname -s)" in
 	   ;;
 esac
 
-if [ -n "${CABAL_CACHE_DISABLE}" ] ; then
+if [ "${CABAL_CACHE_DISABLE}" = "yes" ] ; then
 	echo "cabal-cache disabled (CABAL_CACHE_DISABLE set)"
-elif [ -n "${CABAL_CACHE_NONFATAL}" ] ; then
-	"cabal-cache${ext}" "$@" || echo "cabal-cache failed (CABAL_CACHE_NONFATAL set)"
+elif [ "${CABAL_CACHE_NONFATAL}" = "yes" ] ; then
+	time "cabal-cache${ext}" "$@" || echo "cabal-cache failed (CABAL_CACHE_NONFATAL set)"
 else
-	exec "cabal-cache${ext}" "$@"
+	time "cabal-cache${ext}" "$@"
+	exit $?
 fi
 

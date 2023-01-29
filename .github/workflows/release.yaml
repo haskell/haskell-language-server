@@ -6,6 +6,9 @@ on:
       - '*'
   schedule:
     - cron: '0 2 * * *'
+env:
+  CABAL_CACHE_DISABLE: ${{ vars.CABAL_CACHE_DISABLE }}
+  CABAL_CACHE_NONFATAL: ${{ vars.CABAL_CACHE_NONFATAL }}
 
 jobs:
   build-linux:
@@ -22,112 +25,117 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # - image: alpine:3.12
-          #   installCmd: apk update && apk add --no-cache
-          #   toolRequirements: binutils-gold gcc g++ gmp-dev libc-dev libffi-dev make musl-dev ncurses-dev ncurses-static perl tar xz xz-dev automake autoconf coreutils bsd-compat-headers diffutils gzip findutils tree zlib-dev patchelf
-          #   ARTIFACT: "x86_64-linux-alpine"
-          #   DISTRO: Alpine
-          #   ADD_CABAL_ARGS: "--enable-split-sections"
-          # - image: alpine:3.12
-          #   installCmd: apk update && apk add --no-cache
-          #   toolRequirements: binutils-gold gcc g++ gmp-dev libc-dev libffi-dev make musl-dev ncurses-dev ncurses-static perl tar xz xz-dev automake autoconf coreutils bsd-compat-headers diffutils gzip findutils tree zlib-dev patchelf
-          #   ARTIFACT: "x86_64-linux-alpine-static"
-          #   DISTRO: Alpine
-          #   ADD_CABAL_ARGS: "--enable-split-sections --enable-executable-static -f-dynamic"
-          - image: debian:9
-            installCmd: apt-get update && apt-get install -y
-            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf
-            DISTRO: Debian
-            ARTIFACT: "x86_64-linux-deb9"
-            ADD_CABAL_ARGS: "--enable-split-sections"
-          - image: debian:10
-            installCmd: apt-get update && apt-get install -y
-            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf
-            DISTRO: Debian
-            ARTIFACT: "x86_64-linux-deb10"
-            ADD_CABAL_ARGS: "--enable-split-sections"
-          - image: debian:11
-            installCmd: apt-get update && apt-get install -y
-            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf
-            DISTRO: Debian
-            ARTIFACT: "x86_64-linux-deb11"
-            ADD_CABAL_ARGS: "--enable-split-sections"
-          - image: ubuntu:18.04
-            installCmd: apt-get update && apt-get install -y
-            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf
-            DISTRO: Ubuntu
-            ARTIFACT: "x86_64-linux-ubuntu18.04"
-            ADD_CABAL_ARGS: "--enable-split-sections"
-          - image: ubuntu:20.04
-            installCmd: apt-get update && apt-get install -y
-            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf
-            DISTRO: Ubuntu
-            ARTIFACT: "x86_64-linux-ubuntu20.04"
-            ADD_CABAL_ARGS: "--enable-split-sections"
-          - image: ubuntu:22.04
-            installCmd: apt-get update && apt-get install -y
-            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf
-            DISTRO: Ubuntu
-            ARTIFACT: "x86_64-linux-ubuntu22.04"
-            ADD_CABAL_ARGS: "--enable-split-sections"
-          - image: fedora:27
-            installCmd: dnf install -y
-            toolRequirements: autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf
-            DISTRO: Fedora
-            ARTIFACT: "x86_64-linux-fedora27"
-            ADD_CABAL_ARGS: "--enable-split-sections"
-          - image: fedora:33
-            installCmd: dnf install -y
-            toolRequirements: autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf
-            DISTRO: Fedora
-            ARTIFACT: "x86_64-linux-fedora33"
-            ADD_CABAL_ARGS: "--enable-split-sections"
-          - image: centos:7
-            installCmd: yum -y install epel-release && yum install -y
-            toolRequirements: autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf
-            DISTRO: CentOS
-            ARTIFACT: "x86_64-linux-centos7"
-            ADD_CABAL_ARGS: "--enable-split-sections"
-          - image: linuxmintd/mint19.3-amd64
-            installCmd: apt-get update && apt-get install -y
-            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf
-            DISTRO: Mint
-            ARTIFACT: "x86_64-linux-mint19.3"
-            ADD_CABAL_ARGS: "--enable-split-sections"
-          - image: linuxmintd/mint20.2-amd64
-            installCmd: apt-get update && apt-get install -y
-            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf
-            DISTRO: Mint
-            ARTIFACT: "x86_64-linux-mint20.2"
-            ADD_CABAL_ARGS: "--enable-split-sections"
+        ghc: ["9.4.4", "9.2.5", "9.0.2", "8.10.7"]
+        platform: [ { image: "debian:9"
+                    , installCmd: "apt-get update && apt-get install -y"
+                    , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+                    , DISTRO: "Debian"
+                    , ARTIFACT: "x86_64-linux-deb9"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    },
+                    { image: "debian:10"
+                    , installCmd: "apt-get update && apt-get install -y"
+                    , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+                    , DISTRO: "Debian"
+                    , ARTIFACT: "x86_64-linux-deb10"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    },
+                    { image: "debian:11"
+                    , installCmd: "apt-get update && apt-get install -y"
+                    , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+                    , DISTRO: "Debian"
+                    , ARTIFACT: "x86_64-linux-deb11"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    },
+                    { image: "ubuntu:18.04"
+                    , installCmd: "apt-get update && apt-get install -y"
+                    , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+                    , DISTRO: "Ubuntu"
+                    , ARTIFACT: "x86_64-linux-ubuntu18.04"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    },
+                    { image: "ubuntu:20.04"
+                    , installCmd: "apt-get update && apt-get install -y"
+                    , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+                    , DISTRO: "Ubuntu"
+                    , ARTIFACT: "x86_64-linux-ubuntu20.04"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    },
+                    { image: "ubuntu:22.04"
+                    , installCmd: "apt-get update && apt-get install -y"
+                    , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+                    , DISTRO: "Ubuntu"
+                    , ARTIFACT: "x86_64-linux-ubuntu22.04"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    },
+                    { image: "linuxmintd/mint19.3-amd64"
+                    , installCmd: "apt-get update && apt-get install -y"
+                    , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+                    , DISTRO: "Mint"
+                    , ARTIFACT: "x86_64-linux-mint19.3"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    },
+                    { image: "linuxmintd/mint20.2-amd64"
+                    , installCmd: "apt-get update && apt-get install -y"
+                    , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
+                    , DISTRO: "Mint"
+                    , ARTIFACT: "x86_64-linux-mint20.2"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    },
+                    { image: "fedora:27"
+                    , installCmd: "dnf install -y"
+                    , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+                    , DISTRO: "Fedora"
+                    , ARTIFACT: "x86_64-linux-fedora27"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    },
+                    { image: "fedora:33"
+                    , installCmd: "dnf install -y"
+                    , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+                    , DISTRO: "Fedora"
+                    , ARTIFACT: "x86_64-linux-fedora33"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    },
+                    { image: "centos:7"
+                    , installCmd: "yum -y install epel-release && yum install -y"
+                    , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+                    , DISTRO: "CentOS"
+                    , ARTIFACT: "x86_64-linux-centos7"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    }
+                  ]
     container:
-      image: ${{ matrix.image }}
+      image: ${{ matrix.platform.image }}
     steps:
       - name: Install requirements
         shell: sh
         run: |
-          ${{ matrix.installCmd }} curl bash git ${{ matrix.toolRequirements }}
+          ${{ matrix.platform.installCmd }} curl bash git ${{ matrix.platform.toolRequirements }}
       - uses: actions/checkout@v3
       - name: Run build
-        run: bash .github/scripts/build.sh
+        run: |
+          bash .github/scripts/build.sh
+          tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
+
         env:
-          ARTIFACT: ${{ matrix.ARTIFACT }}
-          DISTRO: ${{ matrix.DISTRO }}
-          ADD_CABAL_ARGS: ${{ matrix.ADD_CABAL_ARGS }}
+          ARTIFACT: ${{ matrix.platform.ARTIFACT }}
+          DISTRO: ${{ matrix.platform.DISTRO }}
+          ADD_CABAL_ARGS: ${{ matrix.platform.ADD_CABAL_ARGS }}
+          GHC_VERSION: ${{ matrix.ghc }}
 
       - if: always()
         name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: artifacts
+          if-no-files-found: error
+          retention-days: 2
+          name: artifacts-${{ matrix.platform.ARTIFACT }}
           path: |
-            ./out/*
-
+            ./out-${{ matrix.platform.ARTIFACT }}-${{ matrix.ghc }}.tar
 
   build-arm:
     name: Build ARM binary
-    runs-on: ${{ matrix.os }}
+    runs-on: [self-hosted, Linux, ARM64, beefy]
     env:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -136,18 +144,18 @@ jobs:
       ADD_CABAL_ARGS: ""
       DEBIAN_FRONTEND: noninteractive
       TZ: Asia/Singapore
+      ARTIFACT: "aarch64-linux-ubuntu20"
+      ARCH: ARM64
+      DISTRO: Ubuntu
     strategy:
       fail-fast: true
       matrix:
-        include:
-          - os: [self-hosted, Linux, ARM64]
-            ARTIFACT: "aarch64-linux-ubuntu20"
-            ARCH: ARM64
+        ghc: ["9.4.4", "9.2.5", "9.0.2", "8.10.7"]
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
         with:
-          args: rm -rf .ghcup/ cabal/ dist-newstyle/ out/ store/
+          args: "find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +"
 
       - name: git config
         run: |
@@ -162,48 +170,87 @@ jobs:
         with:
           args: bash .github/scripts/build.sh
         env:
-          ARTIFACT: ${{ matrix.ARTIFACT }}
-          ARCH: ${{ matrix.ARCH }}
-          DISTRO: Ubuntu
-          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
-          S3_HOST: ${{ env.S3_HOST }}
+          GHC_VERSION: ${{ matrix.ghc }}
+
+      - uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
+        name: Run build (aarch64 linux)
+        with:
+          args: bash .github/scripts/tar.sh
+        env:
+          GHC_VERSION: ${{ matrix.ghc }}
 
       - if: always()
         name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: artifacts
+          if-no-files-found: error
+          retention-days: 2
+          name: artifacts-arm
           path: |
-            ./out/*
+            ./out-${{ env.ARTIFACT }}-${{ matrix.ghc }}.tar
 
-  build-mac:
-    name: Build binary (Mac)
-    runs-on: ${{ matrix.os }}
+  build-mac-x86_64:
+    name: Build binary (Mac x86_64)
+    runs-on: macOS-10.15
     env:
       MACOSX_DEPLOYMENT_TARGET: 10.13
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       S3_HOST: ${{ secrets.S3_HOST }}
       ADD_CABAL_ARGS: ""
+      ARTIFACT: "x86_64-apple-darwin"
+      ARCH: 64
+      TARBALL_EXT: tar.xz
+      DISTRO: na
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: [self-hosted, macOS, ARM64]
-            ARTIFACT: "aarch64-apple-darwin"
-            ARCH: ARM64
-            TARBALL_EXT: tar.xz
-          - os: macOS-10.15
-            ARTIFACT: "x86_64-apple-darwin"
-            ARCH: 64
-            TARBALL_EXT: tar.xz
+        ghc: ["9.4.4", "9.2.5", "9.0.2", "8.10.7"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - if: matrix.ARCH == 'ARM64' && runner.os == 'macOS'
-        name: Run build
+      - name: Run build
+        run: |
+          brew install coreutils tree
+          bash .github/scripts/build.sh
+          tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
+        env:
+          GHC_VERSION: ${{ matrix.ghc }}
+
+      - if: always()
+        name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          if-no-files-found: error
+          retention-days: 2
+          name: artifacts-mac-x86_64
+          path: |
+            ./out-${{ env.ARTIFACT }}-${{ matrix.ghc }}.tar
+
+  build-mac-aarch64:
+    name: Build binary (Mac aarch64)
+    runs-on: [self-hosted, macOS, ARM64]
+    env:
+      MACOSX_DEPLOYMENT_TARGET: 10.13
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      S3_HOST: ${{ secrets.S3_HOST }}
+      ADD_CABAL_ARGS: ""
+      ARTIFACT: "aarch64-apple-darwin"
+      ARCH: ARM64
+      TARBALL_EXT: tar.xz
+      DISTRO: na
+      HOMEBREW_CHANGE_ARCH_TO_ARM: 1
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc: ["9.4.4", "9.2.5", "8.10.7"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run build
         run: |
           bash .github/scripts/brew.sh git coreutils llvm@11 autoconf automake tree
           export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@11/bin:$PATH"
@@ -213,56 +260,36 @@ jobs:
           export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
           export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
           bash .github/scripts/build.sh
+          tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
         env:
-          ARTIFACT: ${{ matrix.ARTIFACT }}
-          ARCH: ${{ matrix.ARCH }}
-          DISTRO: na
-          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
-          S3_HOST: ${{ env.S3_HOST }}
-          HOMEBREW_CHANGE_ARCH_TO_ARM: 1
-          TARBALL_EXT: ${{ matrix.TARBALL_EXT }}
-
-      - if: matrix.ARCH == '64' && runner.os == 'macOS'
-        name: Run build
-        run: |
-          bash .github/scripts/brew.sh coreutils tree
-          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$PATH"
-          bash .github/scripts/build.sh
-        env:
-          ARTIFACT: ${{ matrix.ARTIFACT }}
-          ARCH: ${{ matrix.ARCH }}
-          DISTRO: na
-          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
-          S3_HOST: ${{ env.S3_HOST }}
-          HOMEBREW_CHANGE_ARCH_TO_ARM: 1
-          TARBALL_EXT: ${{ matrix.TARBALL_EXT }}
+          GHC_VERSION: ${{ matrix.ghc }}
 
       - if: always()
         name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: artifacts
+          if-no-files-found: error
+          retention-days: 2
+          name: artifacts-mac-aarch64
           path: |
-            ./out/*
+            ./out-${{ env.ARTIFACT }}-${{ matrix.ghc }}.tar
 
   build-win:
     name: Build binary (Win)
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     env:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       S3_HOST: ${{ secrets.S3_HOST }}
       ADD_CABAL_ARGS: ""
+      ARTIFACT: "x86_64-mingw64"
+      ARCH: 64
+      TARBALL_EXT: "zip"
+      DISTRO: na
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            ARTIFACT: "x86_64-mingw64"
-            ARCH: 64
-            TARBALL_EXT: zip
+        ghc: ["9.4.4", "9.2.5", "9.0.2", "8.10.7"]
     steps:
       - name: install windows deps
         shell: pwsh
@@ -275,32 +302,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Run build (windows/mac)
+      - name: Run build (windows)
         run: |
           $env:CHERE_INVOKING = 1
           $env:MSYS2_PATH_TYPE = "inherit"
+          $ErrorActionPreference = "Stop"
           C:\msys64\usr\bin\bash -lc "bash .github/scripts/build.sh"
         shell: pwsh
         env:
-          ARTIFACT: ${{ matrix.ARTIFACT }}
-          ARCH: ${{ matrix.ARCH }}
-          DISTRO: na
-          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
-          S3_HOST: ${{ env.S3_HOST }}
-          HOMEBREW_CHANGE_ARCH_TO_ARM: 1
-          TARBALL_EXT: ${{ matrix.TARBALL_EXT }}
+          GHC_VERSION: ${{ matrix.ghc }}
 
       - if: always()
         name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: artifacts
+          if-no-files-found: error
+          retention-days: 2
+          name: artifacts-win
           path: |
             ./out/*
 
-  test-linux:
-    name: Test linux binaries
+  bindist-linux:
+    name: Tar linux bindists (linux)
     runs-on: ubuntu-latest
     needs: ["build-linux"]
     env:
@@ -312,16 +335,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - image: alpine:3.12
-          #   installCmd: apk update && apk add --no-cache
-          #   toolRequirements: binutils-gold gcc g++ gmp-dev libc-dev libffi-dev make musl-dev ncurses-dev ncurses-static perl tar xz xz-dev automake autoconf coreutils bsd-compat-headers diffutils gzip findutils tree zlib-dev patchelf
-          #   ARTIFACT: "x86_64-linux-alpine"
-          #   DISTRO: Alpine
-          # - image: alpine:3.12
-          #   installCmd: apk update && apk add --no-cache
-          #   toolRequirements: binutils-gold gcc g++ gmp-dev libc-dev libffi-dev make musl-dev ncurses-dev ncurses-static perl tar xz xz-dev automake autoconf coreutils bsd-compat-headers diffutils gzip findutils tree zlib-dev patchelf
-          #   ARTIFACT: "x86_64-linux-alpine-static"
-          #   DISTRO: Alpine
           - image: debian:9
             installCmd: apt-get update && apt-get install -y
             toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
@@ -389,7 +402,290 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: artifacts
+          name: artifacts-${{ matrix.ARTIFACT }}
+          path: ./
+
+      - name: Create bindist
+        run: |
+          for bindist in out-*.tar ; do
+            tar xf "${bindist}"
+          done
+          unset bindist
+          bash .github/scripts/bindist.sh
+        env:
+          ARTIFACT: ${{ matrix.ARTIFACT }}
+
+      - name: Upload bindist
+        uses: actions/upload-artifact@v3
+        with:
+          if-no-files-found: error
+          name: bindists-${{ matrix.ARTIFACT }}
+          path: |
+            ./out/*.tar.xz
+            ./out/plan.json/*
+
+      - uses: geekyeggo/delete-artifact@v2
+        with:
+          name: artifacts-${{ matrix.ARTIFACT }}
+
+  bindist-arm:
+    name: Tar linux bindists (arm)
+    runs-on: [self-hosted, Linux, ARM64]
+    needs: ["build-arm"]
+    env:
+      TARBALL_EXT: tar.xz
+      ARCH: ARM64
+      DEBIAN_FRONTEND: noninteractive
+      ARTIFACT: "aarch64-linux-ubuntu20"
+      TZ: Asia/Singapore
+    steps:
+      - uses: docker://arm64v8/ubuntu:focal
+        name: Cleanup (aarch64 linux)
+        with:
+          args: "find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +"
+
+      - name: git config
+        run: |
+          git config --global --get-all safe.directory | grep '^\*$' || git config --global --add safe.directory "*"
+        shell: bash
+
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: artifacts-arm
+          path: ./
+
+      - uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
+        name: Unpack
+        with:
+          args: bash .github/scripts/untar.sh
+
+      - uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
+        name: Create bindist (aarch64 linux)
+        with:
+          args: bash .github/scripts/bindist.sh
+
+      - name: Upload bindist
+        uses: actions/upload-artifact@v3
+        with:
+          if-no-files-found: error
+          name: bindists-arm
+          path: |
+            ./out/*.tar.xz
+            ./out/plan.json/*
+
+      - uses: geekyeggo/delete-artifact@v2
+        with:
+          name: artifacts-arm
+
+  bindist-mac-x86_64:
+    name: Tar bindists (Mac x86_64)
+    runs-on: macOS-10.15
+    needs: ["build-mac-x86_64"]
+    env:
+      TARBALL_EXT: tar.xz
+      ARCH: 64
+      ARTIFACT: "x86_64-apple-darwin"
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: artifacts-mac-x86_64
+          path: ./
+
+      - name: Create bindist
+        run: |
+          brew install coreutils tree
+          for bindist in out-*.tar ; do
+            tar xf "${bindist}"
+          done
+          unset bindist
+          bash .github/scripts/bindist.sh
+
+      - name: Upload bindist
+        uses: actions/upload-artifact@v3
+        with:
+          if-no-files-found: error
+          name: bindists-mac-x86_64
+          path: |
+            ./out/*.tar.xz
+            ./out/plan.json/*
+
+      - uses: geekyeggo/delete-artifact@v2
+        with:
+          name: artifacts-mac-x86_64
+
+  bindist-mac-aarch64:
+    name: Tar bindists (Mac aarch64)
+    runs-on: [self-hosted, macOS, ARM64]
+    needs: ["build-mac-aarch64"]
+    env:
+      TARBALL_EXT: tar.xz
+      ARCH: ARM64
+      ARTIFACT: "aarch64-apple-darwin"
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: artifacts-mac-aarch64
+          path: ./
+
+      - name: Create bindist
+        run: |
+          bash .github/scripts/brew.sh git coreutils llvm@11 autoconf automake tree
+          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@11/bin:$PATH"
+          export CC="$HOME/.brew/opt/llvm@11/bin/clang"
+          export CXX="$HOME/.brew/opt/llvm@11/bin/clang++"
+          export LD=ld
+          export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
+          export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
+          for bindist in out-*.tar ; do
+            tar xf "${bindist}"
+          done
+          unset bindist
+          bash .github/scripts/bindist.sh
+
+      - name: Upload bindist
+        uses: actions/upload-artifact@v3
+        with:
+          if-no-files-found: error
+          name: bindists-mac-aarch64
+          path: |
+            ./out/*.tar.xz
+            ./out/plan.json/*
+
+      - uses: geekyeggo/delete-artifact@v2
+        with:
+          name: artifacts-mac-aarch64
+
+  bindist-win:
+    name: Tar bindists (Windows)
+    runs-on: windows-latest
+    needs: ["build-win"]
+    env:
+      TARBALL_EXT: zip
+      ARTIFACT: "x86_64-mingw64"
+      ARCH: 64
+    steps:
+      - name: install windows deps
+        shell: pwsh
+        run: |
+          C:\msys64\usr\bin\bash -lc "pacman --disable-download-timeout --noconfirm -Syuu"
+          C:\msys64\usr\bin\bash -lc "pacman --disable-download-timeout --noconfirm -Syuu"
+          C:\msys64\usr\bin\bash -lc "pacman --disable-download-timeout --noconfirm -S unzip zip git"
+          taskkill /F /FI "MODULES eq msys-2.0.dll"
+
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: artifacts-win
+          path: ./out
+
+      - name: Create bindist
+        run: |
+          $env:CHERE_INVOKING = 1
+          $env:MSYS2_PATH_TYPE = "inherit"
+          C:\msys64\usr\bin\bash -lc "bash .github/scripts/bindist.sh"
+        shell: pwsh
+
+      - name: Upload bindist
+        uses: actions/upload-artifact@v3
+        with:
+          if-no-files-found: error
+          name: bindists-win
+          path: |
+            ./out/*.zip
+            ./out/plan.json/*
+
+      - uses: geekyeggo/delete-artifact@v2
+        with:
+          name: artifacts-win
+
+  test-linux:
+    name: Test linux binaries
+    runs-on: ubuntu-latest
+    needs: ["bindist-linux"]
+    env:
+      TARBALL_EXT: tar.xz
+      ARCH: 64
+      DEBIAN_FRONTEND: noninteractive
+      TZ: Asia/Singapore
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:9
+            installCmd: apt-get update && apt-get install -y
+            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
+            DISTRO: Debian
+            ARTIFACT: "x86_64-linux-deb9"
+          - image: debian:10
+            installCmd: apt-get update && apt-get install -y
+            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
+            DISTRO: Debian
+            ARTIFACT: "x86_64-linux-deb10"
+          - image: debian:11
+            installCmd: apt-get update && apt-get install -y
+            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
+            DISTRO: Debian
+            ARTIFACT: "x86_64-linux-deb11"
+          - image: ubuntu:18.04
+            installCmd: apt-get update && apt-get install -y
+            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
+            DISTRO: Ubuntu
+            ARTIFACT: "x86_64-linux-ubuntu18.04"
+          - image: ubuntu:20.04
+            installCmd: apt-get update && apt-get install -y
+            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
+            DISTRO: Ubuntu
+            ARTIFACT: "x86_64-linux-ubuntu20.04"
+          - image: ubuntu:22.04
+            installCmd: apt-get update && apt-get install -y
+            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
+            DISTRO: Ubuntu
+            ARTIFACT: "x86_64-linux-ubuntu22.04"
+          - image: fedora:27
+            installCmd: dnf install -y
+            toolRequirements: autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf tree
+            DISTRO: Fedora
+            ARTIFACT: "x86_64-linux-fedora27"
+          - image: fedora:33
+            installCmd: dnf install -y
+            toolRequirements: autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf tree
+            DISTRO: Fedora
+            ARTIFACT: "x86_64-linux-fedora33"
+          - image: centos:7
+            installCmd: yum -y install epel-release && yum install -y
+            toolRequirements: autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf tree
+            DISTRO: CentOS
+            ARTIFACT: "x86_64-linux-centos7"
+          - image: linuxmintd/mint19.3-amd64
+            installCmd: apt-get update && apt-get install -y
+            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
+            DISTRO: Mint
+            ARTIFACT: "x86_64-linux-mint19.3"
+          - image: linuxmintd/mint20.2-amd64
+            installCmd: apt-get update && apt-get install -y
+            toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
+            DISTRO: Mint
+            ARTIFACT: "x86_64-linux-mint20.2"
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install requirements
+        shell: sh
+        run: |
+          ${{ matrix.installCmd }} curl bash git ${{ matrix.toolRequirements }}
+
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: bindists-${{ matrix.ARTIFACT }}
           path: ./out
 
       - name: Run test
@@ -400,24 +696,20 @@ jobs:
 
   test-arm:
     name: Test ARM binary
-    runs-on: ${{ matrix.os }}
-    needs: ["build-arm"]
+    runs-on: [self-hosted, Linux, ARM64]
+    needs: ["bindist-arm"]
     env:
       TARBALL_EXT: tar.xz
       DEBIAN_FRONTEND: noninteractive
       TZ: Asia/Singapore
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - os: [self-hosted, Linux, ARM64]
-            ARTIFACT: "aarch64-linux-ubuntu20"
-            ARCH: ARM64
+      ARTIFACT: "aarch64-linux-ubuntu20"
+      ARCH: ARM64
+      DISTRO: Ubuntu
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
         with:
-          args: rm -rf .ghcup/ cabal/ dist-newstyle/ out/ store/
+          args: "find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +"
 
       - name: git config
         run: |
@@ -429,69 +721,80 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: artifacts
+          name: bindists-arm
           path: ./out
 
       - uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
         name: Run test (aarch64 linux)
         with:
           args: bash .github/scripts/test.sh
-        env:
-          ARTIFACT: ${{ matrix.ARTIFACT }}
-          ARCH: ${{ matrix.ARCH }}
-          DISTRO: Ubuntu
 
-  test-mac:
-    name: Test binary (Mac)
-    runs-on: ${{ matrix.os }}
-    needs: ["build-mac"]
+  test-mac-x86_64:
+    name: Test binary (Mac x86_64)
+    runs-on: macOS-10.15
+    needs: ["bindist-mac-x86_64"]
     env:
       MACOSX_DEPLOYMENT_TARGET: 10.13
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: [self-hosted, macOS, ARM64]
-            ARTIFACT: "aarch64-apple-darwin"
-            ARCH: ARM64
-            TARBALL_EXT: tar.xz
-          - os: macOS-10.15
-            ARTIFACT: "x86_64-apple-darwin"
-            ARCH: 64
-            TARBALL_EXT: tar.xz
+      ARTIFACT: "x86_64-apple-darwin"
+      ARCH: 64
+      TARBALL_EXT: tar.xz
+      DISTRO: na
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - uses: actions/download-artifact@v3
         with:
-          name: artifacts
+          name: bindists-mac-x86_64
           path: ./out
 
-      - name: Run test (windows/mac)
+      - name: Run test (mac)
         run: |
-          bash .github/scripts/brew.sh coreutils tree
-          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$PATH"
+          brew install coreutils tree
           bash .github/scripts/test.sh
-        env:
-          ARTIFACT: ${{ matrix.ARTIFACT }}
-          ARCH: ${{ matrix.ARCH }}
-          DISTRO: na
-          HOMEBREW_CHANGE_ARCH_TO_ARM: 1
-          TARBALL_EXT: ${{ matrix.TARBALL_EXT }}
+
+  test-mac-aarch64:
+    name: Test binary (Mac aarch64)
+    runs-on: [self-hosted, macOS, ARM64]
+    needs: ["bindist-mac-aarch64"]
+    env:
+      MACOSX_DEPLOYMENT_TARGET: 10.13
+      ARTIFACT: "aarch64-apple-darwin"
+      ARCH: ARM64
+      TARBALL_EXT: tar.xz
+      DISTRO: n
+      HOMEBREW_CHANGE_ARCH_TO_ARM: 1
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: bindists-mac-aarch64
+          path: ./out
+
+      - name: Run test (mac)
+        run: |
+          bash .github/scripts/brew.sh git coreutils llvm@11 autoconf automake tree
+          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@11/bin:$PATH"
+          export CC="$HOME/.brew/opt/llvm@11/bin/clang"
+          export CXX="$HOME/.brew/opt/llvm@11/bin/clang++"
+          export LD=ld
+          export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
+          export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
+          bash .github/scripts/test.sh
 
   test-win:
     name: Test binary (Win)
-    runs-on: ${{ matrix.os }}
-    needs: ["build-win"]
+    runs-on: windows-latest
+    needs: ["bindist-win"]
+    env:
+      ARTIFACT: "x86_64-mingw64"
+      ARCH: 64
+      TARBALL_EXT: zip
+      DISTRO: na
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            ARTIFACT: "x86_64-mingw64"
-            ARCH: 64
-            TARBALL_EXT: zip
     steps:
       - name: install windows deps
         shell: pwsh
@@ -506,33 +809,98 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: artifacts
+          name: bindists-win
           path: ./out
 
-      - name: Run test (windows/mac)
+      - name: Run test (windows)
         run: |
           $env:CHERE_INVOKING = 1
           $env:MSYS2_PATH_TYPE = "inherit"
           C:\msys64\usr\bin\bash -lc "bash .github/scripts/test.sh"
         shell: pwsh
-        env:
-          ARTIFACT: ${{ matrix.ARTIFACT }}
-          ARCH: ${{ matrix.ARCH }}
-          DISTRO: na
-          HOMEBREW_CHANGE_ARCH_TO_ARM: 1
-          TARBALL_EXT: ${{ matrix.TARBALL_EXT }}
 
   release:
     name: release
-    needs: ["test-linux", "test-mac", "test-win", "test-arm"]
+    needs: ["test-linux", "test-mac-x86_64", "test-mac-aarch64", "test-win", "test-arm"]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v3
         with:
-          name: artifacts
           path: ./out
+          name: bindists-x86_64-linux-deb9
+      - uses: actions/download-artifact@v3
+        with:
+          path: ./out
+          name: bindists-x86_64-linux-deb10
+      - uses: actions/download-artifact@v3
+        with:
+          path: ./out
+          name: bindists-x86_64-linux-deb11
+      - uses: actions/download-artifact@v3
+        with:
+          path: ./out
+          name: bindists-x86_64-linux-ubuntu18.04
+      - uses: actions/download-artifact@v3
+        with:
+          path: ./out
+          name: bindists-x86_64-linux-ubuntu20.04
+      - uses: actions/download-artifact@v3
+        with:
+          path: ./out
+          name: bindists-x86_64-linux-ubuntu22.04
+      - uses: actions/download-artifact@v3
+        with:
+          path: ./out
+          name: bindists-x86_64-linux-fedora27
+      - uses: actions/download-artifact@v3
+        with:
+          path: ./out
+          name: bindists-x86_64-linux-fedora33
+      - uses: actions/download-artifact@v3
+        with:
+          path: ./out
+          name: bindists-x86_64-linux-centos7
+      - uses: actions/download-artifact@v3
+        with:
+          path: ./out
+          name: bindists-x86_64-linux-mint19.3
+      - uses: actions/download-artifact@v3
+        with:
+          path: ./out
+          name: bindists-x86_64-linux-mint20.2
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: bindists-arm
+          path: ./out
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: bindists-mac-x86_64
+          path: ./out
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: bindists-mac-aarch64
+          path: ./out
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: bindists-win
+          path: ./out
+
+      - name: Install requirements
+        run: |
+          sudo apt-get update && sudo apt-get install -y tar xz-utils
+        shell: bash
+
+      - name: tar plan.json
+        run: |
+          cd out/plan.json
+          tar cf plan_json.tar *
+          mv plan_json.tar ../
+        shell: bash
 
       - name: Release
         uses: softprops/action-gh-release@v1
@@ -541,3 +909,4 @@ jobs:
           files: |
             ./out/*.zip
             ./out/*.tar.xz
+            ./out/*.tar
