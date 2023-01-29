@@ -139,7 +139,6 @@ install_ghcup() {
 	else
 		curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_MINIMAL=1 sh
 		source "$(dirname "${GHCUP_BIN}")/env"
-		ghcup install ghc --set "${BOOTSTRAP_HASKELL_GHC_VERSION}"
 		ghcup install cabal --set "${BOOTSTRAP_HASKELL_CABAL_VERSION}"
 	fi
 }

@@ -6,7 +6,6 @@ compute_engine_instance:
   disk: 100 # Gb
 
 build_task:
-  name: build
   timeout_in: 120m
   only_if: $CIRRUS_TAG != ''
   env:
@@ -20,59 +19,83 @@ build_task:
     RUNNER_OS: "FreeBSD"
     ADD_CABAL_ARGS: "--enable-split-sections"
     GITHUB_WORKSPACE: ${CIRRUS_WORKING_DIR}
+    CABAL_CACHE_NONFATAL: "yes"
+  matrix:
+    - name: build-ghc-8.10.7
+      env:
+        GHC_VERSION: 8.10.7
+    - name: build-ghc-9.0.2
+      env:
+        GHC_VERSION: 9.0.2
+    - name: build-ghc-9.2.5
+      env:
+        GHC_VERSION: 9.2.5
   install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree
   script:
     - tzsetup Etc/GMT
     - adjkerntz -a
     - bash .github/scripts/build.sh
-    - bash .github/scripts/test.sh
-      # binaries_cache: &binaries_cache
-      #   folder: out
-      #   fingerprint_script:
-      #     - ghc --numeric-version
-      #     - cat cabal.project
-      #     - cat haskell-language-server.cabal
-      #     - cat dist-newstyle/cache/plan.json
+    - tar caf out.tar.xz out/ store/
   binaries_artifacts:
-    path: "out/*"
+    path: "out.tar.xz"
 
-    # release_task:
-    #   name: "Release"
-    #   only_if: $CIRRUS_TAG != ''
-    #   depends_on: build
-    #   env:
-    #     GITHUB_TOKEN: ENCRYPTED[9d9b54424cb18abc9067436c729a77e0486805eff1903bc5b2c591696850f8db7cebac3f29cfa3b119ebb6fd2e98a839]
-    #   install_script: pkg install -y curl bash jq
-    #   binaries_cache: *binaries_cache
-    #   upload_script: |
-    #     #!/bin/bash
-    #
-    #     if [[ "$CIRRUS_RELEASE" == "" ]]; then
-    #       NUM_TRIES=0
-    #       until [ $NUM_TRIES -eq 20 ]
-    #       do
-    #         echo "Retrying to find a release associated with this tag"
-    #         CIRRUS_RELEASE=$(curl -sL https://api.github.com/repos/$CIRRUS_REPO_FULL_NAME/releases/tags/$CIRRUS_TAG | jq -r '.id')
-    #         [[ "$CIRRUS_RELEASE" != "null" ]] && break
-    #         NUM_TRIES=$((NUM_TRIES+1))
-    #         sleep 30
-    #       done
-    #     fi
-    #
-    #     if [[ "$GITHUB_TOKEN" == "" ]]; then
-    #       echo "Please provide GitHub access token via GITHUB_TOKEN environment variable!"
-    #       exit 1
-    #     fi
-    #
-    #     for fpath in out/*
-    #     do
-    #       echo "Uploading $fpath..."
-    #       name=$(basename "$fpath")
-    #       url_to_upload="https://uploads.github.com/repos/$CIRRUS_REPO_FULL_NAME/releases/$CIRRUS_RELEASE/assets?name=$name"
-    #       echo "Uploading to $url_to_upload"
-    #       curl -X POST \
-    #         --data-binary @$fpath \
-    #         --header "Authorization: token $GITHUB_TOKEN" \
-    #         --header "Content-Type: application/x-xz-compressed-tar" \
-    #         $url_to_upload
-    #     done
+
+bindist_task:
+  name: bindist
+  depends_on:
+    - build-ghc-8.10.7
+    - build-ghc-9.0.2
+    - build-ghc-9.2.5
+  timeout_in: 120m
+  only_if: $CIRRUS_TAG != ''
+  env:
+    TARBALL_EXT: "tar.xz"
+    ARCH: 64
+    ARTIFACT: "x86_64-freebsd"
+    DISTRO: "na"
+    RUNNER_OS: "FreeBSD"
+    GITHUB_WORKSPACE: ${CIRRUS_WORKING_DIR}
+  install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree unzip
+  script:
+    - tzsetup Etc/GMT
+    - adjkerntz -a
+
+    - curl -o binaries-8.10.7.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-8.10.7/binaries/out.tar.xz
+    - tar xvf binaries-8.10.7.tar.xz
+    - rm -f binaries-8.10.7.tar.xz
+
+    - curl -o binaries-9.0.2.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.0.2/binaries/out.tar.xz
+    - tar xvf binaries-9.0.2.tar.xz
+    - rm -f binaries-9.0.2.tar.xz
+
+    - curl -o binaries-9.2.5.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.2.5/binaries/out.tar.xz
+    - tar xvf binaries-9.2.5.tar.xz
+    - rm -f binaries-9.2.5.tar.xz
+
+    - bash .github/scripts/bindist.sh
+  bindist_artifacts:
+    path: "./out/*.tar.xz"
+
+test_task:
+  name: test
+  depends_on:
+    - bindist
+  timeout_in: 120m
+  only_if: $CIRRUS_TAG != ''
+  env:
+    TARBALL_EXT: "tar.xz"
+    ARCH: 64
+    ARTIFACT: "x86_64-freebsd"
+    DISTRO: "na"
+    RUNNER_OS: "FreeBSD"
+    GITHUB_WORKSPACE: ${CIRRUS_WORKING_DIR}
+  install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree unzip
+  script:
+    - tzsetup Etc/GMT
+    - adjkerntz -a
+
+    - curl -O -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/bindist/bindist.zip
+    - unzip bindist.zip
+
+    - bash .github/scripts/test.sh
+

@@ -11,9 +11,10 @@ UNAME := $(shell uname)
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 GHC_VERSION  ?=
+ARTIFACT     ?= unknown-platform
 
 HLS_VERSION := $(shell grep '^version:' haskell-language-server.cabal | awk '{ print $$2 }')
-TARBALL     ?= haskell-language-server-$(HLS_VERSION).tar.xz
+TARBALL     ?= haskell-language-server-$(HLS_VERSION)-$(ARTIFACT).tar.xz
 
 CHMOD     := chmod
 CHMOD_X   := $(CHMOD) 755
@@ -28,7 +29,6 @@ MKDIR_P   := $(MKDIR) -p
 TAR       := tar
 TAR_MK    := $(TAR) caf
 CABAL     := cabal
-AWK       := awk
 STRIP     := strip
 ifeq ($(UNAME), Darwin)
 STRIP_S   := strip
@@ -54,8 +54,8 @@ endif
 
 INSTALL_NAME_TOOL := install_name_tool
 
-STORE_DIR        := store
-BINDIST_BASE_DIR := out/bindist
+STORE_DIR        := store/$(ARTIFACT)
+BINDIST_BASE_DIR := out/bindist/$(ARTIFACT)
 BINDIST_OUT_DIR  := $(BINDIST_BASE_DIR)/haskell-language-server-$(HLS_VERSION)
 
 CABAL_BASE_ARGS         ?= --store-dir=$(ROOT_DIR)/$(STORE_DIR)
@@ -82,32 +82,35 @@ define sync_to
 	$(CABAL_CACHE_BIN) sync-to-archive --host-name-override=$(S3_HOST) --host-port-override=443 --host-ssl-override=True --region us-west-2 --store-path="$(ROOT_DIR)/$(STORE_DIR)" --archive-uri "s3://haskell-language-server/$(S3_KEY)"
 endef
 
-hls: bindist/ghcs
-	for ghc in $(shell { [ -e "bindist/ghcs-`uname`-`uname -p`" ] && cat "bindist/ghcs-`uname`-`uname -p`" ; } || { [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" ; } || cat "bindist/ghcs") ; do \
+hls:
+	@if test -z "$(GHCS)" ; then echo >&2 "GHCS is not set" ; false ; fi
+	for ghc in $(GHCS) ; do \
 		$(GHCUP) install ghc `echo $$ghc` && \
 		$(GHCUP_GC) -p -s -c -t && \
 		$(MAKE) GHC_VERSION=`echo $$ghc` hls-ghc || exit 1 ; \
 	done
 
 hls-ghc:
-	$(MKDIR_P) out/
+	$(MKDIR_P) out/$(ARTIFACT)
+	$(MKDIR_P) out/plan.json
 	@if test -z "$(GHC_VERSION)" ; then echo >&2 "GHC_VERSION is not set" ; false ; fi
 	$(CABAL) $(CABAL_BASE_ARGS) configure --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) exe:haskell-language-server exe:haskell-language-server-wrapper
 	$(CABAL) $(CABAL_BASE_ARGS) build --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) --dependencies-only --dry-run exe:haskell-language-server exe:haskell-language-server-wrapper
 	$(call sync_from)
 	$(CABAL) $(CABAL_BASE_ARGS) build --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) --dependencies-only exe:haskell-language-server exe:haskell-language-server-wrapper
-	$(CP) dist-newstyle/cache/plan.json "$(ROOT_DIR)/out/ghc-$(GHC_VERSION)-plan.json"
+	$(CP) dist-newstyle/cache/plan.json "$(ROOT_DIR)/out/plan.json/$(ARTIFACT)-ghc-$(GHC_VERSION)-plan.json"
 	$(call sync_to)
-	$(CABAL_INSTALL) --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) $(CABAL_INSTALL_ARGS) --installdir="$(ROOT_DIR)/out/$(GHC_VERSION)" exe:haskell-language-server exe:haskell-language-server-wrapper
+	$(CABAL_INSTALL) --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) $(CABAL_INSTALL_ARGS) --installdir="$(ROOT_DIR)/out/$(ARTIFACT)/$(GHC_VERSION)" exe:haskell-language-server exe:haskell-language-server-wrapper
 	$(call sync_to)
-	$(STRIP_S) "$(ROOT_DIR)/out/$(GHC_VERSION)/haskell-language-server"
-	$(STRIP_S) "$(ROOT_DIR)/out/$(GHC_VERSION)/haskell-language-server-wrapper"
+	$(STRIP_S) "$(ROOT_DIR)/out/$(ARTIFACT)/$(GHC_VERSION)/haskell-language-server"
+	$(STRIP_S) "$(ROOT_DIR)/out/$(ARTIFACT)/$(GHC_VERSION)/haskell-language-server-wrapper"
 
 bindist:
-	for ghc in $(shell { [ -e "bindist/ghcs-`uname`-`uname -p`" ] && cat "bindist/ghcs-`uname`-`uname -p`" ; } || { [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" ; } || cat "bindist/ghcs") ; do \
-		$(GHCUP) install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
+	@if test -z "$(GHCS)" ; then echo >&2 "GHCS is not set" ; false ; fi
+	for ghc in $(GHCS) ; do \
+		$(GHCUP) install ghc `echo $$ghc` && \
 		$(GHCUP_GC) -p -s -c -t && \
-		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` bindist-ghc || exit 1 ; \
+		$(MAKE) GHC_VERSION=`echo $$ghc` bindist-ghc || exit 1 ; \
 	done
 	$(SED) -e "s/@@HLS_VERSION@@/$(HLS_VERSION)/" \
 		bindist/GNUmakefile.in > "$(BINDIST_OUT_DIR)/GNUmakefile"
@@ -122,7 +125,7 @@ bindist-ghc:
 	$(MKDIR_P) "$(BINDIST_OUT_DIR)/bin"
 	$(MKDIR_P) "$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)"
 	$(INSTALL_D) "$(BINDIST_OUT_DIR)/bin/"
-	$(INSTALL_X) "out/$(GHC_VERSION)/haskell-language-server" "$(BINDIST_OUT_DIR)/bin/haskell-language-server-$(GHC_VERSION)"
+	$(INSTALL_X) "out/$(ARTIFACT)/$(GHC_VERSION)/haskell-language-server" "$(BINDIST_OUT_DIR)/bin/haskell-language-server-$(GHC_VERSION)"
 	$(call set_rpath,../lib/$(GHC_VERSION),$(BINDIST_OUT_DIR)/bin/haskell-language-server-$(GHC_VERSION))
 	$(SED) \
 		-e "s/@@EXE_NAME@@/haskell-language-server-$(GHC_VERSION)/" \
@@ -132,7 +135,7 @@ bindist-ghc:
 		bindist/wrapper.in > "$(BINDIST_OUT_DIR)/haskell-language-server-$(GHC_VERSION).in"
 	$(CHMOD_X) "$(BINDIST_OUT_DIR)/haskell-language-server-$(GHC_VERSION).in"
 	$(INSTALL_D) "$(BINDIST_OUT_DIR)/bin/"
-	$(INSTALL_X) "out/$(GHC_VERSION)/haskell-language-server-wrapper" "$(BINDIST_OUT_DIR)/bin/haskell-language-server-wrapper"
+	$(INSTALL_X) "out/$(ARTIFACT)/$(GHC_VERSION)/haskell-language-server-wrapper" "$(BINDIST_OUT_DIR)/bin/haskell-language-server-wrapper"
 	$(INSTALL_D) "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)"
 	$(FIND) "$(STORE_DIR)/ghc-$(GHC_VERSION)" -type f -name "$(DLL)" -execdir $(INSTALL_X) "{}" "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)/{}" \;
 	$(FIND) "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)" -type f -name '$(DLL)' -execdir $(call set_rpath,,{}) \;
@@ -144,11 +147,12 @@ clean:
 	$(RM_RF) out/*
 
 clean-ghcs:
-	for ghc in $(shell { [ -e "bindist/ghcs-`uname`-`uname -p`" ] && cat "bindist/ghcs-`uname`-`uname -p`" ; } || { [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" ; } || cat "bindist/ghcs") ; do \
-		$(GHCUP) rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
+	@if test -z "$(GHCS)" ; then echo >&2 "GHCS is not set" ; false ; fi
+	for ghc in $(GHCS) ; do \
+		$(GHCUP) rm ghc `echo $$ghc` ; \
 	done
 
 clean-all: clean-ghcs
 	$(RM_RF) out/* $(STORE_DIR)
 
-.PHONY: hls hls-ghc bindist bindist-ghc bindist-tar clean clean-all install-ghcs
+.PHONY: hls hls-ghc bindist bindist-ghc bindist-tar clean clean-all install-ghcs version
