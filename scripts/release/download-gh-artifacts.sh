@@ -23,7 +23,7 @@ gh release download "$RELEASE"
 
 # cirrus
 curl --fail -L -o "haskell-language-server-${RELEASE}-x86_64-freebsd.tar.xz" \
-	"https://api.cirrus-ci.com/v1/artifact/github/haskell/haskell-language-server/build/binaries/out/haskell-language-server-${RELEASE}-x86_64-freebsd.tar.xz?branch=${RELEASE}"
+	"https://api.cirrus-ci.com/v1/artifact/github/haskell/haskell-language-server/bindist/bindist/out/haskell-language-server-${RELEASE}-x86_64-freebsd.tar.xz?branch=${RELEASE}"
 
 
 sha256sum haskell-language-server-* > SHA256SUMS

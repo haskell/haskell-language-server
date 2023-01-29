@@ -22,6 +22,6 @@ export HOMEBREW_LOGS=$CI_PROJECT_DIR/.brew_logs
 mkdir -p /private/tmp/.brew_tmp
 export HOMEBREW_TEMP=/private/tmp/.brew_tmp
 
-brew update
+#brew update
 brew install ${1+"$@"}
 
