@@ -22,6 +22,7 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Ide.Plugin.Tactic as Tactic
+import           Ide.Types (IdePlugins(..))
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
 import qualified Language.LSP.Types.Lens as J
@@ -64,7 +65,7 @@ runSessionForTactics :: Session a -> IO a
 runSessionForTactics act = do
   recorder <- pluginTestRecorder
   runSessionWithServer'
-    [plugin recorder]
+    (plugin recorder)
     def
     (def { messageTimeout = 20 } )
     fullCaps

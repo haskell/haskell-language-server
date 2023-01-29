@@ -12,10 +12,10 @@ import           Data.Functor             ((<&>))
 import           Data.List                (sort, tails)
 import qualified Data.Map                 as M
 import qualified Data.Text                as T
+import           Development.IDE.Test
 import           Ide.Plugin.CallHierarchy
 import qualified Language.LSP.Test        as Test
 import qualified Language.LSP.Types.Lens  as L
-import Development.IDE.Test
 import           System.Directory.Extra
 import           System.FilePath
 import qualified System.IO.Extra

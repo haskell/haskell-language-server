@@ -63,7 +63,7 @@ resetGlobalHoleRef = writeIORef globalHoleRef 0
 runSessionForTactics :: Session a -> IO a
 runSessionForTactics =
   runSessionWithServer'
-    [plugin]
+    (IdePlugins [plugin])
     def
     (def { messageTimeout = 20 } )
     fullCaps

@@ -22,6 +22,7 @@ import qualified Ide.Plugin.Config       as Plugin
 import qualified Ide.Plugin.Eval         as Eval
 import           Ide.Plugin.Eval.Types   (EvalParams (..), Section (..),
                                           testOutput)
+import           Ide.Types               (IdePlugins (IdePlugins))
 import           Language.LSP.Types.Lens (arguments, command, range, title)
 import           System.FilePath         ((</>))
 import           Test.Hls

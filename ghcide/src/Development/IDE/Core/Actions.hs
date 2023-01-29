@@ -10,6 +10,7 @@ module Development.IDE.Core.Actions
 , useNoFileE
 , usesE
 , workspaceSymbols
+, lookupMod
 ) where
 
 import           Control.Monad.Reader
