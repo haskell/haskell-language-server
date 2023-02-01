@@ -97,9 +97,7 @@ hls-ghc:
 	$(CABAL) $(CABAL_BASE_ARGS) configure --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) exe:haskell-language-server exe:haskell-language-server-wrapper
 	$(CABAL) $(CABAL_BASE_ARGS) build --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) --dependencies-only --dry-run exe:haskell-language-server exe:haskell-language-server-wrapper
 	$(call sync_from)
-	$(CABAL) $(CABAL_BASE_ARGS) build --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) --dependencies-only exe:haskell-language-server exe:haskell-language-server-wrapper
 	$(CP) dist-newstyle/cache/plan.json "$(ROOT_DIR)/out/plan.json/$(ARTIFACT)-ghc-$(GHC_VERSION)-plan.json"
-	$(call sync_to)
 	$(CABAL_INSTALL) --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_ARGS) $(CABAL_INSTALL_ARGS) --installdir="$(ROOT_DIR)/out/$(ARTIFACT)/$(GHC_VERSION)" exe:haskell-language-server exe:haskell-language-server-wrapper
 	$(call sync_to)
 	$(STRIP_S) "$(ROOT_DIR)/out/$(ARTIFACT)/$(GHC_VERSION)/haskell-language-server"

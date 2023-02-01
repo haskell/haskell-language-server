@@ -121,8 +121,6 @@ build_with_cache() {
 	ecabal configure "$@"
 	ecabal build --dependencies-only "$@" --dry-run
 	nonfatal sync_from
-	ecabal build --dependencies-only "$@" || nonfatal sync_to
-	nonfatal sync_to
 	ecabal build "$@"
 	nonfatal sync_to
 }
