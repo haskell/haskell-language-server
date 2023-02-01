@@ -115,13 +115,13 @@ import Development.IDE.GHC.Compat.CmdLine
 import GHC.Driver.Errors.Types
 import GHC.Driver.Env (hscSetActiveUnitId, hsc_all_home_unit_ids)
 import GHC.Driver.Make (checkHomeUnitsClosed)
-#endif
 import GHC.Unit.State
-import qualified Data.List.NonEmpty as NE
-import GHC.ResponseFile
 import GHC.Unit.Env
 import GHC.Types.Error (errMsgDiagnostic)
 import GHC.Data.Bag
+#endif
+import GHC.ResponseFile
+import qualified Data.List.NonEmpty as NE
 
 data Log
   = LogSettingInitialDynFlags
@@ -843,7 +843,7 @@ newComponentCache recorder exts cradlePath cfp hsc_env old_cis new_cis = do
                   getSession
 #else
                 -- getOptions is enough to initialize units on GHC <9.2
-                pure $ hscSetFlags df hsc_env { hsc_IC = (hsc_IC hsc_env) { ic_dflags = init_df } }
+                pure $ hscSetFlags df hsc_env { hsc_IC = (hsc_IC hsc_env) { ic_dflags = df } }
 #endif
           henv <- newFunc thisEnv uids
           let targetEnv = ([], Just henv)
@@ -866,9 +866,17 @@ newComponentCache recorder exts cradlePath cfp hsc_env old_cis new_cis = do
       | alreadyIncluded = xs
       | otherwise = let (as,bs) = break inIncludePath xs
                     in case bs of
-                         [] -> as
+                         [] ->
+                          -- There is no appropriate target to add the file to, so pick one randomly
+                          case as of
+                           [] -> []
+                           ((ctargets,res@(targetEnv, targetDepends)):xs) ->
+                            let x = (TargetDetails (TargetFile cfp) targetEnv targetDepends [cfp] : ctargets, res)
+                            in x:xs
+                         -- There is a component which could have this file in its include path
+                         -- pick one of these components
                          ((ctargets,res@(targetEnv, targetDepends)):bs) ->
-                           let b = (TargetDetails (TargetFile cfp) targetEnv targetDepends [cfp] : ctargets, res) -- todo what is componentFP used for
+                           let b = (TargetDetails (TargetFile cfp) targetEnv targetDepends [cfp] : ctargets, res)
                            in as ++ (b:bs)
       where
         alreadyIncluded = any (any (cfp ==) . concatMap targetLocations . fst) xs
@@ -1066,7 +1074,7 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
     ((theOpts',errs,warns),units) <- processCmdLineP unit_flags [] (map noLoc theOpts)
     case NE.nonEmpty units of
       Just us -> initMulti us
-      Nothing -> NE.singleton <$> initOne (map unLoc theOpts')
+      Nothing -> (NE.:| []) <$> initOne (map unLoc theOpts')
     where
       initMulti unitArgFiles =
         forM unitArgFiles $ \f -> do
