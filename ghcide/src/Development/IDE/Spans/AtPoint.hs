@@ -227,10 +227,14 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
         wrapHaskell x = "\n```haskell\n"<>x<>"\n```\n"
         info = nodeInfoH kind ast
         names = M.assocs $ nodeIdentifiers info
-        -- Check if a name matches a pattern for a generated Core variable.
+        -- Check for evidence bindings
         isInternal :: (Identifier, IdentifierDetails a) -> Bool
         isInternal (Right _, dets) =
+#if MIN_VERSION_ghc(9,0,1)
           any isEvidenceContext $ identInfo dets
+#else
+          False
+#endif
         isInternal (Left _, _) = False
         filteredNames = filter (not . isInternal) names
         types = nodeType info
