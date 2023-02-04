@@ -770,17 +770,8 @@ stripPrefix :: T.Text -> T.Text
 stripPrefix name = T.takeWhile (/=':') $ fromMaybe name $
   getFirst $ foldMap (First . (`T.stripPrefix` name)) occNamePrefixes
 
-safeTyThingForRecord :: TyThing -> Maybe (T.Text, [T.Text])
-safeTyThingForRecord (AnId _) = Nothing
-safeTyThingForRecord (AConLike dc) =
-    let ctxStr = printOutputable . occName . conLikeName $ dc
-        field_names = T.pack . unpackFS . flLabel <$> conLikeFieldLabels dc
-    in
-        Just (ctxStr, field_names)
-safeTyThingForRecord _ = Nothing
-
-mkRecordSnippetCompItem :: Uri -> Maybe T.Text -> T.Text -> [T.Text] -> Provenance -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem
-mkRecordSnippetCompItem uri parent ctxStr compl importedFrom docs imp = r
+mkRecordSnippetCompItem :: Uri -> Maybe T.Text -> T.Text -> [T.Text] -> Provenance -> Maybe (LImportDecl GhcPs) -> CompItem
+mkRecordSnippetCompItem uri parent ctxStr compl importedFrom imp = r
   where
       r  = CI {
             compKind = CiSnippet
