@@ -41,6 +41,7 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat               hiding (ppr)
 import qualified Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Compat.Util
+import           Development.IDE.GHC.CoreFile            (occNamePrefixes)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
@@ -767,50 +768,7 @@ openingBacktick line prefixModule prefixText Position { _character=(fromIntegral
 -- TODO: Turn this into an alex lexer that discards prefixes as if they were whitespace.
 stripPrefix :: T.Text -> T.Text
 stripPrefix name = T.takeWhile (/=':') $ fromMaybe name $
-  getFirst $ foldMap (First . (`T.stripPrefix` name)) prefixes
-
--- | Prefixes that can occur in a GHC OccName
-prefixes :: [T.Text]
-prefixes =
-  [
-    -- long ones
-    "$con2tag_"
-  , "$tag2con_"
-  , "$maxtag_"
-
-  -- four chars
-  , "$sel:"
-  , "$tc'"
-
-  -- three chars
-  , "$dm"
-  , "$co"
-  , "$tc"
-  , "$cp"
-  , "$fx"
-
-  -- two chars
-  , "$W"
-  , "$w"
-  , "$m"
-  , "$b"
-  , "$c"
-  , "$d"
-  , "$i"
-  , "$s"
-  , "$f"
-  , "$r"
-  , "C:"
-  , "N:"
-  , "D:"
-  , "$p"
-  , "$L"
-  , "$f"
-  , "$t"
-  , "$c"
-  , "$m"
-  ]
-
+  getFirst $ foldMap (First . (`T.stripPrefix` name)) occNamePrefixes
 
 mkRecordSnippetCompItem :: Uri -> Maybe T.Text -> T.Text -> [T.Text] -> Provenance -> Maybe (LImportDecl GhcPs) -> CompItem
 mkRecordSnippetCompItem uri parent ctxStr compl importedFrom imp = r

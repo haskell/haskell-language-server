@@ -1026,6 +1026,7 @@ findDefinitionAndHoverTests = let
             ExpectRange  expectedRange -> checkHoverRange expectedRange rangeInHover msg
             ExpectHoverRange expectedRange -> checkHoverRange expectedRange rangeInHover msg
             ExpectHoverText snippets -> liftIO $ traverse_ (`assertFoundIn` msg) snippets
+            ExpectHoverExcludeText snippets -> liftIO $ traverse_ (`assertNotFoundIn` msg) snippets
             ExpectHoverTextRegex re -> liftIO $ assertBool ("Regex not found in " <> T.unpack msg) (msg =~ re :: Bool)
             ExpectNoHover -> liftIO $ assertFailure $ "Expected no hover but got " <> show hover
             _ -> pure () -- all other expectations not relevant to hover
@@ -1053,6 +1054,11 @@ findDefinitionAndHoverTests = let
   assertFoundIn part whole = assertBool
     (T.unpack $ "failed to find: `" <> part <> "` in hover message:\n" <> whole)
     (part `T.isInfixOf` whole)
+
+  assertNotFoundIn :: T.Text -> T.Text -> Assertion
+  assertNotFoundIn part whole = assertBool
+    (T.unpack $ "found unexpected: `" <> part <> "` in hover message:\n" <> whole)
+    (not . T.isInfixOf part $ whole)
 
   sourceFilePath = T.unpack sourceFileName
   sourceFileName = "GotoHover.hs"
@@ -1130,6 +1136,7 @@ findDefinitionAndHoverTests = let
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 (if ghcVersion >= GHC94 then 5 else 0) 3 (if ghcVersion >= GHC94 then 8 else 14)]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
+  cmtL68 = Position 67  0  ;  lackOfdEq = [ExpectHoverExcludeText ["$dEq"]]
   in
   mkFindTests
   --      def    hover  look       expect
@@ -1173,6 +1180,7 @@ findDefinitionAndHoverTests = let
   , test  no     broken chrL36     litC          "literal Char in hover info      #1016"
   , test  no     broken txtL8      litT          "literal Text in hover info      #1016"
   , test  no     broken lstL43     litL          "literal List in hover info      #1016"
+  , test  yes    yes    cmtL68     lackOfdEq     "no Core symbols                 #3280"
   , if ghcVersion >= GHC90 then
         test  no     yes    docL41     constr        "type constraint in hover info   #1012"
     else
@@ -2390,6 +2398,7 @@ data Expect
 --  | ExpectDefRange Range -- Only gotoDef should report this range
   | ExpectHoverRange Range -- Only hover should report this range
   | ExpectHoverText [T.Text] -- the hover message must contain these snippets
+  | ExpectHoverExcludeText [T.Text] -- the hover message must _not_ contain these snippets
   | ExpectHoverTextRegex T.Text -- the hover message must match this pattern
   | ExpectExternFail -- definition lookup in other file expected to fail
   | ExpectNoDefinitions
