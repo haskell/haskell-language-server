@@ -106,8 +106,13 @@ produceCompletions recorder = do
 -- Drop any explicit imports in ImportDecl if not hidden
 dropListFromImportDecl :: LImportDecl GhcPs -> LImportDecl GhcPs
 dropListFromImportDecl iDecl = let
+#if MIN_VERSION_ghc(9,5,0)
+    f d@ImportDecl {ideclImportList} = case ideclImportList of
+        Just (Exactly, _) -> d {ideclImportList=Nothing}
+#else
     f d@ImportDecl {ideclHiding} = case ideclHiding of
         Just (False, _) -> d {ideclHiding=Nothing}
+#endif
         -- if hiding or Nothing just return d
         _               -> d
     f x = x

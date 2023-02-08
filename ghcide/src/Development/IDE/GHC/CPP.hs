@@ -15,6 +15,7 @@
 module Development.IDE.GHC.CPP(doCpp, addOptP)
 where
 
+import           Control.Monad
 import           Development.IDE.GHC.Compat      as Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC
@@ -41,7 +42,9 @@ addOptP f = alterToolSettings $ \s -> s
 
 doCpp :: HscEnv -> Bool -> FilePath -> FilePath -> IO ()
 doCpp env raw input_fn output_fn =
-#if MIN_VERSION_ghc (9,2,0)
+#if MIN_VERSION_ghc(9,5,0)
+    void $ Pipeline.runCppPhase env input_fn output_fn -- TODO wz1000
+#elif MIN_VERSION_ghc(9,2,0)
     Pipeline.doCpp (hsc_logger env) (hsc_tmpfs env) (hsc_dflags env) (hsc_unit_env env) raw input_fn output_fn
 #else
     Pipeline.doCpp (hsc_dflags env) raw input_fn output_fn

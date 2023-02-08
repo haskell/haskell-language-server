@@ -82,7 +82,11 @@ import qualified GHC.Driver.Ways      as Ways
 #endif
 import           GHC.Driver.Hooks     (Hooks)
 import           GHC.Driver.Session   hiding (mkHomeModule)
+#if __GLASGOW_HASKELL__ >= 905
+import           Language.Haskell.Syntax.Module.Name
+#else
 import           GHC.Unit.Module.Name
+#endif
 import           GHC.Unit.Types       (Module, Unit, UnitId, mkModule)
 #else
 import           DynFlags
@@ -230,7 +234,9 @@ mkHomeModule =
 setBytecodeLinkerOptions :: DynFlags -> DynFlags
 setBytecodeLinkerOptions df = df {
     ghcLink   = LinkInMemory
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,5,0)
+  , backend = noBackend
+#elif MIN_VERSION_ghc(9,2,0)
   , backend = NoBackend
 #else
   , hscTarget = HscNothing
@@ -241,7 +247,9 @@ setBytecodeLinkerOptions df = df {
 setInterpreterLinkerOptions :: DynFlags -> DynFlags
 setInterpreterLinkerOptions df = df {
     ghcLink   = LinkInMemory
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,5,0)
+   , backend = interpreterBackend
+#elif MIN_VERSION_ghc(9,2,0)
   , backend = Interpreter
 #else
   , hscTarget = HscInterpreted

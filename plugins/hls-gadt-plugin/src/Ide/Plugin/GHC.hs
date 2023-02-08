@@ -13,6 +13,7 @@ module Ide.Plugin.GHC where
 
 import           Data.Functor                            ((<&>))
 import           Data.List.Extra                         (stripInfix)
+import qualified Data.List.NonEmpty                      as NE
 import qualified Data.Text                               as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
@@ -29,7 +30,11 @@ import           GHC.Parser.Annotation                   (AddEpAnn (..),
                                                           EpAnnComments (EpaComments),
                                                           EpaLocation (EpaDelta),
                                                           SrcSpanAnn' (SrcSpanAnn),
-                                                          spanAsAnchor)
+                                                          spanAsAnchor,
+#if MIN_VERSION_ghc(9,5,0)
+                                                          TokenLocation(..)
+#endif
+                                                          )
 import           Language.Haskell.GHC.ExactPrint         (showAst)
 #else
 import qualified Data.Map.Lazy                           as Map
@@ -94,9 +99,17 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
     ConDeclH98{..} ->
         ConDeclGADT
             con_ext
+#if MIN_VERSION_ghc(9,5,0)
+            (NE.singleton con_name)
+#else
             [con_name]
+#endif
+
 #if !MIN_VERSION_ghc(9,2,1)
             con_forall
+#endif
+#if MIN_VERSION_ghc(9,5,0)
+            (L NoTokenLoc HsNormalTok)
 #endif
             -- Ignore all existential type variable since GADT not needed
             implicitTyVars
@@ -199,7 +212,8 @@ prettyGADTDecl df decl =
         adjustDataDecl DataDecl{..} = DataDecl
             { tcdDExt = adjustWhere tcdDExt
             , tcdDataDefn = tcdDataDefn
-                { dd_cons = map adjustCon (dd_cons tcdDataDefn)
+                { dd_cons =
+                      fmap adjustCon (dd_cons tcdDataDefn)
                 }
             , ..
             }

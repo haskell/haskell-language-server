@@ -8,6 +8,8 @@
 {-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.GADT (descriptor) where
 
+import           Control.Monad.Trans.Class
+import           Control.Monad.IO.Class
 import           Control.Lens                  ((^.))
 import           Control.Monad.Except
 import           Data.Aeson                    (FromJSON, ToJSON, Value (Null),

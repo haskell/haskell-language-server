@@ -46,6 +46,9 @@ import           ByteCodeTypes
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
 #endif
+#if MIN_VERSION_ghc(9,5,0)
+import           GHC.Unit.Home.ModInfo
+#endif
 
 -- Orphan instances for types from the GHC API.
 instance Show CoreModule where show = unpack . printOutputable
@@ -92,8 +95,10 @@ instance Show Module where
 instance Outputable a => Show (GenLocated SrcSpan a) where show = unpack . printOutputable
 #endif
 
+#if !MIN_VERSION_ghc(9,5,0)
 instance (NFData l, NFData e) => NFData (GenLocated l e) where
     rnf (L l e) = rnf l `seq` rnf e
+#endif
 
 instance Show ModSummary where
     show = show . ms_mod
@@ -184,8 +189,10 @@ instance NFData Type where
 instance Show a => Show (Bag a) where
     show = show . bagToList
 
+#if !MIN_VERSION_ghc(9,5,0)
 instance NFData HsDocString where
     rnf = rwhnf
+#endif
 
 instance Show ModGuts where
     show _ = "modguts"
@@ -195,7 +202,9 @@ instance NFData ModGuts where
 instance NFData (ImportDecl GhcPs) where
     rnf = rwhnf
 
-#if MIN_VERSION_ghc(9,0,1)
+#if MIN_VERSION_ghc(9,5,0)
+instance (NFData (HsModule a)) where
+#elif MIN_VERSION_ghc(9,0,1)
 instance (NFData HsModule) where
 #else
 instance (NFData (HsModule a)) where
@@ -220,5 +229,10 @@ instance NFData UnitId where
   rnf = rwhnf
 
 instance NFData NodeKey where
+  rnf = rwhnf
+#endif
+
+#if MIN_VERSION_ghc(9,5,0)
+instance NFData HomeModLinkable where
   rnf = rwhnf
 #endif

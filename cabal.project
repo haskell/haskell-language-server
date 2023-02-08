@@ -42,7 +42,28 @@ packages:
 -- See https://github.com/haskell/haskell-language-server/blob/master/.gitlab-ci.yml
 optional-packages: vendored/*/*.cabal
 
-tests: true
+tests: True
+
+if impl(ghc >= 9.5)
+  source-repository-package
+    type:git
+    location: https://github.com/wz1000/HieDb
+    tag: 3efdab5ba67a9cea5bb8c97ed2c52a8929eabaaa
+
+  source-repository-package
+    type:git
+    location: https://github.com/wz1000/retrie
+    tag: 3ad8ca0450ea4619bbc8007251582ffc828faa37
+
+  source-repository-package
+    type:git
+    location: https://github.com/haskell/hie-bios
+    tag: 8519812ad7501cab31347cd46ad1312b8413b8ad
+
+  source-repository-package
+    type:git
+    location: https://github.com/wz1000/ghc-exactprint/
+    tag: 58d88820399b66304f3bb18f0b2602c3a90d5bea
 
 package *
   ghc-options: -haddock
@@ -50,7 +71,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2023-01-27T00:00:00Z
+index-state: 2023-02-19T00:00:01Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
@@ -66,7 +87,9 @@ constraints:
   ghc-check -ghc-check-use-package-abis,
   ghc-lib-parser-ex -auto,
   stylish-haskell +ghc-lib,
-  fourmolu -fixity-th
+  fourmolu -fixity-th,
+  setup.happy == 1.20.1.1,
+  happy == 1.20.1.1
 
 -- This is benign and won't affect our ability to release to Hackage,
 -- because we only depend on `ekg-json` when a non-default flag
@@ -75,14 +98,18 @@ constraints:
 -- centos7 has an old version of git which cabal doesn't
 -- support. We delete these lines in gitlab ci to workaround
 -- this issue, as this is not necessary to build our binaries.
-source-repository-package
-  type:git
-  location: https://github.com/pepeiborra/ekg-json
-  tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
-  -- https://github.com/tibbe/ekg-json/pull/12
 -- END DELETE
 
 allow-newer:
+  -- ghc-9.6
+  template-haskell,
+  base,
+  ghc-prim,
+  ghc,
+  ghc-boot,
+  mtl,
+  transformers,
+  Cabal,
   -- ghc-9.4
   Chart-diagrams:lens,
   Chart:lens,
@@ -105,3 +132,15 @@ allow-newer:
   uuid:time,
   vector-space:base,
   ekg-wai:time,
+
+if impl(ghc >= 9.5)
+  repository head.hackage.ghc.haskell.org
+     url: https://ghc.gitlab.haskell.org/head.hackage/
+     secure: True
+     key-threshold: 3
+     root-keys:
+         f76d08be13e9a61a377a85e2fb63f4c5435d40f8feb3e12eb05905edb8cdea89
+         26021a13b401500c8eb2761ca95c61f2d625bfef951b939a8124ed12ecf07329
+         7541f32a4ccca4f97aea3b22f5e593ba2c0267546016b992dfadcd2fe944e55d
+
+  active-repositories: hackage.haskell.org, head.hackage.ghc.haskell.org:override

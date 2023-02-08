@@ -262,8 +262,7 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.srcLocLine,
     SrcLoc.noSrcSpan,
     SrcLoc.noSrcLoc,
-    SrcLoc.noLoc,
-    SrcLoc.mapLoc,
+    mapLoc,
     -- * Finder
     FindResult(..),
     mkHomeModLocation,
@@ -487,6 +486,15 @@ module Development.IDE.GHC.Compat.Core (
     Extension(..),
 #endif
     UniqFM,
+    mkCgInteractiveGuts,
+    justBytecode,
+    justObjects,
+    emptyHomeModInfoLinkable,
+    homeModInfoByteCode,
+    homeModInfoObject,
+# if !MIN_VERSION_ghc(9,5,0)
+    field_label,
+#endif
     ) where
 
 import qualified GHC
@@ -1182,4 +1190,35 @@ pattern NamedFieldPuns = RecordPuns
 type UniqFM = UniqFM.UniqFM
 #else
 type UniqFM k = UniqFM.UniqFM
+#endif
+
+#if MIN_VERSION_ghc(9,5,0)
+mkVisFunTys = mkScaledFunctionTys
+mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
+mapLoc = fmap
+#else
+mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
+mapLoc = SrcLoc.mapLoc
+#endif
+
+
+#if !MIN_VERSION_ghc(9,5,0)
+mkCgInteractiveGuts :: CgGuts -> CgGuts
+mkCgInteractiveGuts = id
+
+emptyHomeModInfoLinkable :: Maybe Linkable
+emptyHomeModInfoLinkable = Nothing
+
+justBytecode :: Linkable -> Maybe Linkable
+justBytecode = Just
+
+justObjects :: Linkable -> Maybe Linkable
+justObjects = Just
+
+homeModInfoByteCode, homeModInfoObject :: HomeModInfo -> Maybe Linkable
+homeModInfoByteCode = hm_linkable
+homeModInfoObject = hm_linkable
+
+field_label :: a -> a
+field_label = id
 #endif
