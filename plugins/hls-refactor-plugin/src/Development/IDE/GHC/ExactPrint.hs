@@ -578,10 +578,17 @@ modifyMgMatchesT' ::
   r ->
   (r -> r -> m r) ->
   TransformT m (MatchGroup GhcPs (LHsExpr GhcPs), r)
+#if MIN_VERSION_ghc(9,5,0)
+modifyMgMatchesT' (MG xMg (L locMatches matches)) f def combineResults = do
+  (unzip -> (matches', rs)) <- mapM f matches
+  r' <- lift $ foldM combineResults def rs
+  pure $ (MG xMg (L locMatches matches'), r')
+#else
 modifyMgMatchesT' (MG xMg (L locMatches matches) originMg) f def combineResults = do
   (unzip -> (matches', rs)) <- mapM f matches
   r' <- lift $ foldM combineResults def rs
   pure $ (MG xMg (L locMatches matches') originMg, r')
+#endif
 #endif
 
 graftSmallestDeclsWithM ::

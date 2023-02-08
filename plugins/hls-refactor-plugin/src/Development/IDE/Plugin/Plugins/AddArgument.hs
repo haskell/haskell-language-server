@@ -10,7 +10,7 @@ import qualified Data.Text                                 as T
 import           Language.LSP.Types
 #else
 import           Control.Monad                             (join)
-import           Control.Monad.Except                      (lift)
+import           Control.Monad.Trans.Class                 (lift)
 import           Data.Bifunctor                            (Bifunctor (..))
 import           Data.Either.Extra                         (maybeToEither)
 import qualified Data.Text                                 as T
@@ -85,10 +85,10 @@ addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
 -- => (`foo bar baz new_pat = 1`, Just ("foo", 2))
 appendFinalPatToMatches :: T.Text -> LHsDecl GhcPs -> TransformT (Either ResponseError) (LHsDecl GhcPs, Maybe (GenLocated SrcSpanAnnN RdrName, Int))
 appendFinalPatToMatches name = \case
-  (L locDecl (ValD xVal (FunBind xFunBind idFunBind mg coreFunBind))) -> do
+  (L locDecl (ValD xVal fun@FunBind{fun_matches=mg,fun_id = idFunBind})) -> do
     (mg', numPatsMay) <- modifyMgMatchesT' mg (pure . second Just . addArgToMatch name) Nothing combineMatchNumPats
     numPats <- lift $ maybeToEither (responseError "Unexpected empty match group in HsDecl") numPatsMay
-    let decl' = L locDecl (ValD xVal (FunBind xFunBind idFunBind mg' coreFunBind))
+    let decl' = L locDecl (ValD xVal fun{fun_matches=mg'})
     pure (decl', Just (idFunBind, numPats))
   decl -> pure (decl, Nothing)
   where

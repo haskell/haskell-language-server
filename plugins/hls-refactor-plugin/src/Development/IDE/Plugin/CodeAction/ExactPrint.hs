@@ -376,7 +376,11 @@ extendImportTopLevel ::
   LImportDecl GhcPs ->
   TransformT (Either String) (LImportDecl GhcPs)
 extendImportTopLevel thing (L l it@ImportDecl{..})
+#if MIN_VERSION_ghc(9,5,0)
+  | Just (hide, L l' lies) <- ideclImportList
+#else
   | Just (hide, L l' lies) <- ideclHiding
+#endif
     , hasSibling <- not $ null lies = do
     src <- uniqueSrcSpanT
     top <- uniqueSrcSpanT
@@ -387,7 +391,11 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
     when alreadyImported $
       lift (Left $ thing <> " already imported")
 
-    let lie = reLocA $ L src $ IEName rdr
+    let lie = reLocA $ L src $ IEName
+#if MIN_VERSION_ghc(9,5,0)
+                                noExtField
+#endif
+                                rdr
         x = reLocA $ L top $ IEVar noExtField lie
 
     if x `elem` lies
@@ -416,7 +424,11 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
         return $ L l it{ideclHiding = Just (hide, L l' $ lies ++ [x])}
 #else
         let lies' = addCommaInImportList lies x
+#if MIN_VERSION_ghc(9,5,0)
+        return $ L l it{ideclImportList = Just (hide, L l' lies')}
+#else
         return $ L l it{ideclHiding = Just (hide, L l' lies')}
+#endif
 #endif
 extendImportTopLevel _ _ = lift $ Left "Unable to extend the import list"
 
@@ -447,7 +459,11 @@ extendImportViaParent ::
   LImportDecl GhcPs ->
   TransformT (Either String) (LImportDecl GhcPs)
 extendImportViaParent df parent child (L l it@ImportDecl{..})
+#if MIN_VERSION_ghc(9,5,0)
+  | Just (hide, L l' lies) <- ideclImportList = go hide l' [] lies
+#else
   | Just (hide, L l' lies) <- ideclHiding = go hide l' [] lies
+#endif
  where
   go _hide _l' _pre ((L _ll' (IEThingAll _ (L _ ie))) : _xs)
     | parent == unIEWrappedName ie = lift . Left $ child <> " already included in " <> parent <> " imports"
@@ -456,7 +472,11 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
     | parent == unIEWrappedName ie = do
       srcChild <- uniqueSrcSpanT
       let childRdr = reLocA $ L srcChild $ mkRdrUnqual $ mkVarOcc child
-          childLIE = reLocA $ L srcChild $ IEName childRdr
+          childLIE = reLocA $ L srcChild $ IEName
+#if MIN_VERSION_ghc(9,5,0)
+                                             noExtField
+#endif
+                                             childRdr
 #if !MIN_VERSION_ghc(9,2,0)
           x :: LIE GhcPs = L ll' $ IEThingWith noExtField absIE NoIEWildcard [childLIE] []
       -- take anns from ThingAbs, and attach parens to it
@@ -465,7 +485,13 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #else
           x :: LIE GhcPs = L ll' $ IEThingWith (addAnns mempty [AddEpAnn AnnOpenP (EpaDelta (SameLine 1) []), AddEpAnn AnnCloseP def] emptyComments) absIE NoIEWildcard [childLIE]
 #endif
+
+#if MIN_VERSION_ghc(9,5,0)
+      return $ L l it{ideclImportList = Just (hide, L l' $ reverse pre ++ [x] ++ xs)}
+#else
       return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [x] ++ xs)}
+#endif
+
 #if !MIN_VERSION_ghc(9,2,0)
   go hide l' pre ((L l'' (IEThingWith _ twIE@(L _ ie) _ lies' _)) : xs)
 #else
@@ -475,7 +501,11 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
     | parent == unIEWrappedName ie
     , child == wildCardSymbol = do
 #if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,5,0)
+        let it' = it{ideclImportList = Just (hide, lies)}
+#else
         let it' = it{ideclHiding = Just (hide, lies)}
+#endif
             thing = IEThingWith newl twIE (IEWildcard 2) []
             newl = (\ann -> ann ++ [(AddEpAnn AnnDotdot d0)]) <$> l'''
             lies = L l' $ reverse pre ++ [L l'' thing] ++ xs
@@ -499,14 +529,22 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
         when alreadyImported $
           lift (Left $ child <> " already included in " <> parent <> " imports")
 
-        let childLIE = reLocA $ L srcChild $ IEName childRdr
+        let childLIE = reLocA $ L srcChild $ IEName
+#if MIN_VERSION_ghc(9,5,0)
+                                               noExtField
+#endif
+                                               childRdr
 #if !MIN_VERSION_ghc(9,2,0)
         when hasSibling $
           addTrailingCommaT (last lies')
         addSimpleAnnT childRdr (DP (0, if hasSibling then 1 else 0)) [(G AnnVal, dp00)]
         return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [L l'' (IEThingWith noExtField twIE NoIEWildcard (lies' ++ [childLIE]) [])] ++ xs)}
 #else
+#if MIN_VERSION_ghc(9,5,0)
+        let it' = it{ideclImportList = Just (hide, lies)}
+#else
         let it' = it{ideclHiding = Just (hide, lies)}
+#endif
             lies = L l' $ reverse pre ++
                 [L l'' (IEThingWith l''' twIE NoIEWildcard (over _last fixLast lies' ++ [childLIE]))] ++ xs
             fixLast = if hasSibling then first addComma else id
@@ -528,11 +566,20 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       let parentLIE = L srcParent (if isParentOperator then IEType parentRdr else IEName parentRdr)
           childLIE = reLocA $ L srcChild $ IEName childRdr
 #else
-      let parentLIE = reLocA $ L srcParent $ (if isParentOperator then IEType (epl 0) parentRdr' else IEName parentRdr')
+      let parentLIE = reLocA $ L srcParent $ (if isParentOperator then IEType (epl 0) parentRdr'
+                                               else IEName
+#if MIN_VERSION_ghc(9,5,0)
+                                                      noExtField
+#endif
+                                                      parentRdr')
           parentRdr' = modifyAnns parentRdr $ \case
               it@NameAnn{nann_adornment = NameParens} -> it{nann_open = epl 1, nann_close = epl 0}
               other -> other
-          childLIE = reLocA $ L srcChild $ IEName childRdr
+          childLIE = reLocA $ L srcChild $ IEName
+#if MIN_VERSION_ghc(9,5,0)
+                                             noExtField
+#endif
+                                             childRdr
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
           x :: LIE GhcPs = reLocA $ L l'' $ IEThingWith noExtField parentLIE NoIEWildcard [childLIE] []
@@ -554,7 +601,11 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 
           lies' = addCommaInImportList (reverse pre) x
 #endif
+#if MIN_VERSION_ghc(9,5,0)
+      return $ L l it{ideclImportList = Just (hide, L l' lies')}
+#else
       return $ L l it{ideclHiding = Just (hide, L l' lies')}
+#endif
 extendImportViaParent _ _ _ _ = lift $ Left "Unable to extend the import list via parent"
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -592,7 +643,11 @@ addCommaInImportList lies x =
     fixLast = over _last (first (if existingTrailingComma then id else addComma))
 #endif
 
+#if MIN_VERSION_ghc(9,5,0)
+unIEWrappedName :: IEWrappedName GhcPs -> String
+#else
 unIEWrappedName :: IEWrappedName (IdP GhcPs) -> String
+#endif
 unIEWrappedName (occName -> occ) = T.unpack $ printOutputable $ parenSymOcc occ (ppr occ)
 
 hasParen :: String -> Bool
@@ -615,10 +670,17 @@ unqalDP c paren =
 hideSymbol ::
   String -> LImportDecl GhcPs -> Rewrite
 hideSymbol symbol lidecl@(L loc ImportDecl{..}) =
+#if MIN_VERSION_ghc(9,5,0)
+  case ideclImportList of
+    Nothing -> Rewrite (locA loc) $ extendHiding symbol lidecl Nothing
+    Just (EverythingBut, hides) -> Rewrite (locA loc) $ extendHiding symbol lidecl (Just hides)
+    Just (Exactly, imports) -> Rewrite (locA loc) $ deleteFromImport symbol lidecl imports
+#else
   case ideclHiding of
     Nothing -> Rewrite (locA loc) $ extendHiding symbol lidecl Nothing
     Just (True, hides) -> Rewrite (locA loc) $ extendHiding symbol lidecl (Just hides)
     Just (False, imports) -> Rewrite (locA loc) $ deleteFromImport symbol lidecl imports
+#endif
 hideSymbol _ (L _ (XImportDecl _)) =
   error "cannot happen"
 
@@ -655,7 +717,11 @@ extendHiding symbol (L l idecls) mlies df = do
 #if MIN_VERSION_ghc(9,2,0)
   rdr <- pure $ modifyAnns rdr $ addParens (isOperator $ unLoc rdr)
 #endif
-  let lie = reLocA $ L src $ IEName rdr
+  let lie = reLocA $ L src $ IEName
+#if MIN_VERSION_ghc(9,5,0)
+                               noExtField
+#endif
+                               rdr
       x = reLocA $ L top $ IEVar noExtField lie
 #if MIN_VERSION_ghc(9,2,0)
   x <- pure $ if hasSibling then first addComma x else x
@@ -682,7 +748,11 @@ extendHiding symbol (L l idecls) mlies df = do
     else forM_ mlies $ \lies0 -> do
       transferAnn lies0 singleHide id
 #endif
+#if MIN_VERSION_ghc(9,5,0)
+  return $ L l idecls{ideclImportList = Just (EverythingBut, L l' $ x : lies)}
+#else
   return $ L l idecls{ideclHiding = Just (True, L l' $ x : lies)}
+#endif
  where
   isOperator = not . all isAlphaNum . occNameString . rdrNameOcc
 
@@ -701,7 +771,11 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
       lidecl' =
         L l $
           idecl
+#if MIN_VERSION_ghc(9,5,0)
+            { ideclImportList = Just (Exactly, edited)
+#else
             { ideclHiding = Just (False, edited)
+#endif
             }
 #if !MIN_VERSION_ghc(9,2,0)
   -- avoid import A (foo,)

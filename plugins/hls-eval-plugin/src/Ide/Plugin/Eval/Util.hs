@@ -1,5 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE CPP                       #-}
 {-# OPTIONS_GHC -Wno-orphans -Wno-unused-imports #-}
 
@@ -38,7 +39,7 @@ timed out name op = do
     _ <- out name (showDuration secs)
     return r
 
--- |Log using hie logger, reports source position of logging statement
+-- | Log using hie logger, reports source position of logging statement
 logWith :: (HasCallStack, MonadIO m, Show a1, Show a2) => IdeState -> a1 -> a2 -> m ()
 logWith state key val =
     liftIO . logPriority (ideLogger state) logLevel $
@@ -90,7 +91,12 @@ showErr e =
     Just (SourceError msgs) -> return $ Left $ renderWithContext defaultSDocContext
                                              $ vcat
                                              $ bagToList
-                                             $ fmap (vcat . unDecorated . diagnosticMessage . errMsgDiagnostic)
+                                             $ fmap (vcat . unDecorated
+                                                          . diagnosticMessage
+#if MIN_VERSION_ghc(9,5,0)
+                                                              (defaultDiagnosticOpts @GhcMessage)
+#endif
+                                                          . errMsgDiagnostic)
                                              $ getMessages msgs
     _ ->
 #endif

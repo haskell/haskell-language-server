@@ -9,7 +9,6 @@ module Development.IDE.GHC.Compat.Outputable (
     ppr, pprPanic, text, vcat, (<+>), ($$), empty, hang, nest, punctuate,
     printSDocQualifiedUnsafe,
     printWithoutUniques,
-    mkPrintUnqualified,
     mkPrintUnqualifiedDefault,
     PrintUnqualified(..),
     defaultUserStyle,
@@ -17,6 +16,10 @@ module Development.IDE.GHC.Compat.Outputable (
     -- * Parser errors
     PsWarning,
     PsError,
+#if MIN_VERSION_ghc(9,5,0)
+    defaultDiagnosticOpts,
+    GhcMessage,
+#endif
 #if MIN_VERSION_ghc(9,3,0)
     DiagnosticReason(..),
     renderDiagnosticMessageWithHints,
@@ -43,6 +46,7 @@ module Development.IDE.GHC.Compat.Outputable (
     mkWarnMsg,
     mkSrcErr,
     srcErrorMessages,
+    textDoc,
     ) where
 
 
@@ -88,10 +92,17 @@ import           Outputable                      as Out hiding
 import qualified Outputable                      as Out
 import           SrcLoc
 #endif
+#if MIN_VERSION_ghc(9,5,0)
+import           GHC.Driver.Errors.Types         (GhcMessage)
+#endif
 #if MIN_VERSION_ghc(9,3,0)
 import           Data.Maybe
 import           GHC.Driver.Config.Diagnostic
 import           GHC.Utils.Logger
+#endif
+
+#if MIN_VERSION_ghc(9,5,0)
+type PrintUnqualified = NamePprCtx
 #endif
 
 -- | A compatible function to print `Outputable` instances
@@ -211,7 +222,11 @@ type WarnMsg  = MsgEnvelope DecoratedSDoc
 
 mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
 mkPrintUnqualifiedDefault env =
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,5,0)
+  mkNamePprCtx ptc (hsc_unit_env env)
+    where
+      ptc = initPromotionTickContext (hsc_dflags env)
+#elif MIN_VERSION_ghc(9,2,0)
   -- GHC 9.2 version
   -- mkPrintUnqualified :: UnitEnv -> GlobalRdrEnv -> PrintUnqualified
   mkPrintUnqualified (hsc_unit_env env)
@@ -220,8 +235,13 @@ mkPrintUnqualifiedDefault env =
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
-renderDiagnosticMessageWithHints :: Diagnostic a => a -> DecoratedSDoc
-renderDiagnosticMessageWithHints a = Error.unionDecoratedSDoc (diagnosticMessage a) (mkDecorated $ map ppr $ diagnosticHints a)
+renderDiagnosticMessageWithHints :: forall a. Diagnostic a => a -> DecoratedSDoc
+renderDiagnosticMessageWithHints a = Error.unionDecoratedSDoc
+  (diagnosticMessage
+#if MIN_VERSION_ghc(9,5,0)
+    (defaultDiagnosticOpts @a)
+#endif
+    a) (mkDecorated $ map ppr $ diagnosticHints a)
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
@@ -243,3 +263,6 @@ defaultUserStyle = Out.defaultUserStyle
 #else
 defaultUserStyle = Out.defaultUserStyle unsafeGlobalDynFlags
 #endif
+
+textDoc :: String -> SDoc
+textDoc = text

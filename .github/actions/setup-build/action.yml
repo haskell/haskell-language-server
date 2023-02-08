@@ -26,7 +26,7 @@ runs:
     - name: Workaround runner image issue
       if: runner.os == 'Linux'
       # https://github.com/actions/runner-images/issues/7061
-      run: | 
+      run: |
         sudo mkdir -p /usr/local/.ghcup
         sudo chown -R $USER /usr/local/.ghcup
       shell: bash
