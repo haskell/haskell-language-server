@@ -20,7 +20,12 @@ jobs:
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
       should_skip_ghcide: ${{ steps.skip_ghcide_check.outputs.should_skip }}
+      ghcs: ${{ steps.ghcs.outputs.ghcs }}
     steps:
+      # Need the repo checked out in order to read the file
+      - uses: actions/checkout@v3
+      - id: ghcs
+        run: echo "ghcs=$(cat ./.github/workflows/supported-ghc-versions.json)" >> $GITHUB_OUTPUT
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v5.3.0
         with:
@@ -52,7 +57,8 @@ jobs:
 
   test:
     if: needs.pre_job.outputs.should_skip != 'true'
-    needs: pre_job
+    needs:
+      - pre_job
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
@@ -60,41 +66,17 @@ jobs:
       # **don't forget**
       # to update the ghc versions in 'caching.yml'.
       matrix:
-        ghc: [ "9.4.4"
-             , "9.2.5"
-             , "9.0.2"
-             , "8.10.7"
-             ]
-        os: [ "ubuntu-latest"
-            , "macOS-latest"
-            , "windows-latest"
-            ]
-        # Mark which GHC versions on which platform we want to test.
+        ghc: ${{ fromJSON(needs.pre_job.outputs.ghcs) }}
+        os:
+          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
+        # Mark which GHC versions on which platforms we want to test.
         include:
-           # only test supported ghc major versions
+           # Test all supported versions, but only on ubuntu and windows
            - os: ubuntu-latest
-             ghc: '9.4.4'
-             test: true
-           - os: ubuntu-latest
-             ghc: '9.2.5'
-             test: true
-           - os: ubuntu-latest
-             ghc: '9.0.2'
-             test: true
-           - os: ubuntu-latest
-             ghc: '8.10.7'
              test: true
            - os: windows-latest
-             ghc: '9.4.4'
-             test: true
-           - os: windows-latest
-             ghc: '9.2.5'
-             test: true
-           - os: windows-latest
-             ghc: '9.0.2'
-             test: true
-           - os: windows-latest
-             ghc: '8.10.7'
              test: true
 
     steps:
