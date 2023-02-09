@@ -1,7 +1,7 @@
 cabal-version:      3.0
 category:           Development
 name:               haskell-language-server
-version:            1.9.0.0
+version:            1.9.1.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -405,7 +405,7 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>=1.9
+    , ghcide                ==1.9.1.0
     , githash               >=0.1.6.1
     , lsp
     , hie-bios
