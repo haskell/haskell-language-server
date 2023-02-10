@@ -19,6 +19,7 @@ module Development.IDE.Types.Logger
   , cfilter
   , withDefaultRecorder
   , makeDefaultStderrRecorder
+  , makeDefaultHandleRecorder
   , priorityToHsLoggerPriority
   , LoggingColumn(..)
   , cmapWithPrio
