@@ -30,6 +30,9 @@ build_task:
     - name: build-ghc-9.2.5
       env:
         GHC_VERSION: 9.2.5
+    - name: build-ghc-9.2.6
+      env:
+        GHC_VERSION: 9.2.6
   install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree
   script:
     - tzsetup Etc/GMT
@@ -46,6 +49,7 @@ bindist_task:
     - build-ghc-8.10.7
     - build-ghc-9.0.2
     - build-ghc-9.2.5
+    - build-ghc-9.2.6
   timeout_in: 120m
   only_if: $CIRRUS_TAG != ''
   env:
@@ -71,6 +75,10 @@ bindist_task:
     - curl -o binaries-9.2.5.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.2.5/binaries/out.tar.xz
     - tar xvf binaries-9.2.5.tar.xz
     - rm -f binaries-9.2.5.tar.xz
+
+    - curl -o binaries-9.2.6.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.2.6/binaries/out.tar.xz
+    - tar xvf binaries-9.2.6.tar.xz
+    - rm -f binaries-9.2.6.tar.xz
 
     - bash .github/scripts/bindist.sh
   bindist_artifacts:
