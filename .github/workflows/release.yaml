@@ -259,7 +259,7 @@ jobs:
           export LD=ld
           export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
           export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
-          export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
+          export C_INCLUDE_PATH="`arch -arm64 xcrun --show-sdk-path`/usr/include/ffi"
           bash .github/scripts/build.sh
           tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
         env:
@@ -543,7 +543,7 @@ jobs:
           export LD=ld
           export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
           export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
-          export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
+          export C_INCLUDE_PATH="`arch -arm64 xcrun --show-sdk-path`/usr/include/ffi"
           for bindist in out-*.tar ; do
             tar xf "${bindist}"
           done
@@ -784,7 +784,7 @@ jobs:
           export LD=ld
           export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
           export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
-          export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
+          export C_INCLUDE_PATH="`arch -arm64 xcrun --show-sdk-path`/usr/include/ffi"
           bash .github/scripts/test.sh
 
   test-win:
