@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.4.4", "9.2.5", "9.0.2", "8.10.7"]
+        ghc: ["9.4.4", "9.2.6", "9.2.5", "9.0.2", "8.10.7"]
         platform: [ { image: "debian:9"
                     , installCmd: "apt-get update && apt-get install -y"
                     , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
@@ -150,7 +150,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.4.4", "9.2.5", "9.0.2", "8.10.7"]
+        ghc: ["9.4.4", "9.2.6", "9.2.5", "9.0.2", "8.10.7"]
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
@@ -205,7 +205,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.4.4", "9.2.5", "9.0.2", "8.10.7"]
+        ghc: ["9.4.4", "9.2.6", "9.2.5", "9.0.2", "8.10.7"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -245,7 +245,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.4.4", "9.2.5", "8.10.7"]
+        ghc: ["9.4.4", "9.2.6", "9.2.5", "9.0.2", "8.10.7"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -259,6 +259,7 @@ jobs:
           export LD=ld
           export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
           export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
+          export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
           bash .github/scripts/build.sh
           tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
         env:
@@ -289,7 +290,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.4.4", "9.2.5", "9.0.2", "8.10.7"]
+        ghc: ["9.4.4", "9.2.6", "9.2.5", "9.0.2", "8.10.7"]
     steps:
       - name: install windows deps
         shell: pwsh
@@ -542,6 +543,7 @@ jobs:
           export LD=ld
           export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
           export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
+          export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
           for bindist in out-*.tar ; do
             tar xf "${bindist}"
           done
@@ -782,6 +784,7 @@ jobs:
           export LD=ld
           export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
           export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
+          export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
           bash .github/scripts/test.sh
 
   test-win:
