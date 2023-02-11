@@ -245,7 +245,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.4.4", "9.2.6", "9.2.5", "9.0.2", "8.10.7"]
+        ghc: ["9.4.4", "9.2.6", "9.2.5", "8.10.7"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -259,7 +259,6 @@ jobs:
           export LD=ld
           export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
           export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
-          export C_INCLUDE_PATH="`arch -arm64 xcrun --show-sdk-path`/usr/include/ffi"
           bash .github/scripts/build.sh
           tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
         env:
@@ -543,7 +542,6 @@ jobs:
           export LD=ld
           export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
           export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
-          export C_INCLUDE_PATH="`arch -arm64 xcrun --show-sdk-path`/usr/include/ffi"
           for bindist in out-*.tar ; do
             tar xf "${bindist}"
           done
@@ -784,7 +782,6 @@ jobs:
           export LD=ld
           export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
           export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
-          export C_INCLUDE_PATH="`arch -arm64 xcrun --show-sdk-path`/usr/include/ffi"
           bash .github/scripts/test.sh
 
   test-win:
