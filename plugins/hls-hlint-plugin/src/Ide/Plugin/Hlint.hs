@@ -20,6 +20,11 @@
 
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
+-- On 9.4 we get a new redundant constraint warning, but deleting the
+-- constraint breaks the build on earlier versions. Rather than apply
+-- lots of CPP, we just disable the warning until later.
+{-# OPTIONS_GHC -Wno-redundant-constraints   #-}
+
 #ifdef HLINT_ON_GHC_LIB
 #define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib_parser(x,y,z)
 #else
@@ -134,8 +139,11 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
                                                                      lineSplitTextEdits,
                                                                      nextPragmaLine)
 import           GHC.Generics                                       (Generic)
+#if MIN_VERSION_apply_refact(0,12,0)
+#else
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
+#endif
 import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
