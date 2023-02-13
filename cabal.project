@@ -63,6 +63,7 @@ constraints:
   -- remove this when hlint sets ghc-lib to true by default
   -- https://github.com/ndmitchell/hlint/issues/1376
   hlint +ghc-lib,
+  ghc-check -ghc-check-use-package-abis,
   ghc-lib-parser-ex -auto,
   stylish-haskell +ghc-lib,
   fourmolu -fixity-th
