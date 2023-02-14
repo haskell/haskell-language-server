@@ -27,13 +27,11 @@ jobs:
           paths_ignore: '[ "**/docs/**"
                          , "**.md"
                          , "**/LICENSE"
+                         , "**.yml"
+                         , "**.yaml"
                          , ".circleci/**"
-                         , "**/README.md"
-                         , "FUNDING.yml"
-                         , "**/stack*.yaml"
-                         , "**/stack*.yaml"
-                         , ".gitlab-ci.yaml"
                          , ".gitlab/**"
+                         , ".github/**"
                          ]'
       - id: skip_check_no_nix
         uses: fkirc/skip-duplicate-actions@v5.3.0
