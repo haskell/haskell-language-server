@@ -1,5 +1,12 @@
 # Changelog for haskell-language-server
 
+## 1.9.1.0
+
+- Binaries for GHC 9.2.6.
+- Fix for `hls-hlint-plugin` being unable to apply fixes due to GHC libdir from CI machines (#3241)
+- Improvements for recompilation avoidance, particularly for non-vscode editors
+  which don't support the LSP `workspace/didChangeWatchedFiles` method (#3458)
+
 ## 1.9.0.0
 
 - Binaries for GHC 9.4.3, GHC 9.4.4 and GHC 9.2.5.
