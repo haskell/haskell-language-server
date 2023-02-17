@@ -31,7 +31,7 @@ runs:
         sudo chown -R $USER /usr/local/.ghcup
       shell: bash
 
-    - uses: wz1000/actions/setup@5a3bfac61af3b7638c633268f5ccdb5adda71bf8
+    - uses: wz1000/actions/setup@284804ff76fe6ed69038e8deb199417f2c96b9e4
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
