@@ -27,6 +27,11 @@ import           GHC.Settings
 import qualified DriverPipeline                  as Pipeline
 import           ToolSettings
 #endif
+
+#if MIN_VERSION_ghc(9,5,0)
+import qualified GHC.SysTools.Cpp                as Pipeline
+#endif
+
 #if MIN_VERSION_ghc(9,3,0)
 import qualified GHC.Driver.Pipeline.Execute     as Pipeline
 #endif
@@ -40,12 +45,23 @@ addOptP f = alterToolSettings $ \s -> s
     fingerprintStrings ss = fingerprintFingerprints $ map fingerprintString ss
     alterToolSettings f dynFlags = dynFlags { toolSettings = f (toolSettings dynFlags) }
 
-doCpp :: HscEnv -> Bool -> FilePath -> FilePath -> IO ()
-doCpp env raw input_fn output_fn =
+doCpp :: HscEnv -> FilePath -> FilePath -> IO ()
+doCpp env input_fn output_fn =
+        -- See GHC commit a2f53ac8d968723417baadfab5be36a020ea6850
+        -- this function/Pipeline.doCpp previously had a raw parameter
+        -- always set to True that corresponded to these settings
+#if MIN_VERSION_ghc(9,2,0)
+
 #if MIN_VERSION_ghc(9,5,0)
-    void $ Pipeline.runCppPhase env input_fn output_fn -- TODO wz1000
+    let cpp_opts = Pipeline.CppOpts
+                 { cppUseCc = False
+                 , cppLinePragmas = True
+                 } in
 #elif MIN_VERSION_ghc(9,2,0)
-    Pipeline.doCpp (hsc_logger env) (hsc_tmpfs env) (hsc_dflags env) (hsc_unit_env env) raw input_fn output_fn
+    let cpp_opts = True in
+#endif
+    Pipeline.doCpp (hsc_logger env) (hsc_tmpfs env) (hsc_dflags env) (hsc_unit_env env) cpp_opts input_fn output_fn
+
 #else
     Pipeline.doCpp (hsc_dflags env) raw input_fn output_fn
 #endif

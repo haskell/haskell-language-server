@@ -71,7 +71,9 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2023-02-19T00:00:01Z
+-- head.hackage doesn't like index-state
+if impl(ghc < 9.5)
+  index-state: 2023-02-19T00:00:01Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
