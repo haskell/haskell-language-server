@@ -1248,7 +1248,7 @@ pluginSimpleTests =
 
   -- Error: cabal: Failed to build ghc-typelits-natnormalise-0.7.7 (which is
   -- required by plugin-1.0.0). See the build log above for details.
-  ignoreFor (BrokenSpecific Windows [GHC94]) "ghc-typelist-natnormalise fails to build on GHC 9.4.2 for windows only" $
+  ignoreFor (BrokenSpecific Windows [GHC94, GHC96]) "ghc-typelist-natnormalise fails to build on GHC 9.4.2 for windows only" $
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
@@ -2353,7 +2353,7 @@ ignoreInWindowsForGHC810 =
     ignoreFor (BrokenSpecific Windows [GHC810]) "tests are unreliable in windows for ghc 8.10"
 
 ignoreForGHC92Plus :: String -> TestTree -> TestTree
-ignoreForGHC92Plus = ignoreFor (BrokenForGHC [GHC92, GHC94])
+ignoreForGHC92Plus = ignoreFor (BrokenForGHC [GHC92, GHC94, GHC96])
 
 knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
 knownBrokenForGhcVersions ghcVers = knownBrokenFor (BrokenForGHC ghcVers)
