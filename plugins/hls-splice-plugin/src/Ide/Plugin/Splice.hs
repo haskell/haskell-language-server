@@ -295,24 +295,56 @@ data SpliceClass where
     OneToOneAST :: HasSplice AnnListItem ast => Proxy# ast -> SpliceClass
     IsHsDecl :: SpliceClass
 
+#if MIN_VERSION_ghc(9,5,0)
+data HsSpliceCompat pass
+  = UntypedSplice (HsUntypedSplice pass)
+  | TypedSplice (LHsExpr pass)
+#endif
+
+
 class (Outputable (ast GhcRn), ASTElement l (ast GhcPs)) => HasSplice l ast where
     type SpliceOf ast :: Kinds.Type -> Kinds.Type
-    type SpliceOf ast = HsSplice
     matchSplice :: Proxy# ast -> ast GhcPs -> Maybe (SpliceOf ast GhcPs)
     expandSplice :: Proxy# ast -> SpliceOf ast GhcPs -> RnM (Either (ast GhcPs) (ast GhcRn), FreeVars)
 
 instance HasSplice AnnListItem HsExpr where
+#if MIN_VERSION_ghc(9,5,0)
+    type SpliceOf HsExpr = HsSpliceCompat
+    matchSplice _ (HsUntypedSplice _ spl) = Just (UntypedSplice spl)
+    matchSplice _ (HsTypedSplice _ spl) = Just (TypedSplice spl)
+#else
+    type SpliceOf HsExpr = HsSplice
     matchSplice _ (HsSpliceE _ spl) = Just spl
+#endif
     matchSplice _ _                 = Nothing
+#if MIN_VERSION_ghc(9,5,0)
+    expandSplice _ (UntypedSplice e) = fmap (first Right) $ rnUntypedSpliceExpr e
+    expandSplice _ (TypedSplice e) = fmap (first Right) $ rnTypedSplice e
+#else
     expandSplice _ = fmap (first Right) . rnSpliceExpr
+#endif
 
 instance HasSplice AnnListItem Pat where
+#if MIN_VERSION_ghc(9,5,0)
+    type SpliceOf Pat = HsUntypedSplice
+#else
+    type SpliceOf Pat = HsSplice
+#endif
     matchSplice _ (SplicePat _ spl) = Just spl
     matchSplice _ _                 = Nothing
-    expandSplice _ = rnSplicePat
+    expandSplice _ =
+#if MIN_VERSION_ghc(9,5,0)
+      fmap (first (Left . unLoc . utsplice_result . snd )) .
+#endif
+      rnSplicePat
 
 
 instance HasSplice AnnListItem HsType where
+#if MIN_VERSION_ghc(9,5,0)
+    type SpliceOf HsType = HsUntypedSplice
+#else
+    type SpliceOf HsType = HsSplice
+#endif
     matchSplice _ (HsSpliceTy _ spl) = Just spl
     matchSplice _ _                  = Nothing
     expandSplice _ = fmap (first Right) . rnSpliceType
@@ -401,10 +433,15 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
 showBag :: Error.Diagnostic a => Bag (Error.MsgEnvelope a) -> String
 showBag = show . fmap (fmap toDiagnosticMessage)
 
-toDiagnosticMessage :: Error.Diagnostic a => a -> Error.DiagnosticMessage
+toDiagnosticMessage :: forall a. Error.Diagnostic a => a -> Error.DiagnosticMessage
 toDiagnosticMessage message =
     Error.DiagnosticMessage
-        { diagMessage = Error.diagnosticMessage message
+        { diagMessage = Error.diagnosticMessage
+#if MIN_VERSION_ghc(9,5,0)
+                          (Error.defaultDiagnosticOpts @a)
+#endif
+                          message
+
         , diagReason  = Error.diagnosticReason  message
         , diagHints   = Error.diagnosticHints   message
         }
@@ -480,7 +517,12 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
                     (L (AsSrcSpan l@(RealSrcSpan spLoc _)) expr :: LHsExpr GhcPs)
                         | spanIsRelevant l ->
                             case expr of
+#if MIN_VERSION_ghc(9,5,0)
+                                HsTypedSplice{} -> Here (spLoc, Expr)
+                                HsUntypedSplice{} -> Here (spLoc, Expr)
+#else
                                 HsSpliceE {} -> Here (spLoc, Expr)
+#endif
                                 _            -> Continue
                     _ -> Stop
                 )

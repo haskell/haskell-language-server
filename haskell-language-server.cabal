@@ -287,7 +287,7 @@ common pragmas
     cpp-options: -Dhls_pragmas
 
 common splice
-  if flag(splice) && impl(ghc < 9.5)
+  if flag(splice)
     build-depends: hls-splice-plugin ^>=1.0.0.1
     cpp-options: -Dhls_splice
 
