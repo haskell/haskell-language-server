@@ -262,6 +262,7 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.srcLocLine,
     SrcLoc.noSrcSpan,
     SrcLoc.noSrcLoc,
+    SrcLoc.noLoc,
     mapLoc,
     -- * Finder
     FindResult(..),
