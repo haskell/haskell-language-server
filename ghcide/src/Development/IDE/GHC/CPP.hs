@@ -50,19 +50,19 @@ doCpp env input_fn output_fn =
         -- See GHC commit a2f53ac8d968723417baadfab5be36a020ea6850
         -- this function/Pipeline.doCpp previously had a raw parameter
         -- always set to True that corresponded to these settings
-#if MIN_VERSION_ghc(9,2,0)
 
 #if MIN_VERSION_ghc(9,5,0)
     let cpp_opts = Pipeline.CppOpts
                  { cppUseCc = False
                  , cppLinePragmas = True
                  } in
-#elif MIN_VERSION_ghc(9,2,0)
+#else
     let cpp_opts = True in
 #endif
-    Pipeline.doCpp (hsc_logger env) (hsc_tmpfs env) (hsc_dflags env) (hsc_unit_env env) cpp_opts input_fn output_fn
 
+#if MIN_VERSION_ghc(9,2,0)
+    Pipeline.doCpp (hsc_logger env) (hsc_tmpfs env) (hsc_dflags env) (hsc_unit_env env) cpp_opts input_fn output_fn
 #else
-    Pipeline.doCpp (hsc_dflags env) raw input_fn output_fn
+    Pipeline.doCpp (hsc_dflags env) cpp_opts input_fn output_fn
 #endif
 
