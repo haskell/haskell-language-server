@@ -48,7 +48,7 @@ if impl(ghc >= 9.5)
   source-repository-package
     type:git
     location: https://github.com/wz1000/HieDb
-    tag: 3efdab5ba67a9cea5bb8c97ed2c52a8929eabaaa
+    tag: 721bd0ce7392b8eff8d7643cf132a6448466fd52
 
   source-repository-package
     type:git
@@ -71,10 +71,23 @@ package *
 
 write-ghc-environment-files: never
 
+if impl(ghc >= 9.5)
+  allow-newer:
+    -- ghc-9.6
+    template-haskell,
+    base,
+    ghc-prim,
+    ghc,
+    ghc-boot,
+    mtl,
+    transformers,
+    Cabal
+
 -- head.hackage doesn't like index-state
 if impl(ghc < 9.5)
   index-state: 2023-02-19T00:00:01Z
 
+#if MIN_VERSION_ghc(9,5,0)
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
   entropy >= 0.4.1.10,
@@ -103,15 +116,6 @@ constraints:
 -- END DELETE
 
 allow-newer:
-  -- ghc-9.6
-  template-haskell,
-  base,
-  ghc-prim,
-  ghc,
-  ghc-boot,
-  mtl,
-  transformers,
-  Cabal,
   -- ghc-9.4
   Chart-diagrams:lens,
   Chart:lens,
