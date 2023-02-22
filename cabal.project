@@ -44,6 +44,11 @@ optional-packages: vendored/*/*.cabal
 
 tests: True
 
+-- mfsolve has duplicate instances in its test suite
+-- See: https://github.com/kuribas/mfsolve/issues/8
+package mfsolve
+  tests: False
+
 if impl(ghc >= 9.5)
   source-repository-package
     type:git
@@ -64,6 +69,14 @@ if impl(ghc >= 9.5)
     type:git
     location: https://github.com/wz1000/ghc-exactprint/
     tag: 58d88820399b66304f3bb18f0b2602c3a90d5bea
+
+-- Remove when fix for
+-- https://github.com/kazu-yamamoto/http2/issues/42
+-- is released on hackage
+source-repository-package
+  type:git
+  location: https://github.com/kazu-yamamoto/http2
+  tag: aa56ded3494dd4f0efb0bbcb5378879ce785a647
 
 package *
   ghc-options: -haddock

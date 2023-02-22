@@ -39,7 +39,7 @@ timed out name op = do
     _ <- out name (showDuration secs)
     return r
 
--- |Log using hie logger, reports source position of logging statement
+-- | Log using hie logger, reports source position of logging statement
 logWith :: (HasCallStack, MonadIO m, Show a1, Show a2) => IdeState -> a1 -> a2 -> m ()
 logWith state key val =
     liftIO . logPriority (ideLogger state) logLevel $
