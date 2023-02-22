@@ -1,5 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE CPP                       #-}
 {-# OPTIONS_GHC -Wno-orphans -Wno-unused-imports #-}
 
@@ -90,7 +91,12 @@ showErr e =
     Just (SourceError msgs) -> return $ Left $ renderWithContext defaultSDocContext
                                              $ vcat
                                              $ bagToList
-                                             $ fmap (vcat . unDecorated . diagnosticMessage . errMsgDiagnostic)
+                                             $ fmap (vcat . unDecorated
+                                                          . diagnosticMessage
+#if MIN_VERSION_ghc(9,5,0)
+                                                              (defaultDiagnosticOpts @GhcMessage)
+#endif
+                                                          . errMsgDiagnostic)
                                              $ getMessages msgs
     _ ->
 #endif
