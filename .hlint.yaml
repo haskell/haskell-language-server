@@ -208,6 +208,16 @@
   - name: "GHC.Arr.!"
     within: []
 
+  # We do not want to use functions from the
+  # GHC driver. Instead use hls rules to construct
+  # an appropriate GHC session
+  - name: "load"
+    within: []
+  - name: "load'"
+    within: []
+  - name: "loadWithCache"
+    within: []
+
   # Tracing functions
   # We ban an explicit list rather than the
   # Debug.Trace, because that module also

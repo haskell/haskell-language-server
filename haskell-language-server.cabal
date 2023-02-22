@@ -237,7 +237,7 @@ common haddockComments
     cpp-options: -Dhls_haddockComments
 
 common eval
-  if flag(eval) && (impl(ghc < 9.4.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(eval)
     build-depends: hls-eval-plugin ^>= 1.4
     cpp-options: -Dhls_eval
 
