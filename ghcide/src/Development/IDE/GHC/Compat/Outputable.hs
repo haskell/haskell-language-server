@@ -16,6 +16,10 @@ module Development.IDE.GHC.Compat.Outputable (
     -- * Parser errors
     PsWarning,
     PsError,
+#if MIN_VERSION_ghc(9,5,0)
+    defaultDiagnosticOpts,
+    GhcMessage,
+#endif
 #if MIN_VERSION_ghc(9,3,0)
     DiagnosticReason(..),
     renderDiagnosticMessageWithHints,
@@ -87,6 +91,9 @@ import           Outputable                      as Out hiding
                                                         (defaultUserStyle)
 import qualified Outputable                      as Out
 import           SrcLoc
+#endif
+#if MIN_VERSION_ghc(9,5,0)
+import           GHC.Driver.Errors.Types         (GhcMessage)
 #endif
 #if MIN_VERSION_ghc(9,3,0)
 import           Data.Maybe
