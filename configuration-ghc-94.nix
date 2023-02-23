@@ -13,14 +13,13 @@ let
     {
       hlsDisabledPlugins = disabledPlugins;
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
+      apply-refact = hsuper.apply-refact_0_12_0_0;
+
       # ptr-poker breaks on MacOS without SSE2 optimizations
       # https://github.com/nikita-volkov/ptr-poker/issues/11
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
-      # Freezes in test for some reason.
-      ghc-exactprint =
-        dontCheck (hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-160 { });
-      hlint = hsuper.callCabal2nix "hlint" inputs.hlint-35 {};
+      ormolu = hself.ormolu_0_5_3_0;
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
