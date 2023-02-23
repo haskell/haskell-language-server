@@ -857,7 +857,7 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
                                        ]
 #else
       pat multiple at inArg inExpr = T.concat [ ".*Defaulting the following constraint"
-                                       , if multiple then "s" else " "
+                                       , if multiple then "s" else ""
                                        , " to type ‘([^ ]+)’ "
                                        , ".*arising from the literal ‘(.+)’"
                                        , if inArg then ".+In the.+argument" else ""
