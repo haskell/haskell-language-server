@@ -84,7 +84,7 @@ package *
 
 write-ghc-environment-files: never
 
-if impl(ghc >= 9.5)
+if impl(ghc >= 9.4)
   allow-newer:
     -- ghc-9.6
     template-haskell,
@@ -97,7 +97,7 @@ if impl(ghc >= 9.5)
     Cabal
 
 -- head.hackage doesn't like index-state
-if impl(ghc < 9.5)
+if impl(ghc < 9.4)
   index-state: 2023-02-19T00:00:01Z
 
 constraints:
@@ -151,7 +151,7 @@ allow-newer:
   vector-space:base,
   ekg-wai:time,
 
-if impl(ghc >= 9.5)
+if impl(ghc >= 9.4)
   repository head.hackage.ghc.haskell.org
      url: https://ghc.gitlab.haskell.org/head.hackage/
      secure: True
