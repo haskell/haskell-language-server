@@ -55,6 +55,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+
+            # By default, the `pull_request` event has a `GITHUB_SHA` env variable
+            # set to the "last merge commit on the GITHUB_REF branch" (see
+            # https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request).
+            # But we want to check out the latest commit on the branch whether or
+            # not it is a merge commit, so this is how we do that.
+            ref: "${{ github.event.pull_request.head.sha }}"
 
       - uses: ./.github/actions/setup-build
         with:
