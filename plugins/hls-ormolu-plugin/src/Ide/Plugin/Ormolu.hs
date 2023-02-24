@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 
@@ -45,7 +46,11 @@ provider ideState typ contents fp _ = withIndefiniteProgress title Cancellable $
     mkConf o region = defaultConfig { cfgDynOptions = o, cfgRegion = region }
     fmt :: T.Text -> Config RegionIndices -> IO (Either OrmoluException T.Text)
     fmt cont conf =
+#if MIN_VERSION_ormolu(0,5,3)
+      try @OrmoluException $ ormolu conf (fromNormalizedFilePath fp) cont
+#else
       try @OrmoluException $ ormolu conf (fromNormalizedFilePath fp) $ T.unpack cont
+#endif
 
   case typ of
     FormatText -> ret <$> fmt contents (mkConf fileOpts fullRegion)
