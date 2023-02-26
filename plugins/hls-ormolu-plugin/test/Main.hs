@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main
   ( main
@@ -20,6 +21,10 @@ tests = testGroup "ormolu"
       formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
   , goldenWithOrmolu "formats imports correctly" "Ormolu2" "formatted" $ \doc -> do
       formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
+#if MIN_VERSION_ormolu(0,5,3)
+  , goldenWithOrmolu "formats operators correctly" "Ormolu3" "formatted" $ \doc -> do
+      formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
+#endif
   ]
 
 goldenWithOrmolu :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
