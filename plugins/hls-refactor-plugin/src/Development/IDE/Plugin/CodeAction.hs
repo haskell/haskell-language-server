@@ -1223,9 +1223,20 @@ suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
     where
       findMissingConstraint :: T.Text -> Maybe T.Text
       findMissingConstraint t =
-        let regex = "(No instance for|Could not deduce) (\\((.+)\\)|‘(.+)’) arising from" -- a use of / a do statement
+        let -- The regex below can be tested at:
+            --   https://regex101.com/r/dfSivJ/1
+            regex = "(No instance for|Could not deduce):? (\\((.+)\\)|‘(.+)’|.+) arising from" -- a use of / a do statement
+
             match = matchRegexUnifySpaces t regex
-        in match <&> last . init
+
+            -- For a string like:
+            --   "Could not deduce: ?a::() arising from"
+            -- The `matchRegexUnifySpaces` function returns two empty match
+            -- groups at the end of the list. It's not clear why this is the
+            -- case, so we select the last non-empty match group.
+            getCorrectGroup = last . filter (/="")
+
+        in getCorrectGroup <$> match
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.
 suggestInstanceConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
