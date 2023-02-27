@@ -2416,7 +2416,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = seq (\"debug\" :: " <> listOfChar <> ") traceShow \"debug\""
                ])
-  , knownBrokenForGhcVersions [GHC92, GHC94] "GHC 9.2 only has 'traceShow' in error span" $
+  , knownBrokenForGhcVersions [GHC92] "GHC 9.2 only has 'traceShow' in error span" $
     testSession "add default type to satisfy two constraints" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
@@ -2441,7 +2441,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f a = traceShow (\"debug\" :: " <> listOfChar <> ") a"
                ])
-  , knownBrokenForGhcVersions [GHC92, GHC94] "GHC 9.2 only has 'traceShow' in error span" $
+  , knownBrokenForGhcVersions [GHC92] "GHC 9.2 only has 'traceShow' in error span" $
     testSession "add default type to satisfy two constraints with duplicate literals" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"

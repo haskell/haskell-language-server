@@ -1223,11 +1223,9 @@ suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
     where
       findMissingConstraint :: T.Text -> Maybe T.Text
       findMissingConstraint t =
-        let regex = "(No instance for|Could not deduce) \\(?‘?([^’)]+)’?\\)? arising from" -- a use of / a do statement
-            regexImplicitParams = "Could not deduce:? ‘?(\\?[^’]+)’? arising from a use of"
+        let regex = "(No instance for|Could not deduce) (\\((.+)\\)|‘(.+)’) arising from" -- a use of / a do statement
             match = matchRegexUnifySpaces t regex
-            matchImplicitParams = matchRegexUnifySpaces t regexImplicitParams
-        in match <|> matchImplicitParams <&> last
+        in match <&> last . init
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.
 suggestInstanceConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
