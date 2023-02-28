@@ -1248,6 +1248,7 @@ pluginSimpleTests =
 
   -- Error: cabal: Failed to build ghc-typelits-natnormalise-0.7.7 (which is
   -- required by plugin-1.0.0). See the build log above for details.
+  knownBrokenFor (BrokenForGHC [GHC96]) "ghc-typelits-natnormalise doesn't build on 9.6"$
   ignoreFor (BrokenSpecific Windows [GHC94, GHC96]) "ghc-typelist-natnormalise fails to build on GHC 9.4.2 for windows only" $
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
