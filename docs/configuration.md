@@ -396,13 +396,17 @@ Install the two Atom packages [atom-ide-ui](https://atom.io/packages/atom-ide-ui
 $ apm install language-haskell atom-ide-ui haskell
 ```
 
-### Emacs
+### [Emacs](https://www.gnu.org/software/emacs/)
 
-Emacs support is provided by a combination of the following packages:
+Emacs support can be provided by different combinations of packages:
 
-[lsp-mode](https://github.com/emacs-lsp/lsp-mode)
-[lsp-ui](https://github.com/emacs-lsp/lsp-ui)
-[lsp-haskell](https://github.com/emacs-lsp/lsp-haskell)
+- [eglot](https://github.com/joaotavora/eglot) (built-in from Emacs 29 onwards)
+
+or
+
+- [lsp-mode](https://github.com/emacs-lsp/lsp-mode),
+  [lsp-ui](https://github.com/emacs-lsp/lsp-ui) and
+  [lsp-haskell](https://github.com/emacs-lsp/lsp-haskell)
 
 You can install these manually if you are using plain Emacs; instructions for some specific flavours
 are included below.
@@ -411,6 +415,32 @@ Make sure to check the READMEs of each of these packages, which explain how to c
 various parts of the Emacs integration.
 In particular, `lsp-haskell` provides customization options for the `haskell-language-server`-specific parts,
 such as the path to the server executable.
+
+#### [use-package](https://github.com/jwiegley/use-package) [eglot](https://github.com/joaotavora/eglot)
+
+If you are using vanilla emacs with `use-package`, put the following into your `~/.emacs`.
+This will install `eglot` and enable it by default in `haskell-mode`.
+To configure `haskell-language-server` we use the `eglot-workspace-configuration` variable.
+With `M-x eglot-show-workspace-configuration` you can see the JSON that `eglot` will send to `haskell-language-server`.
+See <https://joaotavora.github.io/eglot/#Customizing-Eglot> fore more information.
+As an example, the setting below will disable the `stan` plugin.
+
+```emacs-lisp
+(use-package eglot
+  :ensure t
+  :config
+  (add-hook 'haskell-mode-hook 'eglot-ensure)
+  :config
+  (setq-default eglot-workspace-configuration
+                '((haskell
+                   (plugin
+                    (stan
+                     (globalOn . :json-false))))))  ;; disable stan
+  :custom
+  (eglot-autoshutdown t)  ;; shutdown language server after closing last file
+  (eglot-confirm-server-initiated-edits nil)  ;; allow edits without confirmation
+  )
+```
 
 #### [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
 
