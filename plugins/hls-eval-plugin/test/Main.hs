@@ -81,7 +81,11 @@ tests =
       evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero" -- The default for marking exceptions is False
   , goldenWithEval "Applies file LANGUAGE extensions" "T9" "hs"
   , goldenWithEval' "Evaluate a type with :kind!" "T10" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
-  , goldenWithEval' "Reports an error for an incorrect type with :kind!" "T11" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
+  , goldenWithEval' "Reports an error for an incorrect type with :kind!" "T11" "hs" (
+        if ghcVersion >= GHC94 then "ghc94.expected"
+        else if ghcVersion >= GHC92 then "ghc92.expected"
+        else "expected"
+      )
   , goldenWithEval' "Shows a kind with :kind" "T12" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
   , goldenWithEval' "Reports an error for an incorrect type with :kind" "T13" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
   , goldenWithEval "Returns a fully-instantiated type for :type" "T14" "hs"
@@ -135,7 +139,14 @@ tests =
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEval "Property checking" "TProperty" "hs"
-  , goldenWithEval' "Property checking with exception" "TPropertyError" "hs" (if ghcVersion >= GHC94 then "ghc94.expected" else "expected")
+  , goldenWithEval' "Property checking with exception" "TPropertyError" "hs" (
+        if ghcVersion >= GHC94 && hostOS == Windows then
+          "windows-ghc94.expected"
+        else if ghcVersion >= GHC94 then
+          "ghc94.expected"
+        else
+          "expected"
+      )
   , goldenWithEval "Prelude has no special treatment, it is imported as stated in the module" "TPrelude" "hs"
   , goldenWithEval "Don't panic on {-# UNPACK #-} pragma" "TUNPACK" "hs"
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"

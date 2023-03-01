@@ -88,7 +88,12 @@ jobs:
           os:  ${{ runner.os }}
 
       - name: Build
-        run: cabal build
+        run: |
+          echo "PATH:    ${PATH}"
+          which ghc
+          ghc --version
+          ghcup list
+          cabal build
 
       - name: Set test options
         # run the tests without parallelism, otherwise tasty will attempt to run

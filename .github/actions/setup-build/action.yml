@@ -26,12 +26,12 @@ runs:
     - name: Workaround runner image issue
       if: runner.os == 'Linux'
       # https://github.com/actions/runner-images/issues/7061
-      run: | 
+      run: |
         sudo mkdir -p /usr/local/.ghcup
         sudo chown -R $USER /usr/local/.ghcup
       shell: bash
 
-    - uses: wz1000/actions/setup@613aea482266c5c34f51216f578f6ddc3881be11
+    - uses: wz1000/actions/setup@492da4227f841e297ff73fabce1795d6062c0b15
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
