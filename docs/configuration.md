@@ -422,7 +422,7 @@ If you are using vanilla emacs with `use-package`, put the following into your `
 This will install `eglot` and enable it by default in `haskell-mode`.
 To configure `haskell-language-server` we use the `eglot-workspace-configuration` variable.
 With `M-x eglot-show-workspace-configuration` you can see the JSON that `eglot` will send to `haskell-language-server`.
-See <https://joaotavora.github.io/eglot/#Customizing-Eglot> fore more information.
+See <https://joaotavora.github.io/eglot/#Customizing-Eglot> for more information.
 As an example, the setting below will disable the `stan` plugin.
 
 ```emacs-lisp
