@@ -102,6 +102,13 @@ jobs:
                     , DISTRO: "CentOS"
                     , ARTIFACT: "x86_64-linux-centos7"
                     , ADD_CABAL_ARGS: "--enable-split-sections"
+                    },
+                    { image: "rockylinux:8"
+                    , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
+                    , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+                    , DISTRO: "Unknown"
+                    , ARTIFACT: "x86_64-linux-unknown"
+                    , ADD_CABAL_ARGS: "--enable-split-sections"
                     }
                   ]
     container:
@@ -111,7 +118,15 @@ jobs:
         shell: sh
         run: |
           ${{ matrix.platform.installCmd }} curl bash git ${{ matrix.platform.toolRequirements }}
+
+      - if: matrix.platform.DISTRO == 'Unknown'
+        run: |
+          echo "NAME=Linux" > /etc/os-release
+          echo "ID=linux" >> /etc/os-release
+          echo "PRETTY_NAME=Linux" >> /etc/os-release
+
       - uses: actions/checkout@v3
+
       - name: Run build
         run: |
           bash .github/scripts/build.sh
@@ -385,6 +400,11 @@ jobs:
             toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
             DISTRO: Mint
             ARTIFACT: "x86_64-linux-mint19.3"
+          - image: "rockylinux:8"
+            installCmd: "yum -y install epel-release && yum install -y --allowerasing"
+            toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+            DISTRO: "Unknown"
+            ARTIFACT: "x86_64-linux-unknown"
           - image: linuxmintd/mint20.2-amd64
             installCmd: apt-get update && apt-get install -y
             toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
@@ -397,6 +417,12 @@ jobs:
         shell: sh
         run: |
           ${{ matrix.installCmd }} curl bash git ${{ matrix.toolRequirements }}
+
+      - if: matrix.platform.DISTRO == 'Unknown'
+        run: |
+          echo "NAME=Linux" > /etc/os-release
+          echo "ID=linux" >> /etc/os-release
+          echo "PRETTY_NAME=Linux" >> /etc/os-release
 
       - uses: actions/checkout@v3
 
@@ -668,6 +694,11 @@ jobs:
             toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
             DISTRO: Mint
             ARTIFACT: "x86_64-linux-mint19.3"
+          - image: "rockylinux:8"
+            installCmd: "yum -y install epel-release && yum install -y --allowerasing"
+            toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+            DISTRO: "Unknown"
+            ARTIFACT: "x86_64-linux-unknown"
           - image: linuxmintd/mint20.2-amd64
             installCmd: apt-get update && apt-get install -y
             toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
@@ -680,6 +711,12 @@ jobs:
         shell: sh
         run: |
           ${{ matrix.installCmd }} curl bash git ${{ matrix.toolRequirements }}
+
+      - if: matrix.platform.DISTRO == 'Unknown'
+        run: |
+          echo "NAME=Linux" > /etc/os-release
+          echo "ID=linux" >> /etc/os-release
+          echo "PRETTY_NAME=Linux" >> /etc/os-release
 
       - uses: actions/checkout@v3
 
@@ -864,6 +901,10 @@ jobs:
         with:
           path: ./out
           name: bindists-x86_64-linux-centos7
+      - uses: actions/download-artifact@v3
+        with:
+          path: ./out
+          name: bindists-x86_64-linux-unknown
       - uses: actions/download-artifact@v3
         with:
           path: ./out
