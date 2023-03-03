@@ -825,6 +825,9 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - uses: actions/download-artifact@v3
         with:
           path: ./out
@@ -902,6 +905,12 @@ jobs:
           mv plan_json.tar ../
         shell: bash
 
+      - name: build source tarball
+        run: |
+          export RELEASE=$GITHUB_REF_NAME
+          git archive --format=tar.gz -o "out/haskell-language-server-${RELEASE}-src.tar.gz" --prefix="haskell-language-server-${RELEASE}/" HEAD
+        shell: bash
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
@@ -909,4 +918,5 @@ jobs:
           files: |
             ./out/*.zip
             ./out/*.tar.xz
+            ./out/*.tar.gz
             ./out/*.tar

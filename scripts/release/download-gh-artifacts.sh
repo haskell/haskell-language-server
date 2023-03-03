@@ -17,8 +17,6 @@ done
 
 mkdir -p "gh-release-artifacts/${RELEASE}"
 
-git archive --format=tar.gz -o "gh-release-artifacts/${RELEASE}/haskell-language-server-${RELEASE}-src.tar.gz" --prefix="haskell-language-server-${RELEASE}/" HEAD
-
 cd "gh-release-artifacts/${RELEASE}"
 
 # github
@@ -32,4 +30,4 @@ curl --fail -L -o "haskell-language-server-${RELEASE}-x86_64-freebsd.tar.xz" \
 sha256sum haskell-language-server-* > SHA256SUMS
 gpg --detach-sign -u "${SIGNER}" SHA256SUMS
 
-gh release upload "$RELEASE" "haskell-language-server-${RELEASE}-src.tar.gz" "haskell-language-server-${RELEASE}-x86_64-freebsd.tar.xz" SHA256SUMS SHA256SUMS.sig
+gh release upload "$RELEASE" "haskell-language-server-${RELEASE}-x86_64-freebsd.tar.xz" SHA256SUMS SHA256SUMS.sig
