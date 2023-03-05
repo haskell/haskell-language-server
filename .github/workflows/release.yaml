@@ -438,11 +438,10 @@ jobs:
           path: ./
 
       - name: Create bindist
-        # we need reverse sorting, so that the wrapper binary comes from the oldest GHC always
         run: |
           set -eux
-          for bindist in $(find . -mindepth 1 -maxdepth 1 -type f -name 'out-*.tar' -print | sort -r) ; do
-            tar --overwrite -xf "${bindist}"
+          for bindist in out-*.tar ; do
+            tar -xf "${bindist}"
           done
           unset bindist
           bash .github/scripts/bindist.sh

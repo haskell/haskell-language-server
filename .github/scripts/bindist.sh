@@ -20,7 +20,9 @@ case "${TARBALL_EXT}" in
 		)
         ;;
     tar.xz)
-		GHCS="$(cd "$CI_PROJECT_DIR/out/${ARTIFACT}" && rm -f ./*.json && for ghc in * ; do printf "%s " "$ghc" ; done)"
+		# we need to control the order, so the hls wrapper binary is installed
+		# from the oldest version in the list
+		: "${GHCS:="$(cd "$CI_PROJECT_DIR/out/${ARTIFACT}" && rm -f ./*.json && for ghc in * ; do printf "%s\n" "$ghc" ; done | sort -r | tr '\n' ' ')"}"
 		emake --version
 		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}" GHCS="${GHCS}" bindist
 		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}"                bindist-tar
