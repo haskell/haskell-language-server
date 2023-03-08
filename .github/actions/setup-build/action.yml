@@ -37,7 +37,7 @@ runs:
         ghc-version  : ${{ inputs.ghc   }}
         cabal-version: ${{ inputs.cabal }}
         enable-stack: false
-        ghcup-release-channel: "https://raw.githubusercontent.com/haskell/ghcup-metadata/b9fd40eef5a6409a0742a5a248cda0cc24510d45/ghcup-prereleases-0.0.7.yaml"
+        ghcup-release-channel: "https://raw.githubusercontent.com/haskell/ghcup-metadata/eadf9b61badc7bd5b6abf3f80975785f7e9b5052/ghcup-prereleases-0.0.7.yaml"
 
     - if: inputs.os == 'Windows'
       name: (Windows) Platform config
