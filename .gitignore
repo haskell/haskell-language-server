@@ -32,7 +32,6 @@ test/testdata/**/hie.yaml
 
 # direnv
 /.direnv/
-/.envrc
 
 # bench
 *.identifierPosition
