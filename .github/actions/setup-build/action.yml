@@ -31,13 +31,12 @@ runs:
         sudo chown -R $USER /usr/local/.ghcup
       shell: bash
 
-    - uses: FinleyMcIlwaine/actions/setup@4a3a6eafc25bf77dff3e127437ac51e63b5d812b
+    - uses: haskell/actions/setup@v2.3.5
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
         cabal-version: ${{ inputs.cabal }}
         enable-stack: false
-        ghcup-release-channel: "https://raw.githubusercontent.com/haskell/ghcup-metadata/eadf9b61badc7bd5b6abf3f80975785f7e9b5052/ghcup-prereleases-0.0.7.yaml"
 
     - if: inputs.os == 'Windows'
       name: (Windows) Platform config
