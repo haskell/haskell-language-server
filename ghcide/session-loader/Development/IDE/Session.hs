@@ -122,6 +122,11 @@ import GHC.Data.Bag
 #endif
 import GHC.ResponseFile
 import qualified Data.List.NonEmpty as NE
+import GHC.Unit.Env
+import GHC.Unit.Home
+import GHC.Unit.Home.ModInfo
+
+import GHC.Utils.Trace
 
 data Log
   = LogSettingInitialDynFlags
@@ -770,6 +775,15 @@ setNameCache :: IORef NameCache -> HscEnv -> HscEnv
 #endif
 setNameCache nc hsc = hsc { hsc_NC = nc }
 
+pprHomeUnitGraph :: HomeUnitGraph -> Compat.SDoc
+pprHomeUnitGraph unitEnv = Compat.vcat (map (\(k, v) -> pprHomeUnitEnv k v) $ Map.assocs $ unitEnv_graph unitEnv)
+
+pprHomeUnitEnv :: UnitId -> HomeUnitEnv -> Compat.SDoc
+pprHomeUnitEnv uid env =
+  Compat.ppr uid Compat.<+> Compat.text "(flags:" Compat.<+> Compat.ppr (homeUnitId_ $ homeUnitEnv_dflags env) Compat.<+> Compat.text "," Compat.<+> Compat.ppr (fmap homeUnitId $ homeUnitEnv_home_unit env) Compat.<+> Compat.text ")" Compat.<+> Compat.text "->"
+  Compat.$$ Compat.nest 4 (pprHPT $ homeUnitEnv_hpt env)
+
+
 -- | Create a mapping from FilePaths to HscEnvEqs
 newComponentCache
          :: Recorder (WithPriority Log)
@@ -783,18 +797,20 @@ newComponentCache
 newComponentCache recorder exts cradlePath cfp hsc_env old_cis new_cis = do
     let cis = old_cis ++ new_cis
     let uids = map (\ci -> (componentUnitId ci, componentDynFlags ci)) cis
+    pprTraceM "newComponentCache" $ Compat.ppr (map fst uids)
     hscEnv' <- -- Set up a multi component session with the other units on GHC 9.4
               Compat.initUnits (map snd uids) hsc_env
 
 #if MIN_VERSION_ghc(9,3,0)
     let closure_errs = checkHomeUnitsClosed (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv') pkg_deps
         pkg_deps = do
-          (home_unit_id,home_unit_env) <- unitEnv_elts $ hsc_HUG hscEnv'
-          map (home_unit_id,) (Map.keys $ unitInfoMap $ homeUnitEnv_units home_unit_env)
+          home_unit_id <- map fst uids
+          home_unit_env <- maybeToList $ unitEnv_lookup_maybe home_unit_id $ hsc_HUG hscEnv'
+          map (home_unit_id,) (map (Compat.toUnitId . fst) $ explicitUnits $ homeUnitEnv_units home_unit_env)
 
     case closure_errs of
       errs@(_:_) -> do
-        let rendered = map (ideErrorWithSource (Just "cradle") (Just DsError) cfp . T.pack . Compat.printWithoutUniques) errs
+        let rendered = map (ideErrorWithSource (Just "cradle") (Just DsError) cfp . T.pack . Compat.printWithoutUniques . (, hsc_all_home_unit_ids hscEnv', pprHomeUnitGraph $ ue_home_unit_graph $ hsc_unit_env hscEnv', pkg_deps)) errs
             res = (rendered,Nothing)
             dep_info = foldMap componentDependencyInfo (filter isBad cis)
             bad_units = OS.fromList $ concat $ do
