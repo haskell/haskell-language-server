@@ -262,7 +262,7 @@ getInitialGhcLibDirDefault recorder rootDir = do
   let log = logWith recorder
   hieYaml <- findCradle def rootDir
   cradle <- loadCradle def hieYaml rootDir
-  libDirRes <- getRuntimeGhcLibDir cradle
+  libDirRes <- getRuntimeGhcLibDir (toCologActionWithPrio (cmapWithPrio LogHieBios recorder)) cradle
   case libDirRes of
       CradleSuccess libdir -> pure $ Just $ LibDir libdir
       CradleFail err -> do
@@ -725,7 +725,7 @@ cradleToOptsAndLibDir recorder cradle file = do
     case cradleRes of
         CradleSuccess r -> do
             -- Now get the GHC lib dir
-            libDirRes <- getRuntimeGhcLibDir cradle
+            libDirRes <- getRuntimeGhcLibDir logger cradle
             case libDirRes of
                 -- This is the successful path
                 CradleSuccess libDir -> pure (Right (r, libDir))
