@@ -62,7 +62,7 @@ extra-deps:
 - lsp-1.6.0.0
 - lsp-types-1.6.0.0
 - lsp-test-0.14.1.0
-- hie-bios-0.11.0
+- hie-bios-0.12.0
 
 configure-options:
   ghcide:
