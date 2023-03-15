@@ -240,7 +240,7 @@ pluginTestRecorder = do
 -- See 'runSessionWithServer'' for details.
 initialiseTestRecorder :: Pretty a => [String] -> IO (Recorder (WithPriority a), WithPriority (Doc ann) -> IO ())
 initialiseTestRecorder envVars = do
-    docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing Debug
+    docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing
     -- There are potentially multiple environment variables that enable this logger
     definedEnvVars <- forM envVars (\var -> fromMaybe "0" <$> lookupEnv var)
     let logStdErr = any (/= "0") definedEnvVars

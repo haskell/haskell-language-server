@@ -91,7 +91,6 @@ library
         transformers,
         unordered-containers >= 0.2.10.0,
         vector,
-        hslogger,
         Diff ^>=0.4.0,
         vector,
         opentelemetry >=0.6.1,
