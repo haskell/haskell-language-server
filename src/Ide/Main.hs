@@ -28,6 +28,7 @@ import           Development.IDE.Types.Logger  as G
 import qualified Development.IDE.Types.Options as Ghcide
 import           GHC.Stack                     (emptyCallStack)
 import qualified HIE.Bios.Environment          as HieBios
+import qualified HIE.Bios.Types                as HieBios
 import           HIE.Bios.Types                hiding (Log)
 import           Ide.Arguments
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
@@ -44,6 +45,7 @@ data Log
   | LogDirectory !FilePath
   | LogLspStart !GhcideArguments ![PluginId]
   | LogIDEMain IDEMain.Log
+  | LogHieBios HieBios.Log
   | LogOther T.Text
   deriving Show
 
@@ -58,6 +60,7 @@ instance Pretty Log where
           , viaShow ghcideArgs
           , "PluginIds:" <+> pretty (coerce @_ @[Text] pluginIds) ]
     LogIDEMain iDEMainLog -> pretty iDEMainLog
+    LogHieBios hieBiosLog -> pretty hieBiosLog
     LogOther t -> pretty t
 
 defaultMain :: Recorder (WithPriority Log) -> Arguments -> IdePlugins IdeState -> IO ()
@@ -105,7 +108,7 @@ defaultMain recorder args idePlugins = do
           let initialFp = d </> "a"
           hieYaml <- Session.findCradle def initialFp
           cradle <- Session.loadCradle def hieYaml d
-          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
+          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir (toCologActionWithPrio (cmapWithPrio LogHieBios recorder)) cradle
           putStr libdir
   where
     encodePrettySorted = A.encodePretty' A.defConfig
