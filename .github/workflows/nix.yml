@@ -103,7 +103,7 @@ jobs:
     # We only build nix dev shell for current GHC version because some are
     # failing with different GHC version on darwin.
     - name: Build development shell with nix dependencies for current GHC version
-      run: nix develop --print-build-logs .#all-nix-dev-shells --profile dev
+      run: nix develop --print-build-logs .#haskell-language-server-dev-nix --profile dev
     - name: Push development shell
       if: ${{ env.HAS_TOKEN == 'true' }}
       run: cachix push haskell-language-server dev

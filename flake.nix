@@ -354,9 +354,8 @@
           all-haskell-language-server = linkFarmFromDrvs "all-haskell-language-server" (lib.unique (builtins.attrValues allPackages));
 
           # Same for all shells
-          # We try to build as much as possible, but not much shells are
-          # working (especially on darwing), so this list is limited.
-          all-nix-dev-shells = linkFarmFromDrvs "all-dev-shells" (builtins.map (shell: shell.inputDerivation) (lib.unique [nixDevShells.haskell-language-server-dev-nix]));
+          all-nix-dev-shells = linkFarmFromDrvs "all-dev-shells"
+            (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues nixDevShells)));
 
           all-simple-dev-shells = linkFarmFromDrvs "all-simple-dev-shells"
             (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues simpleDevShells)));
