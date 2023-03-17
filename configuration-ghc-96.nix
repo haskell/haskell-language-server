@@ -6,12 +6,6 @@ let
     # get it removed from the top level list of requirement and it is not pull
     # in the nix shell.
     "shake-bench"
-    "hls-retrie-plugin"
-    "hls-splice-plugin"
-    "hls-class-plugin"
-    "hls-rename-plugin"
-    "hls-gadt-plugin"
-    "hls-refactor-plugin"
   ];
 
   hpkgsOverride = hself: hsuper:
@@ -36,6 +30,24 @@ let
       hiedb = hself.callCabal2nix "hiedb" inputs.haskell-hiedb { };
       hie-bios = hself.callCabal2nix "hie-bios" inputs.haskell-hie-bios { };
       ghc-exactprint = hself.callCabal2nix "ghc-exactprint" inputs.haskell-ghc-exactprint { };
+      retrie = (hself.callCabal2nix "retrie" inputs.haskell-retrie { }).overrideAttrs(oldAttrs:
+      {
+          # See https://github.com/facebookincubator/retrie/pull/54#issuecomment-1474195206
+          postUnpack = ''
+            substituteInPlace source/Retrie/Types.hs \
+              --replace \
+                "lift $ liftIO $ rrTransformer ctxt (MatchResult sub rrTemplate)" \
+                "TransformT $ lift $ liftIO $ rrTransformer ctxt (MatchResult sub rrTemplate)"
+            substituteInPlace source/Retrie/Rewrites/Function.hs \
+              --replace \
+                "lift $ liftIO $ parseImports libdir" \
+                "TransformT $ lift $ liftIO $ parseImports libdir"
+            substituteInPlace source/Retrie/Elaborate.hs \
+              --replace \
+                "lift $ liftIO $ rrTransformer ctxt" \
+                "TransformT $ lift $ liftIO $ rrTransformer ctxt" \
+          '';
+      });
 
       # ptr-poker breaks on MacOS without SSE2 optimizations
       # https://github.com/nikita-volkov/ptr-poker/issues/11
@@ -50,7 +62,7 @@ let
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         # Pedantic cannot be used due to -Werror=unused-top-binds
         # Check must be disabled due to some missing required files
-        (pkgs.lib.concatStringsSep " " [ "--no-check" "-f-pedantic" "-f-hlint" "-f-refactor" "-f-retrie" "-f-class" "-f-gadt" "-f-splice" "-f-rename" ]) { };
+        (pkgs.lib.concatStringsSep " " [ "--no-check" "-f-pedantic" "-f-hlint" ]) {};
   };
 in {
   inherit disabledPlugins;

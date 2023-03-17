@@ -108,6 +108,23 @@
         "type": "github"
       }
     },
+    "haskell-retrie": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1676461699,
+        "narHash": "sha256-e1ZdgROQ2RC/yr4yIb3+8lYfQVLS/95s0rQt0HvN7FU=",
+        "owner": "wz1000",
+        "repo": "retrie",
+        "rev": "3ad8ca0450ea4619bbc8007251582ffc828faa37",
+        "type": "github"
+      },
+      "original": {
+        "owner": "wz1000",
+        "ref": "wip/9.6-support",
+        "repo": "retrie",
+        "type": "github"
+      }
+    },
     "haskell-unix-compat": {
       "flake": false,
       "locked": {
@@ -186,6 +203,7 @@
         "haskell-ghc-exactprint": "haskell-ghc-exactprint",
         "haskell-hie-bios": "haskell-hie-bios",
         "haskell-hiedb": "haskell-hiedb",
+        "haskell-retrie": "haskell-retrie",
         "haskell-unix-compat": "haskell-unix-compat",
         "hlint-35": "hlint-35",
         "nixpkgs": "nixpkgs",

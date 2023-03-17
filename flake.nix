@@ -59,6 +59,11 @@
       url = "github:alanz/ghc-exactprint/ghc-9.6";
       flake = false;
     };
+
+    haskell-retrie = {
+      url = "github:wz1000/retrie/wip/9.6-support";
+      flake = false;
+    };
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, ... }:

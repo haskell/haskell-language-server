@@ -34,7 +34,7 @@ import           GHC.Hs                                    (IsUnicodeSyntax (..)
 import           GHC.Types.SrcLoc                          (generatedSrcSpan)
 import           Ide.PluginUtils                           (makeDiffTextEdit,
                                                             responseError)
-import           Language.Haskell.GHC.ExactPrint           (TransformT,
+import           Language.Haskell.GHC.ExactPrint           (TransformT(..),
                                                             noAnnSrcSpanDP1,
                                                             runTransformT)
 import           Language.Haskell.GHC.ExactPrint.Transform (d1)
@@ -87,7 +87,7 @@ appendFinalPatToMatches :: T.Text -> LHsDecl GhcPs -> TransformT (Either Respons
 appendFinalPatToMatches name = \case
   (L locDecl (ValD xVal fun@FunBind{fun_matches=mg,fun_id = idFunBind})) -> do
     (mg', numPatsMay) <- modifyMgMatchesT' mg (pure . second Just . addArgToMatch name) Nothing combineMatchNumPats
-    numPats <- lift $ maybeToEither (responseError "Unexpected empty match group in HsDecl") numPatsMay
+    numPats <- TransformT $ lift $ maybeToEither (responseError "Unexpected empty match group in HsDecl") numPatsMay
     let decl' = L locDecl (ValD xVal fun{fun_matches=mg'})
     pure (decl', Just (idFunBind, numPats))
   decl -> pure (decl, Nothing)

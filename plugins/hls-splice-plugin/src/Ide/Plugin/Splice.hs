@@ -51,6 +51,7 @@ import           Development.IDE.GHC.Compat      as Compat hiding (getLoc)
 import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util as Util
 import           Development.IDE.GHC.ExactPrint
+import           Language.Haskell.GHC.ExactPrint.Transform (TransformT(TransformT))
 #if MIN_VERSION_ghc(9,4,1)
 import           GHC.Data.Bag (Bag)
 #endif
@@ -381,7 +382,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                                     (L _spn (SpliceD _ (SpliceDecl _ (L _ spl) _))) -> do
                                         eExpr <-
                                             eitherM (fail . show) pure
-                                                $ lift
+                                                $ TransformT $ lift
                                                     ( lift $
                                                         Util.try @_ @SomeException $
                                                             (fst <$> rnTopSpliceDecls spl)
@@ -394,7 +395,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                                     (L _spn (matchSplice astP -> Just spl)) -> do
                                         eExpr <-
                                             eitherM (fail . show) pure
-                                                $ lift
+                                                $ TransformT $ lift
                                                     ( lift $
                                                         Util.try @_ @SomeException $
                                                             (fst <$> expandSplice astP spl)

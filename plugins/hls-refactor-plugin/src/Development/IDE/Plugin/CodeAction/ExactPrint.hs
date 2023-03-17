@@ -311,7 +311,7 @@ liftParseAST df s = case parseAST df "" s of
 #else
   Right x ->  pure (makeDeltaAst x)
 #endif
-  Left _          -> lift $ Left $ "No parse: " <> s
+  Left _          -> TransformT $ lift $ Left $ "No parse: " <> s
 
 #if !MIN_VERSION_ghc(9,2,0)
 lookupAnn :: (Data a, Monad m)
@@ -344,7 +344,7 @@ lastMaybe other = Just $ last other
 
 liftMaybe :: String -> Maybe a -> TransformT (Either String) a
 liftMaybe _ (Just x) = return x
-liftMaybe s _        = lift $ Left s
+liftMaybe s _        = TransformT $ lift $ Left s
 
 ------------------------------------------------------------------------------
 extendImport :: Maybe String -> String -> LImportDecl GhcPs -> Rewrite
@@ -389,7 +389,7 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
           printOutputable (occName (unLoc rdr))
             `elem` map (printOutputable @OccName) (listify (const True) lies)
     when alreadyImported $
-      lift (Left $ thing <> " already imported")
+      TransformT $ lift (Left $ thing <> " already imported")
 
     let lie = reLocA $ L src $ IEName
 #if MIN_VERSION_ghc(9,5,0)
@@ -399,7 +399,7 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
         x = reLocA $ L top $ IEVar noExtField lie
 
     if x `elem` lies
-      then lift (Left $ thing <> " already imported")
+      then TransformT $ lift (Left $ thing <> " already imported")
       else do
 #if !MIN_VERSION_ghc(9,2,0)
         anns <- getAnnsT
@@ -430,7 +430,7 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
         return $ L l it{ideclHiding = Just (hide, L l' lies')}
 #endif
 #endif
-extendImportTopLevel _ _ = lift $ Left "Unable to extend the import list"
+extendImportTopLevel _ _ = TransformT $ lift $ Left "Unable to extend the import list"
 
 wildCardSymbol :: String
 wildCardSymbol = ".."
@@ -466,7 +466,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #endif
  where
   go _hide _l' _pre ((L _ll' (IEThingAll _ (L _ ie))) : _xs)
-    | parent == unIEWrappedName ie = lift . Left $ child <> " already included in " <> parent <> " imports"
+    | parent == unIEWrappedName ie = TransformT $ lift . Left $ child <> " already included in " <> parent <> " imports"
   go hide l' pre (lAbs@(L ll' (IEThingAbs _ absIE@(L _ ie))) : xs)
     -- ThingAbs ie => ThingWith ie child
     | parent == unIEWrappedName ie = do
@@ -527,7 +527,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
               printOutputable (occName (unLoc childRdr))
                 `elem` map (printOutputable @OccName) (listify (const True) lies')
         when alreadyImported $
-          lift (Left $ child <> " already included in " <> parent <> " imports")
+          TransformT $ lift (Left $ child <> " already included in " <> parent <> " imports")
 
         let childLIE = reLocA $ L srcChild $ IEName
 #if MIN_VERSION_ghc(9,5,0)
@@ -606,7 +606,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #else
       return $ L l it{ideclHiding = Just (hide, L l' lies')}
 #endif
-extendImportViaParent _ _ _ _ = lift $ Left "Unable to extend the import list via parent"
+extendImportViaParent _ _ _ _ = TransformT $ lift $ Left "Unable to extend the import list via parent"
 
 #if MIN_VERSION_ghc(9,2,0)
 -- Add an item in an import list, taking care of adding comma if needed.
