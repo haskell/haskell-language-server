@@ -62,7 +62,7 @@ let
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         # Pedantic cannot be used due to -Werror=unused-top-binds
         # Check must be disabled due to some missing required files
-        (pkgs.lib.concatStringsSep " " [ "--no-check" "-f-pedantic" "-f-hlint" ]) {};
+        (pkgs.lib.concatStringsSep " " [ "--no-check" "-f-pedantic" ]) {};
   };
 in {
   inherit disabledPlugins;
