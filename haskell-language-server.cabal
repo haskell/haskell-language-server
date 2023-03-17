@@ -41,6 +41,7 @@ common common-deps
     , filepath
     , text
     , prettyprinter
+    , co-log-core
 
 -- Default warnings in HLS
 common warnings

@@ -38,6 +38,9 @@ import           Ide.Version
 import           System.Directory
 import qualified System.Directory.Extra        as IO
 import           System.FilePath
+import Colog.Core (LogAction (..))
+
+voidLog = LogAction $ \_ -> pure ()
 
 data Log
   = LogVersion !String
@@ -105,7 +108,7 @@ defaultMain recorder args idePlugins = do
           let initialFp = d </> "a"
           hieYaml <- Session.findCradle def initialFp
           cradle <- Session.loadCradle def hieYaml d
-          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
+          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir voidLog cradle
           putStr libdir
   where
     encodePrettySorted = A.encodePretty' A.defConfig

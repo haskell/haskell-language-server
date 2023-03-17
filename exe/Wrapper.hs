@@ -65,7 +65,10 @@ import           Language.LSP.Types                 (MessageActionItem (MessageA
                                                      SMethod (SExit, SWindowShowMessageRequest),
                                                      ShowMessageRequestParams (ShowMessageRequestParams))
 
+import Colog.Core (LogAction (..))
+
 -- ---------------------------------------------------------------------
+voidLog = LogAction $ \_ -> pure ()
 
 main :: IO ()
 main = do
@@ -95,7 +98,7 @@ main = do
           print =<< findProjectCradle
       PrintLibDir -> do
           cradle <- findProjectCradle' False
-          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
+          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir voidLog cradle
           putStr libdir
       _ -> launchHaskellLanguageServer args >>= \case
             Right () -> pure ()
@@ -170,10 +173,10 @@ launchHaskellLanguageServer parsedArgs = do
 
           let cradleName = actionName (cradleOptsProg cradle)
           -- we need to be compatible with NoImplicitPrelude
-          ghcBinary <- liftIO (fmap trim <$> runGhcCmd ["-v0", "-package-env=-", "-ignore-dot-ghci", "-e", "Control.Monad.join (Control.Monad.fmap System.IO.putStr System.Environment.getExecutablePath)"])
+          ghcBinary <- liftIO (fmap trim <$> runGhcCmd voidLog ["-v0", "-package-env=-", "-ignore-dot-ghci", "-e", "Control.Monad.join (Control.Monad.fmap System.IO.putStr System.Environment.getExecutablePath)"])
                          >>= cradleResult cradleName
 
-          libdir <- liftIO (HieBios.getRuntimeGhcLibDir cradle)
+          libdir <- liftIO (HieBios.getRuntimeGhcLibDir voidLog cradle)
                       >>= cradleResult cradleName
 
           env <- Map.fromList <$> liftIO getEnvironment
@@ -202,7 +205,7 @@ getRuntimeGhcVersion' cradle = do
     Direct  -> checkToolExists "ghc"
     _       -> pure ()
 
-  ghcVersionRes <- liftIO $ HieBios.getRuntimeGhcVersion cradle
+  ghcVersionRes <- liftIO $ HieBios.getRuntimeGhcVersion voidLog cradle
   cradleResult cradleName ghcVersionRes
 
   where

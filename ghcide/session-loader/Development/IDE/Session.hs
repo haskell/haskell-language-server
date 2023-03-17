@@ -107,6 +107,8 @@ import           HieDb.Utils
 import qualified System.Random                        as Random
 import           System.Random                        (RandomGen)
 
+import Colog.Core (LogAction (..))
+
 data Log
   = LogSettingInitialDynFlags
   | LogGetInitialGhcLibDirDefaultCradleFail !CradleError !FilePath !(Maybe FilePath) !(Cradle Void)
@@ -257,12 +259,14 @@ loadWithImplicitCradle mHieYaml rootDir = do
     Just yaml -> HieBios.loadCradle yaml
     Nothing   -> loadImplicitHieCradle $ addTrailingPathSeparator rootDir
 
+voidLog = LogAction $ \_ -> pure ()
+
 getInitialGhcLibDirDefault :: Recorder (WithPriority Log) -> FilePath -> IO (Maybe LibDir)
 getInitialGhcLibDirDefault recorder rootDir = do
   let log = logWith recorder
   hieYaml <- findCradle def rootDir
   cradle <- loadCradle def hieYaml rootDir
-  libDirRes <- getRuntimeGhcLibDir cradle
+  libDirRes <- getRuntimeGhcLibDir voidLog cradle
   case libDirRes of
       CradleSuccess libdir -> pure $ Just $ LibDir libdir
       CradleFail err -> do
@@ -725,7 +729,7 @@ cradleToOptsAndLibDir recorder cradle file = do
     case cradleRes of
         CradleSuccess r -> do
             -- Now get the GHC lib dir
-            libDirRes <- getRuntimeGhcLibDir cradle
+            libDirRes <- getRuntimeGhcLibDir voidLog cradle
             case libDirRes of
                 -- This is the successful path
                 CradleSuccess libDir -> pure (Right (r, libDir))
