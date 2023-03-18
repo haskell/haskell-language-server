@@ -88,6 +88,11 @@ codeLensTests = testGroup
                 [ "(==) :: B -> B -> Bool"
                 , "(==) :: A -> A -> Bool"
                 ]
+    , testCase "No lens for TH" $ do
+        runSessionWithServer classPlugin testDataDir $ do
+            doc <- openDoc "TH.hs" "haskell"
+            lens <- getCodeLenses doc
+            liftIO $ length lens @?= 0
     , goldenCodeLens "Apply code lens" "CodeLensSimple" 1
     , goldenCodeLens "Apply code lens for local class" "LocalClassDefine" 0
     , goldenCodeLens "Apply code lens on the same line" "Inline" 0
