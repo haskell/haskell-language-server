@@ -45,12 +45,10 @@ import qualified Data.Text                          as T
 import qualified Data.Text.IO                       as T
 import           Development.IDE.LSP.LanguageServer (runLanguageServer)
 import qualified Development.IDE.Main               as Main
-import           Development.IDE.Types.Logger       (Logger (Logger),
+import           Development.IDE.Types.Logger       (Doc, Logger (Logger),
                                                      Pretty (pretty),
-                                                     Priority (Info),
                                                      Recorder (logger_),
                                                      WithPriority (WithPriority),
-                                                     Doc,
                                                      cmapWithPrio,
                                                      makeDefaultStderrRecorder,
                                                      toCologActionWithPrio)
@@ -76,7 +74,7 @@ main = do
   args <- getArguments "haskell-language-server-wrapper" mempty
 
   hlsVer <- haskellLanguageServerVersion
-  recorder <- makeDefaultStderrRecorder Nothing Info
+  recorder <- makeDefaultStderrRecorder Nothing
   case args of
       ProbeToolsMode -> do
           programsOfInterest <- findProgramVersions
