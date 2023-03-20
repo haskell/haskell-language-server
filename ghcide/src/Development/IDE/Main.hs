@@ -332,7 +332,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                   let def_options = argsIdeOptions config sessionLoader
 
                   -- disable runSubset if the client doesn't support watched files
-                  runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
+                  runSubset <- pure True
                   log Debug $ LogShouldRunSubset runSubset
 
                   let options = def_options
