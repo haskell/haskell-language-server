@@ -12,6 +12,7 @@ module Main
 import           Control.Lens            (Prism', prism', (^.), (^..), (^?))
 import           Control.Monad           (void)
 import           Data.Maybe
+import qualified Data.Text               as T
 import qualified Ide.Plugin.Class        as Class
 import qualified Language.LSP.Types.Lens as J
 import           System.FilePath
@@ -31,23 +32,21 @@ tests = testGroup
 codeActionTests :: TestTree
 codeActionTests = testGroup
   "code actions"
-  [ testCase "Produces addMinimalMethodPlaceholders code actions for one instance" $ do
-      runSessionWithServer classPlugin testDataDir $ do
-        doc <- openDoc "T1.hs" "haskell"
-        _ <- waitForDiagnosticsFromSource doc "typecheck"
-        caResults <- getAllCodeActions doc
-        liftIO $ map (^? _CACodeAction . J.title) caResults
-          @?=
-          [ Just "Add placeholders for '=='"
-          , Just "Add placeholders for '==' with signature(s)"
-          , Just "Add placeholders for '/='"
-          , Just "Add placeholders for '/=' with signature(s)"
-          ]
+  [ expectCodeActionsAvailable "Produces addMinimalMethodPlaceholders code actions for one instance" "T1"
+      [ "Add placeholders for '=='"
+      , "Add placeholders for '==' with signature(s)"
+      , "Add placeholders for '/='"
+      , "Add placeholders for '/=' with signature(s)"
+      , "Add placeholders for all missing methods"
+      , "Add placeholders for all missing methods with signature(s)"
+      ]
   , goldenWithClass "Creates a placeholder for '=='" "T1" "eq" $ \(eqAction:_) -> do
       executeCodeAction eqAction
   , goldenWithClass "Creates a placeholder for '/='" "T1" "ne" $ \(_:_:neAction:_) -> do
       executeCodeAction neAction
-  , goldenWithClass "Creates a placeholder for 'fmap'" "T2" "fmap" $ \(_:_:_:_:fmapAction:_) -> do
+  , goldenWithClass "Creates a placeholder for both '==' and '/='" "T1" "all" $ \(_:_:_:_:allMethodsAction:_) -> do
+      executeCodeAction allMethodsAction
+  , goldenWithClass "Creates a placeholder for 'fmap'" "T2" "fmap" $ \(_:_:_:_:_:_:fmapAction:_) -> do
       executeCodeAction fmapAction
   , goldenWithClass "Creates a placeholder for multiple methods 1" "T3" "1" $ \(mmAction:_) -> do
       executeCodeAction mmAction
@@ -70,6 +69,11 @@ codeActionTests = testGroup
       executeCodeAction eqWithSig
   , goldenWithClass "Only insert pragma once" "InsertPragmaOnce" "" $ \(_:multi:_) -> do
       executeCodeAction multi
+  , expectCodeActionsAvailable "No code action available when minimal requirements meet" "MinimalDefinitionMeet" []
+  , expectCodeActionsAvailable "Add placeholders for all missing methods is unavailable when all methods are required" "AllMethodsRequired"
+      [ "Add placeholders for 'f','g'"
+      , "Add placeholders for 'f','g' with signature(s)"
+      ]
   ]
 
 codeLensTests :: TestTree
@@ -84,6 +88,11 @@ codeLensTests = testGroup
                 [ "(==) :: B -> B -> Bool"
                 , "(==) :: A -> A -> Bool"
                 ]
+    , testCase "No lens for TH" $ do
+        runSessionWithServer classPlugin testDataDir $ do
+            doc <- openDoc "TH.hs" "haskell"
+            lens <- getCodeLenses doc
+            liftIO $ length lens @?= 0
     , goldenCodeLens "Apply code lens" "CodeLensSimple" 1
     , goldenCodeLens "Apply code lens for local class" "LocalClassDefine" 0
     , goldenCodeLens "Apply code lens on the same line" "Inline" 0
@@ -99,7 +108,6 @@ _CACodeAction = prism' InR $ \case
   InR action -> Just action
   _          -> Nothing
 
-
 goldenCodeLens :: TestName -> FilePath -> Int -> TestTree
 goldenCodeLens title path idx =
     goldenWithHaskellDoc classPlugin title testDataDir path "expected" "hs" $ \doc -> do
@@ -114,6 +122,18 @@ goldenWithClass title path desc act =
     actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
     act actions
     void $ skipManyTill anyMessage (getDocumentEdit doc)
+
+expectCodeActionsAvailable :: TestName -> FilePath -> [T.Text] -> TestTree
+expectCodeActionsAvailable title path actionTitles =
+  testCase title $ do
+    runSessionWithServer classPlugin testDataDir $ do
+      doc <- openDoc (path <.> "hs") "haskell"
+      _ <- waitForDiagnosticsFromSource doc "typecheck"
+      caResults <- getAllCodeActions doc
+      liftIO $ map (^? _CACodeAction . J.title) caResults
+        @?= expectedActions
+    where
+      expectedActions = Just <$> actionTitles
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

@@ -27,6 +27,8 @@ tests :: TestTree
 tests = testGroup "code actions" [
 #if hls_refactor
       importTests
+    , ignoreInEnv [HostOS Windows, GhcVer GHC94] "Diagnostic failure for Windows-ghc9.4.2" importQualifiedTests
+    , ignoreInEnv [HostOS Windows, GhcVer GHC94] "Diagnostic failure for Windows-ghc9.4.2" importQualifiedPostTests
     , packageTests
     , redundantImportTests
     , renameTests
@@ -80,7 +82,7 @@ renameTests = testGroup "rename suggestions" [
 
 importTests :: TestTree
 importTests = testGroup "import suggestions" [
-    testCase "works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    testCase "import works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "CodeActionImport.hs" "haskell"
         -- No Formatting:
         let config = def { formattingProvider = "none" }
@@ -101,6 +103,58 @@ importTests = testGroup "import suggestions" [
 
         contents <- documentContents doc
         liftIO $ contents @?= "import Control.Monad\nmain :: IO ()\nmain = when True $ putStrLn \"hello\""
+    ]
+
+importQualifiedTests :: TestTree
+importQualifiedTests = testGroup "import qualified prefix suggestions" [
+    testCase "qualified import works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
+        doc <- openDoc "CodeActionImportQualified.hs" "haskell"
+        -- No Formatting:
+        let config = def { formattingProvider = "none" }
+        sendConfigurationChanged (toJSON config)
+
+        (diag:_) <- waitForDiagnosticsFrom doc
+        liftIO $ diag ^. L.message @?= "Not in scope: ‘Control.when’\nNo module named ‘Control’ is imported."
+
+        actionsOrCommands <- getAllCodeActions doc
+        let actns = map fromAction actionsOrCommands
+
+        let importQualifiedSuggestion = "import qualified Control.Monad as Control"
+        importControlMonadQualified <- liftIO $ inspectCodeAction actionsOrCommands [importQualifiedSuggestion]
+        liftIO $ do
+            dontExpectCodeAction actionsOrCommands ["import Control.Monad (when)"]
+            length actns >= 10 @? "There are some actions"
+
+        executeCodeAction importControlMonadQualified
+
+        contents <- documentContents doc
+        liftIO $ contents @?= "import qualified Control.Monad as Control\nmain :: IO ()\nmain = Control.when True $ putStrLn \"hello\"\n"
+    ]
+
+importQualifiedPostTests :: TestTree
+importQualifiedPostTests = testGroup "import qualified postfix suggestions" [
+    testCase "qualified import in postfix position works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
+        doc <- openDoc "CodeActionImportPostQualified.hs" "haskell"
+        -- No Formatting:
+        let config = def { formattingProvider = "none" }
+        sendConfigurationChanged (toJSON config)
+
+        (diag:_) <- waitForDiagnosticsFrom doc
+        liftIO $ diag ^. L.message @?= "Not in scope: ‘Control.when’\nNo module named ‘Control’ is imported."
+
+        actionsOrCommands <- getAllCodeActions doc
+        let actns = map fromAction actionsOrCommands
+
+        let importQualifiedPostSuggestion = "import Control.Monad qualified as Control"
+        importControlMonadQualified <- liftIO $ inspectCodeAction actionsOrCommands [importQualifiedPostSuggestion]
+        liftIO $ do
+            dontExpectCodeAction actionsOrCommands ["import qualified Control.Monad as Control", "import Control.Monad (when)"]
+            length actns >= 10 @? "There are some actions"
+
+        executeCodeAction importControlMonadQualified
+
+        contents <- documentContents doc
+        liftIO $ T.lines contents !! 2 @?= "import Control.Monad qualified as Control"
     ]
 
 packageTests :: TestTree
@@ -260,15 +314,15 @@ typedHoleTests = testGroup "typed hole code actions" [
                     , "foo x = maxBound"
                     ]
 
-      , expectFailIfGhc92 "The wingman plugin doesn't yet compile in GHC92" $
-        testCase "doesn't work when wingman is active" $
-        runSession hlsCommand fullCaps "test/testdata" $ do
-            doc <- openDoc "TypedHoles.hs" "haskell"
-            _ <- waitForDiagnosticsFromSource doc "typecheck"
-            cas <- getAllCodeActions doc
-            liftIO $ do
-                dontExpectCodeAction cas ["replace _ with minBound"]
-                dontExpectCodeAction cas ["replace _ with foo _"]
+      , knownBrokenForGhcVersions [GHC92, GHC94] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
+          testCase "doesn't work when wingman is active" $
+          runSession hlsCommand fullCaps "test/testdata" $ do
+              doc <- openDoc "TypedHoles.hs" "haskell"
+              _ <- waitForDiagnosticsFromSource doc "typecheck"
+              cas <- getAllCodeActions doc
+              liftIO $ do
+                  dontExpectCodeAction cas ["replace _ with minBound"]
+                  dontExpectCodeAction cas ["replace _ with foo _"]
 
       , testCase "shows more suggestions" $
             runSession hlsCommand fullCaps "test/testdata" $ do
@@ -295,7 +349,7 @@ typedHoleTests = testGroup "typed hole code actions" [
                         , "    stuff (A a) = A (a + 1)"
                         ]
 
-      , expectFailIfGhc92 "The wingman plugin doesn't yet compile in GHC92" $
+      , knownBrokenForGhcVersions [GHC92, GHC94] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
           testCase "doesnt show more suggestions when wingman is active" $
             runSession hlsCommand fullCaps "test/testdata" $ do
                 doc <- openDoc "TypedHoles2.hs" "haskell"
@@ -383,9 +437,6 @@ unusedTermTests = testGroup "unused term code actions" [
             assertBool "Quick fixes should have been filtered out"
               $ Just CodeActionQuickFix `notElem` kinds
     ]
-
-expectFailIfGhc92 :: String -> TestTree -> TestTree
-expectFailIfGhc92 = knownBrokenForGhcVersions [GHC92]
 
 disableWingman :: Session ()
 disableWingman =

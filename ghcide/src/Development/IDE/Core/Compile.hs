@@ -70,7 +70,7 @@ import           Data.Time                         (UTCTime (..))
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Debug.Trace
-import           Development.IDE.Core.FileStore    (resetInterfaceStore)
+import           Development.IDE.Core.FileStore    (resetInterfaceStore, shareFilePath)
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
@@ -171,11 +171,11 @@ typecheckModule :: IdeDefer
 typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
-        mmodSummary' <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
+        initialized <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
                                       (initPlugins hsc modSummary)
-        case mmodSummary' of
+        case initialized of
           Left errs -> return (errs, Nothing)
-          Right modSummary' -> do
+          Right (modSummary', hsc) -> do
             (warnings, etcm) <- withWarnings "typecheck" $ \tweak ->
                 let
                   session = tweak (hscSetFlags dflags hsc)
@@ -427,6 +427,39 @@ tcRnModule hsc_env tc_helpers pmod = do
       tc_gbl_env = tc_gbl_env' { tcg_ann_env = extendAnnEnvList (tcg_ann_env tc_gbl_env') mod_env_anns }
   pure (TcModuleResult pmod rn_info tc_gbl_env splices False mod_env)
 
+
+-- Note [Clearing mi_globals after generating an iface]
+-- GHC populates the mi_global field in interfaces for GHCi if we are using the bytecode
+-- interpreter.
+-- However, this field is expensive in terms of heap usage, and we don't use it in HLS
+-- anywhere. So we zero it out.
+-- The field is not serialized or deserialised from disk, so we don't need to remove it
+-- while reading an iface from disk, only if we just generated an iface in memory
+--
+
+
+
+-- | See https://github.com/haskell/haskell-language-server/issues/3450
+-- GHC's recompilation avoidance in the presense of TH is less precise than
+-- HLS. To avoid GHC from pessimising HLS, we filter out certain dependency information
+-- that we track ourselves. See also Note [Recompilation avoidance in the presence of TH]
+filterUsages :: [Usage] -> [Usage]
+#if MIN_VERSION_ghc(9,3,0)
+filterUsages = filter $ \case UsageHomeModuleInterface{} -> False
+                              _ -> True
+#else
+filterUsages = id
+#endif
+
+-- | Mitigation for https://gitlab.haskell.org/ghc/ghc/-/issues/22744
+shareUsages :: ModIface -> ModIface
+shareUsages iface = iface {mi_usages = usages}
+  where usages = map go (mi_usages iface)
+        go usg@UsageFile{} = usg {usg_file_path = fp}
+          where !fp = shareFilePath (usg_file_path usg)
+        go usg = usg
+
+
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
 mkHiFileResultNoCompile session tcm = do
   let hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) session
@@ -434,7 +467,8 @@ mkHiFileResultNoCompile session tcm = do
       tcGblEnv = tmrTypechecked tcm
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
-  iface <- mkIfaceTc hsc_env_tmp sf details ms tcGblEnv
+  iface' <- mkIfaceTc hsc_env_tmp sf details ms tcGblEnv
+  let iface = iface' { mi_globals = Nothing, mi_usages = filterUsages (mi_usages iface') } -- See Note [Clearing mi_globals after generating an iface]
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 
 mkHiFileResultCompile
@@ -467,15 +501,16 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
 #endif
                                               simplified_guts
 
-  final_iface <- mkFullIface session partial_iface Nothing
+  final_iface' <- mkFullIface session partial_iface Nothing
 #if MIN_VERSION_ghc(9,4,2)
                     Nothing
 #endif
 
-#else 
+#else
   let !partial_iface = force (mkPartialIface session details simplified_guts)
-  final_iface <- mkFullIface session partial_iface
+  final_iface' <- mkFullIface session partial_iface
 #endif
+  let final_iface = final_iface' {mi_globals = Nothing, mi_usages = filterUsages (mi_usages final_iface')} -- See Note [Clearing mi_globals after generating an iface]
 
   -- Write the core file now
   core_file <- case mguts of
@@ -562,11 +597,6 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
       , Handler $ return . (,Nothing) . diagFromString source DsError (noSpan "<internal>")
       . (("Error during " ++ T.unpack source) ++) . show @SomeException
       ]
-
-initPlugins :: HscEnv -> ModSummary -> IO ModSummary
-initPlugins session modSummary = do
-    session1 <- liftIO $ initializePlugins (hscSetFlags (ms_hspp_opts modSummary) session)
-    return modSummary{ms_hspp_opts = hsc_dflags session1}
 
 -- | Whether we should run the -O0 simplifier when generating core.
 --
@@ -978,28 +1008,6 @@ handleGenerationErrors' dflags source action =
     . (("Error during " ++ T.unpack source) ++) . show @SomeException
     ]
 
--- | Load modules, quickly. Input doesn't need to be desugared.
--- A module must be loaded before dependent modules can be typechecked.
--- This variant of loadModuleHome will *never* cause recompilation, it just
--- modifies the session.
--- The order modules are loaded is important when there are hs-boot files.
--- In particular you should make sure to load the .hs version of a file after the
--- .hs-boot version.
-loadModulesHome
-    :: [HomeModInfo]
-    -> HscEnv
-    -> HscEnv
-loadModulesHome mod_infos e =
-#if MIN_VERSION_ghc(9,3,0)
-  hscUpdateHUG (\hug -> foldr addHomeModInfoToHug hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
-#else
-  let !new_modules = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
-  in e { hsc_HPT = new_modules
-       , hsc_type_env_var = Nothing
-       }
-    where
-      mod_name = moduleName . mi_module . hm_iface
-#endif
 
 -- Merge the HPTs, module graphs and FinderCaches
 -- See Note [GhcSessionDeps] in Development.IDE.Core.Rules
@@ -1095,7 +1103,10 @@ getModSummaryFromImports
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
 getModSummaryFromImports env fp modTime contents = do
-    (contents, opts, dflags) <- preprocessor env fp contents
+
+    (contents, opts, env, src_hash) <- preprocessor env fp contents
+
+    let dflags = hsc_dflags env
 
     -- The warns will hopefully be reported when we actually parse the module
     (_warns, L main_loc hsmod) <- parseHeader dflags fp contents
@@ -1144,9 +1155,6 @@ getModSummaryFromImports env fp modTime contents = do
     liftIO $ evaluate $ rnf srcImports
     liftIO $ evaluate $ rnf textualImports
 
-#if MIN_VERSION_ghc (9,3,0)
-    !src_hash <- liftIO $ fingerprintFromStringBuffer contents
-#endif
 
     modLoc <- liftIO $ if mod == mAIN_NAME
         -- specially in tests it's common to have lots of nameless modules
@@ -1154,9 +1162,9 @@ getModSummaryFromImports env fp modTime contents = do
         then mkHomeModLocation dflags (pathToModuleName fp) fp
         else mkHomeModLocation dflags mod fp
 
-    let modl = mkHomeModule (hscHomeUnit (hscSetFlags dflags env)) mod
+    let modl = mkHomeModule (hscHomeUnit env) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
-        msrModSummary =
+        msrModSummary2 =
             ModSummary
                 { ms_mod          = modl
                 , ms_hie_date     = Nothing
@@ -1181,7 +1189,8 @@ getModSummaryFromImports env fp modTime contents = do
                 , ms_textual_imps = textualImports
                 }
 
-    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
+    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary2
+    (msrModSummary, msrHscEnv) <- liftIO $ initPlugins env msrModSummary2
     return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
@@ -1222,7 +1231,7 @@ parseHeader dflags filename contents = do
      PFailedWithErrorMessages msgs ->
         throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
      POk pst rdr_module -> do
-        let (warns, errs) = getMessages' pst dflags
+        let (warns, errs) = renderMessages $ getPsMessages pst dflags
 
         -- Just because we got a `POk`, it doesn't mean there
         -- weren't errors! To clarify, the GHC parser
@@ -1257,9 +1266,18 @@ parseFileContents env customPreprocessor filename ms = do
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
-             (warns, errs) = getMessages' pst dflags
+             psMessages = getPsMessages pst dflags
          in
            do
+               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
+
+               unless (null errs) $
+                  throwE $ diagFromStrings "parser" DsError errs
+
+               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
+               (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed psMessages
+               let (warns, errs) = renderMessages msgs
+
                -- Just because we got a `POk`, it doesn't mean there
                -- weren't errors! To clarify, the GHC parser
                -- distinguishes between fatal and non-fatal
@@ -1272,14 +1290,6 @@ parseFileContents env customPreprocessor filename ms = do
                unless (null errs) $
                  throwE $ diagFromErrMsgs "parser" dflags errs
 
-               -- Ok, we got here. It's safe to continue.
-               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
-
-               unless (null errs) $
-                  throwE $ diagFromStrings "parser" DsError errs
-
-               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               parsed' <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed
 
                -- To get the list of extra source files, we take the list
                -- that the parser gave us,
@@ -1454,19 +1464,8 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
           regenerate linkableNeeded
 
     case (mb_checked_iface, recomp_iface_reqd) of
-      (Just iface, UpToDate) -> do
-         -- If we have an old value, just return it
-         case old_value of
-           Just (old_hir, _)
-             | isNothing linkableNeeded || isJust (hirCoreFp old_hir)
-             -> do
-             -- Perform the fine grained recompilation check for TH
-             maybe_recomp <- checkLinkableDependencies get_linkable_hashes (hsc_mod_graph sessionWithMsDynFlags) (hirRuntimeModules old_hir)
-             case maybe_recomp of
-               Just msg -> do_regenerate msg
-               Nothing  -> return ([], Just old_hir)
-           -- Otherwise use the value from disk, provided the core file is up to date if required
-           _ -> do
+      (Just iface', UpToDate) -> do
+             let iface = shareUsages iface'
              details <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface
              -- parse the runtime dependencies from the annotations
              let runtime_deps
@@ -1553,7 +1552,7 @@ showReason (RecompBecause s) = s
 mkDetailsFromIface :: HscEnv -> ModIface -> IO ModDetails
 mkDetailsFromIface session iface = do
   fixIO $ \details -> do
-    let hsc' = hscUpdateHPT (\hpt -> addToHpt hpt (moduleName $ mi_module iface) (HomeModInfo iface details Nothing)) session
+    let !hsc' = hscUpdateHPT (\hpt -> addToHpt hpt (moduleName $ mi_module iface) (HomeModInfo iface details Nothing)) session
     initIfaceLoad hsc' (typecheckIface iface)
 
 coreFileToCgGuts :: HscEnv -> ModIface -> ModDetails -> CoreFile -> IO CgGuts

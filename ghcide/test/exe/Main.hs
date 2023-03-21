@@ -200,7 +200,7 @@ waitForAllProgressDone = loop
 
 main :: IO ()
 main = do
-  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) Debug
+  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn])
 
   let docWithFilteredPriorityRecorder@Recorder{ logger_ } =
         docWithPriorityRecorder
@@ -1026,6 +1026,7 @@ findDefinitionAndHoverTests = let
             ExpectRange  expectedRange -> checkHoverRange expectedRange rangeInHover msg
             ExpectHoverRange expectedRange -> checkHoverRange expectedRange rangeInHover msg
             ExpectHoverText snippets -> liftIO $ traverse_ (`assertFoundIn` msg) snippets
+            ExpectHoverExcludeText snippets -> liftIO $ traverse_ (`assertNotFoundIn` msg) snippets
             ExpectHoverTextRegex re -> liftIO $ assertBool ("Regex not found in " <> T.unpack msg) (msg =~ re :: Bool)
             ExpectNoHover -> liftIO $ assertFailure $ "Expected no hover but got " <> show hover
             _ -> pure () -- all other expectations not relevant to hover
@@ -1053,6 +1054,11 @@ findDefinitionAndHoverTests = let
   assertFoundIn part whole = assertBool
     (T.unpack $ "failed to find: `" <> part <> "` in hover message:\n" <> whole)
     (part `T.isInfixOf` whole)
+
+  assertNotFoundIn :: T.Text -> T.Text -> Assertion
+  assertNotFoundIn part whole = assertBool
+    (T.unpack $ "found unexpected: `" <> part <> "` in hover message:\n" <> whole)
+    (not . T.isInfixOf part $ whole)
 
   sourceFilePath = T.unpack sourceFileName
   sourceFileName = "GotoHover.hs"
@@ -1130,6 +1136,7 @@ findDefinitionAndHoverTests = let
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 (if ghcVersion >= GHC94 then 5 else 0) 3 (if ghcVersion >= GHC94 then 8 else 14)]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
+  cmtL68 = Position 67  0  ;  lackOfdEq = [ExpectHoverExcludeText ["$dEq"]]
   in
   mkFindTests
   --      def    hover  look       expect
@@ -1173,6 +1180,7 @@ findDefinitionAndHoverTests = let
   , test  no     broken chrL36     litC          "literal Char in hover info      #1016"
   , test  no     broken txtL8      litT          "literal Text in hover info      #1016"
   , test  no     broken lstL43     litL          "literal List in hover info      #1016"
+  , test  yes    yes    cmtL68     lackOfdEq     "no Core symbols                 #3280"
   , if ghcVersion >= GHC90 then
         test  no     yes    docL41     constr        "type constraint in hover info   #1012"
     else
@@ -1209,10 +1217,32 @@ checkFileCompiles fp diag =
     void (openTestDataDoc (dir </> fp))
     diag
 
+
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
   ignoreInWindowsForGHC810 $
-  ignoreForGHC92Plus "blocked on ghc-typelits-natnormalise" $
+  -- Build profile: -w ghc-9.4.2 -O1
+  -- In order, the following will be built (use -v for more details):
+  -- - ghc-typelits-natnormalise-0.7.7 (lib) (requires build)
+  -- - ghc-typelits-knownnat-0.7.7 (lib) (requires build)
+  -- - plugin-1.0.0 (lib) (first run)
+  -- Starting     ghc-typelits-natnormalise-0.7.7 (lib)
+  -- Building     ghc-typelits-natnormalise-0.7.7 (lib)
+
+  -- Failed to build ghc-typelits-natnormalise-0.7.7.
+  -- Build log (
+  -- C:\cabal\logs\ghc-9.4.2\ghc-typelits-_-0.7.7-3f036a52a0d9bfc3389d1852a87da2e87c6de2e4.log
+  -- ):
+  -- Preprocessing library for ghc-typelits-natnormalise-0.7.7..
+  -- Building library for ghc-typelits-natnormalise-0.7.7..
+  -- [1 of 3] Compiling GHC.TypeLits.Normalise.SOP ( src\GHC\TypeLits\Normalise\SOP.hs, dist\build\GHC\TypeLits\Normalise\SOP.o )
+  -- [2 of 3] Compiling GHC.TypeLits.Normalise.Unify ( src\GHC\TypeLits\Normalise\Unify.hs, dist\build\GHC\TypeLits\Normalise\Unify.o )
+  -- [3 of 3] Compiling GHC.TypeLits.Normalise ( src-ghc-9.4\GHC\TypeLits\Normalise.hs, dist\build\GHC\TypeLits\Normalise.o )
+  -- C:\tools\ghc-9.4.2\lib\../mingw/bin/llvm-ar.exe: error: dist\build\objs-5156\libHSghc-typelits-_-0.7.7-3f036a52a0d9bfc3389d1852a87da2e87c6de2e4.a: No such file or directory
+
+  -- Error: cabal: Failed to build ghc-typelits-natnormalise-0.7.7 (which is
+  -- required by plugin-1.0.0). See the build log above for details.
+  ignoreFor (BrokenSpecific Windows [GHC94]) "ghc-typelist-natnormalise fails to build on GHC 9.4.2 for windows only" $
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
@@ -2368,6 +2398,7 @@ data Expect
 --  | ExpectDefRange Range -- Only gotoDef should report this range
   | ExpectHoverRange Range -- Only hover should report this range
   | ExpectHoverText [T.Text] -- the hover message must contain these snippets
+  | ExpectHoverExcludeText [T.Text] -- the hover message must _not_ contain these snippets
   | ExpectHoverTextRegex T.Text -- the hover message must match this pattern
   | ExpectExternFail -- definition lookup in other file expected to fail
   | ExpectNoDefinitions

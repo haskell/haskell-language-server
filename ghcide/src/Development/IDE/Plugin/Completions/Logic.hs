@@ -41,6 +41,7 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat               hiding (ppr)
 import qualified Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Compat.Util
+import           Development.IDE.GHC.CoreFile            (occNamePrefixes)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
@@ -287,25 +288,27 @@ mkExtCompl label =
 
 
 fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
-fromIdentInfo doc IdentInfo{..} q = CI
+fromIdentInfo doc id@IdentInfo{..} q = CI
   { compKind= occNameToComKind name
-  , insertText=rendered
-  , provenance = DefinedIn moduleNameText
-  , label=rendered
+  , insertText=rend
+  , provenance = DefinedIn mod
+  , label=rend
   , typeText = Nothing
   , isInfix=Nothing
-  , isTypeCompl= not isDatacon && isUpper (T.head rendered)
+  , isTypeCompl= not (isDatacon id) && isUpper (T.head rend)
   , additionalTextEdits= Just $
         ExtendImport
           { doc,
-            thingParent = parent,
-            importName = moduleNameText,
+            thingParent = occNameText <$> parent,
+            importName = mod,
             importQual = q,
-            newThing = rendered
+            newThing = rend
           }
   , nameDetails = Nothing
   , isLocalCompletion = False
   }
+  where rend = rendered id
+        mod = moduleNameText id
 
 cacheDataProducer :: Uri -> [ModuleName] -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> CachedCompletions
 cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
@@ -528,7 +531,7 @@ getCompletions
     -> PosPrefixInfo
     -> ClientCapabilities
     -> CompletionsConfig
-    -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
+    -> ModuleNameEnv (HashSet.HashSet IdentInfo)
     -> Uri
     -> IO [Scored CompletionItem]
 getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
@@ -660,10 +663,10 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
       && (List.length (words (T.unpack fullLine)) >= 2)
       && "(" `isInfixOf` T.unpack fullLine
     -> do
-      let moduleName = T.pack $ words (T.unpack fullLine) !! 1
-          funcs = HM.lookupDefault HashSet.empty moduleName moduleExportsMap
-          funs = map (show . name) $ HashSet.toList funcs
-      return $ filterModuleExports moduleName $ map T.pack funs
+      let moduleName = words (T.unpack fullLine) !! 1
+          funcs = lookupWithDefaultUFM moduleExportsMap HashSet.empty $ mkModuleName moduleName
+          funs = map (renderOcc . name) $ HashSet.toList funcs
+      return $ filterModuleExports (T.pack moduleName) funs
     | "import " `T.isPrefixOf` fullLine
     -> return filtImportCompls
     -- we leave this condition here to avoid duplications and return empty list
@@ -765,50 +768,7 @@ openingBacktick line prefixModule prefixText Position { _character=(fromIntegral
 -- TODO: Turn this into an alex lexer that discards prefixes as if they were whitespace.
 stripPrefix :: T.Text -> T.Text
 stripPrefix name = T.takeWhile (/=':') $ fromMaybe name $
-  getFirst $ foldMap (First . (`T.stripPrefix` name)) prefixes
-
--- | Prefixes that can occur in a GHC OccName
-prefixes :: [T.Text]
-prefixes =
-  [
-    -- long ones
-    "$con2tag_"
-  , "$tag2con_"
-  , "$maxtag_"
-
-  -- four chars
-  , "$sel:"
-  , "$tc'"
-
-  -- three chars
-  , "$dm"
-  , "$co"
-  , "$tc"
-  , "$cp"
-  , "$fx"
-
-  -- two chars
-  , "$W"
-  , "$w"
-  , "$m"
-  , "$b"
-  , "$c"
-  , "$d"
-  , "$i"
-  , "$s"
-  , "$f"
-  , "$r"
-  , "C:"
-  , "N:"
-  , "D:"
-  , "$p"
-  , "$L"
-  , "$f"
-  , "$t"
-  , "$c"
-  , "$m"
-  ]
-
+  getFirst $ foldMap (First . (`T.stripPrefix` name)) occNamePrefixes
 
 mkRecordSnippetCompItem :: Uri -> Maybe T.Text -> T.Text -> [T.Text] -> Provenance -> Maybe (LImportDecl GhcPs) -> CompItem
 mkRecordSnippetCompItem uri parent ctxStr compl importedFrom imp = r

@@ -13,8 +13,10 @@ import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except           (ExceptT, throwE)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
+import           Data.Bifunctor                       (second)
 import           Data.Either.Extra                    (rights)
 import           Data.List
+import           Data.List.Extra                      (nubOrdOn)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (isNothing, listToMaybe,
                                                        mapMaybe)
@@ -113,30 +115,31 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
             logWith recorder Info (LogImplementedMethods cls implemented)
             pure
                 $ concatMap mkAction
-                $ fmap (filter (\(bind, _) -> bind `notElem` implemented))
-                $ minDefToMethodGroups range sigs
-                $ classMinimalDef cls
+                $ nubOrdOn snd
+                $ filter ((/=) mempty . snd)
+                $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
+                $ mkMethodGroups range sigs cls
             where
                 range = diag ^. J.range
 
-                mkAction :: [(T.Text, T.Text)] -> [Command |? CodeAction]
-                mkAction methodGroup
+                mkMethodGroups :: Range -> [InstanceBindTypeSig] -> Class -> [MethodGroup]
+                mkMethodGroups range sigs cls = minimalDef <> [allClassMethods]
+                    where
+                        minimalDef = minDefToMethodGroups range sigs $ classMinimalDef cls
+                        allClassMethods = ("all missing methods", makeMethodDefinitions range sigs)
+
+                mkAction :: MethodGroup -> [Command |? CodeAction]
+                mkAction (name, methods)
                     = [ mkCodeAction title
                             $ mkLspCommand plId codeActionCommandId title
-                                (Just $ mkCmdParams methodGroup False)
+                                (Just $ mkCmdParams methods False)
                       , mkCodeAction titleWithSig
                             $ mkLspCommand plId codeActionCommandId titleWithSig
-                                (Just $ mkCmdParams methodGroup True)
+                                (Just $ mkCmdParams methods True)
                       ]
                     where
-                        title = mkTitle $ fst <$> methodGroup
-                        titleWithSig = mkTitleWithSig $ fst <$> methodGroup
-
-                mkTitle methodGroup
-                    = "Add placeholders for "
-                        <> mconcat (intersperse ", " (fmap (\m -> "'" <> m <> "'") methodGroup))
-
-                mkTitleWithSig methodGroup = mkTitle methodGroup <> " with signature(s)"
+                        title = "Add placeholders for " <> name
+                        titleWithSig = title <> " with signature(s)"
 
                 mkCmdParams methodGroup withSig =
                     [toJSON (AddMinimalMethodsParams uri range (List methodGroup) withSig)]
@@ -211,15 +214,37 @@ isInstanceValBind :: ContextInfo -> Bool
 isInstanceValBind (ValBind InstanceBind _ _) = True
 isInstanceValBind _                          = False
 
--- Return (name text, signature text)
-minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [[(T.Text, T.Text)]]
-minDefToMethodGroups range sigs = go
+type MethodSignature = T.Text
+type MethodName = T.Text
+type MethodDefinition = (MethodName, MethodSignature)
+type MethodGroup = (T.Text, [MethodDefinition])
+
+makeMethodDefinition :: InstanceBindTypeSig -> MethodDefinition
+makeMethodDefinition sig = (name, signature)
     where
-        go (Var mn)   = [[ (T.pack . occNameString . occName $ mn, bindRendered sig)
-                        | sig <- sigs
-                        , inRange range (getSrcSpan $ bindName sig)
-                        , printOutputable mn == T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
-                        ]]
+        name = T.drop (T.length bindingPrefix) (printOutputable  (bindName sig))
+        signature = bindRendered sig
+
+makeMethodDefinitions :: Range -> [InstanceBindTypeSig] -> [MethodDefinition]
+makeMethodDefinitions range sigs =
+    [ makeMethodDefinition sig
+    | sig <- sigs
+    , inRange range (getSrcSpan $ bindName sig)
+    ]
+
+signatureToName :: InstanceBindTypeSig -> T.Text
+signatureToName sig = T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
+
+-- Return [groupName text, [(methodName text, signature text)]]
+minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [MethodGroup]
+minDefToMethodGroups range sigs minDef = makeMethodGroup <$> go minDef
+    where
+        makeMethodGroup methodDefinitions =
+            let name = mconcat $ intersperse "," $ (\x -> "'" <> x <> "'") . fst <$> methodDefinitions
+            in  (name, methodDefinitions)
+
+        go (Var mn)   = pure $ makeMethodDefinitions range $ filter ((==) (printOutputable mn) . signatureToName) sigs
         go (Or ms)    = concatMap (go . unLoc) ms
         go (And ms)   = foldr (liftA2 (<>)) [[]] (fmap (go . unLoc) ms)
         go (Parens m) = go (unLoc m)
+

@@ -26,7 +26,8 @@ module Development.IDE.GHC.Compat(
     disableWarningsAsErrors,
     reLoc,
     reLocA,
-    getMessages',
+    getPsMessages,
+    renderMessages,
     pattern PFailedWithErrorMessages,
     isObjectLinkable,
 
@@ -42,7 +43,11 @@ module Development.IDE.GHC.Compat(
     myCoreToStgExpr,
 #endif
 
+    Usage(..),
+
     FastStringCompat,
+    bytesFS,
+    mkFastStringByteString,
     nodeInfo',
     getNodeIds,
     sourceNodeInfo,
@@ -52,6 +57,8 @@ module Development.IDE.GHC.Compat(
     nodeAnnotations,
     mkAstNode,
     combineRealSrcSpans,
+
+    nonDetOccEnvElts,
 
     isQualifiedImport,
     GhcVersion(..),
@@ -97,6 +104,7 @@ module Development.IDE.GHC.Compat(
     icInteractiveModule,
     HomePackageTable,
     lookupHpt,
+    loadModulesHome,
 #if MIN_VERSION_ghc(9,3,0)
     Dependencies(dep_direct_mods),
 #else
@@ -162,9 +170,9 @@ import           GHC.Runtime.Context                   (icInteractiveModule)
 import           GHC.Unit.Home.ModInfo                 (HomePackageTable,
                                                         lookupHpt)
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Unit.Module.Deps (Dependencies(dep_direct_mods))
+import GHC.Unit.Module.Deps (Dependencies(dep_direct_mods), Usage(..))
 #else
-import GHC.Unit.Module.Deps (Dependencies(dep_mods))
+import GHC.Unit.Module.Deps (Dependencies(dep_mods), Usage(..))
 #endif
 #else
 import           GHC.CoreToByteCode                    (coreExprToBCOs)
@@ -206,6 +214,7 @@ import           VarEnv                                (emptyInScopeSet,
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
+import           GHC.Data.FastString
 import           GHC.Core
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                    hiding (ExposePackage)
@@ -224,6 +233,7 @@ import           GHC.Iface.Make                        (mkIfaceExports)
 import qualified GHC.SysTools.Tasks                    as SysTools
 import qualified GHC.Types.Avail                       as Avail
 #else
+import           FastString
 import qualified Avail
 import           DynFlags                              hiding (ExposePackage)
 import           HscTypes
@@ -262,6 +272,12 @@ import           GHC.Types.IPE
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Types.Error
 import GHC.Driver.Config.Stg.Pipeline
+import GHC.Driver.Plugins                              (PsMessages (..))
+#endif
+
+#if !MIN_VERSION_ghc(9,3,0)
+nonDetOccEnvElts :: OccEnv a -> [a]
+nonDetOccEnvElts = occEnvElts
 #endif
 
 type ModIfaceAnnotation = Annotation
@@ -372,25 +388,13 @@ corePrepExpr _ = GHC.corePrepExpr
 simplifyExpr df _ = GHC.simplifyExpr df
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
-type ErrMsg  = MsgEnvelope DecoratedSDoc
-#endif
+renderMessages :: PsMessages -> (Bag WarnMsg, Bag ErrMsg)
+renderMessages msgs =
 #if MIN_VERSION_ghc(9,3,0)
-type WarnMsg  = MsgEnvelope DecoratedSDoc
-#endif
-
-getMessages' :: PState -> DynFlags -> (Bag WarnMsg, Bag ErrMsg)
-getMessages' pst dflags =
-#if MIN_VERSION_ghc(9,3,0)
-  bimap (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) (fmap (fmap renderDiagnosticMessageWithHints) . getMessages) $ getPsMessages pst
+  let renderMsgs extractor = (fmap . fmap) renderDiagnosticMessageWithHints . getMessages $ extractor msgs
+  in (renderMsgs psWarnings, renderMsgs psErrors)
 #else
-#if MIN_VERSION_ghc(9,2,0)
-                 bimap (fmap pprWarning) (fmap pprError) $
-#endif
-                 getMessages pst
-#if !MIN_VERSION_ghc(9,2,0)
-                   dflags
-#endif
+  msgs
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -502,7 +506,7 @@ getModuleHash = mi_mod_hash . mi_final_exts
 
 disableWarningsAsErrors :: DynFlags -> DynFlags
 disableWarningsAsErrors df =
-    flip gopt_unset Opt_WarnIsError $ foldl' wopt_unset_fatal df [toEnum 0 ..]
+    flip gopt_unset Opt_WarnIsError $! foldl' wopt_unset_fatal df [toEnum 0 ..]
 
 isQualifiedImport :: ImportDecl a -> Bool
 isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
@@ -649,4 +653,27 @@ combineRealSrcSpans span1 span2
     (line_end, col_end)     = max (srcSpanEndLine span1, srcSpanEndCol span1)
                                   (srcSpanEndLine span2, srcSpanEndCol span2)
     file = srcSpanFile span1
+#endif
+
+-- | Load modules, quickly. Input doesn't need to be desugared.
+-- A module must be loaded before dependent modules can be typechecked.
+-- This variant of loadModuleHome will *never* cause recompilation, it just
+-- modifies the session.
+-- The order modules are loaded is important when there are hs-boot files.
+-- In particular you should make sure to load the .hs version of a file after the
+-- .hs-boot version.
+loadModulesHome
+    :: [HomeModInfo]
+    -> HscEnv
+    -> HscEnv
+loadModulesHome mod_infos e =
+#if MIN_VERSION_ghc(9,3,0)
+  hscUpdateHUG (\hug -> foldl' (flip addHomeModInfoToHug) hug mod_infos) (e { hsc_type_env_vars = emptyKnotVars })
+#else
+  let !new_modules = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
+  in e { hsc_HPT = new_modules
+       , hsc_type_env_var = Nothing
+       }
+    where
+      mod_name = moduleName . mi_module . hm_iface
 #endif

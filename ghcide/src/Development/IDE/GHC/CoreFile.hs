@@ -10,7 +10,8 @@ module Development.IDE.GHC.CoreFile
   , typecheckCoreFile
   , readBinCoreFile
   , writeBinCoreFile
-  , getImplicitBinds) where
+  , getImplicitBinds
+  , occNamePrefixes) where
 
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -18,6 +19,7 @@ import           Data.Foldable
 import           Data.IORef
 import           Data.List                       (isPrefixOf)
 import           Data.Maybe
+import qualified Data.Text as T
 import           GHC.Fingerprint
 
 import           Development.IDE.GHC.Compat
@@ -228,3 +230,45 @@ tc_iface_bindings (TopIfaceNonRec v e) = do
 tc_iface_bindings (TopIfaceRec vs) = do
   vs' <- traverse (\(v, e) -> (,) <$> pure v <*> tcIfaceExpr e) vs
   pure $ Rec vs'
+
+-- | Prefixes that can occur in a GHC OccName
+occNamePrefixes :: [T.Text]
+occNamePrefixes =
+  [
+    -- long ones
+    "$con2tag_"
+  , "$tag2con_"
+  , "$maxtag_"
+
+  -- four chars
+  , "$sel:"
+  , "$tc'"
+
+  -- three chars
+  , "$dm"
+  , "$co"
+  , "$tc"
+  , "$cp"
+  , "$fx"
+
+  -- two chars
+  , "$W"
+  , "$w"
+  , "$m"
+  , "$b"
+  , "$c"
+  , "$d"
+  , "$i"
+  , "$s"
+  , "$f"
+  , "$r"
+  , "C:"
+  , "N:"
+  , "D:"
+  , "$p"
+  , "$L"
+  , "$f"
+  , "$t"
+  , "$c"
+  , "$m"
+  ]

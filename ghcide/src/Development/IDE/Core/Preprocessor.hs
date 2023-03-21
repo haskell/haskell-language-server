@@ -8,6 +8,7 @@ module Development.IDE.Core.Preprocessor
 
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util   as Util
+import qualified Development.IDE.GHC.Util          as Util
 import           Development.IDE.GHC.CPP
 import           Development.IDE.GHC.Orphans       ()
 
@@ -36,30 +37,34 @@ import           GHC.Utils.Outputable              (renderWithContext)
 
 -- | Given a file and some contents, apply any necessary preprocessors,
 --   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.
-preprocessor :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> ExceptT [FileDiagnostic] IO (Util.StringBuffer, [String], DynFlags)
-preprocessor env0 filename mbContents = do
+preprocessor :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> ExceptT [FileDiagnostic] IO (Util.StringBuffer, [String], HscEnv, Util.Fingerprint)
+preprocessor env filename mbContents = do
     -- Perform unlit
     (isOnDisk, contents) <-
         if isLiterate filename then do
-            newcontent <- liftIO $ runLhs env0 filename mbContents
+            newcontent <- liftIO $ runLhs env filename mbContents
             return (False, newcontent)
         else do
             contents <- liftIO $ maybe (Util.hGetStringBuffer filename) return mbContents
             let isOnDisk = isNothing mbContents
             return (isOnDisk, contents)
 
+    -- Compute the source hash before the preprocessor because this is
+    -- how GHC does it.
+    !src_hash <- liftIO $ Util.fingerprintFromStringBuffer contents
+
     -- Perform cpp
-    (opts, dflags) <- ExceptT $ parsePragmasIntoDynFlags env0 filename contents
-    let env1 = hscSetFlags dflags env0
-    let logger = hsc_logger env1
-    (isOnDisk, contents, opts, dflags) <-
+    (opts, env) <- ExceptT $ parsePragmasIntoHscEnv env filename contents
+    let dflags = hsc_dflags env
+    let logger = hsc_logger env
+    (isOnDisk, contents, opts, env) <-
         if not $ xopt LangExt.Cpp dflags then
-            return (isOnDisk, contents, opts, dflags)
+            return (isOnDisk, contents, opts, env)
         else do
             cppLogs <- liftIO $ newIORef []
             let newLogger = pushLogHook (const (logActionCompat $ logAction cppLogs)) logger
             contents <- ExceptT
-                        $ (Right <$> (runCpp (putLogHook newLogger env1) filename
+                        $ (Right <$> (runCpp (putLogHook newLogger env) filename
                                        $ if isOnDisk then Nothing else Just contents))
                             `catch`
                             ( \(e :: Util.GhcException) -> do
@@ -68,16 +73,16 @@ preprocessor env0 filename mbContents = do
                                   []    -> throw e
                                   diags -> return $ Left diags
                             )
-            (opts, dflags) <- ExceptT $ parsePragmasIntoDynFlags env1 filename contents
-            return (False, contents, opts, dflags)
+            (opts, env) <- ExceptT $ parsePragmasIntoHscEnv env filename contents
+            return (False, contents, opts, env)
 
     -- Perform preprocessor
     if not $ gopt Opt_Pp dflags then
-        return (contents, opts, dflags)
+        return (contents, opts, env, src_hash)
     else do
-        contents <- liftIO $ runPreprocessor env1 filename $ if isOnDisk then Nothing else Just contents
-        (opts, dflags) <- ExceptT $ parsePragmasIntoDynFlags env1 filename contents
-        return (contents, opts, dflags)
+        contents <- liftIO $ runPreprocessor env filename $ if isOnDisk then Nothing else Just contents
+        (opts, env) <- ExceptT $ parsePragmasIntoHscEnv env filename contents
+        return (contents, opts, env, src_hash)
   where
     logAction :: IORef [CPPLog] -> LogActionCompat
     logAction cppLogs dflags _reason severity srcSpan _style msg = do
@@ -137,12 +142,12 @@ isLiterate x = takeExtension x `elem` [".lhs",".lhs-boot"]
 
 
 -- | This reads the pragma information directly from the provided buffer.
-parsePragmasIntoDynFlags
+parsePragmasIntoHscEnv
     :: HscEnv
     -> FilePath
     -> Util.StringBuffer
-    -> IO (Either [FileDiagnostic] ([String], DynFlags))
-parsePragmasIntoDynFlags env fp contents = catchSrcErrors dflags0 "pragmas" $ do
+    -> IO (Either [FileDiagnostic] ([String], HscEnv))
+parsePragmasIntoHscEnv env fp contents = catchSrcErrors dflags0 "pragmas" $ do
 #if MIN_VERSION_ghc(9,3,0)
     let (_warns,opts) = getOptions (initParserOpts dflags0) contents fp
 #else
@@ -154,7 +159,7 @@ parsePragmasIntoDynFlags env fp contents = catchSrcErrors dflags0 "pragmas" $ do
 
     (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
     hsc_env' <- initializePlugins (hscSetFlags dflags env)
-    return (map unLoc opts, disableWarningsAsErrors (hsc_dflags hsc_env'))
+    return (map unLoc opts, hscSetFlags (disableWarningsAsErrors $ hsc_dflags hsc_env') hsc_env')
   where dflags0 = hsc_dflags env
 
 -- | Run (unlit) literate haskell preprocessor on a file, or buffer if set

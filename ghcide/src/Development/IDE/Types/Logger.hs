@@ -19,7 +19,7 @@ module Development.IDE.Types.Logger
   , cfilter
   , withDefaultRecorder
   , makeDefaultStderrRecorder
-  , priorityToHsLoggerPriority
+  , makeDefaultHandleRecorder
   , LoggingColumn(..)
   , cmapWithPrio
   , withBacklog
@@ -39,8 +39,7 @@ import           Control.Concurrent.STM                (atomically,
                                                         readTVarIO,
                                                         writeTBQueue, writeTVar)
 import           Control.Exception                     (IOException)
-import           Control.Monad                         (forM_, unless, when,
-                                                        (>=>))
+import           Control.Monad                         (unless, when, (>=>))
 import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Data.Foldable                         (for_)
 import           Data.Functor.Contravariant            (Contravariant (contramap))
@@ -76,12 +75,7 @@ import qualified Colog.Core                            as Colog
 import           System.IO                             (Handle,
                                                         IOMode (AppendMode),
                                                         hClose, hFlush,
-                                                        hSetEncoding, openFile,
-                                                        stderr, utf8)
-import qualified System.Log.Formatter                  as HSL
-import qualified System.Log.Handler                    as HSL
-import qualified System.Log.Handler.Simple             as HSL
-import qualified System.Log.Logger                     as HsLogger
+                                                        openFile, stderr)
 import           UnliftIO                              (MonadUnliftIO,
                                                         displayException,
                                                         finally, try)
@@ -170,31 +164,24 @@ textHandleRecorder handle =
   Recorder
     { logger_ = \text -> liftIO $ Text.hPutStrLn handle text *> hFlush handle }
 
--- | Priority is actually for hslogger compatibility
-makeDefaultStderrRecorder :: MonadIO m => Maybe [LoggingColumn] -> Priority -> m (Recorder (WithPriority (Doc a)))
-makeDefaultStderrRecorder columns minPriority = do
+makeDefaultStderrRecorder :: MonadIO m => Maybe [LoggingColumn] -> m (Recorder (WithPriority (Doc a)))
+makeDefaultStderrRecorder columns = do
   lock <- liftIO newLock
-  makeDefaultHandleRecorder columns minPriority lock stderr
+  makeDefaultHandleRecorder columns lock stderr
 
 -- | If no path given then use stderr, otherwise use file.
--- Kinda complicated because we also need to setup `hslogger` for
--- `hie-bios` log compatibility reasons. If `hie-bios` can be set to use our
--- logger instead or if `hie-bios` doesn't use `hslogger` then `hslogger` can
--- be removed completely. See `setupHsLogger` comment.
 withDefaultRecorder
   :: MonadUnliftIO m
   => Maybe FilePath
   -- ^ Log file path. `Nothing` uses stderr
   -> Maybe [LoggingColumn]
   -- ^ logging columns to display. `Nothing` uses `defaultLoggingColumns`
-  -> Priority
-  -- ^ min priority for hslogger compatibility
   -> (Recorder (WithPriority (Doc d)) -> m a)
   -- ^ action given a recorder
   -> m a
-withDefaultRecorder path columns minPriority action = do
+withDefaultRecorder path columns action = do
   lock <- liftIO newLock
-  let makeHandleRecorder = makeDefaultHandleRecorder columns minPriority lock
+  let makeHandleRecorder = makeDefaultHandleRecorder columns lock
   case path of
     Nothing -> do
       recorder <- makeHandleRecorder stderr
@@ -216,64 +203,19 @@ makeDefaultHandleRecorder
   :: MonadIO m
   => Maybe [LoggingColumn]
   -- ^ built-in logging columns to display. Nothing uses the default
-  -> Priority
-  -- ^ min priority for hslogger compatibility
   -> Lock
   -- ^ lock to take when outputting to handle
   -> Handle
   -- ^ handle to output to
   -> m (Recorder (WithPriority (Doc a)))
-makeDefaultHandleRecorder columns minPriority lock handle = do
+makeDefaultHandleRecorder columns lock handle = do
   let Recorder{ logger_ } = textHandleRecorder handle
   let threadSafeRecorder = Recorder { logger_ = \msg -> liftIO $ withLock lock (logger_ msg) }
   let loggingColumns = fromMaybe defaultLoggingColumns columns
   let textWithPriorityRecorder = cmapIO (textWithPriorityToText loggingColumns) threadSafeRecorder
-  -- see `setupHsLogger` comment
-  liftIO $ setupHsLogger lock handle ["hls", "hie-bios"] (priorityToHsLoggerPriority minPriority)
   pure (cmap docToText textWithPriorityRecorder)
   where
     docToText = fmap (renderStrict . layoutPretty defaultLayoutOptions)
-
-priorityToHsLoggerPriority :: Priority -> HsLogger.Priority
-priorityToHsLoggerPriority = \case
-  Debug   -> HsLogger.DEBUG
-  Info    -> HsLogger.INFO
-  Warning -> HsLogger.WARNING
-  Error   -> HsLogger.ERROR
-
--- | The purpose of setting up `hslogger` at all is that `hie-bios` uses
--- `hslogger` to output compilation logs. The easiest way to merge these logs
--- with our log output is to setup an `hslogger` that uses the same handle
--- and same lock as our loggers. That way the output from our loggers and
--- `hie-bios` don't interleave strangely.
--- It may be possible to have `hie-bios` use our logger by decorating the
--- `Cradle.cradleOptsProg.runCradle` we get in the Cradle from
--- `HieBios.findCradle`, but I remember trying that and something not good
--- happened. I'd have to try it again to remember if that was a real issue.
--- Once that is figured out or `hie-bios` doesn't use `hslogger`, then all
--- references to `hslogger` can be removed entirely.
-setupHsLogger :: Lock -> Handle -> [String] -> HsLogger.Priority -> IO ()
-setupHsLogger lock handle extraLogNames level = do
-  hSetEncoding handle utf8
-
-  logH <- HSL.streamHandler handle level
-
-  let logHandle  = logH
-        { HSL.writeFunc = \a s -> withLock lock $ HSL.writeFunc logH a s }
-      logFormatter  = HSL.tfLogFormatter logDateFormat logFormat
-      logHandler = HSL.setFormatter logHandle logFormatter
-
-  HsLogger.updateGlobalLogger HsLogger.rootLoggerName $ HsLogger.setHandlers ([] :: [HSL.GenericHandler Handle])
-  HsLogger.updateGlobalLogger "haskell-lsp" $ HsLogger.setHandlers [logHandler]
-  HsLogger.updateGlobalLogger "haskell-lsp" $ HsLogger.setLevel level
-
-  -- Also route the additional log names to the same log
-  forM_ extraLogNames $ \logName -> do
-    HsLogger.updateGlobalLogger logName $ HsLogger.setHandlers [logHandler]
-    HsLogger.updateGlobalLogger logName $ HsLogger.setLevel level
-  where
-    logFormat = "$time [$tid] $prio $loggername:\t$msg"
-    logDateFormat = "%Y-%m-%d %H:%M:%S%Q"
 
 data LoggingColumn
   = TimeColumn

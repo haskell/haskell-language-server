@@ -77,7 +77,7 @@ The HLS codebase includes several plugins under the namespace `Ide.Plugin.*`, th
 
 - The ghcide plugin, which embeds ghcide as a plugin (ghcide is also the engine under HLS).
 - The example and example2 plugins, offering a dubious welcome to new contributors
-- The Brittany, ormolu, fourmolu, floskell and stylish-haskell plugins, a testament to the code formatting wars of our community.
+- The ormolu, fourmolu, floskell and stylish-haskell plugins, a testament to the code formatting wars of our community.
 - The eval plugin, a code lens provider to evaluate code in comments
 - The retrie plugin, a code actions provider to execute retrie commands
 
@@ -96,7 +96,6 @@ idePlugins = pluginDescToIdePlugins allPlugins
       , Ormolu.descriptor "ormolu"
       , StylishHaskell.descriptor "stylish-haskell"
       , Retrie.descriptor "retrie"
-      , Brittany.descriptor "brittany"
       , Eval.descriptor "eval"
       ]
 ```

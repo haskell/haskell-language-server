@@ -20,6 +20,13 @@ module Development.IDE.GHC.Compat.Outputable (
 #if MIN_VERSION_ghc(9,3,0)
     DiagnosticReason(..),
     renderDiagnosticMessageWithHints,
+    pprMsgEnvelopeBagWithLoc,
+    Error.getMessages,
+    renderWithContext,
+    defaultSDocContext,
+    errMsgDiagnostic,
+    unDecorated,
+    diagnosticMessage,
 #else
     pprWarning,
     pprError,
@@ -27,6 +34,9 @@ module Development.IDE.GHC.Compat.Outputable (
     -- * Error infrastructure
     DecoratedSDoc,
     MsgEnvelope,
+    ErrMsg,
+    WarnMsg,
+    SourceError(..),
     errMsgSpan,
     errMsgSeverity,
     formatErrorWithQual,
@@ -190,6 +200,13 @@ type MsgEnvelope e = ErrMsg
 
 type PsWarning = ErrMsg
 type PsError = ErrMsg
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+type ErrMsg  = MsgEnvelope DecoratedSDoc
+#endif
+#if MIN_VERSION_ghc(9,3,0)
+type WarnMsg  = MsgEnvelope DecoratedSDoc
 #endif
 
 mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified

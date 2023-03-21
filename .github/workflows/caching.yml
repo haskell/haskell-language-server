@@ -54,8 +54,13 @@ jobs:
   pre_job:
     runs-on: ubuntu-latest
     outputs:
+      ghcs: ${{ steps.ghcs.outputs.ghcs }}
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
+      # Need the repo checked out in order to read the file
+      - uses: actions/checkout@v3
+      - id: ghcs
+        run: echo "ghcs=$(cat ./.github/workflows/supported-ghc-versions.json)" >> $GITHUB_OUTPUT
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v5.3.0
         with:
@@ -80,27 +85,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # This list of GHC (including the "exclude" list) versions must match
-        # to the list of GHC versions specified in 'test.yml'
-        ghc: [ "9.4.3"
-             , "9.4.2"
-             , "9.2.5"
-             , "9.2.4"
-             , "9.0.2"
-             , "8.10.7"
-             ]
-        os: [ "ubuntu-latest"
-            , "macOS-latest"
-            , "windows-latest"
-            ]
-        exclude:
-           # Exclude until https://github.com/haskell/actions/issues/129
-           # is resolved.
-           - os: windows-latest
-             ghc: '9.4.3' # Excluded because github action cannot install it
-           - os: windows-latest
-             ghc: '9.2.5'
-
+        ghc: ${{ fromJSON(needs.pre_job.outputs.ghcs) }}
+        os:
+          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
     steps:
       - uses: actions/checkout@v3
 

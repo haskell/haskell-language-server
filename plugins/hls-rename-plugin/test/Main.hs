@@ -6,6 +6,7 @@ import           Data.Aeson
 import qualified Data.Map          as M
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Rename as Rename
+import           Ide.Types         (IdePlugins (IdePlugins))
 import           System.FilePath
 import           Test.Hls
 

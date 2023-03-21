@@ -55,6 +55,7 @@
     within:
     - Development.IDE.Core.Shake
     - Development.IDE.GHC.Util
+    - Development.IDE.Core.FileStore
     - Development.IDE.Plugin.CodeAction.Util
     - Development.IDE.Graph.Internal.Database
     - Development.IDE.Graph.Internal.Paths
@@ -205,6 +206,16 @@
     within: []
 
   - name: "GHC.Arr.!"
+    within: []
+
+  # We do not want to use functions from the
+  # GHC driver. Instead use hls rules to construct
+  # an appropriate GHC session
+  - name: "load"
+    within: []
+  - name: "load'"
+    within: []
+  - name: "loadWithCache"
     within: []
 
   # Tracing functions

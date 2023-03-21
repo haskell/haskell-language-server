@@ -12,7 +12,9 @@ copyright:          The Haskell IDE Team
 maintainer:         jana.chadt@nets.at
 category:           Development
 build-type:         Simple
-extra-source-files: LICENSE
+extra-source-files:
+  LICENSE
+  test/testdata/**/*.hs
 
 flag isolateTests
   description: Should tests search for 'cabal-fmt' on the $PATH or shall we install it via build-tool-depends?
@@ -31,8 +33,8 @@ library
     , base            >=4.12 && <5
     , directory
     , filepath
-    , ghcide          ^>=1.7 || ^>=1.8
-    , hls-plugin-api  ^>=1.5
+    , ghcide          ^>= 1.9
+    , hls-plugin-api  ^>= 1.6
     , lens
     , lsp-types
     , process
@@ -53,7 +55,7 @@ test-suite tests
     , directory
     , filepath
     , hls-cabal-fmt-plugin
-    , hls-test-utils        ^>=1.4
+    , hls-test-utils        ^>=1.5
 
   if flag(isolateTests)
     build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6

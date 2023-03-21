@@ -23,7 +23,6 @@ packages:
 # - ./plugins/hls-retrie-plugin
 # - ./plugins/hls-splice-plugin
 # - ./plugins/hls-tactics-plugin
-# - ./plugins/hls-brittany-plugin
 - ./plugins/hls-stylish-haskell-plugin
 - ./plugins/hls-floskell-plugin
 - ./plugins/hls-fourmolu-plugin
@@ -51,7 +50,7 @@ extra-deps:
 - lsp-1.6.0.0
 - lsp-types-1.6.0.0
 - lsp-test-0.14.1.0
-- hie-bios-0.11.0
+- hie-bios-0.12.0
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true
@@ -72,7 +71,6 @@ flags:
     pedantic: true
 
     ignore-plugins-ghc-bounds: true
-    brittany: false
     haddockComments: false
     retrie: false
     splice: false

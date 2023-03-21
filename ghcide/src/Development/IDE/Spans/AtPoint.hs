@@ -20,6 +20,8 @@ module Development.IDE.Spans.AtPoint (
   , getNamesAtPoint
   , toCurrentLocation
   , rowToLoc
+  , nameToLocation
+  , LookupModule
   ) where
 
 import           Development.IDE.GHC.Error
@@ -225,10 +227,19 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
         wrapHaskell x = "\n```haskell\n"<>x<>"\n```\n"
         info = nodeInfoH kind ast
         names = M.assocs $ nodeIdentifiers info
+        -- Check for evidence bindings
+        isInternal :: (Identifier, IdentifierDetails a) -> Bool
+        isInternal (Right _, dets) =
+#if MIN_VERSION_ghc(9,0,1)
+          any isEvidenceContext $ identInfo dets
+#else
+          False
+#endif
+        isInternal (Left _, _) = False
+        filteredNames = filter (not . isInternal) names
         types = nodeType info
-
         prettyNames :: [T.Text]
-        prettyNames = map prettyName names
+        prettyNames = map prettyName filteredNames
         prettyName (Right n, dets) = T.unlines $
           wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
           : maybeToList (pretty (definedAt n) (prettyPackageName n))

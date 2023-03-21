@@ -29,7 +29,7 @@ jobs:
         package: ["hie-compat", "hls-graph", "shake-bench",
                   "hls-plugin-api", "ghcide", "hls-test-utils",
                   "hls-cabal-plugin",
-                  "hls-brittany-plugin", "hls-floskell-plugin", "hls-fourmolu-plugin",
+                  "hls-floskell-plugin", "hls-fourmolu-plugin",
                   "hls-ormolu-plugin", "hls-stylish-haskell-plugin",
                   "hls-class-plugin", "hls-eval-plugin", "hls-explicit-imports-plugin",
                   "hls-haddock-comments-plugin", "hls-hlint-plugin", "hls-stan-plugin",
@@ -106,14 +106,11 @@ jobs:
       # These tweaks are already in cabal-901.project but we dont want to use the entire file,
       # Only the tricks needed by the solver which we know will not make the hackage build fail.
       # The solver takes in account all project packages, even if they are not gonna be effectively built
-      # (like brittany or stylish-haskell for ghc-9.0)
+      # (like stylish-haskell for ghc-9.0)
       - name: "Add temporary needed allow-newer for ghc-9.0"
         if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '9.0.2'
         run: |
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
-          # For brittany
-          echo "allow-newer:" >> cabal.project
-          echo " butcher:base, multistate:base, data-tree-print:base," >> cabal.project
           # For stylish-haskell
           echo " stylish-haskell:Cabal,stylish-haskell:ghc-lib-parser,stylish-haskell:aeson" >> cabal.project
 

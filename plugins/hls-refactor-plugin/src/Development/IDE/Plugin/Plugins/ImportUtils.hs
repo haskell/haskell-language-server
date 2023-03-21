@@ -4,13 +4,16 @@ module Development.IDE.Plugin.Plugins.ImportUtils
     quickFixImportKind,
     renderImportStyle,
     unImportStyle,
-    importStyles
+    importStyles,
+    QualifiedImportStyle(..),
+    qualifiedImportStyle
   ) where
 
 import           Data.List.NonEmpty                           (NonEmpty ((:|)))
 import qualified Data.Text                                    as T
+import           Development.IDE.GHC.Compat
 import           Development.IDE.Plugin.CodeAction.ExactPrint (wildCardSymbol)
-import           Development.IDE.Types.Exports                (IdentInfo (..))
+import           Development.IDE.Types.Exports
 import           Language.LSP.Types                           (CodeActionKind (..))
 
 -- | Possible import styles for an 'IdentInfo'.
@@ -49,16 +52,18 @@ data ImportStyle
   deriving Show
 
 importStyles :: IdentInfo -> NonEmpty ImportStyle
-importStyles IdentInfo {parent, rendered, isDatacon}
-  | Just p <- parent
+importStyles i@(IdentInfo {parent})
+  | Just p <- pr
     -- Constructors always have to be imported via their parent data type, but
     -- methods and associated type/data families can also be imported as
     -- top-level exports.
-  = ImportViaParent rendered p
-      :| [ImportTopLevel rendered | not isDatacon]
+  = ImportViaParent rend p
+      :| [ImportTopLevel rend | not (isDatacon i)]
       <> [ImportAllConstructors p]
   | otherwise
-  = ImportTopLevel rendered :| []
+  = ImportTopLevel rend :| []
+  where rend = rendered i
+        pr = occNameText <$> parent
 
 -- | Used for adding new imports
 renderImportStyle :: ImportStyle -> T.Text
@@ -81,3 +86,13 @@ quickFixImportKind' x (ImportAllConstructors _) = CodeActionUnknown $ "quickfix.
 
 quickFixImportKind :: T.Text -> CodeActionKind
 quickFixImportKind x = CodeActionUnknown $ "quickfix.import." <> x
+
+-- | Possible import styles for qualified imports
+data QualifiedImportStyle = QualifiedImportPostfix | QualifiedImportPrefix
+    deriving Show
+
+qualifiedImportStyle :: DynFlags -> QualifiedImportStyle
+qualifiedImportStyle df | hasImportQualifedPostEnabled && hasPrePositiveQualifiedWarning = QualifiedImportPostfix
+                        | otherwise = QualifiedImportPrefix
+  where hasImportQualifedPostEnabled = xopt ImportQualifiedPost df
+        hasPrePositiveQualifiedWarning = wopt Opt_WarnPrepositiveQualifiedModule df

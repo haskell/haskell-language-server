@@ -1,22 +1,5 @@
 {
   "nodes": {
-    "all-cabal-hashes-unpacked": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1668997806,
-        "narHash": "sha256-HRTQuIO/MxV5OcbCNsHSCeULa7KAjxIBQk5sAVFzrKk=",
-        "owner": "commercialhaskell",
-        "repo": "all-cabal-hashes",
-        "rev": "934c06ca91eb6ceca8a7c484dfc2862e955489f8",
-        "type": "github"
-      },
-      "original": {
-        "owner": "commercialhaskell",
-        "ref": "current-hackage",
-        "repo": "all-cabal-hashes",
-        "type": "github"
-      }
-    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -48,52 +31,16 @@
         "type": "github"
       }
     },
-    "fourmolu": {
+    "ghc-lib-parser-94": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-vbqgYaAd/JUPFGv6O2+OosBXFceKah9OYrjTuEkEZ3E=",
+        "narHash": "sha256-WElfrJexd0VciSYe0T23s/5pxpOQzKhMn0z5zxa0Ax0=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/fourmolu-0.9.0.0/fourmolu-0.9.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/ghc-lib-parser-9.4.4.20221225/ghc-lib-parser-9.4.4.20221225.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/fourmolu-0.9.0.0/fourmolu-0.9.0.0.tar.gz"
-      }
-    },
-    "ghc-exactprint": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-8OWLBQj0WYi1f91EE3d5Pq+lTjY+FQei37NEedDtKeo=",
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz"
-      }
-    },
-    "ghc-exactprint-150": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-f+WmS86c7B0dx2SMABIMm66z6sbRVWdqSZ1QBBEpUMw=",
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.5.0/ghc-exactprint-1.5.0.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.5.0/ghc-exactprint-1.5.0.tar.gz"
-      }
-    },
-    "ghc-exactprint-160": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-TiFybKVP3JIuUfnyESrKXInW9o0C8FLnsMjO4PEJ3I0=",
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.6.1/ghc-exactprint-1.6.1.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.6.1/ghc-exactprint-1.6.1.tar.gz"
+        "url": "https://hackage.haskell.org/package/ghc-lib-parser-9.4.4.20221225/ghc-lib-parser-9.4.4.20221225.tar.gz"
       }
     },
     "gitignore": {
@@ -112,61 +59,25 @@
         "type": "github"
       }
     },
-    "hiedb": {
+    "hlint-35": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-Ny9Ya7Y8GGdBh8r2cryQfK4XZj2dIrYQpaB8dTNQ3KI=",
+        "narHash": "sha256-qQNUlQQnahUGEO92Lm0RwjTGBGr2Yaw0KRuFRMoc5No=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hiedb-0.4.2.0/hiedb-0.4.2.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/hlint-3.5/hlint-3.5.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hiedb-0.4.2.0/hiedb-0.4.2.0.tar.gz"
-      }
-    },
-    "hlint": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-Kz6adx97kY7ojoDlw3y0R6LQ0h/EtXGR5+N07/b6uGk=",
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz"
-      }
-    },
-    "hlint-34": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-mDncRtVkjWnUbZc1fgDMGcGjy8CFNxUF8z2HGuuN7GU=",
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz"
-      }
-    },
-    "implicit-hie": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-bFPhAuQe5IjKYQIz1OEC/j/imDESAv3H1nLNVM3lZF4=",
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/implicit-hie-0.1.2.7/implicit-hie-0.1.2.7.tar.gz"
+        "url": "https://hackage.haskell.org/package/hlint-3.5/hlint-3.5.tar.gz"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1668650906,
-        "narHash": "sha256-JuiYfDO23O8oxUUOmhQflmOoJovyC5G4RjcYQMQjrRE=",
+        "lastModified": 1678987615,
+        "narHash": "sha256-lF4agoB7ysQGNHRXvOqxtSKIZrUZwClA85aASahQlYM=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "3a86856a13c88c8c64ea32082a851fefc79aa700",
+        "rev": "194c2aa446b2b059886bb68be15ef6736d5a8c31",
         "type": "github"
       },
       "original": {
@@ -174,6 +85,18 @@
         "ref": "nixpkgs-unstable",
         "repo": "nixpkgs",
         "type": "github"
+      }
+    },
+    "ormolu-052": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-H7eqId488RBRxcf7flgJefAZmRgFJASJva+Oy7GG4q4=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ormolu-0.5.2.0/ormolu-0.5.2.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ormolu-0.5.2.0/ormolu-0.5.2.0.tar.gz"
       }
     },
     "ptr-poker": {
@@ -190,20 +113,27 @@
     },
     "root": {
       "inputs": {
-        "all-cabal-hashes-unpacked": "all-cabal-hashes-unpacked",
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
-        "fourmolu": "fourmolu",
-        "ghc-exactprint": "ghc-exactprint",
-        "ghc-exactprint-150": "ghc-exactprint-150",
-        "ghc-exactprint-160": "ghc-exactprint-160",
+        "ghc-lib-parser-94": "ghc-lib-parser-94",
         "gitignore": "gitignore",
-        "hiedb": "hiedb",
-        "hlint": "hlint",
-        "hlint-34": "hlint-34",
-        "implicit-hie": "implicit-hie",
+        "hlint-35": "hlint-35",
         "nixpkgs": "nixpkgs",
-        "ptr-poker": "ptr-poker"
+        "ormolu-052": "ormolu-052",
+        "ptr-poker": "ptr-poker",
+        "stylish-haskell": "stylish-haskell"
+      }
+    },
+    "stylish-haskell": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-493M/S38dad82mA04l98xK50WPfue618TIln+7hE7VM=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/stylish-haskell-0.14.4.0/stylish-haskell-0.14.4.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/stylish-haskell-0.14.4.0/stylish-haskell-0.14.4.0.tar.gz"
       }
     }
   },

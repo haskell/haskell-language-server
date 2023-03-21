@@ -2,7 +2,6 @@
 
 let
   disabledPlugins = [
-    "hls-hlint-plugin"
     # That one is not technically a plugin, but by putting it in this list, we
     # get it removed from the top level list of requirement and it is not pull
     # in the nix shell.
@@ -20,12 +19,19 @@ let
           doCheck = false;
         });
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
+      apply-refact = hsuper.apply-refact_0_12_0_0;
+
       # ptr-poker breaks on MacOS without SSE2 optimizations
       # https://github.com/nikita-volkov/ptr-poker/issues/11
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
-      # Hlint is still broken
-      hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint { });
+      Cabal-syntax = hself.Cabal-syntax_3_8_1_0;
+
+      ghc-lib-parser = hself.callCabal2nix "ghc-lib-parser" inputs.ghc-lib-parser-94 {};
+
+      hlint = appendConfigureFlag (hself.callCabal2nix "hlint" inputs.hlint-35 {}) "-fghc-lib";
+
+      ormolu = hself.callCabal2nix "ormolu" inputs.ormolu-052 {};
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
@@ -33,6 +39,7 @@ let
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         (pkgs.lib.concatStringsSep " " [ "-fpedantic" "-f-hlint" ]) { };
+
     });
 in {
   inherit disabledPlugins;

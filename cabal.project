@@ -11,7 +11,6 @@ packages:
          ./plugins/hls-cabal-plugin
          ./plugins/hls-cabal-fmt-plugin
          ./plugins/hls-tactics-plugin
-         ./plugins/hls-brittany-plugin
          ./plugins/hls-stylish-haskell-plugin
          ./plugins/hls-fourmolu-plugin
          ./plugins/hls-class-plugin
@@ -51,7 +50,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-12-13T21:00:15Z
+index-state: 2023-03-15T00:00:00Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
@@ -64,8 +63,12 @@ constraints:
   -- remove this when hlint sets ghc-lib to true by default
   -- https://github.com/ndmitchell/hlint/issues/1376
   hlint +ghc-lib,
+  ghc-check -ghc-check-use-package-abis,
   ghc-lib-parser-ex -auto,
-  stylish-haskell +ghc-lib
+  stylish-haskell +ghc-lib,
+  fourmolu -fixity-th,
+  -- http2 doesn't build with -haddock on ghc-8.10
+  http2 < 4.0.0
 
 -- This is benign and won't affect our ability to release to Hackage,
 -- because we only depend on `ekg-json` when a non-default flag

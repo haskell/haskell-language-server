@@ -122,10 +122,6 @@ import qualified Ide.Plugin.Ormolu                 as Ormolu
 import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 #endif
 
-#if hls_brittany
-import qualified Ide.Plugin.Brittany               as Brittany
-#endif
-
 #if hls_refactor
 import qualified Development.IDE.Plugin.CodeAction as Refactor
 #endif
@@ -177,9 +173,6 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_retrie
       Retrie.descriptor "retrie" :
-#endif
-#if hls_brittany
-      Brittany.descriptor "brittany" :
 #endif
 #if hls_callHierarchy
       CallHierarchy.descriptor "callHierarchy" :

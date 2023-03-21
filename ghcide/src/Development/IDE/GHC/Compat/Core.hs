@@ -447,6 +447,7 @@ module Development.IDE.GHC.Compat.Core (
     -- * Syntax re-exports
 #if MIN_VERSION_ghc(9,0,0)
     module GHC.Hs,
+    module GHC.Hs.Binds,
     module GHC.Parser,
     module GHC.Parser.Header,
     module GHC.Parser.Lexer,
@@ -589,7 +590,7 @@ import           GHC.Parser.Header            hiding (getImports)
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Linker.Loader            as Linker
 import           GHC.Linker.Types
-import           GHC.Parser.Lexer             hiding (initParserState)
+import           GHC.Parser.Lexer             hiding (initParserState, getPsMessages)
 import           GHC.Parser.Annotation        (EpAnn (..))
 import           GHC.Platform.Ways
 import           GHC.Runtime.Context          (InteractiveImport (..))
@@ -786,6 +787,7 @@ import qualified Finder as GHC
 -- (until the CPP extension is actually needed).
 import GHC.LanguageExtensions.Type hiding (Cpp)
 
+import           GHC.Hs.Binds
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
 #if MIN_VERSION_ghc(9,3,0)
@@ -872,7 +874,7 @@ pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
 pattern FunTy :: Type -> Type -> Type
 pattern FunTy arg res <- TyCoRep.FunTy {ft_arg = arg, ft_res = res}
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(8,10,0)
 -- type HasSrcSpan x a = (GenLocated SrcSpan a ~ x)
 -- type HasSrcSpan x = () :: Constraint
 

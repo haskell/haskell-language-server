@@ -1,5 +1,265 @@
 # Changelog for haskell-language-server
 
+## 1.9.1.0
+
+- Binaries for GHC 9.2.6.
+- Fix for `hls-hlint-plugin` being unable to apply fixes due to GHC libdir from CI machines (#3241)
+- Improvements for recompilation avoidance, particularly for non-vscode editors
+  which don't support the LSP `workspace/didChangeWatchedFiles` method (#3458)
+
+## 1.9.0.0
+
+- Binaries for GHC 9.4.3, GHC 9.4.4 and GHC 9.2.5.
+- Dropped support for GHC 8.8 and GHC 8.10.
+- New plugins including:
+  - Expanding record wild cards using hls-explicit-record-fields-plugin (#3304).
+  - Formatting cabal fields using cabal-fmt via hls-cabal-fmt-plugin (#2047).
+  - Warnings and errors for cabal files using hls-cabal-plugin (#2954).
+  - Folding ranges using hls-code-range-plugin (#3058).
+- Support for many plugins like the refactor, splice, retrie, gadt, hlint, fourmolu and class plugins.
+- Completion for record dot fields (#3080).
+- Performance and memory usage improvements.
+- And many more bug fixes and improvements!
+
+- Enable plugin tests in CI for GHC 9.4
+([#3420](https://github.com/haskell/haskell-language-server/pull/3420)) by @wz1000
+- Add a mergify action to update PRs
+([#3418](https://github.com/haskell/haskell-language-server/pull/3418)) by @michaelpj
+- GHC 9.4: Compute the source hash before the preprocessor
+([#3415](https://github.com/haskell/haskell-language-server/pull/3415)) by @wz1000
+- Clear the mi_globals field when generating an iface
+([#3414](https://github.com/haskell/haskell-language-server/pull/3414)) by @wz1000
+- Various strictness improvements
+([#3413](https://github.com/haskell/haskell-language-server/pull/3413)) by @wz1000
+- Remove unused GHC compat code
+([#3412](https://github.com/haskell/haskell-language-server/pull/3412)) by @fendor
+- Bump shake-bench to v0.2.0.0
+([#3411](https://github.com/haskell/haskell-language-server/pull/3411)) by @pepeiborra
+- Support fourmolu 0.10
+([#3410](https://github.com/haskell/haskell-language-server/pull/3410)) by @brandonchinn178
+- Fix nix build CI 
+([#3404](https://github.com/haskell/haskell-language-server/pull/3404)) by @wavewave
+- Fix fourmolu with -f-fixity-th in nix env
+([#3400](https://github.com/haskell/haskell-language-server/pull/3400)) by @wavewave
+- Correct list of GHC versions in caching.yml to match test.yml
+([#3397](https://github.com/haskell/haskell-language-server/pull/3397)) by @fendor
+- Add CI flows for 9.4.3
+([#3396](https://github.com/haskell/haskell-language-server/pull/3396)) by @pepeiborra
+- Bump technote-space/get-diff-action from 6.1.1 to 6.1.2
+([#3392](https://github.com/haskell/haskell-language-server/pull/3392)) by @dependabot[bot]
+- Unload once per linkable instead of once per splice
+([#3390](https://github.com/haskell/haskell-language-server/pull/3390)) by @wz1000
+- Fix table in ghc-version-support.md
+([#3389](https://github.com/haskell/haskell-language-server/pull/3389)) by @k4z4n0v4
+- Fix Nix CI, probably
+([#3388](https://github.com/haskell/haskell-language-server/pull/3388)) by @lf-
+- [hls-explicit-record-fields-plugin] Expand used fields only
+([#3386](https://github.com/haskell/haskell-language-server/pull/3386)) by @ozkutuk
+- Bump hlint version CI flow
+([#3384](https://github.com/haskell/haskell-language-server/pull/3384)) by @fendor
+- Bump fkirc/skip-duplicate-actions from 5.2.0 to 5.3.0
+([#3381](https://github.com/haskell/haskell-language-server/pull/3381)) by @dependabot[bot]
+- Reword intro section in releases.md
+([#3378](https://github.com/haskell/haskell-language-server/pull/3378)) by @fendor
+- Make redundant import removal work on PatSyn imports
+([#3377](https://github.com/haskell/haskell-language-server/pull/3377)) by @ozkutuk
+- Add CI flows for GHC 9.2.5
+([#3376](https://github.com/haskell/haskell-language-server/pull/3376)) by @fendor
+- Delete dead code in hls-test-utils
+([#3368](https://github.com/haskell/haskell-language-server/pull/3368)) by @fendor
+- Bump gha versions in setup-build/action.yml
+([#3366](https://github.com/haskell/haskell-language-server/pull/3366)) by @fendor
+- Wingman copy old to new
+([#3363](https://github.com/haskell/haskell-language-server/pull/3363)) by @santiweight
+- Cleanup Development.IDE.CodeAction
+([#3360](https://github.com/haskell/haskell-language-server/pull/3360)) by @santiweight
+- Use latest GHC 9.2 and 9.4 in flake.nix
+([#3354](https://github.com/haskell/haskell-language-server/pull/3354)) by @cydparser
+- wingman: move wingman to new directory
+([#3352](https://github.com/haskell/haskell-language-server/pull/3352)) by @santiweight
+- Introduce common code for Recorders in Plugin Tests
+([#3347](https://github.com/haskell/haskell-language-server/pull/3347)) by @fendor
+- Add `RangeMap` for unified "in-range" filtering
+([#3343](https://github.com/haskell/haskell-language-server/pull/3343)) by @ozkutuk
+- Docs: update and split neovim/vim configurations
+([#3342](https://github.com/haskell/haskell-language-server/pull/3342)) by @MrcJkb
+- Extract AddArgument modules
+([#3339](https://github.com/haskell/haskell-language-server/pull/3339)) by @santiweight
+- Add hls-cabal-fmt-plugin to hackage release CI script and HLS library
+([#3335](https://github.com/haskell/haskell-language-server/pull/3335)) by @fendor
+- Ensure at least 1 capability 
+([#3334](https://github.com/haskell/haskell-language-server/pull/3334)) by @pepeiborra
+- Add support for Fourmolu 0.9
+([#3331](https://github.com/haskell/haskell-language-server/pull/3331)) by @brandonchinn178
+- [skip ci] Add myself to CODEOWNERS
+([#3329](https://github.com/haskell/haskell-language-server/pull/3329)) by @ozkutuk
+- Typo fixes
+([#3325](https://github.com/haskell/haskell-language-server/pull/3325)) by @Deltaspace0
+- Gitlab CI improvements
+([#3324](https://github.com/haskell/haskell-language-server/pull/3324)) by @wz1000
+- Refactor overlay composition
+([#3323](https://github.com/haskell/haskell-language-server/pull/3323)) by @Gabriella439
+- Add support for `.env` shells to `flake.nix`
+([#3322](https://github.com/haskell/haskell-language-server/pull/3322)) by @Gabriella439
+- feat: update type signature during add argument action
+([#3321](https://github.com/haskell/haskell-language-server/pull/3321)) by @santiweight
+- Update refactor/splice/hlint/fourmolu/retrie/gadt plugin for GHC 9.4
+([#3317](https://github.com/haskell/haskell-language-server/pull/3317)) by @9999years
+- Remove stack from installation docs since it is not supported anymore
+([#3314](https://github.com/haskell/haskell-language-server/pull/3314)) by @fendor
+- Bump cachix/cachix-action from 11 to 12
+([#3310](https://github.com/haskell/haskell-language-server/pull/3310)) by @dependabot[bot]
+- Restore ability to run source plugins
+([#3309](https://github.com/haskell/haskell-language-server/pull/3309)) by @JakobBruenker
+- New plugin: Explicit record fields
+([#3304](https://github.com/haskell/haskell-language-server/pull/3304)) by @ozkutuk
+- support haddock-library 1.11
+([#3303](https://github.com/haskell/haskell-language-server/pull/3303)) by @kokobd
+- Record diagnostics source rule when testing
+([#3301](https://github.com/haskell/haskell-language-server/pull/3301)) by @pepeiborra
+- Make a test more reliable
+([#3300](https://github.com/haskell/haskell-language-server/pull/3300)) by @pepeiborra
+- Change default cabal install target name on docs/installation.md
+([#3298](https://github.com/haskell/haskell-language-server/pull/3298)) by @caiquefigueiredo
+- Bump technote-space/get-diff-action from 6.1.0 to 6.1.1
+([#3293](https://github.com/haskell/haskell-language-server/pull/3293)) by @dependabot[bot]
+- Bump cachix/install-nix-action from 17 to 18
+([#3292](https://github.com/haskell/haskell-language-server/pull/3292)) by @dependabot[bot]
+- Bump cachix/cachix-action from 10 to 11
+([#3291](https://github.com/haskell/haskell-language-server/pull/3291)) by @dependabot[bot]
+- Purge GHC 8.8
+([#3287](https://github.com/haskell/haskell-language-server/pull/3287)) by @michaelpj
+- Bump partial ghc support warning to 9.4
+([#3286](https://github.com/haskell/haskell-language-server/pull/3286)) by @andys8
+- Improved message for missing command or plugin
+([#3285](https://github.com/haskell/haskell-language-server/pull/3285)) by @andys8
+- Register Fourmolu plugin properties
+([#3284](https://github.com/haskell/haskell-language-server/pull/3284)) by @georgefst
+- Cleanup GHC macros (because min version is 8.8.4)
+([#3281](https://github.com/haskell/haskell-language-server/pull/3281)) by @andys8
+- Remove unlawful Ord instance and replace it by a compare function
+([#3279](https://github.com/haskell/haskell-language-server/pull/3279)) by @ChristophHochrainer
+- Exclude the implicit prelude import (#2798)
+([#3277](https://github.com/haskell/haskell-language-server/pull/3277)) by @ChristophHochrainer
+- Fix typos in documentation
+([#3274](https://github.com/haskell/haskell-language-server/pull/3274)) by @bendo
+- Use an importance score to order the suggested import code action
+([#3271](https://github.com/haskell/haskell-language-server/pull/3271)) by @ChristophHochrainer
+- Update plugin tutorial
+([#3266](https://github.com/haskell/haskell-language-server/pull/3266)) by @dyniec
+- configuration-ghc-94.nix: Fix references to lsp and lsp-types source
+([#3265](https://github.com/haskell/haskell-language-server/pull/3265)) by @akshaymankar
+- Add suggestions about licenses in cabal file
+([#3261](https://github.com/haskell/haskell-language-server/pull/3261)) by @dyniec
+- Fix action removes ticks from TemplateHaskellQuotes (#628)
+([#3260](https://github.com/haskell/haskell-language-server/pull/3260)) by @bendo
+- Hlint: A handful of fixes to hints
+([#3259](https://github.com/haskell/haskell-language-server/pull/3259)) by @andys8
+- Support ghc 9.4 for hls-class-plugin
+([#3258](https://github.com/haskell/haskell-language-server/pull/3258)) by @July541
+- Fix nix developement shell
+([#3257](https://github.com/haskell/haskell-language-server/pull/3257)) by @akshaymankar
+- GCH -> GHC
+([#3252](https://github.com/haskell/haskell-language-server/pull/3252)) by @michaelpj
+- Docs: Plugin Support hls-explicit-fixity-plugin
+([#3251](https://github.com/haskell/haskell-language-server/pull/3251)) by @andys8
+- Fix dead link to supported GHC versions
+([#3244](https://github.com/haskell/haskell-language-server/pull/3244)) by @buggymcbugfix
+- Update link to supported versions in README
+([#3242](https://github.com/haskell/haskell-language-server/pull/3242)) by @citrusmunch
+- Bump fkirc/skip-duplicate-actions from 5.1.0 to 5.2.0
+([#3239](https://github.com/haskell/haskell-language-server/pull/3239)) by @dependabot[bot]
+- Move new imports down the code action list
+([#3235](https://github.com/haskell/haskell-language-server/pull/3235)) by @kokobd
+- Improve memory characteristics of ExportsMap
+([#3231](https://github.com/haskell/haskell-language-server/pull/3231)) by @wz1000
+- [skip ci] Remove myself from codeowners
+([#3230](https://github.com/haskell/haskell-language-server/pull/3230)) by @jneira
+- Fix error in code range
+([#3229](https://github.com/haskell/haskell-language-server/pull/3229)) by @kokobd
+- Use nixpkgs variants of Sphinx packages
+([#3227](https://github.com/haskell/haskell-language-server/pull/3227)) by @ozkutuk
+- Bump fkirc/skip-duplicate-actions from 4.0.0 to 5.1.0
+([#3226](https://github.com/haskell/haskell-language-server/pull/3226)) by @dependabot[bot]
+- Add `source-repository` to all cabal files
+([#3219](https://github.com/haskell/haskell-language-server/pull/3219)) by @hololeap
+- hls-hlint-plugin: Update README.md
+([#3216](https://github.com/haskell/haskell-language-server/pull/3216)) by @hololeap
+-  wrapper.in: Require runtime ghc-pkgs to be an abi compatible superset of bootpkgs
+([#3214](https://github.com/haskell/haskell-language-server/pull/3214)) by @maralorn
+- Add diagnostics to Stan descriptor
+([#3213](https://github.com/haskell/haskell-language-server/pull/3213)) by @pepeiborra
+- Document the `stack` requirement in wrapper tests
+([#3212](https://github.com/haskell/haskell-language-server/pull/3212)) by @ozkutuk
+- Improve haddock comments
+([#3207](https://github.com/haskell/haskell-language-server/pull/3207)) by @kokobd
+- Implement sharing for hls-graph Keys
+([#3206](https://github.com/haskell/haskell-language-server/pull/3206)) by @wz1000
+- Improve hls-fixity-plugin
+([#3205](https://github.com/haskell/haskell-language-server/pull/3205)) by @wz1000
+- Implement completionItem/resolve
+([#3204](https://github.com/haskell/haskell-language-server/pull/3204)) by @wz1000
+- Sort vscode extension schema json by keys
+([#3203](https://github.com/haskell/haskell-language-server/pull/3203)) by @fendor
+- docs/supported-versions: Fix typo and more precise brittany support
+([#3201](https://github.com/haskell/haskell-language-server/pull/3201)) by @maralorn
+- Stylish Haskell: CPP parse issues
+([#3199](https://github.com/haskell/haskell-language-server/pull/3199)) by @andys8
+- Bump technote-space/get-diff-action from 4.0.1 to 6.1.0
+([#3198](https://github.com/haskell/haskell-language-server/pull/3198)) by @dependabot[bot]
+- Log plugin name and attribute errors to plugins
+([#3194](https://github.com/haskell/haskell-language-server/pull/3194)) by @pepeiborra
+- Support optional plugins
+([#3193](https://github.com/haskell/haskell-language-server/pull/3193)) by @pepeiborra
+- Add policy on plugin support tiers
+([#3189](https://github.com/haskell/haskell-language-server/pull/3189)) by @michaelpj
+- Fix broken call-hierarchy-plugin-tests for type signatures
+([#3188](https://github.com/haskell/haskell-language-server/pull/3188)) by @July541
+- Update supported GHC versions doc
+([#3186](https://github.com/haskell/haskell-language-server/pull/3186)) by @michaelpj
+- Docs: Fix checkParents documentation
+([#3184](https://github.com/haskell/haskell-language-server/pull/3184)) by @andys8
+- Configuration: more advanced Vim / Coc example (suggestion)
+([#3181](https://github.com/haskell/haskell-language-server/pull/3181)) by @andys8
+- Docs: List stan plugin
+([#3180](https://github.com/haskell/haskell-language-server/pull/3180)) by @andys8
+- Stan: Respect plugin configuration globalOn
+([#3179](https://github.com/haskell/haskell-language-server/pull/3179)) by @andys8
+- Solve formatting issues (stylish-haskell, pre-commit CI)
+([#3171](https://github.com/haskell/haskell-language-server/pull/3171)) by @andys8
+- remove manual heap profiling from ghcide
+([#3168](https://github.com/haskell/haskell-language-server/pull/3168)) by @pepeiborra
+- Refactor plugin: Prefer code action
+([#3167](https://github.com/haskell/haskell-language-server/pull/3167)) by @andys8
+- Fixes the flake deps to align with cabal bounds
+([#3163](https://github.com/haskell/haskell-language-server/pull/3163)) by @mjrussell
+- Remove unused build-depends and install warnings
+([#3155](https://github.com/haskell/haskell-language-server/pull/3155)) by @pepeiborra
+- Release script fixes
+([#3154](https://github.com/haskell/haskell-language-server/pull/3154)) by @wz1000
+- Allow hackage upload
+([#3153](https://github.com/haskell/haskell-language-server/pull/3153)) by @wz1000
+- support add-argument action
+([#3149](https://github.com/haskell/haskell-language-server/pull/3149)) by @santiweight
+- Only run the pre-commit hook on changed files
+([#3145](https://github.com/haskell/haskell-language-server/pull/3145)) by @drsooch
+- unescape printable characters
+([#3140](https://github.com/haskell/haskell-language-server/pull/3140)) by @kokobd
+- nix: fix nix environment for GHC 9.4
+([#3133](https://github.com/haskell/haskell-language-server/pull/3133)) by @guibou
+- Drop compatibility with GHC 8.6.5
+([#3101](https://github.com/haskell/haskell-language-server/pull/3101)) by @pepeiborra
+- Feat: basic record dot completions
+([#3080](https://github.com/haskell/haskell-language-server/pull/3080)) by @coltenwebb
+- Feat: Folding Ranges
+([#3058](https://github.com/haskell/haskell-language-server/pull/3058)) by @sloorush
+- Parse .cabal files; show error and warning diagnostics
+([#2954](https://github.com/haskell/haskell-language-server/pull/2954)) by @runeksvendsen
+- Make splice plugin compatible with GHC 9.2
+([#2816](https://github.com/haskell/haskell-language-server/pull/2816)) by @eddiejessup
+- Add formatting plugin for cabal files which uses cabal-fmt
+([#2047](https://github.com/haskell/haskell-language-server/pull/2047)) by @VeryMilkyJoe
+
 ## 1.8.0.0
 
 - Binaries for GHC 9.2.3 and GHC 9.2.4

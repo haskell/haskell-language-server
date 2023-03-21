@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name:          hls-plugin-api
-version:       1.5.0.0
+version:       1.6.0.0
 synopsis:      Haskell Language Server API for plugin communication
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -55,7 +55,7 @@ library
     , filepath
     , ghc
     , hashable
-    , hls-graph             ^>= 1.8
+    , hls-graph             ^>= 1.9
     , lens
     , lens-aeson
     , lsp                   ^>=1.6.0.0

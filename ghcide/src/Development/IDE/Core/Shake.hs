@@ -307,13 +307,17 @@ type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,Positi
 
 getShakeExtras :: Action ShakeExtras
 getShakeExtras = do
+    -- Will fail the action with a pattern match failure, but be caught
     Just x <- getShakeExtra @ShakeExtras
     return x
 
 getShakeExtrasRules :: Rules ShakeExtras
 getShakeExtrasRules = do
-    Just x <- getShakeExtraRules @ShakeExtras
-    return x
+    mExtras <- getShakeExtraRules @ShakeExtras
+    case mExtras of
+      Just x  -> return x
+      -- This will actually crash HLS
+      Nothing -> liftIO $ fail "missing ShakeExtras"
 
 -- | Returns the client configuration, creating a build dependency.
 --   You should always use this function when accessing client configuration
@@ -658,7 +662,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
     let readValuesCounter = fromIntegral . countRelevantKeys checkParents <$> getStateKeys shakeExtras
         readDirtyKeys = fromIntegral . countRelevantKeys checkParents . toListKeySet <$> readTVarIO(dirtyKeys shakeExtras)
         readIndexPending = fromIntegral . HMap.size <$> readTVarIO (indexPending $ hiedbWriter shakeExtras)
-        readExportsMap = fromIntegral . HMap.size . getExportsMap <$> readTVarIO (exportsMap shakeExtras)
+        readExportsMap = fromIntegral . ExportsMap.exportsMapSize <$> readTVarIO (exportsMap shakeExtras)
         readDatabaseCount = fromIntegral . countRelevantKeys checkParents . map fst <$> shakeGetDatabaseKeys shakeDb
         readDatabaseStep =  fromIntegral <$> shakeGetBuildStep shakeDb
 
@@ -978,7 +982,10 @@ usesWithStale_ key files = do
 --
 -- Run via 'runIdeAction'.
 newtype IdeAction a = IdeAction { runIdeActionT  :: (ReaderT ShakeExtras IO) a }
-    deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad)
+    deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad, Semigroup)
+
+-- https://hub.darcs.net/ross/transformers/issue/86
+deriving instance (Semigroup (m a)) => Semigroup (ReaderT r m a)
 
 runIdeAction :: String -> ShakeExtras -> IdeAction a -> IO a
 runIdeAction _herald s i = runReaderT (runIdeActionT i) s

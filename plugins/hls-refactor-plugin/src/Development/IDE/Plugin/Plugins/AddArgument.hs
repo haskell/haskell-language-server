@@ -1,6 +1,10 @@
 {-# LANGUAGE CPP #-}
 module Development.IDE.Plugin.Plugins.AddArgument (plugin) where
 
+#if MIN_VERSION_ghc(9,4,0)
+import           Development.IDE.GHC.ExactPrint            (epl)
+import           GHC.Parser.Annotation                     (TokenLocation (..))
+#endif
 #if !MIN_VERSION_ghc(9,2,1)
 import qualified Data.Text                                 as T
 import           Language.LSP.Types
@@ -140,8 +144,14 @@ hsTypeFromFunTypeAsList (args, res) =
 addTyHoleToTySigArg :: Int -> LHsSigType GhcPs -> (LHsSigType GhcPs)
 addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
     let (args, res) = hsTypeToFunTypeAsList lsigTy
+#if MIN_VERSION_ghc(9,4,0)
+        wildCardAnn = SrcSpanAnn (EpAnn genAnchor1 (AnnListItem []) emptyComments) generatedSrcSpan
+        arrowAnn = TokenLoc (epl 1)
+        newArg = (SrcSpanAnn mempty generatedSrcSpan, noAnn, HsUnrestrictedArrow (L arrowAnn HsNormalTok), L wildCardAnn $ HsWildCardTy noExtField)
+#else
         wildCardAnn = SrcSpanAnn (EpAnn genAnchor1 (AnnListItem [AddRarrowAnn d1]) emptyComments) generatedSrcSpan
         newArg = (SrcSpanAnn mempty generatedSrcSpan, noAnn, HsUnrestrictedArrow NormalSyntax, L wildCardAnn $ HsWildCardTy noExtField)
+#endif
         -- NOTE if the location that the argument wants to be placed at is not one more than the number of arguments
         --      in the signature, then we return the original type signature.
         --      This situation most likely occurs due to a function type synonym in the signature

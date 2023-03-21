@@ -47,7 +47,19 @@ import           Ide.Plugin.ExplicitImports           (extractMinimalImports,
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types
+import           Language.LSP.Types                   (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
+                                                       CodeAction (CodeAction, _command, _diagnostics, _disabled, _edit, _isPreferred, _kind, _title, _xdata),
+                                                       CodeActionKind (CodeActionUnknown),
+                                                       CodeActionParams (CodeActionParams),
+                                                       CodeLens (..),
+                                                       CodeLensParams (CodeLensParams, _textDocument),
+                                                       Method (TextDocumentCodeAction, TextDocumentCodeLens),
+                                                       SMethod (STextDocumentCodeAction, STextDocumentCodeLens, SWorkspaceApplyEdit),
+                                                       TextDocumentIdentifier (TextDocumentIdentifier, _uri),
+                                                       TextEdit (..),
+                                                       WorkspaceEdit (..),
+                                                       type (|?) (InR),
+                                                       uriToNormalizedFilePath)
 
 newtype Log = LogShake Shake.Log deriving Show
 

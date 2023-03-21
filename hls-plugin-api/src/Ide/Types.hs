@@ -59,7 +59,7 @@ import           System.Posix.Signals
 #endif
 import           Control.Applicative             ((<|>))
 import           Control.Arrow                   ((&&&))
-import           Control.Lens                    ((^.), (.~))
+import           Control.Lens                    ((.~), (^.))
 import           Data.Aeson                      hiding (defaultOptions)
 import           Data.Default
 import           Data.Dependent.Map              (DMap)
@@ -89,7 +89,6 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities (ClientCapabilities (ClientCapabilities),
                                                   TextDocumentClientCapabilities (_codeAction, _documentSymbol))
-import qualified Language.LSP.Types.Lens         as J
 import           Language.LSP.Types.Lens         as J (HasChildren (children),
                                                        HasCommand (command),
                                                        HasContents (contents),
@@ -102,6 +101,7 @@ import           Language.LSP.Types.Lens         as J (HasChildren (children),
                                                        HasTextDocument (..),
                                                        HasTitle (title),
                                                        HasUri (..))
+import qualified Language.LSP.Types.Lens         as J
 import           Language.LSP.VFS
 import           Numeric.Natural
 import           OpenTelemetry.Eventlog
@@ -196,7 +196,6 @@ instance Default Config where
   def = Config
     { checkParents                = CheckOnSave
     , checkProject                = True
-    -- , formattingProvider          = "brittany"
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
     -- , formattingProvider          = "stylish-haskell"

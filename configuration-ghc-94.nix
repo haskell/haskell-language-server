@@ -2,7 +2,6 @@
 
 let
   disabledPlugins = [
-    "hls-hlint-plugin"
     # That one is not technically a plugin, but by putting it in this list, we
     # get it removed from the top level list of requirement and it is not pull
     # in the nix shell.
@@ -13,28 +12,23 @@ let
     with pkgs.haskell.lib;
     {
       hlsDisabledPlugins = disabledPlugins;
-      # YOLO
-      mkDerivation = args:
-        hsuper.mkDerivation (args // {
-          jailbreak = true;
-          doCheck = false;
-        });
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
+      apply-refact = hsuper.apply-refact_0_12_0_0;
+
       # ptr-poker breaks on MacOS without SSE2 optimizations
       # https://github.com/nikita-volkov/ptr-poker/issues/11
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
-      ghc-exactprint =
-        hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-160 { };
-      # Hlint is still broken
-      hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint { });
+      ormolu = hself.ormolu_0_5_3_0;
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
-        (pkgs.lib.concatStringsSep " " [ "-fpedantic" "-f-hlint" ]) { };
+        # Pedantic cannot be used due to -Werror=unused-top-binds
+        # Check must be disabled due to some missing required files
+        (pkgs.lib.concatStringsSep " " [ "--no-check" "-f-pedantic" "-f-hlint" ]) { };
     });
 in {
   inherit disabledPlugins;
