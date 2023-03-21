@@ -3,11 +3,11 @@
     "flake-compat": {
       "flake": false,
       "locked": {
-        "lastModified": 1668681692,
-        "narHash": "sha256-Ht91NGdewz8IQLtWZ9LCeNXMSXHUss+9COoqu6JLmXU=",
+        "lastModified": 1673956053,
+        "narHash": "sha256-4gtG9iQuiKITOjNQQeQIpoIB6b16fm+504Ch3sNKLd8=",
         "owner": "edolstra",
         "repo": "flake-compat",
-        "rev": "009399224d5e398d03b22badca40a37ac85412a1",
+        "rev": "35bb57c0c8d8b62bbfd284272c928ceb64ddbde9",
         "type": "github"
       },
       "original": {
@@ -18,11 +18,11 @@
     },
     "flake-utils": {
       "locked": {
-        "lastModified": 1667395993,
-        "narHash": "sha256-nuEHfE/LcWyuSWnS8t12N1wc105Qtau+/OdUAjtQ0rA=",
+        "lastModified": 1678901627,
+        "narHash": "sha256-U02riOqrKKzwjsxc/400XnElV+UtPUQWpANPlyazjH0=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "5aed5285a952e0b949eb3ba02c12fa4fcfef535f",
+        "rev": "93a2b84fc4b70d9e089d029deacc3583435c2ed6",
         "type": "github"
       },
       "original": {
@@ -59,6 +59,72 @@
         "type": "github"
       }
     },
+    "haskell-ghc-exactprint": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1678824759,
+        "narHash": "sha256-2I+GyVrfevo/vWZqIdXZ+Cg0+cU/755M0GhaSHiiZCQ=",
+        "owner": "alanz",
+        "repo": "ghc-exactprint",
+        "rev": "db5e8ab3817c9ee34e37359d5839e9526e05e448",
+        "type": "github"
+      },
+      "original": {
+        "owner": "alanz",
+        "ref": "ghc-9.6",
+        "repo": "ghc-exactprint",
+        "type": "github"
+      }
+    },
+    "haskell-hie-bios": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1679040151,
+        "narHash": "sha256-1Y/9wCoR+nMvSrEr0EHnRBCkUuhqWPgPuukNM5zzRT8=",
+        "owner": "mpickering",
+        "repo": "hie-bios",
+        "rev": "af192d4116a382afa1721a6f8d77729f98993082",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mpickering",
+        "repo": "hie-bios",
+        "type": "github"
+      }
+    },
+    "haskell-hiedb": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1678673879,
+        "narHash": "sha256-KN/adLZuREPcZ1fEHCuxF/WjGmTE2nSnlW1vCp+aJL0=",
+        "owner": "wz1000",
+        "repo": "HieDb",
+        "rev": "d4e12eb22c7d832ad54c2e4c433217028fe95c83",
+        "type": "github"
+      },
+      "original": {
+        "owner": "wz1000",
+        "repo": "HieDb",
+        "type": "github"
+      }
+    },
+    "haskell-unix-compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1664758053,
+        "narHash": "sha256-JD/EPdPYEOfS6WqGXOZrdcRUiVkHInSwZT8hn/iQmLs=",
+        "owner": "jacobstanley",
+        "repo": "unix-compat",
+        "rev": "3f6bd688cb56224955e77245a2649ba99ea32fff",
+        "type": "github"
+      },
+      "original": {
+        "owner": "jacobstanley",
+        "repo": "unix-compat",
+        "rev": "3f6bd688cb56224955e77245a2649ba99ea32fff",
+        "type": "github"
+      }
+    },
     "hlint-35": {
       "flake": false,
       "locked": {
@@ -73,16 +139,16 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1678987615,
-        "narHash": "sha256-lF4agoB7ysQGNHRXvOqxtSKIZrUZwClA85aASahQlYM=",
+        "lastModified": 1679011989,
+        "narHash": "sha256-TTyzL8k0ZY2otX8xcvi+GAbFD3dpFVg5UJkgmpJBuuA=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "194c2aa446b2b059886bb68be15ef6736d5a8c31",
+        "rev": "aae97499619fdf720c9524168d831cae04ceae5a",
         "type": "github"
       },
       "original": {
         "owner": "NixOS",
-        "ref": "nixpkgs-unstable",
+        "ref": "haskell-updates",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -117,6 +183,10 @@
         "flake-utils": "flake-utils",
         "ghc-lib-parser-94": "ghc-lib-parser-94",
         "gitignore": "gitignore",
+        "haskell-ghc-exactprint": "haskell-ghc-exactprint",
+        "haskell-hie-bios": "haskell-hie-bios",
+        "haskell-hiedb": "haskell-hiedb",
+        "haskell-unix-compat": "haskell-unix-compat",
         "hlint-35": "hlint-35",
         "nixpkgs": "nixpkgs",
         "ormolu-052": "ormolu-052",

@@ -8,7 +8,7 @@
   description = "haskell language server flake";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/haskell-updates";
     flake-compat = {
       url = "github:edolstra/flake-compat";
       flake = false;
@@ -38,6 +38,25 @@
     };
     stylish-haskell = {
       url = "https://hackage.haskell.org/package/stylish-haskell-0.14.4.0/stylish-haskell-0.14.4.0.tar.gz";
+      flake = false;
+    };
+
+    haskell-unix-compat = {
+      url = "github:jacobstanley/unix-compat/3f6bd688cb56224955e77245a2649ba99ea32fff";
+      flake = false;
+    };
+    haskell-hiedb = {
+      url = "github:wz1000/HieDb";
+      flake = false;
+    };
+
+    haskell-hie-bios = {
+      url = "github:mpickering/hie-bios";
+      flake = false;
+    };
+
+    haskell-ghc-exactprint = {
+      url = "github:alanz/ghc-exactprint/ghc-9.6";
       flake = false;
     };
   };
@@ -172,8 +191,9 @@
         };
 
         ghc902Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
-        ghc927Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
+        ghc926Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
         ghc944Config = (import ./configuration-ghc-94.nix) { inherit pkgs inputs; };
+        ghc961Config = (import ./configuration-ghc-96.nix) { inherit pkgs inputs; };
 
         # GHC versions
         # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached
@@ -182,14 +202,16 @@
           ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
           cases = {
             ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
-            ghc927 = ghc927Config.tweakHpkgs (pkgs.hlsHpkgs "ghc927");
+            ghc926 = ghc926Config.tweakHpkgs (pkgs.hlsHpkgs "ghc926");
             ghc944 = ghc944Config.tweakHpkgs (pkgs.hlsHpkgs "ghc944");
+            ghc961 = ghc961Config.tweakHpkgs (pkgs.hlsHpkgs "ghc961");
           };
           in { default = cases."${ghcVersion}"; } // cases;
 
         ghc902 = supportedGHCs.ghc902;
-        ghc927 = supportedGHCs.ghc927;
+        ghc926 = supportedGHCs.ghc926;
         ghc944 = supportedGHCs.ghc944;
+        ghc961 = supportedGHCs.ghc961;
         ghcDefault = supportedGHCs.default;
 
         pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx ps.myst-parser ps.sphinx_rtd_theme ps.pip]);
@@ -310,16 +332,18 @@
         simpleDevShells = {
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
           haskell-language-server-902-dev = mkDevShell ghc902 "cabal.project";
-          haskell-language-server-927-dev = mkDevShell ghc927 "cabal.project";
+          haskell-language-server-926-dev = mkDevShell ghc926 "cabal.project";
           haskell-language-server-944-dev = mkDevShell ghc944 "cabal.project";
+          haskell-language-server-961-dev = mkDevShell ghc961 "cabal.project";
         };
 
         # Developement shell, haskell packages are also provided by nix
         nixDevShells = {
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
           haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
-          haskell-language-server-927-dev-nix = mkDevShellWithNixDeps ghc927 "cabal.project";
+          haskell-language-server-926-dev-nix = mkDevShellWithNixDeps ghc926 "cabal.project";
           haskell-language-server-944-dev-nix = mkDevShellWithNixDeps ghc944 "cabal.project";
+          haskell-language-server-961-dev-nix = mkDevShellWithNixDeps ghc961 "cabal.project";
         };
 
         # The default shell provided by Nixpkgs for a Haskell package (i.e. the
@@ -327,15 +351,17 @@
         envShells = {
           haskell-language-server-dev-env = mkEnvShell ghcDefault;
           haskell-language-server-902-dev-env = mkEnvShell ghc902;
-          haskell-language-server-927-dev-env = mkEnvShell ghc927;
+          haskell-language-server-926-dev-env = mkEnvShell ghc926;
           haskell-language-server-944-dev-env = mkEnvShell ghc944;
+          haskell-language-server-961-dev-env = mkEnvShell ghc961;
         };
 
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-902 = mkExe ghc902;
-          haskell-language-server-927 = mkExe ghc927;
+          haskell-language-server-926 = mkExe ghc926;
           haskell-language-server-944 = mkExe ghc944;
+          haskell-language-server-961 = mkExe ghc961;
         };
 
         devShells = simpleDevShells // nixDevShells // envShells // {
@@ -354,8 +380,9 @@
           all-haskell-language-server = linkFarmFromDrvs "all-haskell-language-server" (lib.unique (builtins.attrValues allPackages));
 
           # Same for all shells
-          all-nix-dev-shells = linkFarmFromDrvs "all-dev-shells"
-            (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues nixDevShells)));
+          # We try to build as much as possible, but not much shells are
+          # working (especially on darwing), so this list is limited.
+          all-nix-dev-shells = linkFarmFromDrvs "all-dev-shells" (builtins.map (shell: shell.inputDerivation) (lib.unique [nixDevShells.haskell-language-server-dev-nix]));
 
           all-simple-dev-shells = linkFarmFromDrvs "all-simple-dev-shells"
             (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues simpleDevShells)));
