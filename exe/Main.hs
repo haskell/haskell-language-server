@@ -51,7 +51,7 @@ main :: IO ()
 main = do
     -- plugin cli commands use stderr logger for now unless we change the args
     -- parser to get logging arguments first or do more complicated things
-    pluginCliRecorder <- cmapWithPrio pretty <$> makeDefaultStderrRecorder Nothing Info
+    pluginCliRecorder <- cmapWithPrio pretty <$> makeDefaultStderrRecorder Nothing
     args <- getArguments "haskell-language-server" (Plugins.idePlugins (cmapWithPrio LogPlugins pluginCliRecorder))
 
     (lspLogRecorder, cb1) <- Logger.withBacklog Logger.lspClientLogRecorder
@@ -71,7 +71,7 @@ main = do
               in (argsTesting, minPriority, argsLogFile)
             _ -> (False, Info, Nothing)
 
-    withDefaultRecorder logFilePath Nothing minPriority $ \textWithPriorityRecorder -> do
+    withDefaultRecorder logFilePath Nothing $ \textWithPriorityRecorder -> do
       let
         recorder = cmapWithPrio (pretty &&& id) $ mconcat
             [textWithPriorityRecorder
@@ -87,7 +87,7 @@ main = do
                 -- ability of lsp-test to detect a stuck server in tests and benchmarks
                 & if argsTesting then cfilter (not . heapStats . snd . payload) else id
             ]
-        plugins = (Plugins.idePlugins (cmapWithPrio LogPlugins recorder))
+        plugins = Plugins.idePlugins (cmapWithPrio LogPlugins recorder)
 
       defaultMain
         (cmapWithPrio LogIdeMain recorder)

@@ -77,7 +77,7 @@ main = withTelemetryLogger $ \telemetryLogger -> do
     -- stderr recorder just for plugin cli commands
     pluginCliRecorder <-
       cmapWithPrio pretty
-      <$> makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) Info
+      <$> makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn])
 
     let hlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde pluginCliRecorder))
     -- WARNING: If you write to stdout before runLanguageServer
@@ -94,7 +94,7 @@ main = withTelemetryLogger $ \telemetryLogger -> do
 
     let minPriority = if argsVerbose then Debug else Info
 
-    docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) minPriority
+    docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn])
 
     (lspLogRecorder, cb1) <- Logger.withBacklog Logger.lspClientLogRecorder
     (lspMessageRecorder, cb2) <- Logger.withBacklog Logger.lspClientMessageRecorder

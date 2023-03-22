@@ -200,7 +200,7 @@ waitForAllProgressDone = loop
 
 main :: IO ()
 main = do
-  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) Debug
+  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn])
 
   let docWithFilteredPriorityRecorder@Recorder{ logger_ } =
         docWithPriorityRecorder
