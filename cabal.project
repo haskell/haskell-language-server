@@ -53,7 +53,7 @@ if impl(ghc >= 9.5)
   source-repository-package
     type:git
     location: https://github.com/wz1000/retrie
-    tag: 3ad8ca0450ea4619bbc8007251582ffc828faa37
+    tag: 0a2dbfc00e745737f249f16325b2815d2e3a14eb
 
 package *
   ghc-options: -haddock
@@ -61,25 +61,6 @@ package *
 
 write-ghc-environment-files: never
 
-if impl(ghc >= 9.5)
-  allow-newer:
-    -- ghc-9.6
-    algebraic-graphs:transformers,
-    cryptohash-md5:base,
-    cryptohash-sha1:base,
-    ekg-core:ghc-prim,
-    focus:transformers,
-    ghc-trace-events:base,
-    implicit-hie-cradle:transformers,
-    retrie:base,
-    retrie:ghc,
-    retrie:ghc-exactprint,
-    retrie:mtl,
-    retrie:transformers,
-    semigroupoids:base,
-    stm-hamt:transformers,
-    entropy:Cabal,
-    
 -- head.hackage doesn't like index-state
 index-state: 2023-03-23T00:00:00Z
 
@@ -138,3 +119,23 @@ allow-newer:
   uuid:time,
   vector-space:base,
   ekg-wai:time,
+
+if impl(ghc >= 9.5)
+  allow-newer:
+    -- ghc-9.6
+    algebraic-graphs:transformers,
+    cryptohash-md5:base,
+    cryptohash-sha1:base,
+    ekg-core:ghc-prim,
+    focus:transformers,
+    ghc-trace-events:base,
+    implicit-hie-cradle:transformers,
+    retrie:base,
+    retrie:ghc,
+    retrie:ghc-exactprint,
+    retrie:mtl,
+    retrie:transformers,
+    semigroupoids:base,
+    stm-hamt:transformers,
+    entropy:Cabal,
+    

@@ -90,14 +90,7 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
         getBindSpanWithoutSig ClsInstDecl{..} =
             let bindNames = mapMaybe go (bagToList cid_binds)
                 go (L l bind) = case bind of
-                    FunBind{..}
-                        -- `Generated` tagged for Template Haskell,
-                        -- here we filter out nonsence generated bindings
-                        -- that are nonsense for displaying code lenses.
-                        --
-                        -- See https://github.com/haskell/haskell-language-server/issues/3319
-                        | not $ isGenerated (mg_origin fun_matches)
-                                -> Just $ L l fun_id
+                    FunBind{..} -> Just $ L l fun_id
                     _           -> Nothing
                 -- Existed signatures' name
                 sigNames = concat $ mapMaybe (\(L _ r) -> getSigName r) cid_sigs
