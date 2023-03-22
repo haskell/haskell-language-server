@@ -137,4 +137,4 @@ if impl(ghc >= 9.5)
     semigroupoids:base,
     stm-hamt:transformers,
     entropy:Cabal,
-    
+
