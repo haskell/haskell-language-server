@@ -61,7 +61,6 @@ package *
 
 write-ghc-environment-files: never
 
--- head.hackage doesn't like index-state
 index-state: 2023-03-23T00:00:00Z
 
 constraints:
