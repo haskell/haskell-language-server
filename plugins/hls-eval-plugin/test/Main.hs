@@ -74,6 +74,7 @@ tests =
       evalInFile "T8.hs" "-- >>> noFunctionWithThisName" "-- Variable not in scope: noFunctionWithThisName"
       evalInFile "T8.hs" "-- >>> res = \"a\" + \"bc\"" $
         if
+           | ghcVersion >= GHC96 -> "-- No instance for `Num String' arising from a use of `+'\n-- In the expression: \"a\" + \"bc\"\n-- In an equation for `res': res = \"a\" + \"bc\""
            | ghcVersion >= GHC92 -> "-- No instance for (Num String) arising from a use of `+'\n-- In the expression: \"a\" + \"bc\"\n-- In an equation for `res': res = \"a\" + \"bc\""
            | ghcVersion == GHC90 -> "-- No instance for (Num String) arising from a use of ‘+’"
            | otherwise -> "-- No instance for (Num [Char]) arising from a use of ‘+’"
@@ -81,11 +82,15 @@ tests =
       evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero" -- The default for marking exceptions is False
   , goldenWithEval "Applies file LANGUAGE extensions" "T9" "hs"
   , goldenWithEval' "Evaluate a type with :kind!" "T10" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
-  , goldenWithEval' "Reports an error for an incorrect type with :kind!" "T11" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
+  , goldenWithEval' "Reports an error for an incorrect type with :kind!" "T11" "hs" (
+        if ghcVersion >= GHC94 then "ghc94.expected"
+        else if ghcVersion >= GHC92 then "ghc92.expected"
+        else "expected"
+      )
   , goldenWithEval' "Shows a kind with :kind" "T12" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
   , goldenWithEval' "Reports an error for an incorrect type with :kind" "T13" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
   , goldenWithEval "Returns a fully-instantiated type for :type" "T14" "hs"
-  , knownBrokenForGhcVersions [GHC92, GHC94] "type +v does not work anymore with 9.2" $ goldenWithEval "Returns an uninstantiated type for :type +v, admitting multiple whitespaces around arguments" "T15" "hs"
+  , knownBrokenForGhcVersions [GHC92, GHC94, GHC96] "type +v does not work anymore with 9.2" $ goldenWithEval "Returns an uninstantiated type for :type +v, admitting multiple whitespaces around arguments" "T15" "hs"
   , goldenWithEval "Returns defaulted type for :type +d, admitting multiple whitespaces around arguments" "T16" "hs"
   , goldenWithEval' ":type reports an error when given with unknown +x option" "T17" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
   , goldenWithEval "Reports an error when given with unknown command" "T18" "hs"
@@ -135,7 +140,16 @@ tests =
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEval "Property checking" "TProperty" "hs"
-  , goldenWithEval' "Property checking with exception" "TPropertyError" "hs" (if ghcVersion >= GHC94 then "ghc94.expected" else "expected")
+  , goldenWithEval' "Property checking with exception" "TPropertyError" "hs" (
+        if ghcVersion >= GHC96 then
+          "ghc96.expected"
+        else if ghcVersion >= GHC94 && hostOS == Windows then
+          "windows-ghc94.expected"
+        else if ghcVersion >= GHC94 then
+          "ghc94.expected"
+        else
+          "expected"
+      )
   , goldenWithEval "Prelude has no special treatment, it is imported as stated in the module" "TPrelude" "hs"
   , goldenWithEval "Don't panic on {-# UNPACK #-} pragma" "TUNPACK" "hs"
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"

@@ -135,6 +135,11 @@ module Development.IDE.GHC.Compat(
     coreExprToBCOs,
     linkExpr,
 #endif
+    extract_cons,
+    recDotDot,
+#if MIN_VERSION_ghc(9,5,0)
+    XModulePs(..),
+#endif
     ) where
 
 import           Data.Bifunctor
@@ -157,7 +162,15 @@ import           Data.String                           (IsString (fromString))
 
 
 #if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,5,0)
+import           GHC.Core.Lint.Interactive                           (interactiveInScope)
+import           GHC.Driver.Config.Core.Lint.Interactive             (lintInteractiveExpr)
+import           GHC.Driver.Config.Core.Opt.Simplify                 (initSimplifyExprOpts)
+import           GHC.Driver.Config.CoreToStg                         (initCoreToStgOpts)
+import           GHC.Driver.Config.CoreToStg.Prep                    (initCorePrepConfig)
+#else
 import           GHC.Core.Lint                         (lintInteractiveExpr)
+#endif
 import qualified GHC.Core.Opt.Pipeline                 as GHC
 import           GHC.Core.Tidy                         (tidyExpr)
 import           GHC.CoreToStg.Prep                    (corePrepPgm)
@@ -310,7 +323,11 @@ myCoreToStgExpr logger dflags ictxt
        binding for the stg2stg step) -}
     let bco_tmp_id = mkSysLocal (fsLit "BCO_toplevel")
                                 (mkPseudoUniqueE 0)
+#if MIN_VERSION_ghc(9,5,0)
+                                ManyTy
+#else
                                 Many
+#endif
                                 (exprType prepd_expr)
     (stg_binds, prov_map, collected_ccs) <-
        myCoreToStg logger
@@ -343,7 +360,13 @@ myCoreToStg logger dflags ictxt
             this_mod ml prepd_binds = do
     let (stg_binds, denv, cost_centre_info)
          = {-# SCC "Core2Stg" #-}
-           coreToStg dflags this_mod ml prepd_binds
+           coreToStg
+#if MIN_VERSION_ghc(9,5,0)
+             (initCoreToStgOpts dflags)
+#else
+             dflags
+#endif
+             this_mod ml prepd_binds
 
 #if MIN_VERSION_ghc(9,4,2)
     (stg_binds2,_)
@@ -352,7 +375,13 @@ myCoreToStg logger dflags ictxt
 #endif
         <- {-# SCC "Stg2Stg" #-}
 #if MIN_VERSION_ghc(9,3,0)
-           stg2stg logger ictxt (initStgPipelineOpts dflags for_bytecode) this_mod stg_binds
+           stg2stg logger
+#if MIN_VERSION_ghc(9,5,0)
+                   (interactiveInScope ictxt)
+#else
+                   ictxt
+#endif
+                   (initStgPipelineOpts dflags for_bytecode) this_mod stg_binds
 #else
            stg2stg logger dflags ictxt this_mod stg_binds
 #endif
@@ -380,10 +409,21 @@ getDependentMods = map fst . dep_mods . mi_deps
 
 simplifyExpr :: DynFlags -> HscEnv -> CoreExpr -> IO CoreExpr
 #if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,5,0)
+simplifyExpr _ env = GHC.simplifyExpr (Development.IDE.GHC.Compat.Env.hsc_logger env) (ue_eps (Development.IDE.GHC.Compat.Env.hsc_unit_env env)) (initSimplifyExprOpts (hsc_dflags env) (hsc_IC env))
+#else
 simplifyExpr _ = GHC.simplifyExpr
+#endif
 
 corePrepExpr :: DynFlags -> HscEnv -> CoreExpr -> IO CoreExpr
+#if MIN_VERSION_ghc(9,5,0)
+corePrepExpr _ env exp = do
+  cfg <- initCorePrepConfig env
+  GHC.corePrepExpr (Development.IDE.GHC.Compat.Env.hsc_logger env) cfg exp
+#else
 corePrepExpr _ = GHC.corePrepExpr
+#endif
+
 #else
 simplifyExpr df _ = GHC.simplifyExpr df
 #endif
@@ -575,13 +615,16 @@ data GhcVersion
   | GHC90
   | GHC92
   | GHC94
+  | GHC96
   deriving (Eq, Ord, Show)
 
 ghcVersionStr :: String
 ghcVersionStr = VERSION_ghc
 
 ghcVersion :: GhcVersion
-#if MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,6,0,0)
+ghcVersion = GHC96
+#elif MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
 ghcVersion = GHC94
 #elif MIN_VERSION_GLASGOW_HASKELL(9,2,0,0)
 ghcVersion = GHC92
@@ -676,4 +719,18 @@ loadModulesHome mod_infos e =
        }
     where
       mod_name = moduleName . mi_module . hm_iface
+#endif
+
+recDotDot :: HsRecFields (GhcPass p) arg -> Maybe Int
+recDotDot x =
+#if MIN_VERSION_ghc(9,5,0)
+            unRecFieldsDotDot <$>
+#endif
+            unLoc <$> rec_dotdot x
+
+#if MIN_VERSION_ghc(9,5,0)
+extract_cons (NewTypeCon x) = [x]
+extract_cons (DataTypeCons _ xs) = xs
+#else
+extract_cons = id
 #endif

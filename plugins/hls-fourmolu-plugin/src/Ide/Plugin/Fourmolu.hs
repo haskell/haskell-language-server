@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE TypeApplications         #-}
+{-# LANGUAGE CPP                      #-}
 
 module Ide.Plugin.Fourmolu (
     descriptor,
@@ -101,7 +102,11 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
         else do
             let format fourmoluConfig =
                     bimap (mkError . show) (makeDiffTextEdit contents)
+#if MIN_VERSION_fourmolu(0,11,0)
+                        <$> try @OrmoluException (ormolu config fp' contents)
+#else
                         <$> try @OrmoluException (ormolu config fp' (T.unpack contents))
+#endif
                   where
                     printerOpts = cfgFilePrinterOpts fourmoluConfig
                     config =

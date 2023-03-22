@@ -267,7 +267,7 @@ common tactic
     cpp-options: -Dhls_tactic
 
 common hlint
-  if flag(hlint)
+  if flag(hlint) && impl(ghc < 9.5)
     build-depends: hls-hlint-plugin ^>= 1.1
     cpp-options: -Dhls_hlint
 
@@ -329,22 +329,22 @@ common explicitFields
 -- formatters
 
 common floskell
-  if flag(floskell) 
+  if flag(floskell) && impl(ghc < 9.5) 
     build-depends: hls-floskell-plugin ^>= 1.0
     cpp-options: -Dhls_floskell
 
 common fourmolu
-  if flag(fourmolu)
+  if flag(fourmolu) && impl(ghc < 9.5)
     build-depends: hls-fourmolu-plugin ^>= 1.1
     cpp-options: -Dhls_fourmolu
 
 common ormolu
-  if flag(ormolu) 
+  if flag(ormolu) && impl(ghc < 9.5)
     build-depends: hls-ormolu-plugin ^>= 1.0
     cpp-options: -Dhls_ormolu
 
 common stylishHaskell
-  if flag(stylishHaskell) 
+  if flag(stylishHaskell) && impl(ghc < 9.5)
     build-depends: hls-stylish-haskell-plugin ^>= 1.0
     cpp-options: -Dhls_stylishHaskell
 

@@ -145,7 +145,11 @@ showAstDataHtml a0 = html $
             sourceText (SourceText src) = text "SourceText" <+> text src
 
             epaAnchor :: EpaLocation -> SDoc
+#if MIN_VERSION_ghc(9,5,0)
+            epaAnchor (EpaSpan r _)  = text "EpaSpan" <+> realSrcSpan r
+#else
             epaAnchor (EpaSpan r)  = text "EpaSpan" <+> realSrcSpan r
+#endif
             epaAnchor (EpaDelta d cs) = text "EpaDelta" <+> deltaPos d <+> showAstDataHtml' cs
 
             anchorOp :: AnchorOperation -> SDoc

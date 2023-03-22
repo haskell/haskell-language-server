@@ -472,7 +472,7 @@ modifySmallestDeclWithM ::
 modifySmallestDeclWithM validSpan f a = do
   let modifyMatchingDecl [] = pure (DL.empty, Nothing)
       modifyMatchingDecl (ldecl@(L src _) : rest) =
-        lift (validSpan $ locA src) >>= \case
+        TransformT (lift $ validSpan $ locA src) >>= \case
             True -> do
               (decs', r) <- f ldecl
               pure $ (DL.fromList decs' <> DL.fromList rest, Just r)
@@ -578,10 +578,17 @@ modifyMgMatchesT' ::
   r ->
   (r -> r -> m r) ->
   TransformT m (MatchGroup GhcPs (LHsExpr GhcPs), r)
+#if MIN_VERSION_ghc(9,5,0)
+modifyMgMatchesT' (MG xMg (L locMatches matches)) f def combineResults = do
+  (unzip -> (matches', rs)) <- mapM f matches
+  r' <- TransformT $ lift $ foldM combineResults def rs
+  pure $ (MG xMg (L locMatches matches'), r')
+#else
 modifyMgMatchesT' (MG xMg (L locMatches matches) originMg) f def combineResults = do
   (unzip -> (matches', rs)) <- mapM f matches
   r' <- lift $ foldM combineResults def rs
   pure $ (MG xMg (L locMatches matches') originMg, r')
+#endif
 #endif
 
 graftSmallestDeclsWithM ::
@@ -697,7 +704,7 @@ annotate dflags needs_space ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
 #if MIN_VERSION_ghc(9,4,0)
-    expr' <- lift $ mapLeft (showSDoc dflags . ppr) $ parseAST dflags uniq rendered
+    expr' <- TransformT $ lift $ mapLeft (showSDoc dflags . ppr) $ parseAST dflags uniq rendered
     pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
 #elif MIN_VERSION_ghc(9,2,0)
     expr' <- lift $ mapLeft show $ parseAST dflags uniq rendered
@@ -738,7 +745,7 @@ annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
 #if MIN_VERSION_ghc(9,4,0)
-    expr' <- lift $ mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered
+    expr' <- TransformT $ lift $ mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered
     pure $ setPrecedingLines expr' 1 0
 #elif MIN_VERSION_ghc(9,2,0)
     expr' <- lift $ mapLeft show $ parseDecl dflags uniq rendered

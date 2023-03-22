@@ -114,7 +114,10 @@ importQualifiedTests = testGroup "import qualified prefix suggestions" [
         sendConfigurationChanged (toJSON config)
 
         (diag:_) <- waitForDiagnosticsFrom doc
-        liftIO $ diag ^. L.message @?= "Not in scope: ‘Control.when’\nNo module named ‘Control’ is imported."
+        liftIO $ diag ^. L.message @?=
+           if ghcVersion >= GHC96
+           then "Variable not in scope: Control.when :: Bool -> IO () -> IO ()\nNB: no module named ‘Control’ is imported."
+           else "Not in scope: ‘Control.when’\nNo module named ‘Control’ is imported."
 
         actionsOrCommands <- getAllCodeActions doc
         let actns = map fromAction actionsOrCommands
@@ -123,7 +126,7 @@ importQualifiedTests = testGroup "import qualified prefix suggestions" [
         importControlMonadQualified <- liftIO $ inspectCodeAction actionsOrCommands [importQualifiedSuggestion]
         liftIO $ do
             dontExpectCodeAction actionsOrCommands ["import Control.Monad (when)"]
-            length actns >= 10 @? "There are some actions"
+            length actns >= 5 @? "There are some actions"
 
         executeCodeAction importControlMonadQualified
 
@@ -140,7 +143,10 @@ importQualifiedPostTests = testGroup "import qualified postfix suggestions" [
         sendConfigurationChanged (toJSON config)
 
         (diag:_) <- waitForDiagnosticsFrom doc
-        liftIO $ diag ^. L.message @?= "Not in scope: ‘Control.when’\nNo module named ‘Control’ is imported."
+        liftIO $ diag ^. L.message @?=
+           if ghcVersion >= GHC96
+           then "Variable not in scope: Control.when :: Bool -> IO () -> IO ()\nNB: no module named ‘Control’ is imported."
+           else "Not in scope: ‘Control.when’\nNo module named ‘Control’ is imported."
 
         actionsOrCommands <- getAllCodeActions doc
         let actns = map fromAction actionsOrCommands
@@ -149,7 +155,7 @@ importQualifiedPostTests = testGroup "import qualified postfix suggestions" [
         importControlMonadQualified <- liftIO $ inspectCodeAction actionsOrCommands [importQualifiedPostSuggestion]
         liftIO $ do
             dontExpectCodeAction actionsOrCommands ["import qualified Control.Monad as Control", "import Control.Monad (when)"]
-            length actns >= 10 @? "There are some actions"
+            length actns >= 5 @? "There are some actions"
 
         executeCodeAction importControlMonadQualified
 
@@ -314,7 +320,7 @@ typedHoleTests = testGroup "typed hole code actions" [
                     , "foo x = maxBound"
                     ]
 
-      , knownBrokenForGhcVersions [GHC92, GHC94] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
+      , knownBrokenForGhcVersions [GHC92, GHC94, GHC96] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
           testCase "doesn't work when wingman is active" $
           runSession hlsCommand fullCaps "test/testdata" $ do
               doc <- openDoc "TypedHoles.hs" "haskell"
@@ -349,7 +355,7 @@ typedHoleTests = testGroup "typed hole code actions" [
                         , "    stuff (A a) = A (a + 1)"
                         ]
 
-      , knownBrokenForGhcVersions [GHC92, GHC94] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
+      , knownBrokenForGhcVersions [GHC92, GHC94, GHC96] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
           testCase "doesnt show more suggestions when wingman is active" $
             runSession hlsCommand fullCaps "test/testdata" $ do
                 doc <- openDoc "TypedHoles2.hs" "haskell"

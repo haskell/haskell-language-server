@@ -75,6 +75,10 @@ import           Development.IDE
 
 import           Development.IDE.Spans.AtPoint            (pointCommand)
 
+#if MIN_VERSION_ghc(9,5,0)
+import Language.Haskell.Syntax.Basic
+#endif
+
 -- Chunk size used for parallelizing fuzzy matching
 chunkSize :: Int
 chunkSize = 1000
@@ -138,17 +142,29 @@ getCContext pos pm
         importGo :: GHC.LImportDecl GhcPs -> Maybe Context
         importGo (L (locA -> r) impDecl)
           | pos `isInsideSrcSpan` r
+#if MIN_VERSION_ghc(9,5,0)
+          = importInline importModuleName (fmap (fmap reLoc) $ ideclImportList impDecl)
+#else
           = importInline importModuleName (fmap (fmap reLoc) $ ideclHiding impDecl)
+#endif
           <|> Just (ImportContext importModuleName)
 
           | otherwise = Nothing
           where importModuleName = moduleNameString $ unLoc $ ideclName impDecl
 
-        importInline :: String -> Maybe (Bool,  GHC.Located [LIE GhcPs]) -> Maybe Context
+        -- importInline :: String -> Maybe (Bool,  GHC.Located [LIE GhcPs]) -> Maybe Context
+#if MIN_VERSION_ghc(9,5,0)
+        importInline modName (Just (EverythingBut, L r _))
+#else
         importInline modName (Just (True, L r _))
+#endif
           | pos `isInsideSrcSpan` r = Just $ ImportHidingContext modName
           | otherwise = Nothing
+#if MIN_VERSION_ghc(9,5,0)
+        importInline modName (Just (Exactly, L r _))
+#else
         importInline modName (Just (False, L r _))
+#endif
           | pos `isInsideSrcSpan` r = Just $ ImportListContext modName
           | otherwise = Nothing
         importInline _ _ = Nothing
@@ -384,7 +400,7 @@ cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
                   | isDataConName n
                   , Just flds <- Map.lookup parent fieldMap
                   , not (null flds) ->
-                    [mkRecordSnippetCompItem uri mbParent (printOutputable originName) (map (T.pack . unpackFS) flds) (ImportedFrom mn) imp']
+                    [mkRecordSnippetCompItem uri mbParent (printOutputable originName) (map (T.pack . unpackFS . field_label) flds) (ImportedFrom mn) imp']
                 _ -> []
 
         in mkNameCompItem uri mbParent originName (ImportedFrom mn) Nothing imp' (nameModule_maybe n)
@@ -467,7 +483,7 @@ findRecordCompl uri mn DataDecl {tcdLName, tcdDataDefn} = result
     where
         result = [mkRecordSnippetCompItem uri (Just $ printOutputable $ unLoc tcdLName)
                         (printOutputable . unLoc $ con_name) field_labels mn Nothing
-                 | ConDeclH98{..} <- unLoc <$> dd_cons tcdDataDefn
+                 | ConDeclH98{..} <- unLoc <$> (extract_cons $ dd_cons tcdDataDefn)
                  , Just  con_details <- [getFlds con_args]
                  , let field_names = concatMap extract con_details
                  , let field_labels = printOutputable <$> field_names

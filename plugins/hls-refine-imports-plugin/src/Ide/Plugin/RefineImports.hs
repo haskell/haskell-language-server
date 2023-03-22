@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE CPP                   #-}
 
 module Ide.Plugin.RefineImports (descriptor, Log(..)) where
 
@@ -212,7 +213,11 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
         :: LImportDecl GhcRn
         -> Map.Map ModuleName [AvailInfo]
         -> Maybe (Map.Map ModuleName [AvailInfo])
+#if MIN_VERSION_ghc(9,5,0)
+      filterByImport (L _ ImportDecl{ideclImportList = Just (_, L _ names)}) avails =
+#else
       filterByImport (L _ ImportDecl{ideclHiding = Just (_, L _ names)}) avails =
+#endif
         let importedNames = S.fromList $ map (ieName . unLoc) names
             res = flip Map.filter avails $ \a ->
                     any (`S.member` importedNames)
@@ -234,10 +239,18 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
         -> LImportDecl GhcRn
       constructImport
         i@(L lim id@ImportDecl
+#if MIN_VERSION_ghc(9,5,0)
+                  {ideclName = L _ mn, ideclImportList = Just (hiding, L _ names)})
+#else
                   {ideclName = L _ mn, ideclHiding = Just (hiding, L _ names)})
+#endif
         (newModuleName, avails) = L lim id
           { ideclName = noLocA newModuleName
+#if MIN_VERSION_ghc(9,5,0)
+          , ideclImportList = Just (hiding, noLocA newNames)
+#else
           , ideclHiding = Just (hiding, noLocA newNames)
+#endif
           }
           where newNames = filter (\n -> any (n `containsAvail`) avails) names
       constructImport lim _ = lim
