@@ -52,31 +52,8 @@ package mfsolve
 if impl(ghc >= 9.5)
   source-repository-package
     type:git
-    location: https://github.com/wz1000/HieDb
-    tag: 721bd0ce7392b8eff8d7643cf132a6448466fd52
-
-  source-repository-package
-    type:git
     location: https://github.com/wz1000/retrie
     tag: 3ad8ca0450ea4619bbc8007251582ffc828faa37
-
-  source-repository-package
-    type:git
-    location: https://github.com/haskell/hie-bios
-    tag: 8519812ad7501cab31347cd46ad1312b8413b8ad
-
-  source-repository-package
-    type:git
-    location: https://github.com/wz1000/ghc-exactprint/
-    tag: 58d88820399b66304f3bb18f0b2602c3a90d5bea
-
--- Remove when fix for
--- https://github.com/kazu-yamamoto/http2/issues/42
--- is released on hackage
-source-repository-package
-  type:git
-  location: https://github.com/kazu-yamamoto/http2
-  tag: aa56ded3494dd4f0efb0bbcb5378879ce785a647
 
 package *
   ghc-options: -haddock
@@ -87,19 +64,24 @@ write-ghc-environment-files: never
 if impl(ghc >= 9.5)
   allow-newer:
     -- ghc-9.6
-    template-haskell,
-    unordered-containers:template-haskell,
-    base,
-    ghc-prim,
-    ghc,
-    ghc-boot,
-    mtl,
-    transformers,
-    Cabal
-
+    algebraic-graphs:transformers,
+    cryptohash-md5:base,
+    cryptohash-sha1:base,
+    ekg-core:ghc-prim,
+    focus:transformers,
+    ghc-trace-events:base,
+    implicit-hie-cradle:transformers,
+    retrie:base,
+    retrie:ghc,
+    retrie:ghc-exactprint,
+    retrie:mtl,
+    retrie:transformers,
+    semigroupoids:base,
+    stm-hamt:transformers,
+    entropy:Cabal,
+    
 -- head.hackage doesn't like index-state
-if impl(ghc < 9.5)
-  index-state: 2023-03-15T00:00:00Z
+index-state: 2023-03-23T00:00:00Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
@@ -116,10 +98,9 @@ constraints:
   ghc-lib-parser-ex -auto,
   stylish-haskell +ghc-lib,
   fourmolu -fixity-th,
-  -- http2 doesn't build with -haddock on ghc-8.10
-  http2 < 4.0.0,
   setup.happy == 1.20.1.1,
-  happy == 1.20.1.1
+  happy == 1.20.1.1,
+  filepath installed,
 
 -- This is benign and won't affect our ability to release to Hackage,
 -- because we only depend on `ekg-json` when a non-default flag
@@ -157,15 +138,3 @@ allow-newer:
   uuid:time,
   vector-space:base,
   ekg-wai:time,
-
-if impl(ghc >= 9.5)
-  repository head.hackage.ghc.haskell.org
-     url: https://ghc.gitlab.haskell.org/head.hackage/
-     secure: True
-     key-threshold: 3
-     root-keys:
-         f76d08be13e9a61a377a85e2fb63f4c5435d40f8feb3e12eb05905edb8cdea89
-         26021a13b401500c8eb2761ca95c61f2d625bfef951b939a8124ed12ecf07329
-         7541f32a4ccca4f97aea3b22f5e593ba2c0267546016b992dfadcd2fe944e55d
-
-  active-repositories: hackage.haskell.org, head.hackage.ghc.haskell.org:override
