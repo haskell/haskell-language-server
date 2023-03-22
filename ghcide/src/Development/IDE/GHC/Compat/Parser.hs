@@ -120,7 +120,11 @@ type ApiAnns = Anno.ApiAnns
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,5,0)
+pattern HsParsedModule :: Located (HsModule GhcPs) -> [FilePath] -> ApiAnns -> GHC.HsParsedModule
+#else
 pattern HsParsedModule :: Located HsModule -> [FilePath] -> ApiAnns -> GHC.HsParsedModule
+#endif
 pattern HsParsedModule
     { hpm_module
     , hpm_src_files

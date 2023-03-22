@@ -36,6 +36,7 @@ module Development.IDE.Core.Compile
   , TypecheckHelpers(..)
   ) where
 
+import           Control.Monad.IO.Class
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats      hiding (orElse)
 import           Control.DeepSeq                   (NFData (..), force, liftRnf,
@@ -131,6 +132,11 @@ import           GHC                               (Anchor (anchor),
 import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
+#endif
+
+#if MIN_VERSION_ghc(9,5,0)
+import GHC.Driver.Config.CoreToStg.Prep
+import GHC.Core.Lint.Interactive
 #endif
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
@@ -467,7 +473,11 @@ mkHiFileResultNoCompile session tcm = do
       tcGblEnv = tmrTypechecked tcm
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
-  iface' <- mkIfaceTc hsc_env_tmp sf details ms tcGblEnv
+  iface' <- mkIfaceTc hsc_env_tmp sf details ms
+#if MIN_VERSION_ghc(9,5,0)
+                      Nothing
+#endif
+                      tcGblEnv
   let iface = iface' { mi_globals = Nothing, mi_usages = filterUsages (mi_usages iface') } -- See Note [Clearing mi_globals after generating an iface]
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 
@@ -482,20 +492,19 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
       ms = pm_mod_summary $ tmrParsed tcm
       tcGblEnv = tmrTypechecked tcm
 
-  (details, mguts) <-
-    if mg_hsc_src simplified_guts == HsBootFile
-    then do
-        details <- mkBootModDetailsTc session tcGblEnv
-        pure (details, Nothing)
-    else do
+  (details, guts) <- do
         -- write core file
         -- give variables unique OccNames
         tidy_opts <- initTidyOpts session
         (guts, details) <- tidyProgram tidy_opts simplified_guts
-        pure (details, Just guts)
+        pure (details, guts)
 
 #if MIN_VERSION_ghc(9,0,1)
-  let !partial_iface = force $ mkPartialIface session details
+  let !partial_iface = force $ mkPartialIface session
+#if MIN_VERSION_ghc(9,5,0)
+                                              (cg_binds guts)
+#endif
+                                              details
 #if MIN_VERSION_ghc(9,3,0)
                                               ms
 #endif
@@ -513,9 +522,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
   let final_iface = final_iface' {mi_globals = Nothing, mi_usages = filterUsages (mi_usages final_iface')} -- See Note [Clearing mi_globals after generating an iface]
 
   -- Write the core file now
-  core_file <- case mguts of
-    Nothing -> pure Nothing -- no guts, likely boot file
-    Just guts -> do
+  core_file <- do
         let core_fp  = ml_core_file $ ms_location ms
             core_file = codeGutsToCoreFile iface_hash guts
             iface_hash = getModuleHash final_iface
@@ -538,12 +545,22 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
     Just (core, _) | optVerifyCoreFile -> do
       let core_fp = ml_core_file $ ms_location ms
       traceIO $ "Verifying " ++ core_fp
-      let CgGuts{cg_binds = unprep_binds, cg_tycons = tycons } = case mguts of
-            Nothing -> error "invariant optVerifyCoreFile: guts must exist if linkable exists"
-            Just g -> g
+      let CgGuts{cg_binds = unprep_binds, cg_tycons = tycons } = guts
           mod = ms_mod ms
           data_tycons = filter isDataTyCon tycons
       CgGuts{cg_binds = unprep_binds'} <- coreFileToCgGuts session final_iface details core
+
+#if MIN_VERSION_ghc(9,5,0)
+      cp_cfg <- initCorePrepConfig session
+#endif
+
+      let corePrep = corePrepPgm
+#if MIN_VERSION_ghc(9,5,0)
+                       (hsc_logger session) cp_cfg (initCorePrepPgmConfig (hsc_dflags session) (interactiveInScope $ hsc_IC session))
+#else
+                       session
+#endif
+                       mod (ms_location ms)
 
       -- Run corePrep first as we want to test the final version of the program that will
       -- get translated to STG/Bytecode
@@ -552,13 +569,13 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
 #else
       (prepd_binds , _)
 #endif
-        <- corePrepPgm session mod (ms_location ms) unprep_binds data_tycons
+        <- corePrep unprep_binds data_tycons
 #if MIN_VERSION_ghc(9,3,0)
       prepd_binds'
 #else
       (prepd_binds', _)
 #endif
-        <- corePrepPgm session mod (ms_location ms) unprep_binds' data_tycons
+        <- corePrep unprep_binds' data_tycons
       let binds  = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds
           binds' = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds'
 
@@ -683,7 +700,7 @@ generateByteCode (CoreFileTime time) hscEnv summary guts = do
                       let session = _tweak (hscSetFlags (ms_hspp_opts summary) hscEnv)
                           -- TODO: maybe settings ms_hspp_opts is unnecessary?
                           summary' = summary { ms_hspp_opts = hsc_dflags session }
-                      hscInteractive session guts
+                      hscInteractive session (mkCgInteractiveGuts guts)
                                 (ms_location summary')
               let unlinked = BCOs bytecode sptEntries
               let linkable = LM time (ms_mod summary) [unlinked]
@@ -1220,7 +1237,9 @@ parseHeader
        => DynFlags -- ^ flags to use
        -> FilePath  -- ^ the filename (for source locations)
        -> Util.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
-#if MIN_VERSION_ghc(9,0,1)
+#if MIN_VERSION_ghc(9,5,0)
+       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule GhcPs))
+#elif MIN_VERSION_ghc(9,0,1)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule))
 #else
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule GhcPs))
@@ -1552,13 +1571,13 @@ showReason (RecompBecause s) = s
 mkDetailsFromIface :: HscEnv -> ModIface -> IO ModDetails
 mkDetailsFromIface session iface = do
   fixIO $ \details -> do
-    let !hsc' = hscUpdateHPT (\hpt -> addToHpt hpt (moduleName $ mi_module iface) (HomeModInfo iface details Nothing)) session
+    let !hsc' = hscUpdateHPT (\hpt -> addToHpt hpt (moduleName $ mi_module iface) (HomeModInfo iface details emptyHomeModInfoLinkable)) session
     initIfaceLoad hsc' (typecheckIface iface)
 
 coreFileToCgGuts :: HscEnv -> ModIface -> ModDetails -> CoreFile -> IO CgGuts
 coreFileToCgGuts session iface details core_file = do
   let act hpt = addToHpt hpt (moduleName this_mod)
-                             (HomeModInfo iface details Nothing)
+                             (HomeModInfo iface details emptyHomeModInfoLinkable)
       this_mod = mi_module iface
   types_var <- newIORef (md_types details)
   let hsc_env' = hscUpdateHPT act (session {
@@ -1572,7 +1591,10 @@ coreFileToCgGuts session iface details core_file = do
       -- Implicit binds aren't saved, so we need to regenerate them ourselves.
   let implicit_binds = concatMap getImplicitBinds tyCons
       tyCons = typeEnvTyCons (md_types details)
-#if MIN_VERSION_ghc(9,3,0)
+#if MIN_VERSION_ghc(9,5,0)
+  -- In GHC 9.6, the implicit binds are tidied and part of core_binds
+  pure $ CgGuts this_mod tyCons core_binds [] NoStubs [] mempty (emptyHpcInfo False) Nothing []
+#elif MIN_VERSION_ghc(9,3,0)
   pure $ CgGuts this_mod tyCons (implicit_binds ++ core_binds) [] NoStubs [] mempty (emptyHpcInfo False) Nothing []
 #else
   pure $ CgGuts this_mod tyCons (implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
@@ -1582,9 +1604,9 @@ coreFileToLinkable :: LinkableType -> HscEnv -> ModSummary -> ModIface -> ModDet
 coreFileToLinkable linkableType session ms iface details core_file t = do
   cgi_guts <- coreFileToCgGuts session iface details core_file
   (warns, lb) <- case linkableType of
-    BCOLinkable    -> generateByteCode (CoreFileTime t) session ms cgi_guts
-    ObjectLinkable -> generateObjectCode session ms cgi_guts
-  pure (warns, HomeModInfo iface details . Just <$> lb)
+    BCOLinkable    -> fmap (maybe emptyHomeModInfoLinkable justBytecode) <$> generateByteCode (CoreFileTime t) session ms cgi_guts
+    ObjectLinkable -> fmap (maybe emptyHomeModInfoLinkable justObjects) <$> generateObjectCode session ms cgi_guts
+  pure (warns, Just $ HomeModInfo iface details lb) -- TODO wz1000 handle emptyHomeModInfoLinkable
 
 -- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
 --   The interactive paths create problems in ghc-lib builds

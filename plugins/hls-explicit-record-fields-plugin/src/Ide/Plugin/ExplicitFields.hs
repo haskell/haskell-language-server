@@ -23,7 +23,7 @@ import           Data.Generics                   (GenericQ, everything, extQ,
                                                   mkQ)
 import qualified Data.HashMap.Strict             as HashMap
 import           Data.Maybe                      (isJust, listToMaybe,
-                                                  maybeToList)
+                                                  maybeToList, fromMaybe)
 import           Data.Text                       (Text)
 import           Development.IDE                 (IdeState, NormalizedFilePath,
                                                   Pretty (..), Recorder (..),
@@ -36,7 +36,8 @@ import           Development.IDE.Core.Shake      (define, use)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      (HsConDetails (RecCon),
                                                   HsRecFields (..), LPat,
-                                                  Outputable, getLoc, unLoc)
+                                                  Outputable, getLoc, unLoc,
+                                                  recDotDot)
 import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
                                                   GhcPass,
                                                   HsExpr (RecordCon, rcon_flds),
@@ -304,7 +305,7 @@ preprocessRecord
   -> HsRecFields p arg
 preprocessRecord getName names flds = flds { rec_dotdot = Nothing , rec_flds = rec_flds' }
   where
-    no_pun_count = maybe (length (rec_flds flds)) unLoc (rec_dotdot flds)
+    no_pun_count = fromMaybe (length (rec_flds flds)) (recDotDot flds)
     -- Field binds of the explicit form (e.g. `{ a = a' }`) should be
     -- left as is, hence the split.
     (no_puns, puns) = splitAt no_pun_count (rec_flds flds)

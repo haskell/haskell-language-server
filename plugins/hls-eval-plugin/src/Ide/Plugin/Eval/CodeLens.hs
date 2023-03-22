@@ -35,6 +35,7 @@ import           Control.Monad.IO.Class                       (MonadIO (liftIO))
 import           Control.Monad.Trans.Except                   (ExceptT (..))
 import           Data.Aeson                                   (toJSON)
 import           Data.Char                                    (isSpace)
+import           Data.Foldable                                (toList)
 import qualified Data.HashMap.Strict                          as HashMap
 import           Data.List                                    (dropWhileEnd,
                                                                find,
@@ -588,7 +589,7 @@ doInfoCmd allInfo dflags s = do
             names     <- GHC.parseName str
             mb_stuffs <- mapM (GHC.getInfo allInfo) names
             let filtered = filterOutChildren (\(t,_f,_ci,_fi,_sd) -> t)
-                                            (catMaybes mb_stuffs)
+                                            (catMaybes $ toList mb_stuffs)
             return $ vcat (intersperse (text "") $ map pprInfo filtered)
 
         filterOutChildren :: (a -> TyThing) -> [a] -> [a]

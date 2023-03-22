@@ -204,7 +204,7 @@ runCpp env0 filename contents = withTempDir $ \dir -> do
             -- Happy case, file is not modified, so run CPP on it in-place
             -- which also makes things like relative #include files work
             -- and means location information is correct
-            doCpp env1 True filename out
+            doCpp env1 filename out
             liftIO $ Util.hGetStringBuffer out
 
         Just contents -> do
@@ -218,7 +218,7 @@ runCpp env0 filename contents = withTempDir $ \dir -> do
             let inp = dir </> "___GHCIDE_MAGIC___"
             withBinaryFile inp WriteMode $ \h ->
                 hPutStringBuffer h contents
-            doCpp env2 True inp out
+            doCpp env2 inp out
 
             -- Fix up the filename in lines like:
             -- # 1 "C:/Temp/extra-dir-914611385186/___GHCIDE_MAGIC___"

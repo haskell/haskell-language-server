@@ -99,6 +99,7 @@ import qualified Packages
 
 import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env
+import           Development.IDE.GHC.Compat.Outputable
 #if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
 import           Data.Map                        (Map)
 #endif
@@ -400,7 +401,7 @@ filterInplaceUnits us packageFlags =
 #endif
     isInplace p = Right p
 
-showSDocForUser' :: HscEnv -> GHC.PrintUnqualified -> SDoc -> String
+showSDocForUser' :: HscEnv -> PrintUnqualified -> SDoc -> String
 #if MIN_VERSION_ghc(9,2,0)
 showSDocForUser' env = showSDocForUser (hsc_dflags env) (unitState env)
 #else

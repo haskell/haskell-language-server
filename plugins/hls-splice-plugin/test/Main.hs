@@ -57,8 +57,13 @@ tests = testGroup "splice"
   , goldenTest "TQQTypeTypeError" Inplace 8 28
   , goldenTest "TSimpleDecl" Inplace 8 1
   , goldenTest "TQQDecl" Inplace 5 1
-  , goldenTestWithEdit "TTypeKindError" Inplace 7 9
-  , goldenTestWithEdit "TDeclKindError" Inplace 8 1
+  , goldenTestWithEdit "TTypeKindError" (
+        if ghcVersion >= GHC96 then
+          "96-expected"
+        else
+          "expected"
+      ) Inplace 7 9
+  , goldenTestWithEdit "TDeclKindError" "expected" Inplace 8 1
   ]
 
 goldenTest :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
@@ -74,9 +79,9 @@ goldenTest fp tc line col =
         void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
       _ -> liftIO $ assertFailure "No CodeAction detected"
 
-goldenTestWithEdit :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
-goldenTestWithEdit fp tc line col =
-  goldenWithHaskellDoc splicePlugin (fp <> " (golden)") testDataDir fp "expected" "hs" $ \doc -> do
+goldenTestWithEdit :: FilePath -> FilePath -> ExpandStyle -> Int -> Int -> TestTree
+goldenTestWithEdit fp expect tc line col =
+  goldenWithHaskellDoc splicePlugin (fp <> " (golden)") testDataDir fp expect "hs" $ \doc -> do
      orig <- documentContents doc
      let
        lns = T.lines orig

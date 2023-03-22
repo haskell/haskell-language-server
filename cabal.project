@@ -42,7 +42,18 @@ packages:
 -- See https://github.com/haskell/haskell-language-server/blob/master/.gitlab-ci.yml
 optional-packages: vendored/*/*.cabal
 
-tests: true
+tests: True
+
+-- mfsolve has duplicate instances in its test suite
+-- See: https://github.com/kuribas/mfsolve/issues/8
+package mfsolve
+  tests: False
+
+if impl(ghc >= 9.5)
+  source-repository-package
+    type:git
+    location: https://github.com/wz1000/retrie
+    tag: 0a2dbfc00e745737f249f16325b2815d2e3a14eb
 
 package *
   ghc-options: -haddock
@@ -50,7 +61,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2023-03-15T00:00:00Z
+index-state: 2023-03-23T00:00:00Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
@@ -67,8 +78,9 @@ constraints:
   ghc-lib-parser-ex -auto,
   stylish-haskell +ghc-lib,
   fourmolu -fixity-th,
-  -- http2 doesn't build with -haddock on ghc-8.10
-  http2 < 4.0.0
+  setup.happy == 1.20.1.1,
+  happy == 1.20.1.1,
+  filepath installed,
 
 -- This is benign and won't affect our ability to release to Hackage,
 -- because we only depend on `ekg-json` when a non-default flag
@@ -81,7 +93,6 @@ source-repository-package
   type:git
   location: https://github.com/pepeiborra/ekg-json
   tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
-  -- https://github.com/tibbe/ekg-json/pull/12
 -- END DELETE
 
 allow-newer:
@@ -107,3 +118,23 @@ allow-newer:
   uuid:time,
   vector-space:base,
   ekg-wai:time,
+
+if impl(ghc >= 9.5)
+  allow-newer:
+    -- ghc-9.6
+    algebraic-graphs:transformers,
+    cryptohash-md5:base,
+    cryptohash-sha1:base,
+    ekg-core:ghc-prim,
+    focus:transformers,
+    ghc-trace-events:base,
+    implicit-hie-cradle:transformers,
+    retrie:base,
+    retrie:ghc,
+    retrie:ghc-exactprint,
+    retrie:mtl,
+    retrie:transformers,
+    semigroupoids:base,
+    stm-hamt:transformers,
+    entropy:Cabal,
+

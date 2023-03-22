@@ -49,7 +49,7 @@ extra-deps:
 - ghc-lib-9.2.4.20220729
 - ghc-lib-parser-9.2.4.20220729
 - ghc-lib-parser-ex-9.2.0.4
-- hiedb-0.4.2.0
+- hiedb-0.4.3.0
 - hlint-3.4
 - implicit-hie-0.1.2.7@sha256:82bbbb1a8c05f99c8af3c16ac53e80c8648d8bf047b25ed5ce45a135bd736907,3122
 - implicit-hie-cradle-0.5.0.0@sha256:4276f60f3a59bc22df03fd918f73bca9f777de9568f85e3a8be8bd7566234a59,2368

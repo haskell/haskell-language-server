@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs           #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE CPP             #-}
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 
 module Ide.Plugin.Class.CodeLens where
@@ -96,7 +97,11 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
                         -- that are nonsense for displaying code lenses.
                         --
                         -- See https://github.com/haskell/haskell-language-server/issues/3319
-                        | not $ isGenerated (mg_origin fun_matches)
+#if MIN_VERSION_ghc(9,5,0)
+                          | not $ isGenerated (mg_ext fun_matches)
+#else
+                          | not $ isGenerated (mg_origin fun_matches)
+#endif
                                 -> Just $ L l fun_id
                     _           -> Nothing
                 -- Existed signatures' name

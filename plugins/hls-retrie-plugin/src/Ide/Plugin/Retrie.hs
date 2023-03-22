@@ -503,7 +503,11 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
           ]
         | L (locA -> l) r  <- rds_rules,
           pos `isInsideSrcSpan` l,
+#if MIN_VERSION_ghc(9,5,0)
+          let HsRule {rd_name = L _ rn} = r,
+#else
           let HsRule {rd_name = L _ (_, rn)} = r,
+#endif
           let ruleName = unpackFS rn
       ]
   where
@@ -773,7 +777,13 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
     ideclImplicit = False
     ideclHiding = Nothing
     ideclSourceSrc = NoSourceText
-#if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,5,0)
+    ideclExt = GHCGHC.XImportDeclPass
+      { ideclAnn = GHCGHC.EpAnnNotUsed
+      , ideclSourceText = ideclSourceSrc
+      , ideclImplicit = ideclImplicit
+      }
+#elif MIN_VERSION_ghc(9,2,0)
     ideclExt = GHCGHC.EpAnnNotUsed
 #else
     ideclExt = GHC.noExtField

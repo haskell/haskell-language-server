@@ -106,6 +106,7 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     DeltaPos (..),
                                                                     EpAnn (..),
                                                                     EpaLocation (..),
+                                                                    hsmodAnn,
                                                                     LEpaComment)
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
@@ -252,9 +253,21 @@ extendImportHandler' ideState ExtendImport {..}
     mzero
 
 isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl GhcPs) -> Bool
-isWantedModule wantedModule Nothing (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
+isWantedModule wantedModule Nothing (L _ it@ImportDecl{ ideclName
+#if MIN_VERSION_ghc(9,5,0)
+                                                      , ideclImportList = Just (Exactly, _)
+#else
+                                                      , ideclHiding = Just (False, _)
+#endif
+                                                      }) =
     not (isQualifiedImport it) && unLoc ideclName == wantedModule
-isWantedModule wantedModule (Just qual) (L _ ImportDecl{ideclAs, ideclName, ideclHiding = Just (False, _)}) =
+isWantedModule wantedModule (Just qual) (L _ ImportDecl{ ideclAs, ideclName
+#if MIN_VERSION_ghc(9,5,0)
+                                                       , ideclImportList = Just (Exactly, _)
+#else
+                                                       , ideclHiding = Just (False, _)
+#endif
+                                                       }) =
     unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc . reLoc <$> ideclAs) == Just qual)
 isWantedModule _ _ _ = False
 
@@ -813,15 +826,21 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
 --       In the expression: seq "test" seq "test" (traceShow "test")
 --       In an equation for ‘f’:
 --          f = seq "test" seq "test" (traceShow "test")
+--
     | Just [ty, lit] <- matchRegexUnifySpaces _message (pat False False True False)
-                        <|> matchRegexUnifySpaces _message (pat False False False True)
-                        <|> matchRegexUnifySpaces _message (pat False False False False)
-            = codeEdit ty lit (makeAnnotatedLit ty lit)
+                    <|> matchRegexUnifySpaces _message (pat False False False True)
+                    <|> matchRegexUnifySpaces _message (pat False False False False)
+
+            = codeEdit _range ty lit (makeAnnotatedLit ty lit)
     | Just source <- sourceOpt
-    , Just [ty, lit] <- matchRegexUnifySpaces _message (pat True True False False)
-            = let lit' = makeAnnotatedLit ty lit;
-                  tir = textInRange _range source
-              in codeEdit ty lit (T.replace lit lit' tir)
+    , Just [ty, lit, srcspan] <- matchRegexUnifySpaces _message (pat True True False False)
+    , range <- case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
+                 [s] -> let x = realSrcSpanToRange s
+                   in x{_end = (_end x){_character = succ (_character (_end x))}}
+                 _ -> error "bug in srcspan parser"
+    = let lit' = makeAnnotatedLit ty lit;
+          tir = textInRange range source
+      in codeEdit range ty lit (T.replace lit lit' tir)
     | otherwise = []
     where
       makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
@@ -829,10 +848,10 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
       pat multiple at inArg inExpr = T.concat [ ".*Defaulting the type variable "
                                        , ".*to type ‘([^ ]+)’ "
                                        , "in the following constraint"
-                                       , if multiple then "s" else ""
+                                       , if multiple then "s" else " "
                                        , ".*arising from the literal ‘(.+)’"
                                        , if inArg then ".+In the.+argument" else ""
-                                       , if at then ".+at" else ""
+                                       , if at then ".+at ([^ ]*)" else ""
                                        , if inExpr then ".+In the expression" else ""
                                        , ".+In the expression"
                                        ]
@@ -842,14 +861,14 @@ suggestAddTypeAnnotationToSatisfyConstraints sourceOpt Diagnostic{_range=_range,
                                        , " to type ‘([^ ]+)’ "
                                        , ".*arising from the literal ‘(.+)’"
                                        , if inArg then ".+In the.+argument" else ""
-                                       , if at then ".+at" else ""
+                                       , if at then ".+at ([^ ]*)" else ""
                                        , if inExpr then ".+In the expression" else ""
                                        , ".+In the expression"
                                        ]
 #endif
-      codeEdit ty lit replacement =
+      codeEdit range ty lit replacement =
         let title = "Add type annotation ‘" <> ty <> "’ to ‘" <> lit <> "’"
-            edits = [TextEdit _range replacement]
+            edits = [TextEdit range replacement]
         in  [( title, edits )]
 
 -- | GHC strips out backticks in case of infix functions as well as single quote
@@ -954,7 +973,7 @@ suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, Cod
 suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
       matchRegexUnifySpaces _message
-      "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\).$"
+      "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\)."
     = suggestions hsmodImports binding mod srcspan
     | Just (binding, mod_srcspan) <-
       matchRegExMultipleImports _message
@@ -1119,10 +1138,17 @@ occursUnqualified symbol ImportDecl{..}
     | isNothing ideclAs = Just False /=
             -- I don't find this particularly comprehensible,
             -- but HLint suggested me to do so...
+#if MIN_VERSION_ghc(9,5,0)
+        (ideclImportList <&> \(isHiding, L _ ents) ->
+            let occurs = any ((symbol `symbolOccursIn`) . unLoc) ents
+            in (isHiding == EverythingBut) && not occurs || (isHiding == Exactly) && occurs
+        )
+#else
         (ideclHiding <&> \(isHiding, L _ ents) ->
             let occurs = any ((symbol `symbolOccursIn`) . unLoc) ents
             in isHiding && not occurs || not isHiding && occurs
         )
+#endif
 occursUnqualified _ _ = False
 
 symbolOccursIn :: T.Text -> IE GhcPs -> Bool
@@ -1197,11 +1223,20 @@ suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
     where
       findMissingConstraint :: T.Text -> Maybe T.Text
       findMissingConstraint t =
-        let regex = "(No instance for|Could not deduce) \\((.+)\\) arising from" -- a use of / a do statement
-            regexImplicitParams = "Could not deduce: (\\?.+) arising from a use of"
+        let -- The regex below can be tested at:
+            --   https://regex101.com/r/dfSivJ/1
+            regex = "(No instance for|Could not deduce):? (\\((.+)\\)|‘(.+)’|.+) arising from" -- a use of / a do statement
+
             match = matchRegexUnifySpaces t regex
-            matchImplicitParams = matchRegexUnifySpaces t regexImplicitParams
-        in match <|> matchImplicitParams <&> last
+
+            -- For a string like:
+            --   "Could not deduce: ?a::() arising from"
+            -- The `matchRegexUnifySpaces` function returns two empty match
+            -- groups at the end of the list. It's not clear why this is the
+            -- case, so we select the last non-empty match group.
+            getCorrectGroup = last . filter (/="")
+
+        in getCorrectGroup <$> match
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.
 suggestInstanceConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
@@ -1557,7 +1592,11 @@ findPositionAfterModuleName ps hsmodName' = do
     -- The exact-print API changed a lot in ghc-9.2, so we need to handle it separately for different compiler versions.
     whereKeywordLineOffset :: Maybe Int
 #if MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,5,0)
+    whereKeywordLineOffset = case hsmodAnn hsmodExt of
+#else
     whereKeywordLineOffset = case hsmodAnn of
+#endif
         EpAnn _ annsModule _ -> do
             -- Find the first 'where'
             whereLocation <- fmap NE.head .  NE.nonEmpty . mapMaybe filterWhere .  am_main $ annsModule
@@ -1567,7 +1606,12 @@ findPositionAfterModuleName ps hsmodName' = do
     filterWhere _                       = Nothing
 
     epaLocationToLine :: EpaLocation -> Maybe Int
-    epaLocationToLine (EpaSpan sp) = Just . srcLocLine . realSrcSpanEnd $ sp
+#if MIN_VERSION_ghc(9,5,0)
+    epaLocationToLine (EpaSpan sp _)
+#else
+    epaLocationToLine (EpaSpan sp)
+#endif
+      = Just . srcLocLine . realSrcSpanEnd $ sp
     epaLocationToLine (EpaDelta (SameLine _) priorComments) = Just $ sumCommentsOffset priorComments
     -- 'priorComments' contains the comments right before the current EpaLocation
     -- Summing line offset of priorComments is necessary, as 'line' is the gap between the last comment and
@@ -1808,7 +1852,13 @@ textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCo
 
 -- | Returns the ranges for a binding in an import declaration
 rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
-rangesForBindingImport ImportDecl{ideclHiding = Just (False, L _ lies)} b =
+rangesForBindingImport ImportDecl{
+#if MIN_VERSION_ghc(9,5,0)
+  ideclImportList = Just (Exactly, L _ lies)
+#else
+  ideclHiding = Just (False, L _ lies)
+#endif
+  } b =
     concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
   where
     b' = wrapOperatorInParens b
