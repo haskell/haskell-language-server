@@ -30,7 +30,7 @@ library
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide           ^>=1.7 || ^>= 1.8 || ^>= 1.9
+    , ghcide           ^>=1.7 || ^>= 1.8 || ^>= 1.9 || ^>= 1.10
     , hls-plugin-api   ^>=1.4 || ^>= 1.5 || ^>= 1.6
     , lsp-types
     , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14.2

@@ -30,7 +30,7 @@ library
     , extra
     , fuzzy
     , ghc
-    , ghcide                ^>=1.8 || ^>= 1.9
+    , ghcide                ^>=1.8 || ^>= 1.9 || ^>= 1.10
     , hls-plugin-api        ^>=1.5 || ^>= 1.6
     , lens
     , lsp

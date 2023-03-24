@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               hls-explicit-record-fields-plugin
-version:            1.0.0.0
+version:            1.0.1.0
 synopsis:           Explicit record fields plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -29,7 +29,7 @@ library
     -- other-extensions:
     build-depends:
       , base                  >=4.12 && <5
-      , ghcide                ^>=1.9
+      , ghcide                ^>=1.10
       , hls-plugin-api        ^>=1.6
       , lsp
       , lens

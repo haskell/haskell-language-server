@@ -30,7 +30,7 @@ library
     , deepseq
     , extra
     , ghc
-    , ghcide               ^>=1.9
+    , ghcide               ^>=1.9 || ^>= 1.10
     , hashable
     , hls-plugin-api       ^>=1.6
     , lsp                   >=1.2.0.1
