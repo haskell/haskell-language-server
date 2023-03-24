@@ -23,7 +23,7 @@ download_cabal_cache "$HOME/.local/bin/cabal-cache"
 # build
 ghcup install ghc "${GHC_VERSION}"
 ghcup set ghc "${GHC_VERSION}"
-ecabal update
+(cd .. && ecabal update) # run cabal update outside project dir
 "ghc-${GHC_VERSION}" --info
 "ghc" --info
 
