@@ -12,9 +12,7 @@ pwd
 env
 
 # ensure ghcup
-if ! command -v ghcup ; then
-	install_ghcup
-fi
+install_ghcup
 
 # ensure cabal-cache
 download_cabal_cache "$HOME/.local/bin/cabal-cache"
