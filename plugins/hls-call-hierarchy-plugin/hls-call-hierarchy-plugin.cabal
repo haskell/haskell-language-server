@@ -33,7 +33,7 @@ library
     , base                  >=4.12 && <5
     , containers
     , extra
-    , ghcide                ^>= 1.9
+    , ghcide                ^>= 1.9 || ^>= 1.10
     , hiedb
     , hls-plugin-api        ^>= 1.6
     , lens

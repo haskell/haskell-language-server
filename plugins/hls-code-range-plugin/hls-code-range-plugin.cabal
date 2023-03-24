@@ -37,7 +37,7 @@ library
     , containers
     , deepseq
     , extra
-    , ghcide           ^>=1.9
+    , ghcide           ^>=1.9 || ^>= 1.10
     , hashable
     , hls-plugin-api   ^>=1.6
     , lens
@@ -62,7 +62,7 @@ test-suite tests
     , bytestring
     , containers
     , filepath
-    , ghcide                     ^>=1.8 || ^>= 1.9
+    , ghcide                     ^>=1.8 || ^>= 1.9 || ^>= 1.10
     , hls-code-range-plugin
     , hls-test-utils             ^>=1.5
     , lens
