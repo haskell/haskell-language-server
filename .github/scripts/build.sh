@@ -21,9 +21,9 @@ download_cabal_cache "$HOME/.local/bin/cabal-cache"
 
 
 # build
-ecabal update
 ghcup install ghc "${GHC_VERSION}"
 ghcup set ghc "${GHC_VERSION}"
+ecabal update
 "ghc-${GHC_VERSION}" --info
 "ghc" --info
 
