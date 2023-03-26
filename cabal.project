@@ -75,6 +75,8 @@ constraints:
   setup.happy == 1.20.1.1,
   happy == 1.20.1.1,
   filepath installed,
+  -- for ghc 8.10, stm-hamt 1.2.0.10 doesn't build
+  stm-hamt < 1.2.0.10
 
 -- This is benign and won't affect our ability to release to Hackage,
 -- because we only depend on `ekg-json` when a non-default flag
