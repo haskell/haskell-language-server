@@ -53,9 +53,7 @@ uname
 env
 
 # ensure ghcup
-if ! command -v ghcup ; then
-    install_ghcup
-fi
+install_ghcup
 
 ecabal update
 
