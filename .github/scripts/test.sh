@@ -38,7 +38,6 @@ test_all_hls() {
         bin_noexe=${bin/.exe/}
         if ! [[ "${bin_noexe}" =~ "haskell-language-server-wrapper" ]] && ! [[ "${bin_noexe}" =~ "~" ]] ; then
             if ghcup install ghc --set "${bin_noexe/haskell-language-server-/}" ; then
-                ecabal update
                 "${hls}" typecheck "${test_module}" || fail "failed to typecheck with HLS for GHC ${bin_noexe/haskell-language-server-/}"
             else
                 fail "GHCup failed to install GHC ${bin_noexe/haskell-language-server-/}"
@@ -55,6 +54,9 @@ env
 
 # ensure ghcup
 install_ghcup
+ghcup install ghc --set 9.4.4
+
+ecabal update
 
 # unpack
 TARBALL_PREFIX="haskell-language-server"
