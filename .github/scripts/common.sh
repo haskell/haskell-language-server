@@ -126,7 +126,7 @@ build_with_cache() {
 }
 
 install_ghcup() {
-	find "$GHCUP_INSTALL_BASE_PREFIX"
+	# find "$GHCUP_INSTALL_BASE_PREFIX"
 	mkdir -p "$GHCUP_BIN"
 	mkdir -p "$GHCUP_BIN"/../cache
 
