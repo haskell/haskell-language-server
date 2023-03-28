@@ -273,13 +273,18 @@ jobs:
 
       - name: Run build
         run: |
-          bash .github/scripts/brew.sh git coreutils llvm@11 autoconf automake tree
-          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@11/bin:$PATH"
-          export CC="$HOME/.brew/opt/llvm@11/bin/clang"
-          export CXX="$HOME/.brew/opt/llvm@11/bin/clang++"
+          if test "${GHC_VERSION}" = "8.10.7"; then
+            bash .github/scripts/brew.sh git coreutils llvm@11 autoconf automake tree
+            export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@11/bin:$PATH"
+            export CC="$HOME/.brew/opt/llvm@11/bin/clang"
+            export CXX="$HOME/.brew/opt/llvm@11/bin/clang++"
+            export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
+            export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
+          else
+            bash .github/scripts/brew.sh git coreutils autoconf automake tree
+            export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$PATH"
+          fi
           export LD=ld
-          export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
-          export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
           bash .github/scripts/build.sh
           tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
         env:
