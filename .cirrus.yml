@@ -33,7 +33,7 @@ build_task:
     - name: build-ghc-9.2.7
       env:
         GHC_VERSION: 9.2.7
-  install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree
+  install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree gmp libiconv
   script:
     - tzsetup Etc/GMT
     - adjkerntz -a
@@ -59,7 +59,7 @@ bindist_task:
     DISTRO: "na"
     RUNNER_OS: "FreeBSD"
     GITHUB_WORKSPACE: ${CIRRUS_WORKING_DIR}
-  install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree unzip
+  install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree gmp libiconv unzip
   script:
     - tzsetup Etc/GMT
     - adjkerntz -a
@@ -97,7 +97,7 @@ test_task:
     DISTRO: "na"
     RUNNER_OS: "FreeBSD"
     GITHUB_WORKSPACE: ${CIRRUS_WORKING_DIR}
-  install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree unzip
+  install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree gmp libiconv unzip
   script:
     - tzsetup Etc/GMT
     - adjkerntz -a
