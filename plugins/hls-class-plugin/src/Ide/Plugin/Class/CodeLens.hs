@@ -12,6 +12,7 @@ import           Data.Aeson
 import           Data.Maybe                      (mapMaybe, maybeToList)
 import qualified Data.Text                       as T
 import           Development.IDE
+import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC.LanguageExtensions.Type
@@ -26,17 +27,17 @@ import qualified Language.LSP.Types.Lens         as J
 codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
 codeLens state plId CodeLensParams{..} = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
-    tmr <- handleMaybeM "Unable to typecheck"
+    (tmr, _) <- handleMaybeM "Unable to typecheck"
         $ liftIO
         $ runAction "classplugin.TypeCheck" state
-        $ use TypeCheck nfp
+        $ useWithStale TypeCheck nfp
 
     -- All instance binds
-    InstanceBindTypeSigsResult allBinds <-
+    (InstanceBindTypeSigsResult allBinds, mp) <-
         handleMaybeM "Unable to get InstanceBindTypeSigsResult"
         $ liftIO
         $ runAction "classplugin.GetInstanceBindTypeSigs" state
-        $ use GetInstanceBindTypeSigs nfp
+        $ useWithStale GetInstanceBindTypeSigs nfp
 
     pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
 
@@ -53,7 +54,7 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
         makeLens (range, title) =
             generateLens plId range title
                 $ workspaceEdit pragmaInsertion
-                $ makeEdit range title
+                $ makeEdit range title mp
         codeLens = makeLens <$> mapMaybe getRangeWithSig targetSigs
 
     pure $ List codeLens
@@ -130,12 +131,14 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
             let cmd = mkLspCommand plId typeLensCommandId title (Just [toJSON edit])
             in  CodeLens range (Just cmd) Nothing
 
-        makeEdit :: Range -> T.Text -> [TextEdit]
-        makeEdit range bind =
+        makeEdit :: Range -> T.Text -> PositionMapping -> [TextEdit]
+        makeEdit range bind mp =
             let startPos = range ^. J.start
                 insertChar = startPos ^. J.character
                 insertRange = Range startPos startPos
-            in [TextEdit insertRange (bind <> "\n" <> T.replicate (fromIntegral insertChar) " ")]
+            in case toCurrentRange mp insertRange of
+                Just rg -> [TextEdit rg (bind <> "\n" <> T.replicate (fromIntegral insertChar) " ")]
+                Nothing -> []
 
 codeLensCommandHandler :: CommandFunction IdeState WorkspaceEdit
 codeLensCommandHandler _ wedit = do

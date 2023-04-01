@@ -59,10 +59,10 @@ insertPragmaIfNotPresent state nfp pragma = do
     (_, fileContents) <- liftIO
         $ runAction "classplugin.insertPragmaIfNotPresent.GetFileContents" state
         $ getFileContents nfp
-    pm <- handleMaybeM "Unable to GetParsedModuleWithComments"
+    (pm, _) <- handleMaybeM "Unable to GetParsedModuleWithComments"
         $ liftIO
         $ runAction "classplugin.insertPragmaIfNotPresent.GetParsedModuleWithComments" state
-        $ use GetParsedModuleWithComments nfp
+        $ useWithStale GetParsedModuleWithComments nfp
     let exts = getExtensions pm
         info = getNextPragmaInfo sessionDynFlags fileContents
     pure [insertNewPragma info pragma | pragma `notElem` exts]
