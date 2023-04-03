@@ -267,7 +267,7 @@ common tactic
     cpp-options: -Dhls_tactic
 
 common hlint
-  if flag(hlint) && impl(ghc < 9.5)
+  if flag(hlint)
     build-depends: hls-hlint-plugin ^>= 1.1
     cpp-options: -Dhls_hlint
 
@@ -334,7 +334,7 @@ common floskell
     cpp-options: -Dhls_floskell
 
 common fourmolu
-  if flag(fourmolu) && impl(ghc < 9.5)
+  if flag(fourmolu)
     build-depends: hls-fourmolu-plugin ^>= 1.1
     cpp-options: -Dhls_fourmolu
 
