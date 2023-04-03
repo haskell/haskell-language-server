@@ -30,8 +30,7 @@ flag pedantic
   manual:      True
 
 library
-  if impl(ghc >= 9.5)
-    buildable: False
+  buildable: True
   exposed-modules:    Ide.Plugin.Hlint
   hs-source-dirs:     src
   build-depends:
@@ -78,8 +77,7 @@ library
     TypeOperators
 
 test-suite tests
-  if impl(ghc >= 9.5)
-    buildable: False
+  buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
