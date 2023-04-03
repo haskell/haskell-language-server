@@ -263,7 +263,7 @@ common retrie
 
 common tactic
   if flag(tactic) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-tactics-plugin ^>= 1.8
+    build-depends: hls-tactics-plugin ^>= 1.8.1
     cpp-options: -Dhls_tactic
 
 common hlint
