@@ -55,7 +55,7 @@ test-suite tests
     , directory
     , filepath
     , hls-cabal-fmt-plugin
-    , hls-test-utils        ^>=1.5
+    , hls-test-utils        ^>=1.6
 
   if flag(isolateTests)
     build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6

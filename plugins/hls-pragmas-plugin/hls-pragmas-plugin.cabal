@@ -52,7 +52,7 @@ test-suite tests
     , base
     , filepath
     , hls-pragmas-plugin
-    , hls-test-utils      ^>=1.5
+    , hls-test-utils      ^>=1.6
     , lens
     , lsp-types
     , text

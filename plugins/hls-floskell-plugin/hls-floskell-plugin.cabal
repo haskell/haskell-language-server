@@ -48,4 +48,4 @@ test-suite tests
     , base
     , filepath
     , hls-floskell-plugin
-    , hls-test-utils       ^>=1.5
+    , hls-test-utils       ^>=1.6

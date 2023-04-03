@@ -50,4 +50,4 @@ test-suite tests
     , base
     , filepath
     , hls-stylish-haskell-plugin
-    , hls-test-utils              ^>=1.5
+    , hls-test-utils              ^>=1.6
