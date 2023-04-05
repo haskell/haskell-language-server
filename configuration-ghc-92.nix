@@ -35,6 +35,8 @@ let
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
+      hie-bios = hself.callCabal2nix "hie-bios" inputs.haskell-hie-bios { };
+
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
