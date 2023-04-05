@@ -240,7 +240,6 @@
           buildInputs = [
             # our compiling toolchain
             hpkgs.ghc
-            pkgs.cabal-install
             # @guibou: I'm not sure hie-bios is needed
             pkgs.haskellPackages.hie-bios
             # Dependencies needed to build some parts of hackage
