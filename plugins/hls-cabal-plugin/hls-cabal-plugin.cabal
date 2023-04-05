@@ -48,7 +48,7 @@ library
     , deepseq
     , directory
     , extra                 >=1.7.4
-    , ghcide                ^>= 1.9
+    , ghcide                ^>= 1.9 || ^>= 1.10
     , hashable
     , hls-plugin-api        ^>=1.6
     , hls-graph             ^>=1.9

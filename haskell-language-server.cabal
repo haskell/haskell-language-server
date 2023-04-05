@@ -1,7 +1,7 @@
 cabal-version:      3.0
 category:           Development
 name:               haskell-language-server
-version:            1.9.1.0
+version:            1.10.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -238,7 +238,7 @@ common haddockComments
 
 common eval
   if flag(eval)
-    build-depends: hls-eval-plugin ^>= 1.4
+    build-depends: hls-eval-plugin ^>= 1.5
     cpp-options: -Dhls_eval
 
 common importLens
@@ -288,7 +288,7 @@ common pragmas
 
 common splice
   if flag(splice)
-    build-depends: hls-splice-plugin ^>=1.0.0.1
+    build-depends: hls-splice-plugin ^>=1.1
     cpp-options: -Dhls_splice
 
 common alternateNumberFormat
@@ -350,7 +350,7 @@ common stylishHaskell
 
 common refactor
   if flag(refactor)
-    build-depends: hls-refactor-plugin ^>= 1.1
+    build-depends: hls-refactor-plugin ^>= 1.2
     cpp-options: -Dhls_refactor
 
 library
@@ -405,7 +405,7 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ==1.9.1.0
+    , ghcide                ==1.10.0.0
     , githash               >=0.1.6.1
     , lsp
     , hie-bios

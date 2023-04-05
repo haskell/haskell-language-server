@@ -53,11 +53,10 @@ uname
 env
 
 # ensure ghcup
-if ! command -v ghcup ; then
-    install_ghcup
-fi
+install_ghcup
+ghcup install ghc --set 9.4.4
 
-ecabal update
+(cd .. && ecabal update) # run cabal update outside project dir
 
 # unpack
 TARBALL_PREFIX="haskell-language-server"
