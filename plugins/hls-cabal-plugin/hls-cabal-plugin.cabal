@@ -74,7 +74,7 @@ test-suite tests
     , filepath
     , ghcide
     , hls-cabal-plugin
-    , hls-test-utils    ^>=1.5
+    , hls-test-utils    ^>=1.6
     , lens
     , lsp-types
     , tasty-hunit
