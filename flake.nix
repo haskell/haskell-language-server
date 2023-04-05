@@ -121,14 +121,6 @@
                 then overrideCabal hsuper.ormolu (_: { enableSeparateBinOutput = false; })
                 else hsuper.ormolu;
 
-              # Due to the following issue, fixity-th should be disabled, especially for darwin.
-              # https://github.com/fourmolu/fourmolu/issues/238
-              # nixpkgs now disables fixity-th for ghc944.
-              fourmolu =
-                addBuildDepend
-                  (appendConfigureFlag hself.fourmolu_0_10_1_0 "-f-fixity-th")
-                  hself.file-embed;
-
               stylish-haskell = hself.callCabal2nix "stylish-haskell" inputs.stylish-haskell {};
             };
 
@@ -241,7 +233,7 @@
             # our compiling toolchain
             hpkgs.ghc
             # @guibou: I'm not sure hie-bios is needed
-            pkgs.haskellPackages.hie-bios
+            # pkgs.haskellPackages.hie-bios
             # Dependencies needed to build some parts of hackage
             gmp zlib ncurses
             # Changelog tooling

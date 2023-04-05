@@ -95,11 +95,11 @@
     "haskell-hiedb": {
       "flake": false,
       "locked": {
-        "lastModified": 1678673879,
-        "narHash": "sha256-KN/adLZuREPcZ1fEHCuxF/WjGmTE2nSnlW1vCp+aJL0=",
+        "lastModified": 1680249133,
+        "narHash": "sha256-v6PnDMlrdC56QJ9HwDvVFzHkhVbvivUj1LXMVJ0ZLec=",
         "owner": "wz1000",
         "repo": "HieDb",
-        "rev": "d4e12eb22c7d832ad54c2e4c433217028fe95c83",
+        "rev": "dac3ebb37ad33f9c042f59091ee87a4b9a2d63d1",
         "type": "github"
       },
       "original": {
@@ -139,11 +139,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1679011989,
-        "narHash": "sha256-TTyzL8k0ZY2otX8xcvi+GAbFD3dpFVg5UJkgmpJBuuA=",
+        "lastModified": 1680680186,
+        "narHash": "sha256-DqfuocQeQc4pk/ggLntlcf3AoGmnkCcjjL8geGUxv5I=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "aae97499619fdf720c9524168d831cae04ceae5a",
+        "rev": "391e94a986322a002a084574ccf2fd73814872b1",
         "type": "github"
       },
       "original": {
