@@ -33,6 +33,8 @@ let
 
       ormolu = hself.callCabal2nix "ormolu" inputs.ormolu-052 {};
 
+      fourmolu = hself.callHackage "fourmolu" "0.10.1.0" {};
+
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
       hie-bios = hself.callCabal2nix "hie-bios" inputs.haskell-hie-bios { };
