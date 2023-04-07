@@ -1,16 +1,15 @@
 {-# LANGUAGE GADTs           #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE CPP             #-}
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 
 module Ide.Plugin.Class.CodeLens where
 
-import           Control.Lens                    ((^.))
-import           Control.Monad.IO.Class          (liftIO)
+import           Control.Lens                         ((^.))
+import           Control.Monad.IO.Class               (liftIO)
 import           Data.Aeson
-import           Data.Maybe                      (mapMaybe, maybeToList)
-import qualified Data.Text                       as T
+import           Data.Maybe                           (mapMaybe, maybeToList)
+import qualified Data.Text                            as T
 import           Development.IDE
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat
@@ -20,9 +19,9 @@ import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server             (sendRequest)
+import           Language.LSP.Server                  (sendRequest)
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens         as J
+import qualified Language.LSP.Types.Lens              as J
 
 codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
 codeLens state plId CodeLensParams{..} = pluginResponse $ do
@@ -30,6 +29,8 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
     (tmr, _) <- handleMaybeM "Unable to typecheck"
         $ liftIO
         $ runAction "classplugin.TypeCheck" state
+        -- Using stale results means that we can almost always return a value. In practice
+        -- this means the lenses don't 'flicker'
         $ useWithStale TypeCheck nfp
 
     -- All instance binds
@@ -37,6 +38,8 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
         handleMaybeM "Unable to get InstanceBindTypeSigsResult"
         $ liftIO
         $ runAction "classplugin.GetInstanceBindTypeSigs" state
+        -- Using stale results means that we can almost always return a value. In practice
+        -- this means the lenses don't 'flicker'
         $ useWithStale GetInstanceBindTypeSigs nfp
 
     pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
@@ -98,13 +101,9 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
                         -- that are nonsense for displaying code lenses.
                         --
                         -- See https://github.com/haskell/haskell-language-server/issues/3319
-#if MIN_VERSION_ghc(9,5,0)
-                          | not $ isGenerated (mg_ext fun_matches)
-#else
-                          | not $ isGenerated (mg_origin fun_matches)
-#endif
-                                -> Just $ L l fun_id
-                    _           -> Nothing
+                        | not $ isGenerated (matchOrigin fun_matches)
+                            -> Just $ L l fun_id
+                    _       -> Nothing
                 -- Existed signatures' name
                 sigNames = concat $ mapMaybe (\(L _ r) -> getSigName r) cid_sigs
                 toBindInfo (L l (L l' _)) = BindInfo

@@ -1197,9 +1197,11 @@ type UniqFM k = UniqFM.UniqFM
 mkVisFunTys = mkScaledFunctionTys
 mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
 mapLoc = fmap
+groupOrigin = mg_ext
 #else
 mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
 mapLoc = SrcLoc.mapLoc
+groupOrigin = mg_origin
 #endif
 
 

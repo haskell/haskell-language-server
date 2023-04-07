@@ -46,6 +46,10 @@ toMethodName n
     | otherwise
     = n
 
+-- | Here we use `useWithStale` to compute, Using stale results means that we can almost always return a value.
+--   In practice this means the lenses don't 'flicker'.
+--   This function is also used in code actions, but it doesn't matter because our actions only work
+--   if the module parsed success.
 insertPragmaIfNotPresent :: (MonadIO m)
     => IdeState
     -> NormalizedFilePath
