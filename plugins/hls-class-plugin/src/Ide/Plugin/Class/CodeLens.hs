@@ -101,7 +101,7 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
                         -- that are nonsense for displaying code lenses.
                         --
                         -- See https://github.com/haskell/haskell-language-server/issues/3319
-                        | not $ isGenerated (matchOrigin fun_matches)
+                        | not $ isGenerated (groupOrigin fun_matches)
                             -> Just $ L l fun_id
                     _       -> Nothing
                 -- Existed signatures' name

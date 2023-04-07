@@ -496,6 +496,7 @@ module Development.IDE.GHC.Compat.Core (
 # if !MIN_VERSION_ghc(9,5,0)
     field_label,
 #endif
+    groupOrigin,
     ) where
 
 import qualified GHC
