@@ -15,12 +15,6 @@ let
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
       apply-refact = hsuper.apply-refact_0_12_0_0;
 
-      # ptr-poker breaks on MacOS without SSE2 optimizations
-      # https://github.com/nikita-volkov/ptr-poker/issues/11
-      ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
-
-      ormolu = hself.ormolu_0_5_3_0;
-
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
       # Re-generate HLS drv excluding some plugins

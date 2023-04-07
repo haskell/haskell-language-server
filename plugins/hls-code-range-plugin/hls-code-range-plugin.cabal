@@ -64,7 +64,7 @@ test-suite tests
     , filepath
     , ghcide                     ^>=1.8 || ^>= 1.9 || ^>= 1.10
     , hls-code-range-plugin
-    , hls-test-utils             ^>=1.5
+    , hls-test-utils             ^>=1.6
     , lens
     , lsp
     , lsp-test

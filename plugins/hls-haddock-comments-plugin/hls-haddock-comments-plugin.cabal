@@ -68,5 +68,5 @@ test-suite tests
     , base
     , filepath
     , hls-haddock-comments-plugin
-    , hls-test-utils               ^>=1.5
+    , hls-test-utils               ^>=1.6
     , text
