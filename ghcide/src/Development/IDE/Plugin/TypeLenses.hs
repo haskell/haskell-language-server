@@ -28,7 +28,8 @@ import           Development.IDE                     (GhcSession (..),
                                                       HscEnvEq (hscEnv),
                                                       RuleResult, Rules, define,
                                                       srcSpanToRange,
-                                                      usePropertyAction)
+                                                      usePropertyAction,
+                                                      useWithStale)
 import           Development.IDE.Core.Compile        (TcModuleResult (..))
 import           Development.IDE.Core.Rules          (IdeState, runAction)
 import           Development.IDE.Core.RuleTypes      (GetBindings (GetBindings),
@@ -108,10 +109,12 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
   mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
   fmap (Right . List) $ case uriToFilePath' uri of
     Just (toNormalizedFilePath' -> filePath) -> liftIO $ do
-      env <- fmap hscEnv <$> runAction "codeLens.GhcSession" ideState (use GhcSession filePath)
-      tmr <- runAction "codeLens.TypeCheck" ideState (use TypeCheck filePath)
-      bindings <- runAction "codeLens.GetBindings" ideState (use GetBindings filePath)
-      gblSigs <- runAction "codeLens.GetGlobalBindingTypeSigs" ideState (use GetGlobalBindingTypeSigs filePath)
+      -- Using stale results means that we can almost always return a value. In practice
+      -- this means the lenses don't 'flicker'
+      env <- fmap (hscEnv . fst) <$> runAction "codeLens.GhcSession" ideState (useWithStale GhcSession filePath)
+      tmr <- fmap fst <$> runAction "codeLens.TypeCheck" ideState (useWithStale TypeCheck filePath)
+      bindings <- fmap fst <$> runAction "codeLens.GetBindings" ideState (useWithStale GetBindings filePath)
+      gblSigs <- fmap fst <$> runAction "codeLens.GetGlobalBindingTypeSigs" ideState (useWithStale GetGlobalBindingTypeSigs filePath)
 
       diag <- atomically $ getDiagnostics ideState
       hDiag <- atomically $ getHiddenDiagnostics ideState
