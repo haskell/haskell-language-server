@@ -29,7 +29,7 @@ library
     , extra
     , ghc
     , ghc-exactprint
-    , ghcide                ^>= 1.9
+    , ghcide                ^>= 1.9 || ^>= 1.10
     , hashable
     , hiedb
     , hie-compat

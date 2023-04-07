@@ -1,5 +1,54 @@
 # Changelog for haskell-language-server
 
+## 1.10.0.0
+
+- Support for GHC 9.6
+- Binaries for GHC 9.2.7 and GHC 9.6.1
+- Eval plugin support for GHC 9.4+ (#3391)
+- Don't show lenses for TH generated instances when using hls-class-plugin (#3531)
+
+### Pull requests merged for 1.10.0.0
+- Support fourmolu 0.11
+([#3533](https://github.com/haskell/haskell-language-server/pull/3533)) by @brandonchinn178
+- Don't show lenses for TH generated instances
+([#3531](https://github.com/haskell/haskell-language-server/pull/3531)) by @July541
+- Bump haskell/actions from 2.3.3 to 2.3.6
+([#3529](https://github.com/haskell/haskell-language-server/pull/3529)) by @dependabot[bot]
+- Use GHC 9.2.7 in flake
+([#3527](https://github.com/haskell/haskell-language-server/pull/3527)) by @cydparser
+- Remove HsLogger
+([#3526](https://github.com/haskell/haskell-language-server/pull/3526)) by @fendor
+- Use hie-bios 0.12
+([#3524](https://github.com/haskell/haskell-language-server/pull/3524)) by @wz1000
+- Bump haskell/actions
+([#3520](https://github.com/haskell/haskell-language-server/pull/3520)) by @michaelpj
+- Bump cachix/install-nix-action from 19 to 20
+([#3514](https://github.com/haskell/haskell-language-server/pull/3514)) by @dependabot[bot]
+- Docs: update Emacs section: add eglot with config example
+([#3509](https://github.com/haskell/haskell-language-server/pull/3509)) by @m4lvin
+- Eval plugin is now supported in 9.4
+([#3508](https://github.com/haskell/haskell-language-server/pull/3508)) by @michaelpj
+-  Update flake to GHC 9.2.6 and 9.4.4
+([#3503](https://github.com/haskell/haskell-language-server/pull/3503)) by @cydparser
+- Fix lower ghcide bounds of rename and fourmolu plugins
+([#3501](https://github.com/haskell/haskell-language-server/pull/3501)) by @pepeiborra
+- Add 9.2.6 to ghc-version-support.md
+([#3494](https://github.com/haskell/haskell-language-server/pull/3494)) by @wz1000
+- Bump versions and add changelogs for 1.9.1.0
+([#3493](https://github.com/haskell/haskell-language-server/pull/3493)) by @hasufell
+- Bump cachix/install-nix-action from 18 to 19
+([#3490](https://github.com/haskell/haskell-language-server/pull/3490)) by @dependabot[bot]
+- Experiment with loading matrix values from a file
+([#3481](https://github.com/haskell/haskell-language-server/pull/3481)) by @michaelpj
+- 9.6 support for HLS
+([#3480](https://github.com/haskell/haskell-language-server/pull/3480)) by @wz1000
+- Make the Ormolu plugin respect `.ormolu` fixity files when Ormolu ≥0.5.3.0
+([#3449](https://github.com/haskell/haskell-language-server/pull/3449)) by @amesgen
+- Migrate release CI to github
+([#3406](https://github.com/haskell/haskell-language-server/pull/3406)) by @hasufell
+- Eval plugin for GHC 9.4
+([#3391](https://github.com/haskell/haskell-language-server/pull/3391)) by @wz1000
+
 ## 1.9.1.0
 
 - Binaries for GHC 9.2.6.
