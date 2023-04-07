@@ -100,7 +100,7 @@ test-suite tests
     , base
     , filepath
     , hls-refactor-plugin
-    , hls-test-utils      ^>=1.5
+    , hls-test-utils      ^>=1.6
     , lens
     , lsp-types
     , text
