@@ -496,6 +496,7 @@ module Development.IDE.GHC.Compat.Core (
 # if !MIN_VERSION_ghc(9,5,0)
     field_label,
 #endif
+    groupOrigin,
     ) where
 
 import qualified GHC
@@ -1197,9 +1198,11 @@ type UniqFM k = UniqFM.UniqFM
 mkVisFunTys = mkScaledFunctionTys
 mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
 mapLoc = fmap
+groupOrigin = mg_ext
 #else
 mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
 mapLoc = SrcLoc.mapLoc
+groupOrigin = mg_origin
 #endif
 
 

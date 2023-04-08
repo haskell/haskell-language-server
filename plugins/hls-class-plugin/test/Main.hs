@@ -27,7 +27,9 @@ classPlugin = mkPluginTestDescriptor Class.descriptor "class"
 tests :: TestTree
 tests = testGroup
   "class"
-  [codeActionTests, codeLensTests]
+  [ codeActionTests
+  , codeLensTests
+  ]
 
 codeActionTests :: TestTree
 codeActionTests = testGroup
@@ -101,6 +103,14 @@ codeLensTests = testGroup
         goldenCodeLens "Don't insert pragma while GHC2021 enabled" "CodeLensWithGHC2021" 0
     , goldenCodeLens "Qualified name" "Qualified" 0
     , goldenCodeLens "Type family" "TypeFamily" 0
+    , testCase "keep stale lens" $ do
+        runSessionWithServer classPlugin testDataDir $ do
+            doc <- openDoc "Stale.hs" "haskell"
+            oldLens <- getCodeLenses doc
+            let edit = TextEdit (mkRange 4 11 4 12) "" -- Remove the `_`
+            _ <- applyEdit doc edit
+            newLens <- getCodeLenses doc
+            liftIO $ newLens @?= oldLens
     ]
 
 _CACodeAction :: Prism' (Command |? CodeAction) CodeAction
