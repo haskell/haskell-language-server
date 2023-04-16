@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE FlexibleContexts  #-}
@@ -15,59 +16,64 @@ module Ide.Plugin.OverloadedRecordDot
 
 -- based off of Berk Okzuturk's hls-explicit-records-fields-plugin
 
-import           Control.Lens                    ((^.))
-import           Control.Monad.IO.Class          (MonadIO, liftIO)
-import           Control.Monad.Trans.Except      (ExceptT)
-import           Data.Generics                   (GenericQ, everything, mkQ)
-import qualified Data.HashMap.Strict             as HashMap
-import           Data.Maybe                      (listToMaybe, maybeToList)
-import           Data.Text                       (Text)
-import           Development.IDE                 (IdeState, NormalizedFilePath,
-                                                  Pretty (..), Range,
-                                                  Recorder (..), Rules,
-                                                  WithPriority (..),
-                                                  realSrcSpanToRange)
-import           Development.IDE.Core.Rules      (runAction)
-import           Development.IDE.Core.RuleTypes  (TcModuleResult (..),
-                                                  TypeCheck (..))
-import           Development.IDE.Core.Shake      (define, use)
-import qualified Development.IDE.Core.Shake      as Shake
-import           Development.IDE.GHC.Compat      (HsExpr (HsApp, HsPar, HsRecSel, HsVar, OpApp),
-                                                  Outputable, getLoc, unLoc)
-import           Development.IDE.GHC.Compat.Core (Extension (OverloadedRecordDot),
-                                                  GhcPass, LHsExpr, Pass (..),
-                                                  RealSrcSpan, hs_valds,
-                                                  pattern RealSrcSpan)
-import           Development.IDE.GHC.Util        (getExtensions,
-                                                  printOutputable)
-import           Development.IDE.Graph           (RuleResult)
-import           Development.IDE.Graph.Classes   (Hashable, NFData (rnf))
-import           Development.IDE.Spans.Pragmas   (NextPragmaInfo (..),
-                                                  getFirstPragma,
-                                                  insertNewPragma)
-import           Development.IDE.Types.Logger    (Priority (..), cmapWithPrio,
-                                                  logWith, (<+>))
-import           GHC.Generics                    (Generic)
-import           Ide.Plugin.RangeMap             (RangeMap)
-import qualified Ide.Plugin.RangeMap             as RangeMap
-import           Ide.PluginUtils                 (getNormalizedFilePath,
-                                                  handleMaybeM, pluginResponse)
-import           Ide.Types                       (PluginDescriptor (..),
-                                                  PluginId (..),
-                                                  PluginMethodHandler,
-                                                  defaultPluginDescriptor,
-                                                  mkPluginHandler)
-import           Language.LSP.Types              (CodeAction (..),
-                                                  CodeActionKind (CodeActionRefactorRewrite),
-                                                  CodeActionParams (..),
-                                                  Command, List (..),
-                                                  Method (..), SMethod (..),
-                                                  TextEdit (..),
-                                                  WorkspaceEdit (WorkspaceEdit),
-                                                  fromNormalizedUri,
-                                                  normalizedFilePathToUri,
-                                                  type (|?) (InR))
-import qualified Language.LSP.Types.Lens         as L
+import           Control.Lens                   ((^.))
+import           Control.Monad.IO.Class         (MonadIO, liftIO)
+import           Control.Monad.Trans.Except     (ExceptT)
+import           Data.Generics                  (GenericQ, everything, mkQ)
+import qualified Data.HashMap.Strict            as HashMap
+import           Data.Maybe                     (listToMaybe, maybeToList)
+import           Data.Text                      (Text)
+import           Development.IDE                (IdeState, NormalizedFilePath,
+                                                 Pretty (..), Range,
+                                                 Recorder (..), Rules,
+                                                 WithPriority (..),
+                                                 realSrcSpanToRange)
+import           Development.IDE.Core.Rules     (runAction)
+import           Development.IDE.Core.RuleTypes (TcModuleResult (..),
+                                                 TypeCheck (..))
+import           Development.IDE.Core.Shake     (define, use)
+import qualified Development.IDE.Core.Shake     as Shake
+
+#if __GLASGOW_HASKELL__ >= 903
+import           Development.IDE.GHC.Compat     (HsExpr (HsRecSel))
+#else
+import           Development.IDE.GHC.Compat     (HsExpr (HsRecFld))
+#endif
+
+import           Development.IDE.GHC.Compat     (Extension (OverloadedRecordDot),
+                                                 GhcPass,
+                                                 HsExpr (HsApp, HsPar, HsVar, OpApp),
+                                                 LHsExpr, Outputable, Pass (..),
+                                                 RealSrcSpan, getLoc, hs_valds,
+                                                 pattern RealSrcSpan, unLoc)
+import           Development.IDE.GHC.Util       (getExtensions, printOutputable)
+import           Development.IDE.Graph          (RuleResult)
+import           Development.IDE.Graph.Classes  (Hashable, NFData (rnf))
+import           Development.IDE.Spans.Pragmas  (NextPragmaInfo (..),
+                                                 getFirstPragma,
+                                                 insertNewPragma)
+import           Development.IDE.Types.Logger   (Priority (..), cmapWithPrio,
+                                                 logWith, (<+>))
+import           GHC.Generics                   (Generic)
+import           Ide.Plugin.RangeMap            (RangeMap)
+import qualified Ide.Plugin.RangeMap            as RangeMap
+import           Ide.PluginUtils                (getNormalizedFilePath,
+                                                 handleMaybeM, pluginResponse)
+import           Ide.Types                      (PluginDescriptor (..),
+                                                 PluginId (..),
+                                                 PluginMethodHandler,
+                                                 defaultPluginDescriptor,
+                                                 mkPluginHandler)
+import           Language.LSP.Types             (CodeAction (..),
+                                                 CodeActionKind (CodeActionRefactorRewrite),
+                                                 CodeActionParams (..), Command,
+                                                 List (..), Method (..),
+                                                 SMethod (..), TextEdit (..),
+                                                 WorkspaceEdit (WorkspaceEdit),
+                                                 fromNormalizedUri,
+                                                 normalizedFilePathToUri,
+                                                 type (|?) (InR))
+import qualified Language.LSP.Types.Lens        as L
 
 data Log
   = LogShake Shake.Log
@@ -190,23 +196,22 @@ collectConvRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $ \Col
 
 getRecordSelectors :: TcModuleResult -> [RecordSelectors]
 getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
-  collectRecordSelectors valBinds
+    collectRecordSelectors valBinds
 
 convertRecordSelectors :: RecordSelectors -> Maybe ConvertedRecordSelector
 convertRecordSelectors (RecordSelectors ss expr) = ConvertedRecordSelector (realSrcSpanToRange ss) <$> convertRecSel expr
 
 convertRecSel :: Outputable (HsExpr (GhcPass c)) => HsExpr (GhcPass c) -> Maybe Text
-convertRecSel (HsApp _ s@(unLoc -> HsRecSel _ _) r@(unLoc -> HsVar _ _)) =
-  Just $ printOutputable r <> "." <> printOutputable s
-convertRecSel (HsApp _ s@(unLoc -> HsRecSel _ _) r@(unLoc -> HsPar _ _ _ _)) =
-  Just $ printOutputable r <> "." <> printOutputable s
-convertRecSel ( OpApp _ s@(unLoc -> HsRecSel _ _) _ r) =
-     Just $ "(" <> printOutputable r <> ")." <> printOutputable s
+convertRecSel (HsApp _ s r) =
+    Just $ printOutputable r <> "." <> printOutputable s
+convertRecSel ( OpApp _ s _ r) =
+    Just $ "(" <> printOutputable r <> ")." <> printOutputable s
 convertRecSel _ = Nothing
 
 collectRecordSelectors :: GenericQ [RecordSelectors]
 collectRecordSelectors = everything (<>) (maybeToList . (Nothing `mkQ` getRecSels))
 
+#if __GLASGOW_HASKELL__ >= 903
 getRecSels :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordSelectors
 -- standard record selection: "field record"
 getRecSels e@(unLoc -> HsApp _ (unLoc -> HsRecSel _ _) (unLoc -> HsVar _ _)) =
@@ -218,6 +223,16 @@ getRecSels e@(unLoc -> HsApp _ (unLoc -> HsRecSel _ _) (unLoc -> HsPar _ _ _ _))
 getRecSels e@(unLoc -> OpApp _ (unLoc -> HsRecSel _ _) (unLoc -> HsVar _ (unLoc -> d)) _)
     | printOutputable d == "$" = listToMaybe [ RecordSelectors realSpan' (unLoc e) | RealSrcSpan realSpan' _ <- [ getLoc e ]]
 getRecSels _ = Nothing
+#else
+getRecSels :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordSelectors
+getRecSels e@(unLoc -> HsApp _ (unLoc -> HsRecFld _ _) (unLoc -> HsVar _ _)) =
+  listToMaybe [ RecordSelectors realSpan' (unLoc e) | RealSrcSpan realSpan' _ <- [ getLoc e ]]
+getRecSels e@(unLoc -> HsApp _ (unLoc -> HsRecFld _ _) (unLoc -> HsPar _ _)) =
+  listToMaybe [ RecordSelectors realSpan' (unLoc e) | RealSrcSpan realSpan' _ <- [ getLoc e ]]
+getRecSels e@(unLoc -> OpApp _ (unLoc -> HsRecFld _ _) (unLoc -> HsVar _ (unLoc -> d)) _)
+    | printOutputable d == "$" = listToMaybe [ RecordSelectors realSpan' (unLoc e) | RealSrcSpan realSpan' _ <- [ getLoc e ]]
+getRecSels _ = Nothing
+#endif
 
 collectConvRecSels' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectConvertedRecordSelectorsResult
 collectConvRecSels' ideState =

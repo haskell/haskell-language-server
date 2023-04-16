@@ -398,6 +398,15 @@ Known limitations:
 
 - Cross-module renaming requires all components to be indexed, which sometimes causes [partial renames in multi-component projects](https://github.com/haskell/haskell-language-server/issues/2193).
 
+### Rewrite to overloaded record syntax
+
+Provided by: `hls-overloaded-record-dot-plugin`
+
+Code action kind: `refactor.rewrite`
+
+Rewrites record selectors to use overloaded dot syntax
+
+![Explicit Wildcard Demo](../plugins/hls-overloaded-record-dot-plugin/example.gif)
 ## Missing features
 
 The following features are supported by the LSP specification but not implemented in HLS.
