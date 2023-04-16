@@ -46,6 +46,10 @@ toMethodName n
     | otherwise
     = n
 
+-- | Here we use `useWithStale` to compute, Using stale results means that we can almost always return a value.
+--   In practice this means the lenses don't 'flicker'.
+--   This function is also used in code actions, but it doesn't matter because our actions only work
+--   if the module parsed success.
 insertPragmaIfNotPresent :: (MonadIO m)
     => IdeState
     -> NormalizedFilePath
@@ -59,10 +63,10 @@ insertPragmaIfNotPresent state nfp pragma = do
     (_, fileContents) <- liftIO
         $ runAction "classplugin.insertPragmaIfNotPresent.GetFileContents" state
         $ getFileContents nfp
-    pm <- handleMaybeM "Unable to GetParsedModuleWithComments"
+    (pm, _) <- handleMaybeM "Unable to GetParsedModuleWithComments"
         $ liftIO
         $ runAction "classplugin.insertPragmaIfNotPresent.GetParsedModuleWithComments" state
-        $ use GetParsedModuleWithComments nfp
+        $ useWithStale GetParsedModuleWithComments nfp
     let exts = getExtensions pm
         info = getNextPragmaInfo sessionDynFlags fileContents
     pure [insertNewPragma info pragma | pragma `notElem` exts]

@@ -121,14 +121,6 @@
                 then overrideCabal hsuper.ormolu (_: { enableSeparateBinOutput = false; })
                 else hsuper.ormolu;
 
-              # Due to the following issue, fixity-th should be disabled, especially for darwin.
-              # https://github.com/fourmolu/fourmolu/issues/238
-              # nixpkgs now disables fixity-th for ghc944.
-              fourmolu =
-                addBuildDepend
-                  (appendConfigureFlag hself.fourmolu_0_10_1_0 "-f-fixity-th")
-                  hself.file-embed;
-
               stylish-haskell = hself.callCabal2nix "stylish-haskell" inputs.stylish-haskell {};
             };
 
@@ -191,7 +183,7 @@
         };
 
         ghc902Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
-        ghc926Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
+        ghc927Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
         ghc944Config = (import ./configuration-ghc-94.nix) { inherit pkgs inputs; };
         ghc961Config = (import ./configuration-ghc-96.nix) { inherit pkgs inputs; };
 
@@ -202,14 +194,14 @@
           ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
           cases = {
             ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
-            ghc926 = ghc926Config.tweakHpkgs (pkgs.hlsHpkgs "ghc926");
+            ghc927 = ghc927Config.tweakHpkgs (pkgs.hlsHpkgs "ghc927");
             ghc944 = ghc944Config.tweakHpkgs (pkgs.hlsHpkgs "ghc944");
             ghc961 = ghc961Config.tweakHpkgs (pkgs.hlsHpkgs "ghc961");
           };
           in { default = cases."${ghcVersion}"; } // cases;
 
         ghc902 = supportedGHCs.ghc902;
-        ghc926 = supportedGHCs.ghc926;
+        ghc927 = supportedGHCs.ghc927;
         ghc944 = supportedGHCs.ghc944;
         ghc961 = supportedGHCs.ghc961;
         ghcDefault = supportedGHCs.default;
@@ -240,9 +232,8 @@
           buildInputs = [
             # our compiling toolchain
             hpkgs.ghc
-            pkgs.cabal-install
             # @guibou: I'm not sure hie-bios is needed
-            pkgs.haskellPackages.hie-bios
+            # pkgs.haskellPackages.hie-bios
             # Dependencies needed to build some parts of hackage
             gmp zlib ncurses
             # Changelog tooling
@@ -332,7 +323,7 @@
         simpleDevShells = {
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
           haskell-language-server-902-dev = mkDevShell ghc902 "cabal.project";
-          haskell-language-server-926-dev = mkDevShell ghc926 "cabal.project";
+          haskell-language-server-927-dev = mkDevShell ghc927 "cabal.project";
           haskell-language-server-944-dev = mkDevShell ghc944 "cabal.project";
           haskell-language-server-961-dev = mkDevShell ghc961 "cabal.project";
         };
@@ -341,7 +332,7 @@
         nixDevShells = {
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
           haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
-          haskell-language-server-926-dev-nix = mkDevShellWithNixDeps ghc926 "cabal.project";
+          haskell-language-server-927-dev-nix = mkDevShellWithNixDeps ghc927 "cabal.project";
           haskell-language-server-944-dev-nix = mkDevShellWithNixDeps ghc944 "cabal.project";
           haskell-language-server-961-dev-nix = mkDevShellWithNixDeps ghc961 "cabal.project";
         };
@@ -351,7 +342,7 @@
         envShells = {
           haskell-language-server-dev-env = mkEnvShell ghcDefault;
           haskell-language-server-902-dev-env = mkEnvShell ghc902;
-          haskell-language-server-926-dev-env = mkEnvShell ghc926;
+          haskell-language-server-927-dev-env = mkEnvShell ghc927;
           haskell-language-server-944-dev-env = mkEnvShell ghc944;
           haskell-language-server-961-dev-env = mkEnvShell ghc961;
         };
@@ -359,7 +350,7 @@
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-902 = mkExe ghc902;
-          haskell-language-server-926 = mkExe ghc926;
+          haskell-language-server-927 = mkExe ghc927;
           haskell-language-server-944 = mkExe ghc944;
           haskell-language-server-961 = mkExe ghc961;
         };
