@@ -89,7 +89,7 @@ typeLensCommandId = "typesignature.add"
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
   (defaultPluginDescriptor plId)
-    { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider'
+    { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider
     , pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler]
     , pluginRules = rules recorder
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
@@ -103,15 +103,28 @@ properties = emptyProperties
     , (Diagnostics, "Follows error messages produced by GHC about missing signatures")
     ] Always
 
-codeLensProvider' :: PluginMethodHandler IdeState TextDocumentCodeLens
-codeLensProvider' ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = pluginResponse $ do
+codeLensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
+codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = pluginResponse $ do
     mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
     nfp <- getNormalizedFilePath uri
-    (env', _) <- handleMaybeM "Unable to get GhcSession" $ liftIO $ runAction "codeLens.GhcSession" ideState (useWithStale GhcSession nfp)
-    let env = hscEnv env'
-    (tmr, tmrMp) <- handleMaybeM "Unable to TypeCheck" $ liftIO $ runAction "codeLens.TypeCheck" ideState (useWithStale TypeCheck nfp)
-    (bindings, bindingsMp) <- handleMaybeM "Unable to GetBindings" $ liftIO $ runAction "codeLens.GetBindings" ideState (useWithStale GetBindings nfp)
-    (gblSigs@(GlobalBindingTypeSigsResult gblSigs'), gblSigsMp) <- handleMaybeM "Unable to GetGlobalBindingTypeSigs" $ liftIO $ runAction "codeLens.GetGlobalBindingTypeSigs" ideState (useWithStale GetGlobalBindingTypeSigs nfp)
+    env <- hscEnv . fst
+            <$> (handleMaybeM "Unable to get GhcSession"
+                $ liftIO
+                $ runAction "codeLens.GhcSession" ideState (useWithStale GhcSession nfp)
+                )
+    tmr <- fst <$> (
+                handleMaybeM "Unable to TypeCheck"
+              $ liftIO
+              $ runAction "codeLens.TypeCheck" ideState (useWithStale TypeCheck nfp)
+              )
+    (bindings, bindingsMp) <-
+      handleMaybeM "Unable to GetBindings"
+      $ liftIO
+      $ runAction "codeLens.GetBindings" ideState (useWithStale GetBindings nfp)
+    (gblSigs@(GlobalBindingTypeSigsResult gblSigs'), gblSigsMp) <-
+      handleMaybeM "Unable to GetGlobalBindingTypeSigs"
+      $ liftIO
+      $ runAction "codeLens.GetGlobalBindingTypeSigs" ideState (useWithStale GetGlobalBindingTypeSigs nfp)
 
     diag <- liftIO $ atomically $ getDiagnostics ideState
     hDiag <- liftIO $ atomically $ getHiddenDiagnostics ideState
@@ -134,55 +147,11 @@ codeLensProvider' ideState pId CodeLensParams{_textDocument = TextDocumentIdenti
     pure $ List $ case mode of
         Always ->
           mapMaybe (generateLensForGlobal gblSigsMp) gblSigs'
-            <> generateLensFromDiags bindingsMp (suggestLocalSignature False (Just env) (Just tmr) (Just bindings) (Just bindingsMp)) -- we still need diagnostics for local bindings
+            <> generateLensFromDiags bindingsMp
+                (suggestLocalSignature False (Just env) (Just tmr) (Just bindings) (Just bindingsMp)) -- we still need diagnostics for local bindings
         Exported -> mapMaybe (generateLensForGlobal gblSigsMp) (filter gbExported gblSigs')
         Diagnostics -> generateLensFromDiags bindingsMp
             $ suggestSignature' False (Just env) (Just gblSigs) (Just tmr) (Just bindings) (Just gblSigsMp) (Just bindingsMp)
-
-{-
-codeLensProvider ::
-  IdeState ->
-  PluginId ->
-  CodeLensParams ->
-  LSP.LspM Config (Either ResponseError (List CodeLens))
-codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
-  mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
-  fmap (Right . List) $ case uriToFilePath' uri of
-    Just (toNormalizedFilePath' -> filePath) -> liftIO $ do
-      -- Using stale results means that we can almost always return a value. In practice
-      -- this means the lenses don't 'flicker'
-      env <- fmap (hscEnv . fst) <$> runAction "codeLens.GhcSession" ideState (useWithStale GhcSession filePath)
-      tmr <- fmap fst <$> runAction "codeLens.TypeCheck" ideState (useWithStale TypeCheck filePath)
-      bindings <- fmap fst <$> runAction "codeLens.GetBindings" ideState (useWithStale GetBindings filePath)
-      gblSigs <- fmap fst <$> runAction "codeLens.GetGlobalBindingTypeSigs" ideState (useWithStale GetGlobalBindingTypeSigs filePath)
-
-      diag <- atomically $ getDiagnostics ideState
-      hDiag <- atomically $ getHiddenDiagnostics ideState
-
-      let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
-          generateLensForGlobal sig@GlobalBindingTypeSig{..} = do
-            range <- srcSpanToRange $ gbSrcSpan sig
-            tedit <- gblBindingTypeSigToEdit sig
-            let wedit = toWorkSpaceEdit [tedit]
-            pure $ generateLens pId range (T.pack gbRendered) wedit
-          gblSigs' = maybe [] (\(GlobalBindingTypeSigsResult x) -> x) gblSigs
-          generateLensFromDiags f =
-            sequence
-              [ pure $ generateLens pId _range title edit
-              | (dFile, _, dDiag@Diagnostic{_range = _range}) <- diag ++ hDiag
-              , dFile == filePath
-              , (title, tedit) <- f dDiag
-              , let edit = toWorkSpaceEdit tedit
-              ]
-
-      case mode of
-        Always ->
-          pure (catMaybes $ generateLensForGlobal <$> gblSigs')
-            <> generateLensFromDiags (suggestLocalSignature False env tmr bindings) -- we still need diagnostics for local bindings
-        Exported -> pure $ catMaybes $ generateLensForGlobal <$> filter gbExported gblSigs'
-        Diagnostics -> generateLensFromDiags $ suggestSignature False env gblSigs tmr bindings
-    Nothing -> pure []
--}
 
 generateLens :: PluginId -> Range -> T.Text -> WorkspaceEdit -> CodeLens
 generateLens pId _range title edit =
@@ -197,8 +166,7 @@ commandHandler _ideState wedit = do
 --------------------------------------------------------------------------------
 
 suggestSignature :: Bool -> Maybe HscEnv -> Maybe GlobalBindingTypeSigsResult -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestSignature isQuickFix env mGblSigs mTmr mBindings diag =
-  suggestGlobalSignature isQuickFix mGblSigs Nothing diag <> suggestLocalSignature isQuickFix env mTmr mBindings Nothing diag
+suggestSignature isQuickFix env mGblSigs mTmr mBindings diag = suggestSignature' isQuickFix env mGblSigs mTmr mBindings Nothing Nothing diag
 
 suggestSignature' ::
     Bool
