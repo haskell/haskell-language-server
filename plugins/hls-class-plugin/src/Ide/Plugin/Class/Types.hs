@@ -1,10 +1,10 @@
+
 {-# LANGUAGE DeriveAnyClass   #-}
 {-# LANGUAGE DeriveGeneric    #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase       #-}
 {-# LANGUAGE TypeFamilies     #-}
 {-# LANGUAGE ViewPatterns     #-}
-{-# LANGUAGE BangPatterns     #-}
 
 module Ide.Plugin.Class.Types where
 
@@ -21,6 +21,7 @@ import           Development.IDE.Graph.Classes
 import           GHC.Generics
 import           Ide.Plugin.Class.Utils
 import           Ide.Types
+import           Language.LSP.Types            (TextDocumentVersion)
 
 typeLensCommandId :: CommandId
 typeLensCommandId = "classplugin.typelens"
@@ -38,6 +39,7 @@ data AddMinimalMethodsParams = AddMinimalMethodsParams
     , methodGroup :: List (T.Text, T.Text)
     -- ^ (name text, signature text)
     , withSig     :: Bool
+    , textVersion :: TextDocumentVersion
     }
     deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
