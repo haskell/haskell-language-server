@@ -65,7 +65,7 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
         pure Null
     where
         toTextDocumentEdit edit =
-            TextDocumentEdit (VersionedTextDocumentIdentifier uri (Just 0)) (List [InL edit])
+            TextDocumentEdit (VersionedTextDocumentIdentifier uri textVersion) (List [InL edit])
 
         mergeEdit :: WorkspaceEdit -> [TextEdit] -> WorkspaceEdit
         mergeEdit WorkspaceEdit{..} edits = WorkspaceEdit
@@ -84,7 +84,8 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState TextDocumentCodeAction
 codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
-    actions <- join <$> mapM (mkActions nfp) methodDiags
+    version <- lift $ (^. J.version) <$> getVersionedTextDoc docId
+    actions <- join <$> mapM (mkActions nfp version) methodDiags
     pure $ List actions
     where
         uri = docId ^. J.uri
@@ -95,9 +96,10 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
 
         mkActions
             :: NormalizedFilePath
+            -> TextDocumentVersion
             -> Diagnostic
             -> ExceptT String (LspT Ide.Plugin.Config.Config IO) [Command |? CodeAction]
-        mkActions docPath diag = do
+        mkActions docPath textVersion diag = do
             (HAR {hieAst = ast}, pmap) <- handleMaybeM "Unable to GetHieAst"
                 . liftIO
                 . runAction "classplugin.findClassIdentifier.GetHieAst" state
@@ -114,7 +116,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
             implemented <- findImplementedMethods ast instancePosition
             logWith recorder Info (LogImplementedMethods cls implemented)
             pure
-                $ concatMap mkAction
+                $ concatMap (mkAction textVersion)
                 $ nubOrdOn snd
                 $ filter ((/=) mempty . snd)
                 $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
@@ -128,21 +130,21 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                         minimalDef = minDefToMethodGroups range sigs $ classMinimalDef cls
                         allClassMethods = ("all missing methods", makeMethodDefinitions range sigs)
 
-                mkAction :: MethodGroup -> [Command |? CodeAction]
-                mkAction (name, methods)
+                mkAction :: TextDocumentVersion -> MethodGroup -> [Command |? CodeAction]
+                mkAction textVersion (name, methods)
                     = [ mkCodeAction title
                             $ mkLspCommand plId codeActionCommandId title
-                                (Just $ mkCmdParams methods False)
+                                (Just $ mkCmdParams methods textVersion False)
                       , mkCodeAction titleWithSig
                             $ mkLspCommand plId codeActionCommandId titleWithSig
-                                (Just $ mkCmdParams methods True)
+                                (Just $ mkCmdParams methods textVersion True)
                       ]
                     where
                         title = "Add placeholders for " <> name
                         titleWithSig = title <> " with signature(s)"
 
-                mkCmdParams methodGroup withSig =
-                    [toJSON (AddMinimalMethodsParams uri range (List methodGroup) withSig)]
+                mkCmdParams methodGroup textVersion withSig =
+                    [toJSON (AddMinimalMethodsParams uri range (List methodGroup) withSig textVersion)]
 
                 mkCodeAction title cmd
                     = InR
