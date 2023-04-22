@@ -211,14 +211,15 @@ transform ::
     DynFlags ->
     ClientCapabilities ->
     Uri ->
+    TextDocumentVersion ->
     Graft (Either String) ParsedSource ->
     Annotated ParsedSource ->
     Either String WorkspaceEdit
-transform dflags ccs uri f a = do
+transform dflags ccs uri version f a = do
     let src = printA a
     a' <- transformA a $ runGraft f dflags
     let res = printA a'
-    pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
+    pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions version
 
 ------------------------------------------------------------------------------
 
@@ -228,15 +229,16 @@ transformM ::
     DynFlags ->
     ClientCapabilities ->
     Uri ->
+    TextDocumentVersion ->
     Graft (ExceptStringT m) ParsedSource ->
     Annotated ParsedSource ->
     m (Either String WorkspaceEdit)
-transformM dflags ccs uri f a = runExceptT $
+transformM dflags ccs uri version f a = runExceptT $
     runExceptString $ do
         let src = printA a
         a' <- transformA a $ runGraft f dflags
         let res = printA a'
-        pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
+        pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions version
 
 
 -- | Returns whether or not this node requires its immediate children to have

@@ -121,6 +121,7 @@ import           Ide.Types                                          hiding
 import           Language.Haskell.HLint                             as Hlint hiding
                                                                              (Error)
 import           Language.LSP.Server                                (ProgressCancellable (Cancellable),
+                                                                     getVersionedTextDoc,
                                                                      sendRequest,
                                                                      withIndefiniteProgress)
 import           Language.LSP.Types                                 hiding
@@ -407,8 +408,11 @@ codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider ideState pluginId (CodeActionParams _ _ documentId _ context)
   | let TextDocumentIdentifier uri = documentId
   , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
-  = liftIO $ fmap (Right . LSP.List . map LSP.InR) $ do
+  = do
+    version <- (^. LSP.version) <$> getVersionedTextDoc documentId
+    liftIO $ fmap (Right . LSP.List . map LSP.InR) $ do
       allDiagnostics <- atomically $ getDiagnostics ideState
+
       let numHintsInDoc = length
             [diagnostic | (diagnosticNormalizedFilePath, _, diagnostic) <- allDiagnostics
                         , validCommand diagnostic
@@ -425,19 +429,19 @@ codeActionProvider ideState pluginId (CodeActionParams _ _ documentId _ context)
                pure if | Just modSummaryResult <- modSummaryResult
                        , Just source <- source
                        , let dynFlags = ms_hspp_opts $ msrModSummary modSummaryResult ->
-                           diags >>= diagnosticToCodeActions dynFlags source pluginId documentId
+                           diags >>= diagnosticToCodeActions dynFlags source pluginId documentId version
                        | otherwise -> []
            | otherwise -> pure []
       if numHintsInDoc > 1 && numHintsInContext > 0 then do
-        pure $ singleHintCodeActions ++ [applyAllAction]
+        pure $ singleHintCodeActions ++ [applyAllAction version]
       else
         pure singleHintCodeActions
   | otherwise
   = pure $ Right $ LSP.List []
 
   where
-    applyAllAction =
-      let args = Just [toJSON (documentId ^. LSP.uri)]
+    applyAllAction version =
+      let args = Just [toJSON (documentId ^. LSP.uri, version)]
           cmd = mkLspCommand pluginId "applyAll" "Apply all hints" args
         in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd) Nothing
 
@@ -451,8 +455,8 @@ codeActionProvider ideState pluginId (CodeActionParams _ _ documentId _ context)
 
 -- | Convert a hlint diagnostic into an apply and an ignore code action
 -- if applicable
-diagnosticToCodeActions :: DynFlags -> T.Text -> PluginId -> TextDocumentIdentifier -> LSP.Diagnostic -> [LSP.CodeAction]
-diagnosticToCodeActions dynFlags fileContents pluginId documentId diagnostic
+diagnosticToCodeActions :: DynFlags -> T.Text -> PluginId -> TextDocumentIdentifier -> TextDocumentVersion -> LSP.Diagnostic -> [LSP.CodeAction]
+diagnosticToCodeActions dynFlags fileContents pluginId documentId version diagnostic
   | LSP.Diagnostic{ _source = Just "hlint", _code = Just (InR code), _range = LSP.Range start _ } <- diagnostic
   , let TextDocumentIdentifier uri = documentId
   , let isHintApplicable = "refact:" `T.isPrefixOf` code
@@ -469,7 +473,7 @@ diagnosticToCodeActions dynFlags fileContents pluginId documentId diagnostic
       -- Disabling the rule isn't, because less often used and configuration can be adapted.
       [ if | isHintApplicable
            , let applyHintTitle = "Apply hint \"" <> hint <> "\""
-                 applyHintArguments = [toJSON (AOP (documentId ^. LSP.uri) start hint)]
+                 applyHintArguments = [toJSON (AOP (documentId ^. LSP.uri) start hint version)]
                  applyHintCommand = mkLspCommand pluginId "applyOne" applyHintTitle (Just applyHintArguments) ->
                Just (mkCodeAction applyHintTitle diagnostic Nothing (Just applyHintCommand) True)
            | otherwise -> Nothing
@@ -511,13 +515,13 @@ mkSuppressHintTextEdits dynFlags fileContents hint =
     combinedTextEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
-applyAllCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState Uri
-applyAllCmd recorder ide uri = do
+applyAllCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState (Uri, TextDocumentVersion)
+applyAllCmd recorder ide (uri, version) = do
   let file = maybe (error $ show uri ++ " is not a file.")
                     toNormalizedFilePath'
                    (uriToFilePath' uri)
   withIndefiniteProgress "Applying all hints" Cancellable $ do
-    res <- liftIO $ applyHint recorder ide file Nothing
+    res <- liftIO $ applyHint recorder ide file Nothing version
     logWith recorder Debug $ LogApplying file res
     case res of
       Left err -> pure $ Left (responseError (T.pack $ "hlint:applyAll: " ++ show err))
@@ -528,10 +532,11 @@ applyAllCmd recorder ide uri = do
 -- ---------------------------------------------------------------------
 
 data ApplyOneParams = AOP
-  { file      :: Uri
-  , start_pos :: Position
+  { file        :: Uri
+  , start_pos   :: Position
   -- | There can be more than one hint suggested at the same position, so HintTitle is used to distinguish between them.
-  , hintTitle :: HintTitle
+  , hintTitle   :: HintTitle
+  , textVersion :: TextDocumentVersion
   } deriving (Eq,Show,Generic,FromJSON,ToJSON)
 
 type HintTitle = T.Text
@@ -542,13 +547,13 @@ data OneHint = OneHint
   } deriving (Eq, Show)
 
 applyOneCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState ApplyOneParams
-applyOneCmd recorder ide (AOP uri pos title) = do
+applyOneCmd recorder ide (AOP uri pos title version) = do
   let oneHint = OneHint pos title
   let file = maybe (error $ show uri ++ " is not a file.") toNormalizedFilePath'
                    (uriToFilePath' uri)
   let progTitle = "Applying hint: " <> title
   withIndefiniteProgress progTitle Cancellable $ do
-    res <- liftIO $ applyHint recorder ide file (Just oneHint)
+    res <- liftIO $ applyHint recorder ide file (Just oneHint) version
     logWith recorder Debug $ LogApplying file res
     case res of
       Left err -> pure $ Left (responseError (T.pack $ "hlint:applyOne: " ++ show err))
@@ -556,8 +561,8 @@ applyOneCmd recorder ide (AOP uri pos title) = do
         _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
         pure $ Right Null
 
-applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
-applyHint recorder ide nfp mhint =
+applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> TextDocumentVersion -> IO (Either String WorkspaceEdit)
+applyHint recorder ide nfp mhint version =
   runExceptT $ do
     let runAction' :: Action a -> IO a
         runAction' = runAction "applyHint" ide
@@ -615,7 +620,7 @@ applyHint recorder ide nfp mhint =
     case res of
       Right appliedFile -> do
         let uri = fromNormalizedUri (filePathToUri' nfp)
-        let wsEdit = diffText' True (uri, oldContent) (T.pack appliedFile) IncludeDeletions
+        let wsEdit = diffText' True (uri, oldContent) (T.pack appliedFile) IncludeDeletions version
         ExceptT $ return (Right wsEdit)
       Left err ->
         throwE err

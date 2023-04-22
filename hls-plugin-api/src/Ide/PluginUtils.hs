@@ -98,7 +98,7 @@ data WithDeletions = IncludeDeletions | SkipDeletions
   deriving Eq
 
 -- | Generate a 'WorkspaceEdit' value from a pair of source Text
-diffText :: ClientCapabilities -> (Uri,T.Text) -> T.Text -> WithDeletions -> WorkspaceEdit
+diffText :: ClientCapabilities -> (Uri,T.Text) -> T.Text -> WithDeletions -> TextDocumentVersion -> WorkspaceEdit
 diffText clientCaps old new withDeletions =
   let
     supports = clientSupportsDocumentChanges clientCaps
@@ -161,8 +161,8 @@ diffTextEdit fText f2Text withDeletions = J.List r
 
 
 -- | A pure version of 'diffText' for testing
-diffText' :: Bool -> (Uri,T.Text) -> T.Text -> WithDeletions -> WorkspaceEdit
-diffText' supports (f,fText) f2Text withDeletions  =
+diffText' :: Bool -> (Uri,T.Text) -> T.Text -> WithDeletions -> TextDocumentVersion -> WorkspaceEdit
+diffText' supports (f,fText) f2Text withDeletions version =
   if supports
     then WorkspaceEdit Nothing (Just docChanges) Nothing
     else WorkspaceEdit (Just h) Nothing Nothing
@@ -170,7 +170,7 @@ diffText' supports (f,fText) f2Text withDeletions  =
     diff = diffTextEdit fText f2Text withDeletions
     h = H.singleton f diff
     docChanges = J.List [InL docEdit]
-    docEdit = J.TextDocumentEdit (J.VersionedTextDocumentIdentifier f (Just 0)) $ fmap InL diff
+    docEdit = J.TextDocumentEdit (J.VersionedTextDocumentIdentifier f version) $ fmap InL diff
 
 -- ---------------------------------------------------------------------
 
