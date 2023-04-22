@@ -130,27 +130,25 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
     hDiag <- liftIO $ atomically $ getHiddenDiagnostics ideState
 
     let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
-        generateLensForGlobal mp sig@GlobalBindingTypeSig{..} = do
+        generateLensForGlobal mp sig@GlobalBindingTypeSig{gbRendered} = do
             range <- toCurrentRange mp =<< srcSpanToRange (gbSrcSpan sig)
             tedit <- gblBindingTypeSigToEdit sig (Just gblSigsMp)
             let wedit = toWorkSpaceEdit [tedit]
             pure $ generateLens pId range (T.pack gbRendered) wedit
-        generateLensFromDiags mp f =
-            catMaybes
-              [ fmap (\range -> generateLens pId range title edit) mrange
+        generateLensFromDiags f =
+              [ generateLens pId _range title edit
               | (dFile, _, dDiag@Diagnostic{_range = _range}) <- diag ++ hDiag
               , dFile == nfp
               , (title, tedit) <- f dDiag
               , let edit = toWorkSpaceEdit tedit
-              , let mrange = toCurrentRange mp _range
               ]
     pure $ List $ case mode of
         Always ->
           mapMaybe (generateLensForGlobal gblSigsMp) gblSigs'
-            <> generateLensFromDiags bindingsMp
+            <> generateLensFromDiags
                 (suggestLocalSignature False (Just env) (Just tmr) (Just bindings) (Just bindingsMp)) -- we still need diagnostics for local bindings
         Exported -> mapMaybe (generateLensForGlobal gblSigsMp) (filter gbExported gblSigs')
-        Diagnostics -> generateLensFromDiags bindingsMp
+        Diagnostics -> generateLensFromDiags
             $ suggestSignature' False (Just env) (Just gblSigs) (Just tmr) (Just bindings) (Just gblSigsMp) (Just bindingsMp)
 
 generateLens :: PluginId -> Range -> T.Text -> WorkspaceEdit -> CodeLens
