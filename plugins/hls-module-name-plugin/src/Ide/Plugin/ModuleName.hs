@@ -169,9 +169,8 @@ codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
 codeModuleName state nfp = runMaybeT $ do
   (pm, mp) <- MaybeT . runAction "ModuleName.GetParsedModule" state $ useWithStale GetParsedModule nfp
   L (locA -> (RealSrcSpan l _)) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
-  let range = realSrcSpanToRange l
-  let range' = fromMaybe range (toCurrentRange mp range)
-  pure (range', T.pack $ moduleNameString m)
+  range <- MaybeT . pure $ toCurrentRange mp (realSrcSpanToRange l)
+  pure (range, T.pack $ moduleNameString m)
 
 data Log =
     CorrectNames [T.Text]
