@@ -22,8 +22,7 @@ import           Data.Aeson.Types                     (Value (..), toJSON)
 import qualified Data.Aeson.Types                     as A
 import qualified Data.HashMap.Strict                  as Map
 import           Data.List                            (find)
-import           Data.Maybe                           (catMaybes, fromMaybe,
-                                                       mapMaybe)
+import           Data.Maybe                           (catMaybes, mapMaybe)
 import qualified Data.Text                            as T
 import           Development.IDE                      (GhcSession (..),
                                                        HscEnvEq (hscEnv),
@@ -211,8 +210,9 @@ gblBindingTypeSigToEdit GlobalBindingTypeSig{..} mmp
   | Just Range{..} <- srcSpanToRange $ getSrcSpan gbName
     , startOfLine <- Position (_line _start) 0
     , beforeLine <- Range startOfLine startOfLine
-    , range' <- fromMaybe beforeLine (flip toCurrentRange beforeLine =<< mmp)
-    = Just $ TextEdit range' $ T.pack gbRendered <> "\n"
+    , Just mp <- mmp
+    , Just range <- toCurrentRange mp beforeLine
+    = Just $ TextEdit range $ T.pack gbRendered <> "\n"
   | otherwise = Nothing
 
 data Mode
