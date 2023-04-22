@@ -117,10 +117,11 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
               $ liftIO
               $ runAction "codeLens.TypeCheck" ideState (useWithStale TypeCheck nfp)
               )
-    (bindings, bindingsMp) <-
-      handleMaybeM "Unable to GetBindings"
-      $ liftIO
-      $ runAction "codeLens.GetBindings" ideState (useWithStale GetBindings nfp)
+    bindings <- fst <$> (
+                handleMaybeM "Unable to GetBindings"
+                $ liftIO
+                $ runAction "codeLens.GetBindings" ideState (useWithStale GetBindings nfp)
+                )
     (gblSigs@(GlobalBindingTypeSigsResult gblSigs'), gblSigsMp) <-
       handleMaybeM "Unable to GetGlobalBindingTypeSigs"
       $ liftIO
@@ -146,10 +147,10 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
         Always ->
           mapMaybe (generateLensForGlobal gblSigsMp) gblSigs'
             <> generateLensFromDiags
-                (suggestLocalSignature False (Just env) (Just tmr) (Just bindings) (Just bindingsMp)) -- we still need diagnostics for local bindings
+                (suggestLocalSignature False (Just env) (Just tmr) (Just bindings)) -- we still need diagnostics for local bindings
         Exported -> mapMaybe (generateLensForGlobal gblSigsMp) (filter gbExported gblSigs')
         Diagnostics -> generateLensFromDiags
-            $ suggestSignature' False (Just env) (Just gblSigs) (Just tmr) (Just bindings) (Just gblSigsMp) (Just bindingsMp)
+            $ suggestSignature False (Just env) (Just gblSigs) (Just tmr) (Just bindings)
 
 generateLens :: PluginId -> Range -> T.Text -> WorkspaceEdit -> CodeLens
 generateLens pId _range title edit =
@@ -164,20 +165,7 @@ commandHandler _ideState wedit = do
 --------------------------------------------------------------------------------
 
 suggestSignature :: Bool -> Maybe HscEnv -> Maybe GlobalBindingTypeSigsResult -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestSignature isQuickFix env mGblSigs mTmr mBindings diag = suggestSignature' isQuickFix env mGblSigs mTmr mBindings Nothing Nothing diag
-
-suggestSignature' ::
-    Bool
-    -> Maybe HscEnv
-    -> Maybe GlobalBindingTypeSigsResult
-    -> Maybe TcModuleResult
-    -> Maybe Bindings
-    -> Maybe PositionMapping
-    -> Maybe PositionMapping
-    -> Diagnostic
-    -> [(T.Text, [TextEdit])]
-suggestSignature' isQuickFix env mGblSigs mTmr mBindings gblMp bindingMp diag =
-  suggestGlobalSignature isQuickFix mGblSigs gblMp diag <> suggestLocalSignature isQuickFix env mTmr mBindings bindingMp diag
+suggestSignature isQuickFix env mGblSigs mTmr mBindings diag = suggestGlobalSignature isQuickFix mGblSigs Nothing diag <> suggestLocalSignature isQuickFix env mTmr mBindings diag
 
 suggestGlobalSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> Maybe PositionMapping -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestGlobalSignature isQuickFix mGblSigs mmp Diagnostic{_message, _range}
@@ -191,8 +179,8 @@ suggestGlobalSignature isQuickFix mGblSigs mmp Diagnostic{_message, _range}
     [(title, [action])]
   | otherwise = []
 
-suggestLocalSignature :: Bool -> Maybe HscEnv -> Maybe TcModuleResult -> Maybe Bindings -> Maybe PositionMapping -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestLocalSignature isQuickFix mEnv mTmr mBindings mmp Diagnostic{_message, _range = _range@Range{..}}
+suggestLocalSignature :: Bool -> Maybe HscEnv -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestLocalSignature isQuickFix mEnv mTmr mBindings Diagnostic{_message, _range = _range@Range{..}}
   | Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, [identifier]) <-
       (T.unwords . T.words $ _message)
         =~~ ("Polymorphic local binding with no type signature: (.*) ::" :: T.Text)
@@ -210,8 +198,7 @@ suggestLocalSignature isQuickFix mEnv mTmr mBindings mmp Diagnostic{_message, _r
     , startOfLine <- Position (_line _start) startCharacter
     , beforeLine <- Range startOfLine startOfLine
     , title <- if isQuickFix then "add signature: " <> signature else signature
-    , range' <- fromMaybe beforeLine (flip toCurrentRange beforeLine =<< mmp)
-    , action <- TextEdit range' $ signature <> "\n" <> T.replicate (fromIntegral startCharacter) " " =
+    , action <- TextEdit beforeLine $ signature <> "\n" <> T.replicate (fromIntegral startCharacter) " " =
     [(title, [action])]
   | otherwise = []
 
