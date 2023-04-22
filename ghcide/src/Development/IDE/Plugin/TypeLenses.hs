@@ -165,17 +165,17 @@ commandHandler _ideState wedit = do
 --------------------------------------------------------------------------------
 
 suggestSignature :: Bool -> Maybe HscEnv -> Maybe GlobalBindingTypeSigsResult -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestSignature isQuickFix env mGblSigs mTmr mBindings diag = suggestGlobalSignature isQuickFix mGblSigs Nothing diag <> suggestLocalSignature isQuickFix env mTmr mBindings diag
+suggestSignature isQuickFix env mGblSigs mTmr mBindings diag = suggestGlobalSignature isQuickFix mGblSigs diag <> suggestLocalSignature isQuickFix env mTmr mBindings diag
 
-suggestGlobalSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> Maybe PositionMapping -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestGlobalSignature isQuickFix mGblSigs mmp Diagnostic{_message, _range}
+suggestGlobalSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestGlobalSignature isQuickFix mGblSigs Diagnostic{_message, _range}
   | _message
       =~ ("(Top-level binding|Pattern synonym) with no type signature" :: T.Text)
     , Just (GlobalBindingTypeSigsResult sigs) <- mGblSigs
     , Just sig <- find (\x -> sameThing (gbSrcSpan x) _range) sigs
     , signature <- T.pack $ gbRendered sig
     , title <- if isQuickFix then "add signature: " <> signature else signature
-    , Just action <- gblBindingTypeSigToEdit sig mmp =
+    , Just action <- gblBindingTypeSigToEdit sig Nothing =
     [(title, [action])]
   | otherwise = []
 
