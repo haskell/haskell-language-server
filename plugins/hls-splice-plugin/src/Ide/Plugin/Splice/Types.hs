@@ -11,12 +11,14 @@ import           Development.IDE            (Uri)
 import           Development.IDE.GHC.Compat (RealSrcSpan)
 import           GHC.Generics               (Generic)
 import           Ide.Types                  (CommandId)
+import           Language.LSP.Types         (TextDocumentVersion)
 
 -- | Parameter for the addMethods PluginCommand.
 data ExpandSpliceParams = ExpandSpliceParams
     { uri           :: Uri
     , spliceSpan    :: RealSrcSpan
     , spliceContext :: SpliceContext
+    , textVersion   :: TextDocumentVersion
     }
     deriving (Show, Eq, Generic)
     deriving anyclass (ToJSON, FromJSON)

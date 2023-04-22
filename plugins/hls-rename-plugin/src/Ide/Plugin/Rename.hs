@@ -6,9 +6,9 @@
 {-# LANGUAGE OverloadedLabels    #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE RecordWildCards     #-}
 
 module Ide.Plugin.Rename (descriptor, E.Log) where
 
@@ -17,20 +17,21 @@ import           GHC.Parser.Annotation                 (AnnContext, AnnList,
                                                         AnnParen, AnnPragma)
 #endif
 
+import           Compat.HieTypes
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
-import           Data.Generics
 import           Data.Bifunctor                        (first)
+import           Data.Generics
 import           Data.Hashable
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
 import           Data.List.Extra                       hiding (length)
 import qualified Data.Map                              as M
-import qualified Data.Set                              as S
 import           Data.Maybe
 import           Data.Mod.Word
+import qualified Data.Set                              as S
 import qualified Data.Text                             as T
 import           Development.IDE                       (Recorder, WithPriority,
                                                         usePropertyAction)
@@ -54,7 +55,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           Compat.HieTypes
+import qualified Language.LSP.Types.Lens               as J
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -66,9 +67,10 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultP
     }
 
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
-renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _prog newNameText) =
+renameProvider state pluginId (RenameParams docId@(TextDocumentIdentifier uri) pos _prog newNameText) =
     pluginResponse $ do
         nfp <- handleUriToNfp uri
+        VersionedTextDocumentIdentifier{_version = version} <- lift $ getVersionedTextDoc docId
         directOldNames <- getNamesAtPos state nfp pos
         directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
 
@@ -78,7 +80,7 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
            See the `IndirectPuns` test for an example. -}
         indirectOldNames <- concat . filter ((>1) . Prelude.length) <$>
             mapM (uncurry (getNamesAtPos state) . locToFilePos) directRefs
-        let oldNames = (filter matchesDirect indirectOldNames) ++ directOldNames
+        let oldNames = filter matchesDirect indirectOldNames ++ directOldNames
             matchesDirect n = occNameFS (nameOccName n) `elem` directFS
               where
                 directFS = map (occNameFS. nameOccName) directOldNames
@@ -92,7 +94,7 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
         -- Perform rename
         let newName = mkTcOcc $ T.unpack newNameText
             filesRefs = collectWith locToUri refs
-            getFileEdit = flip $ getSrcEdit state . replaceRefs newName
+            getFileEdit = flip $ getSrcEdit state version . replaceRefs newName
         fileEdits <- mapM (uncurry getFileEdit) filesRefs
         pure $ foldl' (<>) mempty fileEdits
 
@@ -125,10 +127,11 @@ failWhenImportOrExport state nfp refLocs names = do
 getSrcEdit ::
     (MonadLsp config m) =>
     IdeState ->
+    TextDocumentVersion ->
     (ParsedSource -> ParsedSource) ->
     Uri ->
     ExceptT String m WorkspaceEdit
-getSrcEdit state updatePs uri = do
+getSrcEdit state version updatePs uri = do
     ccs <- lift getClientCapabilities
     nfp <- handleUriToNfp uri
     annAst <- handleMaybeM ("No parsed source for: " ++ show nfp) $ liftIO $ runAction
@@ -143,7 +146,7 @@ getSrcEdit state updatePs uri = do
     let src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
 #endif
-    pure $ diffText ccs (uri, src) res IncludeDeletions
+    pure $ diffText ccs (uri, src) res IncludeDeletions version
 
 -- | Replace names at every given `Location` (in a given `ParsedSource`) with a given new name.
 replaceRefs ::

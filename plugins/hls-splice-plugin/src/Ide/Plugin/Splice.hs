@@ -151,6 +151,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                             dflags
                             clientCapabilities
                             uri
+                            textVersion
                             (graft (RealSrcSpan spliceSpan Nothing) expanded)
                             ps
             maybe (throwE "No splice information found") (either throwE pure) $
@@ -167,6 +168,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                                 dflags
                                 clientCapabilities
                                 uri
+                                textVersion
                                 (graftDecls (RealSrcSpan spliceSpan Nothing) expanded)
                                 ps
                                 <&>
@@ -377,7 +379,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                 initTcWithGbl hscEnv typechkd srcSpan $
                     case classifyAST spliceContext of
                         IsHsDecl -> fmap (fmap $ adjustToRange uri ran) $
-                            flip (transformM dflags clientCapabilities uri) ps $
+                            flip (transformM dflags clientCapabilities uri textVersion) ps $
                                 graftDeclsWithM (RealSrcSpan srcSpan Nothing) $ \case
                                     (L _spn (SpliceD _ (SpliceDecl _ (L _ spl) _))) -> do
                                         eExpr <-
@@ -390,7 +392,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                                         pure $ Just eExpr
                                     _ -> pure Nothing
                         OneToOneAST astP ->
-                            flip (transformM dflags clientCapabilities uri) ps $
+                            flip (transformM dflags clientCapabilities uri textVersion) ps $
                                 graftWithM (RealSrcSpan srcSpan Nothing) $ \case
                                     (L _spn (matchSplice astP -> Just spl)) -> do
                                         eExpr <-
@@ -484,8 +486,9 @@ fromSearchResult _        = Nothing
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
 codeAction :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
-    fmap (maybe (Right $ List []) Right) $
+codeAction state plId (CodeActionParams _ _ docId ran _) = do
+    textVersion <- (^. J.version) <$> getVersionedTextDoc docId
+    liftIO $ fmap (maybe (Right $ List []) Right) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
             ParsedModule {..} <-

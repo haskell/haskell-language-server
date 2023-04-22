@@ -57,8 +57,8 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
         pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
         let edit =
                 if withSig
-                then mergeEdit (workspaceEdit caps old new) pragmaInsertion
-                else workspaceEdit caps old new
+                then mergeEdit (workspaceEdit caps old new textVersion) pragmaInsertion
+                else workspaceEdit caps old new textVersion
 
         void $ lift $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
 
