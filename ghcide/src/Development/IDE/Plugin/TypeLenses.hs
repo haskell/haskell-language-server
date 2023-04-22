@@ -165,7 +165,8 @@ commandHandler _ideState wedit = do
 --------------------------------------------------------------------------------
 
 suggestSignature :: Bool -> Maybe HscEnv -> Maybe GlobalBindingTypeSigsResult -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestSignature isQuickFix env mGblSigs mTmr mBindings diag = suggestGlobalSignature isQuickFix mGblSigs diag <> suggestLocalSignature isQuickFix env mTmr mBindings diag
+suggestSignature isQuickFix env mGblSigs mTmr mBindings diag =
+  suggestGlobalSignature isQuickFix mGblSigs diag <> suggestLocalSignature isQuickFix env mTmr mBindings diag
 
 suggestGlobalSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestGlobalSignature isQuickFix mGblSigs Diagnostic{_message, _range}
