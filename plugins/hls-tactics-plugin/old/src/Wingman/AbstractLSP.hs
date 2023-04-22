@@ -23,14 +23,16 @@ import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource(GetAnnotatedParsedSource))
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Types
-import           Language.LSP.Server (LspM, sendRequest, getClientCapabilities)
+import           Language.LSP.Server (LspM, sendRequest, getClientCapabilities, getVersionedTextDoc)
 import qualified Language.LSP.Types as LSP
+import qualified Language.LSP.Types.Lens as J
 import           Language.LSP.Types hiding (CodeLens, CodeAction)
 import           Wingman.AbstractLSP.Types
 import           Wingman.EmptyCase (fromMaybeT)
 import           Wingman.LanguageServer (runIde, getTacticConfigAction, getIdeDynflags, mkWorkspaceEdits, runStaleIde, showLspMessage, mkShowMessageParams)
 import           Wingman.StaticPlugin (enableQuasiQuotes)
 import           Wingman.Types
+import Control.Lens ((^.))
 
 
 ------------------------------------------------------------------------------
@@ -111,7 +113,7 @@ runContinuation plId cont state (fc, b) = do
           GraftEdit gr -> do
             ccs <- lift getClientCapabilities
             TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
-            case mkWorkspaceEdits (enableQuasiQuotes le_dflags) ccs (fc_uri le_fileContext) (unTrack pm) gr of
+            case mkWorkspaceEdits (enableQuasiQuotes le_dflags) ccs (fc_uri le_fileContext) (textVersion fc) (unTrack pm) gr of
               Left errs ->
                 pure $ Just $ ResponseError
                   { _code    = InternalError
@@ -176,11 +178,13 @@ codeActionProvider
        )
     -> PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider sort k state plId
-                   (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
+                   (CodeActionParams _ _ docId@(TextDocumentIdentifier uri) range _) = do
+  version <- (^. J.version) <$> getVersionedTextDoc docId
   fromMaybeT (Right $ List []) $ do
     let fc = FileContext
                 { fc_uri   = uri
                 , fc_range = Just $ unsafeMkCurrent range
+                , textVersion = version
                 }
     env <- buildEnv state plId fc
     args <- fetchTargetArgs @target env
@@ -203,11 +207,13 @@ codeLensProvider
       )
     -> PluginMethodHandler IdeState TextDocumentCodeLens
 codeLensProvider sort k state plId
-                 (CodeLensParams _ _ (TextDocumentIdentifier uri)) = do
+                 (CodeLensParams _ _ docId@(TextDocumentIdentifier uri)) = do
+      version <- (^. J.version) <$> getVersionedTextDoc docId
       fromMaybeT (Right $ List []) $ do
         let fc = FileContext
                    { fc_uri   = uri
                    , fc_range = Nothing
+                   , textVersion = version
                    }
         env <- buildEnv state plId fc
         args <- fetchTargetArgs @target env

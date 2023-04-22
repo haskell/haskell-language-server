@@ -622,12 +622,13 @@ mkWorkspaceEdits
     :: DynFlags
     -> ClientCapabilities
     -> Uri
+    -> TextDocumentVersion
     -> Annotated ParsedSource
     -> Graft (Either String) ParsedSource
     -> Either UserFacingMessage WorkspaceEdit
-mkWorkspaceEdits dflags ccs uri pm g = do
+mkWorkspaceEdits dflags ccs uri version pm g = do
   let pm' = runIdentity $ transformA pm annotateMetaprograms
-  let response = transform dflags ccs uri g pm'
+  let response = transform dflags ccs uri version g pm'
    in first (InfrastructureError . T.pack) response
 
 

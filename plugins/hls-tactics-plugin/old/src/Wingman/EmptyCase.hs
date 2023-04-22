@@ -69,7 +69,7 @@ emptyCaseInteraction = Interaction $
               (foldMap (hySingleton . occName . fst) bindings)
               ty
         edits <- liftMaybe $ hush $
-              mkWorkspaceEdits le_dflags ccs fc_uri (unTrack pm) $
+              mkWorkspaceEdits le_dflags ccs fc_uri textVersion (unTrack pm) $
                 graftMatchGroup (RealSrcSpan (unTrack ss) Nothing) $
                   noLoc matches
         pure

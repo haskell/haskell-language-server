@@ -124,6 +124,7 @@ data FileContext = FileContext
   , fc_range    :: Maybe (Tracked 'Current Range)
     -- ^ For code actions, this is 'Just'. For code lenses, you'll get
     -- a 'Nothing' in the request, and a 'Just' in the response.
+  , textVersion     :: TextDocumentVersion
   }
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (A.ToJSON, A.FromJSON)
