@@ -76,7 +76,7 @@ codeActionTests = testGroup
       [ "Add placeholders for 'f','g'"
       , "Add placeholders for 'f','g' with signature(s)"
       ]
-  , testCase "" $ runSessionWithServer classPlugin testDataDir $ do
+  , testCase "Update text document version" $ runSessionWithServer classPlugin testDataDir $ do
     doc <- createDoc "Version.hs" "haskell" "module Version where"
     ver1 <- (^.J.version) <$> getVersionedDoc doc
     liftIO $ ver1 @?= Just 0
