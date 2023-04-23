@@ -142,6 +142,8 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
               , (title, tedit) <- f dDiag
               , let edit = toWorkSpaceEdit tedit
               ]
+    -- `suggestLocalSignature` relies on diagnostic, if diagnostics don't have the local signature warning,
+    -- the `bindings` is useless, and if diagnostic has, that means we parsed success, and the `bindings` is fresh.
     pure $ List $ case mode of
         Always ->
           mapMaybe (generateLensForGlobal gblSigsMp) gblSigs'
