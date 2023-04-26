@@ -59,6 +59,11 @@
       url = "github:alanz/ghc-exactprint/ghc-9.6";
       flake = false;
     };
+
+    fourmolu-012 = {
+      url = "https://hackage.haskell.org/package/fourmolu-0.12.0.0/fourmolu-0.12.0.0.tar.gz";
+      flake = false;
+    };
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, ... }:
