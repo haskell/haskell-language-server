@@ -48,6 +48,16 @@ tests =
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
       void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+  , testCase "Keep stale lens even if parse failed" $ do
+      runSessionWithServer moduleNamePlugin testDataDir $ do
+        doc <- openDoc "Stale.hs" "haskell"
+        oldLens <- getCodeLenses doc
+        let edit = TextEdit (mkRange 1 0 1 0) "f ="
+        _ <- applyEdit doc edit
+        newLens <- getCodeLenses doc
+        txt <- documentContents doc
+        liftIO $ newLens @?= oldLens
+        closeDoc doc
   ]
 
 goldenWithModuleName :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
