@@ -17,46 +17,53 @@ module Ide.Plugin.ModuleName (
     Log,
 ) where
 
-import           Control.Monad                (forM_, void)
-import           Control.Monad.IO.Class       (liftIO)
-import           Control.Monad.Trans.Class    (lift)
+import           Control.Monad                        (forM_, void)
+import           Control.Monad.IO.Class               (liftIO)
+import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                   (Value (Null), toJSON)
-import           Data.Char                    (isLower)
-import qualified Data.HashMap.Strict          as HashMap
-import           Data.List                    (intercalate, isPrefixOf,
-                                               minimumBy)
-import qualified Data.List.NonEmpty           as NE
-import           Data.Maybe                   (maybeToList)
-import           Data.Ord                     (comparing)
-import           Data.String                  (IsString)
-import qualified Data.Text                    as T
-import           Development.IDE              (GetParsedModule (GetParsedModule),
-                                               GhcSession (GhcSession),
-                                               IdeState, Pretty,
-                                               Priority (Debug), Recorder,
-                                               WithPriority, colon, evalGhcEnv,
-                                               hscEnvWithImportPaths, logWith,
-                                               realSrcSpanToRange, runAction,
-                                               uriToFilePath', use, use_, (<+>))
-import           Development.IDE.GHC.Compat   (GenLocated (L),
-                                               getSessionDynFlags, hsmodName,
-                                               importPaths, locA,
-                                               moduleNameString,
-                                               pattern RealSrcSpan,
-                                               pm_parsed_source, unLoc)
-import           Development.IDE.Types.Logger (Pretty (..))
+import           Data.Aeson                           (Value (Null), toJSON)
+import           Data.Char                            (isLower)
+import qualified Data.HashMap.Strict                  as HashMap
+import           Data.List                            (intercalate, isPrefixOf,
+                                                       minimumBy)
+import qualified Data.List.NonEmpty                   as NE
+import           Data.Maybe                           (fromMaybe, maybeToList)
+import           Data.Ord                             (comparing)
+import           Data.String                          (IsString)
+import qualified Data.Text                            as T
+import           Development.IDE                      (GetParsedModule (GetParsedModule),
+                                                       GhcSession (GhcSession),
+                                                       IdeState, Pretty,
+                                                       Priority (Debug),
+                                                       Recorder, WithPriority,
+                                                       colon, evalGhcEnv,
+                                                       hscEnvWithImportPaths,
+                                                       logWith,
+                                                       realSrcSpanToRange,
+                                                       runAction,
+                                                       uriToFilePath',
+                                                       useWithStale,
+                                                       useWithStale_, (<+>))
+import           Development.IDE.Core.PositionMapping (toCurrentRange)
+import           Development.IDE.GHC.Compat           (GenLocated (L),
+                                                       getSessionDynFlags,
+                                                       hsmodName, importPaths,
+                                                       locA, moduleNameString,
+                                                       pattern RealSrcSpan,
+                                                       pm_parsed_source, unLoc)
+import           Development.IDE.Types.Logger         (Pretty (..))
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types           hiding
-                                              (SemanticTokenAbsolute (length, line),
-                                               SemanticTokenRelative (length),
-                                               SemanticTokensEdit (_start))
-import           Language.LSP.VFS             (virtualFileText)
-import           System.Directory             (makeAbsolute)
-import           System.FilePath              (dropExtension, normalise,
-                                               pathSeparator, splitDirectories,
-                                               takeFileName)
+import           Language.LSP.Types                   hiding
+                                                      (SemanticTokenAbsolute (length, line),
+                                                       SemanticTokenRelative (length),
+                                                       SemanticTokensEdit (_start))
+import           Language.LSP.VFS                     (virtualFileText)
+import           System.Directory                     (makeAbsolute)
+import           System.FilePath                      (dropExtension, normalise,
+                                                       pathSeparator,
+                                                       splitDirectories,
+                                                       takeFileName)
 
 -- |Plugin descriptor
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
@@ -134,7 +141,7 @@ pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath
 pathModuleNames recorder state normFilePath filePath
   | isLower . head $ takeFileName filePath = return ["Main"]
   | otherwise = do
-      session <- runAction "ModuleName.ghcSession" state $ use_ GhcSession normFilePath
+      session <- fst <$> (runAction "ModuleName.ghcSession" state $ useWithStale_ GhcSession normFilePath)
       srcPaths <- evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
       logWith recorder Debug (SrcPaths srcPaths)
 
@@ -160,9 +167,10 @@ pathModuleNames recorder state normFilePath filePath
 -- | The module name, as stated in the module
 codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
 codeModuleName state nfp = runMaybeT $ do
-  pm <- MaybeT . runAction "ModuleName.GetParsedModule" state $ use GetParsedModule nfp
+  (pm, mp) <- MaybeT . runAction "ModuleName.GetParsedModule" state $ useWithStale GetParsedModule nfp
   L (locA -> (RealSrcSpan l _)) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
-  pure (realSrcSpanToRange l, T.pack $ moduleNameString m)
+  range <- MaybeT . pure $ toCurrentRange mp (realSrcSpanToRange l)
+  pure (range, T.pack $ moduleNameString m)
 
 data Log =
     CorrectNames [T.Text]
