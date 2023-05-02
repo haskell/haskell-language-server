@@ -14,4 +14,4 @@ home :: Building
 home = Building {address = "No. 10 Privet Dr.", owner = man}
 
 test :: String
-test  = (owner home).name
+test = (owner home).name

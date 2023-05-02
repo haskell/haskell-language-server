@@ -8,4 +8,5 @@ man :: Happy
 man = Happy {name = "Happy", age = 1, happy = True}
 
 test :: String
-test = name man
+test = name
+            man

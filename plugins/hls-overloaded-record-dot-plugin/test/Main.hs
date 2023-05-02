@@ -20,33 +20,37 @@ plugin = mkPluginTestDescriptor OverloadedRecordDot.descriptor "overloaded-recor
 
 test :: TestTree
 test = testGroup "overloaded-record-dot"
-  [ mkTest "Simple" "Simple" 10 8 10 16,
-    mkTest "NoPragmaNeeded" "NoPragmaNeeded" 11 8 11 16,
-    mkTest "NestedParens" "NestedParens" 15 8 15 13,
-    mkTest "NestedDollar" "NestedDollar" 15 8 15 14
+  [ mkTest "Simple" "Simple" "name" 10 7 10 15,
+    mkTest "NoPragmaNeeded" "NoPragmaNeeded" "name" 11 7 11 15,
+    mkTest "NestedParens" "NestedParens" "name" 15 7 15 24,
+    mkTest "NestedDot" "NestedDot" "name" 17 7 17 22,
+    mkTest "NestedDollar" "NestedDollar" "name" 15 7 15 24,
+    mkTest "MultilineCase" "MultilineCase" "name" 10 7 12 15,
+    mkTest "Multiline" "Multiline" "name" 10 7 11 15
   ]
 
-mkTest :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
-mkTest title fp x1 y1 x2 y2 =
+mkTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> TestTree
+mkTest title fp selectorName x1 y1 x2 y2 =
   goldenWithHaskellDoc plugin title testDataDir fp "expected" "hs" $ \doc -> do
-    (act:_) <- getExplicitFieldsActions doc x1 y1 x2 y2
+    (act:_) <- getExplicitFieldsActions doc selectorName x1 y1 x2 y2
     executeCodeAction act
 
 getExplicitFieldsActions
   :: TextDocumentIdentifier
+  -> T.Text
   -> UInt -> UInt -> UInt -> UInt
   -> Session [CodeAction]
-getExplicitFieldsActions doc x1 y1 x2 y2 =
-  findExplicitFieldsAction <$> getCodeActions doc range
+getExplicitFieldsActions doc selectorName x1 y1 x2 y2 =
+  findExplicitFieldsAction selectorName <$> getCodeActions doc range
   where
     range = Range (Position x1 y1) (Position x2 y2)
 
-findExplicitFieldsAction :: [a |? CodeAction] -> [CodeAction]
-findExplicitFieldsAction = filter isExplicitFieldsCodeAction . rights . map toEither
+findExplicitFieldsAction :: T.Text  -> [a |? CodeAction] -> [CodeAction]
+findExplicitFieldsAction selectorName = filter (isExplicitFieldsCodeAction selectorName) . rights . map toEither
 
-isExplicitFieldsCodeAction :: CodeAction -> Bool
-isExplicitFieldsCodeAction CodeAction {_title} =
-  "Convert to record dot syntax" `T.isPrefixOf` _title
+isExplicitFieldsCodeAction :: T.Text -> CodeAction -> Bool
+isExplicitFieldsCodeAction selectorName CodeAction {_title} =
+  ("Convert `" <> selectorName <> "` to record dot syntax") `T.isPrefixOf` _title
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 data Happy = Happy {name :: String, age :: Int, happy :: Bool}
 
 data Building = Building {address :: String, owner :: Happy}
@@ -13,4 +15,4 @@ home :: Building
 home = Building {address = "No. 10 Privet Dr.", owner = man}
 
 test :: String
-test = name (owner home)
+test = name home.owner

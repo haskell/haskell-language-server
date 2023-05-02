@@ -41,6 +41,7 @@ library
       , ghc-boot-th
       , unordered-containers
       , containers
+      , deepseq
     hs-source-dirs:   src
     default-language: GHC2021
 
