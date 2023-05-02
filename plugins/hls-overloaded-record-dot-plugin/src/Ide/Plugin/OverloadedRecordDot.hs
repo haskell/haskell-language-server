@@ -136,7 +136,7 @@ codeActionProvider :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) = pluginResponse $ do
   nfp <- getNormalizedFilePath (caDocId ^. L.uri)
   pragma <- getFirstPragma pId ideState nfp
-  CCRSR crsMap (map unExt -> exts) <- collectConvRecSels' ideState nfp
+  CCRSR crsMap (coerce -> exts) <- collectConvRecSels' ideState nfp
   let actions = map (mkCodeAction nfp exts pragma) (RangeMap.filterByRange caRange crsMap)
   pure $ List actions
   where
