@@ -42,6 +42,7 @@ let
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
       ormolu = hself.ormolu_0_5_3_0;
+      fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu-012 { };
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 

@@ -31,6 +31,18 @@
         "type": "github"
       }
     },
+    "fourmolu-012": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-yru8ls67DMM6WSeVU6xDmmwa48I8S9CUv9NBaxSQ29M=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/fourmolu-0.12.0.0/fourmolu-0.12.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/fourmolu-0.12.0.0/fourmolu-0.12.0.0.tar.gz"
+      }
+    },
     "ghc-lib-parser-94": {
       "flake": false,
       "locked": {
@@ -181,6 +193,7 @@
       "inputs": {
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
+        "fourmolu-012": "fourmolu-012",
         "ghc-lib-parser-94": "ghc-lib-parser-94",
         "gitignore": "gitignore",
         "haskell-ghc-exactprint": "haskell-ghc-exactprint",
