@@ -186,27 +186,27 @@ convertRecSel se re =
 -- It's important that we use everthingBut here, because if we used everything we would
 -- get duplicates for every case that occures inside a HsExpanded expression.
 collectRecordSelectors :: GenericQ [RecordSelectorExpr]
-collectRecordSelectors = everythingBut (<>) (first maybeToList. ((Nothing, False) `mkQ` getRecSels))
+collectRecordSelectors = everythingBut (<>) (([], False) `mkQ` getRecSels)
 
-getRecSels :: LHsExpr (GhcPass 'Renamed) -> (Maybe RecordSelectorExpr, Bool)
+getRecSels :: LHsExpr (GhcPass 'Renamed) -> ([RecordSelectorExpr], Bool)
 -- When we stumble upon an occurance of HsExpanded, we only want to follow one branch
--- we do this here, by explicitly returning an occurance from traversing the original branch,
+-- we do this here, by explicitly returning occurances from traversing the original branch,
 -- and returning True, which keeps syb from implicitly continuing to traverse.
-getRecSels (unLoc -> XExpr (HsExpanded a _)) = (listToMaybe $ collectRecordSelectors a, True)
+getRecSels (unLoc -> XExpr (HsExpanded a _)) = (collectRecordSelectors a, True)
 #if __GLASGOW_HASKELL__ >= 903
 -- applied record selection: "field record" or "field (record)" or "field field.record"
 getRecSels e@(unLoc -> HsApp _ se@(unLoc -> HsRecSel _ _) re) =
-  (listToMaybe [ RecordSelectorExpr (realSrcSpanToRange realSpan') se re | RealSrcSpan realSpan' _ <- [ getLoc e ]], False)
+  ( [ RecordSelectorExpr (realSrcSpanToRange realSpan') se re | RealSrcSpan realSpan' _ <- [ getLoc e ]], False)
 -- Record selection where the field is being applied with the "$" operator: "field $ record"
 getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecSel _ _) (unLoc -> HsVar _ (unLoc -> d)) re)
-    | d == dollarName = (listToMaybe [ RecordSelectorExpr (realSrcSpanToRange realSpan')  se re | RealSrcSpan realSpan' _ <- [ getLoc e ]], False)
+    | d == dollarName = ( [ RecordSelectorExpr (realSrcSpanToRange realSpan')  se re | RealSrcSpan realSpan' _ <- [ getLoc e ]], False)
 #else
 getRecSels e@(unLoc -> HsApp _ se@(unLoc -> HsRecFld _ _) re) =
-  (listToMaybe [ RecordSelectorExpr (realSrcSpanToRange realSpan') se re | RealSrcSpan realSpan' _ <- [ getLoc e ]], False)
+  ( [ RecordSelectorExpr (realSrcSpanToRange realSpan') se re | RealSrcSpan realSpan' _ <- [ getLoc e ]], False)
 getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecFld _ _) (unLoc -> HsVar _ (unLoc -> d)) re)
-    | d == dollarName = (listToMaybe [ RecordSelectorExpr (realSrcSpanToRange realSpan')  se re | RealSrcSpan realSpan' _ <- [ getLoc e ]], False)
+    | d == dollarName = ( [ RecordSelectorExpr (realSrcSpanToRange realSpan')  se re | RealSrcSpan realSpan' _ <- [ getLoc e ]], False)
 #endif
-getRecSels _ = (Nothing, False)
+getRecSels _ = ([], False)
 
 collectRecSelResult :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectRecordSelectorsResult
 collectRecSelResult ideState =
