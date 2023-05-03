@@ -142,10 +142,10 @@ codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) = plugi
     edits crs = convertRecordSelectors crs : maybeToList pragmaEdit
     changes crs = Just $ HashMap.singleton (fromNormalizedUri (normalizedFilePathToUri nfp)) (List (edits crs))
     mkCodeAction crs = InR CodeAction
-        { -- we pass the record selector to the title function, so that it con be used to generate the file
-          -- the advantage of that is that the user can easily distinguish between the the different code actions
-          -- with nested record selectors, the disadvantage is we need to print out the name of the record selector
-          -- which may decrease performance
+        { -- we pass the record selector to the title function, so that we can have the name of the record selector
+          -- in the title of the codeAction allowing the user can easily distinguish between the different codeActions
+          -- when using nested record selectors, the disadvantage is we need to print out the name of the record selector
+          -- which will decrease performance
           _title = mkCodeActionTitle exts crs
         , _kind = Just CodeActionRefactorRewrite
         , _diagnostics = Nothing
@@ -190,7 +190,7 @@ convertRecordSelectors (RecordSelectorExpr l se re) = TextEdit l $ convertRecSel
 
 -- | Converts a record selector expression into record dot syntax,
 -- | currently we are using printOutputable to do it. We are also letting GHC
--- | decide when to parenthesizing the record expression
+-- | decide when to parenthesize the record expression
 convertRecSel :: Outputable (LHsExpr (GhcPass 'Renamed)) => LHsExpr (GhcPass 'Renamed) -> LHsExpr (GhcPass 'Renamed) -> Text
 convertRecSel se re = printOutputable (parenthesizeHsExpr appPrec re) <> "." <> printOutputable se
 
