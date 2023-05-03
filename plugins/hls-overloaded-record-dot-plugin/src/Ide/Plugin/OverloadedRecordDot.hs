@@ -107,10 +107,16 @@ instance Show CollectRecordSelectorsResult where
 
 type instance RuleResult CollectRecordSelectors = CollectRecordSelectorsResult
 
-
-data RecordSelectorExpr = RecordSelectorExpr { location     :: Range,
-                                               selectorExpr :: LHsExpr (GhcPass 'Renamed),
-                                               recordExpr   :: LHsExpr (GhcPass 'Renamed) }
+-- | Where we store our collected record selectors
+data RecordSelectorExpr =
+    RecordSelectorExpr { -- | the location of the matched record selector, and record
+                        location     :: Range,
+                        -- | the record selector, this is found in front of recordExpr, but
+                        -- | get's placed after it when converted into record dot syntax
+                        selectorExpr :: LHsExpr (GhcPass 'Renamed),
+                        -- | the record. Whereas it can be many different structures, the only
+                        -- | requirement is that it evaluates to a record in the end
+                        recordExpr   :: LHsExpr (GhcPass 'Renamed) }
 
 instance Pretty RecordSelectorExpr where
   pretty (RecordSelectorExpr l rs se) = pretty (printOutputable rs) <> ":" <+> pretty (printOutputable se)
@@ -133,10 +139,14 @@ codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) = plugi
     pragmaEdit = if OverloadedRecordDot `elem` exts
                             then Nothing
                             else Just $ insertNewPragma pragma OverloadedRecordDot
-    edits crs = maybeToList (convertRecordSelectors crs) <> maybeToList pragmaEdit
+    edits crs = convertRecordSelectors crs : maybeToList pragmaEdit
     changes crs = Just $ HashMap.singleton (fromNormalizedUri (normalizedFilePathToUri nfp)) (List (edits crs))
     mkCodeAction crs = InR CodeAction
-        { _title = mkCodeActionTitle exts crs
+        { -- we pass the record selector to the title function, so that it con be used to generate the file
+          -- the advantage of that is that the user can easily distinguish between the the different code actions
+          -- with nested record selectors, the disadvantage is we need to print out the name of the record selector
+          -- which may decrease performance
+          _title = mkCodeActionTitle exts crs
         , _kind = Just CodeActionRefactorRewrite
         , _diagnostics = Nothing
         , _isPreferred = Nothing
@@ -162,42 +172,45 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
   use TypeCheck nfp >>= \case
     Nothing -> pure ([], Nothing)
     Just tmr -> do
-      let exts = getEnabledExtensions tmr
-          recSels = getRecordSelectors tmr
+      let exts = getEnabledExtensions tmr -- We need the extensions to check whether we need to add OverloadedRecordDot
+          recSels = getRecordSelectors tmr -- And we need the record selectors for obvious reasons
       logWith recorder Debug (LogCollectedRecordSelectors recSels)
       let crsMap :: RangeMap RecordSelectorExpr
-          crsMap = RangeMap.fromList location recSels
+          crsMap = RangeMap.fromList location recSels -- We need the rangeMap to be able to filter by range later
       pure ([], CRSR <$> Just crsMap <*> Just exts)
   where
     getEnabledExtensions :: TcModuleResult -> [Extension]
     getEnabledExtensions = getExtensions . tmrParsed
+    getRecordSelectors :: TcModuleResult -> [RecordSelectorExpr]
+    getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
+        collectRecordSelectors valBinds
 
-getRecordSelectors :: TcModuleResult -> [RecordSelectorExpr]
-getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
-    collectRecordSelectors valBinds
+convertRecordSelectors :: RecordSelectorExpr ->  TextEdit
+convertRecordSelectors (RecordSelectorExpr l se re) = TextEdit l $ convertRecSel se re
 
-convertRecordSelectors :: RecordSelectorExpr -> Maybe TextEdit
-convertRecordSelectors (RecordSelectorExpr l  se re) = TextEdit l <$> convertRecSel se re
-
-convertRecSel :: Outputable (LHsExpr (GhcPass 'Renamed)) => LHsExpr (GhcPass 'Renamed) -> LHsExpr (GhcPass 'Renamed) -> Maybe Text
-convertRecSel se re =
-    Just $ printOutputable (parenthesizeHsExpr appPrec re) <> "." <> printOutputable se
+-- | Converts a record selector expression into record dot syntax,
+-- | currently we are using printOutputable to do it. We are also letting GHC
+-- | decide when to parenthesizing the record expression
+convertRecSel :: Outputable (LHsExpr (GhcPass 'Renamed)) => LHsExpr (GhcPass 'Renamed) -> LHsExpr (GhcPass 'Renamed) -> Text
+convertRecSel se re = printOutputable (parenthesizeHsExpr appPrec re) <> "." <> printOutputable se
 
 -- It's important that we use everthingBut here, because if we used everything we would
--- get duplicates for every case that occures inside a HsExpanded expression.
+-- get duplicates for every case that occurs inside a HsExpanded expression.
 collectRecordSelectors :: GenericQ [RecordSelectorExpr]
 collectRecordSelectors = everythingBut (<>) (([], False) `mkQ` getRecSels)
 
+-- | We want to return a list here, because on the occasion that we encounter a HsExpanded expression,
+-- | we want to return all the results from recursing on one branch, which could be multiple matches
 getRecSels :: LHsExpr (GhcPass 'Renamed) -> ([RecordSelectorExpr], Bool)
--- When we stumble upon an occurance of HsExpanded, we only want to follow one branch
--- we do this here, by explicitly returning occurances from traversing the original branch,
+-- When we stumble upon an occurrence of HsExpanded, we only want to follow one branch
+-- we do this here, by explicitly returning occurrences from traversing the original branch,
 -- and returning True, which keeps syb from implicitly continuing to traverse.
 getRecSels (unLoc -> XExpr (HsExpanded a _)) = (collectRecordSelectors a, True)
 #if __GLASGOW_HASKELL__ >= 903
--- applied record selection: "field record" or "field (record)" or "field field.record"
+-- applied record selection: "selector record" or "selector (record)" or "selector selector2.record2"
 getRecSels e@(unLoc -> HsApp _ se@(unLoc -> HsRecSel _ _) re) =
   ( [ RecordSelectorExpr (realSrcSpanToRange realSpan') se re | RealSrcSpan realSpan' _ <- [ getLoc e ]], False)
--- Record selection where the field is being applied with the "$" operator: "field $ record"
+-- Record selection where the field is being applied with the "$" operator: "selector $ record"
 getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecSel _ _) (unLoc -> HsVar _ (unLoc -> d)) re)
     | d == dollarName = ( [ RecordSelectorExpr (realSrcSpanToRange realSpan')  se re | RealSrcSpan realSpan' _ <- [ getLoc e ]], False)
 #else
