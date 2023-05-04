@@ -212,8 +212,9 @@ gblBindingTypeSigToEdit GlobalBindingTypeSig{..} mmp
   | Just Range{..} <- srcSpanToRange $ getSrcSpan gbName
     , startOfLine <- Position (_line _start) 0
     , beforeLine <- Range startOfLine startOfLine
-    , Just mp <- mmp
-    , Just range <- toCurrentRange mp beforeLine
+    -- If `mmp` is `Nothing`, return the original range, it used by lenses from diagnostic,
+    -- otherwise we apply `toCurrentRange`, and the guard should fail if `toCurrentRange` failed.
+    , Just range <- maybe (Just beforeLine) (flip toCurrentRange beforeLine) mmp
     = Just $ TextEdit range $ T.pack gbRendered <> "\n"
   | otherwise = Nothing
 
