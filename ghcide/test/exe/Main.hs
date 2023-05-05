@@ -969,6 +969,18 @@ addSigLensesTests =
             [ sigSession "with GHC warnings" True "diagnostics" "" (second Just $ head cases) []
             , sigSession "without GHC warnings" False "diagnostics" "" (second (const Nothing) $ head cases) []
             ]
+        , testSession "keep stale lens" $ do
+            let content = T.unlines
+                    [ "module Stale where"
+                    , "f = _"
+                    ]
+            doc <- createDoc "Stale.hs" "haskell" content
+            oldLens <- getCodeLenses doc
+            liftIO $ length oldLens @?= 1
+            let edit = TextEdit (mkRange 0 4 0 5) "" -- Remove the `_`
+            _ <- applyEdit doc edit
+            newLens <- getCodeLenses doc
+            liftIO $ newLens @?= oldLens
         ]
 
 linkToLocation :: [LocationLink] -> [Location]
