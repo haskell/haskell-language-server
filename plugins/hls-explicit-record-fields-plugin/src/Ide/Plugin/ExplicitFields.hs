@@ -6,6 +6,7 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -18,12 +19,13 @@ module Ide.Plugin.ExplicitFields
 import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class          (MonadIO, liftIO)
 import           Control.Monad.Trans.Except      (ExceptT)
+import           Data.Bifunctor                  (first)
 import           Data.Functor                    ((<&>))
-import           Data.Generics                   (GenericQ, everything, extQ,
-                                                  mkQ)
+import           Data.Generics                   (GenericQ, everything,
+                                                  everythingBut, extQ, mkQ)
 import qualified Data.HashMap.Strict             as HashMap
-import           Data.Maybe                      (isJust, listToMaybe,
-                                                  maybeToList, fromMaybe)
+import           Data.Maybe                      (fromMaybe, isJust,
+                                                  listToMaybe, maybeToList)
 import           Data.Text                       (Text)
 import           Development.IDE                 (IdeState, NormalizedFilePath,
                                                   Pretty (..), Recorder (..),
@@ -36,11 +38,11 @@ import           Development.IDE.Core.Shake      (define, use)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      (HsConDetails (RecCon),
                                                   HsRecFields (..), LPat,
-                                                  Outputable, getLoc, unLoc,
-                                                  recDotDot)
+                                                  Outputable, getLoc, recDotDot,
+                                                  unLoc)
 import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
-                                                  GhcPass,
-                                                  HsExpr (RecordCon, rcon_flds),
+                                                  GhcPass, HsExpansion (..),
+                                                  HsExpr (RecordCon, XExpr, rcon_flds),
                                                   HsRecField, LHsExpr, LocatedA,
                                                   Name, Pass (..), Pat (..),
                                                   RealSrcSpan, UniqFM,
@@ -329,8 +331,13 @@ showRecordCon expr@(RecordCon _ _ flds) =
     expr { rcon_flds = preprocessRecordCon flds }
 showRecordCon _ = Nothing
 
+-- It's important that we use everthingBut here, because if we used everything
+-- we would get duplicates for every case that occurs inside a HsExpanded expression.
 collectRecords :: GenericQ [RecordInfo]
-collectRecords = everything (<>) (maybeToList . (Nothing `mkQ` getRecPatterns `extQ` getRecCons))
+collectRecords =
+  everythingBut (<>) (first maybeToList . ((Nothing, False) `mkQ` getRecPatterns' `extQ` getRecCons))
+  where
+    getRecPatterns' = (,False) . getRecPatterns
 
 -- | Collect 'Name's into a map, indexed by the names' unique identifiers.
 -- The 'Eq' instance of 'Name's makes use of their unique identifiers, hence
@@ -347,14 +354,19 @@ collectRecords = everything (<>) (maybeToList . (Nothing `mkQ` getRecPatterns `e
 collectNames :: GenericQ (UniqFM Name [Name])
 collectNames = everything (plusUFM_C (<>)) (emptyUFM `mkQ` (\x -> unitUFM x [x]))
 
-getRecCons :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordInfo
+getRecCons :: LHsExpr (GhcPass 'Renamed) -> (Maybe RecordInfo, Bool)
+-- When we stumble upon an occurrence of HsExpanded, we only want to follow a
+-- single branch. We do this here, by explicitly returning occurrences from
+-- traversing the original branch, and returning True, which keeps syb from
+-- implicitly continuing to traverse.
+getRecCons (unLoc -> XExpr (HsExpanded _ expanded)) = (listToMaybe (collectRecords expanded), True)
 getRecCons e@(unLoc -> RecordCon _ _ flds)
-  | isJust (rec_dotdot flds) = mkRecInfo e
+  | isJust (rec_dotdot flds) = (mkRecInfo e, False)
   where
     mkRecInfo :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordInfo
     mkRecInfo expr = listToMaybe
       [ RecordInfoCon realSpan' (unLoc expr) | RealSrcSpan realSpan' _ <- [ getLoc expr ]]
-getRecCons _ = Nothing
+getRecCons _ = (Nothing, False)
 
 getRecPatterns :: LPat (GhcPass 'Renamed) -> Maybe RecordInfo
 getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))

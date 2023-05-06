@@ -27,6 +27,7 @@ test = testGroup "explicit-fields"
   , mkTest "WithExplicitBind" "WithExplicitBind" 12 10 12 32
   , mkTest "Mixed" "Mixed" 14 10 14 37
   , mkTest "Construction" "Construction" 16 5 16 15
+  , mkTest "Construction (Dot)" "3574" 16 5 16 15
   , mkTestNoAction "ExplicitBinds" "ExplicitBinds" 11 10 11 52
   , mkTestNoAction "Puns" "Puns" 12 10 12 31
   , mkTestNoAction "Infix" "Infix" 11 11 11 31
@@ -41,11 +42,15 @@ mkTestNoAction title fp x1 y1 x2 y2 =
       actions <- getExplicitFieldsActions doc x1 y1 x2 y2
       liftIO $ actions @?= []
 
-mkTest :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
-mkTest title fp x1 y1 x2 y2 =
+mkTestWithCount :: Int -> TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
+mkTestWithCount cnt title fp x1 y1 x2 y2 =
   goldenWithHaskellDoc plugin title testDataDir fp "expected" "hs" $ \doc -> do
-    (act:_) <- getExplicitFieldsActions doc x1 y1 x2 y2
+    acts@(act:_) <- getExplicitFieldsActions doc x1 y1 x2 y2
+    liftIO $ length acts @?= cnt
     executeCodeAction act
+
+mkTest :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
+mkTest = mkTestWithCount 1
 
 getExplicitFieldsActions
   :: TextDocumentIdentifier
