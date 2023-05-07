@@ -2895,9 +2895,9 @@ ifaceErrorTest3 = testCase "iface-error-test-3" $ runWithExtraFiles "recomp" $ \
     expectNoMoreDiagnostics 2
 
 sessionDepsArePickedUp :: TestTree
-sessionDepsArePickedUp = testSession'
-  "session-deps-are-picked-up"
-  $ \dir -> do
+sessionDepsArePickedUp = knownFlaky
+  "Regularly timeouts, likely due to a race in reloading session changes when hie.yaml changes."
+  $ testSession' "session-deps-are-picked-up" $ \dir -> do
     liftIO $
       writeFileUTF8
         (dir </> "hie.yaml")
