@@ -616,7 +616,7 @@ data GhcVersion
   | GHC92
   | GHC94
   | GHC96
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Enum, Bounded)
 
 ghcVersionStr :: String
 ghcVersionStr = VERSION_ghc

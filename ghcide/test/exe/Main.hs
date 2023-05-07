@@ -138,8 +138,7 @@ import           Development.IDE.Types.Logger             (Logger (Logger),
                                                            WithPriority (WithPriority, priority),
                                                            cfilter,
                                                            cmapWithPrio,
-                                                           makeDefaultStderrRecorder,
-                                                           toCologActionWithPrio)
+                                                           makeDefaultStderrRecorder)
 import qualified FuzzySearch
 import           GHC.Stack                                (emptyCallStack)
 import qualified HieDbRetry
@@ -151,12 +150,11 @@ import           Language.LSP.Types.Lens                  (didChangeWatchedFiles
 import qualified Language.LSP.Types.Lens                  as L
 import qualified Progress
 import           System.Time.Extra
-import qualified Test.QuickCheck.Monadic                  as MonadicQuickCheck
-import           Test.QuickCheck.Monadic                  (forAllM, monadicIO)
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
+import           Test.Tasty.Runners as Runners
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
@@ -2369,7 +2367,7 @@ knownBrokenForGhcVersions ghcVers = knownBrokenFor (BrokenForGHC ghcVers)
 
 data BrokenOS = Linux | MacOS | Windows deriving (Show)
 
-data IssueSolution = Broken | Ignore deriving (Show)
+data IssueSolution = Broken | Ignore | Flaky deriving (Show)
 
 data BrokenTarget =
     BrokenSpecific BrokenOS [GhcVersion]
@@ -2388,6 +2386,14 @@ ignoreFor = knownIssueFor Ignore
 knownBrokenFor :: BrokenTarget -> String -> TestTree -> TestTree
 knownBrokenFor = knownIssueFor Broken
 
+-- | Mark test as flaky for a specific target
+knownFlakyFor :: BrokenTarget -> String -> TestTree -> TestTree
+knownFlakyFor = knownIssueFor Flaky
+
+-- | Mark test as flaky for all GHC versions
+knownFlaky :: String -> TestTree -> TestTree
+knownFlaky = knownIssueFor Flaky (BrokenForGHC [minBound .. maxBound])
+
 -- | Deal with `IssueSolution` for specific OS and GHC.
 knownIssueFor :: IssueSolution -> BrokenTarget -> String -> TestTree -> TestTree
 knownIssueFor solution = go . \case
@@ -2405,7 +2411,29 @@ knownIssueFor solution = go . \case
         go True = case solution of
             Broken -> expectFailBecause
             Ignore -> ignoreTestBecause
+            Flaky -> knownFlakyBecause
         go False = \_ -> id
+
+-- | The test can no longer fail and is marked as flaky.
+-- Flaky tests are tests that sometimes fail but sometimes also succeed.
+-- Ideally, such test cases should not exist at all, but at least in this codebase,
+-- the reality is, that we do have a number of flaky test cases.
+--
+-- The code is basically copy-pasted from 'tasty-expected-failure' and if this
+-- function proves useful in practice, we will upstream it.
+knownFlakyBecause :: String -> TestTree -> TestTree
+knownFlakyBecause info = wrapTest (fmap change)
+  where
+    change r
+      | resultSuccessful r
+      = r { resultDescription = resultDescription r <> " (flaky testcase: " <> info <> ")"
+          , resultShortDescription = resultShortDescription r <> " (flaky testcase)"
+          }
+      | otherwise
+      = r { resultOutcome = Runners.Success
+          , resultDescription = resultDescription r <> " (failed flaky testcase failed: " <> info <> ")"
+          , resultShortDescription = resultShortDescription r <> " (failed flaky testcase)"
+          }
 
 data Expect
   = ExpectRange Range -- Both gotoDef and hover should report this range
