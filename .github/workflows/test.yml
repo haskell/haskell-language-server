@@ -61,10 +61,12 @@ jobs:
       - pre_job
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
-      # when you edit this list of GHC versions,
-      # **don't forget**
-      # to update the ghc versions in 'caching.yml'.
+      # We don't want to fail fast.
+      # We used to fail fast, to avoid caches of failing PRs to overpopulate the CI
+      # caches, evicting known good build caches.
+      # However, PRs do not cache anything any more, and can only use the caches from current master.
+      # See 'caching.yml' for our caching set up.
+      fail-fast: false
       matrix:
         ghc: ${{ fromJSON(needs.pre_job.outputs.ghcs) }}
         os:
