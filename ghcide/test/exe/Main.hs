@@ -1216,10 +1216,6 @@ findDefinitionAndHoverTests = let
         testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
   , if | ghcVersion == GHC90 && isWindows ->
         test  no     broken    thLocL57   thLoc         "TH Splice Hover"
-       | ghcVersion == GHC92 && (isWindows || isMac) ->
-           -- Some GHC 9.2 distributions ship without .hi docs
-           -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
-        test  no     broken   thLocL57   thLoc         "TH Splice Hover"
        | otherwise ->
         test  no     yes       thLocL57   thLoc         "TH Splice Hover"
   ]
@@ -2061,14 +2057,14 @@ completionDocTests =
         ]
       let expected = "*Imported from 'Prelude'*\n"
       test doc (Position 1 8) "odd" (Just $ T.length expected) [expected]
-  , brokenForMacGhc9 $ brokenForWinGhc9 $ testSession "extern single line doc without '\\n'" $ do
+  , brokenForMacGhc9 $ brokenForWinGhc90 $ testSession "extern single line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = no"
         ]
       let expected = "*Imported from 'Prelude'*\n* * *\n\n\nBoolean \"not\"\n"
       test doc (Position 1 8) "not" (Just $ T.length expected) [expected]
-  , brokenForMacGhc9 $ brokenForWinGhc9 $ testSession "extern mulit line doc" $ do
+  , brokenForMacGhc9 $ brokenForWinGhc90 $ testSession "extern mulit line doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = i"
@@ -2085,7 +2081,7 @@ completionDocTests =
   ]
   where
     brokenForGhc9 = knownBrokenFor (BrokenForGHC [GHC90, GHC92, GHC94, GHC96]) "Completion doc doesn't support ghc9"
-    brokenForWinGhc9 = knownBrokenFor (BrokenSpecific Windows [GHC90, GHC92]) "Extern doc doesn't support Windows for ghc9.2"
+    brokenForWinGhc90 = knownBrokenFor (BrokenSpecific Windows [GHC90]) "Extern doc doesn't support Windows for ghc9.2"
     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
     brokenForMacGhc9 = knownBrokenFor (BrokenSpecific MacOS [GHC90, GHC92, GHC94, GHC96]) "Extern doc doesn't support MacOS for ghc9"
     test doc pos label mn expected = do
