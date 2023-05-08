@@ -21,6 +21,8 @@ module Test.Hls.Util
     , knownBrokenForGhcVersions
     , knownBrokenInEnv
     , onlyWorkForGhcVersions
+    , knownFlakyInEnv
+    , knownFlaky
     -- * Extract code actions
     , fromAction
     , fromCommand
@@ -71,9 +73,11 @@ import           System.IO.Temp
 import           System.Time.Extra               (Seconds, sleep)
 import           Test.Tasty                      (TestTree)
 import           Test.Tasty.ExpectedFailure      (expectFailBecause,
-                                                  ignoreTestBecause)
+                                                  ignoreTestBecause, wrapTest)
 import           Test.Tasty.HUnit                (Assertion, assertFailure,
                                                   (@?=))
+import Test.Tasty.Runners (Result(..), resultSuccessful)
+import qualified Test.Tasty.Runners as Runners
 
 noLiteralCaps :: C.ClientCapabilities
 noLiteralCaps = def & textDocument ?~ textDocumentCaps
@@ -142,6 +146,57 @@ onlyRunForGhcVersions vers =
     if ghcVersion `elem` vers
     then const id
     else ignoreTestBecause
+
+-- | Mark test as flaky for a specific target.
+-- This runs the test, but its result does not matter for the test suite.
+--
+-- We define a test as flaky if it is fundamentally correct, but
+-- fails occasionally due to lsp-test shenanigans. In particular, when the
+-- test times out *sometimes*, but not always.
+--
+-- A flaky test is a bug, which we are only not fixing right away
+-- because it might be difficult to fix with lsp-test.
+-- If your test isn't using lsp-test, then using this function
+-- is not permitted.
+knownFlakyInEnv :: [EnvSpec] -> String -> TestTree -> TestTree
+knownFlakyInEnv envSpecs reason
+    | any matchesCurrentEnv envSpecs = knownFlakyBecause reason
+    | otherwise = id
+
+-- | Mark test as flaky for all supported GHC versions.
+-- This runs the test, but its result does not matter for the test suite.
+--
+-- We define a test as flaky if it is fundamentally correct, but
+-- fails occasionally due to lsp-test shenanigans. In particular, when the
+-- test times out *sometimes*, but not always.
+--
+-- A flaky test is a bug, which we are only not fixing right away
+-- because it might be difficult to fix with lsp-test.
+-- If your test isn't using lsp-test, then using this function
+-- is not permitted.
+knownFlaky :: String -> TestTree -> TestTree
+knownFlaky = knownFlakyInEnv (map GhcVer [minBound .. maxBound])
+
+-- | The test can no longer fail and is marked as flaky.
+-- Flaky tests are tests that sometimes fail but sometimes also succeed.
+-- Ideally, such test cases should not exist at all, but at least in this codebase,
+-- the reality is, that we do have a number of flaky test cases.
+--
+-- The code is basically copy-pasted from 'tasty-expected-failure' and if this
+-- function proves useful in practice, we will upstream it.
+knownFlakyBecause :: String -> TestTree -> TestTree
+knownFlakyBecause info = wrapTest (fmap change)
+  where
+    change r
+      | resultSuccessful r
+      = r { resultDescription = resultDescription r <> " (flaky testcase: " <> info <> ")"
+          , resultShortDescription = resultShortDescription r <> " (flaky testcase)"
+          }
+      | otherwise
+      = r { resultOutcome = Runners.Success
+          , resultDescription = resultDescription r <> " (failed flaky testcase failed: " <> info <> ")"
+          , resultShortDescription = resultShortDescription r <> " (failed flaky testcase)"
+          }
 
 -- ---------------------------------------------------------------------
 
