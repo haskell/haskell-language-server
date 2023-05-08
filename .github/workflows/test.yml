@@ -154,7 +154,7 @@ jobs:
         name: Test hls-eval-plugin
         run: cabal test hls-eval-plugin --test-options="$TEST_OPTS" || cabal test hls-eval-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.4' && matrix.ghc != '9.6.1'
+      - if: matrix.test && matrix.ghc != '9.2.7' && matrix.ghc != '9.4.4' && matrix.ghc != '9.6.1'
         name: Test hls-haddock-comments-plugin
         run: cabal test hls-haddock-comments-plugin --test-options="$TEST_OPTS" || cabal test hls-haddock-comments-plugin --test-options="$TEST_OPTS"
 
@@ -174,7 +174,7 @@ jobs:
         name: Test hls-fourmolu-plugin
         run: cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS" || cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.4' && matrix.ghc != '9.6.1'
+      - if: matrix.test && matrix.ghc != '9.2.7' && matrix.ghc != '9.4.4' && matrix.ghc != '9.6.1'
         name: Test hls-tactics-plugin test suite
         run: cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || cabal test hls-tactics-plugin --test-options="$TEST_OPTS"
 
@@ -198,7 +198,7 @@ jobs:
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin --test-options="$TEST_OPTS" || cabal test hls-hlint-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.0.2' && matrix.ghc != '9.2.5' && matrix.ghc != '9.4.4' && matrix.ghc != '9.6.1'
+      - if: matrix.test && matrix.ghc != '9.0.2' && matrix.ghc != '9.2.7' && matrix.ghc != '9.4.4' && matrix.ghc != '9.6.1'
         name: Test hls-stan-plugin test suite
         run: cabal test hls-stan-plugin --test-options="$TEST_OPTS" || cabal test hls-stan-plugin --test-options="$TEST_OPTS"
 
