@@ -13,71 +13,81 @@ module Ide.Plugin.OverloadedRecordDot
 
 -- based off of Berk Okzuturk's hls-explicit-records-fields-plugin
 
-import           Control.Lens                   ((^.))
-import           Control.Monad.IO.Class         (MonadIO, liftIO)
-import           Control.Monad.Trans.Except     (ExceptT)
-import           Data.Generics                  (GenericQ, everything,
-                                                 everythingBut, mkQ)
-import qualified Data.HashMap.Strict            as HashMap
-import           Data.Maybe                     (listToMaybe, maybeToList)
-import           Data.Text                      (Text)
-import           Development.IDE                (IdeState, NormalizedFilePath,
-                                                 Pretty (..), Range,
-                                                 Recorder (..), Rules,
-                                                 WithPriority (..),
-                                                 realSrcSpanToRange)
-import           Development.IDE.Core.Rules     (runAction)
-import           Development.IDE.Core.RuleTypes (TcModuleResult (..),
-                                                 TypeCheck (..))
-import           Development.IDE.Core.Shake     (define, use)
-import qualified Development.IDE.Core.Shake     as Shake
+import           Control.Lens                         ((^.))
+import           Control.Monad.IO.Class               (MonadIO, liftIO)
+import           Control.Monad.Trans.Except           (ExceptT)
+import           Data.Generics                        (GenericQ, everything,
+                                                       everythingBut, mkQ)
+import qualified Data.HashMap.Strict                  as HashMap
+import           Data.Maybe                           (mapMaybe, maybeToList)
+import           Data.Text                            (Text)
+import           Development.IDE                      (IdeState,
+                                                       NormalizedFilePath,
+                                                       Pretty (..), Range,
+                                                       Recorder (..), Rules,
+                                                       WithPriority (..),
+                                                       realSrcSpanToRange)
+import           Development.IDE.Core.Rules           (runAction)
+import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
+                                                       TypeCheck (..))
+import           Development.IDE.Core.Shake           (define, use,
+                                                       useWithStale)
+import qualified Development.IDE.Core.Shake           as Shake
 
 #if __GLASGOW_HASKELL__ >= 903
-import           Development.IDE.GHC.Compat     (HsExpr (HsRecSel))
+import           Development.IDE.GHC.Compat           (HsExpr (HsRecSel))
 #else
-import           Development.IDE.GHC.Compat     (HsExpr (HsRecFld))
+import           Development.IDE.GHC.Compat           (HsExpr (HsRecFld))
 #endif
 
-import           Control.DeepSeq                (rwhnf)
-import           Data.Bifunctor                 (Bifunctor (first))
-import           Development.IDE.GHC.Compat     (Extension (OverloadedRecordDot),
-                                                 GhcPass,
-                                                 HsExpansion (HsExpanded),
-                                                 HsExpr (HsApp, HsPar, HsVar, OpApp, XExpr),
-                                                 LHsExpr, Outputable, Pass (..),
-                                                 RealSrcSpan, appPrec,
-                                                 dollarName, getLoc, hs_valds,
-                                                 parenthesizeHsContext,
-                                                 parenthesizeHsExpr,
-                                                 pattern RealSrcSpan, unLoc)
-import           Development.IDE.GHC.Util       (getExtensions, printOutputable)
-import           Development.IDE.Graph          (RuleResult)
-import           Development.IDE.Graph.Classes  (Hashable, NFData (rnf))
-import           Development.IDE.Spans.Pragmas  (NextPragmaInfo (..),
-                                                 getFirstPragma,
-                                                 insertNewPragma)
-import           Development.IDE.Types.Logger   (Priority (..), cmapWithPrio,
-                                                 logWith, (<+>))
-import           GHC.Generics                   (Generic)
-import           Ide.Plugin.RangeMap            (RangeMap)
-import qualified Ide.Plugin.RangeMap            as RangeMap
-import           Ide.PluginUtils                (getNormalizedFilePath,
-                                                 handleMaybeM, pluginResponse)
-import           Ide.Types                      (PluginDescriptor (..),
-                                                 PluginId (..),
-                                                 PluginMethodHandler,
-                                                 defaultPluginDescriptor,
-                                                 mkPluginHandler)
-import           Language.LSP.Types             (CodeAction (..),
-                                                 CodeActionKind (CodeActionRefactorRewrite),
-                                                 CodeActionParams (..), Command,
-                                                 List (..), Method (..),
-                                                 SMethod (..), TextEdit (..),
-                                                 WorkspaceEdit (WorkspaceEdit),
-                                                 fromNormalizedUri,
-                                                 normalizedFilePathToUri,
-                                                 type (|?) (InR))
-import qualified Language.LSP.Types.Lens        as L
+import           Control.DeepSeq                      (rwhnf)
+import           Development.IDE.Core.PositionMapping (PositionMapping (PositionMapping),
+                                                       toCurrentRange)
+import           Development.IDE.GHC.Compat           (Extension (OverloadedRecordDot),
+                                                       GhcPass,
+                                                       HsExpansion (HsExpanded),
+                                                       HsExpr (HsApp, HsPar, HsVar, OpApp, XExpr),
+                                                       LHsExpr, Outputable,
+                                                       Pass (..), RealSrcSpan,
+                                                       appPrec, dollarName,
+                                                       getLoc, hs_valds,
+                                                       parenthesizeHsContext,
+                                                       parenthesizeHsExpr,
+                                                       pattern RealSrcSpan,
+                                                       unLoc)
+import           Development.IDE.GHC.Util             (getExtensions,
+                                                       printOutputable)
+import           Development.IDE.Graph                (RuleResult)
+import           Development.IDE.Graph.Classes        (Hashable, NFData (rnf))
+import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
+                                                       getFirstPragma,
+                                                       insertNewPragma)
+import           Development.IDE.Types.Logger         (Priority (..),
+                                                       cmapWithPrio, logWith,
+                                                       (<+>))
+import           GHC.Generics                         (Generic)
+import           Ide.Plugin.RangeMap                  (RangeMap)
+import qualified Ide.Plugin.RangeMap                  as RangeMap
+import           Ide.PluginUtils                      (getNormalizedFilePath,
+                                                       handleMaybeM,
+                                                       pluginResponse)
+import           Ide.Types                            (PluginDescriptor (..),
+                                                       PluginId (..),
+                                                       PluginMethodHandler,
+                                                       defaultPluginDescriptor,
+                                                       mkPluginHandler)
+import           Language.LSP.Types                   (CodeAction (..),
+                                                       CodeActionKind (CodeActionRefactorRewrite),
+                                                       CodeActionParams (..),
+                                                       Command, List (..),
+                                                       Method (..),
+                                                       SMethod (..),
+                                                       TextEdit (..),
+                                                       WorkspaceEdit (WorkspaceEdit),
+                                                       fromNormalizedUri,
+                                                       normalizedFilePathToUri,
+                                                       type (|?) (InR))
+import qualified Language.LSP.Types.Lens              as L
 data Log
   = LogShake Shake.Log
   | LogCollectedRecordSelectors [RecordSelectorExpr]
@@ -169,11 +179,11 @@ codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) = plugi
 
 collectRecSelsRule :: Recorder (WithPriority Log) -> Rules ()
 collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectRecordSelectors nfp ->
-  use TypeCheck nfp >>= \case
+  useWithStale TypeCheck nfp >>= \case
     Nothing -> pure ([], Nothing)
-    Just tmr -> do
+    Just (tmr, pm) -> do
       let exts = getEnabledExtensions tmr -- We need the extensions to check whether we need to add OverloadedRecordDot
-          recSels = getRecordSelectors tmr -- And we need the record selectors for obvious reasons
+          recSels = mapMaybe (rewriteRange pm) (getRecordSelectors tmr) -- And we need the record selectors for obvious reasons
       logWith recorder Debug (LogCollectedRecordSelectors recSels)
       let crsMap :: RangeMap RecordSelectorExpr
           crsMap = RangeMap.fromList location recSels -- We need the rangeMap to be able to filter by range later
@@ -184,6 +194,10 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
     getRecordSelectors :: TcModuleResult -> [RecordSelectorExpr]
     getRecordSelectors (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
         collectRecordSelectors valBinds
+    rewriteRange :: PositionMapping -> RecordSelectorExpr -> Maybe RecordSelectorExpr
+    rewriteRange pm recSel = case toCurrentRange pm (location recSel) of
+                                Just newLoc -> Just $ recSel{location = newLoc}
+                                Nothing     -> Nothing
 
 convertRecordSelectors :: RecordSelectorExpr ->  TextEdit
 convertRecordSelectors (RecordSelectorExpr l se re) = TextEdit l $ convertRecSel se re
