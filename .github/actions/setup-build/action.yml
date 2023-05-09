@@ -50,12 +50,6 @@ runs:
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
       shell: bash
 
-    - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
-      name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
-      run: |
-        echo -e 'package floskell\n  ghc-options: -O0' >> cabal.project.local
-      shell: bash
-
     # Shorten binary names as a workaround for filepath length limits in Windows,
     # but since tests are hardcoded on this workaround all platforms need it.
     # All workflows which distinguishes cache on `cabal.project` needs this.
