@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module Development.IDE.Core.Actions
 ( getAtPoint
+, getAtPointPackage
 , getDefinition
 , getTypeDefinition
 , highlightAtPoint
@@ -65,6 +66,15 @@ getAtPoint file pos = runMaybeT $ do
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
   MaybeT $ pure $ first (toCurrentRange mapping =<<) <$> AtPoint.atPoint opts hf dkMap env pos'
+
+-- | Try to get hover text for the package it belongs to under point.
+getAtPointPackage :: NormalizedFilePath -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
+getAtPointPackage file pos = runMaybeT $ do
+  (hf, mapping) <- useE GetHieAst file
+  env <- hscEnv . fst <$> useE GhcSession file
+
+  !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
+  MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$> AtPoint.atPointPackage hf env pos'
 
 toCurrentLocations :: PositionMapping -> [Location] -> [Location]
 toCurrentLocations mapping = mapMaybe go

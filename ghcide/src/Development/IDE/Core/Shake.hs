@@ -6,6 +6,7 @@
 {-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE PackageImports            #-}
 {-# LANGUAGE PolyKinds                 #-}
 {-# LANGUAGE RankNTypes                #-}
@@ -983,6 +984,17 @@ usesWithStale_ key files = do
 -- Run via 'runIdeAction'.
 newtype IdeAction a = IdeAction { runIdeActionT  :: (ReaderT ShakeExtras IO) a }
     deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad, Semigroup)
+
+-- Only for combining module name and its package name while hovering over import statements
+instance {-# OVERLAPPING #-} Semigroup (IdeAction (Maybe (Maybe Range, [T.Text]))) where
+    IdeAction a <> IdeAction b = IdeAction $ do
+        val <- b
+        fmap (flip merge val) a
+        where
+            merge Nothing b = b
+            merge (Just (ra, [ta])) (Just (rb, [tb])) =
+                if ra == rb then Just (ra, [ta <> tb]) else Just (ra, [ta])
+            merge a _ = a
 
 -- https://hub.darcs.net/ross/transformers/issue/86
 deriving instance (Semigroup (m a)) => Semigroup (ReaderT r m a)

@@ -9,6 +9,7 @@
 -- These are all pure functions that should execute quickly.
 module Development.IDE.Spans.AtPoint (
     atPoint
+  , atPointPackage
   , gotoDefinition
   , gotoTypeDefinition
   , documentHighlight
@@ -51,7 +52,7 @@ import qualified Data.Text                            as T
 
 import qualified Data.Array                           as A
 import           Data.Either
-import           Data.List                            (isSuffixOf)
+import           Data.List                            (isSuffixOf, uncons)
 import           Data.List.Extra                      (dropEnd1, nubOrd)
 
 import           Data.Version                         (showVersion)
@@ -205,6 +206,44 @@ gotoDefinition
 gotoDefinition withHieDb getHieFile ideOpts imports srcSpans pos
   = lift $ locationsAtPoint withHieDb getHieFile ideOpts imports pos srcSpans
 
+-- | Synopsis for the package at a given position.
+atPointPackage :: HieAstResult
+  -> HscEnv
+  -> Position
+  -> IO (Maybe (Maybe Range, [T.Text]))
+atPointPackage (HAR _ hf _ _ kind) env pos =
+  case uncons (pointCommand hf pos hoverInfo) of
+    Nothing     -> pure Nothing
+    Just (a, _) -> a
+  where
+    hoverInfo ast = runMaybeT $ do
+      (range, mn) <- getModuleName ast
+      pkg <- MaybeT $ findImportedModule env mn
+      txt <- MaybeT $ pure $ packageNameWithVersion pkg env
+      pure (range, pure $ "\n\n" <> txt)
+
+    getModuleName ast = MaybeT . pure $ do
+      (n, _) <- listToMaybe names
+      m <- leftToMaybe n
+      pure (Just range, m)
+      where
+        range = realSrcSpanToRange $ nodeSpan ast
+        info = nodeInfoH kind ast
+        names = M.assocs $ nodeIdentifiers info
+
+    leftToMaybe (Left l)  = Just l
+    leftToMaybe (Right _) = Nothing
+
+-- | Return the package name and version of a module.
+-- For example, given module `Data.List`, it should return something like `base-4.x`.
+packageNameWithVersion :: Module -> HscEnv -> Maybe T.Text
+packageNameWithVersion m env = do
+  let pid = moduleUnit m
+  conf <- lookupUnit env pid
+  let pkgName = T.pack $ unitPackageNameString conf
+      version = T.pack $ showVersion (unitPackageVersion conf)
+  pure $ pkgName <> "-" <> version
+
 -- | Synopsis for the name at a given position.
 atPoint
   :: IdeOptions
@@ -254,11 +293,8 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
 
         prettyPackageName n = do
           m <- nameModule_maybe n
-          let pid = moduleUnit m
-          conf <- lookupUnit env pid
-          let pkgName = T.pack $ unitPackageNameString conf
-              version = T.pack $ showVersion (unitPackageVersion conf)
-          pure $ "*(" <> pkgName <> "-" <> version <> ")*"
+          pkgTxt <- packageNameWithVersion m env
+          pure $ "*(" <> pkgTxt <> ")*"
 
         prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = case kind of

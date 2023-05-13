@@ -50,50 +50,54 @@ module Development.IDE.GHC.Compat.Units (
     filterInplaceUnits,
     FinderCache,
     showSDocForUser',
+    findImportedModule
     ) where
 
 import           Control.Monad
-import qualified Data.List.NonEmpty              as NE
-import qualified Data.Map.Strict                 as Map
+import qualified Data.List.NonEmpty                    as NE
+import qualified Data.Map.Strict                       as Map
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Unit.Home.ModInfo
 #endif
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Data.ShortText              as ST
+import qualified GHC.Data.ShortText                    as ST
 #if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Env                  (hsc_unit_dbs)
+import           GHC.Driver.Env                        (hsc_unit_dbs)
 #endif
 import           GHC.Driver.Ppr
 import           GHC.Unit.Env
 import           GHC.Unit.External
-import           GHC.Unit.Finder
+import           GHC.Unit.Finder                       hiding
+                                                       (findImportedModule)
 #else
 import           GHC.Driver.Types
 #endif
 import           GHC.Data.FastString
-import qualified GHC.Driver.Session              as DynFlags
+import qualified GHC.Driver.Session                    as DynFlags
 import           GHC.Types.Unique.Set
-import qualified GHC.Unit.Info                   as UnitInfo
-import           GHC.Unit.State                  (LookupResult, UnitInfo,
-                                                  UnitState (unitInfoMap))
-import qualified GHC.Unit.State                  as State
-import           GHC.Unit.Types                  hiding (moduleUnit, toUnitId)
-import qualified GHC.Unit.Types                  as Unit
+import qualified GHC.Unit.Info                         as UnitInfo
+import           GHC.Unit.State                        (LookupResult, UnitInfo,
+                                                        UnitState (unitInfoMap))
+import qualified GHC.Unit.State                        as State
+import           GHC.Unit.Types                        hiding (moduleUnit,
+                                                        toUnitId)
+import qualified GHC.Unit.Types                        as Unit
 import           GHC.Utils.Outputable
 #else
 import qualified DynFlags
 import           FastString
-import           GhcPlugins                      (SDoc, showSDocForUser)
+import           GhcPlugins                            (SDoc, showSDocForUser)
 import           HscTypes
-import           Module                          hiding (moduleUnitId)
+import           Module                                hiding (moduleUnitId)
 import qualified Module
-import           Packages                        (InstalledPackageInfo (haddockInterfaces, packageName),
-                                                  LookupResult, PackageConfig,
-                                                  PackageConfigMap,
-                                                  PackageState,
-                                                  getPackageConfigMap,
-                                                  lookupPackage')
+import           Packages                              (InstalledPackageInfo (haddockInterfaces, packageName),
+                                                        LookupResult,
+                                                        PackageConfig,
+                                                        PackageConfigMap,
+                                                        PackageState,
+                                                        getPackageConfigMap,
+                                                        lookupPackage')
 import qualified Packages
 #endif
 
@@ -101,11 +105,19 @@ import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Outputable
 #if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
-import           Data.Map                        (Map)
+import           Data.Map                              (Map)
 #endif
 import           Data.Either
 import           Data.Version
 import qualified GHC
+#if MIN_VERSION_ghc(9,1,0)
+import           GHC.Types.PkgQual                     (PkgQual (NoPkgQual))
+import qualified GHC.Unit.Finder                       as GHC
+#elif MIN_VERSION_ghc(9,0,0)
+import qualified GHC.Driver.Finder                     as GHC
+#else
+import qualified Finder                                as GHC
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 type PreloadUnitClosure = UniqSet UnitId
@@ -407,3 +419,14 @@ showSDocForUser' env = showSDocForUser (hsc_dflags env) (unitState env)
 #else
 showSDocForUser' env = showSDocForUser (hsc_dflags env)
 #endif
+
+findImportedModule :: HscEnv -> ModuleName -> IO (Maybe Module)
+findImportedModule env mn = do
+#if MIN_VERSION_ghc(9,3,0)
+    res <- GHC.findImportedModule env mn NoPkgQual
+#else
+    res <- GHC.findImportedModule env mn Nothing
+#endif
+    case res of
+        Found _ mod -> pure . pure $ mod
+        _           -> pure Nothing
