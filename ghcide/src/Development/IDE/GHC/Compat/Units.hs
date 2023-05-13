@@ -110,8 +110,10 @@ import           Data.Map                              (Map)
 import           Data.Either
 import           Data.Version
 import qualified GHC
-#if MIN_VERSION_ghc(9,1,0)
+#if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual                     (PkgQual (NoPkgQual))
+#endif
+#if MIN_VERSION_ghc(9,1,0)
 import qualified GHC.Unit.Finder                       as GHC
 #elif MIN_VERSION_ghc(9,0,0)
 import qualified GHC.Driver.Finder                     as GHC
