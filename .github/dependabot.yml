@@ -11,6 +11,6 @@ updates:
       interval: "weekly"
 
   - package-ecosystem: "github-actions"
-    directory: ".github/actions/setup-buil"
+    directory: ".github/actions/setup-build"
     schedule:
       interval: "weekly"
