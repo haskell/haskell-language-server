@@ -55,7 +55,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2023-04-19T12:00:00Z
+index-state: 2023-05-13T12:00:00Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
@@ -93,39 +93,12 @@ source-repository-package
 
 allow-newer:
   -- ghc-9.4
-  Chart-diagrams:lens,
-  Chart:lens,
-  co-log-core:base,
-  constraints-extras:base,
-  constraints-extras:template-haskell,
-  dependent-sum:some,
-  diagrams-contrib:base,
-  diagrams-contrib:lens,
-  diagrams-postscript:base,
-  diagrams-postscript:lens,
-  diagrams-svg:base,
-  diagrams-svg:lens,
   ekg-json:base,
-  ghc-paths:Cabal,
-  haddock-library:base,
-  monoid-extras:base,
-  monoid-subclasses:vector,
-  svg-builder:base,
-  uuid:time,
-  vector-space:base,
   ekg-wai:time,
 
 if impl(ghc >= 9.5)
   allow-newer:
     -- ghc-9.6
-    algebraic-graphs:transformers,
-    cryptohash-md5:base,
-    cryptohash-sha1:base,
     ekg-core:ghc-prim,
-    focus:transformers,
-    ghc-trace-events:base,
-    implicit-hie-cradle:transformers,
-    semigroupoids:base,
     stm-hamt:transformers,
-    entropy:Cabal,
 
