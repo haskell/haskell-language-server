@@ -61,6 +61,9 @@ data Log
 instance Pretty Log where
   pretty = \case
     LogRegisteringIdeConfig ideConfig ->
+      -- This log is also used to identify if HLS starts successfully in vscode-haskell,
+      -- don't forget to update the corresponding test in vscode-haskell if the text in
+      -- the next line has been modified.
       "Registering IDE configuration:" <+> viaShow ideConfig
     LogReactorThreadException e ->
       vcat
