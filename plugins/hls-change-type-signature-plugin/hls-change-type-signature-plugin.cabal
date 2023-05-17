@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-change-type-signature-plugin
-version:            1.1.0.1
+version:            2.0.0.0
 synopsis:           Change a declarations type signature with a Code Action
 description:
   Please see the README on GitHub at <https://github.com/haskell/plugins/hls-change-type-signature-plugin/README.md>
@@ -28,8 +28,8 @@ library
   hs-source-dirs:   src
   build-depends:
     , base             >=4.12 && < 5
-    , ghcide          ^>=1.9 || ^>= 1.10
-    , hls-plugin-api  ^>=1.6
+    , ghcide           == 2.0.0.0
+    , hls-plugin-api   == 2.0.0.0
     , lsp-types
     , regex-tdfa
     , syb
@@ -61,7 +61,7 @@ test-suite tests
     , base                 >=4.12 && < 5
     , filepath
     , hls-change-type-signature-plugin
-    , hls-test-utils       ^>=1.6
+    , hls-test-utils       == 2.0.0.0
     , lsp
     , QuickCheck
     , regex-tdfa
