@@ -212,7 +212,7 @@ jobs:
 
   build-mac-x86_64:
     name: Build binary (Mac x86_64)
-    runs-on: macOS-10.15
+    runs-on: macOS-11
     env:
       MACOSX_DEPLOYMENT_TARGET: 10.13
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -519,7 +519,7 @@ jobs:
 
   bindist-mac-x86_64:
     name: Tar bindists (Mac x86_64)
-    runs-on: macOS-10.15
+    runs-on: macOS-11
     needs: ["build-mac-x86_64"]
     env:
       TARBALL_EXT: tar.xz
@@ -780,7 +780,7 @@ jobs:
 
   test-mac-x86_64:
     name: Test binary (Mac x86_64)
-    runs-on: macOS-10.15
+    runs-on: macOS-11
     needs: ["bindist-mac-x86_64"]
     env:
       MACOSX_DEPLOYMENT_TARGET: 10.13
