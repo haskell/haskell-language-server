@@ -30,8 +30,8 @@ library
     exposed-modules:  Ide.Plugin.OverloadedRecordDot
     build-depends:
       , base                  >=4.16 && <5
-      , ghcide                ^>=1.10
-      , hls-plugin-api        ^>=1.6
+      , ghcide
+      , hls-plugin-api
       , lsp
       , lens
       , hls-graph
