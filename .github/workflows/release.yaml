@@ -27,7 +27,7 @@ jobs:
       matrix:
         ghc: ["9.6.1", "9.4.5", "9.2.7", "9.0.2", "8.10.7"]
         platform: [ { image: "debian:9"
-                    , installCmd: "apt-get update && apt-get install -y"
+                    , installCmd: "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
                     , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
                     , DISTRO: "Debian"
                     , ARTIFACT: "x86_64-linux-deb9"
@@ -212,7 +212,7 @@ jobs:
 
   build-mac-x86_64:
     name: Build binary (Mac x86_64)
-    runs-on: macOS-10.15
+    runs-on: macOS-11
     env:
       MACOSX_DEPLOYMENT_TARGET: 10.13
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -362,7 +362,7 @@ jobs:
       matrix:
         include:
           - image: debian:9
-            installCmd: apt-get update && apt-get install -y
+            installCmd: sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y
             toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
             DISTRO: Debian
             ARTIFACT: "x86_64-linux-deb9"
@@ -519,7 +519,7 @@ jobs:
 
   bindist-mac-x86_64:
     name: Tar bindists (Mac x86_64)
-    runs-on: macOS-10.15
+    runs-on: macOS-11
     needs: ["build-mac-x86_64"]
     env:
       TARBALL_EXT: tar.xz
@@ -657,7 +657,7 @@ jobs:
       matrix:
         include:
           - image: debian:9
-            installCmd: apt-get update && apt-get install -y
+            installCmd: sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y
             toolRequirements: libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf tree
             DISTRO: Debian
             ARTIFACT: "x86_64-linux-deb9"
@@ -780,7 +780,7 @@ jobs:
 
   test-mac-x86_64:
     name: Test binary (Mac x86_64)
-    runs-on: macOS-10.15
+    runs-on: macOS-11
     needs: ["bindist-mac-x86_64"]
     env:
       MACOSX_DEPLOYMENT_TARGET: 10.13

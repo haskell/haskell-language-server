@@ -1,7 +1,7 @@
 cabal-version:      3.0
 category:           Development
 name:               haskell-language-server
-version:            1.10.0.0
+version:            2.0.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -218,149 +218,149 @@ flag cabalfmt
 
 common cabalfmt
   if flag(cabalfmt)
-    build-depends: hls-cabal-fmt-plugin ^>= 0.1.0.0
+    build-depends: hls-cabal-fmt-plugin == 2.0.0.0
     cpp-options: -Dhls_cabalfmt
 
 common cabal
   if flag(cabal)
-    build-depends: hls-cabal-plugin ^>= 0.1
+    build-depends: hls-cabal-plugin == 2.0.0.0
     cpp-options: -Dhls_cabal
 
 common class
   if flag(class)
-    build-depends: hls-class-plugin ^>= 1.1
+    build-depends: hls-class-plugin == 2.0.0.0
     cpp-options: -Dhls_class
 
 common callHierarchy
   if flag(callHierarchy)
-    build-depends: hls-call-hierarchy-plugin ^>= 1.2
+    build-depends: hls-call-hierarchy-plugin == 2.0.0.0
     cpp-options: -Dhls_callHierarchy
 
 common haddockComments
   if flag(haddockComments) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-haddock-comments-plugin ^>= 1.1
+    build-depends: hls-haddock-comments-plugin == 2.0.0.0
     cpp-options: -Dhls_haddockComments
 
 common eval
   if flag(eval)
-    build-depends: hls-eval-plugin ^>= 1.5
+    build-depends: hls-eval-plugin == 2.0.0.0
     cpp-options: -Dhls_eval
 
 common importLens
   if flag(importLens)
-    build-depends: hls-explicit-imports-plugin ^>= 1.2
+    build-depends: hls-explicit-imports-plugin == 2.0.0.0
     cpp-options: -Dhls_importLens
 
 common refineImports
   if flag(refineImports)
-    build-depends: hls-refine-imports-plugin ^>=1.0
+    build-depends: hls-refine-imports-plugin == 2.0.0.0
     cpp-options: -Dhls_refineImports
 
 common rename
   if flag(rename)
-    build-depends: hls-rename-plugin ^>= 1.0
+    build-depends: hls-rename-plugin == 2.0.0.0
     cpp-options: -Dhls_rename
 
 common retrie
   if flag(retrie)
-    build-depends: hls-retrie-plugin ^>= 1.0
+    build-depends: hls-retrie-plugin == 2.0.0.0
     cpp-options: -Dhls_retrie
 
 common tactic
   if flag(tactic) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-tactics-plugin ^>= 1.8.1
+    build-depends: hls-tactics-plugin == 2.0.0.0
     cpp-options: -Dhls_tactic
 
 common hlint
   if flag(hlint) && impl(ghc < 9.5)
-    build-depends: hls-hlint-plugin ^>= 1.1
+    build-depends: hls-hlint-plugin == 2.0.0.0
     cpp-options: -Dhls_hlint
 
 common stan
   if flag(stan) && (impl(ghc >= 8.10) && impl(ghc < 9.0))
-    build-depends: hls-stan-plugin ^>= 1.0
+    build-depends: hls-stan-plugin == 2.0.0.0
     cpp-options: -Dhls_stan
 
 common moduleName
   if flag(moduleName)
-    build-depends: hls-module-name-plugin ^>= 1.1
+    build-depends: hls-module-name-plugin == 2.0.0.0
     cpp-options: -Dhls_moduleName
 
 common pragmas
   if flag(pragmas)
-    build-depends: hls-pragmas-plugin ^>= 1.0
+    build-depends: hls-pragmas-plugin == 2.0.0.0
     cpp-options: -Dhls_pragmas
 
 common splice
   if flag(splice)
-    build-depends: hls-splice-plugin ^>=1.1
+    build-depends: hls-splice-plugin == 2.0.0.0
     cpp-options: -Dhls_splice
 
 common alternateNumberFormat
   if flag(alternateNumberFormat)
-    build-depends: hls-alternate-number-format-plugin ^>= 1.3
+    build-depends: hls-alternate-number-format-plugin == 2.0.0.0
     cpp-options: -Dhls_alternateNumberFormat
 
 common qualifyImportedNames
   if flag(qualifyImportedNames)
-    build-depends: hls-qualify-imported-names-plugin ^>=1.0
+    build-depends: hls-qualify-imported-names-plugin == 2.0.0.0
     cpp-options: -Dhls_qualifyImportedNames
 
 common codeRange
   if flag(codeRange)
-    build-depends: hls-code-range-plugin ^>= 1.1
+    build-depends: hls-code-range-plugin == 2.0.0.0
     cpp-options: -Dhls_codeRange
 
 common changeTypeSignature
   if flag(changeTypeSignature)
-    build-depends: hls-change-type-signature-plugin ^>= 1.1
+    build-depends: hls-change-type-signature-plugin == 2.0.0.0
     cpp-options: -Dhls_changeTypeSignature
 
 common gadt
   if flag(gadt)
-    build-depends: hls-gadt-plugin ^>= 1.0
+    build-depends: hls-gadt-plugin == 2.0.0.0
     cpp-options: -Dhls_gadt
 
 common explicitFixity
   if flag(explicitFixity)
-    build-depends: hls-explicit-fixity-plugin ^>= 1.1
+    build-depends: hls-explicit-fixity-plugin == 2.0.0.0
     cpp-options: -DexplicitFixity
 
 common explicitFields
   if flag(explicitFields)
-    build-depends: hls-explicit-record-fields-plugin ^>= 1.0
+    build-depends: hls-explicit-record-fields-plugin == 2.0.0.0
     cpp-options: -DexplicitFields
 
 common overloadedRecordDot
   if flag(overloadedRecordDot) && (impl(ghc >= 9.2.0) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-overloaded-record-dot-plugin ^>= 1.0
+    build-depends: hls-overloaded-record-dot-plugin = 2.0.0.0
     cpp-options: -Dhls_overloaded_record_dot
 
 -- formatters
 
 common floskell
-  if flag(floskell) && impl(ghc < 9.5)
-    build-depends: hls-floskell-plugin ^>= 1.0
+  if flag(floskell) && impl(ghc < 9.5) 
+    build-depends: hls-floskell-plugin == 2.0.0.0
     cpp-options: -Dhls_floskell
 
 common fourmolu
   if flag(fourmolu)
-    build-depends: hls-fourmolu-plugin ^>= 1.1
+    build-depends: hls-fourmolu-plugin == 2.0.0.0
     cpp-options: -Dhls_fourmolu
 
 common ormolu
   if flag(ormolu) && impl(ghc < 9.5)
-    build-depends: hls-ormolu-plugin ^>= 1.0
+    build-depends: hls-ormolu-plugin == 2.0.0.0
     cpp-options: -Dhls_ormolu
 
 common stylishHaskell
   if flag(stylishHaskell) && impl(ghc < 9.5)
-    build-depends: hls-stylish-haskell-plugin ^>= 1.0
+    build-depends: hls-stylish-haskell-plugin == 2.0.0.0
     cpp-options: -Dhls_stylishHaskell
 
 common refactor
   if flag(refactor)
-    build-depends: hls-refactor-plugin ^>= 1.2
+    build-depends: hls-refactor-plugin == 2.0.0.0
     cpp-options: -Dhls_refactor
 
 library
@@ -416,12 +416,12 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ==1.10.0.0
+    , ghcide                == 2.0.0.0
     , githash               >=0.1.6.1
     , lsp
     , hie-bios
     , hiedb
-    , hls-plugin-api        ^>=1.6
+    , hls-plugin-api        == 2.0.0.0
     , optparse-applicative
     , optparse-simple
     , process
@@ -560,7 +560,7 @@ test-suite func-test
     , lens-aeson
     , ghcide
     , ghcide-test-utils
-    , hls-test-utils ^>=1.6
+    , hls-test-utils == 2.0.0.0
     , lsp-types
     , aeson
     , hls-plugin-api
