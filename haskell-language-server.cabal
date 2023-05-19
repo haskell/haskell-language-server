@@ -333,13 +333,13 @@ common explicitFields
 
 common overloadedRecordDot
   if flag(overloadedRecordDot) && (impl(ghc >= 9.2.0) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-overloaded-record-dot-plugin = 2.0.0.0
+    build-depends: hls-overloaded-record-dot-plugin == 2.0.0.0
     cpp-options: -Dhls_overloaded_record_dot
 
 -- formatters
 
 common floskell
-  if flag(floskell) && impl(ghc < 9.5) 
+  if flag(floskell) && impl(ghc < 9.5)
     build-depends: hls-floskell-plugin == 2.0.0.0
     cpp-options: -Dhls_floskell
 
