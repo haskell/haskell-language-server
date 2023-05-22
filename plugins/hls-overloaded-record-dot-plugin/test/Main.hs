@@ -26,7 +26,8 @@ test = testGroup "overloaded-record-dot"
     mkTest "NestedDot" "NestedDot" "name" 17 7 17 22,
     mkTest "NestedDollar" "NestedDollar" "name" 15 7 15 24,
     mkTest "MultilineCase" "MultilineCase" "name" 10 7 12 15,
-    mkTest "Multiline" "Multiline" "name" 10 7 11 15
+    mkTest "Multiline" "Multiline" "name" 10 7 11 15,
+    mkTest "MultilineExpanded" "MultilineExpanded" "owner" 28 8 28 19
   ]
 
 mkTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> TestTree
