@@ -494,6 +494,11 @@ executable haskell-language-server
     , temporary
     , transformers
     , unordered-containers
+    , ghc-debug-stub
+    , ghc-debug-convention
+    , ghc-debug-client
+    , unix
+    , time
 
   default-language: Haskell2010
   default-extensions: DataKinds, TypeOperators
