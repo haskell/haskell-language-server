@@ -25,8 +25,8 @@ case "${TARBALL_EXT}" in
 		: "${GHCS:="$(cd "$CI_PROJECT_DIR/out/${ARTIFACT}" && rm -f ./*.json && for ghc in * ; do printf "%s\n" "$ghc" ; done | sort -r | tr '\n' ' ')"}"
 		emake --version
 		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}" GHCS="${GHCS}" bindist
-		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}"                bindist-tar
 		emake GHCUP=ghcup                        GHCS="${GHCS}" clean-ghcs
+		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}"                bindist-tar
         ;;
     *)
         fail "Unknown TARBALL_EXT: ${TARBALL_EXT}"
