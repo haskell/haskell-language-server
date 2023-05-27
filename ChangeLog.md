@@ -1,5 +1,10 @@
 # Changelog for haskell-language-server
 
+## 2.0.0.1
+
+- Add overloaded record dot plugin intial version (closes #3350) (#3560)
+- Binaries for GHC 9.2.8 and GHC 9.6.2
+
 ## 2.0.0.0
 
 - New versioning scheme for all packages distributed as part of HLS,
@@ -95,7 +100,7 @@
 ([#3411](https://github.com/haskell/haskell-language-server/pull/3411)) by @pepeiborra
 - Support fourmolu 0.10
 ([#3410](https://github.com/haskell/haskell-language-server/pull/3410)) by @brandonchinn178
-- Fix nix build CI 
+- Fix nix build CI
 ([#3404](https://github.com/haskell/haskell-language-server/pull/3404)) by @wavewave
 - Fix fourmolu with -f-fixity-th in nix env
 ([#3400](https://github.com/haskell/haskell-language-server/pull/3400)) by @wavewave
@@ -145,7 +150,7 @@
 ([#3339](https://github.com/haskell/haskell-language-server/pull/3339)) by @santiweight
 - Add hls-cabal-fmt-plugin to hackage release CI script and HLS library
 ([#3335](https://github.com/haskell/haskell-language-server/pull/3335)) by @fendor
-- Ensure at least 1 capability 
+- Ensure at least 1 capability
 ([#3334](https://github.com/haskell/haskell-language-server/pull/3334)) by @pepeiborra
 - Add support for Fourmolu 0.9
 ([#3331](https://github.com/haskell/haskell-language-server/pull/3331)) by @brandonchinn178
@@ -324,7 +329,7 @@
 - Initial support for GHC 9.4 with binaries for GHC 9.4.1 and GHC 9.4.2
 - Startup time and performance improvements on projects using Template Haskell by serializing intermediate core (#2813)
 - Memory usage improvements due to using a packed representation for filepaths (#3067, @kokobd)
-- Improvements for hls-class-plugin (#2920, @July541) 
+- Improvements for hls-class-plugin (#2920, @July541)
 - The new hls-gadt-plugin (#2899, @July541)
 - Moving code actions from ghcide to the new hls-refactor-plugin (#3091, @wz1000)
 - Many more improvements and bug fixes thanks to our contributors!
@@ -549,7 +554,7 @@
 ([#2873](https://github.com/haskell/haskell-language-server/pull/2873)) by @pepeiborra
 - Expand input to pragma if available
 ([#2871](https://github.com/haskell/haskell-language-server/pull/2871)) by @July541
-- Fix hanging redundant import on Unicode function 
+- Fix hanging redundant import on Unicode function
 ([#2870](https://github.com/haskell/haskell-language-server/pull/2870)) by @drsooch
 - Compatibility with older aeson releases
 ([#2868](https://github.com/haskell/haskell-language-server/pull/2868)) by @pepeiborra
@@ -754,7 +759,7 @@
 - Improve logging
 ([#2558](https://github.com/haskell/haskell-language-server/pull/2558)) by @eddiemundo
 - Improve recompilation avoidance in the presence of TH
-([#2316](https://github.com/haskell/haskell-language-server/pull/2316)) by @wz1000 
+([#2316](https://github.com/haskell/haskell-language-server/pull/2316)) by @wz1000
 
 ## 1.6.1.1 (*only hackage release*)
 
