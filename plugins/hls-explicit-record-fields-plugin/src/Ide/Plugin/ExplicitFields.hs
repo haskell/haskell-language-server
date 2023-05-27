@@ -22,8 +22,8 @@ import           Data.Functor                    ((<&>))
 import           Data.Generics                   (GenericQ, everything, extQ,
                                                   mkQ)
 import qualified Data.HashMap.Strict             as HashMap
-import           Data.Maybe                      (isJust, listToMaybe,
-                                                  maybeToList, fromMaybe)
+import           Data.Maybe                      (fromMaybe, isJust,
+                                                  listToMaybe, maybeToList)
 import           Data.Text                       (Text)
 import           Development.IDE                 (IdeState, NormalizedFilePath,
                                                   Pretty (..), Recorder (..),
@@ -36,8 +36,8 @@ import           Development.IDE.Core.Shake      (define, use)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      (HsConDetails (RecCon),
                                                   HsRecFields (..), LPat,
-                                                  Outputable, getLoc, unLoc,
-                                                  recDotDot)
+                                                  Outputable, getLoc, recDotDot,
+                                                  unLoc)
 import           Development.IDE.GHC.Compat.Core (Extension (NamedFieldPuns),
                                                   GhcPass,
                                                   HsExpr (RecordCon, rcon_flds),
@@ -103,7 +103,7 @@ codeActionProvider :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginResponse $ do
   nfp <- getNormalizedFilePath (docId ^. L.uri)
   pragma <- getFirstPragma pId ideState nfp
-  CRR recMap (map unExt -> exts) <- collectRecords' ideState nfp
+  CRR recMap exts <- collectRecords' ideState nfp
   let actions = map (mkCodeAction nfp exts pragma) (RangeMap.filterByRange range recMap)
   pure $ List actions
 
@@ -160,8 +160,8 @@ collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collect
           pure ([], CRR <$> recMap <*> Just exts)
 
   where
-    getEnabledExtensions :: TcModuleResult -> [GhcExtension]
-    getEnabledExtensions = map GhcExtension . getExtensions . tmrParsed
+    getEnabledExtensions :: TcModuleResult -> [Extension]
+    getEnabledExtensions =  getExtensions . tmrParsed
 
 getRecords :: TcModuleResult -> [RecordInfo]
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
@@ -186,7 +186,7 @@ instance NFData CollectRecords
 
 data CollectRecordsResult = CRR
   { recordInfos       :: RangeMap RenderedRecordInfo
-  , enabledExtensions :: [GhcExtension]
+  , enabledExtensions :: [Extension]
   }
   deriving (Generic)
 
@@ -213,15 +213,8 @@ instance Show CollectNamesResult where
 
 type instance RuleResult CollectNames = CollectNamesResult
 
--- `Extension` is wrapped so that we can provide an `NFData` instance
--- (without resorting to creating an orphan instance).
-newtype GhcExtension = GhcExtension { unExt :: Extension }
-
-instance NFData GhcExtension where
-  rnf x = x `seq` ()
-
 -- As with `GhcExtension`, this newtype exists mostly to attach
--- an `NFData` instance to `UniqFM`.
+-- an `NFData` instance to `UniqFM`.(without resorting to creating an orphan instance).
 newtype NameMap = NameMap (UniqFM Name [Name])
 
 instance NFData NameMap where

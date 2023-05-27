@@ -31,7 +31,7 @@ runs:
         sudo chown -R $USER /usr/local/.ghcup
       shell: bash
 
-    - uses: haskell/actions/setup@v2.3.6
+    - uses: haskell/actions/setup@v2.4.1
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}
@@ -48,12 +48,6 @@ runs:
       name: (Linux,macOS) Platform config
       run: |
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
-      shell: bash
-
-    - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
-      name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
-      run: |
-        echo -e 'package floskell\n  ghc-options: -O0' >> cabal.project.local
       shell: bash
 
     # Shorten binary names as a workaround for filepath length limits in Windows,
