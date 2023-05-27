@@ -901,9 +901,8 @@ indexHieFile se mod_summary srcPath !hash hf = do
             -- If the hash in the pending list doesn't match the current hash, then skip
             Just pendingHash -> pendingHash /= hash
         unless newerScheduled $ do
-          pre optProgressStyle
-          withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
-          post
+          bracket_ (pre optProgressStyle) post $
+            withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
   where
     mod_location    = ms_location mod_summary
     targetPath      = Compat.ml_hie_file mod_location
