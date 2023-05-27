@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-alternate-number-format-plugin
-version:            2.0.0.0
+version:            2.0.0.1
 synopsis:           Provide Alternate Number Formats plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -32,10 +32,10 @@ library
     , base                 >=4.12 && < 5
     , containers
     , extra
-    , ghcide               == 2.0.0.0
+    , ghcide               == 2.0.0.1
     , ghc-boot-th
     , hls-graph
-    , hls-plugin-api       == 2.0.0.0
+    , hls-plugin-api       == 2.0.0.1
     , hie-compat
     , lens
     , lsp                  ^>=1.6
@@ -64,7 +64,7 @@ test-suite tests
     , base                 >=4.12 && < 5
     , filepath
     , hls-alternate-number-format-plugin
-    , hls-test-utils       == 2.0.0.0
+    , hls-test-utils       == 2.0.0.1
     , lsp
     , QuickCheck
     , regex-tdfa
