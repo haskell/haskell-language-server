@@ -91,6 +91,24 @@ source-repository-package
   tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
 -- END DELETE
 
+-- This is needed till lsp makes a release
+source-repository-package
+  type:git
+  location: https://github.com/haskell/lsp
+  tag: ba7e5cbfaf4ab075a8fc290d61e8c9a96a41fd94
+  subdir: lsp
+source-repository-package
+  type:git
+  location: https://github.com/haskell/lsp
+  tag: ba7e5cbfaf4ab075a8fc290d61e8c9a96a41fd94
+  subdir: lsp-types
+source-repository-package
+  type:git
+  location: https://github.com/haskell/lsp
+  tag: ba7e5cbfaf4ab075a8fc290d61e8c9a96a41fd94
+  subdir: lsp-test
+
+
 allow-newer:
   -- ghc-9.4
   ekg-json:base,

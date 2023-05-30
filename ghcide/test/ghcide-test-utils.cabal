@@ -35,7 +35,7 @@ library
         lsp-types,
         hls-plugin-api,
         lens,
-        lsp-test ^>= 0.14,
+        lsp-test ^>= 0.15,
         tasty-hunit >= 0.10,
         text,
     hs-source-dirs: src
