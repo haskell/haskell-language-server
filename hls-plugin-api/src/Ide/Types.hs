@@ -573,7 +573,7 @@ instance PluginRequestMethod Method_TextDocumentCodeLens where
 instance PluginRequestMethod Method_TextDocumentRename where
 
 instance PluginRequestMethod Method_TextDocumentHover where
-  combineResponses _ _ _ _ (dumpNulls -> hs) =
+  combineResponses _ _ _ _ (dumpNulls -> hs :: [Hover]) =
     if mcontent ^. value == ""
         then InR J.Null
         else InL $ Hover (InL mcontent) r
@@ -590,7 +590,7 @@ instance PluginRequestMethod Method_TextDocumentDocumentSymbol where
       uri' = params ^. textDocument . uri
       supportsHierarchy = Just True == (tdc >>= _documentSymbol >>= _hierarchicalDocumentSymbolSupport)
       dsOrSi :: [Either [SymbolInformation] [DocumentSymbol]]
-      dsOrSi =  (fmap toEither) <$> mapMaybe nullToMaybe' $ toList xs
+      dsOrSi =  toEither <$> dumpNulls xs
       res :: [SymbolInformation] |? ([DocumentSymbol] |? J.Null)
       res
         | supportsHierarchy = InR $ InL $ concatMap (either (fmap siToDs) id) dsOrSi
@@ -1000,13 +1000,16 @@ installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 -- but temporarily including them here
 -- We get null responses, which can be problematic for concat, because of
 -- this we need to filter them out
-dumpNulls :: Foldable f => f (a |? J.Null) -> [a]
-dumpNulls = takeLefts
 
 takeLefts :: Foldable f => f (a |? b) -> [a]
 takeLefts = foldr (\x acc -> case x of
                                 InL x' -> x' : acc
                                 InR _  -> acc) []
+
+dumpNulls :: (Foldable f, NullToMaybe a b) => f a -> [b]
+dumpNulls = foldr (\x acc -> case nullToMaybe' x of
+                                Just x' -> x' : acc
+                                Nothing -> acc) []
 
 instance Semigroup s => Semigroup (s |? J.Null) where
   InL x <> InL y = InL (x <> y)
