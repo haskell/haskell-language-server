@@ -40,32 +40,32 @@ module Ide.PluginUtils
 where
 
 
-import           Control.Arrow                   ((&&&))
-import           Control.Monad.Extra             (maybeM)
-import           Control.Monad.Trans.Class       (lift)
-import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
+import           Control.Arrow                 ((&&&))
+import           Control.Monad.Extra           (maybeM)
+import           Control.Monad.Trans.Class     (lift)
+import           Control.Monad.Trans.Except    (ExceptT, runExceptT, throwE)
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
-import           Data.Bifunctor                  (Bifunctor (first))
-import           Data.Char                       (isPrint, showLitChar)
-import           Data.Functor                    (void)
-import qualified Data.HashMap.Strict             as H
-import           Data.String                     (IsString (fromString))
-import qualified Data.Text                       as T
-import           Data.Void                       (Void)
+import           Data.Bifunctor                (Bifunctor (first))
+import           Data.Char                     (isPrint, showLitChar)
+import           Data.Functor                  (void)
+import qualified Data.Map                      as M
+import           Data.String                   (IsString (fromString))
+import qualified Data.Text                     as T
+import           Data.Void                     (Void)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Ide.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types   hiding
+                                               (SemanticTokenAbsolute (length, line),
+                                                SemanticTokenRelative (length),
+                                                SemanticTokensEdit (_start))
+import qualified Language.LSP.Protocol.Types   as J
 import           Language.LSP.Server
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start))
-import qualified Language.LSP.Types              as J
-import           Language.LSP.Types.Capabilities
-import qualified Text.Megaparsec                 as P
-import qualified Text.Megaparsec.Char            as P
-import qualified Text.Megaparsec.Char.Lexer      as P
+import qualified Text.Megaparsec               as P
+import qualified Text.Megaparsec.Char          as P
+import qualified Text.Megaparsec.Char.Lexer    as P
 
 -- ---------------------------------------------------------------------
 
@@ -104,14 +104,14 @@ diffText clientCaps old new withDeletions =
     supports = clientSupportsDocumentChanges clientCaps
   in diffText' supports old new withDeletions
 
-makeDiffTextEdit :: T.Text -> T.Text -> List TextEdit
+makeDiffTextEdit :: T.Text -> T.Text -> [TextEdit]
 makeDiffTextEdit f1 f2 = diffTextEdit f1 f2 IncludeDeletions
 
-makeDiffTextEditAdditive :: T.Text -> T.Text -> List TextEdit
+makeDiffTextEditAdditive :: T.Text -> T.Text -> [TextEdit]
 makeDiffTextEditAdditive f1 f2 = diffTextEdit f1 f2 SkipDeletions
 
-diffTextEdit :: T.Text -> T.Text -> WithDeletions -> List TextEdit
-diffTextEdit fText f2Text withDeletions = J.List r
+diffTextEdit :: T.Text -> T.Text -> WithDeletions -> [TextEdit]
+diffTextEdit fText f2Text withDeletions = r
   where
     r = map diffOperationToTextEdit diffOps
     d = getGroupedDiff (lines $ T.unpack fText) (lines $ T.unpack f2Text)
@@ -168,15 +168,15 @@ diffText' supports (f,fText) f2Text withDeletions  =
     else WorkspaceEdit (Just h) Nothing Nothing
   where
     diff = diffTextEdit fText f2Text withDeletions
-    h = H.singleton f diff
-    docChanges = J.List [InL docEdit]
-    docEdit = J.TextDocumentEdit (J.VersionedTextDocumentIdentifier f (Just 0)) $ fmap InL diff
+    h = M.singleton f diff
+    docChanges = [InL docEdit]
+    docEdit = J.TextDocumentEdit (J.OptionalVersionedTextDocumentIdentifier f (InL 0)) $ fmap InL diff
 
 -- ---------------------------------------------------------------------
 
 clientSupportsDocumentChanges :: ClientCapabilities -> Bool
 clientSupportsDocumentChanges caps =
-  let ClientCapabilities mwCaps _ _ _ _ = caps
+  let ClientCapabilities mwCaps _ _ _ _ _ = caps
       supports = do
         wCaps <- mwCaps
         WorkspaceEditClientCapabilities mDc _ _ _ _ <- _workspaceEdit wCaps
@@ -280,7 +280,7 @@ handleMaybeM msg act = maybeM (throwE msg) return $ lift act
 
 pluginResponse :: Monad m => ExceptT String m a -> m (Either ResponseError a)
 pluginResponse =
-  fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
+  fmap (first (\msg -> ResponseError ErrorCodes_InternalError (fromString msg) Nothing))
     . runExceptT
 
 -- ---------------------------------------------------------------------

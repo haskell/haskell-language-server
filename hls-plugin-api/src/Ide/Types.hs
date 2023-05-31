@@ -9,6 +9,7 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE InstanceSigs               #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -51,65 +52,51 @@ module Ide.Types
     where
 
 #ifdef mingw32_HOST_OS
-import qualified System.Win32.Process            as P (getCurrentProcessId)
+import qualified System.Win32.Process          as P (getCurrentProcessId)
 #else
-import           Control.Monad                   (void)
-import qualified System.Posix.Process            as P (getProcessID)
+import           Control.Monad                 (void)
+import qualified System.Posix.Process          as P (getProcessID)
 import           System.Posix.Signals
 #endif
-import           Control.Applicative             ((<|>))
-import           Control.Arrow                   ((&&&))
-import           Control.Lens                    ((.~), (^.))
-import           Data.Aeson                      hiding (defaultOptions)
+import           Control.Applicative           ((<|>))
+import           Control.Arrow                 ((&&&))
+import           Control.Lens                  ((.~), (^.))
+import           Data.Aeson                    hiding (defaultOptions)
 import           Data.Default
-import           Data.Dependent.Map              (DMap)
-import qualified Data.Dependent.Map              as DMap
-import qualified Data.DList                      as DList
+import           Data.Dependent.Map            (DMap)
+import qualified Data.Dependent.Map            as DMap
+import qualified Data.DList                    as DList
 import           Data.GADT.Compare
-import           Data.Hashable                   (Hashable)
-import           Data.HashMap.Strict             (HashMap)
-import qualified Data.HashMap.Strict             as HashMap
-import           Data.List.Extra                 (find, sortOn)
-import           Data.List.NonEmpty              (NonEmpty (..), toList)
-import qualified Data.Map                        as Map
+import           Data.Hashable                 (Hashable)
+import           Data.HashMap.Strict           (HashMap)
+import qualified Data.HashMap.Strict           as HashMap
+import           Data.List.Extra               (find, sortOn)
+import           Data.List.NonEmpty            (NonEmpty (..), toList)
+import qualified Data.Map                      as Map
 import           Data.Maybe
 import           Data.Ord
 import           Data.Semigroup
 import           Data.String
-import qualified Data.Text                       as T
-import           Data.Text.Encoding              (encodeUtf8)
+import qualified Data.Text                     as T
+import           Data.Text.Encoding            (encodeUtf8)
 import           Development.IDE.Graph
-import           GHC                             (DynFlags)
+import           GHC                           (DynFlags)
 import           GHC.Generics
 import           Ide.Plugin.Properties
-import           Language.LSP.Server             (LspM, getVirtualFile)
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start))
-import           Language.LSP.Types.Capabilities (ClientCapabilities (ClientCapabilities),
-                                                  TextDocumentClientCapabilities (_codeAction, _documentSymbol))
-import           Language.LSP.Types.Lens         as J (HasChildren (children),
-                                                       HasCommand (command),
-                                                       HasContents (contents),
-                                                       HasDeprecated (deprecated),
-                                                       HasEdit (edit),
-                                                       HasKind (kind),
-                                                       HasName (name),
-                                                       HasOptions (..),
-                                                       HasRange (range),
-                                                       HasTextDocument (..),
-                                                       HasTitle (title),
-                                                       HasUri (..))
-import qualified Language.LSP.Types.Lens         as J
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types   hiding
+                                               (SemanticTokenAbsolute (length, line),
+                                                SemanticTokenRelative (length),
+                                                SemanticTokensEdit (_start), id)
+import qualified Language.LSP.Protocol.Types   as J
+import           Language.LSP.Server           (LspM, getVirtualFile)
 import           Language.LSP.VFS
 import           Numeric.Natural
 import           OpenTelemetry.Eventlog
-import           Options.Applicative             (ParserInfo)
+import           Options.Applicative           (ParserInfo)
 import           System.FilePath
 import           System.IO.Unsafe
-import           Text.Regex.TDFA.Text            ()
-
+import           Text.Regex.TDFA.Text          ()
 -- ---------------------------------------------------------------------
 
 data IdePlugins ideState = IdePlugins_
@@ -341,7 +328,13 @@ defaultConfigDescriptor =
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
 -- Only methods for which we know how to combine responses can be instances of 'PluginMethod'
-class HasTracing (MessageParams m) => PluginMethod (k :: MethodType) (m :: Method FromClient k) where
+-- I removed the HasTracing constraint as with it, I get •
+-- No instance for (HasTextDocument InitializedParams doc0)
+--    arising from the superclasses of an instance declaration
+-- In the instance declaration for
+--    ‘PluginMethod 'Notification 'Method_Initialized'
+-- class HasTracing (MessageParams m) => PluginMethod (k :: MessageKind) (m :: Method ClientToServer k) where
+class PluginMethod (k :: MessageKind) (m :: Method ClientToServer k) where
 
   -- | Parse the configuration to check if this plugin is enabled.
   -- Perform sanity checks on the message to see whether plugin is enabled
@@ -391,7 +384,7 @@ class HasTracing (MessageParams m) => PluginMethod (k :: MethodType) (m :: Metho
 -- Plugin Requests
 -- ---------------------------------------------------------------------
 
-class PluginMethod Request m => PluginRequestMethod (m :: Method FromClient Request) where
+class PluginMethod Request m => PluginRequestMethod (m :: Method ClientToServer Request) where
   -- | How to combine responses from different plugins.
   --
   -- For example, for Hover requests, we might have multiple producers of
@@ -400,28 +393,30 @@ class PluginMethod Request m => PluginRequestMethod (m :: Method FromClient Requ
   -- glorious hover box.
   --
   -- However, sometimes only one handler of a request can realistically exist,
-  -- such as TextDocumentFormatting, it is safe to just unconditionally report
+  -- such as Method_TextDocumentFormatting, it is safe to just unconditionally report
   -- back one arbitrary result (arbitrary since it should only be one anyway).
   combineResponses
     :: SMethod m
     -> Config -- ^ IDE Configuration
     -> ClientCapabilities
     -> MessageParams m
-    -> NonEmpty (ResponseResult m) -> ResponseResult m
+    -> NonEmpty (MessageResult m) -> MessageResult m
 
-  default combineResponses :: Semigroup (ResponseResult m)
-    => SMethod m -> Config -> ClientCapabilities -> MessageParams m -> NonEmpty (ResponseResult m) -> ResponseResult m
+  default combineResponses :: Semigroup (MessageResult m)
+    => SMethod m -> Config -> ClientCapabilities -> MessageParams m -> NonEmpty (MessageResult m) -> MessageResult m
   combineResponses _method _config _caps _params = sconcat
 
-instance PluginMethod Request TextDocumentCodeAction where
+instance PluginMethod Request Method_TextDocumentCodeAction where
   pluginEnabled _ msgParams pluginDesc config =
     pluginResponsible uri pluginDesc && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginRequestMethod TextDocumentCodeAction where
-  combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _) (CodeActionParams _ _ _ _ context) resps =
-      fmap compat $ List $ filter wasRequested $ (\(List x) -> x) $ sconcat resps
+instance PluginRequestMethod Method_TextDocumentCodeAction where
+  combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _ _) (CodeActionParams _ _ _ _ context) resps =
+      case fmap compat $ filter wasRequested $ concat $ dumpNulls resps of
+        [] -> InR J.Null
+        x  -> InL x
     where
       compat :: (Command |? CodeAction) -> (Command |? CodeAction)
       compat x@(InL _) = x
@@ -437,7 +432,7 @@ instance PluginRequestMethod TextDocumentCodeAction where
       wasRequested (InL _) = True
       wasRequested (InR ca)
         | Nothing <- _only context = True
-        | Just (List allowed) <- _only context
+        | Just (allowed) <- _only context
         -- See https://github.com/microsoft/language-server-protocol/issues/970
         -- This is somewhat vague, but due to the hierarchical nature of action kinds, we
         -- should check whether the requested kind is a *prefix* of the action kind.
@@ -446,145 +441,164 @@ instance PluginRequestMethod TextDocumentCodeAction where
         , Just caKind <- ca ^. kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
         | otherwise = False
 
-instance PluginMethod Request TextDocumentDefinition where
+      -- Copied form lsp-types 1.6 to get compilation working. May make more
+      -- sense to add it back to lsp-types 2.0
+      -- | Does the first 'CodeActionKind' subsume the other one, hierarchically. Reflexive.
+      codeActionKindSubsumes :: CodeActionKind -> CodeActionKind -> Bool
+      -- Simple but ugly implementation: prefix on the string representation
+      codeActionKindSubsumes parent child = toEnumBaseType parent `T.isPrefixOf` toEnumBaseType child
+
+instance PluginMethod Request Method_TextDocumentDefinition where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod Request TextDocumentTypeDefinition where
+instance PluginMethod Request Method_TextDocumentTypeDefinition where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod Request TextDocumentDocumentHighlight where
+instance PluginMethod Request Method_TextDocumentDocumentHighlight where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod Request TextDocumentReferences where
+instance PluginMethod Request Method_TextDocumentReferences where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod Request WorkspaceSymbol where
+instance PluginMethod Request Method_WorkspaceSymbol where
   -- Unconditionally enabled, but should it really be?
   pluginEnabled _ _ _ _ = True
 
-instance PluginMethod Request TextDocumentCodeLens where
+instance PluginMethod Request Method_TextDocumentCodeLens where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcCodeLensOn (configForPlugin config pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod Request TextDocumentRename where
+instance PluginMethod Request Method_TextDocumentRename where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcRenameOn (configForPlugin config pluginDesc)
    where
       uri = msgParams ^. J.textDocument . J.uri
-instance PluginMethod Request TextDocumentHover where
+instance PluginMethod Request Method_TextDocumentHover where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcHoverOn (configForPlugin config pluginDesc)
    where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod Request TextDocumentDocumentSymbol where
+instance PluginMethod Request Method_TextDocumentDocumentSymbol where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcSymbolsOn (configForPlugin config pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod Request CompletionItemResolve where
+instance PluginMethod Request Method_CompletionItemResolve where
   pluginEnabled _ msgParams pluginDesc config = pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
 
-instance PluginMethod Request TextDocumentCompletion where
+instance PluginMethod Request Method_TextDocumentCompletion where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod Request TextDocumentFormatting where
-  pluginEnabled STextDocumentFormatting msgParams pluginDesc conf =
+instance PluginMethod Request Method_TextDocumentFormatting where
+  pluginEnabled SMethod_TextDocumentFormatting msgParams pluginDesc conf =
     pluginResponsible uri pluginDesc
       && (PluginId (formattingProvider conf) == pid || PluginId (cabalFormattingProvider conf) == pid)
     where
       uri = msgParams ^. J.textDocument . J.uri
       pid = pluginId pluginDesc
 
-instance PluginMethod Request TextDocumentRangeFormatting where
+instance PluginMethod Request Method_TextDocumentRangeFormatting where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
       && (PluginId (formattingProvider conf) == pid || PluginId (cabalFormattingProvider conf) == pid)
     where
       uri = msgParams ^. J.textDocument . J.uri
       pid = pluginId pluginDesc
 
-instance PluginMethod Request TextDocumentPrepareCallHierarchy where
+instance PluginMethod Request Method_TextDocumentPrepareCallHierarchy where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod Request TextDocumentSelectionRange where
+instance PluginMethod Request Method_TextDocumentSelectionRange where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcSelectionRangeOn (configForPlugin conf pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod Request TextDocumentFoldingRange where
+instance PluginMethod Request Method_TextDocumentFoldingRange where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcFoldingRangeOn (configForPlugin conf pluginDesc)
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod Request CallHierarchyIncomingCalls where
+instance PluginMethod Request Method_CallHierarchyIncomingCalls where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'
   pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
 
-instance PluginMethod Request CallHierarchyOutgoingCalls where
+instance PluginMethod Request Method_CallHierarchyOutgoingCalls where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'
   pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
 
-instance PluginMethod Request CustomMethod where
+instance PluginMethod Request (Method_CustomMethod m) where
   pluginEnabled _ _ _ _ = True
 
 ---
-instance PluginRequestMethod TextDocumentDefinition where
+instance PluginRequestMethod Method_TextDocumentDefinition where
   combineResponses _ _ _ _ (x :| _) = x
 
-instance PluginRequestMethod TextDocumentTypeDefinition where
+instance PluginRequestMethod Method_TextDocumentTypeDefinition where
   combineResponses _ _ _ _ (x :| _) = x
 
-instance PluginRequestMethod TextDocumentDocumentHighlight where
+instance PluginRequestMethod Method_TextDocumentDocumentHighlight where
 
-instance PluginRequestMethod TextDocumentReferences where
+instance PluginRequestMethod Method_TextDocumentReferences where
 
-instance PluginRequestMethod WorkspaceSymbol where
+instance PluginRequestMethod Method_WorkspaceSymbol where
+    -- TODO: combine WorkspaceSymbol. Currently all WorkspaceSymbols are dumped
+    -- as it is new of lsp-types 2.0.0.0
+    combineResponses _ _ _ _ xs = InL $ mconcat $ takeLefts xs
 
-instance PluginRequestMethod TextDocumentCodeLens where
+instance PluginRequestMethod Method_TextDocumentCodeLens where
 
-instance PluginRequestMethod TextDocumentRename where
+instance PluginRequestMethod Method_TextDocumentRename where
 
-instance PluginRequestMethod TextDocumentHover where
-  combineResponses _ _ _ _ (catMaybes . toList -> hs) = h
+instance PluginRequestMethod Method_TextDocumentHover where
+  combineResponses _ _ _ _ (dumpNulls -> hs) =
+    if mcontent ^. value == ""
+        then InR J.Null
+        else InL $ Hover (InL mcontent) r
     where
       r = listToMaybe $ mapMaybe (^. range) hs
-      h = case foldMap (^. contents) hs of
-            HoverContentsMS (List []) -> Nothing
-            hh                        -> Just $ Hover hh r
+      -- We are only taking MarkupContent here, because MarkedStrings have been
+      -- deprecated for a while and don't occur in the hls codebase
+      mcontent :: MarkupContent
+      mcontent = mconcat $ takeLefts $ map (^. contents) hs
 
-instance PluginRequestMethod TextDocumentDocumentSymbol where
-  combineResponses _ _ (ClientCapabilities _ tdc _ _ _) params xs = res
+instance PluginRequestMethod Method_TextDocumentDocumentSymbol where
+  combineResponses _ _ (ClientCapabilities _ tdc _ _ _ _) params xs = res
     where
       uri' = params ^. textDocument . uri
       supportsHierarchy = Just True == (tdc >>= _documentSymbol >>= _hierarchicalDocumentSymbolSupport)
-      dsOrSi = fmap toEither xs
+      dsOrSi :: [Either [SymbolInformation] [DocumentSymbol]]
+      dsOrSi =  (fmap toEither) <$> mapMaybe nullToMaybe' $ toList xs
+      res :: [SymbolInformation] |? ([DocumentSymbol] |? J.Null)
       res
-        | supportsHierarchy = InL $ sconcat $ fmap (either id (fmap siToDs)) dsOrSi
-        | otherwise = InR $ sconcat $ fmap (either (List . concatMap dsToSi) id) dsOrSi
-      siToDs (SymbolInformation name kind _tags dep (Location _uri range) cont)
+        | supportsHierarchy = InR $ InL $ concatMap (either (fmap siToDs) id) dsOrSi
+        | otherwise = InL $ concatMap (either id ( concatMap dsToSi)) dsOrSi
+      -- Is this actually a good conversion? It's what there was before, but some
+      -- things such as tags are getting lost
+      siToDs :: SymbolInformation -> DocumentSymbol
+      siToDs (SymbolInformation name kind _tags cont dep (Location _uri range) )
         = DocumentSymbol name cont kind Nothing dep range range Nothing
       dsToSi = go Nothing
       go :: Maybe T.Text -> DocumentSymbol -> [SymbolInformation]
@@ -593,10 +607,10 @@ instance PluginRequestMethod TextDocumentDocumentSymbol where
             children' = concatMap (go (Just name')) (fromMaybe mempty (ds ^. children))
             loc = Location uri' (ds ^. range)
             name' = ds ^. name
-            si = SymbolInformation name' (ds ^. kind) Nothing (ds ^. deprecated) loc parent
+            si = SymbolInformation name' (ds ^. kind) Nothing parent (ds ^. deprecated) loc
         in [si] <> children'
 
-instance PluginRequestMethod CompletionItemResolve where
+instance PluginRequestMethod Method_CompletionItemResolve where
   -- resolving completions can only change the detail, additionalTextEdit or documentation fields
   combineResponses _ _ _ _ (x :| xs) = go x xs
     where go :: CompletionItem -> [CompletionItem] -> CompletionItem
@@ -608,53 +622,55 @@ instance PluginRequestMethod CompletionItemResolve where
                  & J.additionalTextEdits .~ comp1 ^. J.additionalTextEdits <> comp2 ^. J.additionalTextEdits)
                  xs
 
-instance PluginRequestMethod TextDocumentCompletion where
+instance PluginRequestMethod Method_TextDocumentCompletion where
   combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
       where
         limit = maxCompletions conf
-        combine :: [List CompletionItem |? CompletionList] -> (List CompletionItem |? CompletionList)
+        combine :: [[CompletionItem] |? (CompletionList |? Null)] -> ([CompletionItem] |? (CompletionList |? Null))
         combine cs = go True mempty cs
 
+        go :: Bool -> DList.DList CompletionItem -> [[CompletionItem] |? (CompletionList |? Null)] -> ([CompletionItem] |? (CompletionList |? Null))
         go !comp acc [] =
-          InR (CompletionList comp (List $ DList.toList acc))
-        go comp acc (InL (List ls) : rest) =
+           InR (InL (CompletionList comp Nothing ( DList.toList acc)))
+        go comp acc ((InL ls) : rest) =
           go comp (acc <> DList.fromList ls) rest
-        go comp acc (InR (CompletionList comp' (List ls)) : rest) =
+        go comp acc ( (InR (InL (CompletionList comp' _ ls))) : rest) =
           go (comp && comp') (acc <> DList.fromList ls) rest
-
+        go comp acc ( (InR (InR J.Null)) : rest) =
+          go comp acc rest
         -- boolean disambiguators
         isCompleteResponse, isIncompleteResponse :: Bool
         isIncompleteResponse = True
         isCompleteResponse = False
-
-        consumeCompletionResponse limit it@(InR (CompletionList _ (List xx))) =
+        consumeCompletionResponse :: Int -> ([CompletionItem] |? (CompletionList |? Null)) -> (Int, [CompletionItem] |? (CompletionList |? Null))
+        consumeCompletionResponse limit it@(InR (InL (CompletionList _ _ xx))) =
           case splitAt limit xx of
             -- consumed all the items, return the result as is
             (_, []) -> (limit - length xx, it)
             -- need to crop the response, set the 'isIncomplete' flag
-            (xx', _) -> (0, InR (CompletionList isIncompleteResponse (List xx')))
-        consumeCompletionResponse n (InL (List xx)) =
-          consumeCompletionResponse n (InR (CompletionList isCompleteResponse (List xx)))
-
-instance PluginRequestMethod TextDocumentFormatting where
+            (xx', _) -> (0, InR (InL (CompletionList isIncompleteResponse Nothing xx')))
+        consumeCompletionResponse n (InL xx) =
+          consumeCompletionResponse n (InR (InL (CompletionList isCompleteResponse Nothing xx)))
+        consumeCompletionResponse n (InR (InR J.Null)) = (n, InR (InR J.Null))
+instance PluginRequestMethod Method_TextDocumentFormatting where
   combineResponses _ _ _ _ (x :| _) = x
 
-instance PluginRequestMethod TextDocumentRangeFormatting where
+instance PluginRequestMethod Method_TextDocumentRangeFormatting where
   combineResponses _ _ _ _ (x :| _) = x
 
-instance PluginRequestMethod TextDocumentPrepareCallHierarchy where
+instance PluginRequestMethod Method_TextDocumentPrepareCallHierarchy where
 
-instance PluginRequestMethod TextDocumentSelectionRange where
+instance PluginRequestMethod Method_TextDocumentSelectionRange where
   combineResponses _ _ _ _ (x :| _) = x
 
-instance PluginRequestMethod TextDocumentFoldingRange where
+instance PluginRequestMethod Method_TextDocumentFoldingRange where
   combineResponses _ _ _ _ x = sconcat x
 
-instance PluginRequestMethod CallHierarchyIncomingCalls where
+instance PluginRequestMethod Method_CallHierarchyIncomingCalls where
 
-instance PluginRequestMethod CallHierarchyOutgoingCalls where
+instance PluginRequestMethod Method_CallHierarchyOutgoingCalls where
 
-instance PluginRequestMethod CustomMethod where
+instance PluginRequestMethod (Method_CustomMethod m) where
   combineResponses _ _ _ _ (x :| _) = x
 
 -- ---------------------------------------------------------------------
@@ -663,71 +679,71 @@ instance PluginRequestMethod CustomMethod where
 
 -- | Plugin Notification methods. No specific methods at the moment, but
 -- might contain more in the future.
-class PluginMethod Notification m => PluginNotificationMethod (m :: Method FromClient Notification)  where
+class PluginMethod Notification m => PluginNotificationMethod (m :: Method ClientToServer Notification)  where
 
 
-instance PluginMethod Notification TextDocumentDidOpen where
+instance PluginMethod Notification Method_TextDocumentDidOpen where
 
-instance PluginMethod Notification TextDocumentDidChange where
+instance PluginMethod Notification Method_TextDocumentDidChange where
 
-instance PluginMethod Notification TextDocumentDidSave where
+instance PluginMethod Notification Method_TextDocumentDidSave where
 
-instance PluginMethod Notification TextDocumentDidClose where
+instance PluginMethod Notification Method_TextDocumentDidClose where
 
-instance PluginMethod Notification WorkspaceDidChangeWatchedFiles where
+instance PluginMethod Notification Method_WorkspaceDidChangeWatchedFiles where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
   pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
 
-instance PluginMethod Notification WorkspaceDidChangeWorkspaceFolders where
+instance PluginMethod Notification Method_WorkspaceDidChangeWorkspaceFolders where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
   pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
 
-instance PluginMethod Notification WorkspaceDidChangeConfiguration where
+instance PluginMethod Notification Method_WorkspaceDidChangeConfiguration where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
   pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
 
-instance PluginMethod Notification Initialized where
+instance PluginMethod Notification Method_Initialized where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
   pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
 
 
-instance PluginNotificationMethod TextDocumentDidOpen where
+instance PluginNotificationMethod Method_TextDocumentDidOpen where
 
-instance PluginNotificationMethod TextDocumentDidChange where
+instance PluginNotificationMethod Method_TextDocumentDidChange where
 
-instance PluginNotificationMethod TextDocumentDidSave where
+instance PluginNotificationMethod Method_TextDocumentDidSave where
 
-instance PluginNotificationMethod TextDocumentDidClose where
+instance PluginNotificationMethod Method_TextDocumentDidClose where
 
-instance PluginNotificationMethod WorkspaceDidChangeWatchedFiles where
+instance PluginNotificationMethod Method_WorkspaceDidChangeWatchedFiles where
 
-instance PluginNotificationMethod WorkspaceDidChangeWorkspaceFolders where
+instance PluginNotificationMethod Method_WorkspaceDidChangeWorkspaceFolders where
 
-instance PluginNotificationMethod WorkspaceDidChangeConfiguration where
+instance PluginNotificationMethod Method_WorkspaceDidChangeConfiguration where
 
-instance PluginNotificationMethod Initialized where
+instance PluginNotificationMethod Method_Initialized where
 
 -- ---------------------------------------------------------------------
 
 -- | Methods which have a PluginMethod instance
-data IdeMethod (m :: Method FromClient Request) = PluginRequestMethod m => IdeMethod (SMethod m)
+data IdeMethod (m :: Method ClientToServer Request) = PluginRequestMethod m => IdeMethod (SMethod m)
 instance GEq IdeMethod where
   geq (IdeMethod a) (IdeMethod b) = geq a b
 instance GCompare IdeMethod where
   gcompare (IdeMethod a) (IdeMethod b) = gcompare a b
 
 -- | Methods which have a PluginMethod instance
-data IdeNotification (m :: Method FromClient Notification) = PluginNotificationMethod m => IdeNotification (SMethod m)
+data IdeNotification (m :: Method ClientToServer Notification) = PluginNotificationMethod m => IdeNotification (SMethod m)
 instance GEq IdeNotification where
   geq (IdeNotification a) (IdeNotification b) = geq a b
 instance GCompare IdeNotification where
   gcompare (IdeNotification a) (IdeNotification b) = gcompare a b
 
 -- | Combine handlers for the
-newtype PluginHandler a (m :: Method FromClient Request)
-  = PluginHandler (PluginId -> a -> MessageParams m -> LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))
+newtype PluginHandler a (m :: Method ClientToServer Request)
+  = PluginHandler (PluginId -> a -> MessageParams m -> LspM Config (NonEmpty (Either ResponseError (MessageResult m))))
 
-newtype PluginNotificationHandler a (m :: Method FromClient Notification)
+newtype PluginNotificationHandler a (m :: Method ClientToServer Notification)
   = PluginNotificationHandler (PluginId -> a -> VFS -> MessageParams m -> LspM Config ())
 
 newtype PluginHandlers a             = PluginHandlers             (DMap IdeMethod       (PluginHandler a))
@@ -750,7 +766,7 @@ instance Semigroup (PluginNotificationHandlers a) where
 instance Monoid (PluginNotificationHandlers a) where
   mempty = PluginNotificationHandlers mempty
 
-type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config (Either ResponseError (ResponseResult m))
+type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config (Either ResponseError (MessageResult m))
 
 type PluginNotificationMethodHandler a m = a -> VFS -> PluginId -> MessageParams m -> LspM Config ()
 
@@ -767,7 +783,7 @@ mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandl
 -- | Make a handler for plugins with no extra data
 mkPluginNotificationHandler
   :: PluginNotificationMethod m
-  => SClientMethod (m :: Method FromClient Notification)
+  => SClientMethod (m :: Method ClientToServer Notification)
   -> PluginNotificationMethodHandler ideState m
   -> PluginNotificationHandlers ideState
 mkPluginNotificationHandler m f
@@ -871,7 +887,7 @@ data FormattingType = FormatText
 type FormattingMethod m =
   ( J.HasOptions (MessageParams m) FormattingOptions
   , J.HasTextDocument (MessageParams m) TextDocumentIdentifier
-  , ResponseResult m ~ List TextEdit
+  , MessageResult m ~ ([TextEdit] |? Null)
   )
 
 type FormattingHandler a
@@ -880,11 +896,11 @@ type FormattingHandler a
   -> T.Text
   -> NormalizedFilePath
   -> FormattingOptions
-  -> LspM Config (Either ResponseError (List TextEdit))
+  -> LspM Config (Either ResponseError ([TextEdit] |? Null))
 
 mkFormattingHandlers :: forall a. FormattingHandler a -> PluginHandlers a
-mkFormattingHandlers f = mkPluginHandler STextDocumentFormatting (provider STextDocumentFormatting)
-                      <> mkPluginHandler STextDocumentRangeFormatting (provider STextDocumentRangeFormatting)
+mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provider SMethod_TextDocumentFormatting)
+                      <> mkPluginHandler SMethod_TextDocumentRangeFormatting (provider SMethod_TextDocumentRangeFormatting)
   where
     provider :: forall m. FormattingMethod m => SMethod m -> PluginMethodHandler a m
     provider m ide _pid params
@@ -893,9 +909,9 @@ mkFormattingHandlers f = mkPluginHandler STextDocumentFormatting (provider SText
         case mf of
           Just vf -> do
             let typ = case m of
-                  STextDocumentFormatting -> FormatText
-                  STextDocumentRangeFormatting -> FormatRange (params ^. J.range)
-                  _ -> error "mkFormattingHandlers: impossible"
+                  SMethod_TextDocumentFormatting -> FormatText
+                  SMethod_TextDocumentRangeFormatting -> FormatRange (params ^. J.range)
+                  _ -> Prelude.error "mkFormattingHandlers: impossible"
             f ide typ (virtualFileText vf) nfp opts
           Nothing -> pure $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
 
@@ -907,7 +923,7 @@ mkFormattingHandlers f = mkPluginHandler STextDocumentFormatting (provider SText
 -- ---------------------------------------------------------------------
 
 responseError :: T.Text -> ResponseError
-responseError txt = ResponseError InvalidParams txt Nothing
+responseError txt = ResponseError ErrorCodes_InvalidParams txt Nothing
 
 -- ---------------------------------------------------------------------
 
@@ -955,7 +971,7 @@ mkLspCommand :: PluginId -> CommandId -> T.Text -> Maybe [Value] -> Command
 mkLspCommand plid cn title args' = Command title cmdId args
   where
     cmdId = mkLspCmdId pROCESS_ID plid cn
-    args = List <$> args'
+    args = args'
 
 mkLspCmdId :: T.Text -> PluginId -> CommandId -> T.Text
 mkLspCmdId pid (PluginId plid) (CommandId cid)
@@ -979,3 +995,42 @@ getProcessID = fromIntegral <$> P.getProcessID
 
 installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 #endif
+
+-- The functions below should probably be added to the lsp-types package
+-- but temporarily including them here
+-- We get null responses, which can be problematic for concat, because of
+-- this we need to filter them out
+dumpNulls :: Foldable f => f (a |? J.Null) -> [a]
+dumpNulls = takeLefts
+
+takeLefts :: Foldable f => f (a |? b) -> [a]
+takeLefts = foldr (\x acc -> case x of
+                                InL x' -> x' : acc
+                                InR _  -> acc) []
+
+instance Semigroup s => Semigroup (s |? J.Null) where
+  InL x <> InL y = InL (x <> y)
+  InL x <> InR _ = InL x
+  InR _ <> InL x = InL x
+  InR _ <> InR y = InR y
+
+instance Semigroup WorkspaceEdit where
+  (WorkspaceEdit a b c) <> (WorkspaceEdit a' b' c') = WorkspaceEdit (a <> a') (b <> b') (c <> c')
+
+class NullToMaybe a b where
+  nullToMaybe' :: a -> Maybe b
+
+instance NullToMaybe (a |? J.Null) a where
+  nullToMaybe' (InL x) = Just x
+  nullToMaybe' (InR _) = Nothing
+
+instance NullToMaybe (a |? (b |? J.Null)) (a |? b) where
+  nullToMaybe' (InL x)       = Just $ InL x
+  nullToMaybe' (InR (InL x)) = Just $ InR x
+  nullToMaybe' (InR (InR _)) = Nothing
+
+instance NullToMaybe (a |? (b |? (c |? J.Null))) (a |? (b |? c)) where
+  nullToMaybe' (InL x)             = Just $ InL x
+  nullToMaybe' (InR (InL x))       = Just $ InR $ InL x
+  nullToMaybe' (InR (InR (InL x))) = Just $ InR $ InR x
+  nullToMaybe' (InR (InR (InR _))) = Nothing
