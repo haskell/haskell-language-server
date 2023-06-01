@@ -432,7 +432,7 @@ instance PluginRequestMethod Method_TextDocumentCodeAction where
       wasRequested (InL _) = True
       wasRequested (InR ca)
         | Nothing <- _only context = True
-        | Just (allowed) <- _only context
+        | Just allowed <- _only context
         -- See https://github.com/microsoft/language-server-protocol/issues/970
         -- This is somewhat vague, but due to the hierarchical nature of action kinds, we
         -- should check whether the requested kind is a *prefix* of the action kind.
