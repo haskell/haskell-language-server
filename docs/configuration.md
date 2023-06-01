@@ -262,7 +262,7 @@ See [the Sublime Text LSP documentation](https://lsp.sublimetext.io) for informa
 
 ### [Neovim](https://neovim.io)
 
-Neovim provides a [native LSP implementation with a Lua framework](https://neovim.io/doc/user/lsp).
+Neovim provides a [native LSP implementation with a Lua framework](https://neovim.io/doc/user/lsp). If you are unfamiliar with how to use lua to configure neovim, check out [our detailed neovim instructions](./configuration/neovim.md)
 Plugins that streamline the setup of `haskell-language-server` using Neovim's built-in LSP framework include:
 
 * [haskell-tools.nvim](https://github.com/MrcJkb/haskell-tools.nvim): A plugin with a focus on Haskell tooling, including `haskell-language-server`.
