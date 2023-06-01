@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLabels #-}
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 module Development.IDE.Core.PositionMapping
@@ -28,12 +29,14 @@ import           Control.Monad
 import           Data.Algorithm.Diff
 import           Data.Bifunctor
 import           Data.List
-import qualified Data.Text           as T
-import qualified Data.Vector.Unboxed as V
-import           Language.LSP.Types  (Position (Position), Range (Range),
-                                      TextDocumentContentChangeEvent (TextDocumentContentChangeEvent),
-                                      UInt)
-
+import           Data.Row
+import qualified Data.Text                   as T
+import qualified Data.Vector.Unboxed         as V
+import           Language.LSP.Protocol.Types (Position (Position),
+                                              Range (Range),
+                                              TextDocumentContentChangeEvent (TextDocumentContentChangeEvent),
+                                              UInt)
+import qualified Language.LSP.Protocol.Types as J
 -- | Either an exact position, or the range of text that was substituted
 data PositionResult a
   = PositionRange -- ^ Fields need to be non-strict otherwise bind is exponential
@@ -120,10 +123,12 @@ mkDelta cs = foldl' applyChange idDelta cs
 addDelta :: PositionDelta -> PositionMapping -> PositionMapping
 addDelta delta (PositionMapping pm) = PositionMapping (composeDelta delta pm)
 
+-- TODO: We currently ignore the right hand side (if there is only text), as
+-- that was what was done with lsp* 1.6 packages
 applyChange :: PositionDelta -> TextDocumentContentChangeEvent -> PositionDelta
-applyChange PositionDelta{..} (TextDocumentContentChangeEvent (Just r) _ t) = PositionDelta
-    { toDelta = toCurrent r t <=< toDelta
-    , fromDelta = fromDelta <=< fromCurrent r t
+applyChange PositionDelta{..} (TextDocumentContentChangeEvent (J.InL x)) = PositionDelta
+    { toDelta = toCurrent (x .! #range) (x .! #text) <=< toDelta
+    , fromDelta = fromDelta <=< fromCurrent (x .! #range) (x .! #text)
     }
 applyChange posMapping _ = posMapping
 

@@ -32,7 +32,7 @@ import           Development.IDE.Spans.Common
 import           System.Directory
 import           System.FilePath
 
-import           Language.LSP.Types              (filePathToUri, getUri)
+import           Language.LSP.Protocol.Types     (filePathToUri, getUri)
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.Unique.Map
 #endif

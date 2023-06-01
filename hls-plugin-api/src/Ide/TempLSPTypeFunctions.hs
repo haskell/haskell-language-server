@@ -4,8 +4,7 @@
 {-# LANGUAGE PolyKinds             #-}
 module Ide.TempLSPTypeFunctions (takeLefts, dumpNulls, nullToMaybe', NullToMaybe,
                                  toLspId, toTypedResponseError) where
-import           Data.Aeson                    (FromJSON (parseJSON), ToJSON,
-                                                decode, encode, fromJSON)
+import           Data.Aeson                    (FromJSON, decode, encode)
 import           Data.Aeson.Types              (parseMaybe)
 import           Data.Semigroup                ()
 import           Data.Text                     (Text)

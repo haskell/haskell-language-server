@@ -16,26 +16,34 @@ module Development.IDE.LSP.HoverDefinition
     ) where
 
 import           Control.Monad.IO.Class
+import           Data.Maybe                     (fromMaybe)
 import           Development.IDE.Core.Actions
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types    hiding (documentHighlight,
+                                                 hover, id, references)
 import qualified Language.LSP.Server            as LSP
-import           Language.LSP.Types
 
 import qualified Data.Text                      as T
 
-gotoDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (ResponseResult TextDocumentDefinition))
-hover          :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (Maybe Hover))
-gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (ResponseResult TextDocumentTypeDefinition))
-documentHighlight :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (List DocumentHighlight))
-gotoDefinition = request "Definition" getDefinition (InR $ InL $ List []) (InR . InL . List)
-gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InL $ List []) (InR . InL . List)
-hover          = request "Hover"      getAtPoint     Nothing      foundHover
-documentHighlight = request "DocumentHighlight" highlightAtPoint (List []) List
+gotoDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (MessageResult Method_TextDocumentDefinition))
+hover          :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (Hover |? Null))
+gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (MessageResult Method_TextDocumentTypeDefinition))
+documentHighlight :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError ([DocumentHighlight] |? Null))
+gotoDefinition = request "Definition" getDefinition (InR $ InL []) (InR . InL . fmap locationToDefinitionLink)
+gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InL []) (InR . InL . fmap locationToDefinitionLink)
+hover          = request "Hover"      getAtPoint     (InR Null)     foundHover
+documentHighlight = request "DocumentHighlight" highlightAtPoint (InR Null) InL
 
-references :: IdeState -> ReferenceParams -> LSP.LspM c (Either ResponseError (List Location))
+-- Again not sure this is correct, but lsp-types 2 needs DefinitionLink instead
+-- of location so we convert like so
+locationToDefinitionLink :: Location -> DefinitionLink
+locationToDefinitionLink Location{..} = DefinitionLink $ LocationLink Nothing _uri _range _range
+
+references :: IdeState -> ReferenceParams -> LSP.LspM c (Either ResponseError ([Location] |? Null))
 references ide (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = liftIO $
   case uriToFilePath' uri of
     Just path -> do
@@ -43,17 +51,17 @@ references ide (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = liftIO
       logDebug (ideLogger ide) $
         "References request at position " <> T.pack (showPosition pos) <>
         " in file: " <> T.pack path
-      Right . List <$> (runAction "references" ide $ refsAtPoint filePath pos)
-    Nothing -> pure $ Left $ ResponseError InvalidParams ("Invalid URI " <> T.pack (show uri)) Nothing
+      Right  <$> (runAction "references" ide $ refsAtPoint filePath pos)
+    Nothing -> pure $ Left $ ResponseError ErrorCodes_InvalidParams ("Invalid URI " <> T.pack (show uri)) Nothing
 
-wsSymbols :: IdeState -> WorkspaceSymbolParams -> LSP.LspM c (Either ResponseError (List SymbolInformation))
+wsSymbols :: IdeState -> WorkspaceSymbolParams -> LSP.LspM c (Either ResponseError [SymbolInformation])
 wsSymbols ide (WorkspaceSymbolParams _ _ query) = liftIO $ do
   logDebug (ideLogger ide) $ "Workspace symbols request: " <> query
-  runIdeAction "WorkspaceSymbols" (shakeExtras ide) $ Right . maybe (List []) List <$> workspaceSymbols query
+  runIdeAction "WorkspaceSymbols" (shakeExtras ide) $ Right . fromMaybe [] <$> workspaceSymbols query
 
-foundHover :: (Maybe Range, [T.Text]) -> Maybe Hover
+foundHover :: (Maybe Range, [T.Text]) -> Hover |? Null
 foundHover (mbRange, contents) =
-  Just $ Hover (HoverContents $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator contents) mbRange
+  InL $ Hover (InL $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator contents) mbRange
 
 -- | Respond to and log a hover or go-to-definition request
 request

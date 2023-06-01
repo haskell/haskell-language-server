@@ -31,7 +31,7 @@ import           Development.IDE.Types.Diagnostics (FileDiagnostic,
 import           Development.IDE.Types.Location    (Uri (..))
 import           Development.IDE.Types.Logger      (Logger (Logger))
 import           Ide.Types                         (PluginId (..))
-import           Language.LSP.Types                (NormalizedFilePath,
+import           Language.LSP.Protocol.Types       (NormalizedFilePath,
                                                     fromNormalizedFilePath)
 import           OpenTelemetry.Eventlog            (SpanInFlight (..), addEvent,
                                                     beginSpan, endSpan, setTag,

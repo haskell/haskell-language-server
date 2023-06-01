@@ -8,9 +8,9 @@ module Development.IDE.Core.Preprocessor
 
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util   as Util
-import qualified Development.IDE.GHC.Util          as Util
 import           Development.IDE.GHC.CPP
 import           Development.IDE.GHC.Orphans       ()
+import qualified Development.IDE.GHC.Util          as Util
 
 import           Control.DeepSeq                   (NFData (rnf))
 import           Control.Exception                 (evaluate)
@@ -133,7 +133,9 @@ diagsFromCPPLogs filename logs =
           _source = Just "CPP",
           _message = T.unlines $ cdMessage d,
           _relatedInformation = Nothing,
-          _tags = Nothing
+          _tags = Nothing,
+          _codeDescription = Nothing,
+          _data_ = Nothing
         }
 
 

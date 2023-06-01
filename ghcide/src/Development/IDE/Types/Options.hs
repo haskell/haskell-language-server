@@ -2,7 +2,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 -- | Options
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE RankNTypes       #-}
 module Development.IDE.Types.Options
   ( IdeOptions(..)
   , IdePreprocessedSource(..)
@@ -18,17 +19,17 @@ module Development.IDE.Types.Options
   , OptHaddockParse(..)
   , ProgressReportingStyle(..)
   ) where
-
-import qualified Data.Text                         as T
+import           Control.Lens
+import qualified Data.Text                          as T
 import           Data.Typeable
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.GHC.Compat        as GHC
+import           Development.IDE.GHC.Compat         as GHC
 import           Development.IDE.Graph
 import           Development.IDE.Types.Diagnostics
 import           Ide.Plugin.Config
-import           Ide.Types                         (DynFlagsModifications)
-import qualified Language.LSP.Types.Capabilities   as LSP
-
+import           Ide.Types                          (DynFlagsModifications)
+import qualified Language.LSP.Protocol.Capabilities as LSP
+import qualified Language.LSP.Protocol.Types        as LSP
 data IdeOptions = IdeOptions
   { optPreprocessor       :: GHC.ParsedSource -> IdePreprocessedSource
     -- ^ Preprocessor to run over all parsed source trees, generating a list of warnings
@@ -110,7 +111,7 @@ data ProgressReportingStyle
 
 clientSupportsProgress :: LSP.ClientCapabilities -> IdeReportProgress
 clientSupportsProgress caps = IdeReportProgress $ Just True ==
-    (LSP._workDoneProgress =<< LSP._window (caps :: LSP.ClientCapabilities))
+    ((\x -> x ^. LSP.workDoneProgress) =<< LSP._window (caps :: LSP.ClientCapabilities))
 
 defaultIdeOptions :: Action IdeGhcSession -> IdeOptions
 defaultIdeOptions session = IdeOptions

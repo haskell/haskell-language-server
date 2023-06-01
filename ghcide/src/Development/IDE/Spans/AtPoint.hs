@@ -27,7 +27,7 @@ module Development.IDE.Spans.AtPoint (
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Types.Location
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Types          hiding (documentHighlight)
 
 -- compiler and infrastructure
 import           Development.IDE.Core.PositionMapping
@@ -115,7 +115,7 @@ referencesAtPoint
   -> NormalizedFilePath -- ^ The file the cursor is in
   -> Position -- ^ position in the file
   -> FOIReferences -- ^ references data for FOIs
-  -> m [Location]
+  -> m ([Location] |? Null)
 referencesAtPoint withHieDb nfp pos refs = do
   -- The database doesn't have up2date references data for the FOIs so we must collect those
   -- from the Shake graph.
@@ -134,7 +134,7 @@ referencesAtPoint withHieDb nfp pos refs = do
         refs <- liftIO $ withHieDb (\hieDb -> findTypeRefs hieDb True (nameOccName name) (Just $ moduleName mod) (Just $ moduleUnit mod) exclude)
         pure $ mapMaybe typeRowToLoc refs
       _ -> pure []
-  pure $ nubOrd $ foiRefs ++ concat nonFOIRefs ++ concat typeRefs
+  pure $ InL $ nubOrd $ foiRefs ++ concat nonFOIRefs ++ concat typeRefs
 
 rowToLoc :: Res RefRow -> Maybe Location
 rowToLoc (row:.info) = flip Location range <$> mfile
@@ -178,8 +178,8 @@ documentHighlight hf rf pos = pure highlights
       DocumentHighlight (realSrcSpanToRange sp) (Just $ highlightType $ identInfo dets)
     highlightType s =
       if any (isJust . getScopeFromContext) s
-        then HkWrite
-        else HkRead
+        then DocumentHighlightKind_Write
+        else DocumentHighlightKind_Read
 
 gotoTypeDefinition
   :: MonadIO m
@@ -391,13 +391,15 @@ toUri = fromNormalizedUri . filePathToUri' . toNormalizedFilePath'
 
 defRowToSymbolInfo :: Res DefRow -> Maybe SymbolInformation
 defRowToSymbolInfo (DefRow{..}:.(modInfoSrcFile -> Just srcFile))
-  = Just $ SymbolInformation (printOutputable defNameOcc) kind Nothing Nothing loc Nothing
+  = Just $ SymbolInformation (printOutputable defNameOcc) kind Nothing Nothing Nothing loc
   where
     kind
-      | isVarOcc defNameOcc = SkVariable
-      | isDataOcc defNameOcc = SkConstructor
-      | isTcOcc defNameOcc = SkStruct
-      | otherwise = SkUnknown 1
+      | isVarOcc defNameOcc = SymbolKind_Variable
+      | isDataOcc defNameOcc = SymbolKind_Variable
+      | isTcOcc defNameOcc = SymbolKind_Struct
+        -- This used to be (SkUnknown 1), buth there is no SymbolKind_Unknown.
+        -- Changing this to File, as that is enum representation of 1
+      | otherwise = SymbolKind_File
     loc   = Location file range
     file  = fromNormalizedUri . filePathToUri' . toNormalizedFilePath' $ srcFile
     range = Range start end

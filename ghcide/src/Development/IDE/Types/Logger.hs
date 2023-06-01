@@ -55,12 +55,11 @@ import           GHC.Stack                             (CallStack, HasCallStack,
                                                         SrcLoc (SrcLoc, srcLocModule, srcLocStartCol, srcLocStartLine),
                                                         callStack, getCallStack,
                                                         withFrozenCallStack)
+import           Language.LSP.Protocol.Types           (LogMessageParams (..),
+                                                        MessageType (..),
+                                                        ShowMessageParams (..))
 import           Language.LSP.Server
 import qualified Language.LSP.Server                   as LSP
-import           Language.LSP.Types                    (LogMessageParams (..),
-                                                        MessageType (..),
-                                                        SMethod (SWindowLogMessage, SWindowShowMessage),
-                                                        ShowMessageParams (..))
 #if MIN_VERSION_prettyprinter(1,7,0)
 import           Prettyprinter                         as PrettyPrinterModule
 import           Prettyprinter.Render.Text             (renderStrict)
@@ -72,6 +71,7 @@ import           Colog.Core                            (LogAction (..),
                                                         Severity,
                                                         WithSeverity (..))
 import qualified Colog.Core                            as Colog
+import           Language.LSP.Protocol.Message         (SMethod (SMethod_WindowLogMessage, SMethod_WindowShowMessage))
 import           System.IO                             (Handle,
                                                         IOMode (AppendMode),
                                                         hClose, hFlush,
@@ -300,28 +300,28 @@ withBacklog recFun = do
 -- | Creates a recorder that sends logs to the LSP client via @window/showMessage@ notifications.
 lspClientMessageRecorder :: LanguageContextEnv config -> Recorder (WithPriority Text)
 lspClientMessageRecorder env = Recorder $ \WithPriority {..} ->
-  liftIO $ LSP.runLspT env $ LSP.sendNotification SWindowShowMessage
+  liftIO $ LSP.runLspT env $ LSP.sendNotification SMethod_WindowShowMessage
       ShowMessageParams
-        { _xtype = priorityToLsp priority,
+        { _type_ = priorityToLsp priority,
           _message = payload
         }
 
 -- | Creates a recorder that sends logs to the LSP client via @window/logMessage@ notifications.
 lspClientLogRecorder :: LanguageContextEnv config -> Recorder (WithPriority Text)
 lspClientLogRecorder env = Recorder $ \WithPriority {..} ->
-  liftIO $ LSP.runLspT env $ LSP.sendNotification SWindowLogMessage
+  liftIO $ LSP.runLspT env $ LSP.sendNotification SMethod_WindowLogMessage
       LogMessageParams
-        { _xtype = priorityToLsp priority,
+        { _type_ = priorityToLsp priority,
           _message = payload
         }
 
 priorityToLsp :: Priority -> MessageType
 priorityToLsp =
   \case
-    Debug   -> MtLog
-    Info    -> MtInfo
-    Warning -> MtWarning
-    Error   -> MtError
+    Debug   -> MessageType_Log
+    Info    -> MessageType_Info
+    Warning -> MessageType_Warning
+    Error   -> MessageType_Error
 
 toCologActionWithPrio :: (MonadIO m, HasCallStack) => Recorder (WithPriority msg) -> LogAction m (WithSeverity msg)
 toCologActionWithPrio (Recorder _logger) = LogAction $ \WithSeverity{..} -> do

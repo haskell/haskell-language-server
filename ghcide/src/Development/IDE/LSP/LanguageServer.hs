@@ -1,12 +1,12 @@
       -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE PolyKinds                 #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE StarIsType                #-}
-
 -- WARNING: A copy of DA.Daml.LanguageServer, try to keep them in sync
 -- This version removes the daml: handling
 module Development.IDE.LSP.LanguageServer
@@ -26,8 +26,9 @@ import qualified Data.Text                             as T
 import           Development.IDE.LSP.Server
 import           Development.IDE.Session               (runWithDb)
 import           Ide.Types                             (traceWithSpan)
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types           hiding (retry)
 import qualified Language.LSP.Server                   as LSP
-import           Language.LSP.Types
 import           System.IO
 import           UnliftIO.Async
 import           UnliftIO.Concurrent
@@ -43,11 +44,11 @@ import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Logger
 import qualified Development.IDE.Types.Logger          as Logger
 import           Development.IDE.Types.Shake           (WithHieDb)
+import           Ide.TempLSPTypeFunctions
 import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
                                                         type (<~>))
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
-
 data Log
   = LogRegisteringIdeConfig !IdeConfiguration
   | LogReactorThreadException !SomeException
@@ -92,7 +93,7 @@ runLanguageServer
     -> config
     -> (config -> Value -> Either T.Text config)
     -> (MVar ()
-        -> IO (LSP.LanguageContextEnv config -> RequestMessage Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv config, a)),
+        -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv config, a)),
                LSP.Handlers (m config),
                (LanguageContextEnv config, a) -> m config <~> IO))
     -> IO ()
@@ -133,7 +134,7 @@ setupLSP ::
   -> LSP.Handlers (ServerM config)
   -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
   -> MVar ()
-  -> IO (LSP.LanguageContextEnv config -> RequestMessage Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
+  -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
          LSP.Handlers (ServerM config),
          (LanguageContextEnv config, IdeState) -> ServerM config <~> IO)
 setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
@@ -195,8 +196,8 @@ handleInit
     -> (SomeLspId -> IO ())
     -> (SomeLspId -> IO ())
     -> Chan ReactorMessage
-    -> LSP.LanguageContextEnv config -> RequestMessage Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
-handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
+    -> LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
+handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
     let root = LSP.resRootPath env
     dir <- maybe getCurrentDirectory return root
@@ -233,11 +234,11 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                     case cancelOrRes of
                         Left () -> do
                             log Debug $ LogCancelledRequest _id
-                            k $ ResponseError RequestCancelled "" Nothing
+                            k $ ResponseError (ErrorCodes_Custom (-32800)) "" Nothing
                         Right res -> pure res
                 ) $ \(e :: SomeException) -> do
                     exceptionInHandler e
-                    k $ ResponseError InternalError (T.pack $ show e) Nothing
+                    k $ ResponseError ErrorCodes_InternalError (T.pack $ show e) Nothing
     _ <- flip forkFinally handleServerException $ do
         untilMVar lifetime $ runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb hieChan -> do
             putMVar dbMVar (WithHieDbShield withHieDb,hieChan)
@@ -263,27 +264,27 @@ untilMVar mvar io = void $
     waitAnyCancel =<< traverse async [ io , readMVar mvar ]
 
 cancelHandler :: (SomeLspId -> IO ()) -> LSP.Handlers (ServerM c)
-cancelHandler cancelRequest = LSP.notificationHandler SCancelRequest $ \NotificationMessage{_params=CancelParams{_id}} ->
-  liftIO $ cancelRequest (SomeLspId _id)
+cancelHandler cancelRequest = LSP.notificationHandler SMethod_CancelRequest $ \TNotificationMessage{_params=CancelParams{_id}} ->
+  liftIO $ cancelRequest (SomeLspId (toLspId _id))
 
 shutdownHandler :: IO () -> LSP.Handlers (ServerM c)
-shutdownHandler stopReactor = LSP.requestHandler SShutdown $ \_ resp -> do
+shutdownHandler stopReactor = LSP.requestHandler SMethod_Shutdown $ \_ resp -> do
     (_, ide) <- ask
     liftIO $ logDebug (ideLogger ide) "Received shutdown message"
     -- stop the reactor to free up the hiedb connection
     liftIO stopReactor
     -- flush out the Shake session to record a Shake profile if applicable
     liftIO $ shakeShut ide
-    resp $ Right Empty
+    resp $ Right Null
 
 exitHandler :: IO () -> LSP.Handlers (ServerM c)
-exitHandler exit = LSP.notificationHandler SExit $ const $ liftIO exit
+exitHandler exit = LSP.notificationHandler SMethod_Exit $ const $ liftIO exit
 
 modifyOptions :: LSP.Options -> LSP.Options
-modifyOptions x = x{ LSP.textDocumentSync   = Just $ tweakTDS origTDS
+modifyOptions x = x{ LSP.optTextDocumentSync   = Just $ tweakTDS origTDS
                    }
     where
-        tweakTDS tds = tds{_openClose=Just True, _change=Just TdSyncIncremental, _save=Just $ InR $ SaveOptions Nothing}
-        origTDS = fromMaybe tdsDefault $ LSP.textDocumentSync x
+        tweakTDS tds = tds{_openClose=Just True, _change=Just TextDocumentSyncKind_Incremental, _save=Just $ InR $ SaveOptions Nothing}
+        origTDS = fromMaybe tdsDefault $ LSP.optTextDocumentSync x
         tdsDefault = TextDocumentSyncOptions Nothing Nothing Nothing Nothing Nothing
 

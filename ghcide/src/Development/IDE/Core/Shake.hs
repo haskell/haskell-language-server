@@ -136,6 +136,7 @@ import           Development.IDE.GHC.Compat             (NameCache,
 import           Development.IDE.GHC.Compat             (upNameCache)
 #endif
 import qualified Data.Aeson.Types                       as A
+import           Data.Maybe                             (Maybe (Nothing))
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
@@ -167,10 +168,14 @@ import           Ide.Types                              (IdePlugins (IdePlugins)
                                                          PluginDescriptor (pluginId),
                                                          PluginId)
 import           Language.LSP.Diagnostics
+import           Language.LSP.Protocol.Capabilities
+import           Language.LSP.Protocol.Message          hiding (error)
+import           Language.LSP.Protocol.Types            (NotebookDocumentClientCapabilities (NotebookDocumentClientCapabilities),
+                                                         NotebookDocumentSyncClientCapabilities (NotebookDocumentSyncClientCapabilities),
+                                                         WindowClientCapabilities (WindowClientCapabilities))
+import           Language.LSP.Protocol.Types            hiding (id, start)
+import qualified Language.LSP.Protocol.Types            as LSP
 import qualified Language.LSP.Server                    as LSP
-import           Language.LSP.Types
-import qualified Language.LSP.Types                     as LSP
-import           Language.LSP.Types.Capabilities
 import           Language.LSP.VFS                       hiding (start)
 import qualified "list-t" ListT
 import           OpenTelemetry.Eventlog
@@ -303,7 +308,7 @@ type WithProgressFunc = forall a.
 type WithIndefiniteProgressFunc = forall a.
     T.Text -> LSP.ProgressCancellable -> IO a -> IO a
 
-type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,PositionDelta,TextDocumentVersion))
+type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,PositionDelta,Maybe Int32))
 
 getShakeExtras :: Action ShakeExtras
 getShakeExtras = do
@@ -344,7 +349,7 @@ getPluginConfigAction plId = do
 -- This is called when we don't already have a result, or computing the rule failed.
 -- The result of this function will always be marked as 'stale', and a 'proper' rebuild of the rule will
 -- be queued if the rule hasn't run before.
-addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,TextDocumentVersion))) -> Rules ()
+addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,Maybe Int32))) -> Rules ()
 addPersistentRule k getVal = do
   ShakeExtras{persistentKeys} <- getShakeExtrasRules
   void $ liftIO $ atomically $ modifyTVar' persistentKeys $ insertKeyMap (newKey k) (fmap (fmap (first3 toDyn)) . getVal)
@@ -638,8 +643,16 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
                 else noProgressReporting
         actionQueue <- newQueue
 
-        let clientCapabilities = maybe def LSP.resClientCapabilities lspEnv
-
+        let -- TODO: Find some saner default ClientCapabilities so we don't need to
+            -- use Nothing 54 times.
+            clientCapabilities = maybe defClientCapabilities LSP.resClientCapabilities lspEnv
+            defClientCapabilities = ClientCapabilities defWorkspaceCaps defTextDocumentCaps defNotebookDocumentClientCaps defWindowClientCaps defGeneralClientCaps Nothing
+            defWorkspaceCaps = Just $ WorkspaceClientCapabilities Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+            defTextDocumentCaps = Just $ TextDocumentClientCapabilities Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+            defNotebookDocumentClientCaps = Just $ NotebookDocumentClientCapabilities defNotebookDocumentSyncClientCaps
+            defNotebookDocumentSyncClientCaps = NotebookDocumentSyncClientCapabilities Nothing Nothing
+            defWindowClientCaps = Just $ WindowClientCapabilities Nothing Nothing Nothing
+            defGeneralClientCaps = Just $ GeneralClientCapabilities Nothing Nothing Nothing Nothing
         dirtyKeys <- newTVarIO mempty
         -- Take one VFS snapshot at the start
         vfsVar <- newTVarIO =<< vfsSnapshot lspEnv
@@ -682,7 +695,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
 getStateKeys :: ShakeExtras -> IO [Key]
 getStateKeys = (fmap.fmap) fst . atomically . ListT.toList . STM.listT . state
 
--- | Must be called in the 'Initialized' handler and only once
+-- | Must be called in the 'Method_Initialized' handler and only once
 shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()
 shakeSessionInit recorder ide@IdeState{..} = do
     -- Take a snapshot of the VFS - it should be empty as we've received no notifications
@@ -900,7 +913,7 @@ garbageCollectKeys label maxAge checkParents agedKeys = do
         logDebug logger $ T.pack $
             label <> " of " <> show n <> " keys (took " <> showDuration t <> ")"
     when (coerce ideTesting) $ liftIO $ mRunLspT lspEnv $
-        LSP.sendNotification (SCustomMethod "ghcide/GC")
+        LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/GC"))
                              (toJSON $ mapMaybe (fmap showKey . fromKeyType) garbage)
     return garbage
 
@@ -1128,7 +1141,7 @@ defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnost
 
 defineEarlyCutoff'
     :: forall k v. IdeRule k v
-    => (TextDocumentVersion -> [FileDiagnostic] -> Action ()) -- ^ update diagnostics
+    => (Maybe Int32 -> [FileDiagnostic] -> Action ()) -- ^ update diagnostics
     -- | compare current and previous for freshness
     -> (BS.ByteString -> BS.ByteString -> Bool)
     -> k
@@ -1220,7 +1233,7 @@ traceA (A Succeeded{}) = "Success"
 updateFileDiagnostics :: MonadIO m
   => Recorder (WithPriority Log)
   -> NormalizedFilePath
-  -> TextDocumentVersion
+  -> Maybe Int32
   -> Key
   -> ShakeExtras
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
@@ -1254,15 +1267,15 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                         Just env -> LSP.runLspT env $ do
                             liftIO $ tag "count" (show $ Prelude.length newDiags)
                             liftIO $ tag "key" (show k)
-                            LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
-                                LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
+                            LSP.sendNotification SMethod_TextDocumentPublishDiagnostics $
+                                LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) ( newDiags)
                  return action
     where
         diagsFromRule :: Diagnostic -> Diagnostic
         diagsFromRule c@Diagnostic{_range}
             | coerce ideTesting = c
                 {_relatedInformation =
-                    Just $ List [
+                    Just $  [
                         DiagnosticRelatedInformation
                             (Location
                                 (filePathToUri $ fromNormalizedFilePath fp)
@@ -1297,7 +1310,7 @@ updateSTMDiagnostics ::
   (forall a. String -> String -> a -> a) ->
   STMDiagnosticStore ->
   NormalizedUri ->
-  TextDocumentVersion ->
+  Maybe Int32 ->
   DiagnosticsBySource ->
   STM [LSP.Diagnostic]
 updateSTMDiagnostics addTag store uri mv newDiagsBySource =
@@ -1314,7 +1327,7 @@ updateSTMDiagnostics addTag store uri mv newDiagsBySource =
 setStageDiagnostics
     :: (forall a. String -> String -> a -> a)
     -> NormalizedUri
-    -> TextDocumentVersion -- ^ the time that the file these diagnostics originate from was last edited
+    -> Maybe Int32 -- ^ the time that the file these diagnostics originate from was last edited
     -> T.Text
     -> [LSP.Diagnostic]
     -> STMDiagnosticStore
@@ -1329,8 +1342,8 @@ getAllDiagnostics ::
 getAllDiagnostics =
     fmap (concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT
 
-updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> STM ()
-updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (List changes) =
+updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> [TextDocumentContentChangeEvent] -> STM ()
+updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (changes) =
     STM.focus (Focus.alter f) uri positionMapping
       where
         uri = toNormalizedUri _uri
@@ -1343,6 +1356,4 @@ updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} Versi
                   zeroMapping
                   (EM.insert actual_version (shared_change, zeroMapping) mappingForUri)
         shared_change = mkDelta changes
-        actual_version = case _version of
-          Nothing -> error "Nothing version from server" -- This is a violation of the spec
-          Just v  -> v
+        actual_version =  _version

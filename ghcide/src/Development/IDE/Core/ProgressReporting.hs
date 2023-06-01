@@ -21,6 +21,7 @@ import           Control.Concurrent.Strict
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class      (lift)
+import           Data.Aeson                     (ToJSON (toJSON))
 import           Data.Foldable                  (for_)
 import           Data.Functor                   (($>))
 import qualified Data.Text                      as T
@@ -30,9 +31,10 @@ import           Development.IDE.Graph          hiding (ShakeValue)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified Focus
+import           Language.LSP.Protocol.Message  hiding (error)
+import           Language.LSP.Protocol.Types    hiding (id)
+import qualified Language.LSP.Protocol.Types    as LSP
 import qualified Language.LSP.Server            as LSP
-import           Language.LSP.Types
-import qualified Language.LSP.Types             as LSP
 import qualified StmContainers.Map              as STM
 import           System.Time.Extra
 import           UnliftIO.Exception             (bracket_)
@@ -125,30 +127,32 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
             -- first sleep a bit, so we only show progress messages if it's going to take
             -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
             liftIO $ sleep before
-            u <- ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
+            u <- ProgressToken . InR . T.pack . show . hashUnique <$> liftIO newUnique
 
             b <- liftIO newBarrier
-            void $ LSP.runLspT lspEnv $ LSP.sendRequest LSP.SWindowWorkDoneProgressCreate
+            void $ LSP.runLspT lspEnv $ LSP.sendRequest SMethod_WindowWorkDoneProgressCreate
                 LSP.WorkDoneProgressCreateParams { _token = u } $ liftIO . signalBarrier b
             liftIO $ async $ do
                 ready <- waitBarrier b
                 LSP.runLspT lspEnv $ for_ ready $ const $ bracket_ (start u) (stop u) (loop u 0)
             where
-                start id = LSP.sendNotification LSP.SProgress $
+                start id = LSP.sendNotification SMethod_Progress $
                     LSP.ProgressParams
                         { _token = id
-                        , _value = LSP.Begin $ WorkDoneProgressBeginParams
-                          { _title = "Processing"
+                        , _value = toJSON $ WorkDoneProgressBegin
+                          { _kind = AString @"begin"
+                          ,  _title = "Processing"
                           , _cancellable = Nothing
                           , _message = Nothing
                           , _percentage = Nothing
                           }
                         }
-                stop id = LSP.sendNotification LSP.SProgress
+                stop id = LSP.sendNotification SMethod_Progress
                     LSP.ProgressParams
                         { _token = id
-                        , _value = LSP.End WorkDoneProgressEndParams
-                          { _message = Nothing
+                        , _value = toJSON $ WorkDoneProgressEnd
+                          { _kind = AString @"end"
+                           , _message = Nothing
                           }
                         }
                 loop _ _ | optProgressStyle == NoProgress =
@@ -164,17 +168,19 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
                             nextPct :: UInt
                             nextPct = floor $ 100 * nextFrac
                         when (nextPct /= prevPct) $
-                          LSP.sendNotification LSP.SProgress $
+                          LSP.sendNotification SMethod_Progress $
                           LSP.ProgressParams
                               { _token = id
-                              , _value = LSP.Report $ case optProgressStyle of
-                                  Explicit -> LSP.WorkDoneProgressReportParams
-                                    { _cancellable = Nothing
+                              , _value = case optProgressStyle of
+                                  Explicit -> toJSON $ WorkDoneProgressReport
+                                    { _kind = AString @"report"
+                                    , _cancellable = Nothing
                                     , _message = Just $ T.pack $ show done <> "/" <> show todo
                                     , _percentage = Nothing
                                     }
-                                  Percentage -> LSP.WorkDoneProgressReportParams
-                                    { _cancellable = Nothing
+                                  Percentage -> toJSON $ WorkDoneProgressReport
+                                    { _kind = AString @"report"
+                                    , _cancellable = Nothing
                                     , _message = Nothing
                                     , _percentage = Just nextPct
                                     }

@@ -98,8 +98,9 @@ import qualified GHC.LanguageExtensions            as LangExt
 import           GHC.Serialized
 import           HieDb
 import qualified Language.LSP.Server               as LSP
-import           Language.LSP.Types                (DiagnosticTag (..))
-import qualified Language.LSP.Types                as LSP
+import           Language.LSP.Protocol.Types                (DiagnosticTag (..))
+import qualified Language.LSP.Protocol.Types                as LSP
+import qualified Language.LSP.Protocol.Message            as LSP
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
@@ -132,6 +133,7 @@ import           GHC                               (Anchor (anchor),
 import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
+import Data.Data (Proxy(Proxy))
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
@@ -611,7 +613,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
     source = "compile"
     catchErrs x = x `catches`
       [ Handler $ return . (,Nothing) . diagFromGhcException source dflags
-      , Handler $ return . (,Nothing) . diagFromString source DsError (noSpan "<internal>")
+      , Handler $ return . (,Nothing) . diagFromString source DiagnosticSeverity_Error (noSpan "<internal>")
       . (("Error during " ++ T.unpack source) ++) . show @SomeException
       ]
 
@@ -741,7 +743,7 @@ unDefer ( _                                        , fd) = (False, fd)
 
 upgradeWarningToError :: FileDiagnostic -> FileDiagnostic
 upgradeWarningToError (nfp, sh, fd) =
-  (nfp, sh, fd{_severity = Just DsError, _message = warn2err $ _message fd}) where
+  (nfp, sh, fd{_severity = Just DiagnosticSeverity_Error, _message = warn2err $ _message fd}) where
   warn2err :: T.Text -> T.Text
   warn2err = T.intercalate ": error:" . T.splitOn ": warning:"
 
@@ -784,14 +786,14 @@ tagDiag (w@(Reason warning), (nfp, sh, fd))
   where
     requiresTag :: WarningFlag -> Maybe DiagnosticTag
     requiresTag Opt_WarnWarningsDeprecations
-      = Just DtDeprecated
+      = Just DiagnosticTag_Deprecated
     requiresTag wflag  -- deprecation was already considered above
       | wflag `elem` unnecessaryDeprecationWarningFlags
-      = Just DtUnnecessary
+      = Just DiagnosticTag_Unnecessary
     requiresTag _ = Nothing
-    addTag :: DiagnosticTag -> Maybe (List DiagnosticTag) -> Maybe (List DiagnosticTag)
-    addTag t Nothing          = Just (List [t])
-    addTag t (Just (List ts)) = Just (List (t : ts))
+    addTag :: DiagnosticTag -> Maybe ([DiagnosticTag]) -> Maybe ([DiagnosticTag])
+    addTag t Nothing          = Just ( [t])
+    addTag t (Just ( ts)) = Just ( (t : ts))
 -- other diagnostics are left unaffected
 tagDiag t = t
 
@@ -918,12 +920,13 @@ indexHieFile se mod_summary srcPath !hash hf = do
           case lspEnv se of
             Nothing -> pure Nothing
             Just env -> LSP.runLspT env $ do
-              u <- LSP.ProgressTextToken . T.pack . show . hashUnique <$> liftIO Unique.newUnique
+              u <- LSP.ProgressToken . LSP.InR . T.pack . show . hashUnique <$> liftIO Unique.newUnique
               -- TODO: Wait for the progress create response to use the token
-              _ <- LSP.sendRequest LSP.SWindowWorkDoneProgressCreate (LSP.WorkDoneProgressCreateParams u) (const $ pure ())
-              LSP.sendNotification LSP.SProgress $ LSP.ProgressParams u $
-                LSP.Begin $ LSP.WorkDoneProgressBeginParams
-                  { _title = "Indexing"
+              _ <- LSP.sendRequest LSP.SMethod_WindowWorkDoneProgressCreate (LSP.WorkDoneProgressCreateParams u) (const $ pure ())
+              LSP.sendNotification LSP.SMethod_Progress $ LSP.ProgressParams u $
+                toJSON $ LSP.WorkDoneProgressBegin
+                  { _kind = LSP.AString @"begin"
+                  ,  _title = "Indexing"
                   , _cancellable = Nothing
                   , _message = Nothing
                   , _percentage = Nothing
@@ -941,22 +944,25 @@ indexHieFile se mod_summary srcPath !hash hf = do
         progressPct = floor $ 100 * progressFrac
 
       whenJust (lspEnv se) $ \env -> whenJust tok $ \tok -> LSP.runLspT env $
-        LSP.sendNotification LSP.SProgress $ LSP.ProgressParams tok $
-          LSP.Report $
+        LSP.sendNotification LSP.SMethod_Progress $ LSP.ProgressParams tok $
+          toJSON $
             case style of
-                Percentage -> LSP.WorkDoneProgressReportParams
-                    { _cancellable = Nothing
+                Percentage -> LSP.WorkDoneProgressReport
+                    { _kind = LSP.AString @"report"
+                        , _cancellable = Nothing
                     , _message = Nothing
                     , _percentage = Just progressPct
                     }
-                Explicit -> LSP.WorkDoneProgressReportParams
-                    { _cancellable = Nothing
+                Explicit -> LSP.WorkDoneProgressReport
+                    { _kind = LSP.AString @"report"
+                        , _cancellable = Nothing
                     , _message = Just $
                         T.pack " (" <> T.pack (show done) <> "/" <> T.pack (show $ done + remaining) <> ")..."
                     , _percentage = Nothing
                     }
-                NoProgress -> LSP.WorkDoneProgressReportParams
-                  { _cancellable = Nothing
+                NoProgress -> LSP.WorkDoneProgressReport
+                  { _kind = LSP.AString @"report"
+                    , _cancellable = Nothing
                   , _message = Nothing
                   , _percentage = Nothing
                   }
@@ -973,15 +979,17 @@ indexHieFile se mod_summary srcPath !hash hf = do
           swapTVar indexCompleted 0
       whenJust (lspEnv se) $ \env -> LSP.runLspT env $
         when (coerce $ ideTesting se) $
-          LSP.sendNotification (LSP.SCustomMethod "ghcide/reference/ready") $
+          LSP.sendNotification (LSP.SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
             toJSON $ fromNormalizedFilePath srcPath
       whenJust mdone $ \done ->
         modifyVar_ indexProgressToken $ \tok -> do
           whenJust (lspEnv se) $ \env -> LSP.runLspT env $
             whenJust tok $ \tok ->
-              LSP.sendNotification LSP.SProgress $ LSP.ProgressParams tok $
-                LSP.End $ LSP.WorkDoneProgressEndParams
-                  { _message = Just $ "Finished indexing " <> T.pack (show done) <> " files"
+              LSP.sendNotification LSP.SMethod_Progress  $ LSP.ProgressParams tok $
+                toJSON $
+                LSP.WorkDoneProgressEnd
+                  { _kind = LSP.AString @"end"
+                  , _message = Just $ "Finished indexing " <> T.pack (show done) <> " files"
                   }
           -- We are done with the current indexing cycle, so destroy the token
           pure Nothing
@@ -1013,7 +1021,7 @@ handleGenerationErrors :: DynFlags -> T.Text -> IO () -> IO [FileDiagnostic]
 handleGenerationErrors dflags source action =
   action >> return [] `catches`
     [ Handler $ return . diagFromGhcException source dflags
-    , Handler $ return . diagFromString source DsError (noSpan "<internal>")
+    , Handler $ return . diagFromString source DiagnosticSeverity_Error (noSpan "<internal>")
     . (("Error during " ++ T.unpack source) ++) . show @SomeException
     ]
 
@@ -1021,7 +1029,7 @@ handleGenerationErrors' :: DynFlags -> T.Text -> IO (Maybe a) -> IO ([FileDiagno
 handleGenerationErrors' dflags source action =
   fmap ([],) action `catches`
     [ Handler $ return . (,Nothing) . diagFromGhcException source dflags
-    , Handler $ return . (,Nothing) . diagFromString source DsError (noSpan "<internal>")
+    , Handler $ return . (,Nothing) . diagFromString source DiagnosticSeverity_Error (noSpan "<internal>")
     . (("Error during " ++ T.unpack source) ++) . show @SomeException
     ]
 
@@ -1291,9 +1299,9 @@ parseFileContents env customPreprocessor filename ms = do
                let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
 
                unless (null errs) $
-                  throwE $ diagFromStrings "parser" DsError errs
+                  throwE $ diagFromStrings "parser" DiagnosticSeverity_Error errs
 
-               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
+               let preproc_warnings = diagFromStrings "parser" DiagnosticSeverity_Warning preproc_warns
                (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed psMessages
                let (warns, errs) = renderMessages msgs
 
