@@ -9,7 +9,6 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE InstanceSigs               #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -83,6 +82,7 @@ import           Development.IDE.Graph
 import           GHC                           (DynFlags)
 import           GHC.Generics
 import           Ide.Plugin.Properties
+import           Ide.TempLSPTypeFunctions
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types   hiding
                                                (SemanticTokenAbsolute (length, line),
@@ -328,13 +328,7 @@ defaultConfigDescriptor =
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
 -- Only methods for which we know how to combine responses can be instances of 'PluginMethod'
--- I removed the HasTracing constraint as with it, I get •
--- No instance for (HasTextDocument InitializedParams doc0)
---    arising from the superclasses of an instance declaration
--- In the instance declaration for
---    ‘PluginMethod 'Notification 'Method_Initialized'
--- class HasTracing (MessageParams m) => PluginMethod (k :: MessageKind) (m :: Method ClientToServer k) where
-class PluginMethod (k :: MessageKind) (m :: Method ClientToServer k) where
+class HasTracing (MessageParams m) => PluginMethod (k :: MessageKind) (m :: Method ClientToServer k) where
 
   -- | Parse the configuration to check if this plugin is enabled.
   -- Perform sanity checks on the message to see whether plugin is enabled
@@ -954,7 +948,7 @@ instance HasTracing DidChangeWatchedFilesParams where
 instance HasTracing DidChangeWorkspaceFoldersParams
 instance HasTracing DidChangeConfigurationParams
 instance HasTracing InitializeParams
-instance HasTracing (Maybe InitializedParams)
+instance HasTracing InitializedParams
 instance HasTracing WorkspaceSymbolParams where
   traceWithSpan sp (WorkspaceSymbolParams _ _ query) = setTag sp "query" (encodeUtf8 query)
 instance HasTracing CallHierarchyIncomingCallsParams
@@ -996,44 +990,3 @@ getProcessID = fromIntegral <$> P.getProcessID
 installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 #endif
 
--- The functions below should probably be added to the lsp-types package
--- but temporarily including them here
--- We get null responses, which can be problematic for concat, because of
--- this we need to filter them out
-
-takeLefts :: Foldable f => f (a |? b) -> [a]
-takeLefts = foldr (\x acc -> case x of
-                                InL x' -> x' : acc
-                                InR _  -> acc) []
-
-dumpNulls :: (Foldable f, NullToMaybe a b) => f a -> [b]
-dumpNulls = foldr (\x acc -> case nullToMaybe' x of
-                                Just x' -> x' : acc
-                                Nothing -> acc) []
-
-instance Semigroup s => Semigroup (s |? J.Null) where
-  InL x <> InL y = InL (x <> y)
-  InL x <> InR _ = InL x
-  InR _ <> InL x = InL x
-  InR _ <> InR y = InR y
-
-instance Semigroup WorkspaceEdit where
-  (WorkspaceEdit a b c) <> (WorkspaceEdit a' b' c') = WorkspaceEdit (a <> a') (b <> b') (c <> c')
-
-class NullToMaybe a b where
-  nullToMaybe' :: a -> Maybe b
-
-instance NullToMaybe (a |? J.Null) a where
-  nullToMaybe' (InL x) = Just x
-  nullToMaybe' (InR _) = Nothing
-
-instance NullToMaybe (a |? (b |? J.Null)) (a |? b) where
-  nullToMaybe' (InL x)       = Just $ InL x
-  nullToMaybe' (InR (InL x)) = Just $ InR x
-  nullToMaybe' (InR (InR _)) = Nothing
-
-instance NullToMaybe (a |? (b |? (c |? J.Null))) (a |? (b |? c)) where
-  nullToMaybe' (InL x)             = Just $ InL x
-  nullToMaybe' (InR (InL x))       = Just $ InR $ InL x
-  nullToMaybe' (InR (InR (InL x))) = Just $ InR $ InR x
-  nullToMaybe' (InR (InR (InR _))) = Nothing
