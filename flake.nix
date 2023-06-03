@@ -196,14 +196,14 @@
         # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached
         # by upstream nixpkgs, which now only includes GHC version 9+
         supportedGHCs = let
-          ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
+          ghcVersion = "ghc" + (builtins.concatStringsSep "" (pkgs.lib.lists.init (builtins.splitVersion pkgs.haskellPackages.ghc.version)));
           cases = {
             ghc90 = ghc90Config.tweakHpkgs (pkgs.hlsHpkgs "ghc90");
             ghc92 = ghc92Config.tweakHpkgs (pkgs.hlsHpkgs "ghc92");
             ghc94 = ghc94Config.tweakHpkgs (pkgs.hlsHpkgs "ghc94");
             ghc96 = ghc96Config.tweakHpkgs (pkgs.hlsHpkgs "ghc96");
           };
-          in { default = cases."${ghcVersion}"; } // cases;
+        in { default = cases."${ghcVersion}"; } // cases;
 
         ghc90 = supportedGHCs.ghc90;
         ghc92 = supportedGHCs.ghc92;
