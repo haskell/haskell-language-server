@@ -93,7 +93,7 @@ runLanguageServer
     -> config
     -> (config -> Value -> Either T.Text config)
     -> (MVar ()
-        -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either (TResponseError Method_Initialize) (LSP.LanguageContextEnv config, a)),
+        -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv config, a)),
                LSP.Handlers (m config),
                (LanguageContextEnv config, a) -> m config <~> IO))
     -> IO ()

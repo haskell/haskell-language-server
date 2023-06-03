@@ -36,10 +36,12 @@
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
 module Main (main) where
 
+import Data.Row
 import           Control.Applicative.Combinators
 import           Control.Concurrent
 import           Control.Exception                        (bracket_, catch,
@@ -52,6 +54,7 @@ import qualified Data.Aeson                               as A
 import           Data.Default
 import           Data.Foldable
 import           Data.List.Extra
+import           Data.Proxy
 import           Data.Maybe
 import qualified Data.Set                                 as Set
 import qualified Data.Text                                as T
@@ -90,16 +93,17 @@ import           Development.IDE.Types.Location
 import           Development.Shake                        (getDirectoryFilesIO)
 import           Ide.Plugin.Config
 import           Language.LSP.Test
-import           Language.LSP.Types                       hiding
+import           Language.LSP.Protocol.Types                       hiding
                                                           (SemanticTokenAbsolute (length, line),
                                                            SemanticTokenRelative (length),
                                                            SemanticTokensEdit (_start),
-                                                           mkRange)
-import           Language.LSP.Types.Capabilities
-import qualified Language.LSP.Types.Lens                  as Lens (label)
-import qualified Language.LSP.Types.Lens                  as Lsp (diagnostics,
-                                                                  message,
-                                                                  params)
+                                                           mkRange, message, diagnostic, executeCommand, applyEdit, id)
+import qualified Language.LSP.Protocol.Types as L               hiding
+                                                          (SemanticTokenAbsolute (length, line),
+                                                           SemanticTokenRelative (length),
+                                                           SemanticTokensEdit (_start))
+import           Language.LSP.Protocol.Message            hiding (error)
+import           Language.LSP.Protocol.Capabilities
 import           Language.LSP.VFS                         (VfsLog, applyChange)
 import           Network.URI
 import           System.Directory
@@ -145,10 +149,7 @@ import           GHC.Stack                                (emptyCallStack)
 import qualified HieDbRetry
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
 import           Ide.Types
-import qualified Language.LSP.Types                       as LSP
-import           Language.LSP.Types.Lens                  (didChangeWatchedFiles,
-                                                           workspace)
-import qualified Language.LSP.Types.Lens                  as L
+import           Ide.TempLSPTypeFunctions
 import qualified Progress
 import           System.Time.Extra
 import qualified Test.QuickCheck.Monadic                  as MonadicQuickCheck
@@ -175,14 +176,14 @@ instance Pretty Log where
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (Begin _))) -> Just ()
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ _)) -> Just ()
   _ -> Nothing
 
 -- | Wait for the first progress end step
 -- Also implemented in hls-test-utils Test.Hls
 waitForProgressDone :: Session ()
 waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ _)) -> Just ()
   _ -> Nothing
 
 -- | Wait for all progress to be done
@@ -193,7 +194,7 @@ waitForAllProgressDone = loop
   where
     loop = do
       ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ _)) -> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
@@ -216,7 +217,7 @@ main = do
   defaultMainWithRerun $ testGroup "ghcide"
     [ testSession "open close" $ do
         doc <- createDoc "Testing.hs" "haskell" ""
-        void (skipManyTill anyMessage $ message SWindowWorkDoneProgressCreate)
+        void (skipManyTill anyMessage $ message SMethod_WindowWorkDoneProgressCreate)
         waitForProgressBegin
         closeDoc doc
         waitForProgressDone
@@ -259,12 +260,12 @@ initializeResponseTests = withResource acquire release tests where
   -- response. Currently the server advertises almost no capabilities
   -- at all, in some cases failing to announce capabilities that it
   -- actually does provide! Hopefully this will change ...
-  tests :: IO (ResponseMessage Initialize) -> TestTree
+  tests :: IO (TResponseMessage Method_Initialize) -> TestTree
   tests getInitializeResponse =
     testGroup "initialize response capabilities"
     [ chk "   text doc sync"             _textDocumentSync  tds
     , chk "   hover"                         _hoverProvider (Just $ InL True)
-    , chk "   completion"               _completionProvider (Just $ CompletionOptions Nothing (Just ["."]) Nothing (Just True))
+    , chk "   completion"               _completionProvider (Just $ CompletionOptions Nothing (Just ["."]) Nothing (Just True) Nothing)
     , chk "NO signature help"        _signatureHelpProvider Nothing
     , chk "   goto definition"          _definitionProvider (Just $ InL True)
     , chk "   goto type definition" _typeDefinitionProvider (Just $ InL True)
@@ -284,16 +285,16 @@ initializeResponseTests = withResource acquire release tests where
                           _documentOnTypeFormattingProvider Nothing
     , chk "NO renaming"                     _renameProvider (Just $ InL False)
     , chk "NO doc link"               _documentLinkProvider Nothing
-    , chk "NO color"                   (^. L.colorProvider) (Just $ InL False)
+    , chk "NO color"                   (^. colorProvider) (Just $ InL False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ InL False)
     , che "   execute command"      _executeCommandProvider [typeLensCommandId, blockCommandId]
-    , chk "   workspace"                   (^. L.workspace) (Just $ WorkspaceServerCapabilities (Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )}))
-    , chk "NO experimental"             (^. L.experimental) Nothing
+    , chk "   workspace"                   (^. workspace) (Just $ #workspaceFolders .== Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )} .+ #fileOperations .== Nothing)
+    , chk "NO experimental"             (^. experimental) Nothing
     ] where
 
       tds = Just (InL (TextDocumentSyncOptions
                               { _openClose = Just True
-                              , _change    = Just TdSyncIncremental
+                              , _change    = Just TextDocumentSyncKind_Incremental
                               , _willSave  = Nothing
                               , _willSaveWaitUntil = Nothing
                               , _save = Just (InR $ SaveOptions {_includeText = Nothing})}))
@@ -307,18 +308,18 @@ initializeResponseTests = withResource acquire release tests where
         where
             doTest = do
                 ir <- getInitializeResponse
-                let Just ExecuteCommandOptions {_commands = List commands} = getActual $ innerCaps ir
+                let Just ExecuteCommandOptions {_commands = commands} = getActual $ innerCaps ir
                     commandNames = (!! 2) . T.splitOn ":" <$> commands
                 zipWithM_ (\e o -> T.isSuffixOf e o @? show (e,o)) (sort expected) (sort commandNames)
 
-  innerCaps :: ResponseMessage Initialize -> ServerCapabilities
-  innerCaps (ResponseMessage _ _ (Right (InitializeResult c _))) = c
-  innerCaps (ResponseMessage _ _ (Left _)) = error "Initialization error"
+  innerCaps :: TResponseMessage Method_Initialize -> ServerCapabilities
+  innerCaps (TResponseMessage _ _ (Right (InitializeResult c _))) = c
+  innerCaps (TResponseMessage _ _ (Left _)) = error "Initialization error"
 
-  acquire :: IO (ResponseMessage Initialize)
+  acquire :: IO (TResponseMessage Method_Initialize)
   acquire = run initializeResponse
 
-  release :: ResponseMessage Initialize -> IO ()
+  release :: TResponseMessage Method_Initialize -> IO ()
   release = const $ pure ()
 
 
@@ -327,37 +328,25 @@ diagnosticTests = testGroup "diagnostics"
   [ testSessionWait "fix syntax error" $ do
       let content = T.unlines [ "module Testing wher" ]
       doc <- createDoc "Testing.hs" "haskell" content
-      expectDiagnostics [("Testing.hs", [(DsError, (0, 15), "parse error")])]
-      let change = TextDocumentContentChangeEvent
-            { _range = Just (Range (Position 0 15) (Position 0 19))
-            , _rangeLength = Nothing
-            , _text = "where"
-            }
+      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
+      let change = TextDocumentContentChangeEvent $ InL $ #range .== (Range (Position 0 15) (Position 0 19)) .+ #rangeLength .== Nothing .+ #text .== "where"
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [])]
   , testSessionWait "introduce syntax error" $ do
       let content = T.unlines [ "module Testing where" ]
       doc <- createDoc "Testing.hs" "haskell" content
-      void $ skipManyTill anyMessage (message SWindowWorkDoneProgressCreate)
+      void $ skipManyTill anyMessage (message SMethod_WindowWorkDoneProgressCreate)
       waitForProgressBegin
-      let change = TextDocumentContentChangeEvent
-            { _range = Just (Range (Position 0 15) (Position 0 18))
-            , _rangeLength = Nothing
-            , _text = "wher"
-            }
+      let change = TextDocumentContentChangeEvent$ InL $ #range .== (Range (Position 0 15) (Position 0 18)) .+ #rangeLength .== Nothing .+ #text .== "wher"
       changeDoc doc [change]
-      expectDiagnostics [("Testing.hs", [(DsError, (0, 15), "parse error")])]
+      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
   , testSessionWait "update syntax error" $ do
       let content = T.unlines [ "module Testing(missing) where" ]
       doc <- createDoc "Testing.hs" "haskell" content
-      expectDiagnostics [("Testing.hs", [(DsError, (0, 15), "Not in scope: 'missing'")])]
-      let change = TextDocumentContentChangeEvent
-            { _range = Just (Range (Position 0 15) (Position 0 16))
-            , _rangeLength = Nothing
-            , _text = "l"
-            }
+      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'missing'")])]
+      let change = TextDocumentContentChangeEvent $ InL $ #range .== (Range (Position 0 15) (Position 0 16)) .+ #rangeLength .== Nothing .+ #text .== "l"
       changeDoc doc [change]
-      expectDiagnostics [("Testing.hs", [(DsError, (0, 15), "Not in scope: 'lissing'")])]
+      expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'lissing'")])]
   , testSessionWait "variable not in scope" $ do
       let content = T.unlines
             [ "module Testing where"
@@ -369,8 +358,8 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics
         [ ( "Testing.hs"
-          , [ (DsError, (2, 15), "Variable not in scope: ab")
-            , (DsError, (4, 11), "Variable not in scope: cd")
+          , [ (DiagnosticSeverity_Error, (2, 15), "Variable not in scope: ab")
+            , (DiagnosticSeverity_Error, (4, 11), "Variable not in scope: cd")
             ]
           )
         ]
@@ -383,7 +372,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics
         [ ( "Testing.hs"
-          , [(DsError, (2, 14), "Couldn't match type '[Char]' with 'Int'")]
+          , [(DiagnosticSeverity_Error, (2, 14), "Couldn't match type '[Char]' with 'Int'")]
           )
         ]
   , testSessionWait "typed hole" $ do
@@ -395,7 +384,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics
         [ ( "Testing.hs"
-          , [(DsError, (2, 8), "Found hole: _ :: Int -> String")]
+          , [(DiagnosticSeverity_Error, (2, 8), "Found hole: _ :: Int -> String")]
           )
         ]
 
@@ -411,8 +400,8 @@ diagnosticTests = testGroup "diagnostics"
           , "b = True"]
         bMessage = "Couldn't match expected type 'Float' with actual type 'Bool'"
         expectedDs aMessage =
-          [ ("A.hs", [(DsError, (2,4), aMessage)])
-          , ("B.hs", [(DsError, (3,4), bMessage)])]
+          [ ("A.hs", [(DiagnosticSeverity_Error, (2,4), aMessage)])
+          , ("B.hs", [(DiagnosticSeverity_Error, (3,4), bMessage)])]
         deferralTest title binding msg = testSessionWait title $ do
           _ <- createDoc "A.hs" "haskell" $ sourceA binding
           _ <- createDoc "B.hs" "haskell"   sourceB
@@ -431,20 +420,16 @@ diagnosticTests = testGroup "diagnostics"
             , "import ModuleA"
             ]
       _ <- createDoc "ModuleB.hs" "haskell" contentB
-      let change = TextDocumentContentChangeEvent
-            { _range = Just (Range (Position 0 0) (Position 0 20))
-            , _rangeLength = Nothing
-            , _text = ""
-            }
+      let change = TextDocumentContentChangeEvent $ InL $ #range .== (Range (Position 0 0) (Position 0 20)) .+ #rangeLength .== Nothing .+ #text .== ""
       changeDoc docA [change]
-      expectDiagnostics [("ModuleB.hs", [(DsError, (1, 0), "Could not find module")])]
+      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 0), "Could not find module")])]
   , testSessionWait "add missing module" $ do
       let contentB = T.unlines
             [ "module ModuleB where"
             , "import ModuleA ()"
             ]
       _ <- createDoc "ModuleB.hs" "haskell" contentB
-      expectDiagnostics [("ModuleB.hs", [(DsError, (1, 7), "Could not find module")])]
+      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module")])]
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
@@ -459,7 +444,7 @@ diagnosticTests = testGroup "diagnostics"
             , "import ModuleA ()"
             ]
       _ <- createDoc (tmpDir </> "ModuleB.hs") "haskell" contentB
-      expectDiagnostics [(tmpDir </> "ModuleB.hs", [(DsError, (1, 7), "Could not find module")])]
+      expectDiagnostics [(tmpDir </> "ModuleB.hs", [(DiagnosticSeverity_Error, (1, 7), "Could not find module")])]
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc (tmpDir </> "ModuleA.hs") "haskell" contentA
       expectDiagnostics [(tmpDir </> "ModuleB.hs", [])]
@@ -476,10 +461,10 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       expectDiagnostics
         [ ( "ModuleA.hs"
-          , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
+          , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
           )
         , ( "ModuleB.hs"
-          , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
+          , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
           )
         ]
   , testSession' "deeply nested cyclic module dependency" $ \path -> do
@@ -500,7 +485,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "ModuleD.hs" "haskell" contentD
       expectDiagnostics
         [ ( "ModuleB.hs"
-          , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
+          , [(DiagnosticSeverity_Error, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
           )
         ]
   , testSessionWait "cyclic module dependency with hs-boot" $ do
@@ -521,7 +506,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
-      expectDiagnostics [("ModuleB.hs", [(DsWarning, (3,0), "Top-level binding")])]
+      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
   , testSessionWait "correct reference used with hs-boot" $ do
       let contentB = T.unlines
             [ "module ModuleB where"
@@ -547,7 +532,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleC.hs" "haskell" contentC
-      expectDiagnostics [("ModuleC.hs", [(DsWarning, (3,0), "Top-level binding")])]
+      expectDiagnostics [("ModuleC.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
   , testSessionWait "redundant import" $ do
       let contentA = T.unlines ["module ModuleA where"]
       let contentB = T.unlines
@@ -559,7 +544,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       expectDiagnosticsWithTags
         [ ( "ModuleB.hs"
-          , [(DsWarning, (2, 0), "The import of 'ModuleA' is redundant", Just DtUnnecessary)]
+          , [(DiagnosticSeverity_Warning, (2, 0), "The import of 'ModuleA' is redundant", Just DiagnosticTag_Unnecessary)]
           )
         ]
   , testSessionWait "redundant import even without warning" $ do
@@ -573,7 +558,7 @@ diagnosticTests = testGroup "diagnostics"
             ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleB.hs" "haskell" contentB
-      expectDiagnostics [("ModuleB.hs", [(DsWarning, (3,0), "Top-level binding")])]
+      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
   , testSessionWait "package imports" $ do
       let thisDataListContent = T.unlines
             [ "module Data.List where"
@@ -595,14 +580,14 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "Main.hs" "haskell" mainContent
       expectDiagnostics
         [ ( "Main.hs"
-          , [(DsError, (6, 9),
+          , [(DiagnosticSeverity_Error, (6, 9),
                 if ghcVersion >= GHC96 then
                   "Variable not in scope: ThisList.map"
                 else if ghcVersion >= GHC94 then
                   "Variable not in scope: map" -- See https://gitlab.haskell.org/ghc/ghc/-/issues/22130
                 else
                   "Not in scope: \8216ThisList.map\8217")
-            ,(DsError, (7, 9),
+            ,(DiagnosticSeverity_Error, (7, 9),
                 if ghcVersion >= GHC96 then
                   "Variable not in scope: BaseList.x"
                 else if ghcVersion >= GHC94 then
@@ -626,7 +611,7 @@ diagnosticTests = testGroup "diagnostics"
       -- where appropriate. The warning should use an unqualified name 'Ord', not
       -- something like 'GHC.Classes.Ord'. The choice of redundant-constraints to
       -- test this is fairly arbitrary.
-          , [(DsWarning, (2, if ghcVersion >= GHC94 then 7 else 0), "Redundant constraint: Ord a")
+          , [(DiagnosticSeverity_Warning, (2, if ghcVersion >= GHC94 then 7 else 0), "Redundant constraint: Ord a")
             ]
           )
         ]
@@ -654,12 +639,12 @@ diagnosticTests = testGroup "diagnostics"
               in filePathToUri (joinDrive (lower drive) suffix)
           let itemA = TextDocumentItem uriA "haskell" 0 aContent
           let a = TextDocumentIdentifier uriA
-          sendNotification STextDocumentDidOpen (DidOpenTextDocumentParams itemA)
-          NotificationMessage{_params = PublishDiagnosticsParams fileUri _ diags} <- skipManyTill anyMessage diagnostic
+          sendNotification SMethod_TextDocumentDidOpen (DidOpenTextDocumentParams itemA)
+          TNotificationMessage{_params = PublishDiagnosticsParams fileUri _ diags} <- skipManyTill anyMessage diagnostic
           -- Check that if we put a lower-case drive in for A.A
           -- the diagnostics for A.B will also be lower-case.
           liftIO $ fileUri @?= uriB
-          let msg = head (toList diags) ^. L.message
+          let msg :: T.Text = (head diags) ^. L.message
           liftIO $ unless ("redundant" `T.isInfixOf` msg) $
               assertFailure ("Expected redundant import but got " <> T.unpack msg)
           closeDoc a
@@ -676,7 +661,7 @@ diagnosticTests = testGroup "diagnostics"
       else
         expectDiagnostics
             [ ( "Foo.hs"
-              , [(DsWarning, (2, 8), "Haddock parse error on input")]
+              , [(DiagnosticSeverity_Warning, (2, 8), "Haddock parse error on input")]
               )
             ]
   , testSessionWait "strip file path" $ do
@@ -691,10 +676,10 @@ diagnosticTests = testGroup "diagnostics"
       notification <- skipManyTill anyMessage diagnostic
       let
           offenders =
-            Lsp.params .
-            Lsp.diagnostics .
+            params .
+            diagnostics .
             Lens.folded .
-            Lsp.message .
+            L.message .
             Lens.filtered (T.isInfixOf ("/" <> name <> ".hs:"))
           failure msg = liftIO $ assertFailure $ "Expected file path to be stripped but got " <> T.unpack msg
       Lens.mapMOf_ offenders failure notification
@@ -708,7 +693,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "Foo.hs" "haskell" fooContent
       expectDiagnostics
         [ ( "Foo.hs"
-          , [(DsWarning, (1, 0), "Top-level binding with no type signature:")
+          , [(DiagnosticSeverity_Warning, (1, 0), "Top-level binding with no type signature:")
             ]
           )
         ]
@@ -722,7 +707,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "Foo.hs" "haskell" fooContent
       expectDiagnostics
         [ ( "Foo.hs"
-          , [(DsWarning, (3, 0), "Defined but not used:")
+          , [(DiagnosticSeverity_Warning, (3, 0), "Defined but not used:")
             ]
           )
         ]
@@ -738,24 +723,24 @@ diagnosticTests = testGroup "diagnostics"
     bdoc <- createDoc bPath "haskell" bSource
     _pdoc <- createDoc pPath "haskell" pSource
     expectDiagnostics
-      [("P.hs", [(DsWarning,(4,0), "Top-level binding")])] -- So that we know P has been loaded
+      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])] -- So that we know P has been loaded
 
     -- Change y from Int to B which introduces a type error in A (imported from P)
-    changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $
+    changeDoc bdoc [TextDocumentContentChangeEvent . InR . (.==) #text $
                     T.unlines ["module B where", "y :: Bool", "y = undefined"]]
     expectDiagnostics
-      [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
+      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
       ]
 
     -- Open A and edit to fix the type error
     adoc <- createDoc aPath "haskell" aSource
-    changeDoc adoc [TextDocumentContentChangeEvent Nothing Nothing $
+    changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $
                     T.unlines ["module A where", "import B", "x :: Bool", "x = y"]]
 
     expectDiagnostics
       [ ( "P.hs",
-          [ (DsError, (4, 6), "Couldn't match expected type 'Int' with actual type 'Bool'"),
-            (DsWarning, (4, 0), "Top-level binding")
+          [ (DiagnosticSeverity_Error, (4, 6), "Couldn't match expected type 'Int' with actual type 'Bool'"),
+            (DiagnosticSeverity_Warning, (4, 0), "Top-level binding")
           ]
         ),
         ("A.hs", [])
@@ -765,14 +750,14 @@ diagnosticTests = testGroup "diagnostics"
   , testSessionWait "deduplicate missing module diagnostics" $  do
       let fooContent = T.unlines [ "module Foo() where" , "import MissingModule" ]
       doc <- createDoc "Foo.hs" "haskell" fooContent
-      expectDiagnostics [("Foo.hs", [(DsError, (1,7), "Could not find module 'MissingModule'")])]
+      expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (1,7), "Could not find module 'MissingModule'")])]
 
-      changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing "module Foo() where" ]
+      changeDoc doc [TextDocumentContentChangeEvent  . InR . (.==) #text $ "module Foo() where" ]
       expectDiagnostics []
 
-      changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines
+      changeDoc doc [TextDocumentContentChangeEvent  . InR . (.==) #text $ T.unlines
             [ "module Foo() where" , "import MissingModule" ] ]
-      expectDiagnostics [("Foo.hs", [(DsError, (1,7), "Could not find module 'MissingModule'")])]
+      expectDiagnostics [("Foo.hs", [(DiagnosticSeverity_Error, (1,7), "Could not find module 'MissingModule'")])]
 
   , testGroup "Cancellation"
     [ cancellationTestGroup "edit header" editHeader yesSession noParse  noTc
@@ -782,8 +767,8 @@ diagnosticTests = testGroup "diagnostics"
   ]
   where
       editPair x y = let p = Position x y ; p' = Position x (y+2) in
-        (TextDocumentContentChangeEvent {_range=Just (Range p p), _rangeLength=Nothing, _text="fd"}
-        ,TextDocumentContentChangeEvent {_range=Just (Range p p'), _rangeLength=Nothing, _text=""})
+        (TextDocumentContentChangeEvent $ InL $ #range .== Range p p .+ #rangeLength .== Nothing .+ #text .== "fd"
+        ,TextDocumentContentChangeEvent $ InL $ #range .== Range p p' .+ #rangeLength .== Nothing .+ #text .== "")
       editHeader = editPair 0 0
       editImport = editPair 2 10
       editBody   = editPair 3 10
@@ -823,7 +808,7 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
             ]
 
       -- for the example above we expect one warning
-      let missingSigDiags = [(DsWarning, (3, 0), "Top-level binding") ]
+      let missingSigDiags = [(DiagnosticSeverity_Warning, (3, 0), "Top-level binding") ]
       typeCheck doc >> expectCurrentDiagnostics doc missingSigDiags
 
       -- Now we edit the document and wait for the given key (if any)
@@ -861,7 +846,7 @@ watchedFilesTests = testGroup "watched files"
     [ testSession' "workspace files" $ \sessionDir -> do
         liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"WatchedFilesMissingModule\"]}}"
         _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
-        watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
+        watchedFileRegs <- getWatchedFilesSubscriptionsUntil SMethod_TextDocumentPublishDiagnostics
 
         -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
         liftIO $ length watchedFileRegs @?= 2
@@ -871,7 +856,7 @@ watchedFilesTests = testGroup "watched files"
         let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
         liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
         _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
-        watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
+        watchedFileRegs <- getWatchedFilesSubscriptionsUntil SMethod_TextDocumentPublishDiagnostics
 
         -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
         liftIO $ length watchedFileRegs @?= 2
@@ -892,15 +877,15 @@ watchedFilesTests = testGroup "watched files"
           ,"a :: ()"
           ,"a = b"
           ]
-        expectDiagnostics [("A.hs", [(DsError, (3, 4), "Couldn't match expected type '()' with actual type 'Bool'")])]
+        expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 4), "Couldn't match expected type '()' with actual type 'Bool'")])]
         -- modify B off editor
         liftIO $ writeFile (sessionDir </> "B.hs") $ unlines
           ["module B where"
           ,"b :: Int"
           ,"b = 0"]
-        sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-                List [FileEvent (filePathToUri $ sessionDir </> "B.hs") FcChanged ]
-        expectDiagnostics [("A.hs", [(DsError, (3, 4), "Couldn't match expected type '()' with actual type 'Int'")])]
+        sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+               [FileEvent (filePathToUri $ sessionDir </> "B.hs") FileChangeType_Changed ]
+        expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 4), "Couldn't match expected type '()' with actual type 'Int'")])]
     ]
   ]
 
@@ -924,7 +909,7 @@ addSigLensesTests =
       sigSession testName enableGHCWarnings mode exported def others = testSession testName $ do
         let originalCode = before enableGHCWarnings exported def others
         let expectedCode = after' enableGHCWarnings exported def others
-        sendNotification SWorkspaceDidChangeConfiguration $ DidChangeConfigurationParams $ createConfig mode
+        sendNotification SMethod_WorkspaceDidChangeConfiguration $ DidChangeConfigurationParams $ createConfig mode
         doc <- createDoc "Sigs.hs" "haskell" originalCode
         waitForProgressDone
         codeLenses <- getCodeLenses doc
@@ -983,11 +968,15 @@ addSigLensesTests =
             liftIO $ newLens @?= oldLens
         ]
 
-linkToLocation :: [LocationLink] -> [Location]
-linkToLocation = map (\LocationLink{_targetUri,_targetRange} -> Location _targetUri _targetRange)
+defToLocation :: Definition |? ([DefinitionLink] |? Null) -> [Location]
+defToLocation (InL (Definition (InL l))) = [l]
+defToLocation (InL (Definition (InR ls))) = ls
+defToLocation (InR (InL defLink)) = map (\LocationLink{_targetUri,_targetRange} -> Location _targetUri _targetRange) (toLocationLink <$> defLink)
+    where toLocationLink (DefinitionLink ll) = ll
+defToLocation (InR (InR Null)) = []
 
-checkDefs :: [Location] |? [LocationLink] -> Session [Expect] -> Session ()
-checkDefs (either id linkToLocation . toEither -> defs) mkExpectations = traverse_ check =<< mkExpectations where
+checkDefs :: Definition |? ([DefinitionLink] |? Null) -> Session [Expect] -> Session ()
+checkDefs (defToLocation -> defs) mkExpectations = traverse_ check =<< mkExpectations where
   check (ExpectRange expectedRange) = do
     assertNDefinitionsFound 1 defs
     assertRangeCorrect (head defs) expectedRange
@@ -1038,7 +1027,7 @@ findDefinitionAndHoverTests = let
     check expected =
       case hover of
         Nothing -> unless (expected == ExpectNoHover) $ liftIO $ assertFailure "no hover found"
-        Just Hover{_contents = (HoverContents MarkupContent{_value = standardizeQuotes -> msg})
+        Just Hover{_contents = (InL MarkupContent{_value = standardizeQuotes -> msg})
                   ,_range    = rangeInHover } ->
           case expected of
             ExpectRange  expectedRange -> checkHoverRange expectedRange rangeInHover msg
@@ -1063,7 +1052,7 @@ findDefinitionAndHoverTests = let
         Position{_line = l + 1, _character = c + 1}
     in
     case map (read . T.unpack) lineCol of
-      [l,c] -> liftIO $ adjust (_start expectedRange) @=? Position l c
+      [l,c] -> liftIO $ adjust (expectedRange ^. L.start) @=? Position l c
       _     -> liftIO $ assertFailure $
         "expected: " <> show ("[...]" <> sourceFileName <> ":<LINE>:<COL>**[...]", Just expectedRange) <>
         "\n but got: " <> show (msg, rangeInHover)
@@ -1086,8 +1075,8 @@ findDefinitionAndHoverTests = let
     , testGroup "hover"      $ mapMaybe snd tests
     , checkFileCompiles sourceFilePath $
         expectDiagnostics
-          [ ( "GotoHover.hs", [(DsError, (62, 7), "Found hole: _")])
-          , ( "GotoHover.hs", [(DsError, (65, 8), "Found hole: _")])
+          [ ( "GotoHover.hs", [(DiagnosticSeverity_Error, (62, 7), "Found hole: _")])
+          , ( "GotoHover.hs", [(DiagnosticSeverity_Error, (65, 8), "Found hole: _")])
           ]
     , testGroup "type-definition" typeDefinitionTests
     , testGroup "hover-record-dot-syntax" recordDotSyntaxTests ]
@@ -1112,7 +1101,7 @@ findDefinitionAndHoverTests = let
       hover = (getHover      , checkHover)
 
   -- search locations            expectations on results
-  fffL4  = _start fffR     ;  fffR = mkRange 8  4    8  7 ; fff  = [ExpectRange fffR]
+  fffL4  = fffR  ^. L.start  ;  fffR = mkRange 8  4    8  7 ; fff  = [ExpectRange fffR]
   fffL8  = Position 12  4  ;
   fffL14 = Position 18  7  ;
   aL20   = Position 19 15
@@ -1265,7 +1254,7 @@ pluginSimpleTests =
 
     expectDiagnostics
       [ ( "KnownNat.hs",
-          [(DsError, (9, 15), "Variable not in scope: c")]
+          [(DiagnosticSeverity_Error, (9, 15), "Variable not in scope: c")]
           )
       ]
 
@@ -1306,7 +1295,7 @@ cppTests =
           ,"  failed"
           ,"#endif"
           ]
-        expectDiagnostics [("A.hs", [(DsError, (3, 2), "Variable not in scope: worked")])]
+        expectDiagnostics [("A.hs", [(DiagnosticSeverity_Error, (3, 2), "Variable not in scope: worked")])]
     ]
   where
     expectError :: T.Text -> Cursor -> Session ()
@@ -1314,7 +1303,7 @@ cppTests =
       _ <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics
         [ ( "Testing.hs",
-            [(DsError, cursor, "error: unterminated")]
+            [(DiagnosticSeverity_Error, cursor, "error: unterminated")]
           )
         ]
       expectNoMoreDiagnostics 0.5
@@ -1330,7 +1319,7 @@ preprocessorTests = testSessionWait "preprocessor" $ do
   _ <- createDoc "Testing.hs" "haskell" content
   expectDiagnostics
     [ ( "Testing.hs",
-        [(DsError, (2, 8), "Variable not in scope: z")]
+        [(DiagnosticSeverity_Error, (2, 8), "Variable not in scope: z")]
       )
     ]
 
@@ -1391,7 +1380,7 @@ thTests =
                 ]
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
-        expectDiagnostics [ ( "B.hs", [(DsError, (6, 29), "Variable not in scope: n")] ) ]
+        expectDiagnostics [ ( "B.hs", [(DiagnosticSeverity_Error, (6, 29), "Variable not in scope: n")] ) ]
     , testSessionWait "newtype-closure" $ do
         let sourceA =
               T.unlines
@@ -1439,7 +1428,7 @@ thTests =
                 , "main = $a (putStrLn \"success!\")"]
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
-        expectDiagnostics [ ( "B.hs", [(DsWarning, (4, 0), "Top-level binding with no type signature: main :: IO ()")] ) ]
+        expectDiagnostics [ ( "B.hs", [(DiagnosticSeverity_Warning, (4, 0), "Top-level binding with no type signature: main :: IO ()")] ) ]
     , testCase "findsTHnewNameConstructor" $ runWithExtraFiles "THNewName" $ \dir -> do
 
     -- This test defines a TH value with the meaning "data A = A" in A.hs
@@ -1450,7 +1439,7 @@ thTests =
 
     let cPath = dir </> "C.hs"
     _ <- openDoc cPath "haskell"
-    expectDiagnostics [ ( cPath, [(DsWarning, (3, 0), "Top-level binding with no type signature: a :: A")] ) ]
+    expectDiagnostics [ ( cPath, [(DiagnosticSeverity_Warning, (3, 0), "Top-level binding with no type signature: a :: A")] ) ]
     ]
 
 -- | Tests for projects that use symbolic links one way or another
@@ -1461,7 +1450,7 @@ symlinkTests =
         liftIO $ createFileLink (dir </> "some_loc" </> "Sym.hs") (dir </> "other_loc" </> "Sym.hs")
         let fooPath = dir </> "src" </> "Foo.hs"
         _ <- openDoc fooPath "haskell"
-        expectDiagnosticsWithTags  [("src" </> "Foo.hs", [(DsWarning, (2, 0), "The import of 'Sym' is redundant", Just DtUnnecessary)])]
+        expectDiagnosticsWithTags  [("src" </> "Foo.hs", [(DiagnosticSeverity_Warning, (2, 0), "The import of 'Sym' is redundant", Just DiagnosticTag_Unnecessary)])]
         pure ()
     ]
 
@@ -1494,19 +1483,19 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     bdoc <- createDoc bPath "haskell" bSource
     cdoc <- createDoc cPath "haskell" cSource
 
-    expectDiagnostics [("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level binding")])]
 
     -- Change th from () to Bool
     let aSource' = T.unlines $ init (T.lines aSource) ++ ["th_a = [d| a = False|]"]
-    changeDoc adoc [TextDocumentContentChangeEvent Nothing Nothing aSource']
+    changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $ aSource']
     -- generate an artificial warning to avoid timing out if the TH change does not propagate
-    changeDoc cdoc [TextDocumentContentChangeEvent Nothing Nothing $ cSource <> "\nfoo=()"]
+    changeDoc cdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ cSource <> "\nfoo=()"]
 
     -- Check that the change propagates to C
     expectDiagnostics
-        [("THC.hs", [(DsError, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
-        ,("THC.hs", [(DsWarning, (6,0), "Top-level binding")])
-        ,("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level bindin")])
+        [("THC.hs", [(DiagnosticSeverity_Error, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
+        ,("THC.hs", [(DiagnosticSeverity_Warning, (6,0), "Top-level binding")])
+        ,("THB.hs", [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level bindin")])
         ]
 
     closeDoc adoc
@@ -1529,18 +1518,18 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     adoc <- createDoc aPath "haskell" aSource
     bdoc <- createDoc bPath "haskell" bSource
 
-    expectDiagnostics [("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level binding")])]
 
     let aSource' = T.unlines $ init (init (T.lines aSource)) ++ ["th :: DecsQ", "th = [d| a = False|]"]
-    changeDoc adoc [TextDocumentContentChangeEvent Nothing Nothing aSource']
+    changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $ aSource']
 
     -- modify b too
     let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
-    changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing bSource']
+    changeDoc bdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ bSource']
     waitForProgressBegin
     waitForAllProgressDone
 
-    expectCurrentDiagnostics bdoc [(DsWarning, (4,thDollarIdx), "Top-level binding")]
+    expectCurrentDiagnostics bdoc [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level binding")]
 
     closeDoc adoc
     closeDoc bdoc
@@ -1562,7 +1551,7 @@ completionTests
     , testGroup "doc" completionDocTests
     ]
 
-completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe (List TextEdit))] -> TestTree
+completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe [TextEdit])] -> TestTree
 completionTest name src pos expected = testSessionWait name $ do
     docId <- createDoc "A.hs" "haskell" (T.unlines src)
     _ <- waitForDiagnostics
@@ -1576,8 +1565,8 @@ completionTest name src pos expected = testSessionWait name $ do
         CompletionItem{..} <-
           if expectedSig || expectedDocs
           then do
-            rsp <- request SCompletionItemResolve item
-            case rsp ^. L.result of
+            rsp <- request SMethod_CompletionItemResolve item
+            case rsp ^. result of
               Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
               Right x -> pure x
           else pure item
@@ -1593,41 +1582,41 @@ topLevelCompletionTests = [
         "variable"
         ["bar = xx", "-- | haddock", "xxx :: ()", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
         (Position 0 8)
-        [("xxx", CiFunction, "xxx", True, True, Nothing)
+        [("xxx", CompletionItemKind_Function, "xxx", True, True, Nothing)
         ],
     completionTest
         "constructor"
         ["bar = xx", "-- | haddock", "xxx :: ()", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
         (Position 0 8)
-        [("xxx", CiFunction, "xxx", True, True, Nothing)
+        [("xxx", CompletionItemKind_Function, "xxx", True, True, Nothing)
         ],
     completionTest
         "class method"
         ["bar = xx", "class Xxx a where", "-- | haddock", "xxx :: ()", "xxx = ()"]
         (Position 0 8)
-        [("xxx", CiFunction, "xxx", True, True, Nothing)],
+        [("xxx", CompletionItemKind_Function, "xxx", True, True, Nothing)],
     completionTest
         "type"
         ["bar :: Xz", "zzz = ()", "-- | haddock", "data Xzz = XzzCon"]
         (Position 0 9)
-        [("Xzz", CiStruct, "Xzz", False, True, Nothing)],
+        [("Xzz", CompletionItemKind_Struct, "Xzz", False, True, Nothing)],
     completionTest
         "class"
         ["bar :: Xz", "zzz = ()", "-- | haddock", "class Xzz a"]
         (Position 0 9)
-        [("Xzz", CiInterface, "Xzz", False, True, Nothing)],
+        [("Xzz", CompletionItemKind_Interface, "Xzz", False, True, Nothing)],
     completionTest
         "records"
         ["data Person = Person { _personName:: String, _personAge:: Int}", "bar = Person { _pers }" ]
         (Position 1 19)
-        [("_personName", CiFunction, "_personName", False, True, Nothing),
-         ("_personAge", CiFunction, "_personAge", False, True, Nothing)],
+        [("_personName", CompletionItemKind_Function, "_personName", False, True, Nothing),
+         ("_personAge", CompletionItemKind_Function, "_personAge", False, True, Nothing)],
     completionTest
         "recordsConstructor"
         ["data XxRecord = XyRecord { x:: String, y:: Int}", "bar = Xy" ]
         (Position 1 19)
-        [("XyRecord", CiConstructor, "XyRecord", False, True, Nothing),
-         ("XyRecord", CiSnippet, "XyRecord {x=${1:_x}, y=${2:_y}}", False, True, Nothing)]
+        [("XyRecord", CompletionItemKind_Constructor, "XyRecord", False, True, Nothing),
+         ("XyRecord", CompletionItemKind_Snippet, "XyRecord {x=${1:_x}, y=${2:_y}}", False, True, Nothing)]
     ]
 
 localCompletionTests :: [TestTree]
@@ -1636,8 +1625,8 @@ localCompletionTests = [
         "argument"
         ["bar (Just abcdef) abcdefg = abcd"]
         (Position 0 32)
-        [("abcdef", CiFunction, "abcdef", True, False, Nothing),
-         ("abcdefg", CiFunction , "abcdefg", True, False, Nothing)
+        [("abcdef", CompletionItemKind_Function, "abcdef", True, False, Nothing),
+         ("abcdefg", CompletionItemKind_Function , "abcdefg", True, False, Nothing)
         ],
     completionTest
         "let"
@@ -1646,8 +1635,8 @@ localCompletionTests = [
         ,"        in abcd"
         ]
         (Position 2 15)
-        [("abcdef", CiFunction, "abcdef", True, False, Nothing),
-         ("abcdefg", CiFunction , "abcdefg", True, False, Nothing)
+        [("abcdef", CompletionItemKind_Function, "abcdef", True, False, Nothing),
+         ("abcdefg", CompletionItemKind_Function , "abcdefg", True, False, Nothing)
         ],
     completionTest
         "where"
@@ -1656,8 +1645,8 @@ localCompletionTests = [
         ,"        abcdefg = let abcd = undefined in undefined"
         ]
         (Position 0 10)
-        [("abcdef", CiFunction, "abcdef", True, False, Nothing),
-         ("abcdefg", CiFunction , "abcdefg", True, False, Nothing)
+        [("abcdef", CompletionItemKind_Function, "abcdef", True, False, Nothing),
+         ("abcdefg", CompletionItemKind_Function , "abcdefg", True, False, Nothing)
         ],
     completionTest
         "do/1"
@@ -1668,7 +1657,7 @@ localCompletionTests = [
         ,"  pure ()"
         ]
         (Position 2 6)
-        [("abcdef", CiFunction, "abcdef", True, False, Nothing)
+        [("abcdef", CompletionItemKind_Function, "abcdef", True, False, Nothing)
         ],
     completionTest
         "do/2"
@@ -1682,12 +1671,12 @@ localCompletionTests = [
         ,"    abcdefghij = undefined"
         ]
         (Position 5 8)
-        [("abcde", CiFunction, "abcde", True, False, Nothing)
-        ,("abcdefghij", CiFunction, "abcdefghij", True, False, Nothing)
-        ,("abcdef", CiFunction, "abcdef", True, False, Nothing)
-        ,("abcdefg", CiFunction, "abcdefg", True, False, Nothing)
-        ,("abcdefgh", CiFunction, "abcdefgh", True, False, Nothing)
-        ,("abcdefghi", CiFunction, "abcdefghi", True, False, Nothing)
+        [("abcde", CompletionItemKind_Function, "abcde", True, False, Nothing)
+        ,("abcdefghij", CompletionItemKind_Function, "abcdefghij", True, False, Nothing)
+        ,("abcdef", CompletionItemKind_Function, "abcdef", True, False, Nothing)
+        ,("abcdefg", CompletionItemKind_Function, "abcdefg", True, False, Nothing)
+        ,("abcdefgh", CompletionItemKind_Function, "abcdefgh", True, False, Nothing)
+        ,("abcdefghi", CompletionItemKind_Function, "abcdefghi", True, False, Nothing)
         ],
     completionTest
         "type family"
@@ -1696,7 +1685,7 @@ localCompletionTests = [
         ,"a :: Ba"
         ]
         (Position 2 7)
-        [("Bar", CiStruct, "Bar", True, False, Nothing)
+        [("Bar", CompletionItemKind_Struct, "Bar", True, False, Nothing)
         ],
     completionTest
         "class method"
@@ -1708,19 +1697,15 @@ localCompletionTests = [
         , "    abcd = abc"
         ]
         (Position 4 14)
-        [("abcd", CiFunction, "abcd", True, False, Nothing)
-        ,("abcde", CiFunction, "abcde", True, False, Nothing)
+        [("abcd", CompletionItemKind_Function, "abcd", True, False, Nothing)
+        ,("abcde", CompletionItemKind_Function, "abcde", True, False, Nothing)
         ],
     testSessionWait "incomplete entries" $ do
         let src a = "data Data = " <> a
         doc <- createDoc "A.hs" "haskell" $ src "AAA"
         void $ waitForTypecheck doc
         let editA rhs =
-                changeDoc doc [TextDocumentContentChangeEvent
-                    { _range=Nothing
-                    , _rangeLength=Nothing
-                    , _text=src rhs}]
-
+                changeDoc doc [TextDocumentContentChangeEvent . InR . (.==) #text $ src rhs]
         editA "AAAA"
         void $ waitForTypecheck doc
         editA "AAAAA"
@@ -1737,30 +1722,30 @@ nonLocalCompletionTests =
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
-      [("head", CiFunction, "head", True, True, Nothing)],
+      [("head", CompletionItemKind_Function, "head", True, True, Nothing)],
     completionTest
       "constructor"
       ["{-# OPTIONS_GHC -Wall #-}", "module A where", "f = True"]
       (Position 2 8)
-      [ ("True", CiConstructor, "True", True, True, Nothing)
+      [ ("True", CompletionItemKind_Constructor, "True", True, True, Nothing)
       ],
     brokenForWinGhc $ completionTest
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Boo", "f = True"]
       (Position 2 8)
-      [ ("Bool", CiStruct, "Bool", True, True, Nothing)
+      [ ("Bool", CompletionItemKind_Struct, "Bool", True, True, Nothing)
       ],
     completionTest
       "qualified"
       ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = Prelude.hea"]
       (Position 2 15)
-      [ ("head", CiFunction, "head", True, True, Nothing)
+      [ ("head", CompletionItemKind_Function, "head", True, True, Nothing)
       ],
     completionTest
       "duplicate import"
       ["module A where", "import Data.List", "import Data.List", "f = permu"]
       (Position 3 9)
-      [ ("permutations", CiFunction, "permutations", False, False, Nothing)
+      [ ("permutations", CompletionItemKind_Function, "permutations", False, False, Nothing)
       ],
     completionTest
        "dont show hidden items"
@@ -1778,7 +1763,7 @@ nonLocalCompletionTests =
         ,"f = BS.read"
         ]
         (Position 2 10)
-        [("readFile", CiFunction, "readFile", True, True, Nothing)]
+        [("readFile", CompletionItemKind_Function, "readFile", True, True, Nothing)]
         ],
       -- we need this test to make sure the ghcide completions module does not return completions for language pragmas. this functionality is turned on in hls
      completionTest
@@ -1799,7 +1784,7 @@ otherCompletionTests = [
       "keyword"
       ["module A where", "f = newty"]
       (Position 1 9)
-      [("newtype", CiKeyword, "", False, False, Nothing)],
+      [("newtype", CompletionItemKind_Keyword, "", False, False, Nothing)],
     completionTest
       "type context"
       [ "{-# OPTIONS_GHC -Wunused-binds #-}",
@@ -1811,7 +1796,7 @@ otherCompletionTests = [
       -- This should be sufficient to detect that we are in a
       -- type context and only show the completion to the type.
       (Position 3 11)
-      [("Integer", CiStruct, "Integer", True, True, Nothing)],
+      [("Integer", CompletionItemKind_Struct, "Integer", True, True, Nothing)],
 
     testSession "duplicate record fields" $ do
       void $
@@ -1859,7 +1844,7 @@ packageCompletionTests =
         compls <- getCompletions doc (Position 2 12)
         let compls' =
               [T.drop 1 $ T.dropEnd 3 d
-              | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
+              | CompletionItem {_documentation = Just (InR (MarkupContent MarkupKind_Markdown d)), _label}
                 <- compls
               , _label == "fromList"
               ]
@@ -1879,7 +1864,7 @@ packageCompletionTests =
         compls <- getCompletions doc (Position 2 7)
         let compls' =
               [T.drop 1 $ T.dropEnd 3 d
-              | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
+              | CompletionItem {_documentation = Just (InR (MarkupContent MarkupKind_Markdown d)), _label}
                 <- compls
               , _label == "Map"
               ]
@@ -1904,7 +1889,7 @@ packageCompletionTests =
                   CompletionItem
                     { _insertText = Just "fromList"
                     , _documentation =
-                      Just (CompletionDocMarkup (MarkupContent MkMarkdown d))
+                      Just (InR (MarkupContent MarkupKind_Markdown d))
                     } ->
                     "GHC.Exts" `T.isInfixOf` d
                   _ -> False
@@ -1948,7 +1933,7 @@ projectCompletionTests =
         compls <- getCompletions doc (Position 1 10)
         let compls' =
               [T.drop 1 $ T.dropEnd 3 d
-              | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
+              | CompletionItem {_documentation = Just (InR (MarkupContent MarkupKind_Markdown d)), _label}
                 <- compls
               , _label == "anidentifier"
               ]
@@ -1967,9 +1952,9 @@ projectCompletionTests =
               "import ALocal"
             ]
         compls <- getCompletions doc (Position 1 13)
-        let item = head $ filter ((== "ALocalModule") . (^. Lens.label)) compls
+        let item = head $ filter ((== "ALocalModule") . (^. L.label)) compls
         liftIO $ do
-          item ^. Lens.label @?= "ALocalModule",
+          item ^. L.label @?= "ALocalModule",
       testSession' "auto complete functions from qualified imports without alias" $ \dir-> do
         liftIO $ writeFile (dir </> "hie.yaml")
             "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}"
@@ -2088,8 +2073,8 @@ completionDocTests =
       _ <- waitForDiagnostics
       compls <- getCompletions doc pos
       rcompls <- forM compls $ \item -> do
-        rsp <- request SCompletionItemResolve item
-        case rsp ^. L.result of
+        rsp <- request SMethod_CompletionItemResolve item
+        case rsp ^. result of
           Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
           Right x -> pure x
       let compls' = [
@@ -2097,7 +2082,7 @@ completionDocTests =
             case mn of
                 Nothing -> txt
                 Just n  -> T.take n txt
-            | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown txt)), ..} <- rcompls
+            | CompletionItem {_documentation = Just (InR (MarkupContent MarkupKind_Markdown txt)), ..} <- rcompls
             , _label == label
             ]
       liftIO $ compls' @?= expected
@@ -2108,48 +2093,48 @@ highlightTests = testGroup "highlight"
     doc <- createDoc "A.hs" "haskell" source
     _ <- waitForDiagnostics
     highlights <- getHighlights doc (Position 3 2)
-    liftIO $ highlights @?= List
-            [ DocumentHighlight (R 2 0 2 3) (Just HkRead)
-            , DocumentHighlight (R 3 0 3 3) (Just HkWrite)
-            , DocumentHighlight (R 4 6 4 9) (Just HkRead)
-            , DocumentHighlight (R 5 22 5 25) (Just HkRead)
+    liftIO $ highlights @?=
+            [ DocumentHighlight (R 2 0 2 3) (Just DocumentHighlightKind_Read)
+            , DocumentHighlight (R 3 0 3 3) (Just DocumentHighlightKind_Write)
+            , DocumentHighlight (R 4 6 4 9) (Just DocumentHighlightKind_Read)
+            , DocumentHighlight (R 5 22 5 25) (Just DocumentHighlightKind_Read)
             ]
   , testSessionWait "type" $ do
     doc <- createDoc "A.hs" "haskell" source
     _ <- waitForDiagnostics
     highlights <- getHighlights doc (Position 2 8)
-    liftIO $ highlights @?= List
-            [ DocumentHighlight (R 2 7 2 10) (Just HkRead)
-            , DocumentHighlight (R 3 11 3 14) (Just HkRead)
+    liftIO $ highlights @?=
+            [ DocumentHighlight (R 2 7 2 10) (Just DocumentHighlightKind_Read)
+            , DocumentHighlight (R 3 11 3 14) (Just DocumentHighlightKind_Read)
             ]
   , testSessionWait "local" $ do
     doc <- createDoc "A.hs" "haskell" source
     _ <- waitForDiagnostics
     highlights <- getHighlights doc (Position 6 5)
-    liftIO $ highlights @?= List
-            [ DocumentHighlight (R 6 4 6 7) (Just HkWrite)
-            , DocumentHighlight (R 6 10 6 13) (Just HkRead)
-            , DocumentHighlight (R 7 12 7 15) (Just HkRead)
+    liftIO $ highlights @?=
+            [ DocumentHighlight (R 6 4 6 7) (Just DocumentHighlightKind_Write)
+            , DocumentHighlight (R 6 10 6 13) (Just DocumentHighlightKind_Read)
+            , DocumentHighlight (R 7 12 7 15) (Just DocumentHighlightKind_Read)
             ]
   , knownBrokenForGhcVersions [GHC90, GHC92, GHC94, GHC96] "Ghc9 highlights the constructor and not just this field" $
         testSessionWait "record" $ do
         doc <- createDoc "A.hs" "haskell" recsource
         _ <- waitForDiagnostics
         highlights <- getHighlights doc (Position 4 15)
-        liftIO $ highlights @?= List
+        liftIO $ highlights @?=
           -- Span is just the .. on 8.10, but Rec{..} before
           [ if ghcVersion >= GHC810
-            then DocumentHighlight (R 4 8 4 10) (Just HkWrite)
-            else DocumentHighlight (R 4 4 4 11) (Just HkWrite)
-          , DocumentHighlight (R 4 14 4 20) (Just HkRead)
+            then DocumentHighlight (R 4 8 4 10) (Just DocumentHighlightKind_Write)
+            else DocumentHighlight (R 4 4 4 11) (Just DocumentHighlightKind_Write)
+          , DocumentHighlight (R 4 14 4 20) (Just DocumentHighlightKind_Read)
           ]
         highlights <- getHighlights doc (Position 3 17)
-        liftIO $ highlights @?= List
-          [ DocumentHighlight (R 3 17 3 23) (Just HkWrite)
+        liftIO $ highlights @?=
+          [ DocumentHighlight (R 3 17 3 23) (Just DocumentHighlightKind_Write)
           -- Span is just the .. on 8.10, but Rec{..} before
           , if ghcVersion >= GHC810
-              then DocumentHighlight (R 4 8 4 10) (Just HkRead)
-              else DocumentHighlight (R 4 4 4 11) (Just HkRead)
+              then DocumentHighlight (R 4 8 4 10) (Just DocumentHighlightKind_Read)
+              else DocumentHighlight (R 4 4 4 11) (Just DocumentHighlightKind_Read)
           ]
   ]
   where
@@ -2178,28 +2163,28 @@ outlineTests = testGroup
     let source = T.unlines ["module A where", "class A a where a :: a -> Bool"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
+    liftIO $ symbols @?= Right
       [ moduleSymbol
           "A"
           (R 0 7 0 8)
           [ classSymbol "A a"
                         (R 1 0 1 30)
-                        [docSymbol' "a" SkMethod (R 1 16 1 30) (R 1 16 1 17)]
+                        [docSymbol' "a" SymbolKind_Method (R 1 16 1 30) (R 1 16 1 17)]
           ]
       ]
   , testSessionWait "type class instance " $ do
     let source = T.unlines ["class A a where", "instance A () where"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
+    liftIO $ symbols @?= Right
       [ classSymbol "A a" (R 0 0 0 15) []
-      , docSymbol "A ()" SkInterface (R 1 0 1 19)
+      , docSymbol "A ()" SymbolKind_Interface (R 1 0 1 19)
       ]
   , testSessionWait "type family" $ do
     let source = T.unlines ["{-# language TypeFamilies #-}", "type family A"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left [docSymbolD "A" "type family" SkFunction (R 1 0 1 13)]
+    liftIO $ symbols @?= Right [docSymbolD "A" "type family" SymbolKind_Function (R 1 0 1 13)]
   , testSessionWait "type family instance " $ do
     let source = T.unlines
           [ "{-# language TypeFamilies #-}"
@@ -2208,15 +2193,15 @@ outlineTests = testGroup
           ]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
-      [ docSymbolD "A a"   "type family" SkFunction     (R 1 0 1 15)
-      , docSymbol "A ()" SkInterface (R 2 0 2 23)
+    liftIO $ symbols @?= Right
+      [ docSymbolD "A a"   "type family" SymbolKind_Function     (R 1 0 1 15)
+      , docSymbol "A ()" SymbolKind_Interface (R 2 0 2 23)
       ]
   , testSessionWait "data family" $ do
     let source = T.unlines ["{-# language TypeFamilies #-}", "data family A"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left [docSymbolD "A" "data family" SkFunction (R 1 0 1 11)]
+    liftIO $ symbols @?= Right [docSymbolD "A" "data family" SymbolKind_Function (R 1 0 1 11)]
   , testSessionWait "data family instance " $ do
     let source = T.unlines
           [ "{-# language TypeFamilies #-}"
@@ -2225,58 +2210,58 @@ outlineTests = testGroup
           ]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
-      [ docSymbolD "A a"   "data family" SkFunction     (R 1 0 1 11)
-      , docSymbol "A ()" SkInterface (R 2 0 2 25)
+    liftIO $ symbols @?= Right
+      [ docSymbolD "A a"   "data family" SymbolKind_Function     (R 1 0 1 11)
+      , docSymbol "A ()" SymbolKind_Interface (R 2 0 2 25)
       ]
   , testSessionWait "constant" $ do
     let source = T.unlines ["a = ()"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
-      [docSymbol "a" SkFunction (R 0 0 0 6)]
+    liftIO $ symbols @?= Right
+      [docSymbol "a" SymbolKind_Function (R 0 0 0 6)]
   , testSessionWait "pattern" $ do
     let source = T.unlines ["Just foo = Just 21"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
-      [docSymbol "Just foo" SkFunction (R 0 0 0 18)]
+    liftIO $ symbols @?= Right
+      [docSymbol "Just foo" SymbolKind_Function (R 0 0 0 18)]
   , testSessionWait "pattern with type signature" $ do
     let source = T.unlines ["{-# language ScopedTypeVariables #-}", "a :: () = ()"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
-      [docSymbol "a :: ()" SkFunction (R 1 0 1 12)]
+    liftIO $ symbols @?= Right
+      [docSymbol "a :: ()" SymbolKind_Function (R 1 0 1 12)]
   , testSessionWait "function" $ do
     let source = T.unlines ["a _x = ()"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left [docSymbol "a" SkFunction (R 0 0 0 9)]
+    liftIO $ symbols @?= Right [docSymbol "a" SymbolKind_Function (R 0 0 0 9)]
   , testSessionWait "type synonym" $ do
     let source = T.unlines ["type A = Bool"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
-      [docSymbol' "A" SkTypeParameter (R 0 0 0 13) (R 0 5 0 6)]
+    liftIO $ symbols @?= Right
+      [docSymbol' "A" SymbolKind_TypeParameter (R 0 0 0 13) (R 0 5 0 6)]
   , testSessionWait "datatype" $ do
     let source = T.unlines ["data A = C"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
+    liftIO $ symbols @?= Right
       [ docSymbolWithChildren "A"
-                              SkStruct
+                              SymbolKind_Struct
                               (R 0 0 0 10)
-                              [docSymbol "C" SkConstructor (R 0 9 0 10)]
+                              [docSymbol "C" SymbolKind_Variable (R 0 9 0 10)]
       ]
   , testSessionWait "record fields" $ do
     let source = T.unlines ["data A = B {", "  x :: Int", "  , y :: Int}"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
-      [ docSymbolWithChildren "A" SkStruct (R 0 0 2 13)
-          [ docSymbolWithChildren' "B" SkConstructor (R 0 9 2 13) (R 0 9 0 10)
-            [ docSymbol "x" SkField (R 1 2 1 3)
-            , docSymbol "y" SkField (R 2 4 2 5)
+    liftIO $ symbols @?= Right
+      [ docSymbolWithChildren "A" SymbolKind_Struct (R 0 0 2 13)
+          [ docSymbolWithChildren' "B" SymbolKind_Variable (R 0 9 2 13) (R 0 9 0 10)
+            [ docSymbol "x" SymbolKind_Field (R 1 2 1 3)
+            , docSymbol "y" SymbolKind_Field (R 2 4 2 5)
             ]
           ]
       ]
@@ -2284,23 +2269,23 @@ outlineTests = testGroup
     let source = T.unlines ["import Data.Maybe ()"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
+    liftIO $ symbols @?= Right
       [docSymbolWithChildren "imports"
-                             SkModule
+                             SymbolKind_Module
                              (R 0 0 0 20)
-                             [ docSymbol "import Data.Maybe" SkModule (R 0 0 0 20)
+                             [ docSymbol "import Data.Maybe" SymbolKind_Module (R 0 0 0 20)
                              ]
       ]
   , testSessionWait "multiple import" $ do
     let source = T.unlines ["", "import Data.Maybe ()", "", "import Control.Exception ()", ""]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left
+    liftIO $ symbols @?= Right
       [docSymbolWithChildren "imports"
-                             SkModule
+                             SymbolKind_Module
                              (R 1 0 3 27)
-                             [ docSymbol "import Data.Maybe" SkModule (R 1 0 1 20)
-                             , docSymbol "import Control.Exception" SkModule (R 3 0 3 27)
+                             [ docSymbol "import Data.Maybe" SymbolKind_Module (R 1 0 1 20)
+                             , docSymbol "import Control.Exception" SymbolKind_Module (R 3 0 3 27)
                              ]
       ]
   , testSessionWait "foreign import" $ do
@@ -2310,7 +2295,7 @@ outlineTests = testGroup
           ]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left [docSymbolD "a" "import" SkObject (R 1 0 1 33)]
+    liftIO $ symbols @?= Right [docSymbolD "a" "import" SymbolKind_Object (R 1 0 1 33)]
   , testSessionWait "foreign export" $ do
     let source = T.unlines
           [ "{-# language ForeignFunctionInterface #-}"
@@ -2318,7 +2303,7 @@ outlineTests = testGroup
           ]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left [docSymbolD "odd" "export" SkObject (R 1 0 1 39)]
+    liftIO $ symbols @?= Right [docSymbolD "odd" "export" SymbolKind_Object (R 1 0 1 39)]
   ]
  where
   docSymbol name kind loc =
@@ -2328,25 +2313,25 @@ outlineTests = testGroup
   docSymbolD name detail kind loc =
     DocumentSymbol name (Just detail) kind Nothing Nothing loc loc Nothing
   docSymbolWithChildren name kind loc cc =
-    DocumentSymbol name Nothing kind Nothing Nothing loc loc (Just $ List cc)
+    DocumentSymbol name Nothing kind Nothing Nothing loc loc (Just cc)
   docSymbolWithChildren' name kind loc selectionLoc cc =
-    DocumentSymbol name Nothing kind Nothing Nothing loc selectionLoc (Just $ List cc)
+    DocumentSymbol name Nothing kind Nothing Nothing loc selectionLoc (Just cc)
   moduleSymbol name loc cc = DocumentSymbol name
                                             Nothing
-                                            SkFile
+                                            SymbolKind_File
                                             Nothing
                                             Nothing
                                             (R 0 0 maxBound 0)
                                             loc
-                                            (Just $ List cc)
+                                            (Just cc)
   classSymbol name loc cc = DocumentSymbol name
                                            (Just "class")
-                                           SkInterface
+                                           SymbolKind_Interface
                                            Nothing
                                            Nothing
                                            loc
                                            loc
-                                           (Just $ List cc)
+                                           (Just cc)
 
 pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')
@@ -2532,13 +2517,13 @@ loadCradleOnlyonce = testGroup "load cradle only once"
         implicit dir = test dir
         test _dir = do
             doc <- createDoc "B.hs" "haskell" "module B where\nimport Data.Foo"
-            msgs <- someTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message STextDocumentPublishDiagnostics))
+            msgs <- someTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message SMethod_TextDocumentPublishDiagnostics))
             liftIO $ length msgs @?= 1
-            changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing "module B where\nimport Data.Maybe"]
-            msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message STextDocumentPublishDiagnostics))
+            changeDoc doc [TextDocumentContentChangeEvent . InR . (.==) #text $ "module B where\nimport Data.Maybe"]
+            msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message SMethod_TextDocumentPublishDiagnostics))
             liftIO $ length msgs @?= 0
             _ <- createDoc "A.hs" "haskell" "module A where\nimport LoadCradleBar"
-            msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message STextDocumentPublishDiagnostics))
+            msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message SMethod_TextDocumentPublishDiagnostics))
             liftIO $ length msgs @?= 0
 
 retryFailedCradle :: TestTree
@@ -2555,8 +2540,8 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   -- Fix the cradle and typecheck again
   let validCradle = "cradle: {bios: {shell: \"echo A.hs\"}}"
   liftIO $ writeFileUTF8 hiePath $ T.unpack validCradle
-  sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-          List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
+  sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+         [FileEvent (filePathToUri $ dir </> "hie.yaml") FileChangeType_Changed ]
 
   WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
   liftIO $ "No joy after fixing the cradle" `assertBool` ideResultSuccess
@@ -2588,29 +2573,25 @@ dependentFileTest = testGroup "addDependentFile"
         expectDiagnostics $
             if ghcVersion >= GHC90
                 -- String vs [Char] causes this change in error message
-                then [("Foo.hs", [(DsError, if ghcVersion >= GHC92 then (4,11) else (4, 6), "Couldn't match type")])]
-                else [("Foo.hs", [(DsError, (4, 6), "Couldn't match expected type")])]
+                then [("Foo.hs", [(DiagnosticSeverity_Error, if ghcVersion >= GHC92 then (4,11) else (4, 6), "Couldn't match type")])]
+                else [("Foo.hs", [(DiagnosticSeverity_Error, (4, 6), "Couldn't match expected type")])]
         -- Now modify the dependent file
         liftIO $ writeFile depFilePath "B"
-        sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-          List [FileEvent (filePathToUri "dep-file.txt") FcChanged ]
+        sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+            [FileEvent (filePathToUri "dep-file.txt") FileChangeType_Changed ]
 
         -- Modifying Baz will now trigger Foo to be rebuilt as well
-        let change = TextDocumentContentChangeEvent
-              { _range = Just (Range (Position 2 0) (Position 2 6))
-              , _rangeLength = Nothing
-              , _text = "f = ()"
-              }
+        let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 2 0) (Position 2 6) .+ #rangeLength .== Nothing .+ #text .== "f = ()"
         changeDoc doc [change]
         expectDiagnostics [("Foo.hs", [])]
 
 
 cradleLoadedMessage :: Session FromServerMessage
 cradleLoadedMessage = satisfy $ \case
-        FromServerMess (SCustomMethod m) (NotMess _) -> m == cradleLoadedMethod
+        FromServerMess m@(SMethod_CustomMethod _) (NotMess _) -> someMethodToMethodString (SomeMethod m) == cradleLoadedMethod
         _                                            -> False
 
-cradleLoadedMethod :: T.Text
+cradleLoadedMethod :: String
 cradleLoadedMethod = "ghcide/cradle/loaded"
 
 ignoreFatalWarning :: TestTree
@@ -2627,7 +2608,7 @@ simpleSubDirectoryTest =
     mainSource <- liftIO $ readFileUtf8 mainPath
     _mdoc <- createDoc mainPath "haskell" mainSource
     expectDiagnosticsWithTags
-      [("a/src/Main.hs", [(DsWarning,(2,0), "Top-level binding", Nothing)]) -- So that we know P has been loaded
+      [("a/src/Main.hs", [(DiagnosticSeverity_Warning,(2,0), "Top-level binding", Nothing)]) -- So that we know P has been loaded
       ]
     expectNoMoreDiagnostics 0.5
 
@@ -2721,9 +2702,9 @@ bootTests = testGroup "boot"
             -- that the `getDefinitions` request/response in the outer ghcide
             -- session will find no definitions.
             let hoverParams = HoverParams cDoc (Position 4 3) Nothing
-            hoverRequestId <- sendRequest STextDocumentHover hoverParams
+            hoverRequestId <- sendRequest SMethod_TextDocumentHover hoverParams
             let parseReadyMessage = isReferenceReady cPath
-            let parseHoverResponse = responseForId STextDocumentHover hoverRequestId
+            let parseHoverResponse = responseForId SMethod_TextDocumentHover hoverRequestId
             hoverResponseOrReadyMessage <- skipManyTill anyMessage ((Left <$> parseHoverResponse) <|> (Right <$> parseReadyMessage))
             _ <- skipManyTill anyMessage $
               case hoverResponseOrReadyMessage of
@@ -2756,10 +2737,10 @@ ifaceTHTest = testCase "iface-th-test" $ runWithExtraFiles "TH" $ \dir -> do
     liftIO $ writeFileUTF8 aPath (unlines $ init (lines $ T.unpack aSource) ++ ["th_a = [d| a = False|]"])
 
     -- Check that the change propagates to C
-    changeDoc cdoc [TextDocumentContentChangeEvent Nothing Nothing cSource]
+    changeDoc cdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ cSource]
     expectDiagnostics
-      [("THC.hs", [(DsError, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
-      ,("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
+      [("THC.hs", [(DiagnosticSeverity_Error, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
+      ,("THB.hs", [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level binding")])]
     closeDoc cdoc
 
 ifaceErrorTest :: TestTree
@@ -2773,17 +2754,17 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
 
     bdoc <- createDoc bPath "haskell" bSource
     expectDiagnostics
-      [("P.hs", [(DsWarning,(4,0), "Top-level binding")])] -- So what we know P has been loaded
+      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])] -- So what we know P has been loaded
 
     -- Change y from Int to B
-    changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
+    changeDoc bdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
     -- save so that we can that the error propagates to A
-    sendNotification STextDocumentDidSave (DidSaveTextDocumentParams bdoc Nothing)
+    sendNotification SMethod_TextDocumentDidSave (DidSaveTextDocumentParams bdoc Nothing)
 
 
     -- Check that the error propagates to A
     expectDiagnostics
-      [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])]
+      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])]
 
     -- Check that we wrote the interfaces for B when we saved
     hidir <- getInterfaceFilesDir bdoc
@@ -2792,9 +2773,9 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
 
     pdoc <- openDoc pPath "haskell"
     expectDiagnostics
-      [("P.hs", [(DsWarning,(4,0), "Top-level binding")])
+      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])
       ]
-    changeDoc pdoc [TextDocumentContentChangeEvent Nothing Nothing $ pSource <> "\nfoo = y :: Bool" ]
+    changeDoc pdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ pSource <> "\nfoo = y :: Bool" ]
     -- Now in P we have
     -- bar = x :: Int
     -- foo = y :: Bool
@@ -2804,8 +2785,8 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     --   - The diagnostic for A has already been received. Ghcide does not repeat diagnostics
     --   - P is being typechecked with the last successful artifacts for A.
     expectDiagnostics
-      [("P.hs", [(DsWarning,(4,0), "Top-level binding")])
-      ,("P.hs", [(DsWarning,(6,0), "Top-level binding")])
+      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])
+      ,("P.hs", [(DiagnosticSeverity_Warning,(6,0), "Top-level binding")])
       ]
     expectNoMoreDiagnostics 2
 
@@ -2820,13 +2801,13 @@ ifaceErrorTest2 = testCase "iface-error-test-2" $ runWithExtraFiles "recomp" $ \
     bdoc <- createDoc bPath "haskell" bSource
     pdoc <- createDoc pPath "haskell" pSource
     expectDiagnostics
-      [("P.hs", [(DsWarning,(4,0), "Top-level binding")])] -- So that we know P has been loaded
+      [("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])] -- So that we know P has been loaded
 
     -- Change y from Int to B
-    changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
+    changeDoc bdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
 
     -- Add a new definition to P
-    changeDoc pdoc [TextDocumentContentChangeEvent Nothing Nothing $ pSource <> "\nfoo = y :: Bool" ]
+    changeDoc pdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ pSource <> "\nfoo = y :: Bool" ]
     -- Now in P we have
     -- bar = x :: Int
     -- foo = y :: Bool
@@ -2835,9 +2816,9 @@ ifaceErrorTest2 = testCase "iface-error-test-2" $ runWithExtraFiles "recomp" $ \
     expectDiagnostics
     -- As in the other test, P is being typechecked with the last successful artifacts for A
     -- (ot thanks to -fdeferred-type-errors)
-      [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
-      ,("P.hs", [(DsWarning, (4, 0), "Top-level binding")])
-      ,("P.hs", [(DsWarning, (6, 0), "Top-level binding")])
+      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
+      ,("P.hs", [(DiagnosticSeverity_Warning, (4, 0), "Top-level binding")])
+      ,("P.hs", [(DiagnosticSeverity_Warning, (6, 0), "Top-level binding")])
       ]
 
     expectNoMoreDiagnostics 2
@@ -2853,7 +2834,7 @@ ifaceErrorTest3 = testCase "iface-error-test-3" $ runWithExtraFiles "recomp" $ \
     bdoc <- createDoc bPath "haskell" bSource
 
     -- Change y from Int to B
-    changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
+    changeDoc bdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
 
     -- P should not typecheck, as there are no last valid artifacts for A
     _pdoc <- createDoc pPath "haskell" pSource
@@ -2861,8 +2842,8 @@ ifaceErrorTest3 = testCase "iface-error-test-3" $ runWithExtraFiles "recomp" $ \
     -- In this example the interface file for A should not exist (modulo the cache folder)
     -- Despite that P still type checks, as we can generate an interface file for A thanks to -fdeferred-type-errors
     expectDiagnostics
-      [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
-      ,("P.hs", [(DsWarning,(4,0), "Top-level binding")])
+      [("A.hs", [(DiagnosticSeverity_Error, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
+      ,("P.hs", [(DiagnosticSeverity_Warning,(4,0), "Top-level binding")])
       ]
     expectNoMoreDiagnostics 2
 
@@ -2879,22 +2860,18 @@ sessionDepsArePickedUp = testSession'
     expectDiagnostics $
         if ghcVersion >= GHC90
             -- String vs [Char] causes this change in error message
-            then [("Foo.hs", [(DsError, (3, 6), "Couldn't match type")])]
-            else [("Foo.hs", [(DsError, (3, 6), "Couldn't match expected type")])]
+            then [("Foo.hs", [(DiagnosticSeverity_Error, (3, 6), "Couldn't match type")])]
+            else [("Foo.hs", [(DiagnosticSeverity_Error, (3, 6), "Couldn't match expected type")])]
     -- Update hie.yaml to enable OverloadedStrings.
     liftIO $
       writeFileUTF8
         (dir </> "hie.yaml")
         "cradle: {direct: {arguments: [-XOverloadedStrings]}}"
-    sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-          List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
+    sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+        [FileEvent (filePathToUri $ dir </> "hie.yaml") FileChangeType_Changed ]
     -- Send change event.
     let change =
-          TextDocumentContentChangeEvent
-            { _range = Just (Range (Position 4 0) (Position 4 0)),
-              _rangeLength = Nothing,
-              _text = "\n"
-            }
+          TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 4 0) (Position 4 0) .+ #rangeLength .== Nothing .+ #text .== "\n"
     changeDoc doc [change]
     -- Now no errors.
     expectDiagnostics [("Foo.hs", [])]
@@ -2942,7 +2919,7 @@ asyncTests = testGroup "async"
       testSession "command" $ do
             -- Execute a command that will block forever
             let req = ExecuteCommandParams Nothing blockCommandId Nothing
-            void $ sendRequest SWorkspaceExecuteCommand req
+            void $ sendRequest SMethod_WorkspaceExecuteCommand req
             -- Load a file and check for code actions. Will only work if the command is run asynchronously
             doc <- createDoc "A.hs" "haskell" $ T.unlines
               [ "{-# OPTIONS -Wmissing-signatures #-}"
@@ -2954,7 +2931,7 @@ asyncTests = testGroup "async"
               [ "foo :: a -> a" ]
     , testSession "request" $ do
             -- Execute a custom request that will block for 1000 seconds
-            void $ sendRequest (SCustomMethod "test") $ toJSON $ BlockSeconds 1000
+            void $ sendRequest (SMethod_CustomMethod (Proxy @"test")) $ toJSON $ BlockSeconds 1000
             -- Load a file and check for code actions. Will only work if the request is run asynchronously
             doc <- createDoc "A.hs" "haskell" $ T.unlines
               [ "{-# OPTIONS -Wmissing-signatures #-}"
@@ -2970,10 +2947,10 @@ asyncTests = testGroup "async"
 clientSettingsTest :: TestTree
 clientSettingsTest = testGroup "client settings handling"
     [ testSession "ghcide restarts shake session on config changes" $ do
-            void $ skipManyTill anyMessage $ message SClientRegisterCapability
+            void $ skipManyTill anyMessage $ message SMethod_ClientRegisterCapability
             void $ createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
-            sendNotification SWorkspaceDidChangeConfiguration
+            sendNotification SMethod_WorkspaceDidChangeConfiguration
                 (DidChangeConfigurationParams (toJSON (mempty :: A.Object)))
             skipManyTill anyMessage restartingBuildSession
 
@@ -2981,7 +2958,7 @@ clientSettingsTest = testGroup "client settings handling"
   where
     restartingBuildSession :: Session ()
     restartingBuildSession = do
-        FromServerMess SWindowLogMessage NotificationMessage{_params = LogMessageParams{..}} <- loggingNotification
+        FromServerMess SMethod_WindowLogMessage TNotificationMessage{_params = LogMessageParams{..}} <- loggingNotification
         guard $ "Restarting build session" `T.isInfixOf` _message
 
 referenceTests :: TestTree
@@ -3105,7 +3082,7 @@ data IncludeDeclaration =
     YesIncludeDeclaration
     | NoExcludeDeclaration
 
-getReferences' :: SymbolLocation -> IncludeDeclaration -> Session (List Location)
+getReferences' :: SymbolLocation -> IncludeDeclaration -> Session ([Location])
 getReferences' (file, l, c) includeDeclaration = do
     doc <- openDoc file "haskell"
     getReferences doc (Position l c) $ toBool includeDeclaration
@@ -3134,7 +3111,7 @@ referenceTestSession name thisDoc docs' f = testSessionWithExtraFiles "reference
 referenceTest :: String -> SymbolLocation -> IncludeDeclaration -> [SymbolLocation] -> TestTree
 referenceTest name loc includeDeclaration expected =
     referenceTestSession name (fst3 loc) docs $ \dir -> do
-        List actual <- getReferences' loc includeDeclaration
+        actual <- getReferences' loc includeDeclaration
         liftIO $ actual `expectSameLocations` map (first3 (dir </>)) expected
   where
     docs = map fst3 expected
@@ -3145,8 +3122,8 @@ expectSameLocations :: [Location] -> [SymbolLocation] -> Assertion
 expectSameLocations actual expected = do
     let actual' =
             Set.map (\location -> (location ^. L.uri
-                                   , location ^. L.range . L.start . L.line . to fromIntegral
-                                   , location ^. L.range . L.start . L.character . to fromIntegral))
+                                   , location ^. L.range . L.start . L.line . Lens.to fromIntegral
+                                   , location ^. L.range . L.start . L.character . Lens.to fromIntegral))
             $ Set.fromList actual
     expected' <- Set.fromList <$>
         (forM expected $ \(file, l, c) -> do
@@ -3284,7 +3261,9 @@ unitTests recorder logger = do
          uriToFilePath' uri @?= Just ""
      , testCase "showDiagnostics prints ranges 1-based (like vscode)" $ do
          let diag = ("", Diagnostics.ShowDiag, Diagnostic
-               { _range = Range
+               {  _codeDescription = Nothing
+                , _data_ = Nothing
+                , _range = Range
                    { _start = Position{_line = 0, _character = 1}
                    , _end = Position{_line = 2, _character = 3}
                    }
@@ -3304,7 +3283,7 @@ unitTests recorder logger = do
         let plugins = pluginDescToIdePlugins $
                 [ (priorityPluginDescriptor i)
                     { pluginNotificationHandlers = mconcat
-                        [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $ \_ _ _ _ ->
+                        [ mkPluginNotificationHandler SMethod_TextDocumentDidOpen $ \_ _ _ _ ->
                             liftIO $ atomicModifyIORef_ orderRef (i:)
                         ]
                     }
@@ -3381,10 +3360,10 @@ garbageCollectionTests = testGroup "garbage collection"
                         , "a = ()"
                         ]
             doc <- generateGarbage "A" dir
-            changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing edit]
+            changeDoc doc [TextDocumentContentChangeEvent . InR . (.==) #text $ edit]
             builds <- waitForTypecheck doc
             liftIO $ assertBool "it still builds" builds
-            expectCurrentDiagnostics doc [(DsError, (2,4), "Couldn't match expected type")]
+            expectCurrentDiagnostics doc [(DiagnosticSeverity_Error, (2,4), "Couldn't match expected type")]
         ]
   ]
   where
@@ -3547,7 +3526,7 @@ positionMappingTests recorder =
                         range <- genRange rope
                         PrintableText replacement <- arbitrary
                         let newRope = runIdentity $ applyChange mempty rope
-                                (TextDocumentContentChangeEvent (Just range) Nothing replacement)
+                                (TextDocumentContentChangeEvent $ InL $ #range .== range .+ #rangeLength .== Nothing .+ #text .== replacement)
                         newPos <- genPosition newRope
                         pure (range, replacement, newPos)
                 forAll
@@ -3601,11 +3580,12 @@ nthLine i r
 
 getWatchedFilesSubscriptionsUntil :: forall m. SServerMethod m -> Session [DidChangeWatchedFilesRegistrationOptions]
 getWatchedFilesSubscriptionsUntil m = do
-      msgs <- manyTill (Just <$> message SClientRegisterCapability <|> Nothing <$ anyMessage) (message m)
+      msgs <- manyTill (Just <$> message SMethod_ClientRegisterCapability <|> Nothing <$ anyMessage) (message m)
       return
-            [ args
-            | Just RequestMessage{_params = RegistrationParams (List regs)} <- msgs
-            , SomeRegistration (Registration _id SWorkspaceDidChangeWatchedFiles args) <- regs
+            [ x
+            | Just TRequestMessage{_params = RegistrationParams regs} <- msgs
+            , Registration _id "workspace/didChangeWatchedFiles" (Just args) <- regs
+            , Just x@(DidChangeWatchedFilesRegistrationOptions _) <- [A.decode . A.encode $ args]
             ]
 
 -- | Version of 'System.IO.Extra.withTempDir' that canonicalizes the path

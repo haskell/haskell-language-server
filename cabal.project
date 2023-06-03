@@ -94,18 +94,18 @@ source-repository-package
 -- This is needed till lsp makes a release
 source-repository-package
   type:git
-  location: https://github.com/haskell/lsp
-  tag: ba7e5cbfaf4ab075a8fc290d61e8c9a96a41fd94
+  location: https://github.com/joyfulmantis/lsp
+  tag: 98d34d93d8bd93ec603b77f5e5085ba09c74b9c1
   subdir: lsp
 source-repository-package
   type:git
-  location: https://github.com/haskell/lsp
-  tag: ba7e5cbfaf4ab075a8fc290d61e8c9a96a41fd94
+  location: https://github.com/joyfulmantis/lsp
+  tag: 98d34d93d8bd93ec603b77f5e5085ba09c74b9c1
   subdir: lsp-types
 source-repository-package
   type:git
-  location: https://github.com/haskell/lsp
-  tag: ba7e5cbfaf4ab075a8fc290d61e8c9a96a41fd94
+  location: https://github.com/joyfulmantis/lsp
+  tag: 98d34d93d8bd93ec603b77f5e5085ba09c74b9c1
   subdir: lsp-test
 
 

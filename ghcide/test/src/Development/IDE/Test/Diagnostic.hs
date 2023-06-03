@@ -1,10 +1,9 @@
 module Development.IDE.Test.Diagnostic where
 
-import           Control.Lens            ((^.))
-import qualified Data.Text               as T
-import           GHC.Stack               (HasCallStack)
-import           Language.LSP.Types
-import           Language.LSP.Types.Lens as Lsp
+import           Control.Lens                ((^.))
+import qualified Data.Text                   as T
+import           GHC.Stack                   (HasCallStack)
+import           Language.LSP.Protocol.Types
 
 -- | (0-based line number, 0-based column number)
 type Cursor = (UInt, UInt)
@@ -33,10 +32,10 @@ requireDiagnostic actuals expected@(severity, cursor, expectedMsg, expectedTag)
            standardizeQuotes (T.toLower $ d ^. message)
         && hasTag expectedTag (d ^. tags)
 
-    hasTag :: Maybe DiagnosticTag -> Maybe (List DiagnosticTag) -> Bool
-    hasTag Nothing  _                          = True
-    hasTag (Just _) Nothing                    = False
-    hasTag (Just actualTag) (Just (List tags)) = actualTag `elem` tags
+    hasTag :: Maybe DiagnosticTag -> Maybe [DiagnosticTag] -> Bool
+    hasTag Nothing  _                   = True
+    hasTag (Just _) Nothing             = False
+    hasTag (Just actualTag) (Just tags) = actualTag `elem` tags
 
 standardizeQuotes :: T.Text -> T.Text
 standardizeQuotes msg = let

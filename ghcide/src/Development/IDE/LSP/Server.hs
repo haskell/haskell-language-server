@@ -1,13 +1,8 @@
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE UndecidableInstances #-}
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE KindSignatures        #-}
-{-# LANGUAGE RankNTypes            #-}
---{-# LANGUAGE ExistentialQuantification #-}
 module Development.IDE.LSP.Server
   ( ReactorMessage(..)
   , ReactorChan
@@ -15,46 +10,40 @@ module Development.IDE.LSP.Server
   , requestHandler
   , notificationHandler
   ) where
-import           Control.Arrow                 (left)
 import           Control.Monad.IO.Unlift       (MonadUnliftIO)
 import           Control.Monad.Reader
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing
 import           Ide.Types                     (HasTracing, traceWithSpan)
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types   hiding (id)
 import           Language.LSP.Server           (Handlers, LspM)
 import qualified Language.LSP.Server           as LSP
 import           Language.LSP.VFS
 import           UnliftIO.Chan
---import           Ide.TempLSPTypeFunctions
---import Data.Aeson (FromJSON)
+
 data ReactorMessage
   = ReactorNotification (IO ())
   | ReactorRequest SomeLspId (IO ()) (ResponseError -> IO ())
---  | forall {f :: MessageDirection} (m :: Method f 'Request). ReactorRequest SomeLspId (IO ()) (TResponseError m -> IO ())
 
 type ReactorChan = Chan ReactorMessage
 newtype ServerM c a = ServerM { unServerM :: ReaderT (ReactorChan, IdeState) (LspM c) a }
   deriving (Functor, Applicative, Monad, MonadReader (ReactorChan, IdeState), MonadIO, MonadUnliftIO, LSP.MonadLsp c)
 
 requestHandler
-  :: forall (m :: Method ClientToServer Request) c. (HasTracing (MessageParams m), FromJSON( ErrorData m)) =>
---  :: forall (m :: Method ClientToServer Request) c. (HasTracing (MessageParams m)) =>
+  :: forall (m :: Method ClientToServer Request) c. (HasTracing (MessageParams m)) =>
      SMethod m
   -> (IdeState -> MessageParams m -> LspM c (Either ResponseError (MessageResult m)))
   -> Handlers (ServerM c)
 requestHandler m k = LSP.requestHandler m $ \TRequestMessage{_method,_id,_params} resp -> do
   st@(chan,ide) <- ask
   env <- LSP.getLspEnv
-  let resp' :: Either (TResponseError m) (MessageResult m) -> LspM c ()
+  let resp' :: Either ResponseError (MessageResult m) -> LspM c ()
       resp' = flip (runReaderT . unServerM) st . resp
       trace x = otTracedHandler "Request" (show _method) $ \sp -> do
         traceWithSpan sp _params
         x
   writeChan chan $ ReactorRequest (SomeLspId _id) (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
---  writeChan chan $ ReactorRequest (SomeLspId _id) (trace $ LSP.runLspT env $ (resp' . convertToTyped) =<< k ide _params) (LSP.runLspT env . (resp' . convertToTyped) . Left)
---  where convertToTyped = left toTypedResponseError
+
 
 notificationHandler
   :: forall (m :: Method ClientToServer Notification) c. (HasTracing (MessageParams m)) =>

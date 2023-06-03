@@ -364,6 +364,7 @@ test-suite ghcide-tests
         text,
         text-rope,
         unordered-containers,
+        row-types
     if impl(ghc < 9.2)
       build-depends:
           record-dot-preprocessor,

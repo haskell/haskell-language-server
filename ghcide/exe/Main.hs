@@ -41,8 +41,8 @@ import           Ide.PluginUtils                          (pluginDescToIdePlugin
 import           Ide.Types                                (PluginDescriptor (pluginNotificationHandlers),
                                                            defaultPluginDescriptor,
                                                            mkPluginNotificationHandler)
+import           Language.LSP.Protocol.Message            as LSP
 import           Language.LSP.Server                      as LSP
-import           Language.LSP.Types                       as LSP
 import           Paths_ghcide                             (version)
 import qualified System.Directory.Extra                   as IO
 import           System.Environment                       (getExecutablePath)
