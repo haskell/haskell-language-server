@@ -170,7 +170,7 @@ instance Show (IdeCommand st) where show _ = "<ide command>"
 
 -- | We (initially anyway) mirror the hie configuration, so that existing
 -- clients can simply switch executable and not have any nasty surprises.  There
--- will be surprises relating to config options being ignored, initially though.
+-- will initially be surprises relating to config options being ignored though.
 data Config =
   Config
     { checkParents            :: CheckParents
@@ -282,7 +282,7 @@ data PluginDescriptor (ideState :: *) =
                    , pluginCli            :: Maybe (ParserInfo (IdeCommand ideState))
                    , pluginFileType       :: [T.Text]
                    -- ^ File extension of the files the plugin is responsible for.
-                   --   The plugin is only allowed to handle files with these extensions
+                   --   The plugin is only allowed to handle files with these extensions.
                    --   When writing handlers, etc. for this plugin it can be assumed that all handled files are of this type.
                    --   The file extension must have a leading '.'.
                    }
@@ -301,8 +301,8 @@ pluginResponsible uri pluginDesc
 -- | An existential wrapper of 'Properties'
 data CustomConfig = forall r. CustomConfig (Properties r)
 
--- | Describes the configuration a plugin.
--- A plugin may be configurable in such form:
+-- | Describes the configuration of a plugin.
+-- A plugin may be configurable as can be seen below:
 --
 -- @
 -- {
@@ -317,7 +317,7 @@ data CustomConfig = forall r. CustomConfig (Properties r)
 -- }
 -- @
 --
--- @globalOn@, @codeActionsOn@, and @codeLensOn@ etc. are called generic configs,
+-- @globalOn@, @codeActionsOn@, and @codeLensOn@ etc. are called generic configs
 -- which can be inferred from handlers registered by the plugin.
 -- @config@ is called custom config, which is defined using 'Properties'.
 data ConfigDescriptor = ConfigDescriptor {
@@ -344,38 +344,38 @@ defaultConfigDescriptor =
 class HasTracing (MessageParams m) => PluginMethod (k :: MethodType) (m :: Method FromClient k) where
 
   -- | Parse the configuration to check if this plugin is enabled.
-  -- Perform sanity checks on the message to see whether plugin is enabled
+  -- Perform sanity checks on the message to see whether the plugin is enabled
   -- for this message in particular.
-  -- If a plugin is not enabled, its handlers, commands, etc... will not be
+  -- If a plugin is not enabled, its handlers, commands, etc. will not be
   -- run for the given message.
   --
-  -- Semantically, this method described whether a Plugin is enabled configuration wise
+  -- Semantically, this method describes whether a plugin is enabled configuration wise
   -- and is allowed to respond to the message. This might depend on the URI that is
-  -- associated to the Message Parameters, but doesn't have to. There are requests
-  -- with no associated URI that, consequentially, can't inspect the URI.
+  -- associated to the Message Parameters. There are requests
+  -- with no associated URI that, consequentially, cannot inspect the URI.
   --
-  -- Common reason why a plugin might not be allowed to respond although it is enabled:
-  --   * Plugin can not handle requests associated to the specific URI
+  -- A common reason why a plugin might not be allowed to respond although it is enabled:
+  --   * The plugin cannot handle requests associated with the specific URI
   --     * Since the implementation of [cabal plugins](https://github.com/haskell/haskell-language-server/issues/2940)
-  --       HLS knows plugins specific for Haskell and specific for [Cabal file descriptions](https://cabal.readthedocs.io/en/3.6/cabal-package.html)
+  --       HLS knows plugins specific to Haskell and specific to [Cabal file descriptions](https://cabal.readthedocs.io/en/3.6/cabal-package.html)
   --
   -- Strictly speaking, we are conflating two concepts here:
-  --   * Dynamically enabled (e.g. enabled on a per-message basis)
+  --   * Dynamically enabled (e.g. on a per-message basis)
   --   * Statically enabled (e.g. by configuration in the lsp-client)
   --     * Strictly speaking, this might also change dynamically
   --
-  -- But there is no use to split it up currently into two different methods for now.
+  -- But there is no use to split it up into two different methods for now.
   pluginEnabled
     :: SMethod m
     -- ^ Method type.
     -> MessageParams m
     -- ^ Whether a plugin is enabled might depend on the message parameters
-    --   eg 'pluginFileType' specifies what file extension a plugin is allowed to handle
+    --   e.g. 'pluginFileType' specifies which file extensions a plugin is allowed to handle
     -> PluginDescriptor c
-    -- ^ Contains meta information such as PluginId and what file types this
+    -- ^ Contains meta information such as PluginId and which file types this
     -- plugin is able to handle.
     -> Config
-    -- ^ Generic config description, expected to hold 'PluginConfig' configuration
+    -- ^ Generic config description, expected to contain 'PluginConfig' configuration
     -- for this plugin
     -> Bool
     -- ^ Is this plugin enabled and allowed to respond to the given request
@@ -395,12 +395,12 @@ class PluginMethod Request m => PluginRequestMethod (m :: Method FromClient Requ
   -- | How to combine responses from different plugins.
   --
   -- For example, for Hover requests, we might have multiple producers of
-  -- Hover information, we do not want to decide which one to display to the user
-  -- but allow here to define how to merge two hover request responses into one
+  -- Hover information. We do not want to decide which one to display to the user
+  -- but instead allow to define how to merge two hover request responses into one
   -- glorious hover box.
   --
-  -- However, sometimes only one handler of a request can realistically exist,
-  -- such as TextDocumentFormatting, it is safe to just unconditionally report
+  -- However, as sometimes only one handler of a request can realistically exist
+  -- (such as TextDocumentFormatting), it is safe to just unconditionally report
   -- back one arbitrary result (arbitrary since it should only be one anyway).
   combineResponses
     :: SMethod m
@@ -779,7 +779,7 @@ defaultPluginPriority :: Natural
 defaultPluginPriority = 1000
 
 -- | Set up a plugin descriptor, initialized with default values.
--- This is plugin descriptor is prepared for @haskell@ files, such as
+-- This plugin descriptor is prepared for @haskell@ files, such as
 --
 --   * @.hs@
 --   * @.lhs@
@@ -802,7 +802,7 @@ defaultPluginDescriptor plId =
     [".hs", ".lhs", ".hs-boot"]
 
 -- | Set up a plugin descriptor, initialized with default values.
--- This is plugin descriptor is prepared for @.cabal@ files and as such,
+-- This plugin descriptor is prepared for @.cabal@ files and as such,
 -- will only respond / run when @.cabal@ files are currently in scope.
 --
 -- Handles files with the following extensions:
