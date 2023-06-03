@@ -187,10 +187,10 @@
           config = { allowBroken = true; };
         };
 
-        ghc902Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
-        ghc927Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
-        ghc944Config = (import ./configuration-ghc-94.nix) { inherit pkgs inputs; };
-        ghc961Config = (import ./configuration-ghc-96.nix) { inherit pkgs inputs; };
+        ghc90Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
+        ghc92Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
+        ghc94Config = (import ./configuration-ghc-94.nix) { inherit pkgs inputs; };
+        ghc96Config = (import ./configuration-ghc-96.nix) { inherit pkgs inputs; };
 
         # GHC versions
         # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached
@@ -198,17 +198,17 @@
         supportedGHCs = let
           ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
           cases = {
-            ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
-            ghc927 = ghc927Config.tweakHpkgs (pkgs.hlsHpkgs "ghc927");
-            ghc944 = ghc944Config.tweakHpkgs (pkgs.hlsHpkgs "ghc944");
-            ghc961 = ghc961Config.tweakHpkgs (pkgs.hlsHpkgs "ghc961");
+            ghc90 = ghc90Config.tweakHpkgs (pkgs.hlsHpkgs "ghc90");
+            ghc92 = ghc92Config.tweakHpkgs (pkgs.hlsHpkgs "ghc92");
+            ghc94 = ghc94Config.tweakHpkgs (pkgs.hlsHpkgs "ghc94");
+            ghc96 = ghc96Config.tweakHpkgs (pkgs.hlsHpkgs "ghc96");
           };
           in { default = cases."${ghcVersion}"; } // cases;
 
-        ghc902 = supportedGHCs.ghc902;
-        ghc927 = supportedGHCs.ghc927;
-        ghc944 = supportedGHCs.ghc944;
-        ghc961 = supportedGHCs.ghc961;
+        ghc90 = supportedGHCs.ghc90;
+        ghc92 = supportedGHCs.ghc92;
+        ghc94 = supportedGHCs.ghc94;
+        ghc96 = supportedGHCs.ghc96;
         ghcDefault = supportedGHCs.default;
 
         pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx ps.myst-parser ps.sphinx_rtd_theme ps.pip]);
@@ -327,37 +327,37 @@
         # Developement shell with only compiler
         simpleDevShells = {
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
-          haskell-language-server-902-dev = mkDevShell ghc902 "cabal.project";
-          haskell-language-server-927-dev = mkDevShell ghc927 "cabal.project";
-          haskell-language-server-944-dev = mkDevShell ghc944 "cabal.project";
-          haskell-language-server-961-dev = mkDevShell ghc961 "cabal.project";
+          haskell-language-server-90-dev = mkDevShell ghc90 "cabal.project";
+          haskell-language-server-92-dev = mkDevShell ghc92 "cabal.project";
+          haskell-language-server-94-dev = mkDevShell ghc94 "cabal.project";
+          haskell-language-server-96-dev = mkDevShell ghc96 "cabal.project";
         };
 
         # Developement shell, haskell packages are also provided by nix
         nixDevShells = {
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
-          haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
-          haskell-language-server-927-dev-nix = mkDevShellWithNixDeps ghc927 "cabal.project";
-          haskell-language-server-944-dev-nix = mkDevShellWithNixDeps ghc944 "cabal.project";
-          haskell-language-server-961-dev-nix = mkDevShellWithNixDeps ghc961 "cabal.project";
+          haskell-language-server-90-dev-nix = mkDevShellWithNixDeps ghc90 "cabal.project";
+          haskell-language-server-92-dev-nix = mkDevShellWithNixDeps ghc92 "cabal.project";
+          haskell-language-server-94-dev-nix = mkDevShellWithNixDeps ghc94 "cabal.project";
+          haskell-language-server-96-dev-nix = mkDevShellWithNixDeps ghc96 "cabal.project";
         };
 
         # The default shell provided by Nixpkgs for a Haskell package (i.e. the
         # one that comes in the `.env` attribute)
         envShells = {
           haskell-language-server-dev-env = mkEnvShell ghcDefault;
-          haskell-language-server-902-dev-env = mkEnvShell ghc902;
-          haskell-language-server-927-dev-env = mkEnvShell ghc927;
-          haskell-language-server-944-dev-env = mkEnvShell ghc944;
-          haskell-language-server-961-dev-env = mkEnvShell ghc961;
+          haskell-language-server-90-dev-env = mkEnvShell ghc90;
+          haskell-language-server-92-dev-env = mkEnvShell ghc92;
+          haskell-language-server-94-dev-env = mkEnvShell ghc94;
+          haskell-language-server-96-dev-env = mkEnvShell ghc96;
         };
 
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
-          haskell-language-server-902 = mkExe ghc902;
-          haskell-language-server-927 = mkExe ghc927;
-          haskell-language-server-944 = mkExe ghc944;
-          haskell-language-server-961 = mkExe ghc961;
+          haskell-language-server-90 = mkExe ghc90;
+          haskell-language-server-92 = mkExe ghc92;
+          haskell-language-server-94 = mkExe ghc94;
+          haskell-language-server-96 = mkExe ghc96;
         };
 
         devShells = simpleDevShells // nixDevShells // envShells // {
