@@ -12,7 +12,7 @@ import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Parsers
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Types
 
 #if MIN_VERSION_ghc(9,2,0)
 import           Data.Either.Extra                       (eitherToMaybe)
@@ -28,7 +28,7 @@ makeEditText :: Monad m => ParsedModule -> DynFlags -> AddMinimalMethodsParams -
 -- addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located HsModule)
 #if MIN_VERSION_ghc(9,2,0)
 makeEditText pm df AddMinimalMethodsParams{..} = do
-    List mDecls <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
+    mDecls <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
     let ps = makeDeltaAst $ pm_parsed_source pm
         old = T.pack $ exactPrint ps
         (ps', _, _) = runTransform (addMethodDecls ps mDecls range withSig)

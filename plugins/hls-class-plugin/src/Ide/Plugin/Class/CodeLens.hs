@@ -19,11 +19,12 @@ import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
 import           Ide.PluginUtils
 import           Ide.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types          hiding (Null)
+import qualified Language.LSP.Protocol.Types          as J
 import           Language.LSP.Server                  (sendRequest)
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens              as J
 
-codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
+codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLens state plId CodeLensParams{..} = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
     (tmr, _) <- handleMaybeM "Unable to typecheck"
@@ -60,7 +61,7 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
                 $ makeEdit range title mp
         codeLens = makeLens <$> mapMaybe getRangeWithSig targetSigs
 
-    pure $ List codeLens
+    pure $ InL codeLens
     where
         uri = _textDocument ^. J.uri
 
@@ -121,7 +122,7 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
 
         workspaceEdit pragmaInsertion edits =
             WorkspaceEdit
-                (pure [(uri, List $ edits ++ pragmaInsertion)])
+                (pure [(uri, edits ++ pragmaInsertion)])
                 Nothing
                 Nothing
 
@@ -141,5 +142,5 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
 
 codeLensCommandHandler :: CommandFunction IdeState WorkspaceEdit
 codeLensCommandHandler _ wedit = do
-  _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right Null

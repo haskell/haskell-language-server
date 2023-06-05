@@ -4,7 +4,6 @@
 {-# LANGUAGE LambdaCase       #-}
 {-# LANGUAGE TypeFamilies     #-}
 {-# LANGUAGE ViewPatterns     #-}
-{-# LANGUAGE BangPatterns     #-}
 
 module Ide.Plugin.Class.Types where
 
@@ -35,7 +34,7 @@ defaultIndent = 2
 data AddMinimalMethodsParams = AddMinimalMethodsParams
     { uri         :: Uri
     , range       :: Range
-    , methodGroup :: List (T.Text, T.Text)
+    , methodGroup :: [(T.Text, T.Text)]
     -- ^ (name text, signature text)
     , withSig     :: Bool
     }

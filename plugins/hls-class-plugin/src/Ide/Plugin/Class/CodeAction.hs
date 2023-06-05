@@ -34,9 +34,10 @@ import           Ide.Plugin.Class.Utils
 import qualified Ide.Plugin.Config
 import           Ide.PluginUtils
 import           Ide.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types          hiding (Null)
+import qualified Language.LSP.Protocol.Types          as J
 import           Language.LSP.Server
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens              as J
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
@@ -60,17 +61,17 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
                 then mergeEdit (workspaceEdit caps old new) pragmaInsertion
                 else workspaceEdit caps old new
 
-        void $ lift $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+        void $ lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
 
         pure Null
     where
         toTextDocumentEdit edit =
-            TextDocumentEdit (VersionedTextDocumentIdentifier uri (Just 0)) (List [InL edit])
+            TextDocumentEdit (OptionalVersionedTextDocumentIdentifier uri (InL 0)) [InL edit]
 
         mergeEdit :: WorkspaceEdit -> [TextEdit] -> WorkspaceEdit
         mergeEdit WorkspaceEdit{..} edits = WorkspaceEdit
             { _documentChanges =
-                (\(List x) -> List $ x ++ map (InL . toTextDocumentEdit) edits)
+                (\x -> x ++ map (InL . toTextDocumentEdit) edits)
                     <$> _documentChanges
             , ..
             }
@@ -81,14 +82,14 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
-codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState TextDocumentCodeAction
+codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
     actions <- join <$> mapM (mkActions nfp) methodDiags
-    pure $ List actions
+    pure $ InL actions
     where
         uri = docId ^. J.uri
-        List diags = context ^. J.diagnostics
+        diags = context ^. J.diagnostics
 
         ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
         methodDiags = filter (\d -> isClassMethodWarning (d ^. J.message)) ghcDiags
@@ -141,15 +142,16 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                         title = "Add placeholders for " <> name
                         titleWithSig = title <> " with signature(s)"
 
+                mkCmdParams :: [(T.Text, T.Text)] -> Bool -> [Value]
                 mkCmdParams methodGroup withSig =
-                    [toJSON (AddMinimalMethodsParams uri range (List methodGroup) withSig)]
+                    [toJSON (AddMinimalMethodsParams uri range methodGroup withSig)]
 
                 mkCodeAction title cmd
                     = InR
                     $ CodeAction
                         title
-                        (Just CodeActionQuickFix)
-                        (Just (List []))
+                        (Just CodeActionKind_QuickFix)
+                        (Just [])
                         Nothing
                         Nothing
                         Nothing

@@ -9,12 +9,14 @@ module Main
   ( main
   ) where
 
-import           Control.Lens            (Prism', prism', (^.), (^..), (^?))
-import           Control.Monad           (void)
+import           Control.Lens                  (Prism', prism', (^.), (^..),
+                                                (^?))
+import           Control.Monad                 (void)
 import           Data.Maybe
-import qualified Data.Text               as T
-import qualified Ide.Plugin.Class        as Class
-import qualified Language.LSP.Types.Lens as J
+import qualified Data.Text                     as T
+import qualified Ide.Plugin.Class              as Class
+import           Language.LSP.Protocol.Message
+import qualified Language.LSP.Protocol.Types   as J
 import           System.FilePath
 import           Test.Hls
 
@@ -123,7 +125,7 @@ goldenCodeLens title path idx =
     goldenWithHaskellDoc classPlugin title testDataDir path "expected" "hs" $ \doc -> do
         lens <- getCodeLenses doc
         executeCommand $ fromJust $ (lens !! idx) ^. J.command
-        void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+        void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
 goldenWithClass ::TestName -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 goldenWithClass title path desc act =
