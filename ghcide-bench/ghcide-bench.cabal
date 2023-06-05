@@ -89,6 +89,7 @@ library
         safe-exceptions,
         shake,
         text,
+        row-types
     default-extensions:
         BangPatterns
         DeriveFunctor

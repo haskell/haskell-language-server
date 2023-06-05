@@ -1,8 +1,10 @@
 {-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE ImplicitParams            #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
+{-# LANGUAGE OverloadedLabels          #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE PolyKinds                 #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
@@ -23,53 +25,56 @@ module Experiments
 , runBench
 , exampleToOptions
 ) where
-import           Control.Applicative.Combinators (skipManyTill)
-import           Control.Concurrent.Async        (withAsync)
-import           Control.Exception.Safe          (IOException, handleAny, try)
-import           Control.Monad.Extra             (allM, forM, forM_, forever,
-                                                  unless, void, when, whenJust,
-                                                  (&&^))
-import           Control.Monad.Fail              (MonadFail)
+import           Control.Applicative.Combinators    (skipManyTill)
+import           Control.Concurrent.Async           (withAsync)
+import           Control.Exception.Safe             (IOException, handleAny,
+                                                     try)
+import           Control.Lens                       (isn't, (^.))
+import           Control.Monad.Extra                (allM, forM, forM_, forever,
+                                                     unless, void, when,
+                                                     whenJust, (&&^))
+import           Control.Monad.Fail                 (MonadFail)
 import           Control.Monad.IO.Class
-import           Data.Aeson                      (Value (Null),
-                                                  eitherDecodeStrict', toJSON)
-import qualified Data.Aeson                      as A
-import qualified Data.ByteString                 as BS
-import           Data.Either                     (fromRight)
+import           Data.Aeson                         (Value (Null),
+                                                     eitherDecodeStrict',
+                                                     toJSON)
+import qualified Data.Aeson                         as A
+import qualified Data.ByteString                    as BS
+import           Data.Either                        (fromRight)
 import           Data.List
 import           Data.Maybe
-import           Data.Text                       (Text)
-import qualified Data.Text                       as T
+import           Data.Proxy
+import           Data.Row                           hiding (switch)
+import           Data.Text                          (Text)
+import qualified Data.Text                          as T
 import           Data.Version
 import           Development.IDE.Plugin.Test
 import           Development.IDE.Test.Diagnostic
-import           Development.Shake               (CmdOption (Cwd, FileStdout),
-                                                  cmd_)
+import           Development.Shake                  (CmdOption (Cwd, FileStdout),
+                                                     cmd_)
 import           Experiments.Types
+import           Language.LSP.Protocol.Capabilities
+import           Language.LSP.Protocol.Message      hiding (error)
+import           Language.LSP.Protocol.Types        hiding (Null,
+                                                     SemanticTokenAbsolute (length, line),
+                                                     SemanticTokenRelative (length),
+                                                     SemanticTokensEdit (_start),
+                                                     matches, value, verbose)
 import           Language.LSP.Test
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start))
-import           Language.LSP.Types.Capabilities
 import           Numeric.Natural
 import           Options.Applicative
 import           System.Directory
-import           System.Environment.Blank        (getEnv)
-import           System.FilePath                 ((<.>), (</>))
+import           System.Environment.Blank           (getEnv)
+import           System.FilePath                    ((<.>), (</>))
 import           System.IO
 import           System.Process
 import           System.Time.Extra
-import           Text.ParserCombinators.ReadP    (readP_to_S)
+import           Text.ParserCombinators.ReadP       (readP_to_S)
 import           Text.Printf
 
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
-    TextDocumentContentChangeEvent
-    { _range = Just (Range p p),
-      _rangeLength = Nothing,
-      _text = "a"
-    }
+    TextDocumentContentChangeEvent $ InL $ #range .== Range p p .+ #rangeLength .== Nothing .+ #text .== "a"
 
 data DocumentPositions = DocumentPositions {
     -- | A position that can be used to generate non null goto-def and completion responses
@@ -111,13 +116,13 @@ experiments =
           isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "getDefinition" $ allWithIdentifierPos $ \DocumentPositions{..} ->
-        either (not . null) (not . null) . toEither <$> getDefinitions doc (fromJust identifierP),
+        hasDefinitions <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "getDefinition after edit" $ \docs -> do
           forM_ docs $ \DocumentPositions{..} ->
             changeDoc doc [charEdit stringLiteralP]
           flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
-            either (not . null) (not . null) . toEither <$> getDefinitions doc (fromJust identifierP),
+            hasDefinitions <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "documentSymbols" $ allM $ \DocumentPositions{..} -> do
         fmap (either (not . null) (not . null)) . getDocumentSymbols $ doc,
@@ -183,8 +188,8 @@ experiments =
         ( \docs -> do
             hieYamlUri <- getDocUri "hie.yaml"
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
-            sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-                List [ FileEvent hieYamlUri FcChanged ]
+            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+             [ FileEvent hieYamlUri FileChangeType_Changed ]
             waitForProgressStart
             waitForProgressStart
             waitForProgressStart -- the Session logic restarts a second time
@@ -199,17 +204,15 @@ experiments =
         (\docs -> do
             hieYamlUri <- getDocUri "hie.yaml"
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
-            sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-                List [ FileEvent hieYamlUri FcChanged ]
+            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+             [ FileEvent hieYamlUri FileChangeType_Changed ]
             flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
         ),
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "hole fit suggestions"
         ( mapM_ $ \DocumentPositions{..} -> do
-            let edit :: TextDocumentContentChangeEvent =TextDocumentContentChangeEvent
-                  { _range = Just Range {_start = bottom, _end = bottom}
-                  , _rangeLength = Nothing, _text = t}
+            let edit  =TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom .+ #rangeLength .== Nothing .+ #text .== t
                 bottom = Position maxBound 0
                 t = T.unlines
                     [""
@@ -229,12 +232,15 @@ experiments =
             flip allM docs $ \DocumentPositions{..} -> do
                 bottom <- pred . length . T.lines <$> documentContents doc
                 diags <- getCurrentDiagnostics doc
-                case requireDiagnostic diags (DsError, (fromIntegral bottom, 8), "Found hole", Nothing) of
+                case requireDiagnostic diags (DiagnosticSeverity_Error, (fromIntegral bottom, 8), "Found hole", Nothing) of
                     Nothing   -> pure True
                     Just _err -> pure False
         )
     ]
-
+    where hasDefinitions (InL (Definition (InL _)))  = True
+          hasDefinitions (InL (Definition (InR ls))) = not $ null ls
+          hasDefinitions (InR (InL ds))              = not $ null ds
+          hasDefinitions _                           = False
 ---------------------------------------------------------------------------------------------
 
 examplesPath :: FilePath
@@ -481,7 +487,7 @@ badRun = BenchRun 0 0 0 0 0 0 0 0 0 0 0 0 0 False
 waitForProgressStart :: Session ()
 waitForProgressStart = void $ do
     skipManyTill anyMessage $ satisfy $ \case
-      FromServerMess SWindowWorkDoneProgressCreate _ -> True
+      FromServerMess SMethod_WindowWorkDoneProgressCreate _ -> True
       _                                              -> False
 
 -- | Wait for all progress to be done
@@ -491,7 +497,7 @@ waitForProgressDone = loop
   where
     loop = do
       ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ isn't _workDoneProgressEnd v -> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
@@ -499,13 +505,13 @@ waitForProgressDone = loop
 -- | Wait for the build queue to be empty
 waitForBuildQueue :: Session Seconds
 waitForBuildQueue = do
-    let m = SCustomMethod "test"
+    let m = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest m (toJSON WaitForShakeQueue)
     (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
     case resp of
-        ResponseMessage{_result=Right Null} -> return td
+        TResponseMessage{_result=Right Null} -> return td
         -- assume a ghcide binary lacking the WaitForShakeQueue method
-        _                                   -> return 0
+        _                                    -> return 0
 
 runBench ::
   HasConfig =>
@@ -636,32 +642,28 @@ setupDocumentContents config =
 
         -- Setup the special positions used by the experiments
         lastLine <- fromIntegral . length . T.lines <$> documentContents doc
-        changeDoc doc [TextDocumentContentChangeEvent
-            { _range = Just (Range (Position lastLine 0) (Position lastLine 0))
-            , _rangeLength = Nothing
-            , _text = T.unlines [ "_hygienic = \"hygienic\"" ]
-            }]
+        changeDoc doc [TextDocumentContentChangeEvent $ InL $ #range .== (Range (Position lastLine 0) (Position lastLine 0)) .+ #rangeLength .== Nothing .+ #text .== T.unlines [ "_hygienic = \"hygienic\"" ]]
         let
         -- Points to a string in the target file,
         -- convenient for hygienic edits
-            stringLiteralP = Position lastLine 15
+            stringLiteralP = (Position lastLine 15)
 
         -- Find an identifier defined in another file in this project
         symbols <- getDocumentSymbols doc
         let endOfImports = case symbols of
-                Left symbols | Just x <- findEndOfImports symbols -> x
+                Right symbols | Just x <- findEndOfImports symbols -> x
                 _ -> error $ "symbols: " <> show symbols
         contents <- documentContents doc
         identifierP <- searchSymbol doc contents endOfImports
         return $ DocumentPositions{..}
 
 findEndOfImports :: [DocumentSymbol] -> Maybe Position
-findEndOfImports (DocumentSymbol{_kind = SkModule, _name = "imports", _range} : _) =
+findEndOfImports (DocumentSymbol{_kind = SymbolKind_Module, _name = "imports", _range} : _) =
     Just $ Position (succ $ _line $ _end _range) 4
-findEndOfImports [DocumentSymbol{_kind = SkFile, _children = Just (List cc)}] =
+findEndOfImports [DocumentSymbol{_kind = SymbolKind_File, _children = Just (cc)}] =
     findEndOfImports cc
 findEndOfImports (DocumentSymbol{_range} : _) =
-    Just $ _start _range
+    Just $ _range ^. start
 findEndOfImports _ = Nothing
 
 --------------------------------------------------------------------------------------------
@@ -678,11 +680,11 @@ searchSymbol :: TextDocumentIdentifier -> T.Text -> Position -> Session (Maybe P
 searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
     -- this search is expensive, so we cache the result on disk
     let cachedPath = fromJust (uriToFilePath _uri) <.> "identifierPosition"
-    cachedRes <- liftIO $ try @_ @IOException $ read <$> readFile cachedPath
+    cachedRes <- liftIO $ try @_ @IOException $ A.decode . BS.fromStrict <$> BS.readFile cachedPath
     case cachedRes of
         Left _ -> do
             result <- loop pos
-            liftIO $ writeFile cachedPath $ show result
+            liftIO $ BS.writeFile cachedPath $ BS.toStrict $ A.encode result
             return result
         Right res ->
             return res
@@ -708,8 +710,8 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
       checkDefinitions pos = do
         defs <- getDefinitions doc pos
         case defs of
-            (InL [Location uri _]) -> return $ uri /= _uri
-            _                      -> return False
+            (InL (Definition (InR [Location uri _]))) -> return $ uri /= _uri
+            _                                         -> return False
       checkCompletions pos =
         not . null <$> getCompletions doc pos
 
@@ -736,9 +738,9 @@ getStoredKeys = callTestPlugin GetStoredKeys
 -- Copy&paste from ghcide/test/Development.IDE.Test
 tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
 tryCallTestPlugin cmd = do
-    let cm = SCustomMethod "test"
+    let cm = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest cm (A.toJSON cmd)
-    ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
+    TResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
     return $ case _result of
          Left e -> Left e
          Right json -> case A.fromJSON json of
