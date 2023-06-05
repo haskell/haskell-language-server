@@ -29,42 +29,41 @@ import           Control.Exception                            (try)
 import qualified Control.Exception                            as E
 import           Control.Lens                                 (_1, _3, ix, (%~),
                                                                (<&>), (^.))
-import           Control.Monad                                (guard,
-                                                               void, when)
+import           Control.Monad                                (guard, void,
+                                                               when)
 import           Control.Monad.IO.Class                       (MonadIO (liftIO))
 import           Control.Monad.Trans.Except                   (ExceptT (..))
 import           Data.Aeson                                   (toJSON)
 import           Data.Char                                    (isSpace)
 import           Data.Foldable                                (toList)
-import qualified Data.HashMap.Strict                          as HashMap
 import           Data.List                                    (dropWhileEnd,
                                                                find,
                                                                intercalate,
                                                                intersperse)
+import qualified Data.Map                                     as Map
 import           Data.Maybe                                   (catMaybes)
 import           Data.String                                  (IsString)
 import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
 import           Data.Typeable                                (Typeable)
-import Development.IDE.Core.RuleTypes
-    ( NeedsCompilation(NeedsCompilation),
-      LinkableResult(linkableHomeMod),
-      tmrTypechecked,
-      TypeCheck(..))
-import Development.IDE.Core.Rules ( runAction, IdeState )
-import Development.IDE.Core.Shake
-    ( useWithStale_,
-      use_,
-      uses_ )
-import Development.IDE.GHC.Util
-    ( printOutputable, evalGhcEnv, modifyDynFlags )
-import Development.IDE.Types.Location
-    ( toNormalizedFilePath', uriToFilePath' )
+import           Development.IDE.Core.Rules                   (IdeState,
+                                                               runAction)
+import           Development.IDE.Core.RuleTypes               (LinkableResult (linkableHomeMod),
+                                                               NeedsCompilation (NeedsCompilation),
+                                                               TypeCheck (..),
+                                                               tmrTypechecked)
+import           Development.IDE.Core.Shake                   (useWithStale_,
+                                                               use_, uses_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import           Development.IDE.GHC.Compat.Util              (GhcException,
                                                                OverridingBool (..))
+import           Development.IDE.GHC.Util                     (evalGhcEnv,
+                                                               modifyDynFlags,
+                                                               printOutputable)
 import           Development.IDE.Import.DependencyInformation (reachableModules)
+import           Development.IDE.Types.Location               (toNormalizedFilePath',
+                                                               uriToFilePath')
 import           GHC                                          (ClsInst,
                                                                ExecOptions (execLineNumber, execSourceFile),
                                                                FamInst,
@@ -75,24 +74,23 @@ import           GHC                                          (ClsInst,
                                                                exprType,
                                                                getInfo,
                                                                getInteractiveDynFlags,
-                                                               isImport, isStmt, parseName,
+                                                               isImport, isStmt,
+                                                               parseName,
                                                                pprFamInst,
                                                                pprInstance,
                                                                typeKind)
 
 
-import Development.IDE.Core.RuleTypes
-    ( ModSummaryResult(msrModSummary),
-      GetModSummary(GetModSummary),
-      GhcSessionDeps(GhcSessionDeps),
-      GetDependencyInformation(GetDependencyInformation),
-      GetLinkable(GetLinkable) )
-import Development.IDE.Core.Shake ( VFSModified(VFSUnmodified) )
-import Development.IDE.Types.HscEnvEq ( HscEnvEq(hscEnv) )
-import qualified Development.IDE.GHC.Compat.Core as Compat
-    ( InteractiveImport(IIModule) )
-import qualified Development.IDE.GHC.Compat.Core as SrcLoc
-    ( unLoc, HasSrcSpan(getLoc) )
+import           Development.IDE.Core.RuleTypes               (GetDependencyInformation (GetDependencyInformation),
+                                                               GetLinkable (GetLinkable),
+                                                               GetModSummary (GetModSummary),
+                                                               GhcSessionDeps (GhcSessionDeps),
+                                                               ModSummaryResult (msrModSummary))
+import           Development.IDE.Core.Shake                   (VFSModified (VFSUnmodified))
+import qualified Development.IDE.GHC.Compat.Core              as Compat (InteractiveImport (IIModule))
+import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (HasSrcSpan (getLoc),
+                                                                         unLoc)
+import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
 #if MIN_VERSION_ghc(9,2,0)
 #endif
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
@@ -127,17 +125,19 @@ import           Ide.PluginUtils                              (handleMaybe,
                                                                handleMaybeM,
                                                                pluginResponse)
 import           Ide.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types                  hiding
+                                                              (SemanticTokenAbsolute (..),
+                                                               SemanticTokenRelative (..),
+                                                               codeLens, id,
+                                                               text)
 import           Language.LSP.Server
-import           Language.LSP.Types                           hiding
-                                                              (SemanticTokenAbsolute (length, line),
-                                                               SemanticTokenRelative (length))
-import           Language.LSP.Types.Lens                      (end, line)
 import           Language.LSP.VFS                             (virtualFileText)
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
-codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
+codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLens st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
@@ -171,7 +171,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                               args = EvalParams (setupSections ++ [section]) _textDocument ident
                               cmd' =
                                 (cmd :: Command)
-                                    { _arguments = Just (List [toJSON args])
+                                    { _arguments = Just [toJSON args]
                                     , _title =
                                         if trivial resultRange
                                             then "Evaluate..."
@@ -192,7 +192,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                             , "lenses."
                             ]
 
-                return $ List lenses
+                return $ InL lenses
   where
     trivial (Range p p') = p == p'
 
@@ -234,7 +234,7 @@ runEvalCmd plId st EvalParams{..} =
                         evalGhcEnv final_hscEnv $ do
                             runTests evalCfg (st, fp) tests
 
-            let workspaceEditsMap = HashMap.fromList [(_uri, List $ addFinalReturn mdlText edits)]
+            let workspaceEditsMap = Map.fromList [(_uri, addFinalReturn mdlText edits)]
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
 
             return workspaceEdits

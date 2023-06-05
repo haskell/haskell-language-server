@@ -38,9 +38,10 @@ import           Development.IDE                          (Position,
 import           Development.IDE.Types.Location           (Position (..))
 import           GHC.Generics                             hiding (UInt, to)
 import           Ide.Plugin.Eval.Types
-import           Language.LSP.Types                       (UInt)
-import           Language.LSP.Types.Lens                  (character, end, line,
-                                                           start)
+import           Language.LSP.Protocol.Types              hiding
+                                                          (SemanticTokenAbsolute (..),
+                                                           SemanticTokenRelative (..))
+
 import qualified Text.Megaparsec                          as P
 import           Text.Megaparsec
 import           Text.Megaparsec.Char                     (alphaNumChar, char,
@@ -73,7 +74,7 @@ data BlockEnv = BlockEnv
     { isLhs      :: Bool
     , blockRange :: Range
     }
-    deriving (Read, Show, Eq, Ord)
+    deriving (Show, Eq, Ord)
 
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
@@ -109,7 +110,7 @@ data CommentFlavour = Vanilla | HaddockNext | HaddockPrev | Named String
 
 -- | Single line or block comments?
 data CommentStyle = Line | Block Range
-    deriving (Read, Show, Eq, Ord, Generic)
+    deriving (Show, Eq, Ord, Generic)
 
 makePrisms ''CommentStyle
 

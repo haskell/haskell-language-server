@@ -1,30 +1,33 @@
 {-# LANGUAGE MultiWayIf        #-}
+{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeApplications  #-}
 {-# LANGUAGE ViewPatterns      #-}
-
 module Main
   ( main
   ) where
 
-import           Control.Lens            (_Just, folded, preview, toListOf,
-                                          view, (^..))
-import           Data.Aeson              (Value (Object), fromJSON, object,
-                                          toJSON, (.=))
-import           Data.Aeson.Types        (Pair, Result (Success))
-import           Data.List               (isInfixOf)
-import           Data.List.Extra         (nubOrdOn)
-import qualified Data.Map                as Map
-import qualified Data.Text               as T
-import           Ide.Plugin.Config       (Config)
-import qualified Ide.Plugin.Config       as Plugin
-import qualified Ide.Plugin.Eval         as Eval
-import           Ide.Plugin.Eval.Types   (EvalParams (..), Section (..),
-                                          testOutput)
-import           Ide.Types               (IdePlugins (IdePlugins))
-import           Language.LSP.Types.Lens (arguments, command, range, title)
-import           System.FilePath         ((</>))
+import           Control.Lens                  (_Just, folded, preview,
+                                                toListOf, view, (^..))
+import           Data.Aeson                    (Value (Object), fromJSON,
+                                                object, toJSON, (.=))
+import           Data.Aeson.Types              (Pair, Result (Success))
+import           Data.List                     (isInfixOf)
+import           Data.List.Extra               (nubOrdOn)
+import qualified Data.Map                      as Map
+import           Data.Row
+import qualified Data.Text                     as T
+import           Ide.Plugin.Config             (Config)
+import qualified Ide.Plugin.Config             as Plugin
+import qualified Ide.Plugin.Eval               as Eval
+import           Ide.Plugin.Eval.Types         (EvalParams (..), Section (..),
+                                                testOutput)
+import           Ide.Types                     (IdePlugins (IdePlugins))
+import           Language.LSP.Protocol.Message hiding (error)
+import           Language.LSP.Protocol.Types   (arguments, command, range,
+                                                title)
+import           System.FilePath               ((</>))
 import           Test.Hls
 
 main :: IO ()
@@ -249,14 +252,14 @@ executeLensesBackwards doc = do
     nubOrdOn actSectionId [c | CodeLens{_command = Just c} <- codeLenses]
 
 actSectionId :: Command -> Int
-actSectionId Command{_arguments = Just (List [fromJSON -> Success EvalParams{..}])} = evalId
+actSectionId Command{_arguments = Just [fromJSON -> Success EvalParams{..}]} = evalId
 actSectionId _ = error "Invalid CodeLens"
 
 -- Execute command and wait for result
 executeCmd :: Command -> Session ()
 executeCmd cmd = do
   executeCommand cmd
-  _ <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
+  _ <- skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
   -- liftIO $ print _resp
   pure ()
 
@@ -269,7 +272,7 @@ evalLenses path = runSessionWithServer evalPlugin testDataDir $ do
 codeLensTestOutput :: CodeLens -> [String]
 codeLensTestOutput codeLens = do
   CodeLens { _command = Just command } <- [codeLens]
-  Command { _arguments = Just (List args) } <- [command]
+  Command { _arguments = Just args } <- [command]
   Success EvalParams { sections = sections } <- fromJSON @EvalParams <$> args
   Section { sectionTests = sectionTests } <- sections
   testOutput =<< sectionTests
@@ -304,7 +307,7 @@ evalInFile fp e expected = runSessionWithServer evalPlugin testDataDir $ do
   doc <- openDoc fp "haskell"
   origin <- documentContents doc
   let withEval = origin <> e
-  changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing withEval]
+  changeDoc doc [TextDocumentContentChangeEvent . InR . (.==) #text $ withEval]
   executeLensesBackwards doc
   result <- fmap T.strip . T.stripPrefix withEval <$> documentContents doc
   liftIO $ result @?= Just (T.strip expected)
