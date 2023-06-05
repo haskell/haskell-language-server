@@ -58,7 +58,7 @@ library
     , stm
     , text
     , unordered-containers  >=0.2.10.0
-
+    , containers
   hs-source-dirs:   src
   default-language: Haskell2010
 
@@ -79,3 +79,4 @@ test-suite tests
     , lsp-types
     , tasty-hunit
     , text
+    , row-types

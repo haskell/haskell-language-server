@@ -12,11 +12,11 @@ module Ide.Plugin.Cabal.LicenseSuggest
 )
 where
 
-import qualified Data.HashMap.Strict         as Map
+import qualified Data.Map                    as Map
 import qualified Data.Text                   as T
-import           Language.LSP.Types          (CodeAction (CodeAction),
-                                              CodeActionKind (CodeActionQuickFix),
-                                              Diagnostic (..), List (List),
+import           Language.LSP.Protocol.Types (CodeAction (CodeAction),
+                                              CodeActionKind (CodeActionKind_QuickFix),
+                                              Diagnostic (..),
                                               Position (Position),
                                               Range (Range),
                                               TextEdit (TextEdit), Uri,
@@ -54,8 +54,8 @@ licenseErrorAction uri diag =
         -- We must also add a newline character to the replacement since the range returned by
         -- 'Ide.Plugin.Cabal.Diag.errorDiagnostic' ends at the beginning of the following line.
         tedit = [TextEdit (adjustRange $ _range diag) (suggestion <> "\n")]
-        edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
-      in CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing Nothing
+        edit  = WorkspaceEdit (Just $ Map.singleton uri $ tedit) Nothing Nothing
+      in CodeAction title (Just CodeActionKind_QuickFix) (Just $ []) Nothing Nothing (Just edit) Nothing Nothing
 
 -- | License name of every license supported by cabal
 licenseNames :: [T.Text]

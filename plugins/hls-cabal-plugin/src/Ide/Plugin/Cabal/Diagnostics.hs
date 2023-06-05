@@ -11,29 +11,30 @@ module Ide.Plugin.Cabal.Diagnostics
 )
 where
 
-import qualified Data.Text              as T
-import           Development.IDE        (FileDiagnostic,
-                                         ShowDiagnostic (ShowDiag))
-import           Distribution.Fields    (showPError, showPWarning)
-import qualified Ide.Plugin.Cabal.Parse as Lib
-import           Ide.PluginUtils        (extendNextLine)
-import           Language.LSP.Types     (Diagnostic (..),
-                                         DiagnosticSeverity (..),
-                                         DiagnosticSource, NormalizedFilePath,
-                                         Position (Position), Range (Range),
-                                         fromNormalizedFilePath)
+import qualified Data.Text                   as T
+import           Development.IDE             (FileDiagnostic,
+                                              ShowDiagnostic (ShowDiag))
+import           Distribution.Fields         (showPError, showPWarning)
+import qualified Ide.Plugin.Cabal.Parse      as Lib
+import           Ide.PluginUtils             (extendNextLine)
+import           Language.LSP.Protocol.Types (Diagnostic (..),
+                                              DiagnosticSeverity (..),
+                                              NormalizedFilePath,
+                                              Position (Position),
+                                              Range (Range),
+                                              fromNormalizedFilePath)
 
 -- | Produce a diagnostic from a Cabal parser error
 errorDiagnostic :: NormalizedFilePath -> Lib.PError -> FileDiagnostic
 errorDiagnostic fp err@(Lib.PError pos _) =
-  mkDiag fp "cabal" DsError (toBeginningOfNextLine pos) msg
+  mkDiag fp "cabal" DiagnosticSeverity_Error (toBeginningOfNextLine pos) msg
   where
     msg = T.pack $ showPError (fromNormalizedFilePath fp) err
 
 -- | Produce a diagnostic from a Cabal parser warning
 warningDiagnostic :: NormalizedFilePath -> Lib.PWarning -> FileDiagnostic
 warningDiagnostic fp warning@(Lib.PWarning _ pos _) =
-  mkDiag fp "cabal" DsWarning (toBeginningOfNextLine pos) msg
+  mkDiag fp "cabal" DiagnosticSeverity_Warning (toBeginningOfNextLine pos) msg
   where
     msg = T.pack $ showPWarning (fromNormalizedFilePath fp) warning
 
@@ -64,7 +65,7 @@ positionFromCabalPosition (Lib.Position line column) = Position (fromIntegral li
 mkDiag
   :: NormalizedFilePath
   -- ^ Cabal file path
-  -> DiagnosticSource
+  -> T.Text
   -- ^ Where does the diagnostic come from?
   -> DiagnosticSeverity
   -- ^ Severity
@@ -82,4 +83,6 @@ mkDiag file diagSource sev loc msg = (file, ShowDiag,)
     , _code     = Nothing
     , _tags     = Nothing
     , _relatedInformation = Nothing
+    , _codeDescription = Nothing
+    , _data_ = Nothing
     }
