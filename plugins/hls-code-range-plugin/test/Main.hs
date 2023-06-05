@@ -46,7 +46,7 @@ selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDi
         resp <- request SMethod_TextDocumentSelectionRange $ SelectionRangeParams Nothing Nothing doc
             $ fmap (uncurry Position . (\(x, y) -> (x-1, y-1))) positions
         let res = resp ^. result
-        pure $ fmap (showSelectionRangesForTest . nullToEmpty) res
+        pure $ fmap (showSelectionRangesForTest . absorbNull) res
     case res of
         Left err     -> assertFailure (show err)
         Right golden -> pure golden
@@ -74,7 +74,7 @@ foldingRangeGoldenTest testName = goldenGitDiff  testName (testDataDir </> testN
         doc <- openDoc (testName <.> "hs") "haskell"
         resp <- request SMethod_TextDocumentFoldingRange $ FoldingRangeParams Nothing Nothing doc
         let res = resp ^. result
-        pure $ fmap (showFoldingRangesForTest . nullToEmpty) res
+        pure $ fmap (showFoldingRangesForTest . absorbNull) res
 
     case res of
         Left err     -> assertFailure (show err)

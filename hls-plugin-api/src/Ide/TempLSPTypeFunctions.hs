@@ -9,7 +9,7 @@ module Ide.TempLSPTypeFunctions (takeLefts, dumpNulls, nullToMaybe', NullToMaybe
                                  defNotebookDocumentSyncClientCapabilities,
                                  defTextDocumentCapabilities,
                                  defWindowClientCapabilities,
-                                 defWorkspaceCapabilities, nullToEmpty) where
+                                 defWorkspaceCapabilities, maybeToNull) where
 
 import           Data.Semigroup                ()
 import           Data.Text                     (Text)
@@ -25,7 +25,6 @@ import           Language.LSP.Protocol.Types   (ClientCapabilities (ClientCapabi
                                                 WorkspaceClientCapabilities (WorkspaceClientCapabilities),
                                                 WorkspaceEdit (WorkspaceEdit),
                                                 type (|?) (..))
-
 
 -- The functions below may be added to the lsp-types package if they end up being
 -- useful. temporarily including them here now.
@@ -43,9 +42,9 @@ dumpNulls = foldr (\x acc -> case nullToMaybe' x of
                                 Just x' -> x' : acc
                                 Nothing -> acc) []
 
-nullToEmpty :: Monoid m => (m |? Null) -> m
-nullToEmpty (InR Null) = mempty
-nullToEmpty (InL ls)   = ls
+maybeToNull :: Maybe a -> a |? Null
+maybeToNull (Just x) = InL x
+maybeToNull Nothing  = InR Null
 instance Semigroup s => Semigroup (s |? Null) where
   InL x <> InL y = InL (x <> y)
   InL x <> InR _ = InL x
