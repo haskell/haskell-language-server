@@ -3,16 +3,26 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds             #-}
 module Ide.TempLSPTypeFunctions (takeLefts, dumpNulls, nullToMaybe', NullToMaybe,
-                                 toLspId, toTypedResponseError) where
-import           Data.Aeson                    (FromJSON, decode, encode)
-import           Data.Aeson.Types              (parseMaybe)
+                                 toLspId, defClientCapabilities,
+                                 defGeneralClientCapabilities,
+                                 defNotebookDocumentClientCapabilities,
+                                 defNotebookDocumentSyncClientCapabilities,
+                                 defTextDocumentCapabilities,
+                                 defWindowClientCapabilities,
+                                 defWorkspaceCapabilities, nullToEmpty) where
+
 import           Data.Semigroup                ()
 import           Data.Text                     (Text)
-import           Language.LSP.Protocol.Message (ErrorData,
-                                                LspId (IdInt, IdString),
-                                                ResponseError (ResponseError),
-                                                TResponseError (TResponseError))
-import           Language.LSP.Protocol.Types   (Int32, Null,
+import           Language.LSP.Protocol.Message (LspId (IdInt, IdString))
+import           Language.LSP.Protocol.Types   (ClientCapabilities (ClientCapabilities),
+                                                GeneralClientCapabilities (GeneralClientCapabilities),
+                                                Int32,
+                                                NotebookDocumentClientCapabilities (NotebookDocumentClientCapabilities),
+                                                NotebookDocumentSyncClientCapabilities (NotebookDocumentSyncClientCapabilities),
+                                                Null (Null),
+                                                TextDocumentClientCapabilities (TextDocumentClientCapabilities),
+                                                WindowClientCapabilities (WindowClientCapabilities),
+                                                WorkspaceClientCapabilities (WorkspaceClientCapabilities),
                                                 WorkspaceEdit (WorkspaceEdit),
                                                 type (|?) (..))
 
@@ -33,6 +43,9 @@ dumpNulls = foldr (\x acc -> case nullToMaybe' x of
                                 Just x' -> x' : acc
                                 Nothing -> acc) []
 
+nullToEmpty :: Monoid m => (m |? Null) -> m
+nullToEmpty (InR Null) = mempty
+nullToEmpty (InL ls)   = ls
 instance Semigroup s => Semigroup (s |? Null) where
   InL x <> InL y = InL (x <> y)
   InL x <> InR _ = InL x
@@ -64,5 +77,42 @@ toLspId :: (Int32 |? Text) -> LspId a
 toLspId (InL x) = IdInt x
 toLspId (InR y) = IdString y
 
-toTypedResponseError :: FromJSON (ErrorData m) => ResponseError -> TResponseError m
-toTypedResponseError (ResponseError c m d) = TResponseError c m (decode . encode=<<  d)
+-- TODO: Find some saner default ClientCapabilities so we don't need to
+-- use Nothing 54 times.
+defClientCapabilities :: ClientCapabilities
+defClientCapabilities =
+    ClientCapabilities (Just defWorkspaceCapabilities)
+                       (Just defTextDocumentCapabilities)
+                       (Just defNotebookDocumentClientCapabilities)
+                       (Just defWindowClientCapabilities)
+                       (Just defGeneralClientCapabilities)
+                       Nothing
+
+defWorkspaceCapabilities :: WorkspaceClientCapabilities
+defWorkspaceCapabilities =
+    WorkspaceClientCapabilities Nothing Nothing Nothing Nothing Nothing Nothing
+                                Nothing Nothing Nothing Nothing Nothing Nothing
+                                Nothing Nothing
+
+defTextDocumentCapabilities :: TextDocumentClientCapabilities
+defTextDocumentCapabilities =
+    TextDocumentClientCapabilities Nothing Nothing Nothing Nothing Nothing
+                                   Nothing Nothing Nothing Nothing Nothing
+                                   Nothing Nothing Nothing Nothing Nothing
+                                   Nothing Nothing Nothing Nothing Nothing
+                                   Nothing Nothing Nothing Nothing Nothing
+                                   Nothing Nothing Nothing Nothing Nothing
+
+defNotebookDocumentClientCapabilities :: NotebookDocumentClientCapabilities
+defNotebookDocumentClientCapabilities =
+    NotebookDocumentClientCapabilities defNotebookDocumentSyncClientCapabilities
+
+defNotebookDocumentSyncClientCapabilities :: NotebookDocumentSyncClientCapabilities
+defNotebookDocumentSyncClientCapabilities =
+    NotebookDocumentSyncClientCapabilities Nothing Nothing
+
+defWindowClientCapabilities :: WindowClientCapabilities
+defWindowClientCapabilities = WindowClientCapabilities Nothing Nothing Nothing
+
+defGeneralClientCapabilities :: GeneralClientCapabilities
+defGeneralClientCapabilities = GeneralClientCapabilities Nothing Nothing Nothing Nothing

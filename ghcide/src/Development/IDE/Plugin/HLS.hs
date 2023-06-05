@@ -178,9 +178,9 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
                 -- If we have a command, continue to execute it
                 Just (J.Command _ innerCmdId innerArgs)
                     -> execCmd ide (ExecuteCommandParams Nothing innerCmdId innerArgs)
-                Nothing -> return $ Right $ InR Null
+                Nothing -> return $ Right $ InL $ A.Null
 
-            A.Error _str -> return $ Right $ InR Null
+            A.Error _str -> return $ Right $ InL $ A.Null
 
         -- Just an ordinary HIE command
         Just (plugin, cmd) -> runPluginCommand ide plugin cmd cmdParams

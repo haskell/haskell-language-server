@@ -136,7 +136,6 @@ import           Development.IDE.GHC.Compat             (NameCache,
 import           Development.IDE.GHC.Compat             (upNameCache)
 #endif
 import qualified Data.Aeson.Types                       as A
-import           Data.Maybe                             (Maybe (Nothing))
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
@@ -164,15 +163,12 @@ import           GHC.Stack                              (HasCallStack)
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
+import           Ide.TempLSPTypeFunctions
 import           Ide.Types                              (IdePlugins (IdePlugins),
                                                          PluginDescriptor (pluginId),
                                                          PluginId)
 import           Language.LSP.Diagnostics
-import           Language.LSP.Protocol.Capabilities
 import           Language.LSP.Protocol.Message          hiding (error)
-import           Language.LSP.Protocol.Types            (NotebookDocumentClientCapabilities (NotebookDocumentClientCapabilities),
-                                                         NotebookDocumentSyncClientCapabilities (NotebookDocumentSyncClientCapabilities),
-                                                         WindowClientCapabilities (WindowClientCapabilities))
 import           Language.LSP.Protocol.Types            hiding (id, start)
 import qualified Language.LSP.Protocol.Types            as LSP
 import qualified Language.LSP.Server                    as LSP
@@ -646,13 +642,6 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
         let -- TODO: Find some saner default ClientCapabilities so we don't need to
             -- use Nothing 54 times.
             clientCapabilities = maybe defClientCapabilities LSP.resClientCapabilities lspEnv
-            defClientCapabilities = ClientCapabilities defWorkspaceCaps defTextDocumentCaps defNotebookDocumentClientCaps defWindowClientCaps defGeneralClientCaps Nothing
-            defWorkspaceCaps = Just $ WorkspaceClientCapabilities Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-            defTextDocumentCaps = Just $ TextDocumentClientCapabilities Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-            defNotebookDocumentClientCaps = Just $ NotebookDocumentClientCapabilities defNotebookDocumentSyncClientCaps
-            defNotebookDocumentSyncClientCaps = NotebookDocumentSyncClientCapabilities Nothing Nothing
-            defWindowClientCaps = Just $ WindowClientCapabilities Nothing Nothing Nothing
-            defGeneralClientCaps = Just $ GeneralClientCapabilities Nothing Nothing Nothing Nothing
         dirtyKeys <- newTVarIO mempty
         -- Take one VFS snapshot at the start
         vfsVar <- newTVarIO =<< vfsSnapshot lspEnv

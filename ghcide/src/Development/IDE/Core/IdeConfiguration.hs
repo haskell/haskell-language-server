@@ -58,7 +58,7 @@ parseConfiguration InitializeParams {..} =
 
 parseWorkspaceFolder :: WorkspaceFolder -> NormalizedUri
 parseWorkspaceFolder WorkspaceFolder{_uri} =
-  toNormalizedUri (Uri (getUri _uri))
+  toNormalizedUri _uri
 
 modifyWorkspaceFolders
   :: IdeState -> (HashSet NormalizedUri -> HashSet NormalizedUri) -> IO ()

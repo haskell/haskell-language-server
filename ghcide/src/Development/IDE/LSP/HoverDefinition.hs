@@ -33,15 +33,10 @@ gotoDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either R
 hover          :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (Hover |? Null))
 gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (MessageResult Method_TextDocumentTypeDefinition))
 documentHighlight :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError ([DocumentHighlight] |? Null))
-gotoDefinition = request "Definition" getDefinition (InR $ InL []) (InR . InL . fmap locationToDefinitionLink)
-gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InL []) (InR . InL . fmap locationToDefinitionLink)
+gotoDefinition = request "Definition" getDefinition (InR $ InR Null) (InL . Definition. InR)
+gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InR Null) (InL . Definition. InR)
 hover          = request "Hover"      getAtPoint     (InR Null)     foundHover
 documentHighlight = request "DocumentHighlight" highlightAtPoint (InR Null) InL
-
--- Again not sure this is correct, but lsp-types 2 needs DefinitionLink instead
--- of location so we convert like so
-locationToDefinitionLink :: Location -> DefinitionLink
-locationToDefinitionLink Location{..} = DefinitionLink $ LocationLink Nothing _uri _range _range
 
 references :: IdeState -> ReferenceParams -> LSP.LspM c (Either ResponseError ([Location] |? Null))
 references ide (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = liftIO $
