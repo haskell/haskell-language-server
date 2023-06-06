@@ -161,7 +161,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "fourmolu" in Fourmolu.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_cabalfmt
-      let pId = "cabalfmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
+      -- this pId needs to be kept in sync with the hardcoded
+      -- cabalFormattingProvider in the Default Config
+      let pId = "cabal-fmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_tactic
       let pId = "tactics" in Tactic.descriptor (pluginRecorder pId) pId:

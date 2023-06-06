@@ -200,6 +200,7 @@ instance Default Config where
     -- , formattingProvider          = "floskell"
     -- , formattingProvider          = "stylish-haskell"
     , cabalFormattingProvider     = "cabal-fmt"
+    -- this string value needs to kept in sync with the value provided in HlsPlugins
     , maxCompletions              = 40
     , plugins                     = mempty
     }
