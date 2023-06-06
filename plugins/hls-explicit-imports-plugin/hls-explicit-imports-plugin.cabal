@@ -54,3 +54,4 @@ test-suite tests
     , hls-explicit-imports-plugin
     , hls-test-utils
     , text
+    , lsp-types
