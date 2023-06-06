@@ -51,12 +51,9 @@ import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   ideResultSuccess)
 import           Development.IDE.Test.Diagnostic
 import           Ide.Plugin.Config               (CheckParents, checkProject)
-import           Language.LSP.Protocol.Message   hiding (error)
-import           Language.LSP.Protocol.Types     hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start),
-                                                  diagnostic)
+import qualified Language.LSP.Protocol.Lens      as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
 import           System.Directory                (canonicalizePath)
@@ -78,8 +75,8 @@ requireDiagnosticM actuals expected = case requireDiagnostic actuals expected of
 expectNoMoreDiagnostics :: HasCallStack => Seconds -> Session ()
 expectNoMoreDiagnostics timeout =
   expectMessages SMethod_TextDocumentPublishDiagnostics timeout $ \diagsNot -> do
-    let fileUri = diagsNot ^. params . uri
-        actual = diagsNot ^. params . diagnostics
+    let fileUri = diagsNot ^. L.params . L.uri
+        actual = diagsNot ^. L.params . L.diagnostics
     unless (actual == []) $ liftIO $
       assertFailure $
         "Got unexpected diagnostics for " <> show fileUri
@@ -121,7 +118,7 @@ expectDiagnostics
   . map (second (map (\(ds, c, t) -> (ds, c, t, Nothing))))
 
 unwrapDiagnostic :: TServerMessage Method_TextDocumentPublishDiagnostics  -> (Uri, [Diagnostic])
-unwrapDiagnostic diagsNot = (diagsNot^.params.uri, diagsNot^.params.diagnostics)
+unwrapDiagnostic diagsNot = (diagsNot^. L.params . L.uri, diagsNot^. L.params . L.diagnostics)
 
 expectDiagnosticsWithTags :: HasCallStack => [(String, [(DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)])] -> Session ()
 expectDiagnosticsWithTags expected = do

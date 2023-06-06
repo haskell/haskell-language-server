@@ -34,9 +34,9 @@ import           Ide.Plugin.Class.Utils
 import qualified Ide.Plugin.Config
 import           Ide.PluginUtils
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types          hiding (Null)
-import qualified Language.LSP.Protocol.Types          as J
 import           Language.LSP.Server
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
@@ -88,11 +88,11 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
     actions <- join <$> mapM (mkActions nfp) methodDiags
     pure $ InL actions
     where
-        uri = docId ^. J.uri
-        diags = context ^. J.diagnostics
+        uri = docId ^. L.uri
+        diags = context ^. L.diagnostics
 
-        ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
-        methodDiags = filter (\d -> isClassMethodWarning (d ^. J.message)) ghcDiags
+        ghcDiags = filter (\d -> d ^. L.source == Just "typecheck") diags
+        methodDiags = filter (\d -> isClassMethodWarning (d ^. L.message)) ghcDiags
 
         mkActions
             :: NormalizedFilePath
@@ -104,8 +104,8 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                 . runAction "classplugin.findClassIdentifier.GetHieAst" state
                 $ useWithStale GetHieAst docPath
             instancePosition <- handleMaybe "No range" $
-                              fromCurrentRange pmap range ^? _Just . J.start
-                              & fmap (J.character -~ 1)
+                              fromCurrentRange pmap range ^? _Just . L.start
+                              & fmap (L.character -~ 1)
             ident <- findClassIdentifier ast instancePosition
             cls <- findClassFromIdentifier docPath ident
             InstanceBindTypeSigsResult sigs <- handleMaybeM "Unable to GetInstanceBindTypeSigs"
@@ -121,7 +121,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                 $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
                 $ mkMethodGroups range sigs cls
             where
-                range = diag ^. J.range
+                range = diag ^. L.range
 
                 mkMethodGroups :: Range -> [InstanceBindTypeSig] -> Class -> [MethodGroup]
                 mkMethodGroups range sigs cls = minimalDef <> [allClassMethods]

@@ -54,12 +54,10 @@ import           Development.Shake                  (CmdOption (Cwd, FileStdout)
                                                      cmd_)
 import           Experiments.Types
 import           Language.LSP.Protocol.Capabilities
-import           Language.LSP.Protocol.Message      hiding (error)
+import qualified Language.LSP.Protocol.Lens         as L
+import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types        hiding (Null,
-                                                     SemanticTokenAbsolute (length, line),
-                                                     SemanticTokenRelative (length),
-                                                     SemanticTokensEdit (_start),
-                                                     matches, value, verbose)
+                                                     SemanticTokenAbsolute (..))
 import           Language.LSP.Test
 import           Numeric.Natural
 import           Options.Applicative
@@ -663,7 +661,7 @@ findEndOfImports (DocumentSymbol{_kind = SymbolKind_Module, _name = "imports", _
 findEndOfImports [DocumentSymbol{_kind = SymbolKind_File, _children = Just (cc)}] =
     findEndOfImports cc
 findEndOfImports (DocumentSymbol{_range} : _) =
-    Just $ _range ^. start
+    Just $ _range ^. L.start
 findEndOfImports _ = Nothing
 
 --------------------------------------------------------------------------------------------

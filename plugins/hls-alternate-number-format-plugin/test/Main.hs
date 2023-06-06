@@ -9,7 +9,8 @@ import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import qualified Ide.Plugin.AlternateNumberFormat as AlternateNumberFormat
 import qualified Ide.Plugin.Conversion            as Conversion
-import           Language.LSP.Protocol.Types      (kind, toEither)
+import           Language.LSP.Protocol.Lens       (kind)
+import           Language.LSP.Protocol.Types      (toEither)
 import           Properties.Conversion            (conversions)
 import           System.FilePath                  ((<.>), (</>))
 import           Test.Hls

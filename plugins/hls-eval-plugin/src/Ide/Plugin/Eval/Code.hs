@@ -19,14 +19,15 @@ import           Ide.Plugin.Eval.Types       (Language (Plain), Loc,
                                               Located (..),
                                               Section (sectionLanguage),
                                               Test (..), Txt, locate, locate0)
-import           Language.LSP.Protocol.Types hiding (SemanticTokenAbsolute (..),
-                                              SemanticTokenRelative (..))
+import qualified Language.LSP.Protocol.Lens  as L
+import           Language.LSP.Protocol.Types (Position (Position),
+                                              Range (Range))
 import           System.IO.Extra             (newTempFile, readFile')
 
 -- | Return the ranges of the expression and result parts of the given test
 testRanges :: Test -> (Range, Range)
 testRanges tst =
-    let startLine = testRange tst ^. start.line
+    let startLine = testRange tst ^. L.start . L.line
         (fromIntegral -> exprLines, fromIntegral -> resultLines) = testLengths tst
         resLine = startLine + exprLines
      in ( Range
@@ -71,7 +72,7 @@ testLengths (Property _ r _) = (1, length r)
 type Statement = Loc String
 
 asStatements :: Test -> [Statement]
-asStatements lt = locate $ Located (fromIntegral $ testRange lt ^. start.line) (asStmts lt)
+asStatements lt = locate $ Located (fromIntegral $ testRange lt ^. L.start . L.line) (asStmts lt)
 
 asStmts :: Test -> [Txt]
 asStmts (Example e _ _) = NE.toList e

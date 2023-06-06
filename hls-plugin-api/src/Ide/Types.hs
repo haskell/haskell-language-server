@@ -60,7 +60,7 @@ import           System.Posix.Signals
 import           Control.Applicative           ((<|>))
 import           Control.Arrow                 ((&&&))
 import           Control.Lens                  ((.~), (^.))
-import           Data.Aeson                    hiding (defaultOptions)
+import           Data.Aeson                    hiding (Null, defaultOptions)
 import           Data.Default
 import           Data.Dependent.Map            (DMap)
 import qualified Data.Dependent.Map            as DMap
@@ -83,12 +83,9 @@ import           GHC                           (DynFlags)
 import           GHC.Generics
 import           Ide.Plugin.Properties
 import           Ide.TempLSPTypeFunctions
+import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types   hiding
-                                               (SemanticTokenAbsolute (length, line),
-                                                SemanticTokenRelative (length),
-                                                SemanticTokensEdit (_start), id)
-import qualified Language.LSP.Protocol.Types   as J
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server           (LspM, getVirtualFile)
 import           Language.LSP.VFS
 import           Numeric.Natural
@@ -368,11 +365,11 @@ class HasTracing (MessageParams m) => PluginMethod (k :: MessageKind) (m :: Meth
     -- ^ Is this plugin enabled and allowed to respond to the given request
     -- with the given parameters?
 
-  default pluginEnabled :: (HasTextDocument (MessageParams m) doc, HasUri doc Uri)
+  default pluginEnabled :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
                               => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> Bool
   pluginEnabled _ params desc conf = pluginResponsible uri desc && plcGlobalOn (configForPlugin conf desc)
     where
-        uri = params ^. J.textDocument . J.uri
+        uri = params ^. L.textDocument . L.uri
 
 -- ---------------------------------------------------------------------
 -- Plugin Requests
@@ -404,12 +401,12 @@ instance PluginMethod Request Method_TextDocumentCodeAction where
   pluginEnabled _ msgParams pluginDesc config =
     pluginResponsible uri pluginDesc && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginRequestMethod Method_TextDocumentCodeAction where
   combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _ _) (CodeActionParams _ _ _ _ context) resps =
       case fmap compat $ filter wasRequested $ concat $ dumpNulls resps of
-        [] -> InR J.Null
+        [] -> InR Null
         x  -> InL x
     where
       compat :: (Command |? CodeAction) -> (Command |? CodeAction)
@@ -419,8 +416,8 @@ instance PluginRequestMethod Method_TextDocumentCodeAction where
         = x
         | otherwise = InL cmd
         where
-          cmd = mkLspCommand "hls" "fallbackCodeAction" (action ^. title) (Just cmdParams)
-          cmdParams = [toJSON (FallbackCodeActionParams (action ^. edit) (action ^. command))]
+          cmd = mkLspCommand "hls" "fallbackCodeAction" (action ^. L.title) (Just cmdParams)
+          cmdParams = [toJSON (FallbackCodeActionParams (action ^. L.edit) (action ^. L.command))]
 
       wasRequested :: (Command |? CodeAction) -> Bool
       wasRequested (InL _) = True
@@ -432,7 +429,7 @@ instance PluginRequestMethod Method_TextDocumentCodeAction where
         -- should check whether the requested kind is a *prefix* of the action kind.
         -- That means, for example, we will return actions with kinds `quickfix.import` and
         -- `quickfix.somethingElse` if the requested kind is `quickfix`.
-        , Just caKind <- ca ^. kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
+        , Just caKind <- ca ^. L.kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
         | otherwise = False
 
       -- Copied form lsp-types 1.6 to get compilation working. May make more
@@ -446,25 +443,25 @@ instance PluginMethod Request Method_TextDocumentDefinition where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_TextDocumentTypeDefinition where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_TextDocumentDocumentHighlight where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_TextDocumentReferences where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_WorkspaceSymbol where
   -- Unconditionally enabled, but should it really be?
@@ -474,24 +471,24 @@ instance PluginMethod Request Method_TextDocumentCodeLens where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcCodeLensOn (configForPlugin config pluginDesc)
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_TextDocumentRename where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcRenameOn (configForPlugin config pluginDesc)
    where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 instance PluginMethod Request Method_TextDocumentHover where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcHoverOn (configForPlugin config pluginDesc)
    where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_TextDocumentDocumentSymbol where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcSymbolsOn (configForPlugin config pluginDesc)
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_CompletionItemResolve where
   pluginEnabled _ msgParams pluginDesc config = pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
@@ -500,40 +497,40 @@ instance PluginMethod Request Method_TextDocumentCompletion where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_TextDocumentFormatting where
   pluginEnabled SMethod_TextDocumentFormatting msgParams pluginDesc conf =
     pluginResponsible uri pluginDesc
       && (PluginId (formattingProvider conf) == pid || PluginId (cabalFormattingProvider conf) == pid)
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
       pid = pluginId pluginDesc
 
 instance PluginMethod Request Method_TextDocumentRangeFormatting where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
       && (PluginId (formattingProvider conf) == pid || PluginId (cabalFormattingProvider conf) == pid)
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
       pid = pluginId pluginDesc
 
 instance PluginMethod Request Method_TextDocumentPrepareCallHierarchy where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_TextDocumentSelectionRange where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcSelectionRangeOn (configForPlugin conf pluginDesc)
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_TextDocumentFoldingRange where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcFoldingRangeOn (configForPlugin conf pluginDesc)
     where
-      uri = msgParams ^. J.textDocument . J.uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_CallHierarchyIncomingCalls where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'
@@ -568,24 +565,24 @@ instance PluginRequestMethod Method_TextDocumentRename where
 
 instance PluginRequestMethod Method_TextDocumentHover where
   combineResponses _ _ _ _ (dumpNulls -> hs :: [Hover]) =
-    if mcontent ^. value == ""
-        then InR J.Null
+    if mcontent ^. L.value == ""
+        then InR Null
         else InL $ Hover (InL mcontent) r
     where
-      r = listToMaybe $ mapMaybe (^. range) hs
+      r = listToMaybe $ mapMaybe (^. L.range) hs
       -- We are only taking MarkupContent here, because MarkedStrings have been
       -- deprecated for a while and don't occur in the hls codebase
       mcontent :: MarkupContent
-      mcontent = mconcat $ takeLefts $ map (^. contents) hs
+      mcontent = mconcat $ takeLefts $ map (^. L.contents) hs
 
 instance PluginRequestMethod Method_TextDocumentDocumentSymbol where
   combineResponses _ _ (ClientCapabilities _ tdc _ _ _ _) params xs = res
     where
-      uri' = params ^. textDocument . uri
+      uri' = params ^. L.textDocument . L.uri
       supportsHierarchy = Just True == (tdc >>= _documentSymbol >>= _hierarchicalDocumentSymbolSupport)
       dsOrSi :: [Either [SymbolInformation] [DocumentSymbol]]
       dsOrSi =  toEither <$> dumpNulls xs
-      res :: [SymbolInformation] |? ([DocumentSymbol] |? J.Null)
+      res :: [SymbolInformation] |? ([DocumentSymbol] |? Null)
       res
         | supportsHierarchy = InR $ InL $ concatMap (either (fmap siToDs) id) dsOrSi
         | otherwise = InL $ concatMap (either id ( concatMap dsToSi)) dsOrSi
@@ -598,10 +595,10 @@ instance PluginRequestMethod Method_TextDocumentDocumentSymbol where
       go :: Maybe T.Text -> DocumentSymbol -> [SymbolInformation]
       go parent ds =
         let children' :: [SymbolInformation]
-            children' = concatMap (go (Just name')) (fromMaybe mempty (ds ^. children))
-            loc = Location uri' (ds ^. range)
-            name' = ds ^. name
-            si = SymbolInformation name' (ds ^. kind) Nothing parent (ds ^. deprecated) loc
+            children' = concatMap (go (Just name')) (fromMaybe mempty (ds ^. L.children))
+            loc = Location uri' (ds ^. L.range)
+            name' = ds ^. L.name
+            si = SymbolInformation name' (ds ^. L.kind) Nothing parent (ds ^. L.deprecated) loc
         in [si] <> children'
 
 instance PluginRequestMethod Method_CompletionItemResolve where
@@ -611,9 +608,9 @@ instance PluginRequestMethod Method_CompletionItemResolve where
           go !comp [] = comp
           go !comp1 (comp2:xs)
             = go (comp1
-                 & J.detail              .~ comp1 ^. J.detail <> comp2 ^. J.detail
-                 & J.documentation       .~ ((comp1 ^. J.documentation) <|> (comp2 ^. J.documentation)) -- difficult to write generic concatentation for docs
-                 & J.additionalTextEdits .~ comp1 ^. J.additionalTextEdits <> comp2 ^. J.additionalTextEdits)
+                 & L.detail              .~ comp1 ^. L.detail <> comp2 ^. L.detail
+                 & L.documentation       .~ ((comp1 ^. L.documentation) <|> (comp2 ^. L.documentation)) -- difficult to write generic concatentation for docs
+                 & L.additionalTextEdits .~ comp1 ^. L.additionalTextEdits <> comp2 ^. L.additionalTextEdits)
                  xs
 
 instance PluginRequestMethod Method_TextDocumentCompletion where
@@ -630,7 +627,7 @@ instance PluginRequestMethod Method_TextDocumentCompletion where
           go comp (acc <> DList.fromList ls) rest
         go comp acc ( (InR (InL (CompletionList comp' _ ls))) : rest) =
           go (comp && comp') (acc <> DList.fromList ls) rest
-        go comp acc ( (InR (InR J.Null)) : rest) =
+        go comp acc ( (InR (InR Null)) : rest) =
           go comp acc rest
         -- boolean disambiguators
         isCompleteResponse, isIncompleteResponse :: Bool
@@ -645,7 +642,7 @@ instance PluginRequestMethod Method_TextDocumentCompletion where
             (xx', _) -> (0, InR (InL (CompletionList isIncompleteResponse Nothing xx')))
         consumeCompletionResponse n (InL xx) =
           consumeCompletionResponse n (InR (InL (CompletionList isCompleteResponse Nothing xx)))
-        consumeCompletionResponse n (InR (InR J.Null)) = (n, InR (InR J.Null))
+        consumeCompletionResponse n (InR (InR Null)) = (n, InR (InR Null))
 instance PluginRequestMethod Method_TextDocumentFormatting where
   combineResponses _ _ _ _ (x :| _) = x
 
@@ -879,8 +876,8 @@ data FormattingType = FormatText
 
 
 type FormattingMethod m =
-  ( J.HasOptions (MessageParams m) FormattingOptions
-  , J.HasTextDocument (MessageParams m) TextDocumentIdentifier
+  ( L.HasOptions (MessageParams m) FormattingOptions
+  , L.HasTextDocument (MessageParams m) TextDocumentIdentifier
   , MessageResult m ~ ([TextEdit] |? Null)
   )
 
@@ -904,20 +901,20 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
           Just vf -> do
             let typ = case m of
                   SMethod_TextDocumentFormatting -> FormatText
-                  SMethod_TextDocumentRangeFormatting -> FormatRange (params ^. J.range)
+                  SMethod_TextDocumentRangeFormatting -> FormatRange (params ^. L.range)
                   _ -> Prelude.error "mkFormattingHandlers: impossible"
             f ide typ (virtualFileText vf) nfp opts
           Nothing -> pure $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
 
       | otherwise = pure $ Left $ responseError $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
       where
-        uri = params ^. J.textDocument . J.uri
-        opts = params ^. J.options
+        uri = params ^. L.textDocument . L.uri
+        opts = params ^. L.options
 
 -- ---------------------------------------------------------------------
 
 responseError :: T.Text -> ResponseError
-responseError txt = ResponseError ErrorCodes_InvalidParams txt Nothing
+responseError txt = ResponseError (InR ErrorCodes_InvalidParams) txt Nothing
 
 -- ---------------------------------------------------------------------
 
@@ -937,8 +934,8 @@ class HasTracing a where
   traceWithSpan :: SpanInFlight -> a -> IO ()
   traceWithSpan _ _ = pure ()
 
-instance {-# OVERLAPPABLE #-} (HasTextDocument a doc, HasUri doc Uri) => HasTracing a where
-  traceWithSpan sp a = otSetUri sp (a ^. J.textDocument . J.uri)
+instance {-# OVERLAPPABLE #-} (L.HasTextDocument a doc, L.HasUri doc Uri) => HasTracing a where
+  traceWithSpan sp a = otSetUri sp (a ^. L.textDocument . L.uri)
 
 instance HasTracing Value
 instance HasTracing ExecuteCommandParams

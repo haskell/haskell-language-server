@@ -19,9 +19,9 @@ import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
 import           Ide.PluginUtils
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types          hiding (Null)
-import qualified Language.LSP.Protocol.Types          as J
 import           Language.LSP.Server                  (sendRequest)
 
 codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
@@ -63,7 +63,7 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
 
     pure $ InL codeLens
     where
-        uri = _textDocument ^. J.uri
+        uri = _textDocument ^. L.uri
 
         -- Match Binds with their signatures
         -- We try to give every `InstanceBindTypeSig` a `SrcSpan`,
@@ -133,8 +133,8 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
 
         makeEdit :: Range -> T.Text -> PositionMapping -> [TextEdit]
         makeEdit range bind mp =
-            let startPos = range ^. J.start
-                insertChar = startPos ^. J.character
+            let startPos = range ^. L.start
+                insertChar = startPos ^. L.character
                 insertRange = Range startPos startPos
             in case toCurrentRange mp insertRange of
                 Just rg -> [TextEdit rg (bind <> "\n" <> T.replicate (fromIntegral insertChar) " ")]

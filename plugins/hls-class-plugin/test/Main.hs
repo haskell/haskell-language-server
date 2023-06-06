@@ -15,8 +15,8 @@ import           Control.Monad                 (void)
 import           Data.Maybe
 import qualified Data.Text                     as T
 import qualified Ide.Plugin.Class              as Class
+import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
-import qualified Language.LSP.Protocol.Types   as J
 import           System.FilePath
 import           Test.Hls
 
@@ -87,7 +87,7 @@ codeLensTests = testGroup
         runSessionWithServer classPlugin testDataDir $ do
             doc <- openDoc "CodeLensSimple.hs" "haskell"
             lens <- getCodeLenses doc
-            let titles = map (^. J.title) $ mapMaybe (^. J.command) lens
+            let titles = map (^. L.title) $ mapMaybe (^. L.command) lens
             liftIO $ titles @?=
                 [ "(==) :: B -> B -> Bool"
                 , "(==) :: A -> A -> Bool"
@@ -124,7 +124,7 @@ goldenCodeLens :: TestName -> FilePath -> Int -> TestTree
 goldenCodeLens title path idx =
     goldenWithHaskellDoc classPlugin title testDataDir path "expected" "hs" $ \doc -> do
         lens <- getCodeLenses doc
-        executeCommand $ fromJust $ (lens !! idx) ^. J.command
+        executeCommand $ fromJust $ (lens !! idx) ^. L.command
         void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
 goldenWithClass ::TestName -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
@@ -142,7 +142,7 @@ expectCodeActionsAvailable title path actionTitles =
       doc <- openDoc (path <.> "hs") "haskell"
       _ <- waitForDiagnosticsFromSource doc "typecheck"
       caResults <- getAllCodeActions doc
-      liftIO $ map (^? _CACodeAction . J.title) caResults
+      liftIO $ map (^? _CACodeAction . L.title) caResults
         @?= expectedActions
     where
       expectedActions = Just <$> actionTitles

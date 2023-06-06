@@ -12,7 +12,6 @@ import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Parsers
-import           Language.LSP.Protocol.Types
 
 #if MIN_VERSION_ghc(9,2,0)
 import           Data.Either.Extra                       (eitherToMaybe)

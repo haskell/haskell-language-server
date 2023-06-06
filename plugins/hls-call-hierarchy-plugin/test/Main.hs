@@ -5,22 +5,22 @@
 
 module Main (main) where
 
-import           Control.Lens                (set, (^.))
+import           Control.Lens               (set, (^.))
 import           Control.Monad.Extra
 import           Data.Aeson
-import           Data.Functor                ((<&>))
-import           Data.List                   (sort, tails)
-import qualified Data.Map                    as M
-import qualified Data.Text                   as T
+import           Data.Functor               ((<&>))
+import           Data.List                  (sort, tails)
+import qualified Data.Map                   as M
+import qualified Data.Text                  as T
 import           Development.IDE.Test
 import           Ide.Plugin.CallHierarchy
-import qualified Language.LSP.Protocol.Types as L
-import qualified Language.LSP.Test           as Test
+import qualified Language.LSP.Protocol.Lens as L
+import qualified Language.LSP.Test          as Test
 import           System.Directory.Extra
 import           System.FilePath
 import qualified System.IO.Extra
 import           Test.Hls
-import           Test.Hls.Util               (withCanonicalTempDir)
+import           Test.Hls.Util              (withCanonicalTempDir)
 
 plugin :: PluginTestDescriptor ()
 plugin = mkPluginTestDescriptor' descriptor "call-hierarchy"

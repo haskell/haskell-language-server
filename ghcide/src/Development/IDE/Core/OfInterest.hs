@@ -48,7 +48,6 @@ import           Development.IDE.Types.Logger             (Pretty (pretty),
 import           Development.IDE.Types.Options            (IdeTesting (..))
 import           GHC.TypeLits                             (KnownSymbol)
 import qualified Language.LSP.Protocol.Message            as LSP
-import qualified Language.LSP.Protocol.Types              as LSP
 import qualified Language.LSP.Server                      as LSP
 
 data Log = LogShake Shake.Log

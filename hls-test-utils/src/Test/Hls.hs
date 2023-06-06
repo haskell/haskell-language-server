@@ -95,13 +95,8 @@ import           GHC.Stack                          (emptyCallStack)
 import           GHC.TypeLits
 import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
-import           Language.LSP.Protocol.Message      hiding (error)
-import           Language.LSP.Protocol.Types        hiding (Null,
-                                                     SemanticTokenAbsolute (length, line),
-                                                     SemanticTokenRelative (length),
-                                                     SemanticTokensEdit (_start),
-                                                     applyEdit, executeCommand,
-                                                     message, rename)
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types        hiding (Null)
 import           Language.LSP.Test
 import           Prelude                            hiding (log)
 import           System.Directory                   (getCurrentDirectory,
@@ -458,7 +453,7 @@ callTestPlugin cmd = do
     return $ do
       e <- _result
       case A.fromJSON e of
-        A.Error err -> Left $ ResponseError ErrorCodes_InternalError (T.pack err) Nothing
+        A.Error err -> Left $ ResponseError (InR ErrorCodes_InternalError) (T.pack err) Nothing
         A.Success a -> pure a
 
 waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)

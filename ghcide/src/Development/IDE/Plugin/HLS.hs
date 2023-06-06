@@ -36,10 +36,9 @@ import           Development.IDE.Types.Logger  hiding (Error)
 import           Ide.Plugin.Config
 import           Ide.PluginUtils               (getClientConfig)
 import           Ide.Types                     as HLS
+import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types   hiding (id)
-import qualified Language.LSP.Protocol.Types   as J
-import qualified Language.LSP.Protocol.Types   as LSP
+import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server           as LSP
 import           Language.LSP.VFS
 import           Prettyprinter.Render.String   (renderString)
@@ -68,8 +67,8 @@ instance Show Log where show = renderString . layoutCompact . pretty
 prettyResponseError :: ResponseError -> Doc a
 prettyResponseError err = errorCode <> ":" <+> errorBody
     where
-        errorCode = pretty $ show $ err ^. LSP.code
-        errorBody = pretty $ err ^. LSP.message
+        errorCode = pretty $ show $ err ^. L.code
+        errorBody = pretty $ err ^. L.message
 
 pluginNotEnabled :: SMethod m -> [(PluginId, b, a)] -> Text
 pluginNotEnabled method availPlugins =
@@ -94,7 +93,7 @@ failedToParseArgs (CommandId com) (PluginId pid) err arg =
         <> T.pack err <> ", arg = " <> T.pack (show arg)
 
 -- | Build a ResponseError and log it before returning to the caller
-logAndReturnError :: Recorder (WithPriority Log) -> PluginId -> ErrorCodes -> Text -> LSP.LspT Config IO (Either ResponseError a)
+logAndReturnError :: Recorder (WithPriority Log) -> PluginId -> (LSPErrorCodes |? ErrorCodes) -> Text -> LSP.LspT Config IO (Either ResponseError a)
 logAndReturnError recorder p errCode msg = do
     let err = ResponseError errCode msg Nothing
     logWith recorder Warning $ LogPluginError p err
@@ -158,7 +157,7 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
       _                    -> Nothing
 
     -- The parameters to the HLS command are always the first element
-    execCmd :: IdeState -> ExecuteCommandParams -> LSP.LspT Config IO (Either ResponseError (A.Value |? LSP.Null))
+    execCmd :: IdeState -> ExecuteCommandParams -> LSP.LspT Config IO (Either ResponseError (A.Value |? Null))
     execCmd ide (ExecuteCommandParams _ cmdId args) = do
       let cmdParams :: A.Value
           cmdParams = case args of
@@ -176,11 +175,11 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
 
               case mCmd of
                 -- If we have a command, continue to execute it
-                Just (J.Command _ innerCmdId innerArgs)
+                Just (Command _ innerCmdId innerArgs)
                     -> execCmd ide (ExecuteCommandParams Nothing innerCmdId innerArgs)
-                Nothing -> return $ Right $ InL $ A.Null
+                Nothing -> return $ Right $ InL A.Null
 
-            A.Error _str -> return $ Right $ InL $ A.Null
+            A.Error _str -> return $ Right $ InL A.Null
 
         -- Just an ordinary HIE command
         Just (plugin, cmd) -> runPluginCommand ide plugin cmd cmdParams
@@ -188,16 +187,16 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
         -- Couldn't parse the command identifier
         _ -> do
             logWith recorder Warning LogInvalidCommandIdentifier
-            return $ Left $ ResponseError ErrorCodes_InvalidParams "Invalid command identifier" Nothing
+            return $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Invalid command identifier" Nothing
 
     runPluginCommand :: IdeState -> PluginId -> CommandId -> A.Value -> LSP.LspT Config IO (Either ResponseError (A.Value |? Null))
     runPluginCommand ide p com arg =
       case Map.lookup p pluginMap  of
-        Nothing -> logAndReturnError recorder p ErrorCodes_InvalidRequest (pluginDoesntExist p)
+        Nothing -> logAndReturnError recorder p (InR ErrorCodes_InvalidRequest) (pluginDoesntExist p)
         Just xs -> case List.find ((com ==) . commandId) xs of
-          Nothing -> logAndReturnError recorder p ErrorCodes_InvalidRequest (commandDoesntExist com p xs)
+          Nothing -> logAndReturnError recorder p (InR ErrorCodes_InvalidRequest) (commandDoesntExist com p xs)
           Just (PluginCommand _ _ f) -> case A.fromJSON arg of
-            A.Error err -> logAndReturnError recorder p ErrorCodes_InvalidParams (failedToParseArgs com p err arg)
+            A.Error err -> logAndReturnError recorder p (InR ErrorCodes_InvalidParams) (failedToParseArgs com p err arg)
             A.Success a -> fmap InL <$> f ide a
 
 -- ---------------------------------------------------------------------
@@ -222,7 +221,7 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
         case nonEmpty fs of
           Nothing -> do
             logWith recorder Warning (LogNoPluginForMethod $ Some m)
-            let err = ResponseError ErrorCodes_InvalidRequest msg Nothing
+            let err = ResponseError (InR ErrorCodes_InvalidRequest) msg Nothing
                 msg = pluginNotEnabled m fs'
             return $ Left err
           Just fs -> do
@@ -277,11 +276,11 @@ runConcurrently
   -> m (NonEmpty(NonEmpty (Either ResponseError d)))
 runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString method) $ do
   f a b
-     `catchAny` (\e -> pure $ pure $ Left $ ResponseError ErrorCodes_InternalError (msg e pid) Nothing)
+     `catchAny` (\e -> pure $ pure $ Left $ ResponseError (InR ErrorCodes_InternalError) (msg e pid) Nothing)
 
 combineErrors :: [ResponseError] -> ResponseError
 combineErrors [x] = x
-combineErrors xs  = ResponseError ErrorCodes_InternalError (T.pack (show xs)) Nothing
+combineErrors xs  = ResponseError (InR ErrorCodes_InternalError) (T.pack (show xs)) Nothing
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeHandler (m :: Method ClientToServer Request)

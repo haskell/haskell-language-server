@@ -33,9 +33,9 @@ import           Ide.PluginUtils                (getNormalizedFilePath,
                                                  handleMaybe, pluginResponse,
                                                  throwPluginError)
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens     as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Protocol.Types    as L
 import           Text.Read                      (readMaybe)
 
 -- | Render prepare call hierarchy request.

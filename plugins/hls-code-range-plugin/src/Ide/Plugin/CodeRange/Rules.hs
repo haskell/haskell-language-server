@@ -53,8 +53,9 @@ import           Ide.Plugin.CodeRange.ASTPreProcess (CustomNodeType (..),
                                                      PreProcessEnv (..),
                                                      isCustomNode,
                                                      preProcessAST)
-import           Language.LSP.Protocol.Types        (FoldingRangeKind (FoldingRangeKind_Comment, FoldingRangeKind_Imports, FoldingRangeKind_Region),
-                                                     HasEnd (end),
+import           Language.LSP.Protocol.Types        (FoldingRangeKind (FoldingRangeKind_Comment, FoldingRangeKind_Imports, FoldingRangeKind_Region))
+
+import           Language.LSP.Protocol.Lens         (HasEnd (end),
                                                      HasStart (start))
 import           Prelude                            hiding (log)
 

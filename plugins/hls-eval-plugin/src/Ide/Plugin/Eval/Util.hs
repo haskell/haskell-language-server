@@ -72,7 +72,7 @@ response' act = do
              `catchAny` showErr
     case res of
       Left e ->
-          return $ Left (ResponseError ErrorCodes_InternalError (fromString e) Nothing)
+          return $ Left (ResponseError (InR ErrorCodes_InternalError) (fromString e) Nothing)
       Right a -> do
         _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing a) (\_ -> pure ())
         return $ Right Null

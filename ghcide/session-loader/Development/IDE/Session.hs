@@ -79,8 +79,7 @@ import           HIE.Bios.Environment                 hiding (getCacheDir)
 import           HIE.Bios.Types                       hiding (Log)
 import qualified HIE.Bios.Types                       as HieBios
 import           Hie.Implicit.Cradle                  (loadImplicitHieCradle)
-import           Language.LSP.Protocol.Message        hiding (error)
-import           Language.LSP.Protocol.Types          hiding (id)
+import           Language.LSP.Protocol.Message        hiding (error, id)
 import           Language.LSP.Server
 import           System.Directory
 import qualified System.Directory.Extra               as IO

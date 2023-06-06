@@ -17,7 +17,7 @@ import qualified Data.Text                       as Text
 import           Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
-import qualified Language.LSP.Protocol.Types     as J
+import qualified Language.LSP.Protocol.Lens      as L
 import           System.FilePath
 import           Test.Hls
 
@@ -81,16 +81,16 @@ pluginTests = testGroup "Plugin Tests"
         unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
         liftIO $ do
             length diags @?= 1
-            unknownLicenseDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
-            unknownLicenseDiag ^. J.severity @?= Just DiagnosticSeverity_Error
+            unknownLicenseDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
+            unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
     , runCabalTestCaseSession "Clears diagnostics" "" $ do
         doc <- openDoc "invalid.cabal" "cabal"
         diags <- waitForDiagnosticsFrom doc
         unknownLicenseDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
         liftIO $ do
             length diags @?= 1
-            unknownLicenseDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
-            unknownLicenseDiag ^. J.severity @?= Just DiagnosticSeverity_Error
+            unknownLicenseDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
+            unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
         _ <- applyEdit doc $ TextEdit (Range (Position 3 20) (Position 4 0)) "BSD-3-Clause\n"
         newDiags <- waitForDiagnosticsFrom doc
         liftIO $ newDiags @?= []
@@ -113,8 +113,8 @@ pluginTests = testGroup "Plugin Tests"
         expectNoMoreDiagnostics 1 hsDoc "typechecking"
         liftIO $ do
             length cabalDiags @?= 1
-            unknownLicenseDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
-            unknownLicenseDiag ^. J.severity @?= Just DiagnosticSeverity_Error
+            unknownLicenseDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
+            unknownLicenseDiag ^. L.severity @?= Just DiagnosticSeverity_Error
     ]
   , testGroup "Code Actions"
     [ runCabalTestCaseSession "BSD-3" "" $ do
@@ -123,8 +123,8 @@ pluginTests = testGroup "Plugin Tests"
         reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'BSD3'"]
         liftIO $ do
             length diags @?= 1
-            reduceDiag ^. J.range @?= Range (Position 3 24) (Position 4 0)
-            reduceDiag ^. J.severity @?= Just DiagnosticSeverity_Error
+            reduceDiag ^. L.range @?= Range (Position 3 24) (Position 4 0)
+            reduceDiag ^. L.severity @?= Just DiagnosticSeverity_Error
         [codeAction] <- getLicenseAction "BSD-3-Clause" <$> getCodeActions doc (Range (Position 3 24) (Position 4 0))
         executeCodeAction codeAction
         contents <- documentContents doc
@@ -145,8 +145,8 @@ pluginTests = testGroup "Plugin Tests"
         reduceDiag <- liftIO $ inspectDiagnostic diags ["Unknown SPDX license identifier: 'APAHE'"]
         liftIO $ do
             length diags @?= 1
-            reduceDiag ^. J.range @?= Range (Position 3 25) (Position 4 0)
-            reduceDiag ^. J.severity @?= Just DiagnosticSeverity_Error
+            reduceDiag ^. L.range @?= Range (Position 3 25) (Position 4 0)
+            reduceDiag ^. L.severity @?= Just DiagnosticSeverity_Error
         [codeAction] <- getLicenseAction "Apache-2.0" <$> getCodeActions doc (Range (Position 3 24) (Position 4 0))
         executeCodeAction codeAction
         contents <- documentContents doc

@@ -23,8 +23,7 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types    hiding (documentHighlight,
-                                                 hover, id, references)
+import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server            as LSP
 
 import qualified Data.Text                      as T
@@ -47,7 +46,7 @@ references ide (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = liftIO
         "References request at position " <> T.pack (showPosition pos) <>
         " in file: " <> T.pack path
       Right  <$> (runAction "references" ide $ refsAtPoint filePath pos)
-    Nothing -> pure $ Left $ ResponseError ErrorCodes_InvalidParams ("Invalid URI " <> T.pack (show uri)) Nothing
+    Nothing -> pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) ("Invalid URI " <> T.pack (show uri)) Nothing
 
 wsSymbols :: IdeState -> WorkspaceSymbolParams -> LSP.LspM c (Either ResponseError [SymbolInformation])
 wsSymbols ide (WorkspaceSymbolParams _ _ query) = liftIO $ do

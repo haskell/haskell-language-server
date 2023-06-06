@@ -46,7 +46,7 @@ import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Config                    (CheckParents)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types          hiding (Null, retry)
+import           Language.LSP.Protocol.Types          hiding (Null)
 import qualified Language.LSP.Server                  as LSP
 import qualified "list-t" ListT
 import qualified StmContainers.Map                    as STM
@@ -84,7 +84,7 @@ plugin = (defaultPluginDescriptor "test") {
         = testRequestHandler ide customReq
         | otherwise
         = return $ Left
-        $ ResponseError ErrorCodes_InvalidRequest "Cannot parse request" Nothing
+        $ ResponseError (InR ErrorCodes_InvalidRequest) "Cannot parse request" Nothing
 
 
 testRequestHandler ::  IdeState
@@ -147,7 +147,7 @@ getDatabaseKeys field db = do
     return [ k | (k, res) <- keys, field res == Step step]
 
 mkResponseError :: Text -> ResponseError
-mkResponseError msg = ResponseError ErrorCodes_InvalidRequest msg Nothing
+mkResponseError msg = ResponseError (InR ErrorCodes_InvalidRequest) msg Nothing
 
 parseAction :: CI String -> NormalizedFilePath -> Action (Either Text Bool)
 parseAction "typecheck" fp = Right . isJust <$> use TypeCheck fp

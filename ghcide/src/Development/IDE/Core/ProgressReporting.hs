@@ -31,8 +31,8 @@ import           Development.IDE.Graph          hiding (ShakeValue)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified Focus
-import           Language.LSP.Protocol.Message  hiding (error)
-import           Language.LSP.Protocol.Types    hiding (id)
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types    as LSP
 import qualified Language.LSP.Server            as LSP
 import qualified StmContainers.Map              as STM

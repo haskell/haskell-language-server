@@ -94,16 +94,11 @@ import           Development.Shake                        (getDirectoryFilesIO)
 import           Ide.Plugin.Config
 import           Language.LSP.Test
 import           Language.LSP.Protocol.Types                       hiding
-                                                          (SemanticTokenAbsolute (length, line),
-                                                           SemanticTokenRelative (length),
-                                                           SemanticTokensEdit (_start),
-                                                           mkRange, message, diagnostic, executeCommand, applyEdit, id)
-import qualified Language.LSP.Protocol.Types as L               hiding
-                                                          (SemanticTokenAbsolute (length, line),
-                                                           SemanticTokenRelative (length),
-                                                           SemanticTokensEdit (_start))
-import           Language.LSP.Protocol.Message            hiding (error)
-import           Language.LSP.Protocol.Capabilities
+                                                          (SemanticTokenAbsolute (..),
+                                                           SemanticTokenRelative (..),
+                                                           SemanticTokensEdit (..), mkRange)
+import qualified Language.LSP.Protocol.Lens as L
+import           Language.LSP.Protocol.Message
 import           Language.LSP.VFS                         (VfsLog, applyChange)
 import           Network.URI
 import           System.Directory
@@ -149,7 +144,6 @@ import           GHC.Stack                                (emptyCallStack)
 import qualified HieDbRetry
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
 import           Ide.Types
-import           Ide.TempLSPTypeFunctions
 import qualified Progress
 import           System.Time.Extra
 import qualified Test.QuickCheck.Monadic                  as MonadicQuickCheck
@@ -285,11 +279,11 @@ initializeResponseTests = withResource acquire release tests where
                           _documentOnTypeFormattingProvider Nothing
     , chk "NO renaming"                     _renameProvider (Just $ InL False)
     , chk "NO doc link"               _documentLinkProvider Nothing
-    , chk "NO color"                   (^. colorProvider) (Just $ InL False)
+    , chk "NO color"                   (^. L.colorProvider) (Just $ InL False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ InL False)
     , che "   execute command"      _executeCommandProvider [typeLensCommandId, blockCommandId]
-    , chk "   workspace"                   (^. workspace) (Just $ #workspaceFolders .== Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )} .+ #fileOperations .== Nothing)
-    , chk "NO experimental"             (^. experimental) Nothing
+    , chk "   workspace"                   (^. L.workspace) (Just $ #workspaceFolders .== Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )} .+ #fileOperations .== Nothing)
+    , chk "NO experimental"             (^. L.experimental) Nothing
     ] where
 
       tds = Just (InL (TextDocumentSyncOptions
@@ -676,8 +670,8 @@ diagnosticTests = testGroup "diagnostics"
       notification <- skipManyTill anyMessage diagnostic
       let
           offenders =
-            params .
-            diagnostics .
+            L.params .
+            L.diagnostics .
             Lens.folded .
             L.message .
             Lens.filtered (T.isInfixOf ("/" <> name <> ".hs:"))
@@ -1566,7 +1560,7 @@ completionTest name src pos expected = testSessionWait name $ do
           if expectedSig || expectedDocs
           then do
             rsp <- request SMethod_CompletionItemResolve item
-            case rsp ^. result of
+            case rsp ^. L.result of
               Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
               Right x -> pure x
           else pure item
@@ -2074,7 +2068,7 @@ completionDocTests =
       compls <- getCompletions doc pos
       rcompls <- forM compls $ \item -> do
         rsp <- request SMethod_CompletionItemResolve item
-        case rsp ^. result of
+        case rsp ^. L.result of
           Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
           Right x -> pure x
       let compls' = [
@@ -3238,7 +3232,7 @@ lspTestCaps :: ClientCapabilities
 lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
 
 lspTestCapsNoFileWatches :: ClientCapabilities
-lspTestCapsNoFileWatches = lspTestCaps & workspace . Lens._Just . didChangeWatchedFiles .~ Nothing
+lspTestCapsNoFileWatches = lspTestCaps & L.workspace . Lens._Just . L.didChangeWatchedFiles .~ Nothing
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do

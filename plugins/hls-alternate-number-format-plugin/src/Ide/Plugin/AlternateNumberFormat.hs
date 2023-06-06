@@ -31,9 +31,9 @@ import qualified Ide.Plugin.RangeMap           as RangeMap
 import           Ide.PluginUtils               (getNormalizedFilePath,
                                                 handleMaybeM, pluginResponse)
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Protocol.Types   as L
 
 newtype Log = LogShake Shake.Log deriving Show
 

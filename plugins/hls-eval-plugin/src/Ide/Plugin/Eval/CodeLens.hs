@@ -125,12 +125,9 @@ import           Ide.PluginUtils                              (handleMaybe,
                                                                handleMaybeM,
                                                                pluginResponse)
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens                   as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types                  hiding
-                                                              (SemanticTokenAbsolute (..),
-                                                               SemanticTokenRelative (..),
-                                                               codeLens, id,
-                                                               text)
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
 import           Language.LSP.VFS                             (virtualFileText)
 
@@ -355,12 +352,12 @@ runTests EvalConfig{..} e@(_st, _) tests = do
 asEdit :: Format -> Test -> [Text] -> TextEdit
 asEdit (MultiLine commRange) test resultLines
     -- A test in a block comment, ending with @-\}@ without newline in-between.
-    | testRange test ^. end.line == commRange ^. end . line
+    | testRange test ^. L.end . L.line == commRange ^. L.end . L.line
     =
     TextEdit
         (Range
-            (testRange test ^. end)
-            (resultRange test ^. end)
+            (testRange test ^. L.end)
+            (resultRange test ^. L.end)
         )
         ("\n" <> T.unlines (resultLines <> ["-}"]))
 asEdit _ test resultLines =

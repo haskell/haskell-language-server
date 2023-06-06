@@ -3,6 +3,7 @@ module Development.IDE.Test.Diagnostic where
 import           Control.Lens                ((^.))
 import qualified Data.Text                   as T
 import           GHC.Stack                   (HasCallStack)
+import           Language.LSP.Protocol.Lens
 import           Language.LSP.Protocol.Types
 
 -- | (0-based line number, 0-based column number)

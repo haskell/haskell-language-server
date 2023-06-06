@@ -65,10 +65,9 @@ import qualified Data.Text                       as T
 import           Development.IDE                 (GhcVersion (..), ghcVersion)
 import           Ide.TempLSPTypeFunctions
 import qualified Language.LSP.Test               as Test
-import           Language.LSP.Protocol.Types              hiding ( id)
-import           Language.LSP.Protocol.Message   hiding (error)
-import qualified Language.LSP.Protocol.Types         as L hiding (SemanticTokenAbsolute(..))
-import qualified Language.LSP.Protocol.Message       as L
+import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Message
+import qualified Language.LSP.Protocol.Lens         as L
 import           System.Directory
 import           System.FilePath
 import           System.Info.Extra               (isMac, isWindows)
@@ -82,13 +81,13 @@ import           Test.Tasty.HUnit                (Assertion, assertFailure,
                                                   (@?=))
 
 noLiteralCaps :: ClientCapabilities
-noLiteralCaps = defClientCapabilities & textDocument ?~ textDocumentCaps
+noLiteralCaps = defClientCapabilities & L.textDocument ?~ textDocumentCaps
   where
     textDocumentCaps = defTextDocumentCapabilities { _codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
 codeActionSupportCaps :: ClientCapabilities
-codeActionSupportCaps = defClientCapabilities & textDocument ?~ textDocumentCaps
+codeActionSupportCaps = defClientCapabilities & L.textDocument ?~ textDocumentCaps
   where
     textDocumentCaps = defTextDocumentCapabilities { _codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True) Nothing Nothing Nothing Nothing

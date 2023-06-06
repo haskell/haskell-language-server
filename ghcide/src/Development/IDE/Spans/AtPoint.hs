@@ -27,7 +27,8 @@ module Development.IDE.Spans.AtPoint (
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Types.Location
-import           Language.LSP.Protocol.Types          hiding (documentHighlight)
+import           Language.LSP.Protocol.Types          hiding
+                                                      (SemanticTokenAbsolute (..))
 
 -- compiler and infrastructure
 import           Development.IDE.Core.PositionMapping
@@ -426,6 +427,7 @@ pointCommand hf pos k =
  where
    sloc fs = mkRealSrcLoc fs (fromIntegral $ line+1) (fromIntegral $ cha+1)
    sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
+   line :: UInt
    line = _line pos
    cha = _character pos
 

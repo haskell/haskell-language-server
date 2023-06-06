@@ -24,9 +24,9 @@ import qualified Ide.Plugin.Eval               as Eval
 import           Ide.Plugin.Eval.Types         (EvalParams (..), Section (..),
                                                 testOutput)
 import           Ide.Types                     (IdePlugins (IdePlugins))
-import           Language.LSP.Protocol.Message hiding (error)
-import           Language.LSP.Protocol.Types   (arguments, command, range,
+import           Language.LSP.Protocol.Lens    (arguments, command, range,
                                                 title)
+import           Language.LSP.Protocol.Message hiding (error)
 import           System.FilePath               ((</>))
 import           Test.Hls
 

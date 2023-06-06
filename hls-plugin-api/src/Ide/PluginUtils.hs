@@ -57,11 +57,7 @@ import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types   hiding
-                                               (SemanticTokenAbsolute (length, line),
-                                                SemanticTokenRelative (length),
-                                                SemanticTokensEdit (_start))
-import qualified Language.LSP.Protocol.Types   as J
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
 import qualified Text.Megaparsec               as P
 import qualified Text.Megaparsec.Char          as P
@@ -123,8 +119,8 @@ diffTextEdit fText f2Text withDeletions = r
     isDeletion _              = False
 
 
-    diffOperationToTextEdit :: DiffOperation LineRange -> J.TextEdit
-    diffOperationToTextEdit (Change fm to) = J.TextEdit range nt
+    diffOperationToTextEdit :: DiffOperation LineRange -> TextEdit
+    diffOperationToTextEdit (Change fm to) = TextEdit range nt
       where
         range = calcRange fm
         nt = T.pack $ init $ unlines $ lrContents to
@@ -136,28 +132,28 @@ diffTextEdit fText f2Text withDeletions = r
       the line ending character(s) then use an end position denoting
       the start of the next line"
     -}
-    diffOperationToTextEdit (Deletion (LineRange (sl, el) _) _) = J.TextEdit range ""
+    diffOperationToTextEdit (Deletion (LineRange (sl, el) _) _) = TextEdit range ""
       where
-        range = J.Range (J.Position (fromIntegral $ sl - 1) 0)
-                        (J.Position (fromIntegral el) 0)
+        range = Range (Position (fromIntegral $ sl - 1) 0)
+                        (Position (fromIntegral el) 0)
 
-    diffOperationToTextEdit (Addition fm l) = J.TextEdit range nt
+    diffOperationToTextEdit (Addition fm l) = TextEdit range nt
     -- fm has a range wrt to the changed file, which starts in the current file at l + 1
     -- So the range has to be shifted to start at l + 1
       where
-        range = J.Range (J.Position (fromIntegral l) 0)
-                        (J.Position (fromIntegral l) 0)
+        range = Range (Position (fromIntegral l) 0)
+                        (Position (fromIntegral l) 0)
         nt = T.pack $ unlines $ lrContents fm
 
 
-    calcRange fm = J.Range s e
+    calcRange fm = Range s e
       where
         sl = fst $ lrNumbers fm
         sc = 0
-        s = J.Position (fromIntegral $ sl - 1) sc -- Note: zero-based lines
+        s = Position (fromIntegral $ sl - 1) sc -- Note: zero-based lines
         el = snd $ lrNumbers fm
         ec = fromIntegral $ length $ last $ lrContents fm
-        e = J.Position (fromIntegral $ el - 1) ec  -- Note: zero-based lines
+        e = Position (fromIntegral $ el - 1) ec  -- Note: zero-based lines
 
 
 -- | A pure version of 'diffText' for testing
@@ -170,7 +166,7 @@ diffText' supports (f,fText) f2Text withDeletions  =
     diff = diffTextEdit fText f2Text withDeletions
     h = M.singleton f diff
     docChanges = [InL docEdit]
-    docEdit = J.TextDocumentEdit (J.OptionalVersionedTextDocumentIdentifier f (InL 0)) $ fmap InL diff
+    docEdit = TextDocumentEdit (OptionalVersionedTextDocumentIdentifier f (InL 0)) $ fmap InL diff
 
 -- ---------------------------------------------------------------------
 
@@ -280,7 +276,7 @@ handleMaybeM msg act = maybeM (throwE msg) return $ lift act
 
 pluginResponse :: Monad m => ExceptT String m a -> m (Either ResponseError a)
 pluginResponse =
-  fmap (first (\msg -> ResponseError ErrorCodes_InternalError (fromString msg) Nothing))
+  fmap (first (\msg -> ResponseError (InR ErrorCodes_InternalError) (fromString msg) Nothing))
     . runExceptT
 
 -- ---------------------------------------------------------------------

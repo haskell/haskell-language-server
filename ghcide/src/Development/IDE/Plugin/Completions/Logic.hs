@@ -67,10 +67,8 @@ import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
                                                            IdePlugins (..),
                                                            PluginId)
-import           Language.LSP.Protocol.Capabilities
-import           Language.LSP.Protocol.Types              hiding (id,
-                                                           insertText, label,
-                                                           name)
+import qualified Language.LSP.Protocol.Lens               as L
+import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
@@ -534,7 +532,7 @@ toggleSnippets ClientCapabilities {_textDocument} CompletionsConfig{..} =
   removeSnippetsWhen (not $ enableSnippets && supported)
   where
     supported =
-      Just True == (_textDocument >>= _completion >>= view completionItem >>= (\x -> x .! #snippetSupport))
+      Just True == (_textDocument >>= _completion >>= view L.completionItem >>= (\x -> x .! #snippetSupport))
 
 toggleAutoExtend :: CompletionsConfig -> CompItem -> CompItem
 toggleAutoExtend CompletionsConfig{enableAutoExtend=False} x = x {additionalTextEdits = Nothing}

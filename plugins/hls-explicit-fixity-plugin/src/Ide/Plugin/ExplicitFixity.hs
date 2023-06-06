@@ -34,7 +34,7 @@ import           Ide.PluginUtils                      (getNormalizedFilePath,
 import           Ide.TempLSPTypeFunctions             (maybeToNull)
 import           Ide.Types                            hiding (pluginId)
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types          hiding (hover)
+import           Language.LSP.Protocol.Types
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder pluginId = (defaultPluginDescriptor pluginId)

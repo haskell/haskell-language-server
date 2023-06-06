@@ -234,11 +234,11 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                     case cancelOrRes of
                         Left () -> do
                             log Debug $ LogCancelledRequest _id
-                            k $ ResponseError (ErrorCodes_Custom (-32800)) "" Nothing
+                            k $ ResponseError (InL LSPErrorCodes_RequestCancelled) "" Nothing
                         Right res -> pure res
                 ) $ \(e :: SomeException) -> do
                     exceptionInHandler e
-                    k $ ResponseError ErrorCodes_InternalError (T.pack $ show e) Nothing
+                    k $ ResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
     _ <- flip forkFinally handleServerException $ do
         untilMVar lifetime $ runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb hieChan -> do
             putMVar dbMVar (WithHieDbShield withHieDb,hieChan)

@@ -168,8 +168,8 @@ import           Ide.Types                              (IdePlugins (IdePlugins)
                                                          PluginDescriptor (pluginId),
                                                          PluginId)
 import           Language.LSP.Diagnostics
-import           Language.LSP.Protocol.Message          hiding (error)
-import           Language.LSP.Protocol.Types            hiding (id, start)
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types            as LSP
 import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.VFS                       hiding (start)

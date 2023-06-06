@@ -41,9 +41,9 @@ import           Development.IDE.Types.Logger             (Pretty (pretty),
                                                            WithPriority,
                                                            cmapWithPrio)
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import qualified Language.LSP.Protocol.Types              as J
 import qualified Language.LSP.Server                      as LSP
 import qualified Language.LSP.VFS                         as VFS
 import           Numeric.Natural
@@ -154,8 +154,8 @@ resolveCompletion ide _ comp@CompletionItem{_detail,_documentation,_data_}
               Just (InR (MarkupContent MarkupKind_Markdown old)) ->
                 InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator (old:doc)
               _ -> InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator doc
-        pure (Right $ comp & J.detail .~ (det1 <> _detail)
-                           & J.documentation .~ Just doc1
+        pure (Right $ comp & L.detail .~ (det1 <> _detail)
+                           & L.documentation .~ Just doc1
                            )
   where
     stripForall ty = case splitForAllTyCoVars ty of
