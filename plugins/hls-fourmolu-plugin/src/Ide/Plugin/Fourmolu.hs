@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
@@ -5,7 +6,6 @@
 {-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE TypeApplications         #-}
-{-# LANGUAGE CPP                      #-}
 
 module Ide.Plugin.Fourmolu (
     descriptor,
@@ -30,9 +30,10 @@ import           Ide.Plugin.Fourmolu.Shim
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                 (makeDiffTextEdit)
 import           Ide.Types
+import           Language.LSP.Protocol.Lens      (HasTabSize (tabSize))
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server             hiding (defaultConfig)
-import           Language.LSP.Types              hiding (line)
-import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
 import           System.Exit
 import           System.FilePath
@@ -95,13 +96,13 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                 case exitCode of
                     ExitSuccess -> do
                         logWith recorder Debug $ StdErr err
-                        pure . Right $ makeDiffTextEdit contents out
+                        pure . Right $ InL $ makeDiffTextEdit contents out
                     ExitFailure n -> do
                         logWith recorder Info $ StdErr err
                         pure . Left . responseError $ "Fourmolu failed with exit code " <> T.pack (show n)
         else do
             let format fourmoluConfig =
-                    bimap (mkError . show) (makeDiffTextEdit contents)
+                    bimap (mkError . show) (InL . makeDiffTextEdit contents)
 #if MIN_VERSION_fourmolu(0,11,0)
                         <$> try @OrmoluException (ormolu config fp' contents)
 #else
@@ -128,9 +129,9 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                         logWith recorder Info $ NoConfigPath searchDirs
                         format emptyConfig
                     ConfigParseError f err -> do
-                        sendNotification SWindowShowMessage $
+                        sendNotification SMethod_WindowShowMessage $
                             ShowMessageParams
-                                { _xtype = MtError
+                                { _type_ = MessageType_Error
                                 , _message = errorMessage
                                 }
                         return . Left $ responseError errorMessage
