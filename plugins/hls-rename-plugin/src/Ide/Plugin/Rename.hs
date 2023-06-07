@@ -6,9 +6,9 @@
 {-# LANGUAGE OverloadedLabels    #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE RecordWildCards     #-}
 
 module Ide.Plugin.Rename (descriptor, E.Log) where
 
@@ -17,20 +17,21 @@ import           GHC.Parser.Annotation                 (AnnContext, AnnList,
                                                         AnnParen, AnnPragma)
 #endif
 
+import           Compat.HieTypes
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
-import           Data.Generics
 import           Data.Bifunctor                        (first)
+import           Data.Generics
 import           Data.Hashable
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
 import           Data.List.Extra                       hiding (length)
 import qualified Data.Map                              as M
-import qualified Data.Set                              as S
 import           Data.Maybe
 import           Data.Mod.Word
+import qualified Data.Set                              as S
 import qualified Data.Text                             as T
 import           Development.IDE                       (Recorder, WithPriority,
                                                         usePropertyAction)
@@ -51,22 +52,23 @@ import           Development.IDE.Types.Location
 import           HieDb.Query
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
+import           Ide.TempLSPTypeFunctions
 import           Ide.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import           Language.LSP.Types
-import           Compat.HieTypes
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
 descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor pluginId)
-    { pluginHandlers = mkPluginHandler STextDocumentRename renameProvider
+    { pluginHandlers = mkPluginHandler SMethod_TextDocumentRename renameProvider
     , pluginConfigDescriptor = defaultConfigDescriptor
         { configCustomConfig = mkCustomConfig properties }
     }
 
-renameProvider :: PluginMethodHandler IdeState TextDocumentRename
-renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _prog newNameText) =
+renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
+renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos  newNameText) =
     pluginResponse $ do
         nfp <- handleUriToNfp uri
         directOldNames <- getNamesAtPos state nfp pos
@@ -94,7 +96,7 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
             filesRefs = collectWith locToUri refs
             getFileEdit = flip $ getSrcEdit state . replaceRefs newName
         fileEdits <- mapM (uncurry getFileEdit) filesRefs
-        pure $ foldl' (<>) mempty fileEdits
+        pure $ InL $ foldl' (<>) mempty fileEdits
 
 -- | Limit renaming across modules.
 failWhenImportOrExport ::
