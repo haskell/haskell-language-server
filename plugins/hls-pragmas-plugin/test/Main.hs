@@ -4,13 +4,13 @@ module Main
   ( main
   ) where
 
-import           Control.Lens            ((<&>), (^.))
-import qualified Data.Text               as T
+import           Control.Lens               ((<&>), (^.))
+import qualified Data.Text                  as T
 import           Ide.Plugin.Pragmas
-import qualified Language.LSP.Types.Lens as L
+import qualified Language.LSP.Protocol.Lens as L
 import           System.FilePath
 import           Test.Hls
-import           Test.Hls.Util           (onlyWorkForGhcVersions)
+import           Test.Hls.Util              (onlyWorkForGhcVersions)
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -109,11 +109,11 @@ codeActionTests' =
 completionTests :: TestTree
 completionTests =
   testGroup "completions"
-  [ completionTest "completes pragmas" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 34, 0, 4]
-  , completionTest "completes pragmas with existing closing pragma bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 31, 0, 4]
-  , completionTest "completes pragmas with existing closing comment bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #") (Just "{-# LANGUAGE #-}") [0, 4, 0, 32, 0, 4]
-  , completionTest "completes pragmas with existing closing bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-") (Just "{-# LANGUAGE #-}") [0, 4, 0, 33, 0, 4]
-  , completionTest "completes options pragma" "Completion.hs" "OPTIONS" "OPTIONS_GHC" (Just Snippet) (Just "OPTIONS_GHC -${1:option} #-}") (Just "{-# OPTIONS_GHC #-}") [0, 4, 0, 34, 0, 4]
+  [ completionTest "completes pragmas" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension} #-}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 34, 0, 4]
+  , completionTest "completes pragmas with existing closing pragma bracket" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 31, 0, 4]
+  , completionTest "completes pragmas with existing closing comment bracket" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension} #") (Just "{-# LANGUAGE #-}") [0, 4, 0, 32, 0, 4]
+  , completionTest "completes pragmas with existing closing bracket" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension} #-") (Just "{-# LANGUAGE #-}") [0, 4, 0, 33, 0, 4]
+  , completionTest "completes options pragma" "Completion.hs" "OPTIONS" "OPTIONS_GHC" (Just InsertTextFormat_Snippet) (Just "OPTIONS_GHC -${1:option} #-}") (Just "{-# OPTIONS_GHC #-}") [0, 4, 0, 34, 0, 4]
   , completionTest "completes ghc options pragma values" "Completion.hs" "{-# OPTIONS_GHC -Wno-red  #-}\n" "Wno-redundant-constraints" Nothing Nothing Nothing [0, 0, 0, 0, 0, 24]
   , completionTest "completes language extensions" "Completion.hs" "" "OverloadedStrings" Nothing Nothing Nothing [0, 24, 0, 31, 0, 24]
   , completionTest "completes language extensions case insensitive" "Completion.hs" "lAnGuaGe Overloaded" "OverloadedStrings" Nothing Nothing Nothing [0, 4, 0, 34, 0, 24]
@@ -130,7 +130,7 @@ completionSnippetTests =
       (\(insertText, label, detail, _) ->
         let input = T.toLower $ T.init label
         in completionTest (T.unpack label)
-            "Completion.hs" input label (Just Snippet)
+            "Completion.hs" input label (Just InsertTextFormat_Snippet)
             (Just $ "{-# " <> insertText <> " #-}") (Just detail)
             [0, 0, 0, 34, 0, fromIntegral $ T.length input])
 
@@ -145,7 +145,7 @@ completionTest testComment fileName te' label textFormat insertText detail [a, b
     item <- getCompletionByLabel label compls
     liftIO $ do
       item ^. L.label @?= label
-      item ^. L.kind @?= Just CiKeyword
+      item ^. L.kind @?= Just CompletionItemKind_Keyword
       item ^. L.insertTextFormat @?= textFormat
       item ^. L.insertText @?= insertText
       item ^. L.detail @?= detail
