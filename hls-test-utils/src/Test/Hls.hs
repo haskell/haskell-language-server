@@ -13,6 +13,7 @@ module Test.Hls
     module Test.Tasty.ExpectedFailure,
     module Test.Hls.Util,
     module Language.LSP.Protocol.Types,
+    module Language.LSP.Protocol.Message,
     module Language.LSP.Test,
     module Control.Monad.IO.Class,
     module Control.Applicative.Combinators,

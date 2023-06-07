@@ -11,15 +11,16 @@ module Ide.TempLSPTypeFunctions (takeLefts, dumpNulls, nullToMaybe', NullToMaybe
                                  defWindowClientCapabilities,
                                  defWorkspaceCapabilities, maybeToNull) where
 
+import           Data.Hashable
 import           Data.Semigroup                ()
 import           Data.Text                     (Text)
 import           Language.LSP.Protocol.Message (LspId (IdInt, IdString))
 import           Language.LSP.Protocol.Types   (ClientCapabilities (ClientCapabilities),
                                                 GeneralClientCapabilities (GeneralClientCapabilities),
-                                                Int32,
+                                                Int32, Location,
                                                 NotebookDocumentClientCapabilities (NotebookDocumentClientCapabilities),
                                                 NotebookDocumentSyncClientCapabilities (NotebookDocumentSyncClientCapabilities),
-                                                Null (Null),
+                                                Null (Null), Position, Range,
                                                 TextDocumentClientCapabilities (TextDocumentClientCapabilities),
                                                 WindowClientCapabilities (WindowClientCapabilities),
                                                 WorkspaceClientCapabilities (WorkspaceClientCapabilities),
@@ -53,7 +54,12 @@ instance Semigroup s => Semigroup (s |? Null) where
 
 instance Semigroup WorkspaceEdit where
   (WorkspaceEdit a b c) <> (WorkspaceEdit a' b' c') = WorkspaceEdit (a <> a') (b <> b') (c <> c')
+instance Monoid WorkspaceEdit where
+  mempty = WorkspaceEdit Nothing Nothing Nothing
 
+instance Hashable Location
+instance Hashable Range
+instance Hashable Position
 class NullToMaybe a b where
   nullToMaybe' :: a -> Maybe b
 
