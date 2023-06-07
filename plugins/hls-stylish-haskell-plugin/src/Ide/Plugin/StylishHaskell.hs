@@ -16,7 +16,7 @@ import           GHC.LanguageExtensions.Type
 import           Ide.PluginUtils
 import           Ide.Types                       hiding (Config)
 import           Language.Haskell.Stylish
-import           Language.LSP.Types              as J
+import           Language.LSP.Protocol.Types     as LSP
 import           System.Directory
 import           System.FilePath
 
@@ -40,7 +40,7 @@ provider ide typ contents fp _opts = do
       result = runStylishHaskell file mergedConfig selectedContents
   case result of
     Left  err -> return $ Left $ responseError $ T.pack $ "stylishHaskellCmd: " ++ err
-    Right new -> return $ Right $ J.List [TextEdit range new]
+    Right new -> return $ Right $ LSP.InL [TextEdit range new]
   where
     getMergedConfig dyn config
       | null (configLanguageExtensions config)
