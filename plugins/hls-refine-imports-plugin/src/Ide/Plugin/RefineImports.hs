@@ -16,7 +16,6 @@ import           Control.DeepSeq                      (rwhnf)
 import           Control.Monad                        (join)
 import           Control.Monad.IO.Class               (liftIO)
 import           Data.Aeson.Types
-import qualified Data.HashMap.Strict                  as HashMap
 import           Data.IORef                           (readIORef)
 import           Data.List                            (intercalate)
 import qualified Data.Map.Strict                      as Map
@@ -48,20 +47,19 @@ import           Ide.Plugin.ExplicitImports           (extractMinimalImports,
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types                   (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
-                                                       CodeAction (CodeAction, _command, _diagnostics, _disabled, _edit, _isPreferred, _kind, _title, _xdata),
-                                                       CodeActionKind (CodeActionUnknown),
+import           Language.LSP.Protocol.Types                   (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
+                                                       CodeAction (CodeAction, _command, _diagnostics, _disabled, _edit, _isPreferred, _kind, _title, _data_),
+                                                       CodeActionKind (CodeActionKind_Custom),
                                                        CodeActionParams (CodeActionParams),
                                                        CodeLens (..),
                                                        CodeLensParams (CodeLensParams, _textDocument),
-                                                       Method (TextDocumentCodeAction, TextDocumentCodeLens),
-                                                       SMethod (STextDocumentCodeAction, STextDocumentCodeLens, SWorkspaceApplyEdit),
                                                        TextDocumentIdentifier (TextDocumentIdentifier, _uri),
                                                        TextEdit (..),
                                                        WorkspaceEdit (..),
-                                                       type (|?) (InR),
+                                                       type (|?) (InL, InR),
                                                        uriToNormalizedFilePath)
-
+import           Language.LSP.Protocol.Message         (Method (Method_TextDocumentCodeAction, Method_TextDocumentCodeLens),
+                                                       SMethod (SMethod_TextDocumentCodeAction, SMethod_TextDocumentCodeLens, SMethod_WorkspaceApplyEdit),)
 newtype Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
@@ -75,9 +73,9 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
   , pluginRules = refineImportsRule recorder
   , pluginHandlers = mconcat
       [ -- This plugin provides code lenses
-        mkPluginHandler STextDocumentCodeLens lensProvider
+        mkPluginHandler SMethod_TextDocumentCodeLens lensProvider
         -- This plugin provides code actions
-      , mkPluginHandler STextDocumentCodeAction codeActionProvider
+      , mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider
       ]
   }
 
@@ -101,10 +99,10 @@ refineImportCommand =
 runRefineImportCommand :: CommandFunction IdeState RefineImportCommandParams
 runRefineImportCommand _state (RefineImportCommandParams edit) = do
   -- This command simply triggers a workspace edit!
-  _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+  _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
   return (Right Null)
 
-lensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
+lensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 lensProvider
   state -- ghcide state
   pId
@@ -125,13 +123,13 @@ lensProvider
                 | (imp, Just refinedImports) <- result
                 , Just edit <- [mkExplicitEdit posMapping imp refinedImports]
                 ]
-            return $ Right (List $ catMaybes commands)
-          _ -> return $ Right (List [])
+            return $ Right (InL $ catMaybes commands)
+          _ -> return $ Right (InL [])
     | otherwise =
-      return $ Right (List [])
+      return $ Right (InL [])
 
 -- | Provide one code action to refine all imports
-codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
+codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
   | TextDocumentIdentifier {_uri} <- docId,
     Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $
@@ -144,7 +142,7 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
                 any (within range) rangesImports
             _ -> False
       if not insideImport
-        then return (Right (List []))
+        then return (Right (InL []))
         else do
           mbRefinedImports <- runIde ideState $ use RefineImports nfp
           let edits =
@@ -155,20 +153,20 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
                 ]
               caExplicitImports = InR CodeAction {..}
               _title = "Refine all imports"
-              _kind = Just $ CodeActionUnknown "quickfix.import.refine"
+              _kind = Just $ CodeActionKind_Custom "quickfix.import.refine"
               _command = Nothing
               _edit = Just WorkspaceEdit
                 {_changes, _documentChanges, _changeAnnotations}
-              _changes = Just $ HashMap.singleton _uri $ List edits
+              _changes = Just $ Map.singleton _uri edits
               _documentChanges = Nothing
               _diagnostics = Nothing
               _isPreferred = Nothing
               _disabled = Nothing
-              _xdata = Nothing
+              _data_ = Nothing
               _changeAnnotations = Nothing
-          return $ Right $ List [caExplicitImports | not (null edits)]
+          return $ Right $ InL [caExplicitImports | not (null edits)]
   | otherwise =
-    return $ Right $ List []
+    return $ Right $ InL []
 
 --------------------------------------------------------------------------------
 
@@ -215,10 +213,12 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
         -> Maybe (Map.Map ModuleName [AvailInfo])
 #if MIN_VERSION_ghc(9,5,0)
       filterByImport (L _ ImportDecl{ideclImportList = Just (_, L _ names)}) avails =
+        let
 #else
       filterByImport (L _ ImportDecl{ideclHiding = Just (_, L _ names)}) avails =
+        let
 #endif
-        let importedNames = S.fromList $ map (ieName . unLoc) names
+            importedNames = S.fromList $ map (ieName . unLoc) names
             res = flip Map.filter avails $ \a ->
                     any (`S.member` importedNames)
                       $ concatMap availNamesWithSelectors a
@@ -299,10 +299,10 @@ generateLens pId uri edits@TextEdit {_range, _newText} = do
   -- The title of the command is just the minimal explicit import decl
   let title = "Refine imports to " <> T.intercalate ", " (T.lines _newText)
       -- the code lens has no extra data
-      _xdata = Nothing
+      _data_ = Nothing
       -- an edit that replaces the whole declaration with the explicit one
       edit = WorkspaceEdit (Just editsMap) Nothing Nothing
-      editsMap = HashMap.fromList [(uri, List [edits])]
+      editsMap = Map.fromList [(uri, [edits])]
       -- the command argument is simply the edit
       _arguments = Just [toJSON $ RefineImportCommandParams edit]
       -- create the command
