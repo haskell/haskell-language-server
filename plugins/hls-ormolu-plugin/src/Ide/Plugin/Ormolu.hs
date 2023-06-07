@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
-
+{-# LANGUAGE TypeOperators     #-}
 module Ide.Plugin.Ormolu
   ( descriptor
   , provider
@@ -21,8 +21,9 @@ import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type
 import           Ide.PluginUtils
 import           Ide.Types                       hiding (Config)
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server             hiding (defaultConfig)
-import           Language.LSP.Types
 import           Ormolu
 import           System.FilePath                 (takeFileName)
 
@@ -75,9 +76,9 @@ provider ideState typ contents fp _ = withIndefiniteProgress title Cancellable $
  where
    title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
 
-   ret :: Either SomeException T.Text -> Either ResponseError (List TextEdit)
+   ret :: Either SomeException T.Text -> Either ResponseError ([TextEdit] |? Null)
    ret (Left err)  = Left . responseError . T.pack $ "ormoluCmd: " ++ show err
-   ret (Right new) = Right $ makeDiffTextEdit contents new
+   ret (Right new) = Right $ InL $ makeDiffTextEdit contents new
 
    fromDyn :: D.DynFlags -> [DynOption]
    fromDyn df =
