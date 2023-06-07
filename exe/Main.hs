@@ -5,37 +5,37 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
 
-import           Control.Arrow                ((&&&))
-import           Control.Monad.IO.Class       (liftIO)
-import           Data.Function                ((&))
-import           Data.Text                    (Text)
-import qualified Development.IDE.Main         as GhcideMain
-import           Development.IDE.Types.Logger (Doc,
-                                               Priority (Debug, Error, Info),
-                                               WithPriority (WithPriority, priority),
-                                               cfilter, cmapWithPrio,
-                                               defaultLayoutOptions,
-                                               layoutPretty,
-                                               makeDefaultStderrRecorder,
-                                               payload, renderStrict,
-                                               withDefaultRecorder)
-import qualified Development.IDE.Types.Logger as Logger
-import qualified HlsPlugins                   as Plugins
-import           Ide.Arguments                (Arguments (..),
-                                               GhcideArguments (..),
-                                               getArguments)
-import           Ide.Main                     (defaultMain)
-import qualified Ide.Main                     as IdeMain
-import           Ide.PluginUtils              (pluginDescToIdePlugins)
-import           Ide.Types                    (PluginDescriptor (pluginNotificationHandlers),
-                                               defaultPluginDescriptor,
-                                               mkPluginNotificationHandler)
-import           Language.LSP.Server          as LSP
-import           Language.LSP.Types           as LSP
+import           Control.Arrow                 ((&&&))
+import           Control.Monad.IO.Class        (liftIO)
+import           Data.Function                 ((&))
+import           Data.Text                     (Text)
+import qualified Development.IDE.Main          as GhcideMain
+import           Development.IDE.Types.Logger  (Doc,
+                                                Priority (Debug, Error, Info),
+                                                WithPriority (WithPriority, priority),
+                                                cfilter, cmapWithPrio,
+                                                defaultLayoutOptions,
+                                                layoutPretty,
+                                                makeDefaultStderrRecorder,
+                                                payload, renderStrict,
+                                                withDefaultRecorder)
+import qualified Development.IDE.Types.Logger  as Logger
+import qualified HlsPlugins                    as Plugins
+import           Ide.Arguments                 (Arguments (..),
+                                                GhcideArguments (..),
+                                                getArguments)
+import           Ide.Main                      (defaultMain)
+import qualified Ide.Main                      as IdeMain
+import           Ide.PluginUtils               (pluginDescToIdePlugins)
+import           Ide.Types                     (PluginDescriptor (pluginNotificationHandlers),
+                                                defaultPluginDescriptor,
+                                                mkPluginNotificationHandler)
+import           Language.LSP.Protocol.Message as LSP
+import           Language.LSP.Server           as LSP
 #if MIN_VERSION_prettyprinter(1,7,0)
-import           Prettyprinter                (Pretty (pretty), vsep)
+import           Prettyprinter                 (Pretty (pretty), vsep)
 #else
-import           Data.Text.Prettyprint.Doc    (Pretty (pretty), vsep)
+import           Data.Text.Prettyprint.Doc     (Pretty (pretty), vsep)
 #endif
 
 data Log
@@ -59,7 +59,7 @@ main = do
     -- This plugin just installs a handler for the `initialized` notification, which then
     -- picks up the LSP environment and feeds it to our recorders
     let lspRecorderPlugin = (defaultPluginDescriptor "LSPRecorderCallback")
-          { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SInitialized $ \_ _ _ _ -> do
+          { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SMethod_Initialized $ \_ _ _ _ -> do
               env <- LSP.getLspEnv
               liftIO $ (cb1 <> cb2) env
           }
