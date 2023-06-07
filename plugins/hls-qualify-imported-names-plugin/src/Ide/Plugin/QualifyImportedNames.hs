@@ -7,74 +7,73 @@
 
 module Ide.Plugin.QualifyImportedNames (descriptor) where
 
-import           Control.Monad                     (foldM)
-import           Control.Monad.IO.Class            (MonadIO (liftIO))
-import           Control.Monad.Trans.State.Strict  (State)
-import qualified Control.Monad.Trans.State.Strict  as State
-import           Data.DList                        (DList)
-import qualified Data.DList                        as DList
-import           Data.Foldable                     (Foldable (foldl'), find)
-import qualified Data.HashMap.Strict               as HashMap
-import           Data.List                         (sortOn)
-import qualified Data.List                         as List
-import qualified Data.Map.Strict                   as Map
-import           Data.Maybe                        (fromMaybe, mapMaybe)
-import           Data.Text                         (Text)
-import qualified Data.Text                         as Text
-import           Development.IDE                   (spanContainsRange)
-import           Development.IDE.Core.RuleTypes    (GetFileContents (GetFileContents),
-                                                    GetHieAst (GetHieAst),
-                                                    HieAstResult (HAR, refMap),
-                                                    TcModuleResult (TcModuleResult, tmrParsed, tmrTypechecked),
-                                                    TypeCheck (TypeCheck))
-import           Development.IDE.Core.Service      (runAction)
-import           Development.IDE.Core.Shake        (IdeState, use)
-import           Development.IDE.GHC.Compat        (ContextInfo (Use),
-                                                    GenLocated (..), GhcPs,
-                                                    GlobalRdrElt, GlobalRdrEnv,
-                                                    HsModule (hsmodImports),
-                                                    Identifier,
-                                                    IdentifierDetails (IdentifierDetails, identInfo),
-                                                    ImpDeclSpec (ImpDeclSpec, is_as, is_dloc, is_qual),
-                                                    ImportSpec (ImpSpec),
-                                                    LImportDecl, ModuleName,
-                                                    Name, NameEnv, OccName,
-                                                    ParsedModule, RefMap, Span,
-                                                    SrcSpan,
-                                                    TcGblEnv (tcg_rdr_env),
-                                                    emptyUFM, globalRdrEnvElts,
-                                                    gre_imp, gre_name, locA,
-                                                    lookupNameEnv,
-                                                    moduleNameString,
-                                                    nameOccName, occNameString,
-                                                    pattern GRE,
-                                                    pattern ParsedModule,
-                                                    plusUFM_C, pm_parsed_source,
-                                                    srcSpanEndCol,
-                                                    srcSpanEndLine,
-                                                    srcSpanStartCol,
-                                                    srcSpanStartLine, unitUFM)
-import           Development.IDE.GHC.Error         (isInsideSrcSpan)
-import           Development.IDE.Types.Diagnostics (List (List))
-import           Development.IDE.Types.Location    (NormalizedFilePath,
-                                                    Position (Position),
-                                                    Range (Range), Uri,
-                                                    toNormalizedUri)
-import           Ide.Types                         (PluginDescriptor (pluginHandlers),
-                                                    PluginId,
-                                                    PluginMethodHandler,
-                                                    defaultPluginDescriptor,
-                                                    mkPluginHandler)
-import           Language.LSP.Types                (CodeAction (CodeAction, _command, _diagnostics, _disabled, _edit, _isPreferred, _kind, _title, _xdata),
-                                                    CodeActionKind (CodeActionQuickFix),
-                                                    CodeActionParams (CodeActionParams),
-                                                    Method (TextDocumentCodeAction),
-                                                    SMethod (STextDocumentCodeAction),
-                                                    TextDocumentIdentifier (TextDocumentIdentifier),
-                                                    TextEdit (TextEdit),
-                                                    WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
-                                                    type (|?) (InR),
-                                                    uriToNormalizedFilePath)
+import           Control.Monad                    (foldM)
+import           Control.Monad.IO.Class           (MonadIO (liftIO))
+import           Control.Monad.Trans.State.Strict (State)
+import qualified Control.Monad.Trans.State.Strict as State
+import           Data.DList                       (DList)
+import qualified Data.DList                       as DList
+import           Data.Foldable                    (Foldable (foldl'), find)
+import qualified Data.HashMap.Strict              as HashMap
+import           Data.List                        (sortOn)
+import qualified Data.List                        as List
+import qualified Data.Map.Strict                  as Map
+import           Data.Maybe                       (fromMaybe, mapMaybe)
+import           Data.Text                        (Text)
+import qualified Data.Text                        as Text
+import           Development.IDE                  (spanContainsRange)
+import           Development.IDE.Core.RuleTypes   (GetFileContents (GetFileContents),
+                                                   GetHieAst (GetHieAst),
+                                                   HieAstResult (HAR, refMap),
+                                                   TcModuleResult (TcModuleResult, tmrParsed, tmrTypechecked),
+                                                   TypeCheck (TypeCheck))
+import           Development.IDE.Core.Service     (runAction)
+import           Development.IDE.Core.Shake       (IdeState, use)
+import           Development.IDE.GHC.Compat       (ContextInfo (Use),
+                                                   GenLocated (..), GhcPs,
+                                                   GlobalRdrElt, GlobalRdrEnv,
+                                                   HsModule (hsmodImports),
+                                                   Identifier,
+                                                   IdentifierDetails (IdentifierDetails, identInfo),
+                                                   ImpDeclSpec (ImpDeclSpec, is_as, is_dloc, is_qual),
+                                                   ImportSpec (ImpSpec),
+                                                   LImportDecl, ModuleName,
+                                                   Name, NameEnv, OccName,
+                                                   ParsedModule, RefMap, Span,
+                                                   SrcSpan,
+                                                   TcGblEnv (tcg_rdr_env),
+                                                   emptyUFM, globalRdrEnvElts,
+                                                   gre_imp, gre_name, locA,
+                                                   lookupNameEnv,
+                                                   moduleNameString,
+                                                   nameOccName, occNameString,
+                                                   pattern GRE,
+                                                   pattern ParsedModule,
+                                                   plusUFM_C, pm_parsed_source,
+                                                   srcSpanEndCol,
+                                                   srcSpanEndLine,
+                                                   srcSpanStartCol,
+                                                   srcSpanStartLine, unitUFM)
+import           Development.IDE.GHC.Error        (isInsideSrcSpan)
+import           Development.IDE.Types.Location   (NormalizedFilePath,
+                                                   Position (Position),
+                                                   Range (Range), Uri,
+                                                   toNormalizedUri)
+import           Ide.Types                        (PluginDescriptor (pluginHandlers),
+                                                   PluginId,
+                                                   PluginMethodHandler,
+                                                   defaultPluginDescriptor,
+                                                   mkPluginHandler)
+import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentCodeAction),
+                                                   SMethod (SMethod_TextDocumentCodeAction))
+import           Language.LSP.Protocol.Types      (CodeAction (CodeAction, _command, _data_, _diagnostics, _disabled, _edit, _isPreferred, _kind, _title),
+                                                   CodeActionKind (CodeActionKind_QuickFix),
+                                                   CodeActionParams (CodeActionParams),
+                                                   TextDocumentIdentifier (TextDocumentIdentifier),
+                                                   TextEdit (TextEdit),
+                                                   WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
+                                                   type (|?) (InL, InR),
+                                                   uriToNormalizedFilePath)
 
 thenCmp :: Ordering -> Ordering -> Ordering
 {-# INLINE thenCmp #-}
@@ -84,7 +83,7 @@ thenCmp ordering _        = ordering
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor pluginId = (defaultPluginDescriptor pluginId) {
   pluginHandlers = mconcat
-    [ mkPluginHandler STextDocumentCodeAction codeActionProvider
+    [ mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider
     ]
 }
 
@@ -98,15 +97,15 @@ findLImportDeclAt range parsedModule
 makeCodeActions :: Uri -> [TextEdit] -> [a |? CodeAction]
 makeCodeActions uri textEdits = [InR CodeAction {..} | not (null textEdits)]
   where _title = "Qualify imported names"
-        _kind = Just CodeActionQuickFix
+        _kind = Just CodeActionKind_QuickFix
         _command = Nothing
         _edit = Just WorkspaceEdit {..}
-        _changes = Just $ HashMap.singleton uri $ List textEdits
+        _changes = Just $ Map.singleton uri textEdits
         _documentChanges = Nothing
         _diagnostics = Nothing
         _isPreferred = Nothing
         _disabled = Nothing
-        _xdata = Nothing
+        _data_ = Nothing
         _changeAnnotations = Nothing
 
 getTypeCheckedModule :: IdeState -> NormalizedFilePath -> IO (Maybe TcModuleResult)
@@ -236,7 +235,7 @@ usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
 -- 2. refMap from GetHieAst contains location of names and how they are used.
 -- 3. For each used name in refMap check whether the name comes from an import
 --    at the origin of the code action.
-codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
+codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider ideState pluginId (CodeActionParams _ _ documentId range context)
   | TextDocumentIdentifier uri <- documentId
   , Just normalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri) = liftIO $ do
@@ -251,8 +250,8 @@ codeActionProvider ideState pluginId (CodeActionParams _ _ documentId range cont
                 , let nameToImportedByMap = globalRdrEnvToNameToImportedByMap globalRdrEnv
                 , let usedIdentifiers = refMapToUsedIdentifiers refMap
                 , let textEdits = usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers ->
-                    pure $ Right $ List (makeCodeActions uri textEdits)
-                | otherwise -> pure $ Right $ List []
-         | otherwise -> pure $ Right $ List []
-  | otherwise = pure $ Right $ List []
+                    pure $ Right $ InL (makeCodeActions uri textEdits)
+                | otherwise -> pure $ Right $ InL []
+         | otherwise -> pure $ Right $ InL []
+  | otherwise = pure $ Right $ InL []
 
