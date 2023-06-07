@@ -9,8 +9,9 @@ import qualified Data.Text                     as T
 import           Development.IDE               hiding (pluginHandlers)
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Protocol.Message as J
-import           Language.LSP.Protocol.Types   as J
+import           Language.LSP.Protocol.Lens    as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Prelude                       hiding (log)
 import           System.Directory
 import           System.Exit
@@ -46,7 +47,7 @@ descriptor recorder plId =
 provider :: Recorder (WithPriority Log) -> FormattingHandler IdeState
 provider recorder _ (FormatRange _) _ _ _ = do
   logWith recorder Info LogInvalidInvocationInfo
-  pure $ Left (ResponseError ErrorCodes_InvalidRequest "You cannot format a text-range using cabal-fmt." Nothing)
+  pure $ Left (ResponseError (InR ErrorCodes_InvalidRequest) "You cannot format a text-range using cabal-fmt." Nothing)
 provider recorder _ide FormatText contents nfp opts = liftIO $ do
   let cabalFmtArgs = [fp, "--indent", show tabularSize]
   x <- findExecutable "cabal-fmt"
@@ -63,14 +64,14 @@ provider recorder _ide FormatText contents nfp opts = liftIO $ do
       case exitCode of
         ExitFailure code -> do
           log Error $ LogProcessInvocationFailure code
-          pure $ Left (ResponseError ErrorCodes_UnknownErrorCode "Failed to invoke cabal-fmt" Nothing)
+          pure $ Left (ResponseError (InR ErrorCodes_UnknownErrorCode) "Failed to invoke cabal-fmt" Nothing)
         ExitSuccess -> do
           let fmtDiff = makeDiffTextEdit contents (T.pack out)
           pure $ Right $ InL fmtDiff
     Nothing -> do
       log Error LogCabalFmtNotFound
-      pure $ Left (ResponseError ErrorCodes_InvalidRequest "No installation of cabal-fmt could be found. Please install it into your global environment." Nothing)
+      pure $ Left (ResponseError (InR ErrorCodes_InvalidRequest) "No installation of cabal-fmt could be found. Please install it into your global environment." Nothing)
   where
     fp = fromNormalizedFilePath nfp
-    tabularSize = opts ^. J.tabSize
+    tabularSize = opts ^. L.tabSize
     log = logWith recorder
