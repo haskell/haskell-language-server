@@ -64,15 +64,16 @@ import           Ide.Plugin.Splice.Types
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint (uniqueSrcSpanT)
 import           Language.LSP.Server
-import           Language.LSP.Types
-import           Language.LSP.Types.Capabilities
-import qualified Language.LSP.Types.Lens         as J
+import           Language.LSP.Protocol.Types        hiding (Null)
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Capabilities
+import qualified Language.LSP.Protocol.Lens         as J
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
     (defaultPluginDescriptor plId)
         { pluginCommands = commands
-        , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeAction
+        , pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction codeAction
         }
 
 commands :: [PluginCommand IdeState]
@@ -97,7 +98,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
     clientCapabilities <- getClientCapabilities
     rio <- askRunInIO
     let reportEditor :: ReportEditor
-        reportEditor msgTy msgs = liftIO $ rio $ sendNotification SWindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
+        reportEditor msgTy msgs = liftIO $ rio $ sendNotification SMethod_WindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
         expandManually fp = do
             mresl <-
                 liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck fp
@@ -107,7 +108,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                 )
                 pure mresl
             reportEditor
-                MtWarning
+                MessageType_Warning
                 [ "Expansion in type-checking phase failed;"
                 , "trying to expand manually, but note that it is less rigorous."
                 ]
@@ -186,7 +187,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
             case eedits of
                 Left err -> do
                     reportEditor
-                        MtError
+                        MessageType_Error
                         ["Error during expanding splice: " <> T.pack err]
                     pure (Left $ responseError $ T.pack err)
                 Right edits ->
@@ -195,7 +196,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
       Nothing -> pure $ Right Null
       Just (Left err) -> pure $ Left err
       Just (Right edit) -> do
-        _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+        _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
         pure $ Right Null
 
     where
@@ -415,7 +416,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
     unless
         (null warns)
         $ reportEditor
-            MtWarning
+            MessageType_Warning
             [ "Warning during expanding: "
             , ""
             , T.pack (showErrors warns)
@@ -483,9 +484,9 @@ fromSearchResult _        = Nothing
 
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
-codeAction :: PluginMethodHandler IdeState TextDocumentCodeAction
+codeAction :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
-    fmap (maybe (Right $ List []) Right) $
+    fmap (maybe (Right $ InL []) Right) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
             ParsedModule {..} <-
@@ -500,9 +501,9 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
                             act = mkLspCommand plId cmdId title (Just [toJSON params])
                         pure $
                             InR $
-                                CodeAction title (Just CodeActionRefactorRewrite) Nothing Nothing Nothing Nothing (Just act) Nothing
+                                CodeAction title (Just CodeActionKind_RefactorRewrite) Nothing Nothing Nothing Nothing (Just act) Nothing
 
-            pure $ maybe mempty List mcmds
+            pure $ InL $ fromMaybe mempty mcmds
     where
         theUri = docId ^. J.uri
         detectSplice ::

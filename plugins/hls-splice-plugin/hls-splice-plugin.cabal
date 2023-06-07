@@ -71,3 +71,4 @@ test-suite tests
     , hls-splice-plugin
     , hls-test-utils == 2.1.0.0
     , text
+    , row-types
