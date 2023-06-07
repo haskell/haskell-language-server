@@ -90,8 +90,7 @@ import           Generics.SYB.GHC
 import qualified GHC.Generics                            as GHC
 import           Ide.PluginUtils
 import           Language.Haskell.GHC.ExactPrint.Parsers
-import           Language.LSP.Types
-import           Language.LSP.Types.Capabilities         (ClientCapabilities)
+import           Language.LSP.Protocol.Types
 import           Retrie.ExactPrint                       hiding (parseDecl,
                                                           parseExpr,
                                                           parsePattern,

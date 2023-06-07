@@ -34,11 +34,12 @@ import           GHC.Hs                                    (IsUnicodeSyntax (..)
 import           GHC.Types.SrcLoc                          (generatedSrcSpan)
 import           Ide.PluginUtils                           (makeDiffTextEdit,
                                                             responseError)
-import           Language.Haskell.GHC.ExactPrint           (TransformT(..),
+import           Language.Haskell.GHC.ExactPrint           (TransformT (..),
                                                             noAnnSrcSpanDP1,
                                                             runTransformT)
 import           Language.Haskell.GHC.ExactPrint.Transform (d1)
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 #endif
 
 #if !MIN_VERSION_ghc(9,2,1)
@@ -117,7 +118,7 @@ addArgumentAction (ParsedModule _ moduleSrc _ _) range name _typ = do
           Just (matchedDeclName, numPats) -> modifySigWithM (unLoc matchedDeclName) (addTyHoleToTySigArg numPats) moduleSrc'
           Nothing -> pure moduleSrc'
     let diff = makeDiffTextEdit (T.pack $ exactPrint moduleSrc) (T.pack $ exactPrint newSource)
-    pure [("Add argument ‘" <> name <> "’ to function", fromLspList diff)]
+    pure [("Add argument ‘" <> name <> "’ to function", diff)]
   where
     addNameAsLastArgOfMatchingDecl = modifySmallestDeclWithM spanContainsRangeOrErr addNameAsLastArg
     addNameAsLastArg = fmap (first (:[])) . appendFinalPatToMatches name
@@ -162,6 +163,5 @@ addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
         lsigTy' = hsTypeFromFunTypeAsList (insertArg loc args, res)
     in L annHsSig (HsSig xHsSig tyVarBndrs lsigTy')
 
-fromLspList :: List a -> [a]
-fromLspList (List a) = a
+
 #endif

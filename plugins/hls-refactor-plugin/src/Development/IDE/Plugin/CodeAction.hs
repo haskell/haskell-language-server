@@ -22,7 +22,7 @@ import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson
+import           Data.Aeson                                        as A
 import           Data.Char
 import qualified Data.DList                                        as DL
 import           Data.Function
@@ -75,25 +75,25 @@ import           GHC.Parser.Annotation                             (TokenLocatio
 #endif
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
-import qualified Language.LSP.Server                               as LSP
-import           Language.LSP.Types                                (ApplyWorkspaceEditParams (..),
+import           Language.LSP.Protocol.Message                     (ResponseError,
+                                                                    SMethod (..))
+import           Language.LSP.Protocol.Types                       (ApplyWorkspaceEditParams (..),
                                                                     CodeAction (..),
                                                                     CodeActionContext (CodeActionContext, _diagnostics),
-                                                                    CodeActionKind (CodeActionQuickFix),
+                                                                    CodeActionKind (CodeActionKind_QuickFix),
                                                                     CodeActionParams (CodeActionParams),
                                                                     Command,
                                                                     Diagnostic (..),
-                                                                    List (..),
                                                                     MessageType (..),
-                                                                    ResponseError,
-                                                                    SMethod (..),
+                                                                    Null,
                                                                     ShowMessageParams (..),
                                                                     TextDocumentIdentifier (TextDocumentIdentifier),
                                                                     TextEdit (TextEdit, _range),
                                                                     UInt,
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
-                                                                    type (|?) (InR),
+                                                                    type (|?) (InL, InR),
                                                                     uriToFilePath)
+import qualified Language.LSP.Server                               as LSP
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import qualified Text.Fuzzy.Parallel                               as TFP
@@ -106,8 +106,8 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     DeltaPos (..),
                                                                     EpAnn (..),
                                                                     EpaLocation (..),
-                                                                    hsmodAnn,
-                                                                    LEpaComment)
+                                                                    LEpaComment,
+                                                                    hsmodAnn)
 #else
 import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
                                                                     DeltaPos,
@@ -123,8 +123,8 @@ codeAction
     :: IdeState
     -> PluginId
     -> CodeActionParams
-    -> LSP.LspM c (Either ResponseError (List (Command |? CodeAction)))
-codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs}) = do
+    -> LSP.LspM c (Either ResponseError ([(Command |? CodeAction)] |? Null))
+codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics= xs}) = do
   contents <- LSP.getVirtualFile $ toNormalizedUri uri
   liftIO $ do
     let text = Rope.toText . (_file_text :: VirtualFile -> Rope.Rope) <$> contents
@@ -134,7 +134,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
     let
       actions = caRemoveRedundantImports parsedModule text diag xs uri
                <> caRemoveInvalidExports parsedModule text diag xs uri
-    pure $ Right $ List actions
+    pure $ Right $ InL $ actions
 
 -------------------------------------------------------------------------------------------------
 
@@ -152,7 +152,7 @@ iePluginDescriptor recorder plId =
           , wrap suggestNewImport
           ]
           plId
-   in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler STextDocumentCodeAction codeAction }
+   in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler SMethod_TextDocumentCodeAction codeAction }
 
 typeSigsPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
 typeSigsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
@@ -199,10 +199,10 @@ extendImportHandler :: CommandFunction IdeState ExtendImport
 extendImportHandler ideState edit@ExtendImport {..} = do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
-    let (_, List (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . Map.toList
+    let (_, (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . M.toList
         srcSpan = rangeToSrcSpan nfp _range
-    LSP.sendNotification SWindowShowMessage $
-      ShowMessageParams MtInfo $
+    LSP.sendNotification SMethod_WindowShowMessage $
+      ShowMessageParams MessageType_Info $
         "Import "
           <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent
           <> "’ from "
@@ -210,8 +210,8 @@ extendImportHandler ideState edit@ExtendImport {..} = do
           <> " (at "
           <> printOutputable srcSpan
           <> ")"
-    void $ LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right Null
+    void $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  return $ Right A.Null
 
 extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
 extendImportHandler' ideState ExtendImport {..}
@@ -248,7 +248,7 @@ extendImportHandler' ideState ExtendImport {..}
                   Nothing -> newThing
                   Just p  -> p <> "(" <> newThing <> ")"
             t <- liftMaybe $ snd <$> newImportToEdit n ps (fromMaybe "" contents)
-            return (nfp, WorkspaceEdit {_changes=Just (GHC.Exts.fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
+            return (nfp, WorkspaceEdit {_changes=Just (GHC.Exts.fromList [(doc, [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
 
@@ -492,14 +492,14 @@ caRemoveRedundantImports m contents digs ctxDigs uri
       = caRemoveCtx ++ [caRemoveAll]
   | otherwise = []
   where
-    removeSingle title tedit diagnostic = mkCA title (Just CodeActionQuickFix) Nothing [diagnostic] WorkspaceEdit{..} where
-        _changes = Just $ Map.singleton uri $ List tedit
+    removeSingle title tedit diagnostic = mkCA title (Just CodeActionKind_QuickFix) Nothing [diagnostic] WorkspaceEdit{..} where
+        _changes = Just $ M.singleton uri tedit
         _documentChanges = Nothing
         _changeAnnotations = Nothing
     removeAll tedit = InR $ CodeAction{..} where
-        _changes = Just $ Map.singleton uri $ List tedit
+        _changes = Just $ M.singleton uri tedit
         _title = "Remove all redundant imports"
-        _kind = Just CodeActionQuickFix
+        _kind = Just CodeActionKind_QuickFix
         _diagnostics = Nothing
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
@@ -507,7 +507,7 @@ caRemoveRedundantImports m contents digs ctxDigs uri
         _isPreferred = Just True
         _command = Nothing
         _disabled = Nothing
-        _xdata = Nothing
+        _data_ = Nothing
         _changeAnnotations = Nothing
 
 caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [Command |? CodeAction]
@@ -536,24 +536,24 @@ caRemoveInvalidExports m contents digs ctxDigs uri
     removeSingle (_, _, []) = Nothing
     removeSingle (title, diagnostic, ranges) = Just $ InR $ CodeAction{..} where
         tedit = concatMap (\r -> [TextEdit r ""]) $ nubOrd ranges
-        _changes = Just $ Map.singleton uri $ List tedit
+        _changes = Just $ M.singleton uri tedit
         _title = title
-        _kind = Just CodeActionQuickFix
-        _diagnostics = Just $ List [diagnostic]
+        _kind = Just CodeActionKind_QuickFix
+        _diagnostics = Just [diagnostic]
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
         -- See Note [Removing imports is preferred]
         _isPreferred = Just True
         _disabled = Nothing
-        _xdata = Nothing
+        _data_ = Nothing
         _changeAnnotations = Nothing
     removeAll [] = Nothing
     removeAll ranges = Just $ InR $ CodeAction{..} where
         tedit = concatMap (\r -> [TextEdit r ""]) ranges
-        _changes = Just $ Map.singleton uri $ List tedit
+        _changes = Just $ M.singleton uri tedit
         _title = "Remove all redundant exports"
-        _kind = Just CodeActionQuickFix
+        _kind = Just CodeActionKind_QuickFix
         _diagnostics = Nothing
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
@@ -561,7 +561,7 @@ caRemoveInvalidExports m contents digs ctxDigs uri
         -- See Note [Removing imports is preferred]
         _isPreferred = Just True
         _disabled = Nothing
-        _xdata = Nothing
+        _data_ = Nothing
         _changeAnnotations = Nothing
 
 suggestRemoveRedundantExport :: ParsedModule -> Diagnostic -> Maybe (T.Text, [Range])
@@ -1607,11 +1607,10 @@ findPositionAfterModuleName ps hsmodName' = do
 
     epaLocationToLine :: EpaLocation -> Maybe Int
 #if MIN_VERSION_ghc(9,5,0)
-    epaLocationToLine (EpaSpan sp _)
+    epaLocationToLine (EpaSpan sp _) = Just . srcLocLine . realSrcSpanEnd $ sp
 #else
-    epaLocationToLine (EpaSpan sp)
+    epaLocationToLine (EpaSpan sp) = Just . srcLocLine . realSrcSpanEnd $ sp
 #endif
-      = Just . srcLocLine . realSrcSpanEnd $ sp
     epaLocationToLine (EpaDelta (SameLine _) priorComments) = Just $ sumCommentsOffset priorComments
     -- 'priorComments' contains the comments right before the current EpaLocation
     -- Summing line offset of priorComments is necessary, as 'line' is the gap between the last comment and
@@ -1852,14 +1851,17 @@ textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCo
 
 -- | Returns the ranges for a binding in an import declaration
 rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
-rangesForBindingImport ImportDecl{
 #if MIN_VERSION_ghc(9,5,0)
+rangesForBindingImport ImportDecl{
   ideclImportList = Just (Exactly, L _ lies)
-#else
-  ideclHiding = Just (False, L _ lies)
-#endif
-  } b =
+    } b =
     concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
+#else
+rangesForBindingImport ImportDecl{
+  ideclHiding = Just (False, L _ lies)
+    } b =
+    concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
+#endif
   where
     b' = wrapOperatorInParens b
 rangesForBindingImport _ _ = []

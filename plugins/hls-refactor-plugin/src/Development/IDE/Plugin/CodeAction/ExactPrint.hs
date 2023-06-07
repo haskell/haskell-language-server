@@ -32,7 +32,7 @@ import           Development.IDE.Spans.Common
 import           GHC.Exts                        (IsList (fromList))
 import           GHC.Stack                       (HasCallStack)
 import           Language.Haskell.GHC.ExactPrint
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Types
 
 import           Development.IDE.Plugin.CodeAction.Util
 
@@ -149,7 +149,7 @@ rewriteToWEdit dflags uri
                          r
   return $
     WorkspaceEdit
-      { _changes = Just (fromList [(uri, List edits)])
+      { _changes = Just (fromList [(uri, edits)])
       , _documentChanges = Nothing
       , _changeAnnotations = Nothing
       }

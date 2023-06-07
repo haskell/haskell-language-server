@@ -12,8 +12,8 @@ where
 
 import           Data.Char
 import           Data.List
-import           Language.LSP.Types (Position (Position),
-                                     Range (Range, _end, _start))
+import           Language.LSP.Protocol.Types (Position (Position),
+                                              Range (Range, _end, _start))
 
 type PositionIndexed a = [(Position, a)]
 
