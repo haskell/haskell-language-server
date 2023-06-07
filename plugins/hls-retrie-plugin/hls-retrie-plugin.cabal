@@ -32,6 +32,7 @@ library
     , hashable
     , hls-plugin-api        == 2.1.0.0
     , hls-refactor-plugin
+    , lens
     , lsp
     , lsp-types
     , retrie                >=0.1.1.0
