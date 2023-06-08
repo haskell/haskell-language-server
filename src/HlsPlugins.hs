@@ -100,6 +100,10 @@ import qualified Ide.Plugin.ExplicitFixity         as ExplicitFixity
 import qualified Ide.Plugin.ExplicitFields         as ExplicitFields
 #endif
 
+#if hls_overloaded_record_dot
+import qualified Ide.Plugin.OverloadedRecordDot    as OverloadedRecordDot
+#endif
+
 -- formatters
 
 #if hls_floskell
@@ -157,7 +161,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "fourmolu" in Fourmolu.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_cabalfmt
-      let pId = "cabalfmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
+      -- this pId needs to be kept in sync with the hardcoded
+      -- cabalFormattingProvider in the Default Config
+      let pId = "cabal-fmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_tactic
       let pId = "tactics" in Tactic.descriptor (pluginRecorder pId) pId:
@@ -226,11 +232,14 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "ghcide-code-actions-fill-holes" in Refactor.fillHolePluginDescriptor (pluginRecorder pId) pId :
       let pId = "ghcide-extend-import-action" in Refactor.extendImportPluginDescriptor (pluginRecorder pId) pId :
 #endif
-      GhcIde.descriptors (pluginRecorder "ghcide")
 #if explicitFixity
-      ++ [let pId = "explicit-fixity" in ExplicitFixity.descriptor (pluginRecorder pId) pId]
+      let pId = "explicit-fixity" in ExplicitFixity.descriptor (pluginRecorder pId) pId :
 #endif
 #if explicitFields
-      ++ [let pId = "explicit-fields" in ExplicitFields.descriptor (pluginRecorder pId) pId]
+      let pId = "explicit-fields" in ExplicitFields.descriptor (pluginRecorder pId) pId :
 #endif
+#if hls_overloaded_record_dot
+      let pId = "overloaded-record-dot" in OverloadedRecordDot.descriptor (pluginRecorder pId) pId :
+#endif
+      GhcIde.descriptors (pluginRecorder "ghcide")
 

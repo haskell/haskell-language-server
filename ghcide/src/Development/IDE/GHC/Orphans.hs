@@ -236,3 +236,9 @@ instance NFData NodeKey where
 instance NFData HomeModLinkable where
   rnf = rwhnf
 #endif
+
+instance NFData (HsExpr (GhcPass 'Renamed)) where
+    rnf = rwhnf
+
+instance NFData Extension where
+  rnf = rwhnf

@@ -1,5 +1,14 @@
 # Changelog for haskell-language-server
 
+## 2.0.0.0
+
+- New versioning scheme for all packages distributed as part of HLS,
+  versioning them in lockstep for each release.
+- Binaries for GHC 9.4.5
+- Keep instance lenses stable even if parsed results are unavailable (#3545)
+- Keep stale lenses for module name (#3570)
+- Keep type lenses stable (#3558)
+
 ## 1.10.0.0
 
 - Support for GHC 9.6

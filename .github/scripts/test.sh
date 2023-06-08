@@ -54,7 +54,7 @@ env
 
 # ensure ghcup
 install_ghcup
-ghcup install ghc --set 9.4.4
+ghcup install ghc --set 9.4.5
 
 (cd .. && ecabal update) # run cabal update outside project dir
 
