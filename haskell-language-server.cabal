@@ -1628,6 +1628,61 @@ test-suite hls-semantic-tokens-plugin-tests
     , data-default
     , row-types
 
+-----------------------------
+-- notes plugin
+-----------------------------
+
+flag notes
+  description: Enable notes plugin
+  default:     True
+  manual:      True
+
+common notes
+  if flag(notes)
+    build-depends: haskell-language-server:hls-notes-plugin
+    cpp-options: -Dhls_notes
+
+library hls-notes-plugin
+  import: defaults, pedantic, warnings
+  buildable: True
+  exposed-modules:
+    Ide.Plugin.Notes
+  hs-source-dirs:     plugins/hls-notes-plugin/src
+  build-depends:
+    , base >=4.12 && <5
+    , array
+    , ghcide == 2.7.0.0
+    , hls-graph == 2.7.0.0
+    , hls-plugin-api == 2.7.0.0
+    , lens
+    , lsp >=2.4
+    , mtl >= 2.2
+    , regex-tdfa >= 1.3.1
+    , text
+    , text-rope
+    , unordered-containers
+  default-extensions:
+      DataKinds
+    , DeriveAnyClass
+    , DerivingStrategies
+    , OverloadedStrings
+    , LambdaCase
+    , TypeFamilies
+
+test-suite hls-notes-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-notes-plugin/test
+  main-is:          NotesTest.hs
+  build-depends:
+    , base
+    , directory
+    , filepath
+    , ghcide:ghcide-test-utils
+    , haskell-language-server:hls-notes-plugin
+    , hls-test-utils == 2.7.0.0
+  default-extensions: OverloadedStrings
+
 ----------------------------
 ----------------------------
 -- HLS
@@ -1666,6 +1721,7 @@ library
                   , refactor
                   , overloadedRecordDot
                   , semanticTokens
+                  , notes
 
   exposed-modules:
     Ide.Arguments
