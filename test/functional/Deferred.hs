@@ -3,10 +3,10 @@
 {-# LANGUAGE OverloadedStrings     #-}
 module Deferred(tests) where
 
-import           Control.Lens            hiding (List)
+import           Control.Lens               hiding (List)
 -- import Control.Monad
 -- import Data.Maybe
-import           Language.LSP.Types.Lens hiding (id, message)
+import           Language.LSP.Protocol.Lens hiding (id, length, message)
 -- import qualified Language.LSP.Types.Lens as LSP
 import           Test.Hls
 import           Test.Hls.Command
@@ -19,18 +19,18 @@ tests = testGroup "deferred responses" [
     -- testCase "do not affect hover requests" $ runSession hlsCommand fullCaps "test/testdata" $ do
     --   doc <- openDoc "FuncTest.hs" "haskell"
 
-    --   id1 <- sendRequest TextDocumentHover (TextDocumentPositionParams doc (Position 4 2) Nothing)
+    --   id1 <- sendRequest Method_TextDocumentHover (TextDocumentPositionParams doc (Position 4 2) Nothing)
 
     --   skipMany anyNotification
     --   hoverRsp <- message :: Session HoverResponse
     --   liftIO $ hoverRsp ^? result . _Just . _Just . contents @?= Nothing
     --   liftIO $ hoverRsp ^. LSP.id @?= responseId id1
 
-    --   id2 <- sendRequest TextDocumentDocumentSymbol (DocumentSymbolParams doc Nothing)
+    --   id2 <- sendRequest Method_TextDocumentDocumentSymbol (DocumentSymbolParams doc Nothing)
     --   symbolsRsp <- skipManyTill anyNotification message :: Session DocumentSymbolsResponse
     --   liftIO $ symbolsRsp ^. LSP.id @?= responseId id2
 
-    --   id3 <- sendRequest TextDocumentHover (TextDocumentPositionParams doc (Position 4 2) Nothing)
+    --   id3 <- sendRequest Method_TextDocumentHover (TextDocumentPositionParams doc (Position 4 2) Nothing)
     --   hoverRsp2 <- skipManyTill anyNotification message :: Session HoverResponse
     --   liftIO $ hoverRsp2 ^. LSP.id @?= responseId id3
 
@@ -39,56 +39,56 @@ tests = testGroup "deferred responses" [
 
     --   -- Now that we have cache the following request should be instant
     --   let highlightParams = TextDocumentPositionParams doc (Position 7 0) Nothing
-    --   highlightRsp <- request TextDocumentDocumentHighlight highlightParams
+    --   highlightRsp <- request Method_TextDocumentDocumentHighlight highlightParams
     --   let (Just (List locations)) = highlightRsp ^. result
     --   liftIO $ locations @?= [ DocumentHighlight
     --                  { _range = Range
     --                    { _start = Position {_line = 7, _character = 0}
     --                    , _end   = Position {_line = 7, _character = 2}
     --                    }
-    --                  , _kind  = Just HkWrite
+    --                  , _kind  = Just DocumentHighlightKind_Write
     --                  }
     --                , DocumentHighlight
     --                  { _range = Range
     --                    { _start = Position {_line = 7, _character = 0}
     --                    , _end   = Position {_line = 7, _character = 2}
     --                    }
-    --                  , _kind  = Just HkWrite
+    --                  , _kind  = Just DocumentHighlightKind_Write
     --                  }
     --                , DocumentHighlight
     --                  { _range = Range
     --                    { _start = Position {_line = 5, _character = 6}
     --                    , _end   = Position {_line = 5, _character = 8}
     --                    }
-    --                  , _kind  = Just HkRead
+    --                  , _kind  = Just DocumentHighlightKind_Read
     --                  }
     --                , DocumentHighlight
     --                  { _range = Range
     --                    { _start = Position {_line = 7, _character = 0}
     --                    , _end   = Position {_line = 7, _character = 2}
     --                    }
-    --                  , _kind  = Just HkWrite
+    --                  , _kind  = Just DocumentHighlightKind_Write
     --                  }
     --                , DocumentHighlight
     --                  { _range = Range
     --                    { _start = Position {_line = 7, _character = 0}
     --                    , _end   = Position {_line = 7, _character = 2}
     --                    }
-    --                  , _kind  = Just HkWrite
+    --                  , _kind  = Just DocumentHighlightKind_Write
     --                  }
     --                , DocumentHighlight
     --                  { _range = Range
     --                    { _start = Position {_line = 5, _character = 6}
     --                    , _end   = Position {_line = 5, _character = 8}
     --                    }
-    --                  , _kind  = Just HkRead
+    --                  , _kind  = Just DocumentHighlightKind_Read
     --                  }
     --                ]
 
      testCase "instantly respond to failed modules with no cache" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "FuncTestFail.hs" "haskell"
         defs <- getDefinitions doc (Position 1 11)
-        liftIO $ defs @?= InR []
+        liftIO $ defs @?= InR (InL [])
 
     -- TODO: the benefits of caching parsed modules is doubted.
     -- TODO: add issue link
@@ -111,7 +111,7 @@ tests = testGroup "deferred responses" [
     --                 , _diagnostics = List
     --                     [ Diagnostic
     --                         (Range (Position 9 6) (Position 10 18))
-    --                         (Just DsInfo)
+    --                         (Just DiagnosticSeverity_Information)
     --                         (Just (StringValue "Redundant do"))
     --                         (Just "hlint")
     --                         "Redundant do\nFound:\n  do putStrLn \"hello\"\nWhy not:\n  putStrLn \"hello\"\n"
@@ -154,17 +154,17 @@ multiMainTests = testGroup "multiple main modules" [
     testCase "Can load one file at a time, when more than one Main module exists"
         $ runSession hlsCommand fullCaps "test/testdata" $ do
             _doc <- openDoc "ApplyRefact2.hs" "haskell"
-            _diagsRspHlint <- skipManyTill anyNotification (message STextDocumentPublishDiagnostics)
-            diagsRspGhc    <- skipManyTill anyNotification (message STextDocumentPublishDiagnostics)
-            let (List diags) = diagsRspGhc ^. params . diagnostics
+            _diagsRspHlint <- skipManyTill anyNotification (message SMethod_TextDocumentPublishDiagnostics)
+            diagsRspGhc    <- skipManyTill anyNotification (message SMethod_TextDocumentPublishDiagnostics)
+            let diags = diagsRspGhc ^. params . diagnostics
 
             liftIO $ length diags @?= 2
 
             _doc2 <- openDoc "HaReRename.hs" "haskell"
-            _diagsRspHlint2 <- skipManyTill anyNotification (message STextDocumentPublishDiagnostics)
+            _diagsRspHlint2 <- skipManyTill anyNotification (message SMethod_TextDocumentPublishDiagnostics)
             -- errMsg <- skipManyTill anyNotification notification :: Session ShowMessageNotification
-            diagsRsp2 <- skipManyTill anyNotification (message STextDocumentPublishDiagnostics)
-            let (List diags2) = diagsRsp2 ^. params . diagnostics
+            diagsRsp2 <- skipManyTill anyNotification (message SMethod_TextDocumentPublishDiagnostics)
+            let diags2 = diagsRsp2 ^. params . diagnostics
 
             liftIO $ show diags2 @?= "[]"
     ]

@@ -1,11 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module HieBios (tests) where
 
-import           Control.Lens            ((^.))
+import           Control.Lens               ((^.))
 import           Control.Monad.IO.Class
-import qualified Data.Text               as T
-import qualified Language.LSP.Types.Lens as L
-import           System.FilePath         ((</>))
+import qualified Data.Text                  as T
+import qualified Language.LSP.Protocol.Lens as L
+import           System.FilePath            ((</>))
 import           Test.Hls
 import           Test.Hls.Command
 
@@ -19,7 +19,7 @@ tests = testGroup "hie-bios" [
             Just mainHoverText <- getHover doc (Position 3 1)
             let hoverContents = mainHoverText ^. L.contents
             case hoverContents of
-                 (HoverContents (MarkupContent _ x)) -> do
+                 (InL (MarkupContent _ x)) -> do
                     liftIO $ "main :: IO ()" `T.isInfixOf` x
                             @? "found hover text for main"
                  _ -> error $ "Unexpected hover contents: " ++ show hoverContents

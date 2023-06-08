@@ -556,6 +556,7 @@ test-suite func-test
     , lsp-test
     , containers
     , unordered-containers
+    , row-types
 
   hs-source-dirs:     test/functional test/utils
 
