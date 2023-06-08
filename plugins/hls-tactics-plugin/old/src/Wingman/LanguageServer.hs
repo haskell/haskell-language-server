@@ -47,11 +47,9 @@ import           Ide.Plugin.Properties
 import           Ide.Types (PluginId)
 import           Language.Haskell.GHC.ExactPrint (Transform, modifyAnnsT, addAnnotationsForPretty)
 import           Language.LSP.Server (MonadLsp, sendNotification)
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start))
-import           Language.LSP.Types.Capabilities
+import           Language.LSP.Protocol.Types              hiding
+                                                 (SemanticTokensEdit (_start))
+import           Language.LSP.Protocol.Message
 import           Prelude hiding (span)
 import           Retrie (transformA)
 import           Wingman.Context
@@ -172,10 +170,10 @@ properties = emptyProperties
     "Maximum number of `Use constructor <x>` code actions that can appear" 5
   & defineEnumProperty #hole_severity
     "The severity to use when showing hole diagnostics. These are noisy, but some editors don't allow jumping to all severities."
-    [ (Just DsError,   "error")
-    , (Just DsWarning, "warning")
-    , (Just DsInfo,    "info")
-    , (Just DsHint,    "hint")
+    [ (Just DiagnosticSeverity_Error,   "error")
+    , (Just DiagnosticSeverity_Warning, "warning")
+    , (Just DiagnosticSeverity_Information,    "info")
+    , (Just DiagnosticSeverity_Hint,    "hint")
     , (Nothing,        "none")
     ]
     Nothing
@@ -521,11 +519,11 @@ isRhsHoleWithoutWhere (unTrack -> rss) (unTrack -> tcs) =
 
 
 ufmSeverity :: UserFacingMessage -> MessageType
-ufmSeverity NotEnoughGas            = MtInfo
-ufmSeverity TacticErrors            = MtError
-ufmSeverity TimedOut                = MtInfo
-ufmSeverity NothingToDo             = MtInfo
-ufmSeverity (InfrastructureError _) = MtError
+ufmSeverity NotEnoughGas            = MessageType_Info
+ufmSeverity TacticErrors            = MessageType_Error
+ufmSeverity TimedOut                = MessageType_Info
+ufmSeverity NothingToDo             = MessageType_Info
+ufmSeverity (InfrastructureError _) = MessageType_Error
 
 
 mkShowMessageParams :: UserFacingMessage -> ShowMessageParams
@@ -533,7 +531,7 @@ mkShowMessageParams ufm = ShowMessageParams (ufmSeverity ufm) $ T.pack $ show uf
 
 
 showLspMessage :: MonadLsp cfg m => ShowMessageParams -> m ()
-showLspMessage = sendNotification SWindowShowMessage
+showLspMessage = sendNotification SMethod_WindowShowMessage
 
 
 -- This rule only exists for generating file diagnostics
@@ -610,9 +608,11 @@ mkDiagnostic severity r =
   Diagnostic r
     (Just severity)
     (Just $ InR "hole")
+    Nothing
     (Just "wingman")
     "Hole"
-    (Just $ List [DtUnnecessary])
+    (Just [DiagnosticTag_Unnecessary])
+    Nothing
     Nothing
 
 

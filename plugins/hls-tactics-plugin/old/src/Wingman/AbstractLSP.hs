@@ -24,8 +24,9 @@ import           Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource(GetAnn
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Types
 import           Language.LSP.Server (LspM, sendRequest, getClientCapabilities)
-import qualified Language.LSP.Types as LSP
-import           Language.LSP.Types hiding (CodeLens, CodeAction)
+import qualified Language.LSP.Protocol.Types as LSP
+import  Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types hiding (CodeLens, CodeAction)
 import           Wingman.AbstractLSP.Types
 import           Wingman.EmptyCase (fromMaybeT)
 import           Wingman.LanguageServer (runIde, getTacticConfigAction, getIdeDynflags, mkWorkspaceEdits, runStaleIde, showLspMessage, mkShowMessageParams)
@@ -59,9 +60,9 @@ buildHandlers cs =
   flip foldMap cs $ \(Interaction (c :: Continuation sort target b)) ->
     case c_makeCommand c of
       SynthesizeCodeAction k ->
-        mkPluginHandler STextDocumentCodeAction $ codeActionProvider @target (c_sort c) k
+        mkPluginHandler SMethod_TextDocumentCodeAction $ codeActionProvider @target (c_sort c) k
       SynthesizeCodeLens k ->
-        mkPluginHandler STextDocumentCodeLens   $ codeLensProvider   @target (c_sort c) k
+        mkPluginHandler SMethod_TextDocumentCodeLens   $ codeLensProvider   @target (c_sort c) k
 
 
 ------------------------------------------------------------------------------
@@ -89,7 +90,7 @@ runContinuation
 runContinuation plId cont state (fc, b) = do
   fromMaybeT
     (Left $ ResponseError
-              { _code = InternalError
+              { _code = InR $ ErrorCodes_InternalError
               , _message = T.pack "TODO(sandy)"
               , _xdata =  Nothing
               } ) $ do
@@ -114,7 +115,7 @@ runContinuation plId cont state (fc, b) = do
             case mkWorkspaceEdits (enableQuasiQuotes le_dflags) ccs (fc_uri le_fileContext) (unTrack pm) gr of
               Left errs ->
                 pure $ Just $ ResponseError
-                  { _code    = InternalError
+                  { _code    = InR ErrorCodes_InternalError
                   , _message = T.pack $ show errs
                   , _xdata   = Nothing
                   }
@@ -129,7 +130,7 @@ sendEdits :: WorkspaceEdit -> MaybeT (LspM Plugin.Config) ()
 sendEdits edits =
   void $ lift $
     sendRequest
-      SWorkspaceApplyEdit
+      SMethod_WorkspaceApplyEdit
       (ApplyWorkspaceEditParams Nothing edits)
       (const $ pure ())
 
@@ -174,10 +175,10 @@ codeActionProvider
      -> TargetArgs target
      -> MaybeT (LspM Plugin.Config) [(Metadata, b)]
        )
-    -> PluginMethodHandler IdeState TextDocumentCodeAction
+    -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider sort k state plId
                    (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
-  fromMaybeT (Right $ List []) $ do
+  fromMaybeT (Right $ InL []) $ do
     let fc = FileContext
                 { fc_uri   = uri
                 , fc_range = Just $ unsafeMkCurrent range
@@ -187,7 +188,7 @@ codeActionProvider sort k state plId
     actions <- k env args
     pure
       $ Right
-      $ List
+      $ InL
       $ fmap (InR . uncurry (makeCodeAction plId fc sort)) actions
 
 
@@ -201,10 +202,10 @@ codeLensProvider
      -> TargetArgs target
      -> MaybeT (LspM Plugin.Config) [(Range, Metadata, b)]
       )
-    -> PluginMethodHandler IdeState TextDocumentCodeLens
+    -> PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLensProvider sort k state plId
                  (CodeLensParams _ _ (TextDocumentIdentifier uri)) = do
-      fromMaybeT (Right $ List []) $ do
+      fromMaybeT (Right $ InL []) $ do
         let fc = FileContext
                    { fc_uri   = uri
                    , fc_range = Nothing
@@ -214,7 +215,7 @@ codeLensProvider sort k state plId
         actions <- k env args
         pure
           $ Right
-          $ List
+          $ InL
           $ fmap (uncurry3 $ makeCodeLens plId sort fc) actions
 
 
@@ -239,7 +240,7 @@ makeCodeAction plId fc sort (Metadata title kind preferred) b =
         , _disabled    = Nothing
         , _edit        = Nothing
         , _command     = Just cmd
-        , _xdata       = Nothing
+        , _data_       = Nothing
         }
 
 
@@ -261,6 +262,6 @@ makeCodeLens plId sort fc range (Metadata title _ _) b =
    in LSP.CodeLens
         { _range = range
         , _command = Just cmd
-        , _xdata = Nothing
+        , _data_ = Nothing
         }
 

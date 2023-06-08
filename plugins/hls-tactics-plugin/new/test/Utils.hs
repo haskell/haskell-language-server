@@ -115,7 +115,7 @@ invokeTactic doc InvokeTactic{..} = do
     case find ((== Just (tacticTitle it_command it_argument)) . codeActionTitle) actions of
       Just (InR CodeAction {_command = Just c}) -> do
           executeCommand c
-          void $ skipManyTill anyMessage $ message SWorkspaceApplyEdit
+          void $ skipManyTill anyMessage $ message SMethod_WorkspaceApplyEdit
       _ -> error $ show actions
 
 
@@ -151,7 +151,7 @@ mkCodeLensTest input =
       lenses <- fmap (reverse . filter isWingmanLens) $ getCodeLenses doc
       for_ lenses $ \(CodeLens _ (Just cmd) _) ->
         executeCommand cmd
-      _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
+      _resp <- skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
       edited <- documentContents doc
       let expected_name = input <.> "expected" <.> "hs"
       -- Write golden tests if they don't already exist
@@ -201,7 +201,7 @@ mkShowMessageTest tc occ line col input ufm =
       Just (InR CodeAction {_command = Just c})
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
       executeCommand c
-      NotificationMessage _ _ err <- skipManyTill anyMessage (message SWindowShowMessage)
+      TNotificationMessage _ _ err <- skipManyTill anyMessage (message SMethod_WindowShowMessage)
       liftIO $ err `shouldBe` mkShowMessageParams ufm
 
 
@@ -259,5 +259,5 @@ executeCommandWithResp :: Command -> Session (ResponseMessage 'WorkspaceExecuteC
 executeCommandWithResp cmd = do
   let args = decode $ encode $ fromJust $ cmd ^. arguments
       execParams = ExecuteCommandParams Nothing (cmd ^. command) args
-  request SWorkspaceExecuteCommand execParams
+  request SMethod_WorkspaceExecuteCommand execParams
 

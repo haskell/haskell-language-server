@@ -174,9 +174,9 @@ properties = emptyProperties
     "Maximum number of `Use constructor <x>` code actions that can appear" 5
   & defineEnumProperty #hole_severity
     "The severity to use when showing hole diagnostics. These are noisy, but some editors don't allow jumping to all severities."
-    [ (Just DsError,   "error")
-    , (Just DsWarning, "warning")
-    , (Just DsInfo,    "info")
+    [ (Just DiagnosticSeverity_Error,   "error")
+    , (Just DiagnosticSeverity_Warning, "warning")
+    , (Just DiagnosticSeverity_Information,    "info")
     , (Just DsHint,    "hint")
     , (Nothing,        "none")
     ]
@@ -523,10 +523,10 @@ isRhsHoleWithoutWhere (unTrack -> rss) (unTrack -> tcs) =
 
 
 ufmSeverity :: UserFacingMessage -> MessageType
-ufmSeverity NotEnoughGas            = MtInfo
+ufmSeverity NotEnoughGas            = MessageType_Info
 ufmSeverity TacticErrors            = MtError
-ufmSeverity TimedOut                = MtInfo
-ufmSeverity NothingToDo             = MtInfo
+ufmSeverity TimedOut                = MessageType_Info
+ufmSeverity NothingToDo             = MessageType_Info
 ufmSeverity (InfrastructureError _) = MtError
 
 
@@ -535,7 +535,7 @@ mkShowMessageParams ufm = ShowMessageParams (ufmSeverity ufm) $ T.pack $ show uf
 
 
 showLspMessage :: MonadLsp cfg m => ShowMessageParams -> m ()
-showLspMessage = sendNotification SWindowShowMessage
+showLspMessage = sendNotification SMethod_WindowShowMessage
 
 
 -- This rule only exists for generating file diagnostics
@@ -614,7 +614,7 @@ mkDiagnostic severity r =
     (Just $ InR "hole")
     (Just "wingman")
     "Hole"
-    (Just $ List [DtUnnecessary])
+    (Just $ List [DiagnosticTag_Unnecessary])
     Nothing
 
 

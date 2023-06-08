@@ -26,7 +26,7 @@ import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (getLocalScope)
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Types
 import           Prelude hiding (span)
 import           Wingman.AbstractLSP.Types
 import           Wingman.CodeGen (destructionFor)
@@ -76,7 +76,7 @@ emptyCaseInteraction = Interaction $
           ( range
           , Metadata
               (mkEmptyCaseLensDesc ty)
-              (CodeActionUnknown "refactor.wingman.completeEmptyCase")
+              (CodeActionKind_Custom "refactor.wingman.completeEmptyCase")
               False
           , edits
           )

@@ -19,7 +19,7 @@ import           GHC.Generics (Generic)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Types hiding (Config)
 import           Language.LSP.Server (LspM)
-import           Language.LSP.Types hiding (CodeLens, CodeAction)
+import           Language.LSP.Protocol.Types hiding (CodeLens, CodeAction)
 import           Wingman.LanguageServer (judgementForHole)
 import           Wingman.Types
 

@@ -18,7 +18,7 @@ import           Wingman.StaticPlugin
 import Development.IDE.Types.Logger (Recorder, cmapWithPrio, WithPriority, Pretty (pretty))
 
 data Log
-  = LogWingmanLanguageServer WingmanLanguageServer.Log 
+  = LogWingmanLanguageServer WingmanLanguageServer.Log
   | LogExactPrint E.Log
   deriving Show
 
@@ -35,7 +35,7 @@ descriptor recorder plId
       : fmap makeTacticInteraction [minBound .. maxBound]
       )
   $ (defaultPluginDescriptor plId)
-      { pluginHandlers = mkPluginHandler STextDocumentHover hoverProvider
+      { pluginHandlers = mkPluginHandler SMethod_TextDocumentHover hoverProvider
       , pluginRules = wingmanRules (cmapWithPrio LogWingmanLanguageServer recorder) plId
       , pluginConfigDescriptor =
           defaultConfigDescriptor

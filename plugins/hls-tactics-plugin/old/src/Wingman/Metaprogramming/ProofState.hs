@@ -10,7 +10,7 @@ import           Data.Functor ((<&>))
 import qualified Data.Text as T
 import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.Util.Panic
-import           Language.LSP.Types (sectionSeparator)
+import           Language.LSP.Protocol.Types (sectionSeparator)
 import           Wingman.Judgements (jHypothesis)
 import           Wingman.Types
 
