@@ -64,6 +64,7 @@ import           Data.IORef
 import           Data.List.Extra
 import           Data.Map                          (Map)
 import qualified Data.Map.Strict                   as Map
+import           Data.Proxy                        (Proxy(Proxy))
 import qualified Data.Set                          as Set
 import           Data.Maybe
 import qualified Data.Text                         as T

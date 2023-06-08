@@ -7,7 +7,7 @@ import           GHC.Parser.Annotation                     (TokenLocation (..))
 #endif
 #if !MIN_VERSION_ghc(9,2,1)
 import qualified Data.Text                                 as T
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Types               (TextEdit)
 #else
 import           Control.Monad                             (join)
 import           Control.Monad.Trans.Class                 (lift)

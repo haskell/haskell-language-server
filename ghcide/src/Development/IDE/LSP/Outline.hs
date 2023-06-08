@@ -145,7 +145,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
     }
   where
     -- | Extract the record fields of a constructor
-    conArgRecordFields (RecCon (L _ lcdfs)) = Just $ List
+    conArgRecordFields (RecCon (L _ lcdfs)) = Just
       [ (defDocumentSymbol l :: DocumentSymbol)
           { _name = printOutputable n
           , _kind = SymbolKind_Field
