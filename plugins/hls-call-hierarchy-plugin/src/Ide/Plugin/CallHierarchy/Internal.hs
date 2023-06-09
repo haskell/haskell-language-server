@@ -16,7 +16,7 @@ module Ide.Plugin.CallHierarchy.Internal (
 import           Control.Lens                   ((^.))
 import           Control.Monad.IO.Class
 import           Data.Aeson                     as A
-import           Data.List                      (groupBy, singleton, sortBy)
+import           Data.List                      (groupBy, sortBy)
 import qualified Data.Map                       as M
 import           Data.Maybe
 import qualified Data.Set                       as S

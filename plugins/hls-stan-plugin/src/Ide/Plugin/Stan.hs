@@ -13,6 +13,7 @@ import qualified Data.Map                       as Map
 import           Data.Maybe                     (fromJust, mapMaybe)
 import qualified Data.Text                      as T
 import           Development.IDE
+import           Development.IDE                (Diagnostic (_codeDescription))
 import           Development.IDE.Core.Rules     (getHieFile,
                                                  getSourceFileSource)
 import           Development.IDE.Core.RuleTypes (HieAstResult (..))
@@ -33,7 +34,7 @@ import           Ide.Types                      (PluginDescriptor (..),
                                                  defaultConfigDescriptor,
                                                  defaultPluginDescriptor,
                                                  pluginEnabledConfig)
-import qualified Language.LSP.Types             as LSP
+import qualified Language.LSP.Protocol.Types    as LSP
 import           Stan.Analysis                  (Analysis (..), runAnalysis)
 import           Stan.Category                  (Category (..))
 import           Stan.Core.Id                   (Id (..))
@@ -98,23 +99,4 @@ rules recorder plId = do
           message :: T.Text
           message =
             T.unlines $
-              [ " ✲ Name:        " <> inspectionName inspection,
-                " ✲ Description: " <> inspectionDescription inspection,
-                " ✲ Severity:    " <> (T.pack $ show $ inspectionSeverity inspection),
-                " ✲ Category:    " <> T.intercalate " "
-                  (map (("#" <>) . unCategory) $ toList $ inspectionCategory inspection),
-                "Possible solutions:"
-              ]
-                ++ map ("  - " <>) (inspectionSolution inspection)
-        return ( file,
-          ShowDiag,
-          LSP.Diagnostic
-            { _range = realSrcSpanToRange observationSrcSpan,
-              _severity = Just LSP.DsHint,
-              _code = Just (LSP.InR $ unId (inspectionId inspection)),
-              _source = Just "stan",
-              _message = message,
-              _relatedInformation = Nothing,
-              _tags = Nothing
-            }
-          )
+              [ " 
