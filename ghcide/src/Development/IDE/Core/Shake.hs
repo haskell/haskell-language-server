@@ -684,7 +684,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
 getStateKeys :: ShakeExtras -> IO [Key]
 getStateKeys = (fmap.fmap) fst . atomically . ListT.toList . STM.listT . state
 
--- | Must be called in the 'Method_Initialized' handler and only once
+-- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()
 shakeSessionInit recorder ide@IdeState{..} = do
     -- Take a snapshot of the VFS - it should be empty as we've received no notifications
@@ -1343,6 +1343,5 @@ updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} Versi
                 -- used which is evident in long running sessions.
                 EM.mapAccumRWithKey (\acc _k (delta, _) -> let new = addDelta delta acc in (new, (delta, acc)))
                   zeroMapping
-                  (EM.insert actual_version (shared_change, zeroMapping) mappingForUri)
+                  (EM.insert _version (shared_change, zeroMapping) mappingForUri)
         shared_change = mkDelta changes
-        actual_version =  _version

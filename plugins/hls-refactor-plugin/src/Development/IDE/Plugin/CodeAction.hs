@@ -1607,10 +1607,11 @@ findPositionAfterModuleName ps hsmodName' = do
 
     epaLocationToLine :: EpaLocation -> Maybe Int
 #if MIN_VERSION_ghc(9,5,0)
-    epaLocationToLine (EpaSpan sp _) = Just . srcLocLine . realSrcSpanEnd $ sp
+    epaLocationToLine (EpaSpan sp _)
 #else
-    epaLocationToLine (EpaSpan sp) = Just . srcLocLine . realSrcSpanEnd $ sp
+    epaLocationToLine (EpaSpan sp)
 #endif
+      = Just . srcLocLine . realSrcSpanEnd $ sp
     epaLocationToLine (EpaDelta (SameLine _) priorComments) = Just $ sumCommentsOffset priorComments
     -- 'priorComments' contains the comments right before the current EpaLocation
     -- Summing line offset of priorComments is necessary, as 'line' is the gap between the last comment and
@@ -1851,17 +1852,14 @@ textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCo
 
 -- | Returns the ranges for a binding in an import declaration
 rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
+rangesForBindingImport ImportDecl{
 #if MIN_VERSION_ghc(9,5,0)
-rangesForBindingImport ImportDecl{
   ideclImportList = Just (Exactly, L _ lies)
-    } b =
-    concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
 #else
-rangesForBindingImport ImportDecl{
   ideclHiding = Just (False, L _ lies)
-    } b =
-    concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
 #endif
+  } b =
+    concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
   where
     b' = wrapOperatorInParens b
 rangesForBindingImport _ _ = []

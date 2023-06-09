@@ -384,7 +384,7 @@ class PluginMethod Request m => PluginRequestMethod (m :: Method ClientToServer 
   -- glorious hover box.
   --
   -- However, sometimes only one handler of a request can realistically exist,
-  -- such as Method_TextDocumentFormatting, it is safe to just unconditionally report
+  -- such as TextDocumentFormatting, it is safe to just unconditionally report
   -- back one arbitrary result (arbitrary since it should only be one anyway).
   combineResponses
     :: SMethod m
@@ -405,9 +405,7 @@ instance PluginMethod Request Method_TextDocumentCodeAction where
 
 instance PluginRequestMethod Method_TextDocumentCodeAction where
   combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _ _) (CodeActionParams _ _ _ _ context) resps =
-      case fmap compat $ filter wasRequested $ concat $ dumpNulls resps of
-        [] -> InR Null
-        x  -> InL x
+      InL $ fmap compat $ filter wasRequested $ concat $ dumpNulls resps
     where
       compat :: (Command |? CodeAction) -> (Command |? CodeAction)
       compat x@(InL _) = x
@@ -986,4 +984,3 @@ getProcessID = fromIntegral <$> P.getProcessID
 
 installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 #endif
-

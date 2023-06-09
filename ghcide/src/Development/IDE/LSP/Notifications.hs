@@ -59,7 +59,7 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = mconcat
   [ mkPluginNotificationHandler LSP.SMethod_TextDocumentDidOpen $
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
-      atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier _uri _version)  []
+      atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier _uri _version) []
       whenUriFile _uri $ \file -> do
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
@@ -127,7 +127,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
         setSomethingModified (VFSModified vfs) ide [toKey GetClientSettings emptyFilePath] "config change"
 
   , mkPluginNotificationHandler LSP.SMethod_Initialized $ \ide _ _ _ -> do
-      --------- Method_Initialize Shake session --------------------------------------------------------------------
+      --------- Initialize Shake session --------------------------------------------------------------------
       liftIO $ shakeSessionInit (cmapWithPrio LogShake recorder) ide
 
       --------- Set up file watchers ------------------------------------------------------------------------

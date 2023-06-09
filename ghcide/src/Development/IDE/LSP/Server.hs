@@ -44,7 +44,6 @@ requestHandler m k = LSP.requestHandler m $ \TRequestMessage{_method,_id,_params
         x
   writeChan chan $ ReactorRequest (SomeLspId _id) (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
 
-
 notificationHandler
   :: forall (m :: Method ClientToServer Notification) c. (HasTracing (MessageParams m)) =>
      SMethod m

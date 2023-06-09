@@ -31,7 +31,7 @@ tests = testGroup "behaviour on malformed projects" [
     --         liftIO $ do
     --             length diags @?= 1
     --             d ^. range @?= Range (Position 0 0) (Position 1 0)
-    --             d ^. severity @?= (Just DiagnosticSeverity_Error)
+    --             d ^. severity @?= (Just DsError)
     --             d ^. code @?= Nothing
     --             d ^. source @?= Just "bios"
     --             d ^. message @?=

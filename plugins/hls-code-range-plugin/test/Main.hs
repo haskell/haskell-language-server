@@ -14,7 +14,6 @@ import           Development.IDE.Types.Logger   (Priority (Debug),
 import           Ide.Plugin.CodeRange           (Log, descriptor)
 import qualified Ide.Plugin.CodeRange.RulesTest
 import qualified Ide.Plugin.CodeRangeTest
-import           Ide.TempLSPTypeFunctions
 import           Language.LSP.Protocol.Lens
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types

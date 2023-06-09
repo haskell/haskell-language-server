@@ -66,7 +66,6 @@ import           Language.Haskell.GHC.ExactPrint (uniqueSrcSpanT)
 import           Language.LSP.Server
 import           Language.LSP.Protocol.Types        hiding (Null)
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Lens         as J
 
 descriptor :: PluginId -> PluginDescriptor IdeState

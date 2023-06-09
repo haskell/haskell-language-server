@@ -88,7 +88,7 @@ data Provenance
 
 data CompItem = CI
   { compKind            :: CompletionItemKind
-  , insertText          :: T.Text         -- ^ InsertTextFormat_Snippet for the completion
+  , insertText          :: T.Text         -- ^ Snippet for the completion
   , provenance          :: Provenance     -- ^ From where this item is imported from.
   , label               :: T.Text         -- ^ Label to display to the user.
   , typeText            :: Maybe T.Text

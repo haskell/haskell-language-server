@@ -396,7 +396,7 @@ defRowToSymbolInfo (DefRow{..}:.(modInfoSrcFile -> Just srcFile))
   where
     kind
       | isVarOcc defNameOcc = SymbolKind_Variable
-      | isDataOcc defNameOcc = SymbolKind_Variable
+      | isDataOcc defNameOcc = SymbolKind_Constructor
       | isTcOcc defNameOcc = SymbolKind_Struct
         -- This used to be (SkUnknown 1), buth there is no SymbolKind_Unknown.
         -- Changing this to File, as that is enum representation of 1

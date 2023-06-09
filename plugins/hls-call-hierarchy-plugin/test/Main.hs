@@ -59,7 +59,7 @@ prepareCallHierarchyTests =
       let contents = T.unlines ["data A=A"]
           range = mkRange 0 7 0 8
           selRange = mkRange 0 7 0 8
-          expected = mkCallHierarchyItemC "A" SymbolKind_Variable range selRange
+          expected = mkCallHierarchyItemC "A" SymbolKind_Constructor range selRange
       oneCaseWithCreate contents 0 7 expected
 --   , testCase "record" $ do
 --       let contents = T.unlines ["data A=A{a::Int}"]
@@ -164,7 +164,7 @@ prepareCallHierarchyTests =
             ]
           range = mkRange 1 13 1 26
           selRange = mkRange 1 13 1 14
-          expected = mkCallHierarchyItemC "A" SymbolKind_Variable range selRange
+          expected = mkCallHierarchyItemC "A" SymbolKind_Constructor range selRange
       oneCaseWithCreate contents 1 13 expected
   , testGroup "type signature"
       [ testCase "next line" $ do
@@ -421,8 +421,6 @@ outgoingCallsTests =
     ]
   ]
 
-{- deriving instance Ord CallHierarchyIncomingCall
-deriving instance Ord CallHierarchyOutgoingCall -}
 
 incomingCallTestCase :: T.Text -> Int -> Int -> [(Int, Int)] -> [Range] -> Assertion
 incomingCallTestCase contents queryX queryY positions ranges = withCanonicalTempDir $ \dir ->

@@ -134,7 +134,6 @@ import           GHC                               (Anchor (anchor),
 import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
-import Data.Data (Proxy(Proxy))
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
@@ -792,9 +791,9 @@ tagDiag (w@(Reason warning), (nfp, sh, fd))
       | wflag `elem` unnecessaryDeprecationWarningFlags
       = Just DiagnosticTag_Unnecessary
     requiresTag _ = Nothing
-    addTag :: DiagnosticTag -> Maybe ([DiagnosticTag]) -> Maybe ([DiagnosticTag])
-    addTag t Nothing          = Just ( [t])
-    addTag t (Just ( ts)) = Just ( (t : ts))
+    addTag :: DiagnosticTag -> Maybe [DiagnosticTag] -> Maybe [DiagnosticTag]
+    addTag t Nothing          = Just [t]
+    addTag t (Just ts) = Just (t : ts)
 -- other diagnostics are left unaffected
 tagDiag t = t
 

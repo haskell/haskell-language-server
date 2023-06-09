@@ -54,8 +54,8 @@ licenseErrorAction uri diag =
         -- We must also add a newline character to the replacement since the range returned by
         -- 'Ide.Plugin.Cabal.Diag.errorDiagnostic' ends at the beginning of the following line.
         tedit = [TextEdit (adjustRange $ _range diag) (suggestion <> "\n")]
-        edit  = WorkspaceEdit (Just $ Map.singleton uri $ tedit) Nothing Nothing
-      in CodeAction title (Just CodeActionKind_QuickFix) (Just $ []) Nothing Nothing (Just edit) Nothing Nothing
+        edit  = WorkspaceEdit (Just $ Map.singleton uri tedit) Nothing Nothing
+      in CodeAction title (Just CodeActionKind_QuickFix) (Just []) Nothing Nothing (Just edit) Nothing Nothing
 
 -- | License name of every license supported by cabal
 licenseNames :: [T.Text]

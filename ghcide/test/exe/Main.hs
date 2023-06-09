@@ -170,14 +170,14 @@ instance Pretty Log where
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ _)) -> Just ()
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ isn't _workDoneProgressBegin v-> Just ()
   _ -> Nothing
 
 -- | Wait for the first progress end step
 -- Also implemented in hls-test-utils Test.Hls
 waitForProgressDone :: Session ()
 waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ _)) -> Just ()
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ isn't _workDoneProgressEnd v -> Just ()
   _ -> Nothing
 
 -- | Wait for all progress to be done
@@ -188,7 +188,7 @@ waitForAllProgressDone = loop
   where
     loop = do
       ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ _)) -> Just ()
+        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ isn't _workDoneProgressEnd v-> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
@@ -965,8 +965,7 @@ addSigLensesTests =
 defToLocation :: Definition |? ([DefinitionLink] |? Null) -> [Location]
 defToLocation (InL (Definition (InL l))) = [l]
 defToLocation (InL (Definition (InR ls))) = ls
-defToLocation (InR (InL defLink)) = map (\LocationLink{_targetUri,_targetRange} -> Location _targetUri _targetRange) (toLocationLink <$> defLink)
-    where toLocationLink (DefinitionLink ll) = ll
+defToLocation (InR (InL defLink)) = (\(DefinitionLink LocationLink{_targetUri,_targetRange}) -> Location _targetUri _targetRange) <$> defLink
 defToLocation (InR (InR Null)) = []
 
 checkDefs :: Definition |? ([DefinitionLink] |? Null) -> Session [Expect] -> Session ()
@@ -1095,7 +1094,7 @@ findDefinitionAndHoverTests = let
       hover = (getHover      , checkHover)
 
   -- search locations            expectations on results
-  fffL4  = fffR  ^. L.start  ;  fffR = mkRange 8  4    8  7 ; fff  = [ExpectRange fffR]
+  fffL4  = fffR  ^. L.start;  fffR = mkRange 8  4    8  7 ; fff  = [ExpectRange fffR]
   fffL8  = Position 12  4  ;
   fffL14 = Position 18  7  ;
   aL20   = Position 19 15
@@ -2245,7 +2244,7 @@ outlineTests = testGroup
       [ docSymbolWithChildren "A"
                               SymbolKind_Struct
                               (R 0 0 0 10)
-                              [docSymbol "C" SymbolKind_Variable (R 0 9 0 10)]
+                              [docSymbol "C" SymbolKind_Constructor (R 0 9 0 10)]
       ]
   , testSessionWait "record fields" $ do
     let source = T.unlines ["data A = B {", "  x :: Int", "  , y :: Int}"]
@@ -2253,7 +2252,7 @@ outlineTests = testGroup
     symbols <- getDocumentSymbols docId
     liftIO $ symbols @?= Right
       [ docSymbolWithChildren "A" SymbolKind_Struct (R 0 0 2 13)
-          [ docSymbolWithChildren' "B" SymbolKind_Variable (R 0 9 2 13) (R 0 9 0 10)
+          [ docSymbolWithChildren' "B" SymbolKind_Constructor (R 0 9 2 13) (R 0 9 0 10)
             [ docSymbol "x" SymbolKind_Field (R 1 2 1 3)
             , docSymbol "y" SymbolKind_Field (R 2 4 2 5)
             ]

@@ -74,7 +74,6 @@ import           Language.LSP.Protocol.Message                (toUntypedRegistra
 import qualified Language.LSP.Protocol.Message                as LSP
 import           Language.LSP.Protocol.Types                  (DidChangeWatchedFilesRegistrationOptions (DidChangeWatchedFilesRegistrationOptions),
                                                                FileSystemWatcher (..),
-                                                               WatchKind (..),
                                                                _watchers)
 import qualified Language.LSP.Protocol.Types                  as LSP
 import qualified Language.LSP.Server                          as LSP

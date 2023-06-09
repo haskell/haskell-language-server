@@ -93,7 +93,7 @@ construct nfp hf (ident, contexts, ssp)
     | Just ctx <- declInfo contexts
         = Just $ case ctx of
             Decl ClassDec span -> mkCallHierarchyItem' ident SymbolKind_Interface     (renderSpan span) ssp
-            Decl ConDec   span -> mkCallHierarchyItem' ident SymbolKind_Variable   (renderSpan span) ssp
+            Decl ConDec   span -> mkCallHierarchyItem' ident SymbolKind_Constructor   (renderSpan span) ssp
             Decl DataDec  span -> mkCallHierarchyItem' ident SymbolKind_Struct        (renderSpan span) ssp
             Decl FamDec   span -> mkCallHierarchyItem' ident SymbolKind_Function      (renderSpan span) ssp
             Decl InstDec  span -> mkCallHierarchyItem' ident SymbolKind_Interface     (renderSpan span) ssp
@@ -168,9 +168,6 @@ mkSymbol = \case
 -------------- Incoming calls and outgoing calls ---------------------
 ----------------------------------------------------------------------
 
-{- deriving instance Ord SymbolKind
-deriving instance Ord SymbolTag
-deriving instance Ord CallHierarchyItem -}
 #if !MIN_VERSION_aeson(1,5,2)
 deriving instance Ord Value
 #endif

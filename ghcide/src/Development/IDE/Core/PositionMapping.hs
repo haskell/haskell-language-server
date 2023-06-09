@@ -35,8 +35,8 @@ import qualified Data.Vector.Unboxed         as V
 import           Language.LSP.Protocol.Types (Position (Position),
                                               Range (Range),
                                               TextDocumentContentChangeEvent (TextDocumentContentChangeEvent),
-                                              UInt)
-import qualified Language.LSP.Protocol.Types as J
+                                              UInt, type (|?) (InL))
+
 -- | Either an exact position, or the range of text that was substituted
 data PositionResult a
   = PositionRange -- ^ Fields need to be non-strict otherwise bind is exponential
@@ -126,7 +126,7 @@ addDelta delta (PositionMapping pm) = PositionMapping (composeDelta delta pm)
 -- TODO: We currently ignore the right hand side (if there is only text), as
 -- that was what was done with lsp* 1.6 packages
 applyChange :: PositionDelta -> TextDocumentContentChangeEvent -> PositionDelta
-applyChange PositionDelta{..} (TextDocumentContentChangeEvent (J.InL x)) = PositionDelta
+applyChange PositionDelta{..} (TextDocumentContentChangeEvent (InL x)) = PositionDelta
     { toDelta = toCurrent (x .! #range) (x .! #text) <=< toDelta
     , fromDelta = fromDelta <=< fromCurrent (x .! #range) (x .! #text)
     }

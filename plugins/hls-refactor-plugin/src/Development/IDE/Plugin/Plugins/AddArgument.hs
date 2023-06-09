@@ -163,5 +163,4 @@ addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
         lsigTy' = hsTypeFromFunTypeAsList (insertArg loc args, res)
     in L annHsSig (HsSig xHsSig tyVarBndrs lsigTy')
 
-
 #endif

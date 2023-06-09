@@ -143,13 +143,11 @@ getCContext pos pm
         goInline _ = Nothing
 
         importGo :: GHC.LImportDecl GhcPs -> Maybe Context
-#if MIN_VERSION_ghc(9,5,0)
         importGo (L (locA -> r) impDecl)
           | pos `isInsideSrcSpan` r
+#if MIN_VERSION_ghc(9,5,0)
           = importInline importModuleName (fmap (fmap reLoc) $ ideclImportList impDecl)
 #else
-        importGo (L (locA -> r) impDecl)
-          | pos `isInsideSrcSpan` r
           = importInline importModuleName (fmap (fmap reLoc) $ ideclHiding impDecl)
 #endif
           <|> Just (ImportContext importModuleName)
@@ -160,23 +158,18 @@ getCContext pos pm
         -- importInline :: String -> Maybe (Bool,  GHC.Located [LIE GhcPs]) -> Maybe Context
 #if MIN_VERSION_ghc(9,5,0)
         importInline modName (Just (EverythingBut, L r _))
-          | pos `isInsideSrcSpan` r = Just $ ImportHidingContext modName
-          | otherwise = Nothing
 #else
         importInline modName (Just (True, L r _))
+#endif
           | pos `isInsideSrcSpan` r = Just $ ImportHidingContext modName
           | otherwise = Nothing
-#endif
-
 #if MIN_VERSION_ghc(9,5,0)
         importInline modName (Just (Exactly, L r _))
-          | pos `isInsideSrcSpan` r = Just $ ImportListContext modName
-          | otherwise = Nothing
 #else
         importInline modName (Just (False, L r _))
+#endif
           | pos `isInsideSrcSpan` r = Just $ ImportListContext modName
           | otherwise = Nothing
-#endif
         importInline _ _ = Nothing
 
 occNameToComKind :: OccName -> CompletionItemKind

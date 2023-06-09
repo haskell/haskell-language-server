@@ -267,18 +267,15 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
           not $ any (\e -> ("module " ++ moduleNameString name) == e) exports
 extractMinimalImports _ _ = return ([], Nothing)
 
-
+mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl GhcRn -> T.Text -> Maybe TextEdit
+mkExplicitEdit pred posMapping (L (locA -> src) imp) explicit
+  -- Explicit import list case
 #if MIN_VERSION_ghc (9,5,0)
-mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl GhcRn -> T.Text -> Maybe TextEdit
-mkExplicitEdit pred posMapping (L (locA -> src) imp) explicit
-  -- Explicit import list case
-  | ImportDecl {ideclImportList = Just (Exactly, _)} <- imp = Nothing
+  | ImportDecl {ideclImportList = Just (Exactly, _)} <- imp =
 #else
-mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl GhcRn -> T.Text -> Maybe TextEdit
-mkExplicitEdit pred posMapping (L (locA -> src) imp) explicit
-  -- Explicit import list case
-  | ImportDecl {ideclHiding = Just (False, _)} <- imp = Nothing
+  | ImportDecl {ideclHiding = Just (False, _)} <- imp =
 #endif
+    Nothing
   | not (isQualifiedImport imp),
     RealSrcSpan l _ <- src,
     L _ mn <- ideclName imp,

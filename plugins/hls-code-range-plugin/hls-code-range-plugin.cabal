@@ -72,5 +72,3 @@ test-suite tests
     , text
     , transformers
     , vector
-    -- Dump this once dumpNulls has gotten into lsp types
-    , hls-plugin-api

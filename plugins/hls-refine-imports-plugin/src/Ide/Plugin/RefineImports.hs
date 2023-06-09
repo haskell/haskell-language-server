@@ -213,12 +213,10 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
         -> Maybe (Map.Map ModuleName [AvailInfo])
 #if MIN_VERSION_ghc(9,5,0)
       filterByImport (L _ ImportDecl{ideclImportList = Just (_, L _ names)}) avails =
-        let
 #else
       filterByImport (L _ ImportDecl{ideclHiding = Just (_, L _ names)}) avails =
-        let
 #endif
-            importedNames = S.fromList $ map (ieName . unLoc) names
+        let importedNames = S.fromList $ map (ieName . unLoc) names
             res = flip Map.filter avails $ \a ->
                     any (`S.member` importedNames)
                       $ concatMap availNamesWithSelectors a

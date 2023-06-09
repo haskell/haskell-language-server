@@ -22,8 +22,8 @@ v310Tests = testGroup "3.10 hierarchical document symbols" [
         Right symbs <- getDocumentSymbols doc
 
         let myData = DocumentSymbol "MyData" Nothing SymbolKind_Struct Nothing Nothing myDataR myDataSR (Just [a, b])
-            a = DocumentSymbol "A" Nothing SymbolKind_Variable Nothing Nothing aR aSR Nothing
-            b = DocumentSymbol "B" Nothing SymbolKind_Variable Nothing Nothing bR bSR Nothing
+            a = DocumentSymbol "A" Nothing SymbolKind_Constructor Nothing Nothing aR aSR Nothing
+            b = DocumentSymbol "B" Nothing SymbolKind_Constructor Nothing Nothing bR bSR Nothing
         let myData' = symbs ^? ix 0 . L.children . _Just . ix 2
 
         liftIO $ Just myData == myData' @? "Contains symbol"
@@ -68,8 +68,8 @@ pre310Tests = testGroup "pre 3.10 symbol information" [
         Left symbs <- getDocumentSymbols doc
 
         let myData = SymbolInformation "MyData" SymbolKind_Struct Nothing (Just "Symbols") Nothing (Location testUri myDataR)
-            a = SymbolInformation "A" SymbolKind_Variable Nothing (Just "MyData") Nothing (Location testUri aR)
-            b = SymbolInformation "B" SymbolKind_Variable Nothing (Just "MyData") Nothing (Location testUri bR)
+            a = SymbolInformation "A" SymbolKind_Constructor Nothing (Just "MyData") Nothing (Location testUri aR)
+            b = SymbolInformation "B" SymbolKind_Constructor Nothing (Just "MyData") Nothing (Location testUri bR)
 
         liftIO $ [myData, a, b] `isInfixOf` symbs @? "Contains symbols"
 

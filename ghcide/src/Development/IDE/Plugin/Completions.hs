@@ -222,8 +222,8 @@ getCompletionsLSP ide plId
 
                 allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports uri
                 pure $ InL (orderedCompletions allCompletions)
-          _ -> return (InL $  [])
-      _ -> return (InL $  [])
+          _ -> return (InL [])
+      _ -> return (InL [])
 
 getCompletionsConfig :: PluginId -> Action CompletionsConfig
 getCompletionsConfig pId =

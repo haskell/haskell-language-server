@@ -26,7 +26,7 @@ import           Language.LSP.Server            (LspM)
 import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
                                                  DocumentSymbolParams (DocumentSymbolParams, _textDocument),
                                                  SymbolInformation,
-                                                 SymbolKind (SymbolKind_Variable, SymbolKind_Field, SymbolKind_File, SymbolKind_Function, SymbolKind_Interface, SymbolKind_Method, SymbolKind_Module, SymbolKind_Object, SymbolKind_Struct, SymbolKind_TypeParameter),
+                                                 SymbolKind (..),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
                                                  type (|?) (InL, InR), uriToFilePath, Null)
 import           Language.LSP.Protocol.Message   (ResponseError)
@@ -59,7 +59,7 @@ moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentif
                allSymbols    = case moduleSymbol of
                  Nothing -> importSymbols <> declSymbols
                  Just x ->
-                   [ x { _children = Just  (importSymbols <> declSymbols)
+                   [ x { _children = Just (importSymbols <> declSymbols)
                        }
                    ]
              in
@@ -107,10 +107,10 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
       Just $
         [ (defDocumentSymbol l :: DocumentSymbol)
             { _name           = printOutputable n
-            , _kind           = SymbolKind_Variable
+            , _kind           = SymbolKind_Constructor
             , _selectionRange = realSrcSpanToRange l'
 #if MIN_VERSION_ghc(9,2,0)
-            , _children       =  toList <$> nonEmpty childs
+            , _children       = toList <$> nonEmpty childs
             }
         | con <- extract_cons dd_cons
         , let (cs, flds) = hsConDeclsBinders con
