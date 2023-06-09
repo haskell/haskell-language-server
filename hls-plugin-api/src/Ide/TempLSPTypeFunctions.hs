@@ -2,8 +2,8 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds             #-}
-module Ide.TempLSPTypeFunctions (takeLefts, dumpNulls, nullToMaybe', NullToMaybe,
-                                 toLspId, defClientCapabilities,
+
+module Ide.TempLSPTypeFunctions (defClientCapabilities,
                                  defGeneralClientCapabilities,
                                  defNotebookDocumentClientCapabilities,
                                  defNotebookDocumentSyncClientCapabilities,
@@ -31,17 +31,7 @@ import           Language.LSP.Protocol.Types   (ClientCapabilities (ClientCapabi
 -- useful. temporarily including them here now.
 
 
-takeLefts :: Foldable f => f (a |? b) -> [a]
-takeLefts = foldr (\x acc -> case x of
-                                InL x' -> x' : acc
-                                InR _  -> acc) []
 
--- Especially when we want to use concat, we are not interested in nulls,
--- because of this we need to filter them out
-dumpNulls :: (Foldable f, NullToMaybe a b) => f a -> [b]
-dumpNulls = foldr (\x acc -> case nullToMaybe' x of
-                                Just x' -> x' : acc
-                                Nothing -> acc) []
 
 maybeToNull :: Maybe a -> a |? Null
 maybeToNull (Just x) = InL x
@@ -60,27 +50,8 @@ instance Monoid WorkspaceEdit where
 instance Hashable Location
 instance Hashable Range
 instance Hashable Position
-class NullToMaybe a b where
-  nullToMaybe' :: a -> Maybe b
 
-instance NullToMaybe (a |? Null) a where
-  nullToMaybe' (InL x) = Just x
-  nullToMaybe' (InR _) = Nothing
 
-instance NullToMaybe (a |? (b |? Null)) (a |? b) where
-  nullToMaybe' (InL x)       = Just $ InL x
-  nullToMaybe' (InR (InL x)) = Just $ InR x
-  nullToMaybe' (InR (InR _)) = Nothing
-
-instance NullToMaybe (a |? (b |? (c |? Null))) (a |? (b |? c)) where
-  nullToMaybe' (InL x)             = Just $ InL x
-  nullToMaybe' (InR (InL x))       = Just $ InR $ InL x
-  nullToMaybe' (InR (InR (InL x))) = Just $ InR $ InR x
-  nullToMaybe' (InR (InR (InR _))) = Nothing
-
-toLspId :: (Int32 |? Text) -> LspId a
-toLspId (InL x) = IdInt x
-toLspId (InR y) = IdString y
 
 -- TODO: Find some saner default ClientCapabilities so we don't need to
 -- use Nothing 54 times.

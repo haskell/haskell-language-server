@@ -266,6 +266,9 @@ untilMVar mvar io = void $
 cancelHandler :: (SomeLspId -> IO ()) -> LSP.Handlers (ServerM c)
 cancelHandler cancelRequest = LSP.notificationHandler SMethod_CancelRequest $ \TNotificationMessage{_params=CancelParams{_id}} ->
   liftIO $ cancelRequest (SomeLspId (toLspId _id))
+  where toLspId :: (Int32 |? T.Text) -> LspId a
+        toLspId (InL x) = IdInt x
+        toLspId (InR y) = IdString y
 
 shutdownHandler :: IO () -> LSP.Handlers (ServerM c)
 shutdownHandler stopReactor = LSP.requestHandler SMethod_Shutdown $ \_ resp -> do

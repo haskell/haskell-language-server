@@ -170,14 +170,14 @@ instance Pretty Log where
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ isn't _workDoneProgressBegin v-> Just ()
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ Lens.isn't _workDoneProgressBegin v-> Just ()
   _ -> Nothing
 
 -- | Wait for the first progress end step
 -- Also implemented in hls-test-utils Test.Hls
 waitForProgressDone :: Session ()
 waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ isn't _workDoneProgressEnd v -> Just ()
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ Lens.isn't _workDoneProgressEnd v -> Just ()
   _ -> Nothing
 
 -- | Wait for all progress to be done
@@ -188,7 +188,7 @@ waitForAllProgressDone = loop
   where
     loop = do
       ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ isn't _workDoneProgressEnd v-> Just ()
+        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ Lens.isn't _workDoneProgressEnd v-> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop

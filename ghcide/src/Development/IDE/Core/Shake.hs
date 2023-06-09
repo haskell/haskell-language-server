@@ -1332,7 +1332,7 @@ getAllDiagnostics =
     fmap (concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> [TextDocumentContentChangeEvent] -> STM ()
-updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (changes) =
+updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} changes =
     STM.focus (Focus.alter f) uri positionMapping
       where
         uri = toNormalizedUri _uri

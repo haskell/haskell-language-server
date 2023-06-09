@@ -9,6 +9,7 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MonadComprehensions        #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -19,7 +20,6 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE ViewPatterns               #-}
-
 module Ide.Types
 ( PluginDescriptor(..), defaultPluginDescriptor, defaultCabalPluginDescriptor
 , defaultPluginPriority
@@ -405,7 +405,7 @@ instance PluginMethod Request Method_TextDocumentCodeAction where
 
 instance PluginRequestMethod Method_TextDocumentCodeAction where
   combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _ _) (CodeActionParams _ _ _ _ context) resps =
-      InL $ fmap compat $ filter wasRequested $ concat $ dumpNulls resps
+      InL $ fmap compat $ filter wasRequested $ concat $ mapMaybe nullToMaybe $ toList resps
     where
       compat :: (Command |? CodeAction) -> (Command |? CodeAction)
       compat x@(InL _) = x
@@ -555,14 +555,14 @@ instance PluginRequestMethod Method_TextDocumentReferences where
 instance PluginRequestMethod Method_WorkspaceSymbol where
     -- TODO: combine WorkspaceSymbol. Currently all WorkspaceSymbols are dumped
     -- as it is new of lsp-types 2.0.0.0
-    combineResponses _ _ _ _ xs = InL $ mconcat $ takeLefts xs
+    combineResponses _ _ _ _ xs = InL $ mconcat $ takeLefts $ toList xs
 
 instance PluginRequestMethod Method_TextDocumentCodeLens where
 
 instance PluginRequestMethod Method_TextDocumentRename where
 
 instance PluginRequestMethod Method_TextDocumentHover where
-  combineResponses _ _ _ _ (dumpNulls -> hs :: [Hover]) =
+  combineResponses _ _ _ _ (mapMaybe nullToMaybe . toList -> hs :: [Hover]) =
     if mcontent ^. L.value == ""
         then InR Null
         else InL $ Hover (InL mcontent) r
@@ -579,7 +579,7 @@ instance PluginRequestMethod Method_TextDocumentDocumentSymbol where
       uri' = params ^. L.textDocument . L.uri
       supportsHierarchy = Just True == (tdc >>= _documentSymbol >>= _hierarchicalDocumentSymbolSupport)
       dsOrSi :: [Either [SymbolInformation] [DocumentSymbol]]
-      dsOrSi =  toEither <$> dumpNulls xs
+      dsOrSi =  toEither <$> mapMaybe nullToMaybe' (toList xs)
       res :: [SymbolInformation] |? ([DocumentSymbol] |? Null)
       res
         | supportsHierarchy = InR $ InL $ concatMap (either (fmap siToDs) id) dsOrSi
@@ -662,6 +662,13 @@ instance PluginRequestMethod Method_CallHierarchyOutgoingCalls where
 instance PluginRequestMethod (Method_CustomMethod m) where
   combineResponses _ _ _ _ (x :| _) = x
 
+takeLefts :: [a |? b] -> [a]
+takeLefts = mapMaybe (\x -> [res | (InL res) <- Just x])
+
+nullToMaybe' :: (a |? (b |? Null)) -> Maybe (a |? b)
+nullToMaybe' (InL x)       = Just $ InL x
+nullToMaybe' (InR (InL x)) = Just $ InR x
+nullToMaybe' (InR (InR _)) = Nothing
 -- ---------------------------------------------------------------------
 -- Plugin Notifications
 -- ---------------------------------------------------------------------
