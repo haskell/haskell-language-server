@@ -29,7 +29,7 @@ import           Wingman.Types
 
 ------------------------------------------------------------------------------
 -- | Provide the "empty case completion" code lens
-hoverProvider :: PluginMethodHandler IdeState Method_TextDocumentHover
+hoverProvider :: PluginMethodHandler IdeState TextDocumentHover
 hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) (unsafeMkCurrent -> pos) _)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       let loc = fmap (realSrcLocSpan . positionToRealSrcLoc nfp) pos
@@ -48,7 +48,7 @@ hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) (unsafeMkCurr
               z <- liftIO $ attempt_it rsl ctx jdg $ T.unpack program
               pure $ Hover
                 { _contents = HoverContents
-                            $ MarkupContent MarkupKind_Markdown
+                            $ MarkupContent MkMarkdown
                             $ either T.pack T.pack z
                 , _range = Just $ unTrack tr_range
                 }

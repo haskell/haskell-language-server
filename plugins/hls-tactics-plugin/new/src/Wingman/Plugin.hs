@@ -35,7 +35,7 @@ descriptor recorder plId
       : fmap makeTacticInteraction [minBound .. maxBound]
       )
   $ (defaultPluginDescriptor plId)
-      { pluginHandlers = mkPluginHandler SMethod_TextDocumentHover hoverProvider
+      { pluginHandlers = mkPluginHandler STextDocumentHover hoverProvider
       , pluginRules = wingmanRules (cmapWithPrio LogWingmanLanguageServer recorder) plId
       , pluginConfigDescriptor =
           defaultConfigDescriptor

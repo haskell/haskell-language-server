@@ -59,9 +59,9 @@ buildHandlers cs =
   flip foldMap cs $ \(Interaction (c :: Continuation sort target b)) ->
     case c_makeCommand c of
       SynthesizeCodeAction k ->
-        mkPluginHandler SMethod_TextDocumentCodeAction $ codeActionProvider @target (c_sort c) k
+        mkPluginHandler STextDocumentCodeAction $ codeActionProvider @target (c_sort c) k
       SynthesizeCodeLens k ->
-        mkPluginHandler SMethod_TextDocumentCodeLens   $ codeLensProvider   @target (c_sort c) k
+        mkPluginHandler STextDocumentCodeLens   $ codeLensProvider   @target (c_sort c) k
 
 
 ------------------------------------------------------------------------------
@@ -89,7 +89,7 @@ runContinuation
 runContinuation plId cont state (fc, b) = do
   fromMaybeT
     (Left $ ResponseError
-              { _code = ErrorCodes_InternalError
+              { _code = InternalError
               , _message = T.pack "TODO(sandy)"
               , _xdata =  Nothing
               } ) $ do
@@ -114,7 +114,7 @@ runContinuation plId cont state (fc, b) = do
             case mkWorkspaceEdits (enableQuasiQuotes le_dflags) ccs (fc_uri le_fileContext) (unTrack pm) gr of
               Left errs ->
                 pure $ Just $ ResponseError
-                  { _code    = ErrorCodes_InternalError
+                  { _code    = InternalError
                   , _message = T.pack $ show errs
                   , _xdata   = Nothing
                   }
@@ -129,7 +129,7 @@ sendEdits :: WorkspaceEdit -> MaybeT (LspM Plugin.Config) ()
 sendEdits edits =
   void $ lift $
     sendRequest
-      SMethod_WorkspaceApplyEdit
+      SWorkspaceApplyEdit
       (ApplyWorkspaceEditParams Nothing edits)
       (const $ pure ())
 
@@ -174,7 +174,7 @@ codeActionProvider
      -> TargetArgs target
      -> MaybeT (LspM Plugin.Config) [(Metadata, b)]
        )
-    -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
+    -> PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider sort k state plId
                    (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
   fromMaybeT (Right $ List []) $ do
@@ -201,7 +201,7 @@ codeLensProvider
      -> TargetArgs target
      -> MaybeT (LspM Plugin.Config) [(Range, Metadata, b)]
       )
-    -> PluginMethodHandler IdeState Method_TextDocumentCodeLens
+    -> PluginMethodHandler IdeState TextDocumentCodeLens
 codeLensProvider sort k state plId
                  (CodeLensParams _ _ (TextDocumentIdentifier uri)) = do
       fromMaybeT (Right $ List []) $ do
