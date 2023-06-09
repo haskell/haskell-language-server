@@ -44,7 +44,6 @@ import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Logger
 import qualified Development.IDE.Types.Logger          as Logger
 import           Development.IDE.Types.Shake           (WithHieDb)
-import           Ide.TempLSPTypeFunctions
 import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
                                                         type (<~>))

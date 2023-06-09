@@ -52,7 +52,6 @@ import           Development.IDE.Types.Location
 import           HieDb.Query
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
-import           Ide.TempLSPTypeFunctions
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types

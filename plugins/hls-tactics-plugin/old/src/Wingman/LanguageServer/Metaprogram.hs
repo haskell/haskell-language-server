@@ -20,7 +20,6 @@ import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (empty)
 import           Ide.Types
-import           Ide.TempLSPTypeFunctions
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Protocol.Message
 import           Prelude hiding (span)

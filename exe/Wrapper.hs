@@ -54,7 +54,6 @@ import           Development.IDE.Types.Logger       (Doc, Logger (Logger),
                                                      toCologActionWithPrio)
 import           GHC.Stack.Types                    (emptyCallStack)
 import           Ide.Plugin.Config                  (Config)
-import           Ide.TempLSPTypeFunctions
 import           Ide.Types                          (IdePlugins (IdePlugins))
 import           Language.LSP.Protocol.Message      (Method (Method_Initialize),
                                                      ResponseError,

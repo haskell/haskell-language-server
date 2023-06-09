@@ -63,7 +63,6 @@ import           Data.List.Extra                 (find)
 import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
 import           Development.IDE                 (GhcVersion (..), ghcVersion)
-import           Ide.TempLSPTypeFunctions
 import qualified Language.LSP.Test               as Test
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Protocol.Message
@@ -81,15 +80,15 @@ import           Test.Tasty.HUnit                (Assertion, assertFailure,
                                                   (@?=))
 
 noLiteralCaps :: ClientCapabilities
-noLiteralCaps = defClientCapabilities & L.textDocument ?~ textDocumentCaps
+noLiteralCaps = def & L.textDocument ?~ textDocumentCaps
   where
-    textDocumentCaps = defTextDocumentCapabilities { _codeAction = Just codeActionCaps }
+    textDocumentCaps = def { _codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
 codeActionSupportCaps :: ClientCapabilities
-codeActionSupportCaps = defClientCapabilities & L.textDocument ?~ textDocumentCaps
+codeActionSupportCaps = def & L.textDocument ?~ textDocumentCaps
   where
-    textDocumentCaps = defTextDocumentCapabilities { _codeAction = Just codeActionCaps }
+    textDocumentCaps = def { _codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True) Nothing Nothing Nothing Nothing
     literalSupport = #codeActionKind .==  (#valueSet .== [])
 
@@ -249,7 +248,7 @@ inspectCommand cars s = fromCommand <$> onMatch cars predicate err
 waitForDiagnosticsFrom :: TextDocumentIdentifier -> Test.Session [Diagnostic]
 waitForDiagnosticsFrom doc = do
     diagsNot <- skipManyTill Test.anyMessage (Test.message SMethod_TextDocumentPublishDiagnostics)
-    let ( diags) = diagsNot ^. L.params . L.diagnostics
+    let diags = diagsNot ^. L.params . L.diagnostics
     if doc ^. L.uri /= diagsNot ^. L.params . L.uri
        then waitForDiagnosticsFrom doc
        else return diags

@@ -31,7 +31,6 @@ import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (getNormalizedFilePath,
                                                        handleMaybeM,
                                                        pluginResponse)
-import           Ide.TempLSPTypeFunctions             (maybeToNull)
 import           Ide.Types                            hiding (pluginId)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types

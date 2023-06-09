@@ -38,7 +38,6 @@ library
     Ide.Plugin.ConfigUtils
     Ide.Plugin.Properties
     Ide.Plugin.RangeMap
-    Ide.TempLSPTypeFunctions
     Ide.PluginUtils
     Ide.Types
 

@@ -163,7 +163,6 @@ import           GHC.Stack                              (HasCallStack)
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
-import           Ide.TempLSPTypeFunctions
 import           Ide.Types                              (IdePlugins (IdePlugins),
                                                          PluginDescriptor (pluginId),
                                                          PluginId)
@@ -639,9 +638,7 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
                 else noProgressReporting
         actionQueue <- newQueue
 
-        let -- TODO: Find some saner default ClientCapabilities so we don't need to
-            -- use Nothing 54 times.
-            clientCapabilities = maybe defClientCapabilities LSP.resClientCapabilities lspEnv
+        let clientCapabilities = maybe def LSP.resClientCapabilities lspEnv
         dirtyKeys <- newTVarIO mempty
         -- Take one VFS snapshot at the start
         vfsVar <- newTVarIO =<< vfsSnapshot lspEnv

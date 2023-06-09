@@ -82,7 +82,6 @@ import           Development.IDE.Graph
 import           GHC                           (DynFlags)
 import           GHC.Generics
 import           Ide.Plugin.Properties
-import           Ide.TempLSPTypeFunctions
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
