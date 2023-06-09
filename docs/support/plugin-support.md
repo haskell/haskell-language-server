@@ -63,6 +63,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-refine-imports-plugin`         | 2    |                          |
 | `hls-stylish-haskell-plugin`        | 2    | 9.6                      |
 | `hls-tactics-plugin`                | 2    | 9.2, 9.4, 9.6            |
+| `hls-overloaded-recrod-dot-plugin`  | 2    | 8.10, 9.0                |
 | `hls-haddock-comments-plugin`       | 3    | 9.2, 9.4, 9.6            |
 | `hls-stan-plugin`                   | 3    | 8.6, 9.0, 9.2, 9.4, 9.6  |
 | `hls-retrie-plugin`                 | 3    |                          |
