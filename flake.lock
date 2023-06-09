@@ -17,30 +17,21 @@
       }
     },
     "flake-utils": {
+      "inputs": {
+        "systems": "systems"
+      },
       "locked": {
-        "lastModified": 1678901627,
-        "narHash": "sha256-U02riOqrKKzwjsxc/400XnElV+UtPUQWpANPlyazjH0=",
+        "lastModified": 1685518550,
+        "narHash": "sha256-o2d0KcvaXzTrPRIo0kOLV0/QXHhDQ5DTi+OxcjO8xqY=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "93a2b84fc4b70d9e089d029deacc3583435c2ed6",
+        "rev": "a1720a10a6cfe8234c0e93907ffe81be440f4cef",
         "type": "github"
       },
       "original": {
         "owner": "numtide",
         "repo": "flake-utils",
         "type": "github"
-      }
-    },
-    "fourmolu-012": {
-      "flake": false,
-      "locked": {
-        "narHash": "sha256-yru8ls67DMM6WSeVU6xDmmwa48I8S9CUv9NBaxSQ29M=",
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/fourmolu-0.12.0.0/fourmolu-0.12.0.0.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://hackage.haskell.org/package/fourmolu-0.12.0.0/fourmolu-0.12.0.0.tar.gz"
       }
     },
     "ghc-lib-parser-94": {
@@ -91,15 +82,15 @@
     "haskell-hie-bios": {
       "flake": false,
       "locked": {
-        "lastModified": 1679040151,
-        "narHash": "sha256-1Y/9wCoR+nMvSrEr0EHnRBCkUuhqWPgPuukNM5zzRT8=",
-        "owner": "mpickering",
+        "lastModified": 1683794382,
+        "narHash": "sha256-GCf5yVZWphqyMiVvnrGUo5baUCcQz2oo3nL/ahTYVmc=",
+        "owner": "haskell",
         "repo": "hie-bios",
-        "rev": "af192d4116a382afa1721a6f8d77729f98993082",
+        "rev": "57db96016f0b9084e3fc530fd4a0708efc98a6a3",
         "type": "github"
       },
       "original": {
-        "owner": "mpickering",
+        "owner": "haskell",
         "repo": "hie-bios",
         "type": "github"
       }
@@ -117,6 +108,23 @@
       "original": {
         "owner": "wz1000",
         "repo": "HieDb",
+        "type": "github"
+      }
+    },
+    "haskell-implicit-hie-cradle": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1686408106,
+        "narHash": "sha256-OjU5XauKoaFwD1LSQ6AzWQi1zSsiBLLp955lN5t0ZEY=",
+        "owner": "smunix",
+        "repo": "implicit-hie-cradle",
+        "rev": "52e9dd9c5e8f4bbdfdfcf3f841df60b38e4e9456",
+        "type": "github"
+      },
+      "original": {
+        "owner": "smunix",
+        "ref": "smunix-patch-hls-1",
+        "repo": "implicit-hie-cradle",
         "type": "github"
       }
     },
@@ -151,11 +159,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1680680186,
-        "narHash": "sha256-DqfuocQeQc4pk/ggLntlcf3AoGmnkCcjjL8geGUxv5I=",
+        "lastModified": 1686355959,
+        "narHash": "sha256-w+6cxJ3dmDAURDvIKec11Ht12vWk2nEznWZEYlcEor0=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "391e94a986322a002a084574ccf2fd73814872b1",
+        "rev": "35885ddb2374c090aa6d98ea97e469e269e27d60",
         "type": "github"
       },
       "original": {
@@ -193,12 +201,12 @@
       "inputs": {
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
-        "fourmolu-012": "fourmolu-012",
         "ghc-lib-parser-94": "ghc-lib-parser-94",
         "gitignore": "gitignore",
         "haskell-ghc-exactprint": "haskell-ghc-exactprint",
         "haskell-hie-bios": "haskell-hie-bios",
         "haskell-hiedb": "haskell-hiedb",
+        "haskell-implicit-hie-cradle": "haskell-implicit-hie-cradle",
         "haskell-unix-compat": "haskell-unix-compat",
         "hlint-35": "hlint-35",
         "nixpkgs": "nixpkgs",
@@ -217,6 +225,21 @@
       "original": {
         "type": "tarball",
         "url": "https://hackage.haskell.org/package/stylish-haskell-0.14.4.0/stylish-haskell-0.14.4.0.tar.gz"
+      }
+    },
+    "systems": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
       }
     }
   },

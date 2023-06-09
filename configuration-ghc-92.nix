@@ -39,6 +39,8 @@ let
 
       hie-bios = hself.callCabal2nix "hie-bios" inputs.haskell-hie-bios { };
 
+      implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.haskell-implicit-hie-cradle { };
+
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.

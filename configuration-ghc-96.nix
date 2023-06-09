@@ -35,6 +35,7 @@ let
       MonadRandom = hself.callHackage "MonadRandom" "0.6" { };
       hiedb = hself.callCabal2nix "hiedb" inputs.haskell-hiedb { };
       hie-bios = hself.callCabal2nix "hie-bios" inputs.haskell-hie-bios { };
+      implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.haskell-implicit-hie-cradle { };
       ghc-exactprint = hself.callCabal2nix "ghc-exactprint" inputs.haskell-ghc-exactprint { };
 
       # ptr-poker breaks on MacOS without SSE2 optimizations
@@ -42,7 +43,14 @@ let
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
       ormolu = hself.ormolu_0_5_3_0;
-      fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu-012 { };
+
+      # TODO: smunix: nix fails to build fourmolu-0.13 from Hackage with these errors:
+      #   tar: */fourmolu/0.13.0.0/fourmolu.json: Not found in archive
+      #   tar: */fourmolu/0.13.0.0/fourmolu.cabal: Not found in archive
+      #   tar: Exiting with failure status due to previous errors
+      # As an alternative, we could build directly from github:fourmolu. How do people
+      # feel about this?
+      fourmolu = hself.callHackage "fourmolu" "0.12.0.0" {};
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
