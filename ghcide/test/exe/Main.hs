@@ -47,6 +47,7 @@ import           Control.Concurrent
 import           Control.Exception                        (bracket_, catch,
                                                            finally)
 import qualified Control.Lens                             as Lens
+import qualified Control.Lens.Extras                      as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class                   (MonadIO, liftIO)
 import           Data.Aeson                               (toJSON)
@@ -170,14 +171,14 @@ instance Pretty Log where
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ Lens.isn't _workDoneProgressBegin v-> Just ()
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | Lens.is _workDoneProgressBegin v-> Just ()
   _ -> Nothing
 
 -- | Wait for the first progress end step
 -- Also implemented in hls-test-utils Test.Hls
 waitForProgressDone :: Session ()
 waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ Lens.isn't _workDoneProgressEnd v -> Just ()
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | Lens.is _workDoneProgressEnd v -> Just ()
   _ -> Nothing
 
 -- | Wait for all progress to be done
@@ -188,7 +189,7 @@ waitForAllProgressDone = loop
   where
     loop = do
       ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ Lens.isn't _workDoneProgressEnd v-> Just ()
+        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) |Lens.is _workDoneProgressEnd v-> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
@@ -282,7 +283,8 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO color"                   (^. L.colorProvider) (Just $ InL False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ InL False)
     , che "   execute command"      _executeCommandProvider [typeLensCommandId, blockCommandId]
-    , chk "   workspace"                   (^. L.workspace) (Just $ #workspaceFolders .== Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )} .+ #fileOperations .== Nothing)
+    , chk "   workspace"                   (^. L.workspace) (Just $ #workspaceFolders .== Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )}
+                                                                 .+ #fileOperations   .== Nothing)
     , chk "NO experimental"             (^. L.experimental) Nothing
     ] where
 
@@ -323,7 +325,9 @@ diagnosticTests = testGroup "diagnostics"
       let content = T.unlines [ "module Testing wher" ]
       doc <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
-      let change = TextDocumentContentChangeEvent $ InL $ #range .== (Range (Position 0 15) (Position 0 19)) .+ #rangeLength .== Nothing .+ #text .== "where"
+      let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 15) (Position 0 19)
+                                                       .+ #rangeLength .== Nothing
+                                                       .+ #text .== "where"
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [])]
   , testSessionWait "introduce syntax error" $ do
@@ -331,14 +335,18 @@ diagnosticTests = testGroup "diagnostics"
       doc <- createDoc "Testing.hs" "haskell" content
       void $ skipManyTill anyMessage (message SMethod_WindowWorkDoneProgressCreate)
       waitForProgressBegin
-      let change = TextDocumentContentChangeEvent$ InL $ #range .== (Range (Position 0 15) (Position 0 18)) .+ #rangeLength .== Nothing .+ #text .== "wher"
+      let change = TextDocumentContentChangeEvent$ InL $ #range .== Range (Position 0 15) (Position 0 18)
+                                                      .+ #rangeLength .== Nothing
+                                                      .+ #text .== "wher"
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "parse error")])]
   , testSessionWait "update syntax error" $ do
       let content = T.unlines [ "module Testing(missing) where" ]
       doc <- createDoc "Testing.hs" "haskell" content
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'missing'")])]
-      let change = TextDocumentContentChangeEvent $ InL $ #range .== (Range (Position 0 15) (Position 0 16)) .+ #rangeLength .== Nothing .+ #text .== "l"
+      let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 15) (Position 0 16)
+                                                       .+ #rangeLength .== Nothing
+                                                       .+ #text .== "l"
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [(DiagnosticSeverity_Error, (0, 15), "Not in scope: 'lissing'")])]
   , testSessionWait "variable not in scope" $ do
@@ -414,7 +422,9 @@ diagnosticTests = testGroup "diagnostics"
             , "import ModuleA"
             ]
       _ <- createDoc "ModuleB.hs" "haskell" contentB
-      let change = TextDocumentContentChangeEvent $ InL $ #range .== (Range (Position 0 0) (Position 0 20)) .+ #rangeLength .== Nothing .+ #text .== ""
+      let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 0) (Position 0 20)
+                                                       .+ #rangeLength .== Nothing
+                                                       .+ #text .== ""
       changeDoc docA [change]
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Error, (1, 0), "Could not find module")])]
   , testSessionWait "add missing module" $ do
@@ -761,8 +771,12 @@ diagnosticTests = testGroup "diagnostics"
   ]
   where
       editPair x y = let p = Position x y ; p' = Position x (y+2) in
-        (TextDocumentContentChangeEvent $ InL $ #range .== Range p p .+ #rangeLength .== Nothing .+ #text .== "fd"
-        ,TextDocumentContentChangeEvent $ InL $ #range .== Range p p' .+ #rangeLength .== Nothing .+ #text .== "")
+        (TextDocumentContentChangeEvent $ InL $ #range .== Range p p
+                                             .+ #rangeLength .== Nothing
+                                             .+ #text .== "fd"
+        ,TextDocumentContentChangeEvent $ InL $ #range .== Range p p'
+                                             .+ #rangeLength .== Nothing
+                                             .+ #text .== "")
       editHeader = editPair 0 0
       editImport = editPair 2 10
       editBody   = editPair 3 10
@@ -2574,7 +2588,9 @@ dependentFileTest = testGroup "addDependentFile"
             [FileEvent (filePathToUri "dep-file.txt") FileChangeType_Changed ]
 
         -- Modifying Baz will now trigger Foo to be rebuilt as well
-        let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 2 0) (Position 2 6) .+ #rangeLength .== Nothing .+ #text .== "f = ()"
+        let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 2 0) (Position 2 6)
+                                                         .+ #rangeLength .== Nothing
+                                                         .+ #text .== "f = ()"
         changeDoc doc [change]
         expectDiagnostics [("Foo.hs", [])]
 
@@ -2864,7 +2880,9 @@ sessionDepsArePickedUp = testSession'
         [FileEvent (filePathToUri $ dir </> "hie.yaml") FileChangeType_Changed ]
     -- Send change event.
     let change =
-          TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 4 0) (Position 4 0) .+ #rangeLength .== Nothing .+ #text .== "\n"
+          TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 4 0) (Position 4 0)
+                                              .+ #rangeLength .== Nothing
+                                              .+ #text .== "\n"
     changeDoc doc [change]
     -- Now no errors.
     expectDiagnostics [("Foo.hs", [])]
@@ -3519,7 +3537,9 @@ positionMappingTests recorder =
                         range <- genRange rope
                         PrintableText replacement <- arbitrary
                         let newRope = runIdentity $ applyChange mempty rope
-                                (TextDocumentContentChangeEvent $ InL $ #range .== range .+ #rangeLength .== Nothing .+ #text .== replacement)
+                                (TextDocumentContentChangeEvent $ InL $ #range .== range
+                                                                     .+ #rangeLength .== Nothing
+                                                                     .+ #text .== replacement)
                         newPos <- genPosition newRope
                         pure (range, replacement, newPos)
                 forAll

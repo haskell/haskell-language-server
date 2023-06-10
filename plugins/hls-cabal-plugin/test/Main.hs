@@ -107,7 +107,9 @@ pluginTests = testGroup "Plugin Tests"
         expectNoMoreDiagnostics 1 cabalDoc "parsing"
         let theRange = Range (Position 3 20) (Position 3 23)
         -- Invalid license
-        changeDoc cabalDoc [TextDocumentContentChangeEvent $ InL $ #range .== theRange .+ #rangeLength .== Nothing .+ #text .== "MIT3"]
+        changeDoc cabalDoc [TextDocumentContentChangeEvent $ InL $ #range .== theRange
+                                                                .+ #rangeLength .== Nothing
+                                                                .+ #text .== "MIT3"]
         cabalDiags <- waitForDiagnosticsFrom cabalDoc
         unknownLicenseDiag <- liftIO $ inspectDiagnostic cabalDiags ["Unknown SPDX license identifier: 'MIT3'"]
         expectNoMoreDiagnostics 1 hsDoc "typechecking"

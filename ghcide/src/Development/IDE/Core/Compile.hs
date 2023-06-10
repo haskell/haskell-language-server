@@ -782,7 +782,7 @@ tagDiag :: (WarnReason, FileDiagnostic) -> (WarnReason, FileDiagnostic)
 tagDiag (w@(Reason warning), (nfp, sh, fd))
 #endif
   | Just tag <- requiresTag warning
-  = (w, (nfp, sh, fd { _tags = addTag tag (_tags fd) }))
+  = (w, (nfp, sh, fd { _tags = Just $ tag : concat (_tags fd) }))
   where
     requiresTag :: WarningFlag -> Maybe DiagnosticTag
     requiresTag Opt_WarnWarningsDeprecations
@@ -791,9 +791,6 @@ tagDiag (w@(Reason warning), (nfp, sh, fd))
       | wflag `elem` unnecessaryDeprecationWarningFlags
       = Just DiagnosticTag_Unnecessary
     requiresTag _ = Nothing
-    addTag :: DiagnosticTag -> Maybe [DiagnosticTag] -> Maybe [DiagnosticTag]
-    addTag t Nothing          = Just [t]
-    addTag t (Just ts) = Just (t : ts)
 -- other diagnostics are left unaffected
 tagDiag t = t
 
@@ -950,20 +947,20 @@ indexHieFile se mod_summary srcPath !hash hf = do
             case style of
                 Percentage -> LSP.WorkDoneProgressReport
                     { _kind = LSP.AString @"report"
-                        , _cancellable = Nothing
+                    , _cancellable = Nothing
                     , _message = Nothing
                     , _percentage = Just progressPct
                     }
                 Explicit -> LSP.WorkDoneProgressReport
                     { _kind = LSP.AString @"report"
-                        , _cancellable = Nothing
+                    , _cancellable = Nothing
                     , _message = Just $
                         T.pack " (" <> T.pack (show done) <> "/" <> T.pack (show $ done + remaining) <> ")..."
                     , _percentage = Nothing
                     }
                 NoProgress -> LSP.WorkDoneProgressReport
                   { _kind = LSP.AString @"report"
-                    , _cancellable = Nothing
+                  , _cancellable = Nothing
                   , _message = Nothing
                   , _percentage = Nothing
                   }

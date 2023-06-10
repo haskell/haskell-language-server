@@ -80,9 +80,9 @@ progressCaps = fullCaps{_window = Just (WindowClientCapabilities (Just True) Not
 
 data ProgressMessage
   = ProgressCreate WorkDoneProgressCreateParams
-  | ProgressBegin ProgressParams
-  | ProgressReport ProgressParams
-  | ProgressEnd ProgressParams
+  | ProgressBegin ProgressToken WorkDoneProgressBegin
+  | ProgressReport ProgressToken WorkDoneProgressReport
+  | ProgressEnd ProgressToken WorkDoneProgressEnd
 
 data InterestingMessage a
   = InterestingMessage a
@@ -93,17 +93,20 @@ progressMessage =
   progressCreate <|> progressBegin <|> progressReport <|> progressEnd
   where
     progressCreate = ProgressCreate . view L.params <$> message SMethod_WindowWorkDoneProgressCreate
-    progressBegin = ProgressBegin <$> satisfyMaybe (\case
-      FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams t x))
-        | not $ isn't _workDoneProgressBegin x-> Just (ProgressParams t x)
+    progressBegin :: Session ProgressMessage
+    progressBegin = satisfyMaybe (\case
+      FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams t (preview _workDoneProgressBegin -> Just params))) ->
+        Just (ProgressBegin t params)
       _ -> Nothing)
-    progressReport = ProgressReport <$> satisfyMaybe (\case
-      FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams t x))
-        | not $ isn't _workDoneProgressReport x-> Just (ProgressParams t x)
+    progressReport :: Session ProgressMessage
+    progressReport = satisfyMaybe (\case
+      FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams t (preview _workDoneProgressReport -> Just params))) ->
+             Just (ProgressReport t params)
       _ -> Nothing)
-    progressEnd = ProgressEnd <$> satisfyMaybe (\case
-      FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams t x))
-        | not $ isn't _workDoneProgressEnd x -> Just (ProgressParams t x)
+    progressEnd :: Session ProgressMessage
+    progressEnd = satisfyMaybe (\case
+      FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams t (preview _workDoneProgressEnd -> Just params)))
+         -> Just (ProgressEnd t params)
       _ -> Nothing)
 
 interestingMessage :: Session a -> Session (InterestingMessage a)
@@ -145,13 +148,13 @@ updateExpectProgressStateAndRecurseWith f progressMessage expectedTitles activeP
   case progressMessage of
     ProgressCreate params -> do
       f expectedTitles ((params ^. L.token): activeProgressTokens)
-    ProgressBegin (ProgressParams token (preview _workDoneProgressBegin -> Just params)) -> do
+    ProgressBegin token params -> do
       liftIO $ token `expectedIn` activeProgressTokens
       f (delete (params ^. L.title) expectedTitles) activeProgressTokens
-    ProgressReport (ProgressParams token (preview _workDoneProgressBegin -> Just params)) -> do
+    ProgressReport token _ -> do
       liftIO $ token `expectedIn` activeProgressTokens
       f expectedTitles activeProgressTokens
-    ProgressEnd (ProgressParams token (preview _workDoneProgressBegin -> Just params)) -> do
+    ProgressEnd token _ -> do
       liftIO $ token `expectedIn` activeProgressTokens
       f expectedTitles (delete token activeProgressTokens)
 

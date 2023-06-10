@@ -116,7 +116,7 @@ referencesAtPoint
   -> NormalizedFilePath -- ^ The file the cursor is in
   -> Position -- ^ position in the file
   -> FOIReferences -- ^ references data for FOIs
-  -> m ([Location] |? Null)
+  -> m [Location]
 referencesAtPoint withHieDb nfp pos refs = do
   -- The database doesn't have up2date references data for the FOIs so we must collect those
   -- from the Shake graph.
@@ -135,7 +135,7 @@ referencesAtPoint withHieDb nfp pos refs = do
         refs <- liftIO $ withHieDb (\hieDb -> findTypeRefs hieDb True (nameOccName name) (Just $ moduleName mod) (Just $ moduleUnit mod) exclude)
         pure $ mapMaybe typeRowToLoc refs
       _ -> pure []
-  pure $ InL $ nubOrd $ foiRefs ++ concat nonFOIRefs ++ concat typeRefs
+  pure $ nubOrd $ foiRefs ++ concat nonFOIRefs ++ concat typeRefs
 
 rowToLoc :: Res RefRow -> Maybe Location
 rowToLoc (row:.info) = flip Location range <$> mfile

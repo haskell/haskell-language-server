@@ -31,9 +31,7 @@ import           Development.IDE.Types.HscEnvEq       (hscEnv)
 import           Development.IDE.Types.Location
 import qualified HieDb
 import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
-                                                       Null,
-                                                       SymbolInformation (..),
-                                                       type (|?) (..))
+                                                       SymbolInformation (..))
 
 
 -- | Eventually this will lookup/generate URIs for files in dependencies, but not in the
@@ -110,7 +108,7 @@ highlightAtPoint file pos = runMaybeT $ do
     mapMaybe toCurrentHighlight <$>AtPoint.documentHighlight hf rf pos'
 
 -- Refs are not an IDE action, so it is OK to be slow and (more) accurate
-refsAtPoint :: NormalizedFilePath -> Position -> Action ([Location] |? Null)
+refsAtPoint :: NormalizedFilePath -> Position -> Action [Location]
 refsAtPoint file pos = do
     ShakeExtras{withHieDb} <- getShakeExtras
     fs <- HM.keys <$> getFilesOfInterestUntracked

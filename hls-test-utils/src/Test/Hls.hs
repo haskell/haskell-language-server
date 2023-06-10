@@ -60,7 +60,7 @@ import           Control.Applicative.Combinators
 import           Control.Concurrent.Async           (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Base
-import           Control.Lens                       (isn't)
+import           Control.Lens.Extras                (is)
 import           Control.Monad                      (guard, unless, void)
 import           Control.Monad.Extra                (forM)
 import           Control.Monad.IO.Class
@@ -420,7 +420,7 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
 -- | Wait for the next progress end step
 waitForProgressDone :: Session ()
 waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ isn't _workDoneProgressEnd v-> Just ()
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | is _workDoneProgressEnd v-> Just ()
   _ -> Nothing
 
 -- | Wait for all progress to be done
@@ -430,7 +430,7 @@ waitForAllProgressDone = loop
   where
     loop = do
       ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ isn't _workDoneProgressEnd v -> Just ()
+        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | is _workDoneProgressEnd v -> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop

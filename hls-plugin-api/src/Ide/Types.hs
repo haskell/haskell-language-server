@@ -964,10 +964,9 @@ pROCESS_ID :: T.Text
 pROCESS_ID = unsafePerformIO getPid
 
 mkLspCommand :: PluginId -> CommandId -> T.Text -> Maybe [Value] -> Command
-mkLspCommand plid cn title args' = Command title cmdId args
+mkLspCommand plid cn title args = Command title cmdId args
   where
     cmdId = mkLspCmdId pROCESS_ID plid cn
-    args = args'
 
 mkLspCmdId :: T.Text -> PluginId -> CommandId -> T.Text
 mkLspCmdId pid (PluginId plid) (CommandId cid)

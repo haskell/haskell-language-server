@@ -97,17 +97,7 @@ source-repository-package
   type:git
   location: https://github.com/joyfulmantis/lsp
   tag: 75826fbf344d62b59532008c190e72927158ea7a
-  subdir: lsp
-source-repository-package
-  type:git
-  location: https://github.com/joyfulmantis/lsp
-  tag: 75826fbf344d62b59532008c190e72927158ea7a
-  subdir: lsp-types
-source-repository-package
-  type:git
-  location: https://github.com/joyfulmantis/lsp
-  tag: 75826fbf344d62b59532008c190e72927158ea7a
-  subdir: lsp-test
+  subdir: lsp lsp-types lsp-test
 
 
 allow-newer:

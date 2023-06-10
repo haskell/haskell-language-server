@@ -29,7 +29,8 @@ import           Control.Applicative.Combinators    (skipManyTill)
 import           Control.Concurrent.Async           (withAsync)
 import           Control.Exception.Safe             (IOException, handleAny,
                                                      try)
-import           Control.Lens                       (isn't, (^.))
+import           Control.Lens                       ((^.))
+import           Control.Lens.Extras                (is)
 import           Control.Monad.Extra                (allM, forM, forM_, forever,
                                                      unless, void, when,
                                                      whenJust, (&&^))
@@ -59,6 +60,7 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types        hiding (Null,
                                                      SemanticTokenAbsolute (..))
 import           Language.LSP.Test
+import qualified Lanuguage.LSP.Protocol.Types       as LSP
 import           Numeric.Natural
 import           Options.Applicative
 import           System.Directory
@@ -72,7 +74,9 @@ import           Text.Printf
 
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
-    TextDocumentContentChangeEvent $ InL $ #range .== Range p p .+ #rangeLength .== Nothing .+ #text .== "a"
+    TextDocumentContentChangeEvent $ InL $ #range .== Range p p
+                                        .+ #rangeLength .== Nothing
+                                        .+ #text .== "a"
 
 data DocumentPositions = DocumentPositions {
     -- | A position that can be used to generate non null goto-def and completion responses
@@ -210,7 +214,9 @@ experiments =
       benchWithSetup
         "hole fit suggestions"
         ( mapM_ $ \DocumentPositions{..} -> do
-            let edit  =TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom .+ #rangeLength .== Nothing .+ #text .== t
+            let edit  =TextDocumentContentChangeEvent $ InL $ #range .== Range bottom bottom
+                                                           .+ #rangeLength .== Nothing
+                                                           .+ #text .== t
                 bottom = Position maxBound 0
                 t = T.unlines
                     [""
@@ -238,7 +244,7 @@ experiments =
     where hasDefinitions (InL (Definition (InL _)))  = True
           hasDefinitions (InL (Definition (InR ls))) = not $ null ls
           hasDefinitions (InR (InL ds))              = not $ null ds
-          hasDefinitions _                           = False
+          hasDefinitions (InR (InR LSP.Null))        = False
 ---------------------------------------------------------------------------------------------
 
 examplesPath :: FilePath
@@ -495,7 +501,7 @@ waitForProgressDone = loop
   where
     loop = do
       ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | not $ isn't _workDoneProgressEnd v -> Just ()
+        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | is _workDoneProgressEnd v -> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
@@ -640,11 +646,14 @@ setupDocumentContents config =
 
         -- Setup the special positions used by the experiments
         lastLine <- fromIntegral . length . T.lines <$> documentContents doc
-        changeDoc doc [TextDocumentContentChangeEvent $ InL $ #range .== (Range (Position lastLine 0) (Position lastLine 0)) .+ #rangeLength .== Nothing .+ #text .== T.unlines [ "_hygienic = \"hygienic\"" ]]
+        changeDoc doc [TextDocumentContentChangeEvent $ InL
+                        $ #range .== Range (Position lastLine 0) (Position lastLine 0)
+                       .+ #rangeLength .== Nothing
+                       .+ #text .== T.unlines [ "_hygienic = \"hygienic\"" ]]
         let
         -- Points to a string in the target file,
         -- convenient for hygienic edits
-            stringLiteralP = (Position lastLine 15)
+            stringLiteralP = Position lastLine 15
 
         -- Find an identifier defined in another file in this project
         symbols <- getDocumentSymbols doc

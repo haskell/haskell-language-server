@@ -99,4 +99,23 @@ rules recorder plId = do
           message :: T.Text
           message =
             T.unlines $
-              [ " 
+              [ " ✲ Name:        " <> inspectionName inspection,
+                " ✲ Description: " <> inspectionDescription inspection,
+                " ✲ Severity:    " <> (T.pack $ show $ inspectionSeverity inspection),
+                " ✲ Category:    " <> T.intercalate " "
+                  (map (("#" <>) . unCategory) $ toList $ inspectionCategory inspection),
+                "Possible solutions:"
+              ]
+                ++ map ("  - " <>) (inspectionSolution inspection)
+        return ( file,
+          ShowDiag,
+          LSP.Diagnostic
+            { _range = realSrcSpanToRange observationSrcSpan,
+              _severity = Just LSP.DsHint,
+              _code = Just (LSP.InR $ unId (inspectionId inspection)),
+              _source = Just "stan",
+              _message = message,
+              _relatedInformation = Nothing,
+              _tags = Nothing
+            }
+          )

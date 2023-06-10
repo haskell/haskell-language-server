@@ -125,11 +125,15 @@ suggestionsTests =
         doc <- openDoc "Base.hs" "haskell"
         testHlintDiagnostics doc
 
-        let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 1 8) (Position 1 12) .+ #rangeLength .== Nothing .+ #text .== "x"
+        let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 1 8) (Position 1 12)
+                                                         .+ #rangeLength .== Nothing
+                                                         .+ #text .== "x"
         changeDoc doc [change]
         expectNoMoreDiagnostics 3 doc "hlint"
 
-        let change' = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 1 8) (Position 1 12) .+ #rangeLength .== Nothing .+ #text .== "id x"
+        let change' = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 1 8) (Position 1 12)
+                                                          .+ #rangeLength .== Nothing
+                                                          .+ #text .== "id x"
 
         changeDoc doc [change']
         testHlintDiagnostics doc

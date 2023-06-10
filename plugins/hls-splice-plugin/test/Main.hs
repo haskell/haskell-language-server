@@ -95,7 +95,9 @@ goldenTestWithEdit fp expect tc line col =
      waitForAllProgressDone
      alt <- liftIO $ T.readFile (fp <.> "error.hs")
      void $ applyEdit doc $ TextEdit theRange alt
-     changeDoc doc [TextDocumentContentChangeEvent $ InL $ #range .== theRange .+ #rangeLength .== Nothing .+ #text .== alt]
+     changeDoc doc [TextDocumentContentChangeEvent $ InL $ #range .== theRange
+                                                        .+ #rangeLength .== Nothing
+                                                        .+ #text .== alt]
      void waitForDiagnostics
      -- wait for the entire build to finish
      void waitForBuildQueue

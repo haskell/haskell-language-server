@@ -116,9 +116,9 @@ construct nfp hf (ident, contexts, ssp)
         renderSpan _           = ssp
 
         -- https://github.com/haskell/lsp/blob/e11b7c09658610f6d815d04db08a64e7cf6b4467/lsp-types/src/Language/LSP/Types/DocumentSymbol.hs#L97
-        -- There is no longer an unknown symbol, thus using SymbolKind_TypeParameter
-        -- which is 26
-        skUnknown = SymbolKind_TypeParameter
+        -- There is no longer an unknown symbol, thus using SymbolKind_Function
+        -- as this is the call-hierarchy plugin
+        skUnknown = SymbolKind_Function
 
         mkCallHierarchyItem' = mkCallHierarchyItem nfp
 

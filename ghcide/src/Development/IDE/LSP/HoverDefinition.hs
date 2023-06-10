@@ -45,7 +45,7 @@ references ide (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = liftIO
       logDebug (ideLogger ide) $
         "References request at position " <> T.pack (showPosition pos) <>
         " in file: " <> T.pack path
-      Right  <$> (runAction "references" ide $ refsAtPoint filePath pos)
+      Right . InL <$> (runAction "references" ide $ refsAtPoint filePath pos)
     Nothing -> pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) ("Invalid URI " <> T.pack (show uri)) Nothing
 
 wsSymbols :: IdeState -> WorkspaceSymbolParams -> LSP.LspM c (Either ResponseError [SymbolInformation])
