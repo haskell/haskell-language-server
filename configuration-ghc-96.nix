@@ -28,7 +28,7 @@ let
             broken = false;
             doCheck = false;
           });
-      apply-refact = hsuper.apply-refact_0_12_0_0;
+      apply-refact = hsuper.apply-refact_0_13_0_0;
       tagged = hself.callHackage "tagged" "0.8.7" { };
       primitive = hself.callHackage "primitive" "0.8.0.0" { };
       unix-compat = hself.callCabal2nix "unix-compat" inputs.haskell-unix-compat { };
