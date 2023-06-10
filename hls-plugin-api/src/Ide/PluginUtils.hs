@@ -41,6 +41,7 @@ where
 
 
 import           Control.Arrow                   ((&&&))
+import           Control.Lens                    ((^.))
 import           Control.Monad.Extra             (maybeM)
 import           Control.Monad.Trans.Class       (lift)
 import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
@@ -63,6 +64,7 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
+import qualified Language.LSP.Types.Lens         as J
 import qualified Text.Megaparsec                 as P
 import qualified Text.Megaparsec.Char            as P
 import qualified Text.Megaparsec.Char.Lexer      as P
@@ -98,7 +100,7 @@ data WithDeletions = IncludeDeletions | SkipDeletions
   deriving Eq
 
 -- | Generate a 'WorkspaceEdit' value from a pair of source Text
-diffText :: ClientCapabilities -> (Uri,T.Text) -> T.Text -> WithDeletions -> TextDocumentVersion -> WorkspaceEdit
+diffText :: ClientCapabilities -> (VersionedTextDocumentIdentifier,T.Text) -> T.Text -> WithDeletions -> WorkspaceEdit
 diffText clientCaps old new withDeletions =
   let
     supports = clientSupportsDocumentChanges clientCaps
@@ -161,16 +163,16 @@ diffTextEdit fText f2Text withDeletions = J.List r
 
 
 -- | A pure version of 'diffText' for testing
-diffText' :: Bool -> (Uri,T.Text) -> T.Text -> WithDeletions -> TextDocumentVersion -> WorkspaceEdit
-diffText' supports (f,fText) f2Text withDeletions version =
+diffText' :: Bool -> (VersionedTextDocumentIdentifier,T.Text) -> T.Text -> WithDeletions -> WorkspaceEdit
+diffText' supports (verTxtDocId,fText) f2Text withDeletions =
   if supports
     then WorkspaceEdit Nothing (Just docChanges) Nothing
     else WorkspaceEdit (Just h) Nothing Nothing
   where
     diff = diffTextEdit fText f2Text withDeletions
-    h = H.singleton f diff
+    h = H.singleton (verTxtDocId ^. J.uri) diff
     docChanges = J.List [InL docEdit]
-    docEdit = J.TextDocumentEdit (J.VersionedTextDocumentIdentifier f version) $ fmap InL diff
+    docEdit = J.TextDocumentEdit verTxtDocId $ fmap InL diff
 
 -- ---------------------------------------------------------------------
 

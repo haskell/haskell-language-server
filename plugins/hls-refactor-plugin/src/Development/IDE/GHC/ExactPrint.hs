@@ -210,16 +210,15 @@ instance Monad m => Monoid (Graft m a) where
 transform ::
     DynFlags ->
     ClientCapabilities ->
-    Uri ->
-    TextDocumentVersion ->
+    VersionedTextDocumentIdentifier ->
     Graft (Either String) ParsedSource ->
     Annotated ParsedSource ->
     Either String WorkspaceEdit
-transform dflags ccs uri version f a = do
+transform dflags ccs verTxtDocId f a = do
     let src = printA a
     a' <- transformA a $ runGraft f dflags
     let res = printA a'
-    pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions version
+    pure $ diffText ccs (verTxtDocId, T.pack src) (T.pack res) IncludeDeletions
 
 ------------------------------------------------------------------------------
 
@@ -228,17 +227,16 @@ transformM ::
     Monad m =>
     DynFlags ->
     ClientCapabilities ->
-    Uri ->
-    TextDocumentVersion ->
+    VersionedTextDocumentIdentifier ->
     Graft (ExceptStringT m) ParsedSource ->
     Annotated ParsedSource ->
     m (Either String WorkspaceEdit)
-transformM dflags ccs uri version f a = runExceptT $
+transformM dflags ccs verTextDocId f a = runExceptT $
     runExceptString $ do
         let src = printA a
         a' <- transformA a $ runGraft f dflags
         let res = printA a'
-        pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions version
+        pure $ diffText ccs (verTextDocId, T.pack src) (T.pack res) IncludeDeletions
 
 
 -- | Returns whether or not this node requires its immediate children to have

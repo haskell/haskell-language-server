@@ -42,7 +42,7 @@ addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsP
 addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
     caps <- getClientCapabilities
     pluginResponse $ do
-        nfp <- getNormalizedFilePath uri
+        nfp <- getNormalizedFilePath (verTxtDocId ^. J.uri)
         pm <- handleMaybeM "Unable to GetParsedModule"
             $ liftIO
             $ runAction "classplugin.addMethodPlaceholders.GetParsedModule" state
@@ -57,15 +57,15 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
         pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
         let edit =
                 if withSig
-                then mergeEdit (workspaceEdit caps old new textVersion) pragmaInsertion
-                else workspaceEdit caps old new textVersion
+                then mergeEdit (workspaceEdit caps old new) pragmaInsertion
+                else workspaceEdit caps old new
 
         void $ lift $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
 
         pure Null
     where
         toTextDocumentEdit edit =
-            TextDocumentEdit (VersionedTextDocumentIdentifier uri textVersion) (List [InL edit])
+            TextDocumentEdit verTxtDocId (List [InL edit])
 
         mergeEdit :: WorkspaceEdit -> [TextEdit] -> WorkspaceEdit
         mergeEdit WorkspaceEdit{..} edits = WorkspaceEdit
@@ -76,19 +76,18 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
             }
 
         workspaceEdit caps old new
-            = diffText caps (uri, old) new IncludeDeletions
+            = diffText caps (verTxtDocId, old) new IncludeDeletions
 
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState TextDocumentCodeAction
 codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginResponse $ do
-    nfp <- getNormalizedFilePath uri
-    version <- lift $ (^. J.version) <$> getVersionedTextDoc docId
-    actions <- join <$> mapM (mkActions nfp version) methodDiags
+    verTxtDocId <- lift $ getVersionedTextDoc docId
+    nfp <- getNormalizedFilePath (verTxtDocId ^. J.uri)
+    actions <- join <$> mapM (mkActions nfp verTxtDocId) methodDiags
     pure $ List actions
     where
-        uri = docId ^. J.uri
         List diags = context ^. J.diagnostics
 
         ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
@@ -96,10 +95,10 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
 
         mkActions
             :: NormalizedFilePath
-            -> TextDocumentVersion
+            -> VersionedTextDocumentIdentifier
             -> Diagnostic
             -> ExceptT String (LspT Ide.Plugin.Config.Config IO) [Command |? CodeAction]
-        mkActions docPath textVersion diag = do
+        mkActions docPath verTxtDocId diag = do
             (HAR {hieAst = ast}, pmap) <- handleMaybeM "Unable to GetHieAst"
                 . liftIO
                 . runAction "classplugin.findClassIdentifier.GetHieAst" state
@@ -116,7 +115,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
             implemented <- findImplementedMethods ast instancePosition
             logWith recorder Info (LogImplementedMethods cls implemented)
             pure
-                $ concatMap (mkAction textVersion)
+                $ concatMap mkAction
                 $ nubOrdOn snd
                 $ filter ((/=) mempty . snd)
                 $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
@@ -130,21 +129,21 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                         minimalDef = minDefToMethodGroups range sigs $ classMinimalDef cls
                         allClassMethods = ("all missing methods", makeMethodDefinitions range sigs)
 
-                mkAction :: TextDocumentVersion -> MethodGroup -> [Command |? CodeAction]
-                mkAction textVersion (name, methods)
+                mkAction :: MethodGroup -> [Command |? CodeAction]
+                mkAction (name, methods)
                     = [ mkCodeAction title
                             $ mkLspCommand plId codeActionCommandId title
-                                (Just $ mkCmdParams methods textVersion False)
+                                (Just $ mkCmdParams methods False)
                       , mkCodeAction titleWithSig
                             $ mkLspCommand plId codeActionCommandId titleWithSig
-                                (Just $ mkCmdParams methods textVersion True)
+                                (Just $ mkCmdParams methods True)
                       ]
                     where
                         title = "Add placeholders for " <> name
                         titleWithSig = title <> " with signature(s)"
 
-                mkCmdParams methodGroup textVersion withSig =
-                    [toJSON (AddMinimalMethodsParams uri range (List methodGroup) withSig textVersion)]
+                mkCmdParams methodGroup withSig =
+                    [toJSON (AddMinimalMethodsParams verTxtDocId range (List methodGroup) withSig)]
 
                 mkCodeAction title cmd
                     = InR

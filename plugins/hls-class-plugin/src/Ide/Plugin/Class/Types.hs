@@ -20,7 +20,7 @@ import           Development.IDE.Graph.Classes
 import           GHC.Generics
 import           Ide.Plugin.Class.Utils
 import           Ide.Types
-import           Language.LSP.Types            (TextDocumentVersion)
+import           Language.LSP.Types            (VersionedTextDocumentIdentifier)
 
 typeLensCommandId :: CommandId
 typeLensCommandId = "classplugin.typelens"
@@ -33,12 +33,11 @@ defaultIndent :: Int
 defaultIndent = 2
 
 data AddMinimalMethodsParams = AddMinimalMethodsParams
-    { uri         :: Uri
+    { verTxtDocId :: VersionedTextDocumentIdentifier
     , range       :: Range
     , methodGroup :: List (T.Text, T.Text)
     -- ^ (name text, signature text)
     , withSig     :: Bool
-    , textVersion :: TextDocumentVersion
     }
     deriving (Show, Eq, Generic, ToJSON, FromJSON)
 

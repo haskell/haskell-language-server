@@ -18,6 +18,7 @@ import           GHC.Parser.Annotation                 (AnnContext, AnnList,
 #endif
 
 import           Compat.HieTypes
+import           Control.Lens                          ((^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
@@ -55,7 +56,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens               as J
+import qualified Language.LSP.Types.Lens               as LSP
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -70,7 +71,6 @@ renameProvider :: PluginMethodHandler IdeState TextDocumentRename
 renameProvider state pluginId (RenameParams docId@(TextDocumentIdentifier uri) pos _prog newNameText) =
     pluginResponse $ do
         nfp <- handleUriToNfp uri
-        VersionedTextDocumentIdentifier{_version = version} <- lift $ getVersionedTextDoc docId
         directOldNames <- getNamesAtPos state nfp pos
         directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
 
@@ -94,8 +94,10 @@ renameProvider state pluginId (RenameParams docId@(TextDocumentIdentifier uri) p
         -- Perform rename
         let newName = mkTcOcc $ T.unpack newNameText
             filesRefs = collectWith locToUri refs
-            getFileEdit = flip $ getSrcEdit state version . replaceRefs newName
-        fileEdits <- mapM (uncurry getFileEdit) filesRefs
+            getFileEdit (uri, locations) = do
+              verTxtDocId <- lift $ getVersionedTextDoc (TextDocumentIdentifier uri)
+              getSrcEdit state verTxtDocId (replaceRefs newName locations)
+        fileEdits <- mapM getFileEdit filesRefs
         pure $ foldl' (<>) mempty fileEdits
 
 -- | Limit renaming across modules.
@@ -127,13 +129,12 @@ failWhenImportOrExport state nfp refLocs names = do
 getSrcEdit ::
     (MonadLsp config m) =>
     IdeState ->
-    TextDocumentVersion ->
+    VersionedTextDocumentIdentifier ->
     (ParsedSource -> ParsedSource) ->
-    Uri ->
     ExceptT String m WorkspaceEdit
-getSrcEdit state version updatePs uri = do
+getSrcEdit state verTxtDocId updatePs = do
     ccs <- lift getClientCapabilities
-    nfp <- handleUriToNfp uri
+    nfp <- handleUriToNfp (verTxtDocId ^. LSP.uri)
     annAst <- handleMaybeM ("No parsed source for: " ++ show nfp) $ liftIO $ runAction
         "Rename.GetAnnotatedParsedSource"
         state
@@ -146,7 +147,7 @@ getSrcEdit state version updatePs uri = do
     let src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
 #endif
-    pure $ diffText ccs (uri, src) res IncludeDeletions version
+    pure $ diffText ccs (verTxtDocId, src) res IncludeDeletions
 
 -- | Replace names at every given `Location` (in a given `ParsedSource`) with a given new name.
 replaceRefs ::
