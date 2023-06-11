@@ -4,6 +4,7 @@
 
 module Wingman.AbstractLSP.TacticActions where
 
+import           Control.Lens ((^.))
 import           Control.Monad (when)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans (lift)
@@ -16,6 +17,7 @@ import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Generics.SYB.GHC (mkBindListT, everywhereM')
+import qualified Language.LSP.Types.Lens as LSP
 import           Wingman.AbstractLSP.Types
 import           Wingman.CaseSplit
 import           Wingman.GHC (liftMaybe, isHole, pattern AMatch)
@@ -45,7 +47,7 @@ makeTacticInteraction cmd =
               }
     )
     $ \LspEnv{..} HoleJudgment{..} FileContext{..} var_name -> do
-        nfp <- getNfp fc_uri
+        nfp <- getNfp (fc_verTxtDocId ^. LSP.uri)
         let stale a = runStaleIde "tacticCmd" le_ideState nfp a
 
         let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) hj_range
