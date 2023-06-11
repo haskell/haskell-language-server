@@ -71,7 +71,7 @@
     # See details here: https://github.com/Avi-D-coder/implicit-hie-cradle/compare/master...smunix:implicit-hie-cradle:smunix-patch-hls-1?expand=1
     #
     haskell-implicit-hie-cradle = {
-      url = "github:smunix/implicit-hie-cradle?ref=smunix-patch-hls-1";
+      url = "github:smunix/implicit-hie-cradle?ref=smunix-patch-hls-0.5-1";
       flake = false;
     };
   };

@@ -114,16 +114,16 @@
     "haskell-implicit-hie-cradle": {
       "flake": false,
       "locked": {
-        "lastModified": 1686408106,
-        "narHash": "sha256-OjU5XauKoaFwD1LSQ6AzWQi1zSsiBLLp955lN5t0ZEY=",
+        "lastModified": 1686495518,
+        "narHash": "sha256-OAe+zOkMZuoTfVEMnxnCT1cmPgRF/riAR8nVdomnwxo=",
         "owner": "smunix",
         "repo": "implicit-hie-cradle",
-        "rev": "52e9dd9c5e8f4bbdfdfcf3f841df60b38e4e9456",
+        "rev": "d6aa00355898469af56cfd5e62f7fc8bd9959ded",
         "type": "github"
       },
       "original": {
         "owner": "smunix",
-        "ref": "smunix-patch-hls-1",
+        "ref": "smunix-patch-hls-0.5-1",
         "repo": "implicit-hie-cradle",
         "type": "github"
       }
