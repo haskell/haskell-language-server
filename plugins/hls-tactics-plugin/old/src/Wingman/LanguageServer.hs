@@ -621,14 +621,13 @@ mkDiagnostic severity r =
 mkWorkspaceEdits
     :: DynFlags
     -> ClientCapabilities
-    -> Uri
-    -> TextDocumentVersion
+    -> VersionedTextDocumentIdentifier
     -> Annotated ParsedSource
     -> Graft (Either String) ParsedSource
     -> Either UserFacingMessage WorkspaceEdit
-mkWorkspaceEdits dflags ccs uri version pm g = do
+mkWorkspaceEdits dflags ccs verTxtDocId pm g = do
   let pm' = runIdentity $ transformA pm annotateMetaprograms
-  let response = transform dflags ccs uri version g pm'
+  let response = transform dflags ccs verTxtDocId g pm'
    in first (InfrastructureError . T.pack) response
 
 
