@@ -11,15 +11,15 @@ module Development.IDE.Plugin.Completions
 
 import           Control.Concurrent.Async                 (concurrently)
 import           Control.Concurrent.STM.Stats             (readTVarIO)
+import           Control.Lens                             ((&), (.~))
 import           Control.Monad.IO.Class
-import           Control.Lens                            ((&), (.~))
+import           Data.Aeson
 import qualified Data.HashMap.Strict                      as Map
 import qualified Data.HashSet                             as Set
-import           Data.Aeson
 import           Data.Maybe
 import qualified Data.Text                                as T
-import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Compile
+import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service             hiding (Log, LogShake)
 import           Development.IDE.Core.Shake               hiding (Log)
@@ -27,10 +27,10 @@ import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph
-import           Development.IDE.Spans.Common
-import           Development.IDE.Spans.Documentation
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
+import           Development.IDE.Spans.Common
+import           Development.IDE.Spans.Documentation
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageExports, envVisibleModuleNames),
                                                            hscEnv)
@@ -43,7 +43,7 @@ import           Development.IDE.Types.Logger             (Pretty (pretty),
 import           Ide.Types
 import qualified Language.LSP.Server                      as LSP
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens         as J
+import qualified Language.LSP.Types.Lens                  as J
 import qualified Language.LSP.VFS                         as VFS
 import           Numeric.Natural
 import           Text.Fuzzy.Parallel                      (Scored (..))
@@ -137,7 +137,7 @@ resolveCompletion ide _ comp@CompletionItem{_detail,_documentation,_xdata}
         mdkm <- useWithStaleFast GetDocMap file
         let (dm,km) = case mdkm of
               Just (DKMap dm km, _) -> (dm,km)
-              Nothing -> (mempty, mempty)
+              Nothing               -> (mempty, mempty)
         doc <- case lookupNameEnv dm name of
           Just doc -> pure $ spanDocToMarkdown doc
           Nothing -> liftIO $ spanDocToMarkdown <$> getDocumentationTryGhc (hscEnv sess) name
@@ -189,11 +189,11 @@ getCompletionsLSP ide plId
             packageExportsMap <- mapM liftIO packageExportsMapIO
             projectExportsMap <- liftIO $ readTVarIO (exportsMap $ shakeExtras ide)
             let exportsMap = fromMaybe mempty packageExportsMap <> projectExportsMap
-
+            config <- liftIO $ runAction "completions: config" ide $ getCompletionsConfig plId
             let moduleExports = getModuleExportsMap exportsMap
                 exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . nonDetOccEnvElts . getExportsMap $ exportsMap
                 exportsCompls = mempty{anyQualCompls = exportsCompItems}
-            let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls <> Just lModules
+            let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> (if enableOutOfScope config then Just exportsCompls else Nothing) <> Just lModules
 
             -- get HieAst if OverloadedRecordDot is enabled
 #if MIN_VERSION_ghc(9,2,0)
@@ -230,6 +230,7 @@ getCompletionsConfig pId =
   CompletionsConfig
     <$> usePropertyAction #snippetsOn pId properties
     <*> usePropertyAction #autoExtendOn pId properties
+    <*> usePropertyAction #outOfScopeOn pId properties
     <*> (Config.maxCompletions <$> getClientConfigAction)
 
 {- COMPLETION SORTING

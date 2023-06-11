@@ -1,9 +1,9 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE OverloadedLabels   #-}
 {-# LANGUAGE TypeFamilies       #-}
-{-# LANGUAGE CPP                #-}
 module Development.IDE.Plugin.Completions.Types (
   module Development.IDE.Plugin.Completions.Types
 ) where
@@ -25,9 +25,9 @@ import           Ide.Plugin.Properties
 import           Language.LSP.Types           (CompletionItemKind (..), Uri)
 import qualified Language.LSP.Types           as J
 #if MIN_VERSION_ghc(9,0,0)
-import qualified GHC.Types.Name.Occurrence as Occ
+import qualified GHC.Types.Name.Occurrence    as Occ
 #else
-import qualified OccName as Occ
+import qualified OccName                      as Occ
 #endif
 
 -- | Produce completions info for a file
@@ -53,7 +53,9 @@ extendImportCommandId :: Text
 extendImportCommandId = "extendImport"
 
 properties :: Properties
-  '[ 'PropertyKey "autoExtendOn" 'TBoolean,
+  '[
+     'PropertyKey "outOfScopeOn" 'TBoolean,
+     'PropertyKey "autoExtendOn" 'TBoolean,
      'PropertyKey "snippetsOn" 'TBoolean]
 properties = emptyProperties
   & defineBooleanProperty #snippetsOn
@@ -62,11 +64,15 @@ properties = emptyProperties
   & defineBooleanProperty #autoExtendOn
     "Extends the import list automatically when completing a out-of-scope identifier"
     True
+  & defineBooleanProperty #outOfScopeOn
+    "Allows completions for out-of-scope identifiers. Turning this off can help performance and accuracy by decreasing the amount of completions given."
+    True
 
 
 data CompletionsConfig = CompletionsConfig {
   enableSnippets   :: Bool,
   enableAutoExtend :: Bool,
+  enableOutOfScope :: Bool,
   maxCompletions   :: Int
 }
 
@@ -178,7 +184,7 @@ parseNs (String "v") = pure Occ.varName
 parseNs (String "c") = pure dataName
 parseNs (String "t") = pure tcClsName
 parseNs (String "z") = pure tvName
-parseNs _ = mempty
+parseNs _            = mempty
 
 instance FromJSON NameDetails where
   parseJSON v@(Array _)
@@ -204,9 +210,9 @@ instance Show NameDetails where
 -- We need the URI to be able to reconstruct the GHC environment
 -- in the file the completion was triggered in.
 data CompletionResolveData = CompletionResolveData
-  { itemFile :: Uri
+  { itemFile      :: Uri
   , itemNeedsType :: Bool -- ^ Do we need to lookup a type for this item?
-  , itemName :: NameDetails
+  , itemName      :: NameDetails
   }
   deriving stock Generic
   deriving anyclass (FromJSON, ToJSON)
