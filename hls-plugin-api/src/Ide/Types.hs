@@ -69,6 +69,7 @@ import           Data.GADT.Compare
 import           Data.Hashable                   (Hashable)
 import           Data.HashMap.Strict             (HashMap)
 import qualified Data.HashMap.Strict             as HashMap
+import           Data.Kind                       (Type)
 import           Data.List.Extra                 (find, sortOn)
 import           Data.List.NonEmpty              (NonEmpty (..), toList)
 import qualified Data.Map                        as Map
@@ -269,7 +270,7 @@ instance ToJSON PluginConfig where
 
 -- ---------------------------------------------------------------------
 
-data PluginDescriptor (ideState :: *) =
+data PluginDescriptor (ideState :: Type) =
   PluginDescriptor { pluginId           :: !PluginId
                    -- ^ Unique identifier of the plugin.
                    , pluginPriority     :: Natural
@@ -499,7 +500,7 @@ instance PluginMethod Request TextDocumentDocumentSymbol where
       uri = msgParams ^. J.textDocument . J.uri
 
 instance PluginMethod Request CompletionItemResolve where
-  pluginEnabled _ msgParams pluginDesc config = pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
+  pluginEnabled _ _ pluginDesc config = pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
 
 instance PluginMethod Request TextDocumentCompletion where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
