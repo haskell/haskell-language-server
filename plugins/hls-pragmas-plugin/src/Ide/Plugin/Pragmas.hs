@@ -12,6 +12,7 @@ module Ide.Plugin.Pragmas
   ( descriptor
   -- For testing
   , validPragmas
+  , AppearWhere(..)
   ) where
 
 import           Control.Lens                       hiding (List)
@@ -181,23 +182,32 @@ completion _ide _ complParams = do
     contents <- LSP.getVirtualFile $ toNormalizedUri uri
     fmap (Right . J.InL) $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
-            result <$> VFS.getCompletionPrefix position cnts
+            J.List . result <$> VFS.getCompletionPrefix position cnts
             where
                 result (Just pfix)
                     | "{-# language" `T.isPrefixOf` line
-                    = J.List $ map buildCompletion
+                    = map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
                     | "{-# options_ghc" `T.isPrefixOf` line
-                    = J.List $ map buildCompletion
+                    = map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
                     | "{-#" `T.isPrefixOf` line
-                    = J.List $ [ mkPragmaCompl (a <> suffix) b c
-                                | (a, b, c, w) <- validPragmas, w == NewLine ]
+                    = [ mkPragmaCompl (a <> suffix) b c
+                      | (a, b, c, w) <- validPragmas, w == NewLine
+                      ]
+                    | "import" `T.isPrefixOf` line || not (T.null module_) || T.null word
+                    = []
                     | otherwise
-                    = J.List $ [ mkPragmaCompl (prefix <> a <> suffix) b c
-                                | (a, b, c, _) <- validPragmas, Fuzzy.test word b]
+                    = [ mkPragmaCompl (prefix <> pragmaTemplate <> suffix) matcher detail
+                      | (pragmaTemplate, matcher, detail, appearWhere) <- validPragmas
+                      , Fuzzy.test word matcher
+                      , (appearWhere == NewLine && line == word)
+                        || (appearWhere == CanInline && line /= word)
+                        || (T.elem ' ' matcher && appearWhere == NewLine && Fuzzy.test line matcher)
+                      ]
                     where
                         line = T.toLower $ VFS.fullLine pfix
+                        module_ = VFS.prefixModule pfix
                         word = VFS.prefixText pfix
                         -- Not completely correct, may fail if more than one "{-#" exist
                         -- , we can ignore it since it rarely happen.
@@ -211,9 +221,8 @@ completion _ide _ complParams = do
                             | "-}"   `T.isSuffixOf` line = " #"
                             | "}"    `T.isSuffixOf` line = " #-"
                             | otherwise                 = " #-}"
-                result Nothing = J.List []
+                result Nothing = []
         _ -> return $ J.List []
-
 -----------------------------------------------------------------------
 
 -- | Pragma where exist
@@ -268,6 +277,3 @@ buildCompletion label =
   J.CompletionItem label (Just J.CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing
-
-
-
