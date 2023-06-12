@@ -19,10 +19,8 @@ import           Data.List                               (dropWhileEnd, foldl',
                                                           sortBy)
 import           Data.List.Extra                         (nubOrd)
 import           Data.Maybe
-import           Data.Time                               (defaultTimeLocale,
-                                                          formatTime,
-                                                          getCurrentTime,
-                                                          iso8601DateFormat)
+import           Data.Time                               (getCurrentTime)
+import           Data.Time.Format.ISO8601                (iso8601Show)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Database (getDirtySet)
 import           Development.IDE.Graph.Internal.Paths
@@ -207,7 +205,7 @@ runTemplate ask = lbsMapLinesIO f
             time <- getCurrentTime
             pure $ LBS.pack $
                 "var version = \"0\"" ++
-                "\nvar generated = " ++ show (formatTime defaultTimeLocale (iso8601DateFormat (Just "%H:%M:%S")) time)
+                "\nvar generated = " ++ iso8601Show time
         asker x = ask x
 
 -- Perform a mapM on each line and put the result back together again
