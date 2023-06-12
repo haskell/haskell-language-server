@@ -66,6 +66,7 @@ extra-deps:
   - lsp-types
   - lsp-test
 - hie-bios-0.12.0
+- row-types-1.0.1.2
 
 configure-options:
   ghcide:
