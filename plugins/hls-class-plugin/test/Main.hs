@@ -76,6 +76,30 @@ codeActionTests = testGroup
       [ "Add placeholders for 'f','g'"
       , "Add placeholders for 'f','g' with signature(s)"
       ]
+  , testCase "Update text document version" $ runSessionWithServer classPlugin testDataDir $ do
+    doc <- createDoc "Version.hs" "haskell" "module Version where"
+    ver1 <- (^.J.version) <$> getVersionedDoc doc
+    liftIO $ ver1 @?= Just 0
+
+    -- Change the doc to ensure the version is not 0
+    changeDoc doc
+        [ TextDocumentContentChangeEvent
+            Nothing
+            Nothing
+            (T.unlines ["module Version where", "data A a = A a", "instance Functor A where"])
+        ]
+    ver2 <- (^.J.version) <$> getVersionedDoc doc
+    _ <- waitForDiagnostics
+    liftIO $ ver2 @?= Just 1
+
+    -- Execute the action and see what the version is
+    action <- head . concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
+    executeCodeAction action
+    _ <- waitForDiagnostics
+    -- TODO: uncomment this after lsp-test fixed
+    -- ver3 <- (^.J.version) <$> getVersionedDoc doc
+    -- liftIO $ ver3 @?= Just 3
+    pure mempty
   ]
 
 codeLensTests :: TestTree

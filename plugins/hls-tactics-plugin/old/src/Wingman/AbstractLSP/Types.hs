@@ -9,6 +9,7 @@ module Wingman.AbstractLSP.Types where
 
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe (MaybeT (MaybeT), mapMaybeT)
+import           Control.Lens ((^.))
 import qualified Data.Aeson as A
 import           Data.Text (Text)
 import           Development.IDE (IdeState)
@@ -20,6 +21,7 @@ import qualified Ide.Plugin.Config as Plugin
 import           Ide.Types hiding (Config)
 import           Language.LSP.Server (LspM)
 import           Language.LSP.Types hiding (CodeLens, CodeAction)
+import qualified Language.LSP.Types.Lens as LSP
 import           Wingman.LanguageServer (judgementForHole)
 import           Wingman.Types
 
@@ -120,12 +122,12 @@ data Continuation sort target payload = Continuation
 ------------------------------------------------------------------------------
 -- | What file are we looking at, and what bit of it?
 data FileContext = FileContext
-  { fc_uri      :: Uri
-  , fc_range    :: Maybe (Tracked 'Current Range)
+  { fc_verTxtDocId :: VersionedTextDocumentIdentifier
+  , fc_range       :: Maybe (Tracked 'Current Range)
     -- ^ For code actions, this is 'Just'. For code lenses, you'll get
     -- a 'Nothing' in the request, and a 'Just' in the response.
   }
-  deriving stock (Eq, Ord, Show, Generic)
+  deriving stock (Eq, Show, Generic)
   deriving anyclass (A.ToJSON, A.FromJSON)
 
 
@@ -164,6 +166,6 @@ instance IsTarget HoleTarget where
   fetchTargetArgs LspEnv{..} = do
     let FileContext{..} = le_fileContext
     range <- MaybeT $ pure fc_range
-    nfp <- getNfp fc_uri
+    nfp <- getNfp (fc_verTxtDocId ^. LSP.uri)
     mapMaybeT liftIO $ judgementForHole le_ideState nfp range le_config
 
