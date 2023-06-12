@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Symbol (tests) where
 
-import           Control.Lens                       (_Just, ix, to, (^?))
+import           Control.Lens                       (_Just, ix, (^?))
 import           Data.List
 import           Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Lens         as L
