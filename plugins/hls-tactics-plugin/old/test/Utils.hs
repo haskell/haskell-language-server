@@ -23,9 +23,9 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Ide.Plugin.Tactic as Tactic
 import           Ide.Types (IdePlugins(..))
-import           Language.LSP.Types
-import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
-import qualified Language.LSP.Types.Lens as J
+import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title, error)
 import           System.Directory (doesFileExist)
 import           System.FilePath
 import           Test.Hls
@@ -258,7 +258,7 @@ tacticPath :: FilePath
 tacticPath = "old/test/golden"
 
 
-executeCommandWithResp :: Command -> Session (ResponseMessage 'WorkspaceExecuteCommand)
+executeCommandWithResp :: Command -> Session (TResponseMessage 'Method_WorkspaceExecuteCommand)
 executeCommandWithResp cmd = do
   let args = decode $ encode $ fromJust $ cmd ^. arguments
       execParams = ExecuteCommandParams Nothing (cmd ^. command) args
