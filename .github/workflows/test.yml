@@ -90,7 +90,7 @@ jobs:
           echo "Excluded the following packages due the GHC version:"
           echo "$EXCLUDED"
 
-          PKGS_FOR_SH=$(echo "$SELECTED_PKGS" | jq -r '@tsv' | tr '\t' ' ' )
+          PKGS_FOR_SH=$(echo "$SELECTED_PKGS" | jq -r '"pkg:" + . | @tsv' | tr '\t' ' ' )
           echo "PKGS=$PKGS_FOR_SH" >> "$GITHUB_ENV"
         shell: bash
 
@@ -126,7 +126,11 @@ jobs:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
         run: |
-          cabal test $PKGS --test-options="$TEST_OPTS"
+          # We can't just pass the list of packages to cabal here, if any of them
+          # don't have tests it will just exit immediately
+          for pkg in $PKGS; do
+            cabal test $PKG --test-options="$TEST_OPTS"
+          done
         shell: bash
 
   test_post_job:
