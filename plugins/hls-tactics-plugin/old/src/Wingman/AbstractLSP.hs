@@ -23,14 +23,16 @@ import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource(GetAnnotatedParsedSource))
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Types
-import           Language.LSP.Server (LspM, sendRequest, getClientCapabilities)
+import           Language.LSP.Server (LspM, sendRequest, getClientCapabilities, getVersionedTextDoc)
 import qualified Language.LSP.Types as LSP
+import qualified Language.LSP.Types.Lens as J
 import           Language.LSP.Types hiding (CodeLens, CodeAction)
 import           Wingman.AbstractLSP.Types
 import           Wingman.EmptyCase (fromMaybeT)
 import           Wingman.LanguageServer (runIde, getTacticConfigAction, getIdeDynflags, mkWorkspaceEdits, runStaleIde, showLspMessage, mkShowMessageParams)
 import           Wingman.StaticPlugin (enableQuasiQuotes)
 import           Wingman.Types
+import Control.Lens ((^.))
 
 
 ------------------------------------------------------------------------------
@@ -94,7 +96,7 @@ runContinuation plId cont state (fc, b) = do
               , _xdata =  Nothing
               } ) $ do
       env@LspEnv{..} <- buildEnv state plId fc
-      nfp <- getNfp $ fc_uri le_fileContext
+      nfp <- getNfp $ fc_verTxtDocId le_fileContext ^. J.uri
       let stale a = runStaleIde "runContinuation" state nfp a
       args <- fetchTargetArgs @a env
       res <- c_runCommand cont env args fc b
@@ -111,7 +113,7 @@ runContinuation plId cont state (fc, b) = do
           GraftEdit gr -> do
             ccs <- lift getClientCapabilities
             TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
-            case mkWorkspaceEdits (enableQuasiQuotes le_dflags) ccs (fc_uri le_fileContext) (unTrack pm) gr of
+            case mkWorkspaceEdits (enableQuasiQuotes le_dflags) ccs (fc_verTxtDocId le_fileContext) (unTrack pm) gr of
               Left errs ->
                 pure $ Just $ ResponseError
                   { _code    = InternalError
@@ -153,7 +155,7 @@ buildEnv
     -> MaybeT (LspM Plugin.Config) LspEnv
 buildEnv state plId fc = do
   cfg <- liftIO $ runIde "plugin" "config" state $ getTacticConfigAction plId
-  nfp <- getNfp $ fc_uri fc
+  nfp <- getNfp $ fc_verTxtDocId fc ^. J.uri
   dflags <- mapMaybeT liftIO $ getIdeDynflags state nfp
   pure $ LspEnv
     { le_ideState = state
@@ -176,10 +178,11 @@ codeActionProvider
        )
     -> PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider sort k state plId
-                   (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
+                   (CodeActionParams _ _ docId range _) = do
+  verTxtDocId <- getVersionedTextDoc docId
   fromMaybeT (Right $ List []) $ do
     let fc = FileContext
-                { fc_uri   = uri
+                { fc_verTxtDocId = verTxtDocId
                 , fc_range = Just $ unsafeMkCurrent range
                 }
     env <- buildEnv state plId fc
@@ -203,10 +206,11 @@ codeLensProvider
       )
     -> PluginMethodHandler IdeState TextDocumentCodeLens
 codeLensProvider sort k state plId
-                 (CodeLensParams _ _ (TextDocumentIdentifier uri)) = do
+                 (CodeLensParams _ _ docId) = do
+      verTxtDocId <- getVersionedTextDoc docId
       fromMaybeT (Right $ List []) $ do
         let fc = FileContext
-                   { fc_uri   = uri
+                   { fc_verTxtDocId = verTxtDocId
                    , fc_range = Nothing
                    }
         env <- buildEnv state plId fc
