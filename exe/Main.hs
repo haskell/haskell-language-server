@@ -66,9 +66,8 @@ main = do
 
     let (argsTesting, minPriority, logFilePath) =
           case args of
-            Ghcide GhcideArguments{ argsTesting, argsDebugOn, argsLogFile} ->
-              let minPriority = if argsDebugOn || argsTesting then Debug else Info
-              in (argsTesting, minPriority, argsLogFile)
+            Ghcide GhcideArguments{ argsTesting, argsLogLevel, argsLogFile} ->
+              (argsTesting, argsLogLevel, argsLogFile)
             _ -> (False, Info, Nothing)
 
     withDefaultRecorder logFilePath Nothing $ \textWithPriorityRecorder -> do
