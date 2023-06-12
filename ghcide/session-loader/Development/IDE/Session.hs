@@ -436,6 +436,7 @@ loadSession recorder = loadSessionWithOptions recorder def
 
 loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
 loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
+  cradle_files <- newIORef []
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
   -- Mapping from a Filepath to HscEnv
@@ -624,7 +625,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
            eopts <- mRunLspTCallback lspEnv (withIndefiniteProgress progMsg NotCancellable) $
               withTrace "Load cradle" $ \addTag -> do
                   addTag "file" lfp
-                  res <- cradleToOptsAndLibDir recorder cradle cfp
+                  old_files <- readIORef cradle_files
+                  res <- cradleToOptsAndLibDir recorder cradle cfp old_files
                   addTag "result" (show res)
                   return res
 
@@ -639,7 +641,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                      error $ "GHC installation not found in libdir: " <> libdir
                  InstallationMismatch{..} ->
                      return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
-                 InstallationChecked _compileTime _ghcLibCheck ->
+                 InstallationChecked _compileTime _ghcLibCheck -> do
+                   atomicModifyIORef' cradle_files (\xs -> (cfp:xs,()))
                    session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
              -- Failure case, either a cradle error or the none cradle
              Left err -> do
@@ -697,15 +700,15 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
 -- GHC options/dynflags needed for the session and the GHC library directory
-cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> Cradle Void -> FilePath
+cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> Cradle Void -> FilePath -> [FilePath]
                       -> IO (Either [CradleError] (ComponentOptions, FilePath))
-cradleToOptsAndLibDir recorder cradle file = do
+cradleToOptsAndLibDir recorder cradle file old_files = do
     -- let noneCradleFoundMessage :: FilePath -> T.Text
     --     noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
     -- Start off by getting the session options
     logWith recorder Debug $ LogCradle cradle
     let logger = toCologActionWithPrio $ cmapWithPrio LogHieBios recorder
-    cradleRes <- HieBios.getCompilerOptions logger file cradle
+    cradleRes <- HieBios.getCompilerOptions logger (file:old_files) cradle
     case cradleRes of
         CradleSuccess r -> do
             -- Now get the GHC lib dir
