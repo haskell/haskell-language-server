@@ -95,7 +95,7 @@ source-repository-package
 -- This is needed till lsp makes a release
 source-repository-package
   type:git
-  location: https://github.com/joyfulmantis/lsp
+  location: https://github.com/haskell/lsp
   tag: 98ba7cc91436e93578e9882c7ef18660b5fd4dd4
   subdir: lsp lsp-types lsp-test
 
