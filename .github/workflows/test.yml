@@ -90,7 +90,7 @@ jobs:
           echo "Excluded the following packages due the GHC version:"
           echo "$EXCLUDED"
 
-          PKGS_FOR_SH=$(echo "$SELECTED_PKGS" | jq -r '@sh' )
+          PKGS_FOR_SH=$(echo "$SELECTED_PKGS" | jq -r '@tsv' | tr '\t' ' ' )
           echo "PKGS=$PKGS_FOR_SH" >> "$GITHUB_ENV"
         shell: bash
 
