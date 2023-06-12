@@ -48,12 +48,12 @@ extra-deps:
 - monad-dijkstra-0.1.1.3@sha256:d2fc098d7c122555e726830a12ae0423ac187f89de9228f32e56e2f6fc2238e1,1900
 - retrie-1.2.0.1
 - co-log-core-0.3.1.0
-- git: https://github.com/haskell/lsp.git
+- git: git@github.com:haskell/lsp.git
   commit: 98ba7cc91436e93578e9882c7ef18660b5fd4dd4
-    subdirs:
-    - lsp
-    - lsp-types
-    - lsp-test
+  subdirs:
+  - lsp
+  - lsp-types
+  - lsp-test
 - hie-bios-0.12.0
 
 # currently needed for ghcide>extra, etc.
