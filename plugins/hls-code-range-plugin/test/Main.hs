@@ -85,7 +85,7 @@ foldingRangeGoldenTest testName = goldenGitDiff  testName (testDataDir </> testN
         testDataDir = "test" </> "testdata" </> "folding-range"
 
         showFoldingRangesForTest :: [FoldingRange] -> ByteString
-        showFoldingRangesForTest foldingRanges = LBSChar8.intercalate "\n" $ fmap showFoldingRangeForTest foldingRanges
+        showFoldingRangesForTest foldingRanges = (LBSChar8.intercalate "\n" $ fmap showFoldingRangeForTest foldingRanges) `LBSChar8.snoc` '\n'
 
         showFoldingRangeForTest :: FoldingRange -> ByteString
         showFoldingRangeForTest f@(FoldingRange sl (Just sc) el (Just ec) (Just frk) _) = "((" <> showLBS sl <>", "<> showLBS sc <> ")" <> " : " <> "(" <> showLBS el <>", "<> showLBS ec<> ")) : " <> showFRK frk
