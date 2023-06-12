@@ -206,7 +206,7 @@ completion _ide _ complParams = do
                     | otherwise
                     = [ mkPragmaCompl (prefix <> pragmaTemplate <> suffix) matcher detail
                       | (pragmaTemplate, matcher, detail, appearWhere) <- validPragmas
-                      , -- Only suggest a pragma that need its own line if the whole line
+                      , -- Only suggest a pragma that needs its own line if the whole line
                         -- fuzzily matches the pragma
                         (appearWhere == NewLine && Fuzzy.test line matcher ) ||
                         -- Only suggest a pragma that appears in the middle of a line when
