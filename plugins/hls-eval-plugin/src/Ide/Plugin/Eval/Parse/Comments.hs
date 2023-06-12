@@ -496,7 +496,7 @@ consume style =
         Line     -> (,) <$> takeRest <*> getPosition
         Block {} -> manyTill_ anySingle (getPosition <* eob)
 
-getPosition :: (Ord v, TraversableStream s) => ParsecT v s m Position
+getPosition :: (Monad m, Ord v, TraversableStream s) => ParsecT v s m Position
 getPosition = sourcePosToPosition <$> getSourcePos
 
 -- | Parses example test line.
