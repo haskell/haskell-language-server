@@ -573,8 +573,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
           let new_cache = newComponentCache recorder optExtensions hieYaml _cfp hscEnv
           all_target_details <- new_cache old_deps new_deps
 
-          let new_envs = take (L.length new_deps) all_target_details
-              all_targets = concatMap fst all_target_details
+          let all_targets = concatMap fst all_target_details
 
           let this_flags_map = HM.fromList (concatMap toFlagsMap all_targets)
 
@@ -593,8 +592,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject
-          unless (null new_envs || not checkProject) $ do
-                cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap (concatMap targetLocations) $ fmap fst new_envs)
+          unless (null new_deps || not checkProject) $ do
+                cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations all_targets)
                 void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
                     mmt <- uses GetModificationTime cfps'
                     let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
@@ -795,24 +794,26 @@ newComponentCache
          -> [ComponentInfo]
          -> IO [ ([TargetDetails], (IdeResult HscEnvEq, DependencyInfo))]
 newComponentCache recorder exts cradlePath cfp hsc_env old_cis new_cis = do
-    let cis = old_cis ++ new_cis
-    let uids = map (\ci -> (componentUnitId ci, componentDynFlags ci)) cis
-    pprTraceM "newComponentCache" $ Compat.ppr (map fst uids)
+    let cis = Map.union (mkMap new_cis) (mkMap old_cis) -- Left biased so prefer new components over old ones
+        mkMap = Map.fromList . map (\ci -> (componentUnitId ci, ci))
+    let dfs = map componentDynFlags $ Map.elems cis
+        uids = Map.keys cis
+    pprTraceM "newComponentCache" $ Compat.ppr uids
     hscEnv' <- -- Set up a multi component session with the other units on GHC 9.4
-              Compat.initUnits (map snd uids) hsc_env
+              Compat.initUnits dfs hsc_env
 
 #if MIN_VERSION_ghc(9,3,0)
     let closure_errs = checkHomeUnitsClosed (hsc_unit_env hscEnv') (hsc_all_home_unit_ids hscEnv') pkg_deps
         pkg_deps = do
-          home_unit_id <- map fst uids
+          home_unit_id <- uids
           home_unit_env <- maybeToList $ unitEnv_lookup_maybe home_unit_id $ hsc_HUG hscEnv'
           map (home_unit_id,) (map (Compat.toUnitId . fst) $ explicitUnits $ homeUnitEnv_units home_unit_env)
 
     case closure_errs of
       errs@(_:_) -> do
-        let rendered = map (ideErrorWithSource (Just "cradle") (Just DsError) cfp . T.pack . Compat.printWithoutUniques . (, hsc_all_home_unit_ids hscEnv', pprHomeUnitGraph $ ue_home_unit_graph $ hsc_unit_env hscEnv', pkg_deps)) errs
+        let rendered = map (ideErrorWithSource (Just "cradle") (Just DsError) cfp . T.pack . Compat.printWithoutUniques) errs
             res = (rendered,Nothing)
-            dep_info = foldMap componentDependencyInfo (filter isBad cis)
+            dep_info = foldMap componentDependencyInfo (filter isBad $ Map.elems cis)
             bad_units = OS.fromList $ concat $ do
               x <- bagToList $ mapBag errMsgDiagnostic $ unionManyBags $ map Compat.getMessages errs
               DriverHomePackagesNotClosed us <- pure x
@@ -837,7 +838,7 @@ newComponentCache recorder exts cradlePath cfp hsc_env old_cis new_cis = do
           case res of
             Nothing  -> pure ()
 
-        fmap (addSpecial cfp) $ forM cis $ \ci -> do
+        fmap (addSpecial cfp) $ forM (Map.elems cis) $ \ci -> do
           let df = componentDynFlags ci
           let newFunc = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
           thisEnv <- do
@@ -861,7 +862,7 @@ newComponentCache recorder exts cradlePath cfp hsc_env old_cis new_cis = do
                 -- getOptions is enough to initialize units on GHC <9.2
                 pure $ hscSetFlags df hsc_env { hsc_IC = (hsc_IC hsc_env) { ic_dflags = df } }
 #endif
-          henv <- newFunc thisEnv uids
+          henv <- newFunc thisEnv (zip uids dfs)
           let targetEnv = ([], Just henv)
               targetDepends = componentDependencyInfo ci
               res = ( targetEnv, targetDepends)
