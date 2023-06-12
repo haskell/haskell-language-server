@@ -563,7 +563,7 @@ instance PluginRequestMethod Method_TextDocumentRename where
 
 instance PluginRequestMethod Method_TextDocumentHover where
   combineResponses _ _ _ _ (mapMaybe nullToMaybe . toList -> hs :: [Hover]) =
-    if mcontent ^. L.value == ""
+    if null hs
         then InR Null
         else InL $ Hover (InL mcontent) r
     where

@@ -333,7 +333,7 @@ common explicitFields
 
 common overloadedRecordDot
   if flag(overloadedRecordDot) && (impl(ghc >= 9.2.0) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-overloaded-record-dot-plugin == 2.0.0.0
+    build-depends: hls-overloaded-record-dot-plugin == 2.1.0.0
     cpp-options: -Dhls_overloaded_record_dot
 
 -- formatters

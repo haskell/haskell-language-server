@@ -96,7 +96,7 @@ source-repository-package
 source-repository-package
   type:git
   location: https://github.com/joyfulmantis/lsp
-  tag: 19b7425034ad4a7901a80b8b08df99491cb902e2
+  tag: 98ba7cc91436e93578e9882c7ef18660b5fd4dd4
   subdir: lsp lsp-types lsp-test
 
 
