@@ -3,10 +3,11 @@
 {-# LANGUAGE OverloadedStrings     #-}
 module Deferred(tests) where
 
-import           Control.Lens               hiding (List)
+import           Control.Lens                hiding (List)
 -- import Control.Monad
 -- import Data.Maybe
-import           Language.LSP.Protocol.Lens hiding (id, length, message)
+import           Language.LSP.Protocol.Lens  hiding (id, length, message)
+import           Language.LSP.Protocol.Types (Null (Null))
 -- import qualified Language.LSP.Types.Lens as LSP
 import           Test.Hls
 import           Test.Hls.Command
@@ -88,7 +89,7 @@ tests = testGroup "deferred responses" [
      testCase "instantly respond to failed modules with no cache" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "FuncTestFail.hs" "haskell"
         defs <- getDefinitions doc (Position 1 11)
-        liftIO $ defs @?= InR (InL [])
+        liftIO $ defs @?= InR (InR Null)
 
     -- TODO: the benefits of caching parsed modules is doubted.
     -- TODO: add issue link
