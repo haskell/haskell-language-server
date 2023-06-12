@@ -10,8 +10,7 @@ import           Control.Monad.IO.Class       (liftIO)
 import           Data.Function                ((&))
 import           Data.Text                    (Text)
 import qualified Development.IDE.Main         as GhcideMain
-import           Development.IDE.Types.Logger (Doc,
-                                               Priority (Debug, Error, Info),
+import           Development.IDE.Types.Logger (Doc, Priority (Error, Info),
                                                WithPriority (WithPriority, priority),
                                                cfilter, cmapWithPrio,
                                                defaultLayoutOptions,
