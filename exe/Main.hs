@@ -1,6 +1,5 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP               #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
@@ -10,8 +9,7 @@ import           Control.Monad.IO.Class        (liftIO)
 import           Data.Function                 ((&))
 import           Data.Text                     (Text)
 import qualified Development.IDE.Main          as GhcideMain
-import           Development.IDE.Types.Logger  (Doc,
-                                                Priority (Debug, Error, Info),
+import           Development.IDE.Types.Logger  (Doc, Priority (Error, Info),
                                                 WithPriority (WithPriority, priority),
                                                 cfilter, cmapWithPrio,
                                                 defaultLayoutOptions,
@@ -66,9 +64,8 @@ main = do
 
     let (argsTesting, minPriority, logFilePath) =
           case args of
-            Ghcide GhcideArguments{ argsTesting, argsDebugOn, argsLogFile} ->
-              let minPriority = if argsDebugOn || argsTesting then Debug else Info
-              in (argsTesting, minPriority, argsLogFile)
+            Ghcide GhcideArguments{ argsTesting, argsLogLevel, argsLogFile} ->
+              (argsTesting, argsLogLevel, argsLogFile)
             _ -> (False, Info, Nothing)
 
     withDefaultRecorder logFilePath Nothing $ \textWithPriorityRecorder -> do
