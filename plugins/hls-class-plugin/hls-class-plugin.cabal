@@ -77,4 +77,5 @@ test-suite tests
     , hls-test-utils     == 2.1.0.0
     , lens
     , lsp-types
+    , row-types
     , text

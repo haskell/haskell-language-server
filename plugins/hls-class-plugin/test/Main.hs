@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators     #-}
@@ -13,6 +14,7 @@ import           Control.Lens                  (Prism', prism', (^.), (^..),
                                                 (^?))
 import           Control.Monad                 (void)
 import           Data.Maybe
+import           Data.Row                      ((.==))
 import qualified Data.Text                     as T
 import qualified Ide.Plugin.Class              as Class
 import qualified Language.LSP.Protocol.Lens    as L
@@ -81,18 +83,16 @@ codeActionTests = testGroup
   , testCase "Update text document version" $ runSessionWithServer classPlugin testDataDir $ do
     doc <- createDoc "Version.hs" "haskell" "module Version where"
     ver1 <- (^. L.version) <$> getVersionedDoc doc
-    liftIO $ ver1 @?= Just 0
+    liftIO $ ver1 @?= 0
 
     -- Change the doc to ensure the version is not 0
     changeDoc doc
-        [ TextDocumentContentChangeEvent
-            Nothing
-            Nothing
-            (T.unlines ["module Version where", "data A a = A a", "instance Functor A where"])
+        [ TextDocumentContentChangeEvent . InR . (.==) #text $
+            T.unlines ["module Version where", "data A a = A a", "instance Functor A where"]
         ]
     ver2 <- (^. L.version) <$> getVersionedDoc doc
     _ <- waitForDiagnostics
-    liftIO $ ver2 @?= Just 1
+    liftIO $ ver2 @?= 1
 
     -- Execute the action and see what the version is
     action <- head . concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
