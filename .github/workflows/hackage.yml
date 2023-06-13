@@ -40,11 +40,11 @@ jobs:
                   "hls-qualify-imported-names-plugin", "hls-code-range-plugin",
                   "hls-cabal-fmt-plugin",
                   "haskell-language-server"]
-        ghc: [ "9.0.2"
-             , "8.10.7"
+        ghc: [ "9.0"
+             , "8.10"
              ]
         exclude:
-        - ghc: "9.0.2"
+        - ghc: "9.0"
           package: "hls-stylish-haskell-plugin"
 
     steps:
@@ -108,7 +108,7 @@ jobs:
       # The solver takes in account all project packages, even if they are not gonna be effectively built
       # (like stylish-haskell for ghc-9.0)
       - name: "Add temporary needed allow-newer for ghc-9.0"
-        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '9.0.2'
+        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '9.0'
         run: |
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
           # For stylish-haskell
@@ -133,7 +133,7 @@ jobs:
           cabal haddock --haddock-for-hackage
 
       - name: "Upload package dist tarball"
-        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '8.10.7'
+        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '8.10'
         uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.package }}

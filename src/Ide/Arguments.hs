@@ -1,10 +1,11 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP             #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections   #-}
+{-# LANGUAGE CPP              #-}
+{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE TemplateHaskell  #-}
+{-# LANGUAGE TupleSections    #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
+{-# LANGUAGE TypeApplications #-}
 
 module Ide.Arguments
   ( Arguments(..)
@@ -19,6 +20,7 @@ module Ide.Arguments
 import           Data.Version
 import           Development.IDE               (IdeState)
 import           Development.IDE.Main          (Command (..), commandP)
+import           Development.IDE.Types.Logger  (Priority (..))
 import           GitHash                       (giHash, tGitInfoCwdTry)
 import           Ide.Types                     (IdePlugins)
 import           Options.Applicative
@@ -43,10 +45,9 @@ data GhcideArguments = GhcideArguments
     ,argsShakeProfiling     :: Maybe FilePath
     ,argsTesting            :: Bool
     ,argsExamplePlugin      :: Bool
-    -- These next two are for compatibility with existing hie clients, allowing
-    -- them to just change the name of the exe and still work.
-    , argsDebugOn           :: Bool
+    , argsLogLevel          :: Priority
     , argsLogFile           :: Maybe String
+    -- ^ the minimum log level to show
     , argsThreads           :: Int
     , argsProjectGhcVersion :: Bool
     } deriving Show
@@ -122,13 +123,23 @@ arguments plugins = GhcideArguments
       <*> switch (long "example"
                   <> help "Include the Example Plugin. For Plugin devs only")
 
-      <*> switch
-           ( long "debug"
+      <*>
+        (option @Priority auto
+          (long "log-level"
+          <> help "Only show logs at or above this log level"
+          <> metavar "LOG_LEVEL"
+          <> value Info
+          <> showDefault
+          )
+        <|>
+        flag' Debug
+          (long "debug"
           <> short 'd'
-          <> help "Generate debug output"
-           )
+          <> help "Sets the log level to Debug, alias for '--log-level Debug'"
+          )
+        )
       <*> optional (strOption
-           ( long "logfile"
+           (long "logfile"
           <> short 'l'
           <> metavar "LOGFILE"
           <> help "File to log to, defaults to stdout"
