@@ -150,7 +150,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                         transform
                             dflags
                             clientCapabilities
-                            uri
+                            verTxtDocId
                             (graft (RealSrcSpan spliceSpan Nothing) expanded)
                             ps
             maybe (throwE "No splice information found") (either throwE pure) $
@@ -166,16 +166,16 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                             transform
                                 dflags
                                 clientCapabilities
-                                uri
+                                verTxtDocId
                                 (graftDecls (RealSrcSpan spliceSpan Nothing) expanded)
                                 ps
                                 <&>
                                 -- FIXME: Why ghc-exactprint sweeps preceding comments?
-                                adjustToRange uri range
+                                adjustToRange (verTxtDocId ^. J.uri) range
 
     res <- liftIO $ runMaybeT $ do
 
-            fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri uri
+            fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri (verTxtDocId ^. J.uri)
             eedits <-
                 ( lift . runExceptT . withTypeChecked fp
                         =<< MaybeT
@@ -376,8 +376,8 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
             (msgs, eresl) <-
                 initTcWithGbl hscEnv typechkd srcSpan $
                     case classifyAST spliceContext of
-                        IsHsDecl -> fmap (fmap $ adjustToRange uri ran) $
-                            flip (transformM dflags clientCapabilities uri) ps $
+                        IsHsDecl -> fmap (fmap $ adjustToRange (verTxtDocId ^. J.uri) ran) $
+                            flip (transformM dflags clientCapabilities verTxtDocId) ps $
                                 graftDeclsWithM (RealSrcSpan srcSpan Nothing) $ \case
                                     (L _spn (SpliceD _ (SpliceDecl _ (L _ spl) _))) -> do
                                         eExpr <-
@@ -390,7 +390,7 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                                         pure $ Just eExpr
                                     _ -> pure Nothing
                         OneToOneAST astP ->
-                            flip (transformM dflags clientCapabilities uri) ps $
+                            flip (transformM dflags clientCapabilities verTxtDocId) ps $
                                 graftWithM (RealSrcSpan srcSpan Nothing) $ \case
                                     (L _spn (matchSplice astP -> Just spl)) -> do
                                         eExpr <-
@@ -484,8 +484,9 @@ fromSearchResult _        = Nothing
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
 codeAction :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
-codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
-    fmap (maybe (Right $ InL []) Right) $
+codeAction state plId (CodeActionParams _ _ docId ran _) = do
+    verTxtDocId <- getVersionedTextDoc docId
+    liftIO $ fmap (maybe (Right $ InL []) Right) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
             ParsedModule {..} <-
@@ -496,7 +497,7 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
             mcmds <- forM mouterSplice $
                 \(spliceSpan, spliceContext) ->
                     forM expandStyles $ \(_, (title, cmdId)) -> do
-                        let params = ExpandSpliceParams {uri = theUri, ..}
+                        let params = ExpandSpliceParams {verTxtDocId, ..}
                             act = mkLspCommand plId cmdId title (Just [toJSON params])
                         pure $
                             InR $

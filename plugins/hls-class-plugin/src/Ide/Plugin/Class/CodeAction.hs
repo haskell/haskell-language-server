@@ -43,7 +43,7 @@ addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsP
 addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
     caps <- getClientCapabilities
     pluginResponse $ do
-        nfp <- getNormalizedFilePath uri
+        nfp <- getNormalizedFilePath (verTxtDocId ^. L.uri)
         pm <- handleMaybeM "Unable to GetParsedModule"
             $ liftIO
             $ runAction "classplugin.addMethodPlaceholders.GetParsedModule" state
@@ -66,7 +66,7 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
         pure Null
     where
         toTextDocumentEdit edit =
-            TextDocumentEdit (OptionalVersionedTextDocumentIdentifier uri (InL 0)) [InL edit]
+            TextDocumentEdit (verTxtDocId ^.re _versionedTextDocumentIdentifier) [InL edit]
 
         mergeEdit :: WorkspaceEdit -> [TextEdit] -> WorkspaceEdit
         mergeEdit WorkspaceEdit{..} edits = WorkspaceEdit
@@ -77,18 +77,18 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
             }
 
         workspaceEdit caps old new
-            = diffText caps (uri, old) new IncludeDeletions
+            = diffText caps (verTxtDocId, old) new IncludeDeletions
 
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginResponse $ do
-    nfp <- getNormalizedFilePath uri
-    actions <- join <$> mapM (mkActions nfp) methodDiags
+    verTxtDocId <- lift $ getVersionedTextDoc docId
+    nfp <- getNormalizedFilePath (verTxtDocId ^. L.uri)
+    actions <- join <$> mapM (mkActions nfp verTxtDocId) methodDiags
     pure $ InL actions
     where
-        uri = docId ^. L.uri
         diags = context ^. L.diagnostics
 
         ghcDiags = filter (\d -> d ^. L.source == Just "typecheck") diags
@@ -96,9 +96,10 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
 
         mkActions
             :: NormalizedFilePath
+            -> VersionedTextDocumentIdentifier
             -> Diagnostic
             -> ExceptT String (LspT Ide.Plugin.Config.Config IO) [Command |? CodeAction]
-        mkActions docPath diag = do
+        mkActions docPath verTxtDocId diag = do
             (HAR {hieAst = ast}, pmap) <- handleMaybeM "Unable to GetHieAst"
                 . liftIO
                 . runAction "classplugin.findClassIdentifier.GetHieAst" state
@@ -144,7 +145,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
 
                 mkCmdParams :: [(T.Text, T.Text)] -> Bool -> [Value]
                 mkCmdParams methodGroup withSig =
-                    [toJSON (AddMinimalMethodsParams uri range methodGroup withSig)]
+                    [toJSON (AddMinimalMethodsParams verTxtDocId range methodGroup withSig)]
 
                 mkCodeAction title cmd
                     = InR

@@ -9,7 +9,9 @@
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
-  ( descriptor
+  ( suggestPragmaDescriptor
+  , completionDescriptor
+  , suggestDisableWarningDescriptor
   -- For testing
   , validPragmas
   ) where
@@ -34,11 +36,23 @@ import qualified Text.Fuzzy                         as Fuzzy
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction codeActionProvider
-                  <> mkPluginHandler LSP.SMethod_TextDocumentCompletion completion
+suggestPragmaDescriptor :: PluginId -> PluginDescriptor IdeState
+suggestPragmaDescriptor plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction suggestPragmaProvider
+  , pluginPriority = defaultPluginPriority + 1000
+  }
+
+completionDescriptor :: PluginId -> PluginDescriptor IdeState
+completionDescriptor plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCompletion completion
   , pluginPriority = ghcideCompletionsPluginPriority + 1
+  }
+
+suggestDisableWarningDescriptor :: PluginId -> PluginDescriptor IdeState
+suggestDisableWarningDescriptor plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction suggestDisableWarningProvider
+    -- #3636 Suggestions to disable warnings should appear last.
+  , pluginPriority = 0
   }
 
 -- ---------------------------------------------------------------------
@@ -48,8 +62,14 @@ type PragmaEdit = (T.Text, Pragma)
 data Pragma = LangExt T.Text | OptGHC T.Text
   deriving (Show, Eq, Ord)
 
-codeActionProvider :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
-codeActionProvider state _plId (LSP.CodeActionParams _ _ docId _ (LSP.CodeActionContext diags _monly _))
+suggestPragmaProvider :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+suggestPragmaProvider = mkCodeActionProvider suggest
+
+suggestDisableWarningProvider :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+suggestDisableWarningProvider = mkCodeActionProvider $ const suggestDisableWarning
+
+mkCodeActionProvider :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+mkCodeActionProvider mkSuggest state _plId (LSP.CodeActionParams _ _ docId _ (LSP.CodeActionContext diags _monly _))
   | let LSP.TextDocumentIdentifier{ _uri = uri } = docId
   , Just normalizedFilePath <- LSP.uriToNormalizedFilePath $ toNormalizedUri uri = do
       -- ghc session to get some dynflags even if module isn't parsed
@@ -61,7 +81,7 @@ codeActionProvider state _plId (LSP.CodeActionParams _ _ docId _ (LSP.CodeAction
       case ghcSession of
         Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) ->
           let nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
-              pedits = nubOrdOn snd . concat $ suggest parsedModuleDynFlags <$> diags
+              pedits = (nubOrdOn snd . concat $ mkSuggest parsedModuleDynFlags <$> diags)
           in
             pure $ Right $ LSP.InL $ pragmaEditToAction uri nextPragmaInfo <$> pedits
         Nothing -> pure $ Right $ LSP.InL []
@@ -96,7 +116,6 @@ pragmaEditToAction uri Pragmas.NextPragmaInfo{ nextPragmaLine, lineSplitTextEdit
 suggest :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
 suggest dflags diag =
   suggestAddPragma dflags diag
-    ++ suggestDisableWarning diag
 
 -- ---------------------------------------------------------------------
 

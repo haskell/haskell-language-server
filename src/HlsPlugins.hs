@@ -152,7 +152,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "cabal" in Cabal.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_pragmas
-      Pragmas.descriptor  "pragmas" :
+      Pragmas.suggestPragmaDescriptor  "pragmas-suggest" :
+      Pragmas.completionDescriptor  "pragmas-completion" :
+      Pragmas.suggestDisableWarningDescriptor  "pragmas-disable" :
 #endif
 #if hls_floskell
       Floskell.descriptor "floskell" :

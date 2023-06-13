@@ -35,6 +35,7 @@ library
     , hie-compat
     , hls-plugin-api        == 2.1.0.0
     , hls-refactor-plugin
+    , lens
     , lsp
     , lsp-types
     , mod

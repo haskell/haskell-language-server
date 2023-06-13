@@ -41,6 +41,7 @@ where
 
 
 import           Control.Arrow                 ((&&&))
+import           Control.Lens                  (re, (^.))
 import           Control.Monad.Extra           (maybeM)
 import           Control.Monad.Trans.Class     (lift)
 import           Control.Monad.Trans.Except    (ExceptT, runExceptT, throwE)
@@ -56,6 +57,7 @@ import           Data.Void                     (Void)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
@@ -94,7 +96,7 @@ data WithDeletions = IncludeDeletions | SkipDeletions
   deriving Eq
 
 -- | Generate a 'WorkspaceEdit' value from a pair of source Text
-diffText :: ClientCapabilities -> (Uri,T.Text) -> T.Text -> WithDeletions -> WorkspaceEdit
+diffText :: ClientCapabilities -> (VersionedTextDocumentIdentifier,T.Text) -> T.Text -> WithDeletions -> WorkspaceEdit
 diffText clientCaps old new withDeletions =
   let
     supports = clientSupportsDocumentChanges clientCaps
@@ -157,16 +159,16 @@ diffTextEdit fText f2Text withDeletions = r
 
 
 -- | A pure version of 'diffText' for testing
-diffText' :: Bool -> (Uri,T.Text) -> T.Text -> WithDeletions -> WorkspaceEdit
-diffText' supports (f,fText) f2Text withDeletions  =
+diffText' :: Bool -> (VersionedTextDocumentIdentifier,T.Text) -> T.Text -> WithDeletions -> WorkspaceEdit
+diffText' supports (verTxtDocId,fText) f2Text withDeletions =
   if supports
     then WorkspaceEdit Nothing (Just docChanges) Nothing
     else WorkspaceEdit (Just h) Nothing Nothing
   where
     diff = diffTextEdit fText f2Text withDeletions
-    h = M.singleton f diff
+    h = M.singleton (verTxtDocId ^. L.uri) diff
     docChanges = [InL docEdit]
-    docEdit = TextDocumentEdit (OptionalVersionedTextDocumentIdentifier f (InL 0)) $ fmap InL diff
+    docEdit = TextDocumentEdit (verTxtDocId ^.re _versionedTextDocumentIdentifier) $ fmap InL diff
 
 -- ---------------------------------------------------------------------
 

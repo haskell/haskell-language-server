@@ -111,11 +111,13 @@ rules recorder plId = do
           ShowDiag,
           LSP.Diagnostic
             { _range = realSrcSpanToRange observationSrcSpan,
-              _severity = Just LSP.DsHint,
+              _severity = Just LSP.DiagnosticSeverity_Hint,
               _code = Just (LSP.InR $ unId (inspectionId inspection)),
               _source = Just "stan",
               _message = message,
               _relatedInformation = Nothing,
-              _tags = Nothing
+              _tags = Nothing,
+              _codeDescription = Nothing,
+              _data_ = Nothing
             }
           )

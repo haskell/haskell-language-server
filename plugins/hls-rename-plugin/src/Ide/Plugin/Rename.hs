@@ -18,6 +18,7 @@ import           GHC.Parser.Annotation                 (AnnContext, AnnList,
 #endif
 
 import           Compat.HieTypes
+import           Control.Lens                          ((^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
@@ -53,6 +54,7 @@ import           HieDb.Query
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
@@ -67,7 +69,7 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultP
     }
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
-renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos  newNameText) =
+renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier uri) pos  newNameText) =
     pluginResponse $ do
         nfp <- handleUriToNfp uri
         directOldNames <- getNamesAtPos state nfp pos
@@ -79,7 +81,7 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
            See the `IndirectPuns` test for an example. -}
         indirectOldNames <- concat . filter ((>1) . Prelude.length) <$>
             mapM (uncurry (getNamesAtPos state) . locToFilePos) directRefs
-        let oldNames = (filter matchesDirect indirectOldNames) ++ directOldNames
+        let oldNames = filter matchesDirect indirectOldNames ++ directOldNames
             matchesDirect n = occNameFS (nameOccName n) `elem` directFS
               where
                 directFS = map (occNameFS. nameOccName) directOldNames
@@ -93,8 +95,10 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
         -- Perform rename
         let newName = mkTcOcc $ T.unpack newNameText
             filesRefs = collectWith locToUri refs
-            getFileEdit = flip $ getSrcEdit state . replaceRefs newName
-        fileEdits <- mapM (uncurry getFileEdit) filesRefs
+            getFileEdit (uri, locations) = do
+              verTxtDocId <- lift $ getVersionedTextDoc (TextDocumentIdentifier uri)
+              getSrcEdit state verTxtDocId (replaceRefs newName locations)
+        fileEdits <- mapM getFileEdit filesRefs
         pure $ InL $ foldl' (<>) mempty fileEdits
 
 -- | Limit renaming across modules.
@@ -126,12 +130,12 @@ failWhenImportOrExport state nfp refLocs names = do
 getSrcEdit ::
     (MonadLsp config m) =>
     IdeState ->
+    VersionedTextDocumentIdentifier ->
     (ParsedSource -> ParsedSource) ->
-    Uri ->
     ExceptT String m WorkspaceEdit
-getSrcEdit state updatePs uri = do
+getSrcEdit state verTxtDocId updatePs = do
     ccs <- lift getClientCapabilities
-    nfp <- handleUriToNfp uri
+    nfp <- handleUriToNfp (verTxtDocId ^. L.uri)
     annAst <- handleMaybeM ("No parsed source for: " ++ show nfp) $ liftIO $ runAction
         "Rename.GetAnnotatedParsedSource"
         state
@@ -144,7 +148,7 @@ getSrcEdit state updatePs uri = do
     let src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
 #endif
-    pure $ diffText ccs (uri, src) res IncludeDeletions
+    pure $ diffText ccs (verTxtDocId, src) res IncludeDeletions
 
 -- | Replace names at every given `Location` (in a given `ParsedSource`) with a given new name.
 replaceRefs ::

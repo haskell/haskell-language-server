@@ -7,6 +7,7 @@
 module Wingman.EmptyCase where
 
 import           Control.Applicative (empty)
+import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Except (runExcept)
 import           Control.Monad.Trans
@@ -26,6 +27,7 @@ import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (getLocalScope)
 import           Ide.Types
 import           Language.LSP.Server
+import           Language.LSP.Protocol.Lens as L
 import           Language.LSP.Protocol.Types
 import           Prelude hiding (span)
 import           Wingman.AbstractLSP.Types
@@ -50,7 +52,7 @@ emptyCaseInteraction = Interaction $
   Continuation @EmptyCaseT @EmptyCaseT @WorkspaceEdit EmptyCaseT
     (SynthesizeCodeLens $ \LspEnv{..} _ -> do
       let FileContext{..} = le_fileContext
-      nfp <- getNfp fc_uri
+      nfp <- getNfp (fc_verTxtDocId ^. L.uri)
 
       let stale a = runStaleIde "codeLensProvider" le_ideState nfp a
 
@@ -69,7 +71,7 @@ emptyCaseInteraction = Interaction $
               (foldMap (hySingleton . occName . fst) bindings)
               ty
         edits <- liftMaybe $ hush $
-              mkWorkspaceEdits le_dflags ccs fc_uri (unTrack pm) $
+              mkWorkspaceEdits le_dflags ccs fc_verTxtDocId (unTrack pm) $
                 graftMatchGroup (RealSrcSpan (unTrack ss) Nothing) $
                   noLoc matches
         pure
