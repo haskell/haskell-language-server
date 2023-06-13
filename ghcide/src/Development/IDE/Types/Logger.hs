@@ -76,7 +76,7 @@ data Priority
       -- ^ These error messages should not occur in a expected usage, and
       -- should be investigated.
     | Error -- ^ Such log messages must never occur in expected usage.
-    deriving (Eq, Show, Ord, Enum, Bounded)
+    deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
 -- | Note that this is logging actions _of the program_, not of the user.
 --   You shouldn't call warning/error if the user has caused an error, only
