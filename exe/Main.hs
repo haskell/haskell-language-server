@@ -30,11 +30,7 @@ import           Ide.Types                     (PluginDescriptor (pluginNotifica
                                                 mkPluginNotificationHandler)
 import           Language.LSP.Protocol.Message as LSP
 import           Language.LSP.Server           as LSP
-#if MIN_VERSION_prettyprinter(1,7,0)
 import           Prettyprinter                 (Pretty (pretty), vsep)
-#else
-import           Data.Text.Prettyprint.Doc     (Pretty (pretty), vsep)
-#endif
 
 data Log
   = LogIdeMain IdeMain.Log
