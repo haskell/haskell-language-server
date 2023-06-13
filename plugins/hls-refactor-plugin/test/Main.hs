@@ -310,6 +310,7 @@ codeActionTests = testGroup "code actions"
   , removeImportTests
   , suggestImportClassMethodTests
   , suggestImportTests
+  , suggestAddRecordFieldImportTests
   , suggestHideShadowTests
   , fixConstructorImportTests
   , fixModuleImportTypoTests
@@ -1729,6 +1730,32 @@ suggestImportTests = testGroup "suggest import actions"
              liftIO $ after @=? contentAfterAction
           else
               liftIO $ [_title | InR CodeAction{_title} <- actions, _title == newImp ] @?= []
+
+suggestAddRecordFieldImportTests :: TestTree
+suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields when using OverloadedRecordDot"
+  [ testGroup "The field is suggested when an instance resolution failure occurs"
+    [ ignoreFor (BrokenForGHC [GHC810, GHC90, GHC94, GHC96]) "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
+    ]
+  ]
+  where
+    theTest = testSessionWithExtraFiles "hover" def $ \dir -> do
+      configureCheckProject False
+      let before = T.unlines $ "module A where" : ["import B (Foo)", "getFoo :: Foo -> Int", "getFoo x = x.foo"]
+          after  = T.unlines $ "module A where" : ["import B (Foo, foo)", "getFoo :: Foo -> Int", "getFoo x = x.foo"]
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, B]}}"
+      liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
+      liftIO $ writeFileUTF8 (dir </> "B.hs") $ unlines ["module B where", "data Foo = Foo { foo :: Int }"]
+      doc <- createDoc "Test.hs" "haskell" before
+      waitForProgressDone
+      _ <- waitForDiagnostics
+      let defLine = fromIntegral $ 1 + 2
+          range = Range (Position defLine 0) (Position defLine maxBound)
+      actions <- getCodeActions doc range
+      action <- liftIO $ pickActionWithTitle "Add foo to the import list of B" actions
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      liftIO $ after @=? contentAfterAction
+
 
 suggestImportDisambiguationTests :: TestTree
 suggestImportDisambiguationTests = testGroup "suggest import disambiguation actions"
