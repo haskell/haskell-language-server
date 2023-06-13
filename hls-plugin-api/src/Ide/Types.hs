@@ -403,19 +403,8 @@ instance PluginMethod Request Method_TextDocumentCodeAction where
     where
       uri = msgParams ^. L.textDocument . L.uri
 
-instance PluginRequestMethod Method_TextDocumentCodeAction where
-  combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _ _) (CodeActionParams _ _ _ _ context) resps =
-      InL $ fmap compat $ filter wasRequested $ concat $ mapMaybe nullToMaybe $ toList resps
-    where
-      compat :: (Command |? CodeAction) -> (Command |? CodeAction)
-      compat x@(InL _) = x
-      compat x@(InR action)
-        | Just _ <- textDocCaps >>= _codeAction >>= _codeActionLiteralSupport
-        = x
-        | otherwise = InL cmd
-        where
-          cmd = mkLspCommand "hls" "fallbackCodeAction" (action ^. L.title) (Just cmdParams)
-          cmdParams = [toJSON (FallbackCodeActionParams (action ^. L.edit) (action ^. L.command))]
+instance PluginMethod Request Method_CodeActionResolve where
+  pluginEnabled _ msgParams pluginDesc config = pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
 
       wasRequested :: (Command |? CodeAction) -> Bool
       wasRequested (InL _) = True
@@ -463,6 +452,10 @@ instance PluginMethod Request Method_TextDocumentCodeLens where
       && pluginEnabledConfig plcCodeLensOn (configForPlugin config pluginDesc)
     where
       uri = msgParams ^. L.textDocument . L.uri
+
+instance PluginMethod Request Method_CodeLensResolve where
+  pluginEnabled _ msgParams pluginDesc config = pluginEnabledConfig plcCodeLensOn (configForPlugin config pluginDesc)
+
 
 instance PluginMethod Request Method_TextDocumentRename where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
@@ -535,6 +528,44 @@ instance PluginMethod Request (Method_CustomMethod m) where
   pluginEnabled _ _ _ _ = True
 
 ---
+instance PluginRequestMethod Method_TextDocumentCodeAction where
+  combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _ _) (CodeActionParams _ _ _ _ context) resps =
+      InL $ fmap compat $ filter wasRequested $ concat $ mapMaybe nullToMaybe $ toList resps
+    where
+      compat :: (Command |? CodeAction) -> (Command |? CodeAction)
+      compat x@(InL _) = x
+      compat x@(InR action)
+        | Just _ <- textDocCaps >>= _codeAction >>= _codeActionLiteralSupport
+        = x
+        | otherwise = InL cmd
+        where
+          cmd = mkLspCommand "hls" "fallbackCodeAction" (action ^. L.title) (Just cmdParams)
+          cmdParams = [toJSON (FallbackCodeActionParams (action ^. L.edit) (action ^. L.command))]
+
+      wasRequested :: (Command |? CodeAction) -> Bool
+      wasRequested (InL _) = True
+      wasRequested (InR ca)
+        | Nothing <- _only context = True
+        | Just allowed <- _only context
+        -- See https://github.com/microsoft/language-server-protocol/issues/970
+        -- This is somewhat vague, but due to the hierarchical nature of action kinds, we
+        -- should check whether the requested kind is a *prefix* of the action kind.
+        -- That means, for example, we will return actions with kinds `quickfix.import` and
+        -- `quickfix.somethingElse` if the requested kind is `quickfix`.
+        , Just caKind <- ca ^. L.kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
+        | otherwise = False
+
+      -- Copied form lsp-types 1.6 to get compilation working. May make more
+      -- sense to add it back to lsp-types 2.0
+      -- | Does the first 'CodeActionKind' subsume the other one, hierarchically. Reflexive.
+      codeActionKindSubsumes :: CodeActionKind -> CodeActionKind -> Bool
+      -- Simple but ugly implementation: prefix on the string representation
+      codeActionKindSubsumes parent child = toEnumBaseType parent `T.isPrefixOf` toEnumBaseType child
+
+instance PluginRequestMethod Method_CodeActionResolve where
+    -- TODO: Make a more serious combineResponses function
+      combineResponses _ _ _ _ (x :| _) = x
+
 instance PluginRequestMethod Method_TextDocumentDefinition where
   combineResponses _ _ _ _ (x :| _) = x
 
@@ -551,6 +582,10 @@ instance PluginRequestMethod Method_WorkspaceSymbol where
     combineResponses _ _ _ _ xs = InL $ mconcat $ takeLefts $ toList xs
 
 instance PluginRequestMethod Method_TextDocumentCodeLens where
+
+instance PluginRequestMethod Method_CodeLensResolve where
+    -- TODO: Make a more serious combineResponses function
+      combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentRename where
 
@@ -949,7 +984,8 @@ instance HasTracing WorkspaceSymbolParams where
 instance HasTracing CallHierarchyIncomingCallsParams
 instance HasTracing CallHierarchyOutgoingCallsParams
 instance HasTracing CompletionItem
-
+instance HasTracing CodeLens
+instance HasTracing CodeAction
 -- ---------------------------------------------------------------------
 
 {-# NOINLINE pROCESS_ID #-}
