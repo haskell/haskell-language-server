@@ -51,7 +51,7 @@
     };
 
     haskell-hie-bios = {
-      url = "github:mpickering/hie-bios";
+      url = "github:haskell/hie-bios";
       flake = false;
     };
 
@@ -60,8 +60,18 @@
       flake = false;
     };
 
-    fourmolu-012 = {
-      url = "https://hackage.haskell.org/package/fourmolu-0.12.0.0/fourmolu-0.12.0.0.tar.gz";
+    # smunix: github:haskell/hie-bios defines
+    #   'CabalType :: Maybe String -> Maybe FilePath -> CabalType'
+    # while the original githcom:Avi-D-coder/hie-bios still has this:
+    #   'CabalType :: Maybe String -> CabalType'
+    # We need a patched version of implicit-hie-cradle that works with hls, so I've created
+    # the repository below. Obviously, this is not sustainable as it adds more technical debt.
+    # We need a better strategy to streamline changes required by HLS from other hie-bios related
+    # packages.
+    # See details here: https://github.com/Avi-D-coder/implicit-hie-cradle/compare/master...smunix:implicit-hie-cradle:smunix-patch-hls-1?expand=1
+    #
+    haskell-implicit-hie-cradle = {
+      url = "github:smunix/implicit-hie-cradle?ref=smunix-patch-hls-0.5-1";
       flake = false;
     };
   };

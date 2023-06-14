@@ -13,7 +13,7 @@ let
     {
       hlsDisabledPlugins = disabledPlugins;
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
-      apply-refact = hsuper.apply-refact_0_12_0_0;
+      apply-refact = hsuper.apply-refact_0_13_0_0;
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
