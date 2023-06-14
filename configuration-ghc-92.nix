@@ -19,7 +19,7 @@ let
           doCheck = false;
         });
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
-      apply-refact = hsuper.apply-refact_0_12_0_0;
+      apply-refact = hsuper.apply-refact_0_13_0_0;
 
       # ptr-poker breaks on MacOS without SSE2 optimizations
       # https://github.com/nikita-volkov/ptr-poker/issues/11
@@ -38,6 +38,8 @@ let
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
       hie-bios = hself.callCabal2nix "hie-bios" inputs.haskell-hie-bios { };
+
+      implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.haskell-implicit-hie-cradle { };
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
