@@ -5,6 +5,8 @@ module Main
   ) where
 
 import           Control.Lens            ((<&>), (^.))
+import           Data.Aeson
+import           Data.Foldable
 import qualified Data.Text               as T
 import           Ide.Plugin.Pragmas
 import qualified Language.LSP.Types.Lens as L
@@ -31,6 +33,7 @@ tests =
   , codeActionTests'
   , completionTests
   , completionSnippetTests
+  , dontSuggestCompletionTests
   ]
 
 codeActionTests :: TestTree
@@ -139,28 +142,79 @@ completionSnippetTests :: TestTree
 completionSnippetTests =
   testGroup "expand snippet to pragma" $
     validPragmas <&>
-      (\(insertText, label, detail, _) ->
-        let input = T.toLower $ T.init label
+      (\(insertText, label, detail, appearWhere) ->
+        let inputPrefix =
+              case appearWhere of
+                NewLine   -> ""
+                CanInline -> "something "
+            input = inputPrefix <> (T.toLower $ T.init label)
         in completionTest (T.unpack label)
             "Completion.hs" input label (Just Snippet)
             (Just $ "{-# " <> insertText <> " #-}") (Just detail)
             [0, 0, 0, 34, 0, fromIntegral $ T.length input])
 
-completionTest :: String -> String -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> [UInt] -> TestTree
-completionTest testComment fileName te' label textFormat insertText detail [a, b, c, d, x, y] =
+dontSuggestCompletionTests :: TestTree
+dontSuggestCompletionTests =
+  testGroup "do not suggest pragmas" $
+  let replaceFuncBody newBody = Just $ mkEdit (8,6) (8,8) newBody
+      writeInEmptyLine txt = Just $ mkEdit (3,0) (3,0) txt
+      generalTests = [ provideNoCompletionsTest "in imports" "Completion.hs" (Just $ mkEdit (3,0) (3,0) "import WA") (Position 3 8)
+                     , provideNoCompletionsTest "when no word has been typed" "Completion.hs" Nothing (Position 3 0)
+                     , provideNoCompletionsTest "when expecting auto complete on modules" "Completion.hs" (Just $ mkEdit (8,6) (8,8) "Data.Maybe.WA") (Position 8 19)
+                     ]
+      individualPragmaTests = validPragmas <&> \(insertText,label,detail,appearWhere) ->
+          let completionPrompt = T.toLower $ T.init label
+              promptLen = fromIntegral (T.length completionPrompt)
+          in case appearWhere of
+              CanInline ->
+                  provideNoUndesiredCompletionsTest ("at new line: " <> T.unpack label) "Completion.hs" (Just label) (writeInEmptyLine completionPrompt) (Position 3 0)
+              NewLine ->
+                  provideNoUndesiredCompletionsTest ("inline: " <> T.unpack label) "Completion.hs" (Just label) (replaceFuncBody completionPrompt) (Position 8 (6 + promptLen))
+    in generalTests ++ individualPragmaTests
+
+mkEdit :: (UInt,UInt) -> (UInt,UInt) -> T.Text -> TextEdit
+mkEdit (startLine, startCol) (endLine, endCol) newText =
+    TextEdit (Range (Position startLine startCol) (Position endLine endCol)) newText
+
+completionTest :: String -> FilePath -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> [UInt] -> TestTree
+completionTest testComment fileName replacementText expectedLabel expectedFormat expectedInsertText detail [delFromLine, delFromCol, delToLine, delToCol, completeAtLine, completeAtCol] =
   testCase testComment $ runSessionWithServer pragmasCompletionPlugin testDataDir $ do
     doc <- openDoc fileName "haskell"
     _ <- waitForDiagnostics
-    let te = TextEdit (Range (Position a b) (Position c d)) te'
+    let te = TextEdit (Range (Position delFromLine delFromCol) (Position delToLine delToCol)) replacementText
     _ <- applyEdit doc te
-    compls <- getCompletions doc (Position x y)
-    item <- getCompletionByLabel label compls
+    compls <- getCompletions doc (Position completeAtLine completeAtCol)
+    item <- getCompletionByLabel expectedLabel compls
     liftIO $ do
-      item ^. L.label @?= label
+      item ^. L.label @?= expectedLabel
       item ^. L.kind @?= Just CiKeyword
-      item ^. L.insertTextFormat @?= textFormat
-      item ^. L.insertText @?= insertText
+      item ^. L.insertTextFormat @?= expectedFormat
+      item ^. L.insertText @?= expectedInsertText
       item ^. L.detail @?= detail
+
+provideNoCompletionsTest :: String -> FilePath -> Maybe TextEdit -> Position -> TestTree
+provideNoCompletionsTest testComment fileName mTextEdit pos =
+  provideNoUndesiredCompletionsTest testComment fileName Nothing mTextEdit pos
+
+provideNoUndesiredCompletionsTest :: String -> FilePath -> Maybe T.Text -> Maybe TextEdit -> Position -> TestTree
+provideNoUndesiredCompletionsTest testComment fileName mUndesiredLabel mTextEdit pos =
+  testCase testComment $ runSessionWithServer pragmasCompletionPlugin testDataDir $ do
+    doc <- openDoc fileName "haskell"
+    _ <- waitForDiagnostics
+    _ <- sendConfigurationChanged disableGhcideCompletions
+    mapM_ (applyEdit doc) mTextEdit
+    compls <- getCompletions doc pos
+    liftIO $ case mUndesiredLabel of
+        Nothing -> compls @?= []
+        Just undesiredLabel -> do
+            case find (\c -> c ^. L.label == undesiredLabel) compls of
+                Just c -> assertFailure $
+                    "Did not expect a completion with label=" <> T.unpack undesiredLabel
+                    <> ", got completion: "<> show c
+                Nothing -> pure ()
+
+disableGhcideCompletions :: Value
+disableGhcideCompletions = object [ "haskell" .= object ["plugin" .= object [ "ghcide-completions" .= object ["globalOn" .= False]]] ]
 
 goldenWithPragmas :: PluginTestDescriptor () -> TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithPragmas descriptor title path = goldenWithHaskellDoc descriptor title testDataDir path "expected" "hs"
