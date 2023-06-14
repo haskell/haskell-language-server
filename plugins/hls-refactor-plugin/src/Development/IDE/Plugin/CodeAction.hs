@@ -150,6 +150,7 @@ iePluginDescriptor recorder plId =
           , wrap suggestNewOrExtendImportForClassMethod
           , wrap suggestHideShadow
           , wrap suggestNewImport
+          , wrap suggestAddRecordFieldImport
           ]
           plId
    in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler SMethod_TextDocumentCodeAction codeAction }
@@ -1211,6 +1212,25 @@ suggestFixConstructorImport Diagnostic{_range=_range,..}
     in [("Fix import of " <> fixedImport, TextEdit _range fixedImport)]
   | otherwise = []
 
+suggestAddRecordFieldImport :: ExportsMap -> DynFlags -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
+suggestAddRecordFieldImport exportsMap df ps fileContents Diagnostic {..}
+  | Just fieldName <- findMissingField _message
+  , Just (range, indent) <- newImportInsertRange ps fileContents
+    = let qis = qualifiedImportStyle df
+          suggestions = nubSortBy simpleCompareImportSuggestion (constructNewImportSuggestions exportsMap (Nothing, NotInScopeThing fieldName) Nothing qis)
+      in map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
+  | otherwise = []
+    where
+      findMissingField :: T.Text -> Maybe T.Text
+      findMissingField t =
+        let
+            hasfieldRegex = "((.+\\.)?HasField) \"(.+)\" ([^ ]+) ([^ ]+)"
+            regex = "(No instance for|Could not deduce):? (\\(" <> hasfieldRegex <> "\\)|‘" <> hasfieldRegex <> "’|" <> hasfieldRegex <> ")"
+            match = filter (/="") <$> matchRegexUnifySpaces t regex
+        in case match of
+               Just [_, _, _, _, fieldName, _, _] -> Just fieldName
+               _                                  -> Nothing
+
 -- | Suggests a constraint for a declaration for which a constraint is missing.
 suggestConstraint :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
 suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
@@ -1608,10 +1628,11 @@ findPositionAfterModuleName ps hsmodName' = do
     epaLocationToLine :: EpaLocation -> Maybe Int
 #if MIN_VERSION_ghc(9,5,0)
     epaLocationToLine (EpaSpan sp _)
+      = Just . srcLocLine . realSrcSpanEnd $ sp
 #else
     epaLocationToLine (EpaSpan sp)
-#endif
       = Just . srcLocLine . realSrcSpanEnd $ sp
+#endif
     epaLocationToLine (EpaDelta (SameLine _) priorComments) = Just $ sumCommentsOffset priorComments
     -- 'priorComments' contains the comments right before the current EpaLocation
     -- Summing line offset of priorComments is necessary, as 'line' is the gap between the last comment and
@@ -1852,16 +1873,21 @@ textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCo
 
 -- | Returns the ranges for a binding in an import declaration
 rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
-rangesForBindingImport ImportDecl{
 #if MIN_VERSION_ghc(9,5,0)
+rangesForBindingImport ImportDecl{
   ideclImportList = Just (Exactly, L _ lies)
-#else
-  ideclHiding = Just (False, L _ lies)
-#endif
   } b =
     concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
   where
     b' = wrapOperatorInParens b
+#else
+rangesForBindingImport ImportDecl{
+  ideclHiding = Just (False, L _ lies)
+  } b =
+    concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
+  where
+    b' = wrapOperatorInParens b
+#endif
 rangesForBindingImport _ _ = []
 
 wrapOperatorInParens :: String -> String

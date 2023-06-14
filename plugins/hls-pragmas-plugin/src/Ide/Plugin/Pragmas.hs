@@ -14,6 +14,7 @@ module Ide.Plugin.Pragmas
   , suggestDisableWarningDescriptor
   -- For testing
   , validPragmas
+  , AppearWhere(..)
   ) where
 
 import           Control.Lens                       hiding (List)
@@ -212,12 +213,30 @@ completion _ide _ complParams = do
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
                     | "{-#" `T.isPrefixOf` line
                     = [ mkPragmaCompl (a <> suffix) b c
-                                | (a, b, c, w) <- validPragmas, w == NewLine ]
+                      | (a, b, c, w) <- validPragmas, w == NewLine
+                      ]
+                    | -- Do not suggest any pragmas any of these conditions:
+                      -- 1. Current line is a an import
+                      -- 2. There is a module name right before the current word.
+                      --    Something like `Text.la` shouldn't suggest adding the
+                      --    'LANGUAGE' pragma.
+                      -- 3. The user has not typed anything yet.
+                      "import" `T.isPrefixOf` line || not (T.null module_) || T.null word
+                    = []
                     | otherwise
-                    = [ mkPragmaCompl (prefix <> a <> suffix) b c
-                                | (a, b, c, _) <- validPragmas, Fuzzy.test word b]
+                    = [ mkPragmaCompl (prefix <> pragmaTemplate <> suffix) matcher detail
+                      | (pragmaTemplate, matcher, detail, appearWhere) <- validPragmas
+                      , -- Only suggest a pragma that needs its own line if the whole line
+                        -- fuzzily matches the pragma
+                        (appearWhere == NewLine && Fuzzy.test line matcher ) ||
+                        -- Only suggest a pragma that appears in the middle of a line when
+                        -- the current word is not the only thing in the line and the
+                        -- current word fuzzily matches the pragma
+                        (appearWhere == CanInline && line /= word && Fuzzy.test word matcher)
+                      ]
                     where
                         line = T.toLower $ VFS.fullLine pfix
+                        module_ = VFS.prefixModule pfix
                         word = VFS.prefixText pfix
                         -- Not completely correct, may fail if more than one "{-#" exist
                         -- , we can ignore it since it rarely happen.
