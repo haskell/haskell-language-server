@@ -89,7 +89,7 @@ initializeTests = withResource acquire release tests
   where
     tests :: IO (TResponseMessage Method_Initialize) -> TestTree
     tests getInitializeResponse = testGroup "initialize response capabilities"
-        [ chk "   code action"             _codeActionProvider  (Just $ InL True)
+        [ chk "   code action"             _codeActionProvider  (Just (InR (CodeActionOptions {_workDoneProgress = Nothing, _codeActionKinds = Nothing, _resolveProvider = Just False})))
         , che "   execute command"         _executeCommandProvider [extendImportCommandId]
         ]
       where

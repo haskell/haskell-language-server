@@ -61,7 +61,7 @@ extra-deps:
 - co-log-core-0.3.1.0
 - lsp-2.0.0.0
 - lsp-types-2.0.0.0
-- lsp-test-2.0.0.0
+- lsp-test-0.15.0.0
 - hie-bios-0.12.0
 - row-types-1.0.1.2
 
