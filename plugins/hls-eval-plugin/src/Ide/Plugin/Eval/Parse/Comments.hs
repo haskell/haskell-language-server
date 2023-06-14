@@ -33,9 +33,6 @@ import           Data.Map.Strict                          (Map)
 import qualified Data.Map.Strict                          as Map
 import qualified Data.Text                                as T
 import           Data.Void                                (Void)
-import           Development.IDE                          (Position,
-                                                           Range (Range))
-import           Development.IDE.Types.Location           (Position (..))
 import           GHC.Generics                             hiding (UInt, to)
 import           Ide.Plugin.Eval.Types
 import qualified Language.LSP.Protocol.Lens               as L

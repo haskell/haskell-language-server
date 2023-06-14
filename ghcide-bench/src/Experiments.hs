@@ -59,8 +59,8 @@ import qualified Language.LSP.Protocol.Lens         as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types        hiding (Null,
                                                      SemanticTokenAbsolute (..))
+import qualified Language.LSP.Protocol.Types        as LSP
 import           Language.LSP.Test
-import qualified Lanuguage.LSP.Protocol.Types       as LSP
 import           Numeric.Natural
 import           Options.Applicative
 import           System.Directory

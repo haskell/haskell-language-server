@@ -59,12 +59,9 @@ extra-deps:
 - retrie-1.1.0.0
 - stylish-haskell-0.14.2.0@sha256:fffe1c13ad4c2678cf28a7470cac5d3bf20c71c36f09969e3e5f186787cceb7c,4321
 - co-log-core-0.3.1.0
-- git: git@github.com:haskell/lsp.git
-  commit: 98ba7cc91436e93578e9882c7ef18660b5fd4dd4
-  subdirs:
-  - lsp
-  - lsp-types
-  - lsp-test
+- lsp-2.0.0.0
+- lsp-types-2.0.0.0
+- lsp-test-2.0.0.0
 - hie-bios-0.12.0
 - row-types-1.0.1.2
 
