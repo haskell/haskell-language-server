@@ -9,7 +9,9 @@
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
-  ( descriptor
+  ( suggestPragmaDescriptor
+  , completionDescriptor
+  , suggestDisableWarningDescriptor
   -- For testing
   , validPragmas
   , AppearWhere(..)
@@ -34,11 +36,23 @@ import qualified Text.Fuzzy                         as Fuzzy
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler J.STextDocumentCodeAction codeActionProvider
-                  <> mkPluginHandler J.STextDocumentCompletion completion
+suggestPragmaDescriptor :: PluginId -> PluginDescriptor IdeState
+suggestPragmaDescriptor plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkPluginHandler J.STextDocumentCodeAction suggestPragmaProvider
+  , pluginPriority = defaultPluginPriority + 1000
+  }
+
+completionDescriptor :: PluginId -> PluginDescriptor IdeState
+completionDescriptor plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkPluginHandler J.STextDocumentCompletion completion
   , pluginPriority = ghcideCompletionsPluginPriority + 1
+  }
+
+suggestDisableWarningDescriptor :: PluginId -> PluginDescriptor IdeState
+suggestDisableWarningDescriptor plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkPluginHandler J.STextDocumentCodeAction suggestDisableWarningProvider
+    -- #3636 Suggestions to disable warnings should appear last.
+  , pluginPriority = 0
   }
 
 -- ---------------------------------------------------------------------
@@ -48,8 +62,14 @@ type PragmaEdit = (T.Text, Pragma)
 data Pragma = LangExt T.Text | OptGHC T.Text
   deriving (Show, Eq, Ord)
 
-codeActionProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
-codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly))
+suggestPragmaProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
+suggestPragmaProvider = mkCodeActionProvider suggest
+
+suggestDisableWarningProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
+suggestDisableWarningProvider = mkCodeActionProvider $ const suggestDisableWarning
+
+mkCodeActionProvider :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'J.TextDocumentCodeAction
+mkCodeActionProvider mkSuggest state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly))
   | let J.TextDocumentIdentifier{ _uri = uri } = docId
   , Just normalizedFilePath <- J.uriToNormalizedFilePath $ toNormalizedUri uri = do
       -- ghc session to get some dynflags even if module isn't parsed
@@ -61,7 +81,7 @@ codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionCont
       case ghcSession of
         Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) ->
           let nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
-              pedits = nubOrdOn snd . concat $ suggest parsedModuleDynFlags <$> diags
+              pedits = (nubOrdOn snd . concat $ mkSuggest parsedModuleDynFlags <$> diags)
           in
             pure $ Right $ List $ pragmaEditToAction uri nextPragmaInfo <$> pedits
         Nothing -> pure $ Right $ List []
@@ -96,7 +116,6 @@ pragmaEditToAction uri Pragmas.NextPragmaInfo{ nextPragmaLine, lineSplitTextEdit
 suggest :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
 suggest dflags diag =
   suggestAddPragma dflags diag
-    ++ suggestDisableWarning diag
 
 -- ---------------------------------------------------------------------
 

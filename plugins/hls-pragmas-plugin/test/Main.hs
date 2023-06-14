@@ -17,8 +17,14 @@ import           Test.Hls.Util           (onlyWorkForGhcVersions)
 main :: IO ()
 main = defaultTestRunner tests
 
-pragmasPlugin :: PluginTestDescriptor ()
-pragmasPlugin = mkPluginTestDescriptor' descriptor "pragmas"
+pragmasSuggestPlugin :: PluginTestDescriptor ()
+pragmasSuggestPlugin = mkPluginTestDescriptor' suggestPragmaDescriptor "pragmas"
+
+pragmasCompletionPlugin :: PluginTestDescriptor ()
+pragmasCompletionPlugin = mkPluginTestDescriptor' completionDescriptor "pragmas"
+
+pragmasDisableWarningPlugin :: PluginTestDescriptor ()
+pragmasDisableWarningPlugin = mkPluginTestDescriptor' suggestDisableWarningDescriptor "pragmas"
 
 tests :: TestTree
 tests =
@@ -33,53 +39,59 @@ tests =
 codeActionTests :: TestTree
 codeActionTests =
   testGroup "code actions"
-  [ codeActionTest "Block comment then line comment doesn't split line" "BlockCommentThenLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Block comment then single-line block comment doesn't split line" "BlockCommentThenSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Block comment then multi-line block comment doesn't split line" "BlockCommentThenMultiLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Block comment then line haddock splits line" "BlockCommentThenLineHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Block comment then single-line block haddock splits line" "BlockCommentThenSingleLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Block comment then multi-line block haddock splits line" "BlockCommentThenMultiLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Pragma then line comment doesn't split line" "PragmaThenLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Pragma then single-line block comment doesn't split line" "PragmaThenSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Pragma then multi-line block comment splits line" "PragmaThenMultiLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Pragma then line haddock splits line" "PragmaThenLineHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Pragma then single-line block haddock splits line" "PragmaThenSingleLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Pragma then multi-line block haddock splits line" "PragmaThenMultiLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Pragma then single-line block haddock single-line block comment splits line" "PragmaThenSingleLineBlockHaddockSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Block comment then single-line block haddock single-line block comment splits line" "BlockCommentThenSingleLineBlockHaddockSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Pragma then line haddock then newline line comment splits line" "PragmaThenLineHaddockNewlineLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "does not add pragma after OPTIONS_GHC pragma located after a declaration" "OptionsGhcAfterDecl" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE with no other pragmas at start ignoring later INLINE pragma" "AddPragmaIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE before Doc comments after interchanging pragmas" "BeforeDocInterchanging" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
-  , codeActionTest "Add language after altering OPTIONS_GHC and Language" "AddLanguagePragmaAfterInterchaningOptsGhcAndLangs" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "Add language after pragmas with non standard space between prefix and name" "AddPragmaWithNonStandardSpacingInPrecedingPragmas" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE after OptGHC at start ignoring later INLINE pragma" "AddPragmaAfterOptsGhcIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE ignore later Ann pragma" "AddPragmaIgnoreLaterAnnPragma" [("Add \"BangPatterns\"", "Contains BangPatterns code action")]
-  , codeActionTest "adds LANGUAGE after interchanging pragmas ignoring later Ann pragma" "AddLanguageAfterInterchaningIgnoringLaterAnn" [("Add \"BangPatterns\"", "Contains BangPatterns code action")]
-  , codeActionTest "adds LANGUAGE after OptGHC preceded by another language pragma" "AddLanguageAfterLanguageThenOptsGhc" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
-  , codeActionTest "adds LANGUAGE pragma after shebang and last language pragma" "AfterShebangAndPragma" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
-  , codeActionTest "adds above module keyword on first line" "ModuleOnFirstLine" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE pragma after GHC_OPTIONS" "AfterGhcOptions" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE pragma after shebang and GHC_OPTIONS" "AfterShebangAndOpts" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE pragma after shebang, GHC_OPTIONS and language pragma" "AfterShebangAndOptionsAndPragma" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE pragma after all others ignoring later INLINE pragma" "AfterShebangAndOptionsAndPragmasIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE pragma after all others ignoring multiple later INLINE pragma" "AfterAllWithMultipleInlines" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE pragma correctly ignoring later INLINE pragma" "AddLanguagePragma" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds TypeApplications pragma" "TypeApplications" [("Add \"TypeApplications\"", "Contains TypeApplications code action")]
-  , codeActionTest "after shebang" "AfterShebang" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
-  , codeActionTest "append to existing pragmas" "AppendToExisting" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
-  , codeActionTest "before doc comments" "BeforeDocComment" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
-  , codeActionTest "before doc comments" "MissingSignatures" [("Disable \"missing-signatures\" warnings", "Contains missing-signatures code action")]
-  , codeActionTest "before doc comments" "UnusedImports" [("Disable \"unused-imports\" warnings", "Contains unused-imports code action")]
-  , codeActionTest "adds TypeSynonymInstances pragma" "NeedsPragmas" [("Add \"TypeSynonymInstances\"", "Contains TypeSynonymInstances code action"), ("Add \"FlexibleInstances\"", "Contains FlexibleInstances code action")]
+  [ codeActionTestWithPragmasSuggest "Block comment then line comment doesn't split line" "BlockCommentThenLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Block comment then single-line block comment doesn't split line" "BlockCommentThenSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Block comment then multi-line block comment doesn't split line" "BlockCommentThenMultiLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Block comment then line haddock splits line" "BlockCommentThenLineHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Block comment then single-line block haddock splits line" "BlockCommentThenSingleLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Block comment then multi-line block haddock splits line" "BlockCommentThenMultiLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Pragma then line comment doesn't split line" "PragmaThenLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Pragma then single-line block comment doesn't split line" "PragmaThenSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Pragma then multi-line block comment splits line" "PragmaThenMultiLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Pragma then line haddock splits line" "PragmaThenLineHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Pragma then single-line block haddock splits line" "PragmaThenSingleLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Pragma then multi-line block haddock splits line" "PragmaThenMultiLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Pragma then single-line block haddock single-line block comment splits line" "PragmaThenSingleLineBlockHaddockSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Block comment then single-line block haddock single-line block comment splits line" "BlockCommentThenSingleLineBlockHaddockSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Pragma then line haddock then newline line comment splits line" "PragmaThenLineHaddockNewlineLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "does not add pragma after OPTIONS_GHC pragma located after a declaration" "OptionsGhcAfterDecl" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE with no other pragmas at start ignoring later INLINE pragma" "AddPragmaIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE before Doc comments after interchanging pragmas" "BeforeDocInterchanging" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTestWithPragmasSuggest "Add language after altering OPTIONS_GHC and Language" "AddLanguagePragmaAfterInterchaningOptsGhcAndLangs" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "Add language after pragmas with non standard space between prefix and name" "AddPragmaWithNonStandardSpacingInPrecedingPragmas" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE after OptGHC at start ignoring later INLINE pragma" "AddPragmaAfterOptsGhcIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE ignore later Ann pragma" "AddPragmaIgnoreLaterAnnPragma" [("Add \"BangPatterns\"", "Contains BangPatterns code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE after interchanging pragmas ignoring later Ann pragma" "AddLanguageAfterInterchaningIgnoringLaterAnn" [("Add \"BangPatterns\"", "Contains BangPatterns code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE after OptGHC preceded by another language pragma" "AddLanguageAfterLanguageThenOptsGhc" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE pragma after shebang and last language pragma" "AfterShebangAndPragma" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTestWithPragmasSuggest "adds above module keyword on first line" "ModuleOnFirstLine" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE pragma after GHC_OPTIONS" "AfterGhcOptions" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE pragma after shebang and GHC_OPTIONS" "AfterShebangAndOpts" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE pragma after shebang, GHC_OPTIONS and language pragma" "AfterShebangAndOptionsAndPragma" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE pragma after all others ignoring later INLINE pragma" "AfterShebangAndOptionsAndPragmasIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE pragma after all others ignoring multiple later INLINE pragma" "AfterAllWithMultipleInlines" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "adds LANGUAGE pragma correctly ignoring later INLINE pragma" "AddLanguagePragma" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTestWithPragmasSuggest "adds TypeApplications pragma" "TypeApplications" [("Add \"TypeApplications\"", "Contains TypeApplications code action")]
+  , codeActionTestWithPragmasSuggest "after shebang" "AfterShebang" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTestWithPragmasSuggest "append to existing pragmas" "AppendToExisting" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTestWithPragmasSuggest "before doc comments" "BeforeDocComment" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTestWithPragmasSuggest "adds TypeSynonymInstances pragma" "NeedsPragmas" [("Add \"TypeSynonymInstances\"", "Contains TypeSynonymInstances code action"), ("Add \"FlexibleInstances\"", "Contains FlexibleInstances code action")]
+  , codeActionTestWithDisableWarning "before doc comments" "MissingSignatures" [("Disable \"missing-signatures\" warnings", "Contains missing-signatures code action")]
+  , codeActionTestWithDisableWarning "before doc comments" "UnusedImports" [("Disable \"unused-imports\" warnings", "Contains unused-imports code action")]
   ]
 
 ghc94regression :: String
 ghc94regression = "to be reported"
 
-codeActionTest :: String -> FilePath -> [(T.Text, String)] -> TestTree
-codeActionTest testComment fp actions =
-  goldenWithPragmas testComment fp $ \doc -> do
+codeActionTestWithPragmasSuggest :: String -> FilePath -> [(T.Text, String)] -> TestTree
+codeActionTestWithPragmasSuggest = codeActionTestWith pragmasSuggestPlugin
+
+codeActionTestWithDisableWarning :: String -> FilePath -> [(T.Text, String)] -> TestTree
+codeActionTestWithDisableWarning = codeActionTestWith pragmasDisableWarningPlugin
+
+codeActionTestWith :: PluginTestDescriptor () -> String -> FilePath -> [(T.Text, String)] -> TestTree
+codeActionTestWith descriptor testComment fp actions =
+  goldenWithPragmas descriptor testComment fp $ \doc -> do
     _ <- waitForDiagnosticsFrom doc
     cas <- map fromAction <$> getAllCodeActions doc
     mapM_ (\(action, contains) -> go action contains cas) actions
@@ -94,7 +106,7 @@ codeActionTests' :: TestTree
 codeActionTests' =
   testGroup "additional code actions"
   [
- goldenWithPragmas "no duplication" "NamedFieldPuns" $ \doc -> do
+ goldenWithPragmas pragmasSuggestPlugin "no duplication" "NamedFieldPuns" $ \doc -> do
       _ <- waitForDiagnosticsFrom doc
       cas <- map fromAction <$> getCodeActions doc (Range (Position 8 9) (Position 8 9))
       ca <- liftIO $ case cas of
@@ -102,7 +114,7 @@ codeActionTests' =
         _ -> assertFailure $ "Expected one code action, but got: " <> show cas
       liftIO $ (ca ^. L.title == "Add \"NamedFieldPuns\"") @? "NamedFieldPuns code action"
       executeCodeAction ca
-  , goldenWithPragmas "doesn't suggest disabling type errors" "DeferredTypeErrors" $ \doc -> do
+  , goldenWithPragmas pragmasSuggestPlugin "doesn't suggest disabling type errors" "DeferredTypeErrors" $ \doc -> do
       _ <- waitForDiagnosticsFrom doc
       cas <- map fromAction <$> getAllCodeActions doc
       liftIO $ "Disable \"deferred-type-errors\" warnings" `notElem` map (^. L.title) cas @? "Doesn't contain deferred-type-errors code action"
@@ -166,7 +178,7 @@ mkEdit (startLine, startCol) (endLine, endCol) newText =
 
 completionTest :: String -> FilePath -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> [UInt] -> TestTree
 completionTest testComment fileName replacementText expectedLabel expectedFormat expectedInsertText detail [delFromLine, delFromCol, delToLine, delToCol, completeAtLine, completeAtCol] =
-  testCase testComment $ runSessionWithServer pragmasPlugin testDataDir $ do
+  testCase testComment $ runSessionWithServer pragmasCompletionPlugin testDataDir $ do
     doc <- openDoc fileName "haskell"
     _ <- waitForDiagnostics
     let te = TextEdit (Range (Position delFromLine delFromCol) (Position delToLine delToCol)) replacementText
@@ -186,7 +198,7 @@ provideNoCompletionsTest testComment fileName mTextEdit pos =
 
 provideNoUndesiredCompletionsTest :: String -> FilePath -> Maybe T.Text -> Maybe TextEdit -> Position -> TestTree
 provideNoUndesiredCompletionsTest testComment fileName mUndesiredLabel mTextEdit pos =
-  testCase testComment $ runSessionWithServer pragmasPlugin testDataDir $ do
+  testCase testComment $ runSessionWithServer pragmasCompletionPlugin testDataDir $ do
     doc <- openDoc fileName "haskell"
     _ <- waitForDiagnostics
     _ <- sendConfigurationChanged disableGhcideCompletions
@@ -204,8 +216,8 @@ provideNoUndesiredCompletionsTest testComment fileName mUndesiredLabel mTextEdit
 disableGhcideCompletions :: Value
 disableGhcideCompletions = object [ "haskell" .= object ["plugin" .= object [ "ghcide-completions" .= object ["globalOn" .= False]]] ]
 
-goldenWithPragmas :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithPragmas title path = goldenWithHaskellDoc pragmasPlugin title testDataDir path "expected" "hs"
+goldenWithPragmas :: PluginTestDescriptor () -> TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
+goldenWithPragmas descriptor title path = goldenWithHaskellDoc descriptor title testDataDir path "expected" "hs"
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
