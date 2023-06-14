@@ -18,8 +18,8 @@ import           Control.Monad                        (replicateM)
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except           (ExceptT)
-import           Data.Aeson                           (FromJSON, ToJSON, decode,
-                                                       encode, fromJSON, toJSON)
+import           Data.Aeson                           (FromJSON, Result (..),
+                                                       ToJSON, fromJSON, toJSON)
 import           Data.Generics                        (GenericQ, everything,
                                                        everythingBut, mkQ)
 import qualified Data.IntMap.Strict                   as IntMap
@@ -148,30 +148,28 @@ instance NFData RecordSelectorExpr where
   rnf = rwhnf
 
 data ORDResolveData = ORDRD {
-  uri      :: NormalizedFilePath
+  uri      :: Uri
 , uniqueID :: Int
 } deriving (Generic, Show)
 instance ToJSON ORDResolveData
 instance FromJSON ORDResolveData
 
--- TODO: move the orphans to their packages
-instance ToJSON NormalizedFilePath
-instance FromJSON NormalizedFilePath
-instance ToJSON NormalizedUri
-instance FromJSON NormalizedUri
 descriptor :: Recorder (WithPriority Log) -> PluginId
                 -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginHandlers =
-      mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider <> mkPluginHandler SMethod_CodeActionResolve resolveProvider
+      mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider
+      <> mkPluginHandler SMethod_CodeActionResolve resolveProvider
+
     , pluginRules = collectRecSelsRule recorder
     }
 
 resolveProvider :: PluginMethodHandler IdeState 'Method_CodeActionResolve
 resolveProvider ideState pId ca@(CodeAction _ _ _ _ _ _ _ (Just resData)) =
     pluginResponse $ do
-        case decode . encode $ resData of
-            Just (ORDRD nfp int) -> do
+        case fromJSON $ resData of
+            Success (ORDRD uri int) -> do
+                nfp <- getNormalizedFilePath uri
                 CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
                 pragma <- getFirstPragma pId ideState nfp
                 let pragmaEdit =
@@ -205,7 +203,7 @@ codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
             edits _ = []
             changes crsM crsD =
                 case supportsResolve of
-                    Just True -> Just $ WorkspaceEdit
+                    Just False -> Just $ WorkspaceEdit
                                     (Just (Map.singleton (fromNormalizedUri
                                             (normalizedFilePathToUri nfp))
                                             (edits (IntMap.lookup crsM crsD))))
@@ -213,7 +211,7 @@ codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
                     _ -> Nothing
             resolveData crsM =
                 case supportsResolve of
-                    Just True -> Just $ toJSON $ ORDRD nfp crsM
+                    Just True -> Just $ toJSON $ ORDRD (caDocId ^. L.uri) crsM
                     _         -> Nothing
             mkCodeAction crsD crsM  = InR CodeAction
                 { -- We pass the record selector to the title function, so that
