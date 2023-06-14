@@ -138,23 +138,49 @@ cradle:
 ### Manually testing your hacked HLS
 If you want to test HLS while hacking on it, follow the steps below.
 
-To do once:
+#### Using Cabal
 
-- Open some codebase on which you want to test your hacked HLS in your favorite editor (it can also be HLS codebase itself: see previous section for configuration)
+- Whenever you want to build HLS, call `cabal install exe:haskell-language-server --overwrite-policy=always`. 
+  At the end of the output you will find the path the HLS executable was installed to, i.e.:
+
+  ```
+  ...
+  Resolving dependencies...
+  Symlinking 'haskell-language-server' to
+  '/home/user/.cabal/bin/haskell-language-server'
+  Symlinking 'haskell-language-server-wrapper' to
+  '/home/user/.cabal/bin/haskell-language-server-wrapper'
+  ```
+
+  In this example output, the path would be `/home/user/.cabal/bin/haskell-language-server`.
+
+- Open some codebase on which you want to test your local HLS in your favorite editor (it can also be the HLS codebase itself: see previous section for configuration)
+  - Configure this editor to use your custom HLS executable by using the path you obtained previously.
+- Restart HLS in your project:
+  - With VS Code: Press `CTRL + Shift + P` and type `Haskell: Restart Haskell LSP Server`
+  - With Emacs: `lsp-workspace-restart`
+
+##### VS Code
+
+When using VS Code you can set up a test project to use a specific HLS executable:
+
+- If it doesn't already exist in your project directory, create a directory called `.vscode`.
+- In the `.vscode` directory create a file called `settings.json` with the below contents. The path used here is the one obtained by using the `cabal` install command.
+
+```json
+{
+    "haskell.serverExecutablePath": "/home/user/.cabal/bin/haskell-language-server"
+}
+```
+
+#### Using Stack
+
+- Open some codebase on which you want to test your local HLS in your favorite editor (it can also be the HLS codebase itself: see previous section for configuration)
 - Configure this editor to use your custom HLS executable
-  - With Cabal:
-    - On Unix systems: `cabal exec which haskell-language-server`
-    - On Windows: `cabal exec where haskell-language-server`
-  - With Stack: `$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server`
-
-To do every time you change HLS code and want to test it:
+  - To obtain the path to your local HLS executable: `$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server`
 
 - Build HLS
-  - With Cabal: `cabal build exe:haskell-language-server`
-  - With Stack: `stack build haskell-language-server:exe:haskell-language-server`
-- Restart HLS
-  - With VS Code: `Haskell: Restart Haskell LSP Server`
-  - With Emacs: `lsp-workspace-restart`
+  - `stack build haskell-language-server:exe:haskell-language-server`
 
 ## Style guidelines
 
