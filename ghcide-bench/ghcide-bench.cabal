@@ -23,7 +23,7 @@ executable ghcide-bench
     build-depends:
         aeson,
         base,
-        bytestring ^>= 0.11,
+        bytestring >= 0.11,
         containers,
         data-default,
         directory,
