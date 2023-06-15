@@ -60,7 +60,7 @@ Here is a visual statement of what we want to accomplish:
 
 And here is the gist of the algorithm:
 
-1. Request the type checking artefacts from the `ghcide` subsystem
+1. Request the type checking artefacts
 2. Extract the actual import lists from the type checked AST,
 3. Ask GHC to produce the minimal import lists for this AST,
 4. For every import statement without a explicit import list:
@@ -69,20 +69,11 @@ And here is the gist of the algorithm:
 
 ## Setup
 
-To get started, let’s fetch the HLS repo and build it by following the [installation instructions](https://haskell-language-server.readthedocs.io/en/latest/contributing/contributing.html#building) in the Contributing section of this documentation.
+To get started, let’s fetch the HLS repo and build it by following the [setup instructions](https://haskell-language-server.readthedocs.io/en/latest/contributing/contributing.html#building) in the Contributing section of this documentation.
 
-If you run into any issues trying to build the binaries, you can get in touch with the HLS team using one of the [contact channels](https://haskell-language-server.readthedocs.io/en/latest/contributing/contributing.html#how-to-contact-the-haskell-ide-team) or [open an issue](https://github.com/haskell/haskell-language-server/issues/new?assignees=&labels=status%3A+needs+triage%2C+type%3A+support&projects=&template=support.md&title=) in the HLS repository.
+If you run into any issues trying to build the binaries, you can get in touch with the HLS team using one of the [contact channels](https://haskell-language-server.readthedocs.io/en/latest/contributing/contributing.html#how-to-contact-the-haskell-ide-team) or [open an issue](https://github.com/haskell/haskell-language-server/issues) in the HLS repository.
 
-Once the build is done, you can find the location of the `haskell-language-server` binary with ` cabal list-bin exe:haskell-language-server` and point your LSP client to it:
-
-```sh
-cabal list-bin exe:haskell-language-server
-path/to/hls/dist-newstyle/build/x86_64-linux/ghc-9.2.7/haskell-language-server-2.0.0.0/x/haskell-language-server/build/haskell-language-server/haskell-language-server
-```
-
-> **Note:** In VSCode this is done by editing the "Haskell Server Executable Path" setting. This way you can simply test your changes by reloading your editor after rebuilding the binary.
-
-![Settings](settings-vscode.png)
+Make sure you use the HLS package you just built by following [this section](https://haskell-language-server.readthedocs.io/en/latest/contributing/contributing.html#manually-testing-your-hacked-hls) of the "Contributing" guide.
 
 ## Anatomy of a plugin
 
@@ -99,10 +90,10 @@ data PluginDescriptor (ideState :: *) =
 ```
 A plugin has a unique id, command handlers, request handlers, notification handlers and rules:
 
-* Commands are an LSP abstraction for actions initiated by the user which are handled in the server. These actions can be long running and involve multiple modules.
 * Request handlers are called when an LSP client asks the server for information. These queries must be fulfilled as quickly as possible.
 * Notification handlers are called by code that was not directly triggerd by an user/client.
-* Rules add new targets to the Shake build graph defined in ghcide. Most plugins do not need to define new rules.
+* Rules add new targets to the Shake build graph. Most plugins do not need to define new rules.
+* Commands are an LSP abstraction for actions initiated by the user which are handled in the server. These actions can be long running and involve multiple modules.
 
 ## The explicit imports plugin
 
@@ -134,11 +125,11 @@ We'll start with the command, since it's the simplest of the two.
 
 In short, commands works like this:
 - The LSP server (HLS) initially sends a command descriptor to the client, in this case as part of a code lens.
-- Whenever the client decides to execute the command on behalf of a user action (in this case a click on the code lens), it sends this same descriptor back to the LSP server which then proceeds to handle and execute the command. The latter part is implemented by the `commandFunc` field of our `PluginCommand` value.
+- Whenever the client decides to execute the command on behalf of a user (in this case a click on the code lens), it sends this same descriptor back to the LSP server which then proceeds to handle and execute the command. The latter part is implemented by the `commandFunc` field of our `PluginCommand` value.
 
 > **Note**: Check the [LSP spec](https://microsoft.github.io/language-server-protocol/specification) for a deeper understanding of how commands work.
 
-The command handler will be called `importLensCommand` and have the `PluginCommand` type, which is a type synonym defined in `Ide.Types` as:
+The command handler will be called `importLensCommand` and have the `PluginCommand` type, which is a type defined in `Ide.Types` as:
 
 ```haskell
 -- hls-plugin-api/src/Ide/Types.hs
@@ -166,7 +157,7 @@ importLensCommand =
 runImportCommand = undefined
 ```
 
-The most important (and still `undefined`) field is `commandFunc :: CommandFunction`, another type synonym from `LSP.Types`:
+The most important (and still `undefined`) field is `commandFunc :: CommandFunction`, a type synonym from `LSP.Types`:
 
 ```haskell
 -- hls-plugin-api/src/Ide/Types.hs
@@ -195,13 +186,13 @@ runImportCommand _ (ImportCommandParams edit) = do
   return (Right Null)
 ```
 
-It [sends a request](https://hackage.haskell.org/package/lsp-1.6.0.0/docs/Language-LSP-Server.html#v:sendRequest) with the method `SWorkspaceApplyEdit` to the server with the `ApplyWorkspaceEditParams Nothing edit` parameters and a response handler (that does nothing). It then returns `Right Null`, an empty `Aeson.Value` wrapped in `Right`.
+It [sends a request](https://hackage.haskell.org/package/lsp-1.6.0.0/docs/Language-LSP-Server.html#v:sendRequest) with the method `SWorkspaceApplyEdit` to the client with the `ApplyWorkspaceEditParams Nothing edit` parameters and a response handler (that does nothing). It then returns `Right Null`, an empty `Aeson.Value` wrapped in `Right`.
 
 ### The code lens provider
 
 The code lens provider implements all the steps of the algorithm described earlier:
 
->  1. Request the type checking artefacts from the ghcide subsystem
+>  1. Request the type checking artefacts
 >  2. Extract the actual import lists from the type checked AST,
 >  3. Ask GHC to produce the minimal import lists for this AST,
 >  4. For every import statement without a explicit import list, find out what's the minimal import list, and produce a code lens to display it together with a diff to graft the import list in.
@@ -333,7 +324,7 @@ TODO: Figure out what to do with the following sections:
 If you have used VSCode or any other LSP editor you are probably already familiar with the capabilities afforded by LSP. If not, check the [specification](https://microsoft.github.io/language-server-protocol/specification) for the full details.
 Another good source of information is the [haskell-lsp-types](https://hackage.haskell.org/package/haskell-lsp-types) package, which contains a Haskell encoding of the protocol.
 
-The [haskell-lsp-types](https://hackage.haskell.org/package/haskell-lsp-types-0.22.0.0/docs/Language-Haskell-LSP-Types.html#t:CodeLens) package encodes code lenses in Haskell as:
+The [haskell-lsp-types](https://hackage.haskell.org/package/lsp-types) package encodes code lenses in Haskell as:
 ```haskell
 data CodeLens =
   CodeLens
