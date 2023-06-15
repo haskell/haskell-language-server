@@ -16,10 +16,12 @@ module Development.IDE.Core.Actions
 import           Control.Monad.Extra                  (mapMaybeM)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
+import qualified Data.ByteString                      as BS
 import qualified Data.HashMap.Strict                  as HM
 import           Data.Maybe
 import qualified Data.Text                            as T
 import           Data.Tuple.Extra
+import           Development.IDE.Core.Compile         (loadHieFile)
 import           Development.IDE.Core.OfInterest
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
@@ -35,10 +37,13 @@ import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
                                                        SymbolInformation (..),
                                                        normalizedFilePathToUri,
                                                        uriToNormalizedFilePath)
+import           Language.LSP.Server                  (resRootPath)
+import           System.Directory                     (doesFileExist)
+import           System.FilePath                      ((</>))
 
 
--- | Eventually this will lookup/generate URIs for files in dependencies, but not in the
--- project. Right now, this is just a stub.
+-- | Generates URIs for files in dependencies, but not in the
+-- project.
 lookupMod
   :: HieDbWriter -- ^ access the database
   -> FilePath -- ^ The `.hie` file we got from the database
@@ -46,7 +51,42 @@ lookupMod
   -> Unit
   -> Bool -- ^ Is this file a boot file?
   -> MaybeT IdeAction Uri
-lookupMod _dbchan _hie_f _mod _uid _boot = MaybeT $ pure Nothing
+lookupMod _dbchan hieFile moduleName _uid _boot = MaybeT $ do
+  mProjectRoot <- (resRootPath =<<) <$> asks lspEnv
+  case mProjectRoot of
+    Nothing -> pure Nothing
+    Just projectRoot -> do
+      let toFilePath :: ModuleName -> FilePath
+          toFilePath = separateDirectories . show
+            where
+              separateDirectories :: FilePath -> FilePath
+              separateDirectories moduleNameString =
+                case breakOnDot moduleNameString of
+                  [] -> ""
+                  ms -> foldr1 (</>) ms
+              breakOnDot :: FilePath -> [FilePath]
+              breakOnDot = words . map replaceDotWithSpace
+              replaceDotWithSpace :: Char -> Char
+              replaceDotWithSpace '.' = ' '
+              replaceDotWithSpace c = c
+          writeOutDir :: FilePath
+          writeOutDir = projectRoot </> ".hls" </> "dependencies"
+          writeOutFile :: FilePath
+          writeOutFile = toFilePath moduleName ++ ".hs"
+          writeOutPath :: FilePath
+          writeOutPath = writeOutDir </> writeOutFile
+          moduleUri :: Uri
+          moduleUri = AtPoint.toUri writeOutPath
+      fileExists <- liftIO $ doesFileExist writeOutPath
+      if fileExists
+      then pure $ Just moduleUri
+      else do
+        nc <- asks ideNc
+        liftIO $ do
+          moduleSource <- hie_hs_src <$> loadHieFile (mkUpdater nc) hieFile
+          BS.writeFile writeOutPath moduleSource
+        pure $ Just moduleUri
+
 
 
 -- IMPORTANT NOTE : make sure all rules `useE`d by these have a "Persistent Stale" rule defined,
