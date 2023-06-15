@@ -59,8 +59,11 @@ test-suite tests
     build-depends:
       , base
       , filepath
+      , ghcide
       , text
       , hls-overloaded-record-dot-plugin
+      , lens
       , lsp-test
+      , lsp-types
       , hls-test-utils
 

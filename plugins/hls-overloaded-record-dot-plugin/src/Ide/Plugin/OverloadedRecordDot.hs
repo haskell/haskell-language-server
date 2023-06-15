@@ -27,7 +27,7 @@ import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromJust, mapMaybe,
                                                        maybeToList)
 import           Data.Text                            (Text)
-import           Data.Unique
+import           Data.Unique                          (hashUnique, newUnique)
 import           Development.IDE                      (IdeState,
                                                        NormalizedFilePath,
                                                        NormalizedUri,
