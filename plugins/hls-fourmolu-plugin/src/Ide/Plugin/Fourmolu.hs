@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments           #-}
 {-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
@@ -26,6 +27,7 @@ import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
                                                             hang, vcat)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
+import           GHC.Unit                        (UnitId (UnitId))
 import           Ide.Plugin.Fourmolu.Shim
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                 (makeDiffTextEdit)
@@ -57,16 +59,27 @@ properties =
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
 provider recorder plId ideState typ contents fp fo = withIndefiniteProgress title Cancellable $ do
-    fileOpts <-
-        maybe [] (convertDynFlags . hsc_dflags . hscEnv)
-            <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
+    dynFlags <- fmap (hsc_dflags . hscEnv) <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
+    let fileOpts = maybe [] convertDynFlags dynFlags
+        packages =
+            maybe
+                []
+                ( map (T.unpack . T.intercalate "-" . reverse . drop' 2 . reverse . T.splitOn "-" . printOutputable)
+                    . mapMaybe getUnit . packageFlags
+                )
+                dynFlags
+          where
+            getUnit = \case
+                ExposePackage _ (UnitIdArg (RealUnit (Definite (UnitId s)))) _ -> Just s
+                _ -> Nothing
+            drop' n xs = drop (n `min` (Prelude.length xs - 1)) xs
     useCLI <- liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #external plId properties
     if useCLI
         then liftIO
             . fmap (join . first (mkError . show))
             . try @IOException
             $ do
-                CLIVersionInfo{noCabal} <- do -- check Fourmolu version so that we know which flags to use
+                CLIVersionInfo{fixities} <- do -- check Fourmolu version so that we know which flags to use
                     (exitCode, out, _err) <- readCreateProcessWithExitCode ( proc "fourmolu" ["-v"] ) ""
                     let version = do
                             guard $ exitCode == ExitSuccess
@@ -74,18 +87,18 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                             traverse (readMaybe @Int . T.unpack) $ T.splitOn "." v
                     case version of
                         Just v -> pure CLIVersionInfo
-                            { noCabal = v >= [0, 7]
+                            { fixities = v >= [0, 7]
                             }
                         Nothing -> do
                             logWith recorder Warning $ NoVersion out
                             pure CLIVersionInfo
-                                { noCabal = True
+                                { fixities = True
                                 }
                 (exitCode, out, err) <- -- run Fourmolu
                     readCreateProcessWithExitCode
                         ( proc "fourmolu" $
                             map ("-o" <>) fileOpts
-                                <> mwhen noCabal ["--no-cabal"]
+                                <> mwhen fixities ("--no-cabal" : map ("-p" <>) packages)
                                 <> catMaybes
                                     [ ("--start-line=" <>) . show <$> regionStartLine region
                                     , ("--end-line=" <>) . show <$> regionEndLine region
@@ -174,7 +187,7 @@ convertDynFlags df =
      in pp <> pm <> ex
 
 newtype CLIVersionInfo = CLIVersionInfo
-    { noCabal :: Bool
+    { fixities :: Bool
     }
 
 mwhen :: Monoid a => Bool -> a -> a
