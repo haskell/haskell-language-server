@@ -26,7 +26,7 @@ tests =
         (if cli then "cli" else "lib")
         [ goldenWithFourmolu cli "formats correctly" "Fourmolu" "formatted" $ \doc -> do
             formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
-        , goldenWithFourmolu cli "formats imports correctly" "Fourmolu" "formatted" $ \doc -> do
+        , goldenWithFourmolu cli "formats imports correctly" "Fourmolu2" "formatted" $ \doc -> do
             formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
         ]
 

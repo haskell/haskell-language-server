@@ -21,13 +21,15 @@ import           Ormolu.Fixity
 
 {-- Backport FourmoluConfig --}
 
-#if !MIN_VERSION_fourmolu(0,7,0)
+#if MIN_VERSION_fourmolu(0,7,0)
+-- these functions are now defined
+#else
 type FourmoluConfig = PrinterOptsPartial
 
 cfgFilePrinterOpts :: FourmoluConfig -> PrinterOptsPartial
 cfgFilePrinterOpts = id
 
-cfgFileFixities :: FourmoluConfig -> FixityMap
+cfgFileFixities :: FourmoluConfig -> FixityOverrides
 cfgFileFixities _ = mempty
 #endif
 
@@ -45,15 +47,20 @@ emptyConfig :: FourmoluConfig
 emptyConfig = mempty
 #endif
 
-{-- Backport FixityMap --}
+{-- Backport FixityOverrides --}
 
-#if MIN_VERSION_fourmolu(0,7,0)
-addFixityOverrides :: FixityMap -> Config region -> Config region
+#if MIN_VERSION_fourmolu(0,13,0)
+addFixityOverrides :: FixityOverrides -> Config region -> Config region
+addFixityOverrides fixities cfg = cfg{cfgFixityOverrides = fixities}
+#elif MIN_VERSION_fourmolu(0,7,0)
+type FixityOverrides = FixityMap
+
+addFixityOverrides :: FixityOverrides -> Config region -> Config region
 addFixityOverrides fixities cfg = cfg{cfgFixityOverrides = fixities}
 #else
-type FixityMap = ()
+type FixityOverrides = ()
 
-addFixityOverrides :: FixityMap -> Config region -> Config region
+addFixityOverrides :: FixityOverrides -> Config region -> Config region
 addFixityOverrides _ = id
 #endif
 
