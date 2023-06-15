@@ -9,9 +9,12 @@
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
-  ( descriptor
+  ( suggestPragmaDescriptor
+  , completionDescriptor
+  , suggestDisableWarningDescriptor
   -- For testing
   , validPragmas
+  , AppearWhere(..)
   ) where
 
 import           Control.Lens                       hiding (List)
@@ -33,11 +36,23 @@ import qualified Text.Fuzzy                         as Fuzzy
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler J.STextDocumentCodeAction codeActionProvider
-                  <> mkPluginHandler J.STextDocumentCompletion completion
+suggestPragmaDescriptor :: PluginId -> PluginDescriptor IdeState
+suggestPragmaDescriptor plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkPluginHandler J.STextDocumentCodeAction suggestPragmaProvider
+  , pluginPriority = defaultPluginPriority + 1000
+  }
+
+completionDescriptor :: PluginId -> PluginDescriptor IdeState
+completionDescriptor plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkPluginHandler J.STextDocumentCompletion completion
   , pluginPriority = ghcideCompletionsPluginPriority + 1
+  }
+
+suggestDisableWarningDescriptor :: PluginId -> PluginDescriptor IdeState
+suggestDisableWarningDescriptor plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkPluginHandler J.STextDocumentCodeAction suggestDisableWarningProvider
+    -- #3636 Suggestions to disable warnings should appear last.
+  , pluginPriority = 0
   }
 
 -- ---------------------------------------------------------------------
@@ -47,8 +62,14 @@ type PragmaEdit = (T.Text, Pragma)
 data Pragma = LangExt T.Text | OptGHC T.Text
   deriving (Show, Eq, Ord)
 
-codeActionProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
-codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly))
+suggestPragmaProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
+suggestPragmaProvider = mkCodeActionProvider suggest
+
+suggestDisableWarningProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
+suggestDisableWarningProvider = mkCodeActionProvider $ const suggestDisableWarning
+
+mkCodeActionProvider :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'J.TextDocumentCodeAction
+mkCodeActionProvider mkSuggest state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly))
   | let J.TextDocumentIdentifier{ _uri = uri } = docId
   , Just normalizedFilePath <- J.uriToNormalizedFilePath $ toNormalizedUri uri = do
       -- ghc session to get some dynflags even if module isn't parsed
@@ -60,7 +81,7 @@ codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionCont
       case ghcSession of
         Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) ->
           let nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
-              pedits = nubOrdOn snd . concat $ suggest parsedModuleDynFlags <$> diags
+              pedits = (nubOrdOn snd . concat $ mkSuggest parsedModuleDynFlags <$> diags)
           in
             pure $ Right $ List $ pragmaEditToAction uri nextPragmaInfo <$> pedits
         Nothing -> pure $ Right $ List []
@@ -95,7 +116,6 @@ pragmaEditToAction uri Pragmas.NextPragmaInfo{ nextPragmaLine, lineSplitTextEdit
 suggest :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
 suggest dflags diag =
   suggestAddPragma dflags diag
-    ++ suggestDisableWarning diag
 
 -- ---------------------------------------------------------------------
 
@@ -181,23 +201,41 @@ completion _ide _ complParams = do
     contents <- LSP.getVirtualFile $ toNormalizedUri uri
     fmap (Right . J.InL) $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
-            result <$> VFS.getCompletionPrefix position cnts
+            J.List . result <$> VFS.getCompletionPrefix position cnts
             where
                 result (Just pfix)
                     | "{-# language" `T.isPrefixOf` line
-                    = J.List $ map buildCompletion
+                    = map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
                     | "{-# options_ghc" `T.isPrefixOf` line
-                    = J.List $ map buildCompletion
+                    = map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
                     | "{-#" `T.isPrefixOf` line
-                    = J.List $ [ mkPragmaCompl (a <> suffix) b c
-                                | (a, b, c, w) <- validPragmas, w == NewLine ]
+                    = [ mkPragmaCompl (a <> suffix) b c
+                      | (a, b, c, w) <- validPragmas, w == NewLine
+                      ]
+                    | -- Do not suggest any pragmas any of these conditions:
+                      -- 1. Current line is a an import
+                      -- 2. There is a module name right before the current word.
+                      --    Something like `Text.la` shouldn't suggest adding the
+                      --    'LANGUAGE' pragma.
+                      -- 3. The user has not typed anything yet.
+                      "import" `T.isPrefixOf` line || not (T.null module_) || T.null word
+                    = []
                     | otherwise
-                    = J.List $ [ mkPragmaCompl (prefix <> a <> suffix) b c
-                                | (a, b, c, _) <- validPragmas, Fuzzy.test word b]
+                    = [ mkPragmaCompl (prefix <> pragmaTemplate <> suffix) matcher detail
+                      | (pragmaTemplate, matcher, detail, appearWhere) <- validPragmas
+                      , -- Only suggest a pragma that needs its own line if the whole line
+                        -- fuzzily matches the pragma
+                        (appearWhere == NewLine && Fuzzy.test line matcher ) ||
+                        -- Only suggest a pragma that appears in the middle of a line when
+                        -- the current word is not the only thing in the line and the
+                        -- current word fuzzily matches the pragma
+                        (appearWhere == CanInline && line /= word && Fuzzy.test word matcher)
+                      ]
                     where
                         line = T.toLower $ VFS.fullLine pfix
+                        module_ = VFS.prefixModule pfix
                         word = VFS.prefixText pfix
                         -- Not completely correct, may fail if more than one "{-#" exist
                         -- , we can ignore it since it rarely happen.
@@ -211,9 +249,8 @@ completion _ide _ complParams = do
                             | "-}"   `T.isSuffixOf` line = " #"
                             | "}"    `T.isSuffixOf` line = " #-"
                             | otherwise                 = " #-}"
-                result Nothing = J.List []
+                result Nothing = []
         _ -> return $ J.List []
-
 -----------------------------------------------------------------------
 
 -- | Pragma where exist
@@ -268,6 +305,3 @@ buildCompletion label =
   J.CompletionItem label (Just J.CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing
-
-
-
