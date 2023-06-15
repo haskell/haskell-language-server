@@ -41,6 +41,7 @@ import           Data.Aeson                         (Value (Null),
                                                      toJSON)
 import qualified Data.Aeson                         as A
 import qualified Data.ByteString                    as BS
+import qualified Data.ByteString.Lazy               as BSL
 import           Data.Either                        (fromRight)
 import           Data.List
 import           Data.Maybe
@@ -687,11 +688,11 @@ searchSymbol :: TextDocumentIdentifier -> T.Text -> Position -> Session (Maybe P
 searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
     -- this search is expensive, so we cache the result on disk
     let cachedPath = fromJust (uriToFilePath _uri) <.> "identifierPosition"
-    cachedRes <- liftIO $ try @_ @IOException $ A.decode . BS.fromStrict <$> BS.readFile cachedPath
+    cachedRes <- liftIO $ try @_ @IOException $ A.decode . BSL.fromStrict <$> BS.readFile cachedPath
     case cachedRes of
         Left _ -> do
             result <- loop pos
-            liftIO $ BS.writeFile cachedPath $ BS.toStrict $ A.encode result
+            liftIO $ BS.writeFile cachedPath $ BSL.toStrict $ A.encode result
             return result
         Right res ->
             return res
