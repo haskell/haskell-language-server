@@ -11,7 +11,6 @@
 
 module Ide.Plugin.ExplicitImports
   ( descriptor
-  , descriptorForModules
   , extractMinimalImports
   , within
   , abbreviateImportTitle
@@ -43,9 +42,6 @@ import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
 
-importCommandId :: CommandId
-importCommandId = "ImportLensCommand"
-
 newtype Log
   = LogShake Shake.Log
   deriving Show
@@ -56,35 +52,37 @@ instance Pretty Log where
 
 -- | The "main" function of a plugin
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder =
-    -- (almost) no one wants to see an explicit import list for Prelude
-    descriptorForModules recorder (/= moduleName pRELUDE)
-
-descriptorForModules
-    :: Recorder (WithPriority Log)
-    -> (ModuleName -> Bool)
-      -- ^ Predicate to select modules that will be annotated
-    -> PluginId
-    -> PluginDescriptor IdeState
-descriptorForModules recorder pred plId =
+descriptor recorder plId =
   (defaultPluginDescriptor plId)
-    {
-      -- This plugin provides a command handler
+    { -- This plugin provides a command handler
       pluginCommands = [importLensCommand],
       -- This plugin defines a new rule
       pluginRules = minimalImportsRule recorder,
       pluginHandlers = mconcat
         [ -- This plugin provides code lenses
-          mkPluginHandler STextDocumentCodeLens $ lensProvider pred
+          lensProvider
           -- This plugin provides code actions
-        , mkPluginHandler STextDocumentCodeAction $ codeActionProvider pred
+        , codeActionProvider
         ]
     }
+
+codeActionProvider :: PluginHandlers IdeState
+codeActionProvider = mkPluginHandler STextDocumentCodeAction $ codeActionProvider'
+
+lensProvider :: PluginHandlers IdeState
+lensProvider = mkPluginHandler STextDocumentCodeLens $ lensProvider'
+
+importCommandId :: CommandId
+importCommandId = "ImportLensCommand"
 
 -- | The command descriptor
 importLensCommand :: PluginCommand IdeState
 importLensCommand =
-  PluginCommand importCommandId "Explicit import command" runImportCommand
+  PluginCommand
+    { commandId = importCommandId
+    , commandDesc = "Explicit import command"
+    , commandFunc = runImportCommand
+    }
 
 -- | The type of the parameters accepted by our command
 newtype ImportCommandParams = ImportCommandParams WorkspaceEdit
@@ -93,7 +91,7 @@ newtype ImportCommandParams = ImportCommandParams WorkspaceEdit
 
 -- | The actual command handler
 runImportCommand :: CommandFunction IdeState ImportCommandParams
-runImportCommand _state (ImportCommandParams edit) = do
+runImportCommand _ (ImportCommandParams edit) = do
   -- This command simply triggers a workspace edit!
   _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
   return (Right Null)
@@ -108,9 +106,8 @@ runImportCommand _state (ImportCommandParams edit) = do
 -- the provider should produce one code lens associated to the import statement:
 --
 -- > import Data.List (intercalate, sortBy)
-lensProvider :: (ModuleName -> Bool) -> PluginMethodHandler IdeState TextDocumentCodeLens
-lensProvider
-  pred
+lensProvider' :: PluginMethodHandler IdeState TextDocumentCodeLens
+lensProvider'
   state -- ghcide state, used to retrieve typechecking artifacts
   pId -- plugin Id
   CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}}
@@ -127,7 +124,7 @@ lensProvider
               sequence
                 [ generateLens pId _uri edit
                   | (imp, Just minImport) <- minImports,
-                    Just edit <- [mkExplicitEdit pred posMapping imp minImport]
+                    Just edit <- [mkExplicitEdit predImport posMapping imp minImport]
                 ]
             return $ Right (List $ catMaybes commands)
           _ ->
@@ -137,8 +134,8 @@ lensProvider
 
 -- | If there are any implicit imports, provide one code action to turn them all
 --   into explicit imports.
-codeActionProvider :: (ModuleName -> Bool) -> PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider pred ideState _pId (CodeActionParams _ _ docId range _context)
+codeActionProvider' :: PluginMethodHandler IdeState TextDocumentCodeAction
+codeActionProvider' ideState _pId (CodeActionParams _ _ docId range _context)
   | TextDocumentIdentifier {_uri} <- docId,
     Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $
     do
@@ -157,7 +154,7 @@ codeActionProvider pred ideState _pId (CodeActionParams _ _ docId range _context
                 [ e
                   | (imp, Just explicit) <-
                       maybe [] getMinimalImportsResult minImports,
-                    Just e <- [mkExplicitEdit pred zeroMapping imp explicit]
+                    Just e <- [mkExplicitEdit predImport zeroMapping imp explicit]
                 ]
               caExplicitImports = InR CodeAction {..}
               _title = "Make all imports explicit"
@@ -350,3 +347,7 @@ runIde = runAction "importLens"
 within :: Range -> SrcSpan -> Bool
 within (Range start end) span =
   isInsideSrcSpan start span || isInsideSrcSpan end span
+
+-- | (almost) no one wants to see an explicit import list for Prelude
+predImport :: ModuleName -> Bool
+predImport = (/= moduleName pRELUDE)
