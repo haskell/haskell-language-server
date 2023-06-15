@@ -2,17 +2,18 @@
 
 module Ide.Plugin.Class.Utils where
 
-import           Control.Monad.IO.Class          (MonadIO, liftIO)
+import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Control.Monad.Trans.Except
-import           Data.Char                       (isAlpha)
-import           Data.List                       (isPrefixOf)
-import           Data.String                     (IsString)
-import qualified Data.Text                       as T
+import           Data.Char                        (isAlpha)
+import           Data.List                        (isPrefixOf)
+import           Data.String                      (IsString)
+import qualified Data.Text                        as T
 import           Development.IDE
+import qualified Development.IDE.Core.PluginUtils as PluginUtils
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.Spans.Pragmas   (getNextPragmaInfo,
-                                                  insertNewPragma)
+import           Development.IDE.Spans.Pragmas    (getNextPragmaInfo,
+                                                   insertNewPragma)
 import           Ide.PluginUtils
 import           Language.LSP.Types
 
@@ -54,19 +55,15 @@ insertPragmaIfNotPresent :: (MonadIO m)
     => IdeState
     -> NormalizedFilePath
     -> Extension
-    -> ExceptT String m [TextEdit]
+    -> ExceptT PluginUtils.GhcidePluginError m [TextEdit]
 insertPragmaIfNotPresent state nfp pragma = do
-    (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- handleMaybeM "Unable to get GhcSession"
-        $ liftIO
-        $ runAction "classplugin.insertPragmaIfNotPresent.GhcSession" state
-        $ useWithStale GhcSession nfp
-    (_, fileContents) <- liftIO
-        $ runAction "classplugin.insertPragmaIfNotPresent.GetFileContents" state
+    (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- PluginUtils.runAction "classplugin.insertPragmaIfNotPresent.GhcSession" state
+        $ PluginUtils.useWithStale GhcSession nfp
+    (_, fileContents) <- PluginUtils.runAction "classplugin.insertPragmaIfNotPresent.GetFileContents" state
+        $ PluginUtils.hoistAction
         $ getFileContents nfp
-    (pm, _) <- handleMaybeM "Unable to GetParsedModuleWithComments"
-        $ liftIO
-        $ runAction "classplugin.insertPragmaIfNotPresent.GetParsedModuleWithComments" state
-        $ useWithStale GetParsedModuleWithComments nfp
+    (pm, _) <- PluginUtils.runAction "classplugin.insertPragmaIfNotPresent.GetParsedModuleWithComments" state
+        $ PluginUtils.useWithStale GetParsedModuleWithComments nfp
     let exts = getExtensions pm
         info = getNextPragmaInfo sessionDynFlags fileContents
     pure [insertNewPragma info pragma | pragma `notElem` exts]

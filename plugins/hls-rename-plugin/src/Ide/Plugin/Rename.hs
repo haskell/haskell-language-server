@@ -19,6 +19,7 @@ import           GHC.Parser.Annotation                 (AnnContext, AnnList,
 
 import           Compat.HieTypes
 import           Control.Lens                          ((^.))
+import           Compat.HieTypes
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
@@ -36,6 +37,7 @@ import qualified Data.Set                              as S
 import qualified Data.Text                             as T
 import           Development.IDE                       (Recorder, WithPriority,
                                                         usePropertyAction)
+import qualified Development.IDE.Core.PluginUtils      as PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -57,6 +59,7 @@ import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens               as LSP
+import           Compat.HieTypes
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -69,7 +72,7 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultP
 
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
 renameProvider state pluginId (RenameParams docId@(TextDocumentIdentifier uri) pos _prog newNameText) =
-    pluginResponse $ do
+    PluginUtils.pluginResponse $ do
         nfp <- handleUriToNfp uri
         directOldNames <- getNamesAtPos state nfp pos
         directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
@@ -89,7 +92,7 @@ renameProvider state pluginId (RenameParams docId@(TextDocumentIdentifier uri) p
         -- Validate rename
         crossModuleEnabled <- liftIO $ runAction "rename: config" state $ usePropertyAction #crossModule pluginId properties
         unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
-        when (any isBuiltInSyntax oldNames) $ throwE "Invalid rename of built-in syntax"
+        when (any isBuiltInSyntax oldNames) $ throwE $ PluginUtils.mkPluginErrorMessage "Invalid rename of built-in syntax"
 
         -- Perform rename
         let newName = mkTcOcc $ T.unpack newNameText
@@ -107,19 +110,17 @@ failWhenImportOrExport ::
     NormalizedFilePath ->
     HashSet Location ->
     [Name] ->
-    ExceptT String m ()
+    ExceptT PluginUtils.GhcidePluginError m ()
 failWhenImportOrExport state nfp refLocs names = do
-    pm <- handleMaybeM ("No parsed module for: " ++ show nfp) $ liftIO $ runAction
-        "Rename.GetParsedModule"
-        state
-        (use GetParsedModule nfp)
+    pm <- PluginUtils.runAction "Rename.GetParsedModule" state
+         (PluginUtils.use GetParsedModule nfp)
     let hsMod = unLoc $ pm_parsed_source pm
     case (unLoc <$> hsmodName hsMod, hsmodExports hsMod) of
         (mbModName, _) | not $ any (\n -> nameIsLocalOrFrom (replaceModName n mbModName) n) names
-            -> throwE "Renaming of an imported name is unsupported"
+            -> throwE $ PluginUtils.mkPluginErrorMessage "Renaming of an imported name is unsupported"
         (_, Just (L _ exports)) | any ((`HS.member` refLocs) . unsafeSrcSpanToLoc . getLoc) exports
-            -> throwE "Renaming of an exported name is unsupported"
-        (Just _, Nothing) -> throwE "Explicit export list required for renaming"
+            -> throwE $ PluginUtils.mkPluginErrorMessage "Renaming of an exported name is unsupported"
+        (Just _, Nothing) -> throwE $ PluginUtils.mkPluginErrorMessage "Explicit export list required for renaming"
         _ -> pure ()
 
 ---------------------------------------------------------------------------------------------------
@@ -131,14 +132,12 @@ getSrcEdit ::
     IdeState ->
     VersionedTextDocumentIdentifier ->
     (ParsedSource -> ParsedSource) ->
-    ExceptT String m WorkspaceEdit
+    ExceptT PluginUtils.GhcidePluginError m WorkspaceEdit
 getSrcEdit state verTxtDocId updatePs = do
     ccs <- lift getClientCapabilities
     nfp <- handleUriToNfp (verTxtDocId ^. LSP.uri)
-    annAst <- handleMaybeM ("No parsed source for: " ++ show nfp) $ liftIO $ runAction
-        "Rename.GetAnnotatedParsedSource"
-        state
-        (use GetAnnotatedParsedSource nfp)
+    annAst <- PluginUtils.runAction "Rename.GetAnnotatedParsedSource" state
+        (PluginUtils.use GetAnnotatedParsedSource nfp)
     let (ps, anns) = (astA annAst, annsA annAst)
 #if !MIN_VERSION_ghc(9,2,1)
     let src = T.pack $ exactPrint ps anns
@@ -194,7 +193,7 @@ refsAtName ::
     IdeState ->
     NormalizedFilePath ->
     Name ->
-    ExceptT String m [Location]
+    ExceptT PluginUtils.GhcidePluginError m [Location]
 refsAtName state nfp name = do
     ShakeExtras{withHieDb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
     ast <- handleGetHieAst state nfp
@@ -219,7 +218,7 @@ nameLocs name (HAR _ _ rm _ _, pm) =
 ---------------------------------------------------------------------------------------------------
 -- Util
 
-getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT String m [Name]
+getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT PluginUtils.GhcidePluginError m [Name]
 getNamesAtPos state nfp pos = do
     (HAR{hieAst}, pm) <- handleGetHieAst state nfp
     pure $ getNamesAtPoint hieAst pos pm
@@ -228,10 +227,9 @@ handleGetHieAst ::
     MonadIO m =>
     IdeState ->
     NormalizedFilePath ->
-    ExceptT String m (HieAstResult, PositionMapping)
-handleGetHieAst state nfp = handleMaybeM
-    ("No AST for file: " ++ show nfp)
-    (liftIO $ fmap (fmap (first removeGenerated)) $ runAction "Rename.GetHieAst" state $ useWithStale GetHieAst nfp)
+    ExceptT PluginUtils.GhcidePluginError m (HieAstResult, PositionMapping)
+handleGetHieAst state nfp =
+    fmap (first removeGenerated) $ PluginUtils.runAction "Rename.GetHieAst" state $ PluginUtils.useWithStale GetHieAst nfp
 
 -- | We don't want to rename in code generated by GHC as this gives false positives.
 -- So we restrict the HIE file to remove all the generated code.
@@ -247,10 +245,8 @@ removeGenerated HAR{..} = HAR{hieAst = go hieAst,..}
       hf
 #endif
 
-handleUriToNfp :: (Monad m) => Uri -> ExceptT String m NormalizedFilePath
-handleUriToNfp uri = handleMaybe
-    ("No filepath for uri: " ++ show uri)
-    (toNormalizedFilePath <$> uriToFilePath uri)
+handleUriToNfp :: (Monad m) => Uri -> ExceptT PluginUtils.GhcidePluginError m NormalizedFilePath
+handleUriToNfp uri = PluginUtils.withPluginError $ getNormalizedFilePath uri
 
 -- head is safe since groups are non-empty
 collectWith :: (Hashable a, Eq a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]

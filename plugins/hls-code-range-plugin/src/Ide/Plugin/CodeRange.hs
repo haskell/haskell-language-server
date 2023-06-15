@@ -1,4 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
@@ -13,12 +14,10 @@ module Ide.Plugin.CodeRange (
     , createFoldingRange
     ) where
 
-import           Control.Monad.Except                 (ExceptT (ExceptT),
-                                                       mapExceptT)
-import           Control.Monad.IO.Class               (liftIO)
+import           Control.Monad.IO.Class               (MonadIO)
+import           Control.Monad.Trans.Except           (ExceptT)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        maybeToExceptT)
-import           Data.Either.Extra                    (maybeToEither)
 import           Data.List.Extra                      (drop1)
 import           Data.Maybe                           (fromMaybe)
 import           Data.Vector                          (Vector)
@@ -27,11 +26,8 @@ import           Development.IDE                      (Action, IdeAction,
                                                        IdeState (shakeExtras),
                                                        Range (Range), Recorder,
                                                        WithPriority,
-                                                       cmapWithPrio, runAction,
-                                                       runIdeAction,
-                                                       toNormalizedFilePath',
-                                                       uriToFilePath', use,
-                                                       useWithStaleFast)
+                                                       cmapWithPrio)
+import qualified Development.IDE.Core.PluginUtils     as PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentPosition,
                                                        toCurrentRange)
@@ -42,13 +38,16 @@ import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
                                                        codeRangeRule, crkToFrk)
 import qualified Ide.Plugin.CodeRange.Rules           as Rules (Log)
-import           Ide.PluginUtils                      (pluginResponse,
-                                                       positionInRange)
+import           Ide.PluginUtils                      (getNormalizedFilePath,
+                                                       mkSimpleResponseError,
+                                                       pluginResponseM,
+                                                       positionInRange,
+                                                       withError)
 import           Ide.Types                            (PluginDescriptor (pluginHandlers, pluginRules),
                                                        PluginId,
                                                        defaultPluginDescriptor,
                                                        mkPluginHandler)
-import           Language.LSP.Server                  (LspM, LspT)
+import           Language.LSP.Server                  (LspM)
 import           Language.LSP.Types                   (FoldingRange (..),
                                                        FoldingRangeParams (..),
                                                        List (List),
@@ -79,40 +78,31 @@ instance Pretty Log where
         LogBadDependency rule -> pretty $ "bad dependency: " <> show rule
 
 foldingRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError (List FoldingRange))
-foldingRangeHandler recorder ide _ FoldingRangeParams{..} = do
-    pluginResponse $ do
-        filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
-                toNormalizedFilePath' <$> uriToFilePath' uri
-        foldingRanges <- mapExceptT runAction' $
-            getFoldingRanges filePath
+foldingRangeHandler recorder ide _ FoldingRangeParams{..} =
+    pluginResponseM handleErrors $ do
+        filePath <- withError PluginUtils.CoreError $ getNormalizedFilePath uri
+        foldingRanges <- PluginUtils.runAction "FoldingRange" ide $ getFoldingRanges filePath
         pure . List $ foldingRanges
   where
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument
 
-    runAction' :: Action (Either FoldingRangeError [FoldingRange]) -> LspT c IO (Either String [FoldingRange])
-    runAction' action = do
-        result <- liftIO $ runAction "FoldingRange" ide action
-        case result of
-            Left err -> case err of
-                FoldingRangeBadDependency rule -> do
-                    logWith recorder Warning $ LogBadDependency rule
-                    pure $ Right []
-            Right list -> pure $ Right list
+    handleErrors = \case
+        PluginUtils.RuleFailed rule -> do
+            logWith recorder Warning $ LogBadDependency rule
+            pure $ Right $ List []
+        errs -> pure $ Left $ PluginUtils.handlePluginError errs
 
-data FoldingRangeError = forall rule. Show rule => FoldingRangeBadDependency rule
-
-getFoldingRanges :: NormalizedFilePath -> ExceptT FoldingRangeError Action [FoldingRange]
+getFoldingRanges :: NormalizedFilePath -> ExceptT PluginUtils.GhcidePluginError Action [FoldingRange]
 getFoldingRanges file = do
-    codeRange <- maybeToExceptT (FoldingRangeBadDependency GetCodeRange) . MaybeT $ use GetCodeRange file
+    codeRange <- PluginUtils.use GetCodeRange file
     pure $ findFoldingRanges codeRange
 
 selectionRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
-    pluginResponse $ do
-        filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
-                toNormalizedFilePath' <$> uriToFilePath' uri
-        fmap List . mapExceptT runIdeAction' . getSelectionRanges filePath $ positions
+    pluginResponseM handleErrors $ do
+        filePath <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath uri
+        fmap List . runIdeAction' $ getSelectionRanges filePath positions
   where
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument
@@ -120,30 +110,36 @@ selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
     positions :: [Position]
     List positions = _positions
 
-    runIdeAction' :: IdeAction (Either SelectionRangeError [SelectionRange]) -> LspT c IO (Either String [SelectionRange])
-    runIdeAction' action = do
-        result <- liftIO $ runIdeAction "SelectionRange" (shakeExtras ide) action
-        case result of
-            Left err   -> case err of
-                SelectionRangeBadDependency rule -> do
-                    logWith recorder Warning $ LogBadDependency rule
-                    -- This might happen if the HieAst is not ready,
-                    -- so we give it a default value instead of throwing an error
-                    pure $ Right []
-                SelectionRangeInputPositionMappingFailure -> pure $
-                    Left "failed to apply position mapping to input positions"
-                SelectionRangeOutputPositionMappingFailure -> pure $
-                    Left "failed to apply position mapping to output positions"
-            Right list -> pure $ Right list
+    runIdeAction' :: MonadIO m => ExceptT SelectionRangeError IdeAction [SelectionRange] -> ExceptT SelectionRangeError m [SelectionRange]
+    runIdeAction' action = PluginUtils.runIdeAction "SelectionRange" (shakeExtras ide) action
+
+    handleErrors ::
+        MonadIO m =>
+        SelectionRangeError ->
+        m (Either ResponseError (List a))
+    handleErrors err = case err of
+        SelectionRangeBadDependency rule -> do
+            logWith recorder Warning $ LogBadDependency rule
+            -- This might happen if the HieAst is not ready,
+            -- so we give it a default value instead of throwing an error
+            pure $ Right $ List []
+        SelectionRangeInputPositionMappingFailure ->
+            pure $ Left $ mkSimpleResponseError "failed to apply position mapping to input positions"
+        SelectionRangeOutputPositionMappingFailure ->
+            pure $ Left $ mkSimpleResponseError "failed to apply position mapping to output positions"
+        GhcidePluginErrors ghcidePluginError ->
+            pure $ Left $ PluginUtils.handlePluginError ghcidePluginError
+
 
 data SelectionRangeError = forall rule. Show rule => SelectionRangeBadDependency rule
                          | SelectionRangeInputPositionMappingFailure
                          | SelectionRangeOutputPositionMappingFailure
+                         | GhcidePluginErrors PluginUtils.GhcidePluginError
 
 getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT SelectionRangeError IdeAction [SelectionRange]
 getSelectionRanges file positions = do
-    (codeRange, positionMapping) <- maybeToExceptT (SelectionRangeBadDependency GetCodeRange) . MaybeT $
-        useWithStaleFast GetCodeRange file
+    (codeRange, positionMapping) <- withError (\_ -> SelectionRangeBadDependency GetCodeRange) $
+        PluginUtils.useWithStaleFast GetCodeRange file
     -- 'positionMapping' should be applied to the input before using them
     positions' <- maybeToExceptT SelectionRangeInputPositionMappingFailure . MaybeT . pure $
         traverse (fromCurrentPosition positionMapping) positions
