@@ -69,7 +69,7 @@ library
         lens,
         list-t,
         hiedb == 0.4.3.*,
-        lsp-types ^>= 2.0.0.0,
+        lsp-types ^>= 2.0.0.1,
         lsp ^>= 2.0.0.0 ,
         mtl,
         optparse-applicative,

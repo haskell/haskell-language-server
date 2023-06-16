@@ -60,7 +60,7 @@ extra-deps:
 - stylish-haskell-0.14.2.0@sha256:fffe1c13ad4c2678cf28a7470cac5d3bf20c71c36f09969e3e5f186787cceb7c,4321
 - co-log-core-0.3.1.0
 - lsp-2.0.0.0
-- lsp-types-2.0.0.0
+- lsp-types-2.0.0.1
 - lsp-test-0.15.0.0
 - hie-bios-0.12.0
 - row-types-1.0.1.2
