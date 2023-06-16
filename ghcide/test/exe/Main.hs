@@ -142,6 +142,7 @@ import           Development.IDE.Types.Logger             (Logger (Logger),
                                                            toCologActionWithPrio)
 import qualified FuzzySearch
 import           GHC.Stack                                (emptyCallStack)
+import           GHC.TypeLits                             (symbolVal)
 import qualified HieDbRetry
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
 import           Ide.Types
@@ -2597,7 +2598,7 @@ dependentFileTest = testGroup "addDependentFile"
 
 cradleLoadedMessage :: Session FromServerMessage
 cradleLoadedMessage = satisfy $ \case
-        FromServerMess m@(SMethod_CustomMethod _) (NotMess _) -> someMethodToMethodString (SomeMethod m) == cradleLoadedMethod
+        FromServerMess (SMethod_CustomMethod p) (NotMess _) -> symbolVal p == cradleLoadedMethod
         _                                            -> False
 
 cradleLoadedMethod :: String

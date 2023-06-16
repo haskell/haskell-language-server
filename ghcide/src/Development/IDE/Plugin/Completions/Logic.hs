@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP              #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs            #-}
 {-# LANGUAGE MultiWayIf       #-}
 {-# LANGUAGE OverloadedLabels #-}
@@ -16,6 +17,7 @@ module Development.IDE.Plugin.Completions.Logic (
 import           Control.Applicative
 import           Control.Lens                             hiding (Context)
 import           Data.Char                                (isAlphaNum, isUpper)
+import           Data.Default                             (def)
 import           Data.Generics
 import           Data.List.Extra                          as List hiding
                                                                   (stripPrefix)
@@ -283,30 +285,32 @@ showForSnippet x = printOutputable x
 
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
-  CompletionItem label Nothing (Just CompletionItemKind_Module) Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    (defaultCompletionItemWithLabel label)
+    { _kind = Just CompletionItemKind_Module }
 
 mkModuleFunctionImport :: T.Text -> T.Text -> CompletionItem
 mkModuleFunctionImport moduleName label =
-  CompletionItem label Nothing (Just CompletionItemKind_Function) Nothing (Just moduleName)
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    (defaultCompletionItemWithLabel label)
+    { _kind = Just CompletionItemKind_Function
+    , _detail = Just moduleName }
 
 mkImportCompl :: T.Text -> T.Text -> CompletionItem
 mkImportCompl enteredQual label =
-  CompletionItem m Nothing (Just CompletionItemKind_Module) Nothing (Just label)
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    (defaultCompletionItemWithLabel m)
+    { _kind = Just CompletionItemKind_Module
+    , _detail = Just label }
   where
     m = fromMaybe "" (T.stripPrefix enteredQual label)
 
 mkExtCompl :: T.Text -> CompletionItem
 mkExtCompl label =
-  CompletionItem label Nothing (Just CompletionItemKind_Keyword) Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    (defaultCompletionItemWithLabel label)
+    { _kind = Just CompletionItemKind_Keyword }
 
+defaultCompletionItemWithLabel :: T.Text -> CompletionItem
+defaultCompletionItemWithLabel label =
+    CompletionItem label def def def def def def def def def
+                         def def def def def def def def def
 
 fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
 fromIdentInfo doc id@IdentInfo{..} q = CI

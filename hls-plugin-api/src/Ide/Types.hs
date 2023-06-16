@@ -430,13 +430,6 @@ instance PluginRequestMethod Method_TextDocumentCodeAction where
         , Just caKind <- ca ^. L.kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
         | otherwise = False
 
-      -- Copied form lsp-types 1.6 to get compilation working. May make more
-      -- sense to add it back to lsp-types 2.0
-      -- | Does the first 'CodeActionKind' subsume the other one, hierarchically. Reflexive.
-      codeActionKindSubsumes :: CodeActionKind -> CodeActionKind -> Bool
-      -- Simple but ugly implementation: prefix on the string representation
-      codeActionKindSubsumes parent child = toEnumBaseType parent `T.isPrefixOf` toEnumBaseType child
-
 instance PluginMethod Request Method_TextDocumentDefinition where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc

@@ -50,6 +50,7 @@ import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult,
                                                   ideResultSuccess)
 import           Development.IDE.Test.Diagnostic
+import           GHC.TypeLits                    ( symbolVal )
 import           Ide.Plugin.Config               (CheckParents, checkProject)
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
@@ -229,8 +230,8 @@ getFilesOfInterest = callTestPlugin GetFilesOfInterest
 waitForCustomMessage :: T.Text -> (A.Value -> Maybe res) -> Session res
 waitForCustomMessage msg pred =
     skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess cm@(SMethod_CustomMethod _) (NotMess TNotificationMessage{_params = value})
-            | someMethodToMethodString (SomeMethod cm) == T.unpack msg -> pred value
+        FromServerMess (SMethod_CustomMethod p) (NotMess TNotificationMessage{_params = value})
+            | symbolVal p == T.unpack msg -> pred value
         _ -> Nothing
 
 waitForGC :: Session [T.Text]
@@ -251,10 +252,10 @@ isReferenceReady p = void $ referenceReady (equalFilePath p)
 
 referenceReady :: (FilePath -> Bool) -> Session FilePath
 referenceReady pred = satisfyMaybe $ \case
-  FromServerMess cm@(SMethod_CustomMethod _) (NotMess TNotificationMessage{_params})
+  FromServerMess (SMethod_CustomMethod p) (NotMess TNotificationMessage{_params})
     | A.Success fp <- A.fromJSON _params
     , pred fp
-    , someMethodToMethodString (SomeMethod cm) == "ghcide/reference/ready"
+    , symbolVal p == "ghcide/reference/ready"
     -> Just fp
   _ -> Nothing
 
