@@ -31,8 +31,10 @@ plugin :: PluginTestDescriptor OverloadedRecordDot.Log
 plugin = mkPluginTestDescriptor OverloadedRecordDot.descriptor "overloaded-record-dot"
 
 test :: TestTree
-test = testGroup "overloaded-record-dot" $
-  [testGroup "without resolve" [ mkTest "Simple" "Simple" "name" 10 7 10 15,
+test = testGroup "overloaded-record-dot"
+  [testGroup
+  "without resolve"
+  [ mkTest "Simple" "Simple" "name" 10 7 10 15,
     mkTest "NoPragmaNeeded" "NoPragmaNeeded" "name" 11 7 11 15,
     mkTest "NestedParens" "NestedParens" "name" 15 7 15 24,
     mkTest "NestedDot" "NestedDot" "name" 17 7 17 22,
@@ -41,7 +43,9 @@ test = testGroup "overloaded-record-dot" $
     mkTest "Multiline" "Multiline" "name" 10 7 11 15,
     mkTest "MultilineExpanded" "MultilineExpanded" "owner" 28 8 28 19
   ],
-  testGroup "with Resolve" [ mkResolveTest "Simple" "Simple" "name" 10 7 10 15,
+  testGroup
+  "with Resolve"
+  [ mkResolveTest "Simple" "Simple" "name" 10 7 10 15,
     mkResolveTest "NoPragmaNeeded" "NoPragmaNeeded" "name" 11 7 11 15,
     mkResolveTest "NestedParens" "NestedParens" "name" 15 7 15 24,
     mkResolveTest "NestedDot" "NestedDot" "name" 17 7 17 22,
@@ -49,6 +53,11 @@ test = testGroup "overloaded-record-dot" $
     mkResolveTest "MultilineCase" "MultilineCase" "name" 10 7 12 15,
     mkResolveTest "Multiline" "Multiline" "name" 10 7 11 15,
     mkResolveTest "MultilineExpanded" "MultilineExpanded" "owner" 28 8 28 19
+  ],
+  testGroup
+  "benchmark"
+  [ mkTest "Benchmark without resolve" "Benchmark" "name1298" 1797 11 1797 27,
+    mkResolveTest "Benchmark with resolve" "Benchmark" "name1298" 1797 11 1797 27
   ]]
 
 mkTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> TestTree
