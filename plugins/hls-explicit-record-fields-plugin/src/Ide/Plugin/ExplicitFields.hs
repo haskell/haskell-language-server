@@ -21,7 +21,7 @@ import           Control.Monad.Trans.Except      (ExceptT)
 import           Data.Functor                    ((<&>))
 import           Data.Generics                   (GenericQ, everything, extQ,
                                                   mkQ)
-import qualified Data.HashMap.Strict             as HashMap
+import qualified Data.Map                        as Map
 import           Data.Maybe                      (fromMaybe, isJust,
                                                   listToMaybe, maybeToList)
 import           Data.Text                       (Text)
@@ -69,17 +69,16 @@ import           Ide.Types                       (PluginDescriptor (..),
                                                   PluginMethodHandler,
                                                   defaultPluginDescriptor,
                                                   mkPluginHandler)
-import           Language.LSP.Types              (CodeAction (..),
-                                                  CodeActionKind (CodeActionRefactorRewrite),
+import qualified Language.LSP.Protocol.Lens      as L
+import           Language.LSP.Protocol.Message   (Method (..), SMethod (..))
+import           Language.LSP.Protocol.Types     (CodeAction (..),
+                                                  CodeActionKind (CodeActionKind_RefactorRewrite),
                                                   CodeActionParams (..),
-                                                  Command, List (..),
-                                                  Method (..), SMethod (..),
-                                                  TextEdit (..),
+                                                  Command, TextEdit (..),
                                                   WorkspaceEdit (WorkspaceEdit),
                                                   fromNormalizedUri,
                                                   normalizedFilePathToUri,
-                                                  type (|?) (InR))
-import qualified Language.LSP.Types.Lens         as L
+                                                  type (|?) (InL, InR))
 
 
 data Log
@@ -95,29 +94,29 @@ instance Pretty Log where
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+  { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider
   , pluginRules = collectRecordsRule recorder *> collectNamesRule
   }
 
-codeActionProvider :: PluginMethodHandler IdeState 'TextDocumentCodeAction
+codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginResponse $ do
   nfp <- getNormalizedFilePath (docId ^. L.uri)
   pragma <- getFirstPragma pId ideState nfp
   CRR recMap exts <- collectRecords' ideState nfp
   let actions = map (mkCodeAction nfp exts pragma) (RangeMap.filterByRange range recMap)
-  pure $ List actions
+  pure $ InL actions
 
   where
     mkCodeAction :: NormalizedFilePath -> [Extension] -> NextPragmaInfo -> RenderedRecordInfo -> Command |? CodeAction
     mkCodeAction nfp exts pragma rec = InR CodeAction
       { _title = mkCodeActionTitle exts
-      , _kind = Just CodeActionRefactorRewrite
+      , _kind = Just CodeActionKind_RefactorRewrite
       , _diagnostics = Nothing
       , _isPreferred = Nothing
       , _disabled = Nothing
       , _edit = Just $ mkWorkspaceEdit nfp edits
       , _command = Nothing
-      , _xdata = Nothing
+      , _data_ = Nothing
       }
       where
         edits = mkTextEdit rec : maybeToList pragmaEdit
@@ -133,7 +132,7 @@ codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginRes
     mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
     mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
       where
-        changes = Just $ HashMap.singleton (fromNormalizedUri (normalizedFilePathToUri nfp)) (List edits)
+        changes = Just $ Map.singleton (fromNormalizedUri (normalizedFilePathToUri nfp)) edits
 
     mkCodeActionTitle :: [Extension] -> Text
     mkCodeActionTitle exts =

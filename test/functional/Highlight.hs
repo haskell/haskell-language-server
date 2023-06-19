@@ -12,10 +12,10 @@ tests = testGroup "highlight" [
         highlights <- getHighlights doc (Position 2 2)
         liftIO $ do
             let hls =
-                    [ DocumentHighlight (mkRange 2 0 2 3) (Just HkWrite)
-                    , DocumentHighlight (mkRange 4 22 4 25) (Just HkRead)
-                    , DocumentHighlight (mkRange 3 6 3 9) (Just HkRead)
-                    , DocumentHighlight (mkRange 1 0 1 3) (Just HkRead)]
+                    [ DocumentHighlight (mkRange 2 0 2 3) (Just DocumentHighlightKind_Write)
+                    , DocumentHighlight (mkRange 4 22 4 25) (Just DocumentHighlightKind_Read)
+                    , DocumentHighlight (mkRange 3 6 3 9) (Just DocumentHighlightKind_Read)
+                    , DocumentHighlight (mkRange 1 0 1 3) (Just DocumentHighlightKind_Read)]
             mapM_ (\x -> x `elem` highlights @? "Contains highlight") hls
     ]
     where

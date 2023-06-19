@@ -11,12 +11,12 @@ module Test.AddArgument (tests) where
 import           Data.List.Extra
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Location
-import           Language.LSP.Test
-import           Language.LSP.Types                hiding
+import           Language.LSP.Protocol.Types       hiding
                                                    (SemanticTokenAbsolute (length, line),
                                                     SemanticTokenRelative (length),
                                                     SemanticTokensEdit (_start),
                                                     mkRange)
+import           Language.LSP.Test
 import           Test.Tasty
 import           Test.Tasty.HUnit
 

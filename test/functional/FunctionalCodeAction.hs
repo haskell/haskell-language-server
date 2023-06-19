@@ -4,21 +4,21 @@
 
 module FunctionalCodeAction (tests) where
 
-import           Control.Lens            hiding (List)
+import           Control.Lens               hiding (List)
 import           Control.Monad
 import           Data.Aeson
-import           Data.Aeson.Lens         (_Object)
+import           Data.Aeson.Lens            (_Object)
 import           Data.List
-import qualified Data.Map                as M
+import qualified Data.Map                   as M
 import           Data.Maybe
-import qualified Data.Text               as T
+import qualified Data.Text                  as T
 import           Ide.Plugin.Config
-import           Language.LSP.Test       as Test
-import qualified Language.LSP.Types.Lens as L
+import qualified Language.LSP.Protocol.Lens as L
+import           Language.LSP.Test          as Test
 import           Test.Hls
 import           Test.Hspec.Expectations
 
-import           Development.IDE.Test    (configureCheckProject)
+import           Development.IDE.Test       (configureCheckProject)
 import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
@@ -64,7 +64,7 @@ renameTests = testGroup "rename suggestions" [
             cmd <- liftIO $ inspectCommand cars ["Replace with", "putStrLn"]
             let mbArgs = cmd ^. L.arguments
             case mbArgs of
-                Just (List [args]) -> liftIO $ do
+                Just [args] -> liftIO $ do
                     let editParams = args ^. ix "fallbackWorkspaceEdit" . _Object
                     (editParams & has (ix "changes"))  @? "Contains changes"
                     not (editParams & has (ix "documentChanges")) @? "Doesn't contain documentChanges"
@@ -184,7 +184,7 @@ packageTests = testGroup "add package suggestions" [
                 (InR action:_) -> do
                     liftIO $ do
                         action ^. L.title @?= "Add text as a dependency"
-                        action ^. L.kind @?= Just CodeActionQuickFix
+                        action ^. L.kind @?= Just CodeActionKind_QuickFix
                         "package:add" `T.isSuffixOf` (action ^. L.command . _Just . L.command) @? "Command contains package:add"
 
                     executeCodeAction action
@@ -218,7 +218,7 @@ packageTests = testGroup "add package suggestions" [
 
             liftIO $ do
                 action ^. L.title @?= "Add zlib as a dependency"
-                forM_ allActions $ \a -> a ^. L.kind @?= Just CodeActionQuickFix
+                forM_ allActions $ \a -> a ^. L.kind @?= Just CodeActionKind_QuickFix
                 forM_ allActions $ \a -> "package:add" `T.isSuffixOf` (a ^. L.command . _Just . L.command) @? "Command contains package:add"
 
             executeCodeAction action
@@ -255,7 +255,7 @@ redundantImportTests = testGroup "redundant import code actions" [
             case mbRemoveAction of
                 Just removeAction -> do
                     liftIO $ do
-                        forM_ allActions $ \a -> a ^. L.kind @?= Just CodeActionQuickFix
+                        forM_ allActions $ \a -> a ^. L.kind @?= Just CodeActionKind_QuickFix
                         forM_ allActions $ \a -> a ^. L.command @?= Nothing
                         forM_ allActions $ \a -> isJust (a ^. L.edit) @? "Has edit"
 
@@ -425,23 +425,23 @@ unusedTermTests = testGroup "unused term code actions" [
         _     <- waitForDiagnosticsFrom doc
         diags <- getCurrentDiagnostics doc
         let params = CodeActionParams Nothing Nothing doc (Range (Position 1 0) (Position 4 0)) caContext
-            caContext = CodeActionContext (List diags) (Just (List [CodeActionRefactor]))
-            caContextAllActions = CodeActionContext (List diags) Nothing
+            caContext = CodeActionContext diags (Just [CodeActionKind_Refactor]) Nothing
+            caContextAllActions = CodeActionContext diags Nothing Nothing
         -- Verify that we get code actions of at least two different kinds.
-        ResponseMessage _ _ (Right (List res))
-          <- request STextDocumentCodeAction (params & L.context .~ caContextAllActions)
+        TResponseMessage _ _ (Right res)
+          <- request SMethod_TextDocumentCodeAction (params & L.context .~ caContextAllActions)
         liftIO $ do
-            let cas = map fromAction res
+            let cas = map fromAction $ absorbNull res
                 kinds = map (^. L.kind) cas
-            assertBool "Test precondition failed" $ Just CodeActionQuickFix `elem` kinds
+            assertBool "Test precondition failed" $ Just CodeActionKind_QuickFix `elem` kinds
         -- Verify that that when we set the only parameter, we only get actions
         -- of the right kind.
-        ResponseMessage _ _ (Right (List res)) <- request STextDocumentCodeAction params
+        TResponseMessage _ _ (Right res) <- request SMethod_TextDocumentCodeAction params
         liftIO $ do
-            let cas = map fromAction res
+            let cas = map fromAction $ absorbNull res
                 kinds = map (^. L.kind) cas
             assertBool "Quick fixes should have been filtered out"
-              $ Just CodeActionQuickFix `notElem` kinds
+              $ Just CodeActionKind_QuickFix `notElem` kinds
     ]
 
 disableWingman :: Session ()

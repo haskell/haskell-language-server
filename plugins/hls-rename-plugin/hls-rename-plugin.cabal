@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-rename-plugin
-version:            2.0.0.0
+version:            2.1.0.0
 synopsis:           Rename plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -29,11 +29,11 @@ library
     , extra
     , ghc
     , ghc-exactprint
-    , ghcide                == 2.0.0.0
+    , ghcide                == 2.1.0.0
     , hashable
     , hiedb
     , hie-compat
-    , hls-plugin-api        == 2.0.0.0
+    , hls-plugin-api        == 2.1.0.0
     , hls-refactor-plugin
     , lens
     , lsp
@@ -59,4 +59,4 @@ test-suite tests
     , filepath
     , hls-plugin-api
     , hls-rename-plugin
-    , hls-test-utils             == 2.0.0.0
+    , hls-test-utils             == 2.1.0.0

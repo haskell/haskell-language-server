@@ -3,7 +3,7 @@ module Reference (tests) where
 import           Control.Lens
 import           Data.Coerce
 import           Data.List
-import           Language.LSP.Types.Lens
+import           Language.LSP.Protocol.Lens
 import           Test.Hls
 import           Test.Hls.Command
 

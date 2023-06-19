@@ -1,18 +1,18 @@
 module Ide.Plugin.Class (descriptor, Log(..)) where
 
-import           Development.IDE             (IdeState, Recorder, WithPriority)
+import           Development.IDE               (IdeState, Recorder,
+                                                WithPriority)
 import           Ide.Plugin.Class.CodeAction
 import           Ide.Plugin.Class.CodeLens
 import           Ide.Plugin.Class.Types
 import           Ide.Types
-import           Language.LSP.Types
-
+import           Language.LSP.Protocol.Message
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginCommands = commands plId
     , pluginRules = rules recorder
-    , pluginHandlers = mkPluginHandler STextDocumentCodeAction (codeAction recorder)
-        <> mkPluginHandler STextDocumentCodeLens codeLens
+    , pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction (codeAction recorder)
+        <> mkPluginHandler SMethod_TextDocumentCodeLens codeLens
     }
 
 commands :: PluginId -> [PluginCommand IdeState]

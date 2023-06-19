@@ -40,8 +40,9 @@ import           Development.IDE.Types.Logger         as Logger (Pretty (pretty)
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types          hiding (Null)
 import           Language.LSP.Server
-import           Language.LSP.Types
 
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
@@ -75,9 +76,9 @@ descriptorForModules recorder pred plId =
       pluginRules = minimalImportsRule recorder,
       pluginHandlers = mconcat
         [ -- This plugin provides code lenses
-          mkPluginHandler STextDocumentCodeLens $ lensProvider pred
+          mkPluginHandler SMethod_TextDocumentCodeLens $ lensProvider pred
           -- This plugin provides code actions
-        , mkPluginHandler STextDocumentCodeAction $ codeActionProvider pred
+        , mkPluginHandler SMethod_TextDocumentCodeAction $ codeActionProvider pred
         ]
     }
 
@@ -95,7 +96,7 @@ newtype ImportCommandParams = ImportCommandParams WorkspaceEdit
 runImportCommand :: CommandFunction IdeState ImportCommandParams
 runImportCommand _state (ImportCommandParams edit) = do
   -- This command simply triggers a workspace edit!
-  _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+  _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
   return (Right Null)
 
 -- | For every implicit import statement, return a code lens of the corresponding explicit import
@@ -108,7 +109,7 @@ runImportCommand _state (ImportCommandParams edit) = do
 -- the provider should produce one code lens associated to the import statement:
 --
 -- > import Data.List (intercalate, sortBy)
-lensProvider :: (ModuleName -> Bool) -> PluginMethodHandler IdeState TextDocumentCodeLens
+lensProvider :: (ModuleName -> Bool) -> PluginMethodHandler IdeState Method_TextDocumentCodeLens
 lensProvider
   pred
   state -- ghcide state, used to retrieve typechecking artifacts
@@ -129,15 +130,15 @@ lensProvider
                   | (imp, Just minImport) <- minImports,
                     Just edit <- [mkExplicitEdit pred posMapping imp minImport]
                 ]
-            return $ Right (List $ catMaybes commands)
+            return $ Right $ InL $ catMaybes commands
           _ ->
-            return $ Right (List [])
+            return $ Right $ InL []
     | otherwise =
-      return $ Right (List [])
+      return $ Right $ InL []
 
 -- | If there are any implicit imports, provide one code action to turn them all
 --   into explicit imports.
-codeActionProvider :: (ModuleName -> Bool) -> PluginMethodHandler IdeState TextDocumentCodeAction
+codeActionProvider :: (ModuleName -> Bool) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider pred ideState _pId (CodeActionParams _ _ docId range _context)
   | TextDocumentIdentifier {_uri} <- docId,
     Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $
@@ -150,7 +151,7 @@ codeActionProvider pred ideState _pId (CodeActionParams _ _ docId range _context
                 any (within range) rangesImports
             _ -> False
       if not insideImport
-        then return (Right (List []))
+        then return (Right (InL []))
         else do
           minImports <- runAction "MinimalImports" ideState $ use MinimalImports nfp
           let edits =
@@ -161,19 +162,19 @@ codeActionProvider pred ideState _pId (CodeActionParams _ _ docId range _context
                 ]
               caExplicitImports = InR CodeAction {..}
               _title = "Make all imports explicit"
-              _kind = Just CodeActionQuickFix
+              _kind = Just CodeActionKind_QuickFix
               _command = Nothing
               _edit = Just WorkspaceEdit {_changes, _documentChanges, _changeAnnotations}
-              _changes = Just $ HashMap.singleton _uri $ List edits
+              _changes = Just $ Map.singleton _uri edits
               _documentChanges = Nothing
               _diagnostics = Nothing
               _isPreferred = Nothing
               _disabled = Nothing
-              _xdata = Nothing
+              _data_ = Nothing
               _changeAnnotations = Nothing
-          return $ Right $ List [caExplicitImports | not (null edits)]
+          return $ Right $ InL [caExplicitImports | not (null edits)]
   | otherwise =
-    return $ Right $ List []
+    return $ Right $ InL []
 
 --------------------------------------------------------------------------------
 
@@ -298,10 +299,10 @@ generateLens pId uri importEdit@TextEdit {_range, _newText} = do
   let
       title = abbreviateImportTitle _newText
       -- the code lens has no extra data
-      _xdata = Nothing
+      _data_ = Nothing
       -- an edit that replaces the whole declaration with the explicit one
       edit = WorkspaceEdit (Just editsMap) Nothing Nothing
-      editsMap = HashMap.fromList [(uri, List [importEdit])]
+      editsMap = Map.fromList [(uri, [importEdit])]
       -- the command argument is simply the edit
       _arguments = Just [toJSON $ ImportCommandParams edit]
   -- create the command

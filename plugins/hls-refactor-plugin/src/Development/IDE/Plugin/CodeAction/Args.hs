@@ -19,8 +19,8 @@ import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
 import           Data.Either                                  (fromRight,
                                                                partitionEithers)
-import qualified Data.HashMap.Strict                          as Map
 import           Data.IORef.Extra
+import qualified Data.Map                                     as Map
 import           Data.Maybe                                   (fromMaybe)
 import qualified Data.Text                                    as T
 import           Development.IDE                              hiding
@@ -38,8 +38,9 @@ import           Development.IDE.Types.Exports                (ExportsMap)
 import           Development.IDE.Types.Options                (IdeOptions)
 import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server                          as LSP
-import           Language.LSP.Types
 
 type CodeActionTitle = T.Text
 
@@ -52,8 +53,8 @@ type GhcideCodeAction = ExceptT ResponseError (ReaderT CodeActionArgs IO) Ghcide
 -------------------------------------------------------------------------------------------------
 
 {-# ANN runGhcideCodeAction ("HLint: ignore Move guards forward" :: String) #-}
-runGhcideCodeAction :: LSP.MonadLsp Config m => IdeState -> MessageParams TextDocumentCodeAction -> GhcideCodeAction -> m GhcideCodeActionResult
-runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext {_diagnostics = List diags}) codeAction = do
+runGhcideCodeAction :: LSP.MonadLsp Config m => IdeState -> MessageParams Method_TextDocumentCodeAction -> GhcideCodeAction -> m GhcideCodeActionResult
+runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext {_diagnostics = diags}) codeAction = do
   let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
       runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure mbFile) >>= MaybeT . use key
   caaGhcSession <- onceIO $ runRule GhcSession
@@ -90,20 +91,20 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
 
 mkCA :: T.Text -> Maybe CodeActionKind -> Maybe Bool -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
 mkCA title kind isPreferred diags edit =
-  InR $ CodeAction title kind (Just $ List diags) isPreferred Nothing (Just edit) Nothing Nothing
+  InR $ CodeAction title kind (Just $ diags) isPreferred Nothing (Just edit) Nothing Nothing
 
 mkGhcideCAPlugin :: GhcideCodeAction -> PluginId -> PluginDescriptor IdeState
 mkGhcideCAPlugin codeAction plId =
   (defaultPluginDescriptor plId)
-    { pluginHandlers = mkPluginHandler STextDocumentCodeAction $
-        \state _ params@(CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext {_diagnostics = List diags}) -> do
+    { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction $
+        \state _ params@(CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext {_diagnostics = diags}) -> do
           results <- runGhcideCodeAction state params codeAction
           pure $
             Right $
-              List
+              InL
                 [ mkCA title kind isPreferred diags edit
                   | (title, kind, isPreferred, tedit) <- results,
-                    let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
+                    let edit = WorkspaceEdit (Just $ Map.singleton uri tedit) Nothing Nothing
                 ]
     }
 
@@ -193,13 +194,13 @@ instance ToCodeAction a => ToCodeAction (Either ResponseError a) where
   toCodeAction = either (\err -> ExceptT $ ReaderT $ \_ -> pure $ Left err) toCodeAction
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, a) where
-  toCodeAction (title, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just CodeActionQuickFix,Nothing,) <$> toTextEdit caa te
+  toCodeAction (title, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just CodeActionKind_QuickFix,Nothing,) <$> toTextEdit caa te
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionKind, a) where
   toCodeAction (title, kind, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just kind,Nothing,) <$> toTextEdit caa te
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionPreferred, a) where
-  toCodeAction (title, isPreferred, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just CodeActionQuickFix,Just isPreferred,) <$> toTextEdit caa te
+  toCodeAction (title, isPreferred, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just CodeActionKind_QuickFix,Just isPreferred,) <$> toTextEdit caa te
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionKind, CodeActionPreferred, a) where
   toCodeAction (title, kind, isPreferred, te) = ExceptT $ ReaderT $ \caa -> Right . pure . (title,Just kind,Just isPreferred,) <$> toTextEdit caa te

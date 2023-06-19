@@ -74,8 +74,8 @@ isGADTCodeAction :: CodeAction -> Bool
 isGADTCodeAction CodeAction{..} = case _kind of
     Nothing -> False
     Just kind -> case kind of
-        CodeActionRefactorRewrite -> True
-        _                         -> False
+        CodeActionKind_RefactorRewrite -> True
+        _                              -> False
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

@@ -30,7 +30,7 @@ import qualified Development.IDE.Spans.AtPoint        as AtPoint
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
 import           Development.IDE.Types.Location
 import qualified HieDb
-import           Language.LSP.Types                   (DocumentHighlight (..),
+import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
                                                        SymbolInformation (..))
 
 

@@ -2,20 +2,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Format (tests) where
 
-import           Control.Lens            ((^.))
+import           Control.Lens                ((^.))
 import           Control.Monad.IO.Class
 import           Data.Aeson
-import qualified Data.ByteString.Lazy    as BS
-import qualified Data.Text               as T
-import qualified Data.Text.Encoding      as T
-import qualified Data.Text.IO            as T
+import qualified Data.ByteString.Lazy        as BS
+import qualified Data.Text                   as T
+import qualified Data.Text.Encoding          as T
+import qualified Data.Text.IO                as T
+import qualified Language.LSP.Protocol.Lens  as L
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Test
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens as LSP
 import           Test.Hls
 import           Test.Hls.Command
-import           Test.Hls.Flags          (requiresFloskellPlugin,
-                                          requiresOrmoluPlugin)
+import           Test.Hls.Flags              (requiresFloskellPlugin,
+                                              requiresOrmoluPlugin)
 
 tests :: TestTree
 tests = testGroup "format document" [
@@ -47,11 +47,11 @@ providerTests :: TestTree
 providerTests = testGroup "formatting provider" [
     testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
-        resp <- request STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
-        liftIO $ case resp ^. LSP.result of
+        resp <- request SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
+        liftIO $ case resp ^. L.result of
           result@(Left (ResponseError reason message Nothing)) -> case reason of
-            MethodNotFound -> pure () -- No formatter
-            InvalidRequest | "No plugin enabled for STextDocumentFormatting" `T.isPrefixOf` message -> pure ()
+            (InR ErrorCodes_MethodNotFound) -> pure () -- No formatter
+            (InR ErrorCodes_InvalidRequest) | "No plugin enabled for SMethod_TextDocumentFormatting" `T.isPrefixOf` message -> pure ()
             _ -> assertFailure $ "strange response from formatting provider:" ++ show result
           result -> assertFailure $ "strange response from formatting provider:" ++ show result
 

@@ -54,21 +54,22 @@ import           HieDb.Query
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens            as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens               as LSP
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
 descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor pluginId)
-    { pluginHandlers = mkPluginHandler STextDocumentRename renameProvider
+    { pluginHandlers = mkPluginHandler SMethod_TextDocumentRename renameProvider
     , pluginConfigDescriptor = defaultConfigDescriptor
         { configCustomConfig = mkCustomConfig properties }
     }
 
-renameProvider :: PluginMethodHandler IdeState TextDocumentRename
-renameProvider state pluginId (RenameParams docId@(TextDocumentIdentifier uri) pos _prog newNameText) =
+renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
+renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier uri) pos  newNameText) =
     pluginResponse $ do
         nfp <- handleUriToNfp uri
         directOldNames <- getNamesAtPos state nfp pos
@@ -98,7 +99,7 @@ renameProvider state pluginId (RenameParams docId@(TextDocumentIdentifier uri) p
               verTxtDocId <- lift $ getVersionedTextDoc (TextDocumentIdentifier uri)
               getSrcEdit state verTxtDocId (replaceRefs newName locations)
         fileEdits <- mapM getFileEdit filesRefs
-        pure $ foldl' (<>) mempty fileEdits
+        pure $ InL $ foldl' (<>) mempty fileEdits
 
 -- | Limit renaming across modules.
 failWhenImportOrExport ::
@@ -134,7 +135,7 @@ getSrcEdit ::
     ExceptT String m WorkspaceEdit
 getSrcEdit state verTxtDocId updatePs = do
     ccs <- lift getClientCapabilities
-    nfp <- handleUriToNfp (verTxtDocId ^. LSP.uri)
+    nfp <- handleUriToNfp (verTxtDocId ^. L.uri)
     annAst <- handleMaybeM ("No parsed source for: " ++ show nfp) $ liftIO $ runAction
         "Rename.GetAnnotatedParsedSource"
         state

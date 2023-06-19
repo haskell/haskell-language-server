@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-refine-imports-plugin
-version:            2.0.0.0
+version:            2.1.0.0
 synopsis:           Refine imports plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -29,10 +29,10 @@ library
     , containers
     , deepseq
     , ghc
-    , ghcide                       == 2.0.0.0
-    , hls-explicit-imports-plugin  == 2.0.0.0
+    , ghcide                       == 2.1.0.0
+    , hls-explicit-imports-plugin  == 2.1.0.0
     , hls-graph
-    , hls-plugin-api               == 2.0.0.0
+    , hls-plugin-api               == 2.1.0.0
     , lsp
     , text
     , unordered-containers

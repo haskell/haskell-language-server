@@ -24,6 +24,10 @@ let
 
       ghc-lib-parser = hself.callCabal2nix "ghc-lib-parser" inputs.ghc-lib-parser-94 {};
 
+      lsp = hself.callCabal2nix "lsp" inputs.lsp {};
+      lsp-types = hself.callCabal2nix "lsp-types" inputs.lsp-types {};
+      lsp-test = hself.callCabal2nix "lsp-test" inputs.lsp-test {};
+
       hlint = appendConfigureFlag (hself.callCabal2nix "hlint" inputs.hlint-35 {}) "-fghc-lib";
 
       hls-hlint-plugin = hself.callCabal2nixWithOptions "hls-hlint-plugin"

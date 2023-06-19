@@ -50,6 +50,7 @@ import           Data.Aeson.Types                                   (FromJSON (.
 import qualified Data.ByteString                                    as BS
 import           Data.Hashable
 import qualified Data.HashMap.Strict                                as Map
+import qualified Data.Map                                           as M
 import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.Encoding                                 as T
@@ -120,16 +121,15 @@ import           Ide.Types                                          hiding
                                                                     (Config)
 import           Language.Haskell.HLint                             as Hlint hiding
                                                                              (Error)
+import qualified Language.LSP.Protocol.Lens                         as LSP
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types                        hiding
+                                                                    (Null)
+import qualified Language.LSP.Protocol.Types                        as LSP
 import           Language.LSP.Server                                (ProgressCancellable (Cancellable),
                                                                      getVersionedTextDoc,
                                                                      sendRequest,
                                                                      withIndefiniteProgress)
-import           Language.LSP.Types                                 hiding
-                                                                    (SemanticTokenAbsolute (length, line),
-                                                                     SemanticTokenRelative (length),
-                                                                     SemanticTokensEdit (_start))
-import qualified Language.LSP.Types                                 as LSP
-import qualified Language.LSP.Types.Lens                            as LSP
 
 import qualified Development.IDE.Core.Shake                         as Shake
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
@@ -193,7 +193,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
       [ PluginCommand "applyOne" "Apply a single hint" (applyOneCmd recorder)
       , PluginCommand "applyAll" "Apply all hints to the file" (applyAllCmd recorder)
       ]
-  , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+  , pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider
   , pluginConfigDescriptor = defaultConfigDescriptor
       { configHasDiagnostics = True
       , configCustomConfig = mkCustomConfig properties
@@ -244,13 +244,15 @@ rules recorder plugin = do
       ideaToDiagnostic idea =
         LSP.Diagnostic {
             _range    = srcSpanToRange $ ideaSpan idea
-          , _severity = Just LSP.DsInfo
+          , _severity = Just LSP.DiagnosticSeverity_Information
           -- we are encoding the fact that idea has refactorings in diagnostic code
           , _code     = Just (InR $ T.pack $ codePre ++ ideaHint idea)
           , _source   = Just "hlint"
           , _message  = idea2Message idea
           , _relatedInformation = Nothing
           , _tags     = Nothing
+          , _codeDescription = Nothing
+          , _data_ = Nothing
         }
         where codePre = if null $ ideaRefactoring idea then "" else "refact:"
 
@@ -268,12 +270,14 @@ rules recorder plugin = do
       parseErrorToDiagnostic (Hlint.ParseError l msg contents) =
         LSP.Diagnostic {
             _range    = srcSpanToRange l
-          , _severity = Just LSP.DsInfo
+          , _severity = Just LSP.DiagnosticSeverity_Information
           , _code     = Just (InR "parser")
           , _source   = Just "hlint"
           , _message  = T.unlines [T.pack msg,T.pack contents]
           , _relatedInformation = Nothing
           , _tags     = Nothing
+          , _codeDescription = Nothing
+          , _data_ = Nothing
         }
 
       -- This one is defined in Development.IDE.GHC.Error but here
@@ -404,13 +408,13 @@ runGetModSummaryAction :: IdeState -> NormalizedFilePath -> IO (Maybe ModSummary
 runGetModSummaryAction ideState normalizedFilePath = runHlintAction ideState normalizedFilePath "Hlint.GetModSummary" GetModSummary
 
 -- ---------------------------------------------------------------------
-codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
+codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider ideState pluginId (CodeActionParams _ _ documentId _ context)
   | let TextDocumentIdentifier uri = documentId
   , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
   = do
     verTxtDocId <- getVersionedTextDoc documentId
-    liftIO $ fmap (Right . LSP.List . map LSP.InR) $ do
+    liftIO $ fmap (Right . InL . map LSP.InR) $ do
       allDiagnostics <- atomically $ getDiagnostics ideState
 
       let numHintsInDoc = length
@@ -437,21 +441,21 @@ codeActionProvider ideState pluginId (CodeActionParams _ _ documentId _ context)
       else
         pure singleHintCodeActions
   | otherwise
-  = pure $ Right $ LSP.List []
+  = pure $ Right $ InL []
 
   where
     applyAllAction verTxtDocId =
       let args = Just [toJSON verTxtDocId]
           cmd = mkLspCommand pluginId "applyAll" "Apply all hints" args
-        in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd) Nothing
+        in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionKind_QuickFix) Nothing Nothing Nothing Nothing (Just cmd) Nothing
 
     -- |Some hints do not have an associated refactoring
-    validCommand (LSP.Diagnostic _ _ (Just (InR code)) (Just "hlint") _ _ _) =
+    validCommand (LSP.Diagnostic _ _ (Just (InR code)) _ (Just "hlint") _ _ _ _) =
         "refact:" `T.isPrefixOf` code
     validCommand _ =
         False
 
-    LSP.List diags = context ^. LSP.diagnostics
+    diags = context ^. LSP.diagnostics
 
 -- | Convert a hlint diagnostic into an apply and an ignore code action
 -- if applicable
@@ -464,7 +468,7 @@ diagnosticToCodeActions dynFlags fileContents pluginId verTxtDocId diagnostic
   , let suppressHintTextEdits = mkSuppressHintTextEdits dynFlags fileContents hint
   , let suppressHintWorkspaceEdit =
           LSP.WorkspaceEdit
-            (Just (Map.singleton (verTxtDocId ^. LSP.uri) (List suppressHintTextEdits)))
+            (Just (M.singleton (verTxtDocId ^. LSP.uri) suppressHintTextEdits))
             Nothing
             Nothing
   = catMaybes
@@ -484,13 +488,13 @@ mkCodeAction :: T.Text -> LSP.Diagnostic -> Maybe LSP.WorkspaceEdit -> Maybe LSP
 mkCodeAction title diagnostic workspaceEdit command isPreferred =
   LSP.CodeAction
     { _title = title
-    , _kind = Just LSP.CodeActionQuickFix
-    , _diagnostics = Just (LSP.List [diagnostic])
+    , _kind = Just LSP.CodeActionKind_QuickFix
+    , _diagnostics = Just [diagnostic]
     , _isPreferred = Just isPreferred
     , _disabled = Nothing
     , _edit = workspaceEdit
     , _command = command
-    , _xdata = Nothing
+    , _data_ = Nothing
     }
 
 mkSuppressHintTextEdits :: DynFlags -> T.Text -> T.Text -> [LSP.TextEdit]
@@ -525,7 +529,7 @@ applyAllCmd recorder ide verTxtDocId = do
     case res of
       Left err -> pure $ Left (responseError (T.pack $ "hlint:applyAll: " ++ show err))
       Right fs -> do
-        _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
+        _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
         pure $ Right Null
 
 -- ---------------------------------------------------------------------
@@ -556,7 +560,7 @@ applyOneCmd recorder ide (AOP verTxtDocId pos title) = do
     case res of
       Left err -> pure $ Left (responseError (T.pack $ "hlint:applyOne: " ++ show err))
       Right fs -> do
-        _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
+        _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
         pure $ Right Null
 
 applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either String WorkspaceEdit)

@@ -82,11 +82,11 @@
     "haskell-hie-bios": {
       "flake": false,
       "locked": {
-        "lastModified": 1683794382,
-        "narHash": "sha256-GCf5yVZWphqyMiVvnrGUo5baUCcQz2oo3nL/ahTYVmc=",
+        "lastModified": 1686930638,
+        "narHash": "sha256-gfcxxHtZ2jUsiKNn/O4jEkfWF/2H04aTnaIvPDbtNlQ=",
         "owner": "haskell",
         "repo": "hie-bios",
-        "rev": "57db96016f0b9084e3fc530fd4a0708efc98a6a3",
+        "rev": "3d4fadfb0dc44cb287db9897ecfb503899d33513",
         "type": "github"
       },
       "original": {
@@ -157,13 +157,49 @@
         "url": "https://hackage.haskell.org/package/hlint-3.5/hlint-3.5.tar.gz"
       }
     },
+    "lsp": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-H0qJbQQufOOWovqqdJv6GUaL49o7tET8yTkdLKH1qoE=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-2.0.0.0/lsp-2.0.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-2.0.0.0/lsp-2.0.0.0.tar.gz"
+      }
+    },
+    "lsp-test": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-ac9G/i9JfFKfX7gI57fVirBgW+Np+GDlZ3/4Eb8r6Gc=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-test-0.15.0.0/lsp-test-0.15.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-test-0.15.0.0/lsp-test-0.15.0.0.tar.gz"
+      }
+    },
+    "lsp-types": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-ISvkr2CQWWbxcGm62IK+NIVfq6CEzXQhov47f9YdHW4=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-types-2.0.0.1/lsp-types-2.0.0.1.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-types-2.0.0.1/lsp-types-2.0.0.1.tar.gz"
+      }
+    },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1686355959,
-        "narHash": "sha256-w+6cxJ3dmDAURDvIKec11Ht12vWk2nEznWZEYlcEor0=",
+        "lastModified": 1686874404,
+        "narHash": "sha256-u2Ss8z+sGaVlKtq7sCovQ8WvXY+OoXJmY1zmyxITiaY=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "35885ddb2374c090aa6d98ea97e469e269e27d60",
+        "rev": "efc10371d5c5b8d2d58bab6c1100753efacfe550",
         "type": "github"
       },
       "original": {
@@ -209,6 +245,9 @@
         "haskell-implicit-hie-cradle": "haskell-implicit-hie-cradle",
         "haskell-unix-compat": "haskell-unix-compat",
         "hlint-35": "hlint-35",
+        "lsp": "lsp",
+        "lsp-test": "lsp-test",
+        "lsp-types": "lsp-types",
         "nixpkgs": "nixpkgs",
         "ormolu-052": "ormolu-052",
         "ptr-poker": "ptr-poker",

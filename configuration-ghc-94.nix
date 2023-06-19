@@ -17,6 +17,10 @@ let
 
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
+      lsp = hself.callCabal2nix "lsp" inputs.lsp {};
+      lsp-types = hself.callCabal2nix "lsp-types" inputs.lsp-types {};
+      lsp-test = hself.callCabal2nix "lsp-test" inputs.lsp-test {};
+
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.

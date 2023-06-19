@@ -5,6 +5,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds #-}
 module Test.Hls.Util
   (  -- * Test Capabilities
       codeActionSupportCaps
@@ -54,15 +57,16 @@ import           Control.Monad.IO.Class
 import qualified Data.Aeson                      as A
 import           Data.Bool                       (bool)
 import           Data.Default
+import           Data.Row
+import           Data.Proxy
 import           Data.List.Extra                 (find)
 import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
 import           Development.IDE                 (GhcVersion (..), ghcVersion)
 import qualified Language.LSP.Test               as Test
-import           Language.LSP.Types              hiding (Reason (..))
-import qualified Language.LSP.Types.Capabilities as C
-import           Language.LSP.Types.Lens         (textDocument)
-import qualified Language.LSP.Types.Lens         as L
+import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Message
+import qualified Language.LSP.Protocol.Lens         as L
 import           System.Directory
 import           System.FilePath
 import           System.Info.Extra               (isMac, isWindows)
@@ -75,18 +79,18 @@ import           Test.Tasty.ExpectedFailure      (expectFailBecause,
 import           Test.Tasty.HUnit                (Assertion, assertFailure,
                                                   (@?=))
 
-noLiteralCaps :: C.ClientCapabilities
-noLiteralCaps = def & textDocument ?~ textDocumentCaps
+noLiteralCaps :: ClientCapabilities
+noLiteralCaps = def & L.textDocument ?~ textDocumentCaps
   where
-    textDocumentCaps = def { C._codeAction = Just codeActionCaps }
+    textDocumentCaps = def { _codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
-codeActionSupportCaps :: C.ClientCapabilities
-codeActionSupportCaps = def & textDocument ?~ textDocumentCaps
+codeActionSupportCaps :: ClientCapabilities
+codeActionSupportCaps = def & L.textDocument ?~ textDocumentCaps
   where
-    textDocumentCaps = def { C._codeAction = Just codeActionCaps }
+    textDocumentCaps = def { _codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True) Nothing Nothing Nothing Nothing
-    literalSupport = CodeActionLiteralSupport def
+    literalSupport = #codeActionKind .==  (#valueSet .== [])
 
 -- ---------------------------------------------------------------------
 -- Environment specification for ignoring tests
@@ -243,8 +247,8 @@ inspectCommand cars s = fromCommand <$> onMatch cars predicate err
 
 waitForDiagnosticsFrom :: TextDocumentIdentifier -> Test.Session [Diagnostic]
 waitForDiagnosticsFrom doc = do
-    diagsNot <- skipManyTill Test.anyMessage (Test.message STextDocumentPublishDiagnostics)
-    let (List diags) = diagsNot ^. L.params . L.diagnostics
+    diagsNot <- skipManyTill Test.anyMessage (Test.message SMethod_TextDocumentPublishDiagnostics)
+    let diags = diagsNot ^. L.params . L.diagnostics
     if doc ^. L.uri /= diagsNot ^. L.params . L.uri
        then waitForDiagnosticsFrom doc
        else return diags
@@ -272,22 +276,22 @@ waitForDiagnosticsFromSourceWithTimeout timeout document source = do
         -- Send a dummy message to provoke a response from the server.
         -- This guarantees that we have at least one message to
         -- process, so message won't block or timeout.
-    testId <- Test.sendRequest (SCustomMethod "test") A.Null
+    testId <- Test.sendRequest (SMethod_CustomMethod (Proxy @"test")) A.Null
     handleMessages testId
   where
     matches :: Diagnostic -> Bool
     matches d = d ^. L.source == Just (T.pack source)
 
-    handleMessages testId = handleDiagnostic testId <|> handleCustomMethodResponse testId <|> ignoreOthers testId
+    handleMessages testId = handleDiagnostic testId <|> handleMethod_CustomMethodResponse testId <|> ignoreOthers testId
     handleDiagnostic testId = do
-        diagsNot <- Test.message STextDocumentPublishDiagnostics
+        diagsNot <- Test.message SMethod_TextDocumentPublishDiagnostics
         let fileUri = diagsNot ^. L.params . L.uri
-            (List diags) = diagsNot ^. L.params . L.diagnostics
+            ( diags) = diagsNot ^. L.params . L.diagnostics
             res = filter matches diags
         if fileUri == document ^. L.uri && not (null res)
             then return res else handleMessages testId
-    handleCustomMethodResponse testId = do
-        _ <- Test.responseForId (SCustomMethod "test") testId
+    handleMethod_CustomMethodResponse testId = do
+        _ <- Test.responseForId (SMethod_CustomMethod (Proxy @"test")) testId
         pure []
 
     ignoreOthers testId = void Test.anyMessage >> handleMessages testId

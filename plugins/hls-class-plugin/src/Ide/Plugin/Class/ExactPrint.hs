@@ -12,7 +12,6 @@ import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Parsers
-import           Language.LSP.Types
 
 #if MIN_VERSION_ghc(9,2,0)
 import           Data.Either.Extra                       (eitherToMaybe)
@@ -22,13 +21,14 @@ import           Control.Monad                           (foldM)
 import qualified Data.Map.Strict                         as Map
 import           Language.Haskell.GHC.ExactPrint.Types   hiding (GhcPs)
 import           Language.Haskell.GHC.ExactPrint.Utils   (rs)
+import           Language.LSP.Protocol.Types             (Range)
 #endif
 
 makeEditText :: Monad m => ParsedModule -> DynFlags -> AddMinimalMethodsParams -> MaybeT m (T.Text, T.Text)
 -- addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located HsModule)
 #if MIN_VERSION_ghc(9,2,0)
 makeEditText pm df AddMinimalMethodsParams{..} = do
-    List mDecls <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
+    mDecls <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
     let ps = makeDeltaAst $ pm_parsed_source pm
         old = T.pack $ exactPrint ps
         (ps', _, _) = runTransform (addMethodDecls ps mDecls range withSig)
@@ -76,7 +76,7 @@ addMethodDecls ps mDecls range withSig
 #else
 
 makeEditText pm df AddMinimalMethodsParams{..} = do
-    List (unzip -> (mAnns, mDecls)) <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
+    (unzip -> (mAnns, mDecls)) <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
     let ps = pm_parsed_source pm
         anns = relativiseApiAnns ps (pm_annotations pm)
         old = T.pack $ exactPrint ps anns

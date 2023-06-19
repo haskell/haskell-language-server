@@ -41,7 +41,7 @@ import           Data.String                   (IsString (..))
 import           Development.IDE               (Range, RuleResult)
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                  (Generic)
-import           Language.LSP.Types            (TextDocumentIdentifier)
+import           Language.LSP.Protocol.Types   (TextDocumentIdentifier)
 import qualified Text.Megaparsec               as P
 
 -- | A thing with a location attached.

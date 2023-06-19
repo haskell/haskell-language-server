@@ -8,11 +8,12 @@ module Main
   ( main
   ) where
 
-import           Data.Foldable              (find, forM_)
-import           Data.Text                  (Text)
-import qualified Data.Text                  as T
-import qualified Ide.Plugin.ExplicitImports as ExplicitImports
-import           System.FilePath            ((<.>), (</>))
+import           Data.Foldable                 (find, forM_)
+import           Data.Text                     (Text)
+import qualified Data.Text                     as T
+import qualified Ide.Plugin.ExplicitImports    as ExplicitImports
+import           Language.LSP.Protocol.Message
+import           System.FilePath               ((<.>), (</>))
 import           Test.Hls
 
 explicitImportsPlugin :: PluginTestDescriptor ExplicitImports.Log
@@ -95,7 +96,7 @@ isExplicitImports _ = False
 executeCmd :: Command -> Session ()
 executeCmd cmd = do
     executeCommand cmd
-    _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
+    _resp <- skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
     -- liftIO $ print _resp
     return ()
 

@@ -10,7 +10,7 @@ import           Control.Monad                  (guard)
 import           Control.Monad.IO.Class         (MonadIO (liftIO))
 import           Control.Monad.Trans.Except     (ExceptT)
 import           Data.Foldable                  (asum)
-import qualified Data.HashMap.Strict            as Map
+import qualified Data.Map                       as Map
 import           Data.Maybe                     (mapMaybe)
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
@@ -28,18 +28,19 @@ import           Ide.Types                      (PluginDescriptor (..),
                                                  PluginMethodHandler,
                                                  defaultPluginDescriptor,
                                                  mkPluginHandler)
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Text.Regex.TDFA                ((=~))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHandler STextDocumentCodeAction (codeActionHandler plId) }
+descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction (codeActionHandler plId) }
 
-codeActionHandler :: PluginId -> PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler plId ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = pluginResponse $ do
+codeActionHandler :: PluginId -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
+codeActionHandler plId ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext diags _ _} = pluginResponse $ do
       nfp <- getNormalizedFilePath uri
       decls <- getDecls plId ideState nfp
       let actions = mapMaybe (generateAction plId uri decls) diags
-      pure $ List actions
+      pure $ InL actions
 
 getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m [LHsDecl GhcPs]
 getDecls (PluginId changeTypeSignatureId) state = handleMaybeM "Could not get Parsed Module"
@@ -146,15 +147,16 @@ stripSignature (T.filter (/= '\n') -> sig) = if T.isInfixOf " => " sig
                                                 else T.strip $ snd $ T.breakOnEnd " :: " sig
 
 changeSigToCodeAction :: PluginId -> Uri -> ChangeSignature -> Command |? CodeAction
-changeSigToCodeAction (PluginId changeTypeSignatureId) uri ChangeSignature{..} = InR CodeAction { _title       = mkChangeSigTitle declName actualType
-                                                               , _kind        = Just (CodeActionUnknown ("quickfix." <> changeTypeSignatureId))
-                                                               , _diagnostics = Just $ List [diagnostic]
-                                                               , _isPreferred = Nothing
-                                                               , _disabled    = Nothing
-                                                               , _edit        = Just $ mkChangeSigEdit uri declSrcSpan (mkNewSignature declName actualType)
-                                                               , _command     = Nothing
-                                                               , _xdata       = Nothing
-                                                               }
+changeSigToCodeAction (PluginId changeTypeSignatureId) uri ChangeSignature{..} =
+    InR CodeAction { _title       = mkChangeSigTitle declName actualType
+                   , _kind        = Just (CodeActionKind_Custom ("quickfix." <> changeTypeSignatureId))
+                   , _diagnostics = Just [diagnostic]
+                   , _isPreferred = Nothing
+                   , _disabled    = Nothing
+                   , _edit        = Just $ mkChangeSigEdit uri declSrcSpan (mkNewSignature declName actualType)
+                   , _command     = Nothing
+                   , _data_       = Nothing
+                   }
 
 mkChangeSigTitle :: Text -> Text -> Text
 mkChangeSigTitle declName actualType = "Change signature for ‘" <> declName <> "’ to: " <> actualType
@@ -162,7 +164,7 @@ mkChangeSigTitle declName actualType = "Change signature for ‘" <> declName <>
 mkChangeSigEdit :: Uri -> RealSrcSpan -> Text -> WorkspaceEdit
 mkChangeSigEdit uri ss replacement =
         let txtEdit = TextEdit (realSrcSpanToRange ss) replacement
-            changes = Just $ Map.singleton uri (List [txtEdit])
+            changes = Just $ Map.singleton uri [txtEdit]
         in WorkspaceEdit changes Nothing Nothing
 
 mkNewSignature :: Text -> Text -> Text

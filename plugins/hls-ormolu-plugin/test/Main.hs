@@ -4,8 +4,8 @@ module Main
   ( main
   ) where
 
-import qualified Ide.Plugin.Ormolu  as Ormolu
-import           Language.LSP.Types
+import qualified Ide.Plugin.Ormolu           as Ormolu
+import           Language.LSP.Protocol.Types
 import           System.FilePath
 import           Test.Hls
 

@@ -42,7 +42,7 @@ import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics
 import           GHC.Serialized                               (Serialized)
-import           Language.LSP.Types                           (Int32,
+import           Language.LSP.Protocol.Types                  (Int32,
                                                                NormalizedFilePath)
 
 data LinkableType = ObjectLinkable | BCOLinkable

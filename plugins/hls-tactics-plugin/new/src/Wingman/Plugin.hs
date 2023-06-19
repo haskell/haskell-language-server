@@ -18,7 +18,7 @@ import           Wingman.StaticPlugin
 import Development.IDE.Types.Logger (Recorder, cmapWithPrio, WithPriority, Pretty (pretty))
 
 data Log
-  = LogWingmanLanguageServer WingmanLanguageServer.Log 
+  = LogWingmanLanguageServer WingmanLanguageServer.Log
   | LogExactPrint E.Log
   deriving Show
 

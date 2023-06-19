@@ -5,13 +5,13 @@ module Ide.PluginUtilsTest
     ( tests
     ) where
 
-import           Data.Char             (isPrint)
-import qualified Data.Set              as Set
-import qualified Data.Text             as T
-import qualified Ide.Plugin.RangeMap   as RangeMap
-import           Ide.PluginUtils       (positionInRange, unescape)
-import           Language.LSP.Types    (Position (..), Range (Range), UInt,
-                                        isSubrangeOf)
+import           Data.Char                   (isPrint)
+import qualified Data.Set                    as Set
+import qualified Data.Text                   as T
+import qualified Ide.Plugin.RangeMap         as RangeMap
+import           Ide.PluginUtils             (positionInRange, unescape)
+import           Language.LSP.Protocol.Types (Position (..), Range (Range),
+                                              UInt, isSubrangeOf)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck

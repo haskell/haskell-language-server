@@ -10,7 +10,7 @@ import           Data.Text               (Text)
 import qualified Data.Text               as T
 import qualified Data.Text.IO            as T
 import qualified Ide.Plugin.Stan         as Stan
-import qualified Language.LSP.Types.Lens as L
+import qualified Language.LSP.Protocol.Lens as L
 import           System.FilePath
 import           Test.Hls
 
@@ -28,7 +28,7 @@ tests =
           liftIO $ do
             length diags @?= 1
             reduceDiag ^. L.range @?= Range (Position 0 0) (Position 3 19)
-            reduceDiag ^. L.severity @?= Just DsHint
+            reduceDiag ^. L.severity @?= Just DiagnosticSeverity_Hint
             let expectedPrefix = " ✲ Name:        "
             assertBool "" $ T.isPrefixOf expectedPrefix (reduceDiag ^. L.message)
             reduceDiag ^. L.source @?= Just "stan"

@@ -44,7 +44,7 @@ import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           GHC
-import           Language.LSP.Types                (isSubrangeOf)
+import           Language.LSP.Protocol.Types       (isSubrangeOf)
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
@@ -57,6 +57,8 @@ diagFromText diagSource sev loc msg = (toNormalizedFilePath' $ fromMaybe noFileP
     , _code     = Nothing
     , _relatedInformation = Nothing
     , _tags     = Nothing
+    , _codeDescription = Nothing
+    , _data_   = Nothing
     }
 
 -- | Produce a GHC-style error from a source span and a message.
@@ -132,13 +134,13 @@ toDSeverity :: GHC.Severity -> Maybe D.DiagnosticSeverity
 toDSeverity SevOutput      = Nothing
 toDSeverity SevInteractive = Nothing
 toDSeverity SevDump        = Nothing
-toDSeverity SevInfo        = Just DsInfo
-toDSeverity SevFatal       = Just DsError
+toDSeverity SevInfo        = Just DiagnosticSeverity_Information
+toDSeverity SevFatal       = Just DiagnosticSeverity_Error
 #else
 toDSeverity SevIgnore      = Nothing
 #endif
-toDSeverity SevWarning     = Just DsWarning
-toDSeverity SevError       = Just DsError
+toDSeverity SevWarning     = Just DiagnosticSeverity_Warning
+toDSeverity SevError       = Just DiagnosticSeverity_Error
 
 
 -- | Produce a bag of GHC-style errors (@ErrorMessages@) from the given
@@ -186,7 +188,7 @@ catchSrcErrors dflags fromWhere ghcM = do
 
 
 diagFromGhcException :: T.Text -> DynFlags -> GhcException -> [FileDiagnostic]
-diagFromGhcException diagSource dflags exc = diagFromString diagSource DsError (noSpan "<Internal>") (showGHCE dflags exc)
+diagFromGhcException diagSource dflags exc = diagFromString diagSource DiagnosticSeverity_Error (noSpan "<Internal>") (showGHCE dflags exc)
 
 showGHCE :: DynFlags -> GhcException -> String
 showGHCE dflags exc = case exc of

@@ -12,7 +12,6 @@ module Ide.Plugin.HaddockComments (descriptor, E.Log) where
 import           Control.Monad                         (join, when)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class             (lift)
-import qualified Data.HashMap.Strict                   as HashMap
 import qualified Data.Map                              as Map
 import qualified Data.Text                             as T
 import           Development.IDE                       hiding (pluginHandlers)
@@ -27,25 +26,26 @@ import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs)
 import           Language.Haskell.GHC.ExactPrint.Utils
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 
 -----------------------------------------------------------------------------
 descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = mkExactprintPluginDescriptor recorder $
   (defaultPluginDescriptor plId)
-    { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+    { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider
     }
 
-codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider ideState _pId (CodeActionParams _ _ (TextDocumentIdentifier uri) range CodeActionContext {_diagnostics = List diags}) =
+codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
+codeActionProvider ideState _pId (CodeActionParams _ _ (TextDocumentIdentifier uri) range CodeActionContext {_diagnostics = diags}) =
   do
-    let noErr = and $ (/= Just DsError) . _severity <$> diags
+    let noErr = and $ (/= Just DiagnosticSeverity_Error) . _severity <$> diags
         nfp = uriToNormalizedFilePath $ toNormalizedUri uri
     (join -> pm) <- liftIO $ runAction "HaddockComments.GetAnnotatedParsedSource" ideState $ use GetAnnotatedParsedSource `traverse` nfp
     let locDecls = hsmodDecls . unLoc . astA <$> pm
         anns = annsA <$> pm
         edits = [gen locDecls anns range | noErr, gen <- genList]
-    return $ Right $ List [InR $ toAction title uri edit | (Just (title, edit)) <- edits]
+    return $ Right $ InL [InR $ toAction title uri edit | (Just (title, edit)) <- edits]
 
 genList :: [Maybe [LHsDecl GhcPs] -> Maybe Anns -> Range -> Maybe (T.Text, TextEdit)]
 genList =
@@ -114,15 +114,15 @@ toAction :: T.Text -> Uri -> TextEdit -> CodeAction
 toAction title uri edit = CodeAction {..}
   where
     _title = title
-    _kind = Just CodeActionQuickFix
+    _kind = Just CodeActionKind_QuickFix
     _diagnostics = Nothing
     _command = Nothing
-    _changes = Just $ HashMap.singleton uri $ List [edit]
+    _changes = Just $ Map.singleton uri [edit]
     _documentChanges = Nothing
     _edit = Just WorkspaceEdit {..}
     _isPreferred = Nothing
     _disabled = Nothing
-    _xdata = Nothing
+    _data_ = Nothing
     _changeAnnotations = Nothing
 
 

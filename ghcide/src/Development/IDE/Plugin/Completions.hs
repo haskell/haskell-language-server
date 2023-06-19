@@ -11,15 +11,15 @@ module Development.IDE.Plugin.Completions
 
 import           Control.Concurrent.Async                 (concurrently)
 import           Control.Concurrent.STM.Stats             (readTVarIO)
+import           Control.Lens                             ((&), (.~))
 import           Control.Monad.IO.Class
-import           Control.Lens                            ((&), (.~))
+import           Data.Aeson
 import qualified Data.HashMap.Strict                      as Map
 import qualified Data.HashSet                             as Set
-import           Data.Aeson
 import           Data.Maybe
 import qualified Data.Text                                as T
-import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Compile
+import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service             hiding (Log, LogShake)
 import           Development.IDE.Core.Shake               hiding (Log)
@@ -27,10 +27,10 @@ import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph
-import           Development.IDE.Spans.Common
-import           Development.IDE.Spans.Documentation
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
+import           Development.IDE.Spans.Common
+import           Development.IDE.Spans.Documentation
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageExports, envVisibleModuleNames),
                                                            hscEnv)
@@ -41,9 +41,10 @@ import           Development.IDE.Types.Logger             (Pretty (pretty),
                                                            WithPriority,
                                                            cmapWithPrio)
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens               as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server                      as LSP
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens         as J
 import qualified Language.LSP.VFS                         as VFS
 import           Numeric.Natural
 import           Text.Fuzzy.Parallel                      (Scored (..))
@@ -64,8 +65,8 @@ ghcideCompletionsPluginPriority = defaultPluginPriority
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions recorder
-  , pluginHandlers = mkPluginHandler STextDocumentCompletion getCompletionsLSP
-                  <> mkPluginHandler SCompletionItemResolve resolveCompletion
+  , pluginHandlers = mkPluginHandler SMethod_TextDocumentCompletion getCompletionsLSP
+                  <> mkPluginHandler SMethod_CompletionItemResolve resolveCompletion
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   , pluginPriority = ghcideCompletionsPluginPriority
   }
@@ -119,8 +120,8 @@ dropListFromImportDecl iDecl = let
     in f <$> iDecl
 
 resolveCompletion :: IdeState -> PluginId -> CompletionItem -> LSP.LspM Config (Either ResponseError CompletionItem)
-resolveCompletion ide _ comp@CompletionItem{_detail,_documentation,_xdata}
-  | Just resolveData <- _xdata
+resolveCompletion ide _ comp@CompletionItem{_detail,_documentation,_data_}
+  | Just resolveData <- _data_
   , Success (CompletionResolveData uri needType (NameDetails mod occ)) <- fromJSON resolveData
   , Just file <- uriToNormalizedFilePath $ toNormalizedUri uri
   = liftIO $ runIdeAction "Completion resolve" (shakeExtras ide) $ do
@@ -137,7 +138,7 @@ resolveCompletion ide _ comp@CompletionItem{_detail,_documentation,_xdata}
         mdkm <- useWithStaleFast GetDocMap file
         let (dm,km) = case mdkm of
               Just (DKMap dm km, _) -> (dm,km)
-              Nothing -> (mempty, mempty)
+              Nothing               -> (mempty, mempty)
         doc <- case lookupNameEnv dm name of
           Just doc -> pure $ spanDocToMarkdown doc
           Nothing -> liftIO $ spanDocToMarkdown <$> getDocumentationTryGhc (hscEnv sess) name
@@ -150,11 +151,11 @@ resolveCompletion ide _ comp@CompletionItem{_detail,_documentation,_xdata}
               Just ty -> Just (":: " <> printOutputable (stripForall ty) <> "\n")
               Nothing -> Nothing
             doc1 = case _documentation of
-              Just (CompletionDocMarkup (MarkupContent MkMarkdown old)) ->
-                CompletionDocMarkup $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator (old:doc)
-              _ -> CompletionDocMarkup $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator doc
-        pure (Right $ comp & J.detail .~ (det1 <> _detail)
-                           & J.documentation .~ Just doc1
+              Just (InR (MarkupContent MarkupKind_Markdown old)) ->
+                InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator (old:doc)
+              _ -> InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator doc
+        pure (Right $ comp & L.detail .~ (det1 <> _detail)
+                           & L.documentation .~ Just doc1
                            )
   where
     stripForall ty = case splitForAllTyCoVars ty of
@@ -166,7 +167,7 @@ getCompletionsLSP
     :: IdeState
     -> PluginId
     -> CompletionParams
-    -> LSP.LspM Config (Either ResponseError (ResponseResult TextDocumentCompletion))
+    -> LSP.LspM Config (Either ResponseError (MessageResult Method_TextDocumentCompletion))
 getCompletionsLSP ide plId
   CompletionParams{_textDocument=TextDocumentIdentifier uri
                   ,_position=position
@@ -213,17 +214,16 @@ getCompletionsLSP ide plId
             let pfix = getCompletionPrefix position cnts
             case (pfix, completionContext) of
               ((PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
-                -> return (InL $ List [])
+                -> return (InL [])
               (_, _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
                     plugins = idePlugins $ shakeExtras ide
                 config <- liftIO $ runAction "" ide $ getCompletionsConfig plId
 
                 allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports uri
-                pure $ InL (List $ orderedCompletions allCompletions)
-              _ -> return (InL $ List [])
-          _ -> return (InL $ List [])
-      _ -> return (InL $ List [])
+                pure $ InL (orderedCompletions allCompletions)
+          _ -> return (InL [])
+      _ -> return (InL [])
 
 getCompletionsConfig :: PluginId -> Action CompletionsConfig
 getCompletionsConfig pId =

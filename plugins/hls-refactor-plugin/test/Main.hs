@@ -33,14 +33,14 @@ import           Development.IDE.Test
 import           Development.IDE.Types.Location
 import           Development.Shake                        (getDirectoryFilesIO)
 import           Ide.Types
-import           Language.LSP.Test
-import           Language.LSP.Types                       hiding
+import qualified Language.LSP.Protocol.Lens               as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types              hiding
                                                           (SemanticTokenAbsolute (length, line),
                                                            SemanticTokenRelative (length),
                                                            SemanticTokensEdit (_start),
                                                            mkRange)
-import           Language.LSP.Types.Capabilities
-import qualified Language.LSP.Types.Lens                  as L
+import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
 import           System.Info.Extra                        (isMac, isWindows)
@@ -87,9 +87,9 @@ tests =
 
 initializeTests = withResource acquire release tests
   where
-    tests :: IO (ResponseMessage Initialize) -> TestTree
+    tests :: IO (TResponseMessage Method_Initialize) -> TestTree
     tests getInitializeResponse = testGroup "initialize response capabilities"
-        [ chk "   code action"             _codeActionProvider  (Just $ InL True)
+        [ chk "   code action"             _codeActionProvider  (Just (InR (CodeActionOptions {_workDoneProgress = Nothing, _codeActionKinds = Nothing, _resolveProvider = Just False})))
         , che "   execute command"         _executeCommandProvider [extendImportCommandId]
         ]
       where
@@ -102,20 +102,20 @@ initializeTests = withResource acquire release tests
           where
               doTest = do
                   ir <- getInitializeResponse
-                  let Just ExecuteCommandOptions {_commands = List commands} = getActual $ innerCaps ir
+                  let Just ExecuteCommandOptions {_commands = commands} = getActual $ innerCaps ir
                   -- Check if expected exists in commands. Note that commands can arrive in different order.
                   mapM_ (\e -> any (\o -> T.isSuffixOf e o) commands @? show (expected, show commands)) expected
 
-    acquire :: IO (ResponseMessage Initialize)
+    acquire :: IO (TResponseMessage Method_Initialize)
     acquire = run initializeResponse
 
 
-    release :: ResponseMessage Initialize -> IO ()
+    release :: TResponseMessage Method_Initialize -> IO ()
     release = const $ pure ()
 
-    innerCaps :: ResponseMessage Initialize -> ServerCapabilities
-    innerCaps (ResponseMessage _ _ (Right (InitializeResult c _))) = c
-    innerCaps (ResponseMessage _ _ (Left _)) = error "Initialization error"
+    innerCaps :: TResponseMessage Method_Initialize -> ServerCapabilities
+    innerCaps (TResponseMessage _ _ (Right (InitializeResult c _))) = c
+    innerCaps (TResponseMessage _ _ (Left _)) = error "Initialization error"
 
 completionTests :: TestTree
 completionTests =
@@ -277,7 +277,7 @@ completionCommandTest name src pos wanted expected = testSession name $ do
             modifiedCode <- skipManyTill anyMessage (getDocumentEdit docId)
             liftIO $ modifiedCode @?= T.unlines expected
           else do
-            expectMessages SWorkspaceApplyEdit 1 $ \edit ->
+            expectMessages SMethod_WorkspaceApplyEdit 1 $ \edit ->
               liftIO $ assertFailure $ "Expected no edit but got: " <> show edit
 
 completionNoCommandTest ::
@@ -1882,7 +1882,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
     auxFiles = ["AVec.hs", "BVec.hs", "CVec.hs", "DVec.hs", "EVec.hs", "FVec.hs"]
     withTarget file locs k = runWithExtraFiles "hiding" $ \dir -> do
         doc <- openDoc file "haskell"
-        void $ expectDiagnostics [(file, [(DsError, loc, "Ambiguous occurrence") | loc <- locs])]
+        void $ expectDiagnostics [(file, [(DiagnosticSeverity_Error, loc, "Ambiguous occurrence") | loc <- locs])]
         actions <- getAllCodeActions doc
         k dir doc actions
     withHideFunction = withTarget ("HideFunction" <.> "hs")
@@ -2336,7 +2336,7 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
   where
     testFor source pos expectedTitle expectedResult = do
       docId <- createDoc "A.hs" "haskell" source
-      expectDiagnostics [ ("A.hs", [(DsWarning, pos, "not used")]) ]
+      expectDiagnostics [ ("A.hs", [(DiagnosticSeverity_Warning, pos, "not used")]) ]
 
       (action, title) <- extractCodeAction docId "Delete" pos
 
@@ -2360,9 +2360,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f = 1"
                ])
 #if MIN_VERSION_ghc(9,4,0)
-    [ (DsWarning, (3, 4), "Defaulting the type variable") ]
+    [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable") ]
 #else
-    [ (DsWarning, (3, 4), "Defaulting the following constraint") ]
+    [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the following constraint") ]
 #endif
     "Add type annotation ‘Integer’ to ‘1’"
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
@@ -2381,9 +2381,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    in x"
                ])
 #if MIN_VERSION_ghc(9,4,0)
-    [ (DsWarning, (4, 12), "Defaulting the type variable") ]
+    [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable") ]
 #else
-    [ (DsWarning, (4, 12), "Defaulting the following constraint") ]
+    [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the following constraint") ]
 #endif
     "Add type annotation ‘Integer’ to ‘3’"
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
@@ -2403,9 +2403,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    in x"
                ])
 #if MIN_VERSION_ghc(9,4,0)
-    [ (DsWarning, (4, 20), "Defaulting the type variable") ]
+    [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable") ]
 #else
-    [ (DsWarning, (4, 20), "Defaulting the following constraint") ]
+    [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the following constraint") ]
 #endif
     "Add type annotation ‘Integer’ to ‘5’"
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
@@ -2426,12 +2426,12 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f = seq \"debug\" traceShow \"debug\""
                ])
 #if MIN_VERSION_ghc(9,4,0)
-    [ (DsWarning, (6, 8), "Defaulting the type variable")
-    , (DsWarning, (6, 16), "Defaulting the type variable")
+    [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable")
+    , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable")
     ]
 #else
-    [ (DsWarning, (6, 8), "Defaulting the following constraint")
-    , (DsWarning, (6, 16), "Defaulting the following constraint")
+    [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint")
+    , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint")
     ]
 #endif
     ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
@@ -2454,9 +2454,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f a = traceShow \"debug\" a"
                ])
 #if MIN_VERSION_ghc(9,4,0)
-    [ (DsWarning, (6, 6), "Defaulting the type variable") ]
+    [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable") ]
 #else
-    [ (DsWarning, (6, 6), "Defaulting the following constraint") ]
+    [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint") ]
 #endif
     ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
@@ -2478,9 +2478,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
                ])
 #if MIN_VERSION_ghc(9,4,0)
-    [ (DsWarning, (6, 54), "Defaulting the type variable") ]
+    [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable") ]
 #else
-    [ (DsWarning, (6, 54), "Defaulting the following constraint") ]
+    [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint") ]
 #endif
     ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"

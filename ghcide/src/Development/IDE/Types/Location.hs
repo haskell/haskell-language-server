@@ -39,9 +39,9 @@ import           GHC.Types.SrcLoc             as GHC
 import           FastString
 import           SrcLoc                       as GHC
 #endif
-import           Language.LSP.Types           (Location (..), Position (..),
+import           Language.LSP.Protocol.Types  (Location (..), Position (..),
                                                Range (..))
-import qualified Language.LSP.Types           as LSP
+import qualified Language.LSP.Protocol.Types  as LSP
 import           Text.ParserCombinators.ReadP as ReadP
 
 toNormalizedFilePath' :: FilePath -> LSP.NormalizedFilePath

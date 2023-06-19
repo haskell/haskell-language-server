@@ -17,7 +17,7 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import           Development.IDE.GHC.Compat
 import           Ide.Types hiding (Config)
-import           Language.LSP.Types hiding (SemanticTokenAbsolute (..), SemanticTokenRelative (..))
+import           Language.LSP.Protocol.Types
 import           Prelude hiding (span)
 import           Wingman.AbstractLSP.Types
 import           Wingman.Auto
@@ -86,7 +86,7 @@ tacticPreferred RunMetaprogram         = True
 
 mkTacticKind :: TacticCommand -> CodeActionKind
 mkTacticKind =
-  CodeActionUnknown . mappend "refactor.wingman." . tacticKind
+  CodeActionKind_Custom . mappend "refactor.wingman." . tacticKind
 
 
 ------------------------------------------------------------------------------

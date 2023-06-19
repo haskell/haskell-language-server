@@ -14,7 +14,9 @@ import           Development.IDE.Types.Logger   (Priority (Debug),
 import           Ide.Plugin.CodeRange           (Log, descriptor)
 import qualified Ide.Plugin.CodeRange.RulesTest
 import qualified Ide.Plugin.CodeRangeTest
-import           Language.LSP.Types.Lens
+import           Language.LSP.Protocol.Lens
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           System.FilePath                ((<.>), (</>))
 import           Test.Hls
 
@@ -41,10 +43,10 @@ selectionRangeGoldenTest :: TestName -> [(UInt, UInt)] -> TestTree
 selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
     res <- runSessionWithServer plugin testDataDir $ do
         doc <- openDoc (testName <.> "hs") "haskell"
-        resp <- request STextDocumentSelectionRange $ SelectionRangeParams Nothing Nothing doc
-            (List $ fmap (uncurry Position . (\(x, y) -> (x-1, y-1))) positions)
+        resp <- request SMethod_TextDocumentSelectionRange $ SelectionRangeParams Nothing Nothing doc
+            $ fmap (uncurry Position . (\(x, y) -> (x-1, y-1))) positions
         let res = resp ^. result
-        pure $ fmap showSelectionRangesForTest res
+        pure $ fmap (showSelectionRangesForTest . absorbNull) res
     case res of
         Left err     -> assertFailure (show err)
         Right golden -> pure golden
@@ -52,8 +54,8 @@ selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDi
     testDataDir :: FilePath
     testDataDir = "test" </> "testdata" </> "selection-range"
 
-    showSelectionRangesForTest :: List SelectionRange -> ByteString
-    showSelectionRangesForTest (List selectionRanges) = LBSChar8.intercalate "\n" $ fmap showSelectionRangeForTest selectionRanges
+    showSelectionRangesForTest :: [SelectionRange] -> ByteString
+    showSelectionRangesForTest selectionRanges = LBSChar8.intercalate "\n" $ fmap showSelectionRangeForTest selectionRanges
 
     showSelectionRangeForTest :: SelectionRange -> ByteString
     showSelectionRangeForTest selectionRange = go True (Just selectionRange)
@@ -70,9 +72,9 @@ foldingRangeGoldenTest :: TestName -> TestTree
 foldingRangeGoldenTest testName = goldenGitDiff  testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
     res <- runSessionWithServer plugin testDataDir $ do
         doc <- openDoc (testName <.> "hs") "haskell"
-        resp <- request STextDocumentFoldingRange $ FoldingRangeParams Nothing Nothing doc
+        resp <- request SMethod_TextDocumentFoldingRange $ FoldingRangeParams Nothing Nothing doc
         let res = resp ^. result
-        pure $ fmap showFoldingRangesForTest res
+        pure $ fmap (showFoldingRangesForTest . absorbNull) res
 
     case res of
         Left err     -> assertFailure (show err)
@@ -82,11 +84,11 @@ foldingRangeGoldenTest testName = goldenGitDiff  testName (testDataDir </> testN
         testDataDir :: FilePath
         testDataDir = "test" </> "testdata" </> "folding-range"
 
-        showFoldingRangesForTest :: List FoldingRange -> ByteString
-        showFoldingRangesForTest (List foldingRanges) = LBSChar8.intercalate "\n" $ fmap showFoldingRangeForTest foldingRanges
+        showFoldingRangesForTest :: [FoldingRange] -> ByteString
+        showFoldingRangesForTest foldingRanges = (LBSChar8.intercalate "\n" $ fmap showFoldingRangeForTest foldingRanges) `LBSChar8.snoc` '\n'
 
         showFoldingRangeForTest :: FoldingRange -> ByteString
-        showFoldingRangeForTest f@(FoldingRange sl (Just sc) el (Just ec) (Just frk)) = "((" <> showLBS sl <>", "<> showLBS sc <> ")" <> " : " <> "(" <> showLBS el <>", "<> showLBS ec<> ")) : " <> showFRK frk
+        showFoldingRangeForTest f@(FoldingRange sl (Just sc) el (Just ec) (Just frk) _) = "((" <> showLBS sl <>", "<> showLBS sc <> ")" <> " : " <> "(" <> showLBS el <>", "<> showLBS ec<> ")) : " <> showFRK frk
 
         showLBS = fromString . show
         showFRK = fromString . show

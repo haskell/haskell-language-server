@@ -1,15 +1,16 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
-
 module Main
   ( main
   ) where
 
 import           Control.Monad           (void)
 import           Data.List               (find)
+import           Data.Row
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import qualified Data.Text.IO            as T
@@ -76,7 +77,7 @@ goldenTest fp tc line col =
     case find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions of
       Just (InR CodeAction {_command = Just c}) -> do
         executeCommand c
-        void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+        void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
       _ -> liftIO $ assertFailure "No CodeAction detected"
 
 goldenTestWithEdit :: FilePath -> FilePath -> ExpandStyle -> Int -> Int -> TestTree
@@ -94,7 +95,9 @@ goldenTestWithEdit fp expect tc line col =
      waitForAllProgressDone
      alt <- liftIO $ T.readFile (fp <.> "error.hs")
      void $ applyEdit doc $ TextEdit theRange alt
-     changeDoc doc [TextDocumentContentChangeEvent (Just theRange) Nothing alt]
+     changeDoc doc [TextDocumentContentChangeEvent $ InL $ #range .== theRange
+                                                        .+ #rangeLength .== Nothing
+                                                        .+ #text .== alt]
      void waitForDiagnostics
      -- wait for the entire build to finish
      void waitForBuildQueue
@@ -102,7 +105,7 @@ goldenTestWithEdit fp expect tc line col =
      case find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions of
        Just (InR CodeAction {_command = Just c}) -> do
          executeCommand c
-         void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+         void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
        _ -> liftIO $ assertFailure "No CodeAction detected"
 
 testDataDir :: FilePath
