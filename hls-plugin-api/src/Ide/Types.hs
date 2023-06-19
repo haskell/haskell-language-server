@@ -440,10 +440,6 @@ instance PluginMethod Request Method_TextDocumentCodeLens where
     where
       uri = msgParams ^. L.textDocument . L.uri
 
-instance PluginMethod Request Method_CodeLensResolve where
-  pluginEnabled _ msgParams pluginDesc config = pluginEnabledConfig plcCodeLensOn (configForPlugin config pluginDesc)
-
-
 instance PluginMethod Request Method_TextDocumentRename where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcRenameOn (configForPlugin config pluginDesc)
@@ -543,8 +539,9 @@ instance PluginRequestMethod Method_TextDocumentCodeAction where
         | otherwise = False
 
 instance PluginRequestMethod Method_CodeActionResolve where
-    -- TODO: Make a more serious combineResponses function
-      combineResponses _ _ _ _ (x :| _) = x
+    -- CodeAction resolve is currently only used to changed the edit field, thus
+    -- that's the only field we are combining.
+    combineResponses _ _ _ codeAction (toList -> codeActions) = codeAction & L.edit .~ mconcat ((^. L.edit) <$> codeActions)
 
 instance PluginRequestMethod Method_TextDocumentDefinition where
   combineResponses _ _ _ _ (x :| _) = x
@@ -562,10 +559,6 @@ instance PluginRequestMethod Method_WorkspaceSymbol where
     combineResponses _ _ _ _ xs = InL $ mconcat $ takeLefts $ toList xs
 
 instance PluginRequestMethod Method_TextDocumentCodeLens where
-
-instance PluginRequestMethod Method_CodeLensResolve where
-    -- TODO: Make a more serious combineResponses function
-      combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentRename where
 
