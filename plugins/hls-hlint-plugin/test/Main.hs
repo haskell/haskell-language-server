@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeOperators     #-}
@@ -6,20 +7,21 @@ module Main
   ( main
   ) where
 
-import           Control.Lens            ((^.))
-import           Control.Monad           (when)
-import           Data.Aeson              (Value (..), object, toJSON, (.=))
-import           Data.Functor            (void)
-import           Data.List               (find)
-import qualified Data.Map                as Map
-import           Data.Maybe              (fromJust, isJust)
-import qualified Data.Text               as T
-import           Ide.Plugin.Config       (Config (..), PluginConfig (..))
-import qualified Ide.Plugin.Config       as Plugin
-import qualified Ide.Plugin.Hlint        as HLint
-import           Ide.Types               (PluginId)
-import qualified Language.LSP.Types.Lens as L
-import           System.FilePath         ((</>))
+import           Control.Lens               ((^.))
+import           Control.Monad              (when)
+import           Data.Aeson                 (Value (..), object, toJSON, (.=))
+import           Data.Functor               (void)
+import           Data.List                  (find)
+import qualified Data.Map                   as Map
+import           Data.Maybe                 (fromJust, isJust)
+import           Data.Row                   ((.+), (.==))
+import qualified Data.Text                  as T
+import           Ide.Plugin.Config          (Config (..), PluginConfig (..))
+import qualified Ide.Plugin.Config          as Plugin
+import qualified Ide.Plugin.Hlint           as HLint
+import           Ide.Types                  (PluginId)
+import qualified Language.LSP.Protocol.Lens as L
+import           System.FilePath            ((</>))
 import           Test.Hls
 
 main :: IO ()
@@ -77,7 +79,7 @@ suggestionsTests =
         liftIO $ do
             length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
             reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
-            reduceDiag ^. L.severity @?= Just DsInfo
+            reduceDiag ^. L.severity @?= Just DiagnosticSeverity_Information
             reduceDiag ^. L.code @?= Just (InR "refact:Eta reduce")
             reduceDiag ^. L.source @?= Just "hlint"
 
@@ -123,15 +125,16 @@ suggestionsTests =
         doc <- openDoc "Base.hs" "haskell"
         testHlintDiagnostics doc
 
-        let change = TextDocumentContentChangeEvent
-                        (Just (Range (Position 1 8) (Position 1 12)))
-                         Nothing "x"
+        let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 1 8) (Position 1 12)
+                                                         .+ #rangeLength .== Nothing
+                                                         .+ #text .== "x"
         changeDoc doc [change]
         expectNoMoreDiagnostics 3 doc "hlint"
 
-        let change' = TextDocumentContentChangeEvent
-                        (Just (Range (Position 1 8) (Position 1 12)))
-                         Nothing "id x"
+        let change' = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 1 8) (Position 1 12)
+                                                          .+ #rangeLength .== Nothing
+                                                          .+ #text .== "id x"
+
         changeDoc doc [change']
         testHlintDiagnostics doc
 
@@ -323,7 +326,7 @@ configTests = testGroup "hlint plugin config" [
         liftIO $ do
             length diags' @?= 1
             d ^. L.range @?= Range (Position 1 10) (Position 1 21)
-            d ^. L.severity @?= Just DsInfo
+            d ^. L.severity @?= Just DiagnosticSeverity_Information
     ]
 
 testDir :: FilePath

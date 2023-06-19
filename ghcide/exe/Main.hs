@@ -41,8 +41,8 @@ import           Ide.PluginUtils                          (pluginDescToIdePlugin
 import           Ide.Types                                (PluginDescriptor (pluginNotificationHandlers),
                                                            defaultPluginDescriptor,
                                                            mkPluginNotificationHandler)
+import           Language.LSP.Protocol.Message            as LSP
 import           Language.LSP.Server                      as LSP
-import           Language.LSP.Types                       as LSP
 import           Paths_ghcide                             (version)
 import qualified System.Directory.Extra                   as IO
 import           System.Environment                       (getExecutablePath)
@@ -101,7 +101,7 @@ main = withTelemetryLogger $ \telemetryLogger -> do
     -- This plugin just installs a handler for the `initialized` notification, which then
     -- picks up the LSP environment and feeds it to our recorders
     let lspRecorderPlugin = (defaultPluginDescriptor "LSPRecorderCallback")
-          { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SInitialized $ \_ _ _ _ -> do
+          { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SMethod_Initialized $ \_ _ _ _ -> do
               env <- LSP.getLspEnv
               liftIO $ (cb1 <> cb2) env
           }

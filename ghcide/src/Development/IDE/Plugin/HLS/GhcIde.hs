@@ -15,8 +15,9 @@ import           Development.IDE.LSP.Outline
 import qualified Development.IDE.Plugin.Completions  as Completions
 import qualified Development.IDE.Plugin.TypeLenses   as TypeLenses
 import           Ide.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                 (LspM)
-import           Language.LSP.Types
 import           Text.Regex.TDFA.Text                ()
 
 data Log
@@ -43,29 +44,29 @@ descriptors recorder =
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler STextDocumentHover hover'
-                  <> mkPluginHandler STextDocumentDocumentSymbol symbolsProvider
-                  <> mkPluginHandler STextDocumentDefinition (\ide _ DefinitionParams{..} ->
+  { pluginHandlers = mkPluginHandler SMethod_TextDocumentHover hover'
+                  <> mkPluginHandler SMethod_TextDocumentDocumentSymbol symbolsProvider
+                  <> mkPluginHandler SMethod_TextDocumentDefinition (\ide _ DefinitionParams{..} ->
                       gotoDefinition ide TextDocumentPositionParams{..})
-                  <> mkPluginHandler STextDocumentTypeDefinition (\ide _ TypeDefinitionParams{..} ->
+                  <> mkPluginHandler SMethod_TextDocumentTypeDefinition (\ide _ TypeDefinitionParams{..} ->
                       gotoTypeDefinition ide TextDocumentPositionParams{..})
-                  <> mkPluginHandler STextDocumentDocumentHighlight (\ide _ DocumentHighlightParams{..} ->
+                  <> mkPluginHandler SMethod_TextDocumentDocumentHighlight (\ide _ DocumentHighlightParams{..} ->
                       documentHighlight ide TextDocumentPositionParams{..})
-                  <> mkPluginHandler STextDocumentReferences (\ide _ params -> references ide params)
-                  <> mkPluginHandler SWorkspaceSymbol (\ide _ params -> wsSymbols ide params),
+                  <> mkPluginHandler SMethod_TextDocumentReferences (\ide _ params -> references ide params)
+                  <> mkPluginHandler SMethod_WorkspaceSymbol (\ide _ params -> fmap InL <$> wsSymbols ide params),
 
     pluginConfigDescriptor = defaultConfigDescriptor
   }
 
 -- ---------------------------------------------------------------------
 
-hover' :: IdeState -> PluginId -> HoverParams  -> LspM c (Either ResponseError (Maybe Hover))
+hover' :: IdeState -> PluginId -> HoverParams  -> LspM c (Either ResponseError (Hover |? Null))
 hover' ideState _ HoverParams{..} = do
     liftIO $ logDebug (ideLogger ideState) "GhcIde.hover entered (ideLogger)" -- AZ
     hover ideState TextDocumentPositionParams{..}
 
 -- ---------------------------------------------------------------------
-symbolsProvider :: IdeState -> PluginId -> DocumentSymbolParams -> LspM c (Either ResponseError (List DocumentSymbol |? List SymbolInformation))
+symbolsProvider :: IdeState -> PluginId -> DocumentSymbolParams -> LspM c (Either ResponseError ([SymbolInformation] |? ([DocumentSymbol] |? Null)))
 symbolsProvider ide _ params = moduleOutline ide params
 
 -- ---------------------------------------------------------------------

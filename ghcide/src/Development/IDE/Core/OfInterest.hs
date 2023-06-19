@@ -24,6 +24,7 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.HashMap.Strict                      (HashMap)
 import qualified Data.HashMap.Strict                      as HashMap
+import           Data.Proxy
 import qualified Data.Text                                as T
 import           Development.IDE.Graph
 
@@ -45,8 +46,9 @@ import           Development.IDE.Types.Logger             (Pretty (pretty),
                                                            cmapWithPrio,
                                                            logDebug)
 import           Development.IDE.Types.Options            (IdeTesting (..))
+import           GHC.TypeLits                             (KnownSymbol)
+import qualified Language.LSP.Protocol.Message            as LSP
 import qualified Language.LSP.Server                      as LSP
-import qualified Language.LSP.Types                       as LSP
 
 data Log = LogShake Shake.Log
   deriving Show
@@ -130,12 +132,13 @@ kick :: Action ()
 kick = do
     files <- HashMap.keys <$> getFilesOfInterestUntracked
     ShakeExtras{exportsMap, ideTesting = IdeTesting testing, lspEnv, progress} <- getShakeExtras
-    let signal msg = when testing $ liftIO $
+    let signal :: KnownSymbol s => Proxy s -> Action ()
+        signal msg = when testing $ liftIO $
             mRunLspT lspEnv $
-                LSP.sendNotification (LSP.SCustomMethod msg) $
+                LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
                 toJSON $ map fromNormalizedFilePath files
 
-    signal "kick/start"
+    signal (Proxy @"kick/start")
     liftIO $ progressUpdate progress KickStarted
 
     -- Update the exports map
@@ -155,4 +158,4 @@ kick = do
         void garbageCollectDirtyKeys
         liftIO $ writeVar var False
 
-    signal "kick/done"
+    signal (Proxy @"kick/done")

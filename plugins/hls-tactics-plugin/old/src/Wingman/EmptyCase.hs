@@ -27,8 +27,8 @@ import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (getLocalScope)
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens as LSP
+import           Language.LSP.Protocol.Lens as L
+import           Language.LSP.Protocol.Types
 import           Prelude hiding (span)
 import           Wingman.AbstractLSP.Types
 import           Wingman.CodeGen (destructionFor)
@@ -52,7 +52,7 @@ emptyCaseInteraction = Interaction $
   Continuation @EmptyCaseT @EmptyCaseT @WorkspaceEdit EmptyCaseT
     (SynthesizeCodeLens $ \LspEnv{..} _ -> do
       let FileContext{..} = le_fileContext
-      nfp <- getNfp (fc_verTxtDocId ^. LSP.uri)
+      nfp <- getNfp (fc_verTxtDocId ^. L.uri)
 
       let stale a = runStaleIde "codeLensProvider" le_ideState nfp a
 
@@ -78,7 +78,7 @@ emptyCaseInteraction = Interaction $
           ( range
           , Metadata
               (mkEmptyCaseLensDesc ty)
-              (CodeActionUnknown "refactor.wingman.completeEmptyCase")
+              (CodeActionKind_Custom "refactor.wingman.completeEmptyCase")
               False
           , edits
           )

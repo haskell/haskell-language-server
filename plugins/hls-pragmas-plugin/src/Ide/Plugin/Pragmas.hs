@@ -19,8 +19,8 @@ module Ide.Plugin.Pragmas
 
 import           Control.Lens                       hiding (List)
 import           Control.Monad.IO.Class             (MonadIO (liftIO))
-import qualified Data.HashMap.Strict                as H
 import           Data.List.Extra                    (nubOrdOn)
+import qualified Data.Map                           as M
 import           Data.Maybe                         (catMaybes)
 import qualified Data.Text                          as T
 import           Development.IDE
@@ -28,9 +28,10 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.Plugin.Completions (ghcideCompletionsPluginPriority)
 import qualified Development.IDE.Spans.Pragmas      as Pragmas
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens         as L
+import qualified Language.LSP.Protocol.Message      as LSP
+import qualified Language.LSP.Protocol.Types        as LSP
 import qualified Language.LSP.Server                as LSP
-import qualified Language.LSP.Types                 as J
-import qualified Language.LSP.Types.Lens            as J
 import qualified Language.LSP.VFS                   as VFS
 import qualified Text.Fuzzy                         as Fuzzy
 
@@ -38,19 +39,19 @@ import qualified Text.Fuzzy                         as Fuzzy
 
 suggestPragmaDescriptor :: PluginId -> PluginDescriptor IdeState
 suggestPragmaDescriptor plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler J.STextDocumentCodeAction suggestPragmaProvider
+  { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction suggestPragmaProvider
   , pluginPriority = defaultPluginPriority + 1000
   }
 
 completionDescriptor :: PluginId -> PluginDescriptor IdeState
 completionDescriptor plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler J.STextDocumentCompletion completion
+  { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCompletion completion
   , pluginPriority = ghcideCompletionsPluginPriority + 1
   }
 
 suggestDisableWarningDescriptor :: PluginId -> PluginDescriptor IdeState
 suggestDisableWarningDescriptor plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler J.STextDocumentCodeAction suggestDisableWarningProvider
+  { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction suggestDisableWarningProvider
     -- #3636 Suggestions to disable warnings should appear last.
   , pluginPriority = 0
   }
@@ -62,16 +63,16 @@ type PragmaEdit = (T.Text, Pragma)
 data Pragma = LangExt T.Text | OptGHC T.Text
   deriving (Show, Eq, Ord)
 
-suggestPragmaProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
+suggestPragmaProvider :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 suggestPragmaProvider = mkCodeActionProvider suggest
 
-suggestDisableWarningProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
+suggestDisableWarningProvider :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 suggestDisableWarningProvider = mkCodeActionProvider $ const suggestDisableWarning
 
-mkCodeActionProvider :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'J.TextDocumentCodeAction
-mkCodeActionProvider mkSuggest state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly))
-  | let J.TextDocumentIdentifier{ _uri = uri } = docId
-  , Just normalizedFilePath <- J.uriToNormalizedFilePath $ toNormalizedUri uri = do
+mkCodeActionProvider :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+mkCodeActionProvider mkSuggest state _plId (LSP.CodeActionParams _ _ docId _ (LSP.CodeActionContext diags _monly _))
+  | let LSP.TextDocumentIdentifier{ _uri = uri } = docId
+  , Just normalizedFilePath <- LSP.uriToNormalizedFilePath $ toNormalizedUri uri = do
       -- ghc session to get some dynflags even if module isn't parsed
       ghcSession <- liftIO $ runAction "Pragmas.GhcSession" state $ useWithStale GhcSession normalizedFilePath
       (_, fileContents) <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
@@ -83,17 +84,17 @@ mkCodeActionProvider mkSuggest state _plId (J.CodeActionParams _ _ docId _ (J.Co
           let nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
               pedits = (nubOrdOn snd . concat $ mkSuggest parsedModuleDynFlags <$> diags)
           in
-            pure $ Right $ List $ pragmaEditToAction uri nextPragmaInfo <$> pedits
-        Nothing -> pure $ Right $ List []
-  | otherwise = pure $ Right $ List []
+            pure $ Right $ LSP.InL $ pragmaEditToAction uri nextPragmaInfo <$> pedits
+        Nothing -> pure $ Right $ LSP.InL []
+  | otherwise = pure $ Right $ LSP.InL []
 
 
 -- | Add a Pragma to the given URI at the top of the file.
 -- It is assumed that the pragma name is a valid pragma,
 -- thus, not validated.
-pragmaEditToAction :: Uri -> Pragmas.NextPragmaInfo -> PragmaEdit -> (J.Command J.|? J.CodeAction)
+pragmaEditToAction :: Uri -> Pragmas.NextPragmaInfo -> PragmaEdit -> (LSP.Command LSP.|? LSP.CodeAction)
 pragmaEditToAction uri Pragmas.NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } (title, p) =
-  J.InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing Nothing
+  LSP.InR $ LSP.CodeAction title (Just LSP.CodeActionKind_QuickFix) (Just []) Nothing Nothing (Just edit) Nothing Nothing
   where
     render (OptGHC x)  = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
     render (LangExt x) = "{-# LANGUAGE " <> x <> " #-}\n"
@@ -103,13 +104,13 @@ pragmaEditToAction uri Pragmas.NextPragmaInfo{ nextPragmaLine, lineSplitTextEdit
     -- edits in reverse order than lsp (tried in both coc.nvim and vscode)
     textEdits =
       if | Just (Pragmas.LineSplitTextEdits insertTextEdit deleteTextEdit) <- lineSplitTextEdits
-         , let J.TextEdit{ _range, _newText } = insertTextEdit ->
-             [J.TextEdit _range (render p <> _newText), deleteTextEdit]
-         | otherwise -> [J.TextEdit pragmaInsertRange (render p)]
+         , let LSP.TextEdit{ _range, _newText } = insertTextEdit ->
+             [LSP.TextEdit _range (render p <> _newText), deleteTextEdit]
+         | otherwise -> [LSP.TextEdit pragmaInsertRange (render p)]
 
     edit =
-      J.WorkspaceEdit
-        (Just $ H.singleton uri (J.List textEdits))
+      LSP.WorkspaceEdit
+        (Just $ M.singleton uri textEdits)
         Nothing
         Nothing
 
@@ -121,7 +122,7 @@ suggest dflags diag =
 
 suggestDisableWarning :: Diagnostic -> [PragmaEdit]
 suggestDisableWarning Diagnostic {_code}
-  | Just (J.InR (T.stripPrefix "-W" -> Just w)) <- _code
+  | Just (LSP.InR (T.stripPrefix "-W" -> Just w)) <- _code
   , w `notElem` warningBlacklist =
     pure ("Disable \"" <> w <> "\" warnings", OptGHC w)
   | otherwise = []
@@ -194,21 +195,21 @@ allPragmas =
 flags :: [T.Text]
 flags = map (T.pack . stripLeading '-') $ flagsForCompletion False
 
-completion :: PluginMethodHandler IdeState 'J.TextDocumentCompletion
+completion :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCompletion
 completion _ide _ complParams = do
-    let (J.TextDocumentIdentifier uri) = complParams ^. J.textDocument
-        position = complParams ^. J.position
+    let (LSP.TextDocumentIdentifier uri) = complParams ^. L.textDocument
+        position = complParams ^. L.position
     contents <- LSP.getVirtualFile $ toNormalizedUri uri
-    fmap (Right . J.InL) $ case (contents, uriToFilePath' uri) of
+    fmap (Right . LSP.InL) $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
-            J.List . result <$> VFS.getCompletionPrefix position cnts
+            result <$> VFS.getCompletionPrefix position cnts
             where
                 result (Just pfix)
                     | "{-# language" `T.isPrefixOf` line
                     = map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
                     | "{-# options_ghc" `T.isPrefixOf` line
-                    = map buildCompletion
+                    =  map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
                     | "{-#" `T.isPrefixOf` line
                     = [ mkPragmaCompl (a <> suffix) b c
@@ -250,7 +251,8 @@ completion _ide _ complParams = do
                             | "}"    `T.isSuffixOf` line = " #-"
                             | otherwise                 = " #-}"
                 result Nothing = []
-        _ -> return $ J.List []
+        _ -> return $ []
+
 -----------------------------------------------------------------------
 
 -- | Pragma where exist
@@ -286,11 +288,11 @@ validPragmas =
   , ("INCOHERENT"                     , "INCOHERENT"       , "{-# INCOHERENT #-}"       , CanInline)
   ]
 
-mkPragmaCompl :: T.Text -> T.Text -> T.Text -> J.CompletionItem
+mkPragmaCompl :: T.Text -> T.Text -> T.Text -> LSP.CompletionItem
 mkPragmaCompl insertText label detail =
-  J.CompletionItem label (Just J.CiKeyword) Nothing (Just detail)
-    Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just J.Snippet)
-    Nothing Nothing Nothing Nothing Nothing Nothing
+  LSP.CompletionItem label Nothing (Just LSP.CompletionItemKind_Keyword) Nothing (Just detail)
+    Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just LSP.InsertTextFormat_Snippet)
+    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
 
 stripLeading :: Char -> String -> String
@@ -300,8 +302,11 @@ stripLeading c (s:ss)
   | otherwise = s:ss
 
 
-buildCompletion :: T.Text -> J.CompletionItem
+buildCompletion :: T.Text -> LSP.CompletionItem
 buildCompletion label =
-  J.CompletionItem label (Just J.CiKeyword) Nothing Nothing
+  LSP.CompletionItem label Nothing (Just LSP.CompletionItemKind_Keyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+
+
+

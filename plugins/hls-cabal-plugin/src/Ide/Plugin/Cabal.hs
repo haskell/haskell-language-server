@@ -33,9 +33,10 @@ import qualified Ide.Plugin.Cabal.LicenseSuggest as LicenseSuggest
 import qualified Ide.Plugin.Cabal.Parse          as Parse
 import           Ide.Plugin.Config               (Config)
 import           Ide.Types
+import qualified Language.LSP.Protocol.Message   as LSP
+import           Language.LSP.Protocol.Types
+import qualified Language.LSP.Protocol.Types     as LSP
 import           Language.LSP.Server             (LspM)
-import           Language.LSP.Types
-import qualified Language.LSP.Types              as LSP
 import qualified Language.LSP.VFS                as VFS
 
 data Log
@@ -68,30 +69,30 @@ instance Pretty Log where
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultCabalPluginDescriptor plId)
   { pluginRules = cabalRules recorder
-  , pluginHandlers = mkPluginHandler STextDocumentCodeAction licenseSuggestCodeAction
+  , pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction licenseSuggestCodeAction
   , pluginNotificationHandlers = mconcat
-  [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $
+  [ mkPluginNotificationHandler LSP.SMethod_TextDocumentDidOpen $
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       whenUriFile _uri $ \file -> do
         log' Debug $ LogDocOpened _uri
         addFileOfInterest recorder ide file Modified{firstOpen=True}
         restartCabalShakeSession (shakeExtras ide) vfs file "(opened)"
 
-  , mkPluginNotificationHandler LSP.STextDocumentDidChange $
+  , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
       \ide vfs _ (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> liftIO $ do
       whenUriFile _uri $ \file -> do
         log' Debug $ LogDocModified _uri
         addFileOfInterest recorder ide file Modified{firstOpen=False}
         restartCabalShakeSession (shakeExtras ide) vfs file "(changed)"
 
-  , mkPluginNotificationHandler LSP.STextDocumentDidSave $
+  , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
       \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
       whenUriFile _uri $ \file -> do
         log' Debug $ LogDocSaved _uri
         addFileOfInterest recorder ide file OnDisk
         restartCabalShakeSession (shakeExtras ide) vfs file "(saved)"
 
-  , mkPluginNotificationHandler LSP.STextDocumentDidClose $
+  , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
       \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
       whenUriFile _uri $ \file -> do
         log' Debug $ LogDocClosed _uri
@@ -181,9 +182,9 @@ licenseSuggestCodeAction
   :: IdeState
   -> PluginId
   -> CodeActionParams
-  -> LspM Config (Either ResponseError (ResponseResult 'TextDocumentCodeAction))
-licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List diags}) =
-  pure $ Right $ List $ diags >>= (fmap InR . (LicenseSuggest.licenseErrorAction uri))
+  -> LspM Config (Either LSP.ResponseError (LSP.MessageResult 'LSP.Method_TextDocumentCodeAction))
+licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=diags}) =
+  pure $ Right $ InL $ diags >>= (fmap InR . LicenseSuggest.licenseErrorAction uri)
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable

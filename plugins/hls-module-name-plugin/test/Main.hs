@@ -21,22 +21,22 @@ tests =
   [ goldenWithModuleName "Add module header to empty module" "TEmptyModule" $ \doc -> do
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
-      void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+      void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
   , goldenWithModuleName "Fix wrong module name" "TWrongModuleName" $ \doc -> do
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
-      void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+      void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
   , goldenWithModuleName "Must infer module name as Main, if the file name starts with a lowercase" "mainlike" $ \doc -> do
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
-      void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+      void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
   , goldenWithModuleName "Fix wrong module name in nested directory" "subdir/TWrongModuleName" $ \doc -> do
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
-      void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+      void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
   , testCase "Should not show code lens if the module name is correct" $
       runSessionWithServer moduleNamePlugin testDataDir $ do
         doc <- openDoc "CorrectName.hs" "haskell"
@@ -47,7 +47,7 @@ tests =
   , goldenWithModuleName "Fix#3047" "canonicalize/Lib/A" $ \doc -> do
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
-      void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+      void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
   , testCase "Keep stale lens even if parse failed" $ do
       runSessionWithServer moduleNamePlugin testDataDir $ do
         doc <- openDoc "Stale.hs" "haskell"

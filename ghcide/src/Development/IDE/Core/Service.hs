@@ -31,8 +31,8 @@ import           Development.IDE.Types.Logger     as Logger (Logger,
                                                              cmapWithPrio)
 import           Development.IDE.Types.Options    (IdeOptions (..))
 import           Ide.Plugin.Config
+import qualified Language.LSP.Protocol.Types      as LSP
 import qualified Language.LSP.Server              as LSP
-import qualified Language.LSP.Types               as LSP
 
 import           Control.Monad
 import qualified Development.IDE.Core.FileExists  as FileExists

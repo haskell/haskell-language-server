@@ -33,14 +33,11 @@ import           Data.Map.Strict                          (Map)
 import qualified Data.Map.Strict                          as Map
 import qualified Data.Text                                as T
 import           Data.Void                                (Void)
-import           Development.IDE                          (Position,
-                                                           Range (Range))
-import           Development.IDE.Types.Location           (Position (..))
 import           GHC.Generics                             hiding (UInt, to)
 import           Ide.Plugin.Eval.Types
-import           Language.LSP.Types                       (UInt)
-import           Language.LSP.Types.Lens                  (character, end, line,
-                                                           start)
+import qualified Language.LSP.Protocol.Lens               as L
+import           Language.LSP.Protocol.Types
+
 import qualified Text.Megaparsec                          as P
 import           Text.Megaparsec
 import           Text.Megaparsec.Char                     (alphaNumChar, char,
@@ -73,7 +70,7 @@ data BlockEnv = BlockEnv
     { isLhs      :: Bool
     , blockRange :: Range
     }
-    deriving (Read, Show, Eq, Ord)
+    deriving (Show, Eq, Ord)
 
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
@@ -109,7 +106,7 @@ data CommentFlavour = Vanilla | HaddockNext | HaddockPrev | Named String
 
 -- | Single line or block comments?
 data CommentStyle = Line | Block Range
-    deriving (Read, Show, Eq, Ord, Generic)
+    deriving (Show, Eq, Ord, Generic)
 
 makePrisms ''CommentStyle
 
@@ -124,8 +121,8 @@ commentsToSections isLHS Comments {..} =
                 ( \lcs ->
                     let theRan =
                             Range
-                                (view start $ fst $ NE.head lcs)
-                                (view end $ fst $ NE.last lcs)
+                                (view L.start $ fst $ NE.head lcs)
+                                (view L.end $ fst $ NE.last lcs)
                      in case parseMaybe lineGroupP $ NE.toList lcs of
                             Nothing -> mempty
                             Just (mls, rs) ->
@@ -147,8 +144,8 @@ commentsToSections isLHS Comments {..} =
                         -- non-zero base indentation level!
                         ( \pos _ ->
                             if isLHS
-                                then pos ^. start . character == 2
-                                else pos ^. start . character == 0
+                                then pos ^. L.start . L.character == 2
+                                else pos ^. L.start . L.character == 0
                         )
                         lineComments
         (blockSeed, blockSetupSeeds) =
@@ -205,7 +202,7 @@ parseBlockMaybe isLhs blockRange p i =
                 st
                     { statePosState =
                         (statePosState st)
-                            { pstateSourcePos = positionToSourcePos $ blockRange ^. start
+                            { pstateSourcePos = positionToSourcePos $ blockRange ^. L.start
                             }
                     }
             p
@@ -330,8 +327,8 @@ positionToSourcePos :: Position -> SourcePos
 positionToSourcePos pos =
     P.SourcePos
         { sourceName = "<block comment>"
-        , sourceLine = P.mkPos $ fromIntegral $ 1 + pos ^. line
-        , sourceColumn = P.mkPos $ fromIntegral $ 1 + pos ^. character
+        , sourceLine = P.mkPos $ fromIntegral $ 1 + pos ^. L.line
+        , sourceColumn = P.mkPos $ fromIntegral $ 1 + pos ^. L.character
         }
 
 sourcePosToPosition :: SourcePos -> Position
@@ -420,7 +417,7 @@ exampleLinesGP =
 
 convexHullRange :: NonEmpty Range -> Range
 convexHullRange nes =
-    Range (NE.head nes ^. start) (NE.last nes ^. end)
+    Range (NE.head nes ^. L.start) (NE.last nes ^. L.end)
 
 exampleLineGP :: LineGroupParser (Range, ExampleLine)
 exampleLineGP =
@@ -568,5 +565,5 @@ contiguousGroupOn toLineCol = foldr step []
 groupLineComments ::
     Map Range a -> [NonEmpty (Range, a)]
 groupLineComments =
-    contiguousGroupOn (fst >>> view start >>> view line &&& view character)
+    contiguousGroupOn (fst >>> view L.start >>> view L.line &&& view L.character)
         . Map.toList

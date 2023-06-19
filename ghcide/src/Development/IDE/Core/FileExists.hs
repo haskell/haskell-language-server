@@ -33,8 +33,8 @@ import           Development.IDE.Types.Logger          (Pretty (pretty),
 import           Development.IDE.Types.Options
 import qualified Focus
 import           Ide.Plugin.Config                     (Config)
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                   hiding (getVirtualFile)
-import           Language.LSP.Types
 import qualified StmContainers.Map                     as STM
 import qualified System.Directory                      as Dir
 import qualified System.FilePath.Glob                  as Glob
@@ -117,16 +117,16 @@ modifyFileExists state changes = do
     -- See Note [Invalidating file existence results]
     -- flush previous values
     let (fileModifChanges, fileExistChanges) =
-            partition ((== FcChanged) . snd) changes
+            partition ((== FileChangeType_Changed) . snd) changes
     mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
     io1 <- recordDirtyKeys (shakeExtras state) GetFileExists $ map fst fileExistChanges
     io2 <- recordDirtyKeys (shakeExtras state) GetModificationTime $ map fst fileModifChanges
     return (io1 <> io2)
 
 fromChange :: FileChangeType -> Maybe Bool
-fromChange FcCreated = Just True
-fromChange FcDeleted = Just False
-fromChange FcChanged = Nothing
+fromChange FileChangeType_Created = Just True
+fromChange FileChangeType_Deleted = Just False
+fromChange FileChangeType_Changed = Nothing
 
 -------------------------------------------------------------------------------------
 

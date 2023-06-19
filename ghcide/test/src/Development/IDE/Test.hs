@@ -43,20 +43,20 @@ import           Data.Bifunctor                  (second)
 import           Data.Default
 import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (fromJust)
+import           Data.Proxy
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult,
                                                   ideResultSuccess)
 import           Development.IDE.Test.Diagnostic
+import           GHC.TypeLits                    ( symbolVal )
 import           Ide.Plugin.Config               (CheckParents, checkProject)
+import qualified Language.LSP.Protocol.Lens      as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start))
-import           Language.LSP.Types.Lens         as Lsp
 import           System.Directory                (canonicalizePath)
 import           System.FilePath                 (equalFilePath)
 import           System.Time.Extra
@@ -75,23 +75,23 @@ requireDiagnosticM actuals expected = case requireDiagnostic actuals expected of
 -- if any diagnostic messages arrive in that period
 expectNoMoreDiagnostics :: HasCallStack => Seconds -> Session ()
 expectNoMoreDiagnostics timeout =
-  expectMessages STextDocumentPublishDiagnostics timeout $ \diagsNot -> do
-    let fileUri = diagsNot ^. params . uri
-        actual = diagsNot ^. params . diagnostics
-    unless (actual == List []) $ liftIO $
+  expectMessages SMethod_TextDocumentPublishDiagnostics timeout $ \diagsNot -> do
+    let fileUri = diagsNot ^. L.params . L.uri
+        actual = diagsNot ^. L.params . L.diagnostics
+    unless (actual == []) $ liftIO $
       assertFailure $
         "Got unexpected diagnostics for " <> show fileUri
           <> " got "
           <> show actual
 
-expectMessages :: SMethod m -> Seconds -> (ServerMessage m -> Session ()) -> Session ()
+expectMessages :: SMethod m -> Seconds -> (TServerMessage m -> Session ()) -> Session ()
 expectMessages m timeout handle = do
     -- Give any further diagnostic messages time to arrive.
     liftIO $ sleep timeout
     -- Send a dummy message to provoke a response from the server.
     -- This guarantees that we have at least one message to
     -- process, so message won't block or timeout.
-    let cm = SCustomMethod "test"
+    let cm = SMethod_CustomMethod (Proxy @"test")
     i <- sendRequest cm $ A.toJSON GetShakeSessionQueueCount
     go cm i
   where
@@ -102,7 +102,7 @@ expectMessages m timeout handle = do
 
 flushMessages :: Session ()
 flushMessages = do
-    let cm = SCustomMethod "non-existent-method"
+    let cm = SMethod_CustomMethod (Proxy @"non-existent-method")
     i <- sendRequest cm A.Null
     void (responseForId cm i) <|> ignoreOthers cm i
     where
@@ -118,8 +118,8 @@ expectDiagnostics
   = expectDiagnosticsWithTags
   . map (second (map (\(ds, c, t) -> (ds, c, t, Nothing))))
 
-unwrapDiagnostic :: NotificationMessage TextDocumentPublishDiagnostics  -> (Uri, List Diagnostic)
-unwrapDiagnostic diagsNot = (diagsNot^.params.uri, diagsNot^.params.diagnostics)
+unwrapDiagnostic :: TServerMessage Method_TextDocumentPublishDiagnostics  -> (Uri, [Diagnostic])
+unwrapDiagnostic diagsNot = (diagsNot^. L.params . L.uri, diagsNot^. L.params . L.diagnostics)
 
 expectDiagnosticsWithTags :: HasCallStack => [(String, [(DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)])] -> Session ()
 expectDiagnosticsWithTags expected = do
@@ -130,13 +130,13 @@ expectDiagnosticsWithTags expected = do
 
 expectDiagnosticsWithTags' ::
   (HasCallStack, MonadIO m) =>
-  m (Uri, List Diagnostic) ->
+  m (Uri, [Diagnostic]) ->
   Map.Map NormalizedUri [(DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)] ->
   m ()
 expectDiagnosticsWithTags' next m | null m = do
     (_,actual) <- next
     case actual of
-        List [] ->
+        [] ->
             return ()
         _ ->
             liftIO $ assertFailure $ "Got unexpected diagnostics:" <> show actual
@@ -178,19 +178,19 @@ checkDiagnosticsForDoc :: HasCallStack => TextDocumentIdentifier -> [(Diagnostic
 checkDiagnosticsForDoc TextDocumentIdentifier {_uri} expected obtained = do
     let expected' = Map.fromList [(nuri, map (\(ds, c, t) -> (ds, c, t, Nothing)) expected)]
         nuri = toNormalizedUri _uri
-    expectDiagnosticsWithTags' (return (_uri, List obtained)) expected'
+    expectDiagnosticsWithTags' (return (_uri, obtained)) expected'
 
 canonicalizeUri :: Uri -> IO Uri
 canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePath uri))
 
-diagnostic :: Session (NotificationMessage TextDocumentPublishDiagnostics)
-diagnostic = LspTest.message STextDocumentPublishDiagnostics
+diagnostic :: Session (TNotificationMessage Method_TextDocumentPublishDiagnostics)
+diagnostic = LspTest.message SMethod_TextDocumentPublishDiagnostics
 
 tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
 tryCallTestPlugin cmd = do
-    let cm = SCustomMethod "test"
+    let cm = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest cm (A.toJSON cmd)
-    ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
+    TResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
     return $ case _result of
          Left e -> Left e
          Right json -> case A.fromJSON json of
@@ -230,8 +230,8 @@ getFilesOfInterest = callTestPlugin GetFilesOfInterest
 waitForCustomMessage :: T.Text -> (A.Value -> Maybe res) -> Session res
 waitForCustomMessage msg pred =
     skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess (SCustomMethod lbl) (NotMess NotificationMessage{_params = value})
-            | lbl == msg -> pred value
+        FromServerMess (SMethod_CustomMethod p) (NotMess TNotificationMessage{_params = value})
+            | symbolVal p == T.unpack msg -> pred value
         _ -> Nothing
 
 waitForGC :: Session [T.Text]
@@ -242,7 +242,7 @@ waitForGC = waitForCustomMessage "ghcide/GC" $ \v ->
 
 configureCheckProject :: Bool -> Session ()
 configureCheckProject overrideCheckProject =
-    sendNotification SWorkspaceDidChangeConfiguration
+    sendNotification SMethod_WorkspaceDidChangeConfiguration
         (DidChangeConfigurationParams $ toJSON
             def{checkProject = overrideCheckProject})
 
@@ -252,9 +252,10 @@ isReferenceReady p = void $ referenceReady (equalFilePath p)
 
 referenceReady :: (FilePath -> Bool) -> Session FilePath
 referenceReady pred = satisfyMaybe $ \case
-  FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params})
+  FromServerMess (SMethod_CustomMethod p) (NotMess TNotificationMessage{_params})
     | A.Success fp <- A.fromJSON _params
     , pred fp
+    , symbolVal p == "ghcide/reference/ready"
     -> Just fp
   _ -> Nothing
 

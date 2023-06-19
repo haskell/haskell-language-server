@@ -9,8 +9,8 @@ import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import qualified Ide.Plugin.AlternateNumberFormat as AlternateNumberFormat
 import qualified Ide.Plugin.Conversion            as Conversion
-import           Language.LSP.Types               (toEither)
-import           Language.LSP.Types.Lens          (kind)
+import           Language.LSP.Protocol.Lens       (kind)
+import           Language.LSP.Protocol.Types      (toEither)
 import           Properties.Conversion            (conversions)
 import           System.FilePath                  ((<.>), (</>))
 import           Test.Hls
@@ -66,8 +66,8 @@ findAlternateNumberActions = pure . filter isAlternateNumberCodeAction . rights 
         isAlternateNumberCodeAction CodeAction{_kind} = case _kind of
           Nothing -> False
           Just kind -> case kind of
-            CodeActionUnknown txt -> txt == "quickfix.literals.style"
-            _                     -> False
+            CodeActionKind_Custom txt -> txt == "quickfix.literals.style"
+            _                         -> False
 
 -- most helpers derived from explicit-imports-plugin Main Test file
 

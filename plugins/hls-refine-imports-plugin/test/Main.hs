@@ -60,7 +60,7 @@ isRefineImports _ = False
 executeCmd :: Command -> Session ()
 executeCmd cmd = do
     executeCommand cmd
-    _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
+    _resp <- skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
     -- liftIO $ print _resp
     return ()
 

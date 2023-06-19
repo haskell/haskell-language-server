@@ -27,7 +27,8 @@ module Development.IDE.Spans.AtPoint (
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Types.Location
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Types          hiding
+                                                      (SemanticTokenAbsolute (..))
 
 -- compiler and infrastructure
 import           Development.IDE.Core.PositionMapping
@@ -178,8 +179,8 @@ documentHighlight hf rf pos = pure highlights
       DocumentHighlight (realSrcSpanToRange sp) (Just $ highlightType $ identInfo dets)
     highlightType s =
       if any (isJust . getScopeFromContext) s
-        then HkWrite
-        else HkRead
+        then DocumentHighlightKind_Write
+        else DocumentHighlightKind_Read
 
 gotoTypeDefinition
   :: MonadIO m
@@ -391,13 +392,15 @@ toUri = fromNormalizedUri . filePathToUri' . toNormalizedFilePath'
 
 defRowToSymbolInfo :: Res DefRow -> Maybe SymbolInformation
 defRowToSymbolInfo (DefRow{..}:.(modInfoSrcFile -> Just srcFile))
-  = Just $ SymbolInformation (printOutputable defNameOcc) kind Nothing Nothing loc Nothing
+  = Just $ SymbolInformation (printOutputable defNameOcc) kind Nothing Nothing Nothing loc
   where
     kind
-      | isVarOcc defNameOcc = SkVariable
-      | isDataOcc defNameOcc = SkConstructor
-      | isTcOcc defNameOcc = SkStruct
-      | otherwise = SkUnknown 1
+      | isVarOcc defNameOcc = SymbolKind_Variable
+      | isDataOcc defNameOcc = SymbolKind_Constructor
+      | isTcOcc defNameOcc = SymbolKind_Struct
+        -- This used to be (SkUnknown 1), buth there is no SymbolKind_Unknown.
+        -- Changing this to File, as that is enum representation of 1
+      | otherwise = SymbolKind_File
     loc   = Location file range
     file  = fromNormalizedUri . filePathToUri' . toNormalizedFilePath' $ srcFile
     range = Range start end
@@ -424,6 +427,7 @@ pointCommand hf pos k =
  where
    sloc fs = mkRealSrcLoc fs (fromIntegral $ line+1) (fromIntegral $ cha+1)
    sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
+   line :: UInt
    line = _line pos
    cha = _character pos
 

@@ -23,9 +23,9 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Ide.Plugin.Tactic as Tactic
 import           Ide.Types (IdePlugins(..))
-import           Language.LSP.Types
-import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
-import qualified Language.LSP.Types.Lens as J
+import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title, error)
 import           System.Directory (doesFileExist)
 import           System.FilePath
 import           Test.Hls
@@ -118,7 +118,7 @@ invokeTactic doc InvokeTactic{..} = do
     case find ((== Just (tacticTitle it_command it_argument)) . codeActionTitle) actions of
       Just (InR CodeAction {_command = Just c}) -> do
           executeCommand c
-          void $ skipManyTill anyMessage $ message SWorkspaceApplyEdit
+          void $ skipManyTill anyMessage $ message SMethod_WorkspaceApplyEdit
       _ -> error $ show actions
 
 
@@ -154,7 +154,7 @@ mkCodeLensTest input =
       lenses <- fmap (reverse . filter isWingmanLens) $ getCodeLenses doc
       for_ lenses $ \(CodeLens _ (Just cmd) _) ->
         executeCommand cmd
-      _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
+      _resp <- skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
       edited <- documentContents doc
       let expected_name = input <.> "expected" <.> "hs"
       -- Write golden tests if they don't already exist
@@ -204,7 +204,7 @@ mkShowMessageTest tc occ line col input ufm =
       Just (InR CodeAction {_command = Just c})
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
       executeCommand c
-      NotificationMessage _ _ err <- skipManyTill anyMessage (message SWindowShowMessage)
+      TNotificationMessage _ _ err <- skipManyTill anyMessage (message SMethod_WindowShowMessage)
       liftIO $ err `shouldBe` mkShowMessageParams ufm
 
 
@@ -258,9 +258,9 @@ tacticPath :: FilePath
 tacticPath = "old/test/golden"
 
 
-executeCommandWithResp :: Command -> Session (ResponseMessage 'WorkspaceExecuteCommand)
+executeCommandWithResp :: Command -> Session (TResponseMessage 'Method_WorkspaceExecuteCommand)
 executeCommandWithResp cmd = do
   let args = decode $ encode $ fromJust $ cmd ^. arguments
       execParams = ExecuteCommandParams Nothing (cmd ^. command) args
-  request SWorkspaceExecuteCommand execParams
+  request SMethod_WorkspaceExecuteCommand execParams
 

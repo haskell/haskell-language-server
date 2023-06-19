@@ -18,7 +18,7 @@ import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Control.Monad.Trans.Except           (ExceptT)
 import           Data.Generics                        (GenericQ, everything,
                                                        everythingBut, mkQ)
-import qualified Data.HashMap.Strict                  as HashMap
+import qualified Data.Map                             as Map
 import           Data.Maybe                           (mapMaybe, maybeToList)
 import           Data.Text                            (Text)
 import           Development.IDE                      (IdeState,
@@ -76,18 +76,17 @@ import           Ide.Types                            (PluginDescriptor (..),
                                                        PluginMethodHandler,
                                                        defaultPluginDescriptor,
                                                        mkPluginHandler)
-import           Language.LSP.Types                   (CodeAction (..),
-                                                       CodeActionKind (CodeActionRefactorRewrite),
+import qualified Language.LSP.Protocol.Lens           as L
+import           Language.LSP.Protocol.Message        (Method (..),
+                                                       SMethod (..))
+import           Language.LSP.Protocol.Types          (CodeAction (..),
+                                                       CodeActionKind (CodeActionKind_RefactorRewrite),
                                                        CodeActionParams (..),
-                                                       Command, List (..),
-                                                       Method (..),
-                                                       SMethod (..),
-                                                       TextEdit (..),
+                                                       Command, TextEdit (..),
                                                        WorkspaceEdit (WorkspaceEdit),
                                                        fromNormalizedUri,
                                                        normalizedFilePathToUri,
-                                                       type (|?) (InR))
-import qualified Language.LSP.Types.Lens              as L
+                                                       type (|?) (..))
 data Log
     = LogShake Shake.Log
     | LogCollectedRecordSelectors [RecordSelectorExpr]
@@ -140,11 +139,11 @@ descriptor :: Recorder (WithPriority Log) -> PluginId
                 -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginHandlers =
-        mkPluginHandler STextDocumentCodeAction codeActionProvider
+        mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider
     , pluginRules = collectRecSelsRule recorder
     }
 
-codeActionProvider :: PluginMethodHandler IdeState 'TextDocumentCodeAction
+codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
     pluginResponse $ do
         nfp <- getNormalizedFilePath (caDocId ^. L.uri)
@@ -156,9 +155,9 @@ codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
                 else Just $ insertNewPragma pragma OverloadedRecordDot
             edits crs = convertRecordSelectors crs : maybeToList pragmaEdit
             changes crs =
-                Just $ HashMap.singleton (fromNormalizedUri
+                Just $ Map.singleton (fromNormalizedUri
                                             (normalizedFilePathToUri nfp))
-                                            (List (edits crs))
+                                            (edits crs)
             mkCodeAction crs = InR CodeAction
                 { -- We pass the record selector to the title function, so that
                   -- we can have the name of the record selector in the title of
@@ -167,16 +166,16 @@ codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
                   -- selectors, the disadvantage is we need to print out the
                   -- name of the record selector which will decrease performance
                 _title = mkCodeActionTitle exts crs
-                , _kind = Just CodeActionRefactorRewrite
+                , _kind = Just CodeActionKind_RefactorRewrite
                 , _diagnostics = Nothing
                 , _isPreferred = Nothing
                 , _disabled = Nothing
                 , _edit = Just $ WorkspaceEdit (changes crs) Nothing Nothing
                 , _command = Nothing
-                , _xdata = Nothing
+                , _data_ = Nothing
                 }
             actions = map mkCodeAction (RangeMap.filterByRange caRange crsMap)
-        pure $ List actions
+        pure $ InL actions
     where
     mkCodeActionTitle :: [Extension] -> RecordSelectorExpr-> Text
     mkCodeActionTitle exts (RecordSelectorExpr _ se _) =

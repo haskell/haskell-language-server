@@ -33,7 +33,7 @@ getTypeDefinitionTest :: SymbolLocation -> [SymbolLocation] -> Assertion
 getTypeDefinitionTest (symbolFile, symbolLine, symbolCol) definitionLocations =
     failIfSessionTimeout . runSession (hlsCommand ++ " --test") fullCaps definitionsPath $ do
         doc  <- openDoc symbolFile "haskell"
-        InL defs <- getTypeDefinitions doc $ Position symbolLine symbolCol
+        InL (Definition (InR defs)) <- getTypeDefinitions doc $ Position symbolLine symbolCol
         liftIO $ defs `expectSameLocations` map (first3 (definitionsPath </>)) definitionLocations
 
 getTypeDefinitionTest' :: UInt -> UInt -> UInt -> UInt -> Assertion

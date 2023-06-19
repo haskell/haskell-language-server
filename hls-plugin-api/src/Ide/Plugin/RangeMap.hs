@@ -22,9 +22,8 @@ module Ide.Plugin.RangeMap
 import           Data.Bifunctor                           (first)
 import           Data.Foldable                            (foldl')
 import           Development.IDE.Graph.Classes            (NFData)
-import           Language.LSP.Types                       (Position,
-                                                           Range (Range),
-                                                           isSubrangeOf)
+import           Language.LSP.Protocol.Types              (Position,
+                                                           Range (Range))
 #ifdef USE_FINGERTREE
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IM
 #endif

@@ -29,43 +29,44 @@ module Development.IDE.Types.Logger
   , toCologActionWithPrio
   ) where
 
-import           Colog.Core                 (LogAction (..), Severity,
-                                             WithSeverity (..))
-import qualified Colog.Core                 as Colog
-import           Control.Concurrent         (myThreadId)
-import           Control.Concurrent.Extra   (Lock, newLock, withLock)
-import           Control.Concurrent.STM     (atomically, flushTBQueue,
-                                             isFullTBQueue, newTBQueueIO,
-                                             newTVarIO, readTVarIO,
-                                             writeTBQueue, writeTVar)
-import           Control.Exception          (IOException)
-import           Control.Monad              (unless, when, (>=>))
-import           Control.Monad.IO.Class     (MonadIO (liftIO))
-import           Data.Foldable              (for_)
-import           Data.Functor.Contravariant (Contravariant (contramap))
-import           Data.Maybe                 (fromMaybe)
-import           Data.Text                  (Text)
-import qualified Data.Text                  as T
-import qualified Data.Text                  as Text
-import qualified Data.Text.IO               as Text
-import           Data.Time                  (defaultTimeLocale, formatTime,
-                                             getCurrentTime)
-import           GHC.Stack                  (CallStack, HasCallStack,
-                                             SrcLoc (SrcLoc, srcLocModule, srcLocStartCol, srcLocStartLine),
-                                             callStack, getCallStack,
-                                             withFrozenCallStack)
+import           Colog.Core                    (LogAction (..), Severity,
+                                                WithSeverity (..))
+import qualified Colog.Core                    as Colog
+import           Control.Concurrent            (myThreadId)
+import           Control.Concurrent.Extra      (Lock, newLock, withLock)
+import           Control.Concurrent.STM        (atomically, flushTBQueue,
+                                                isFullTBQueue, newTBQueueIO,
+                                                newTVarIO, readTVarIO,
+                                                writeTBQueue, writeTVar)
+import           Control.Exception             (IOException)
+import           Control.Monad                 (unless, when, (>=>))
+import           Control.Monad.IO.Class        (MonadIO (liftIO))
+import           Data.Foldable                 (for_)
+import           Data.Functor.Contravariant    (Contravariant (contramap))
+import           Data.Maybe                    (fromMaybe)
+import           Data.Text                     (Text)
+import qualified Data.Text                     as T
+import qualified Data.Text                     as Text
+import qualified Data.Text.IO                  as Text
+import           Data.Time                     (defaultTimeLocale, formatTime,
+                                                getCurrentTime)
+import           GHC.Stack                     (CallStack, HasCallStack,
+                                                SrcLoc (SrcLoc, srcLocModule, srcLocStartCol, srcLocStartLine),
+                                                callStack, getCallStack,
+                                                withFrozenCallStack)
+import           Language.LSP.Protocol.Message (SMethod (SMethod_WindowLogMessage, SMethod_WindowShowMessage))
+import           Language.LSP.Protocol.Types   (LogMessageParams (..),
+                                                MessageType (..),
+                                                ShowMessageParams (..))
 import           Language.LSP.Server
-import qualified Language.LSP.Server        as LSP
-import           Language.LSP.Types         (LogMessageParams (..),
-                                             MessageType (..),
-                                             SMethod (SWindowLogMessage, SWindowShowMessage),
-                                             ShowMessageParams (..))
-import           Prettyprinter              as PrettyPrinterModule
-import           Prettyprinter.Render.Text  (renderStrict)
-import           System.IO                  (Handle, IOMode (AppendMode),
-                                             hClose, hFlush, openFile, stderr)
-import           UnliftIO                   (MonadUnliftIO, displayException,
-                                             finally, try)
+import qualified Language.LSP.Server           as LSP
+import           Prettyprinter                 as PrettyPrinterModule
+import           Prettyprinter.Render.Text     (renderStrict)
+import           System.IO                     (Handle, IOMode (AppendMode),
+                                                hClose, hFlush, openFile,
+                                                stderr)
+import           UnliftIO                      (MonadUnliftIO, displayException,
+                                                finally, try)
 
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
@@ -287,28 +288,28 @@ withBacklog recFun = do
 -- | Creates a recorder that sends logs to the LSP client via @window/showMessage@ notifications.
 lspClientMessageRecorder :: LanguageContextEnv config -> Recorder (WithPriority Text)
 lspClientMessageRecorder env = Recorder $ \WithPriority {..} ->
-  liftIO $ LSP.runLspT env $ LSP.sendNotification SWindowShowMessage
+  liftIO $ LSP.runLspT env $ LSP.sendNotification SMethod_WindowShowMessage
       ShowMessageParams
-        { _xtype = priorityToLsp priority,
+        { _type_ = priorityToLsp priority,
           _message = payload
         }
 
 -- | Creates a recorder that sends logs to the LSP client via @window/logMessage@ notifications.
 lspClientLogRecorder :: LanguageContextEnv config -> Recorder (WithPriority Text)
 lspClientLogRecorder env = Recorder $ \WithPriority {..} ->
-  liftIO $ LSP.runLspT env $ LSP.sendNotification SWindowLogMessage
+  liftIO $ LSP.runLspT env $ LSP.sendNotification SMethod_WindowLogMessage
       LogMessageParams
-        { _xtype = priorityToLsp priority,
+        { _type_ = priorityToLsp priority,
           _message = payload
         }
 
 priorityToLsp :: Priority -> MessageType
 priorityToLsp =
   \case
-    Debug   -> MtLog
-    Info    -> MtInfo
-    Warning -> MtWarning
-    Error   -> MtError
+    Debug   -> MessageType_Log
+    Info    -> MessageType_Info
+    Warning -> MessageType_Warning
+    Error   -> MessageType_Error
 
 toCologActionWithPrio :: (MonadIO m, HasCallStack) => Recorder (WithPriority msg) -> LogAction m (WithSeverity msg)
 toCologActionWithPrio (Recorder _logger) = LogAction $ \WithSeverity{..} -> do

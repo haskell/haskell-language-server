@@ -34,15 +34,16 @@ import           Ide.Plugin.Class.Utils
 import qualified Ide.Plugin.Config
 import           Ide.PluginUtils
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens           as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types          hiding (Null)
 import           Language.LSP.Server
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens              as J
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
     caps <- getClientCapabilities
     pluginResponse $ do
-        nfp <- getNormalizedFilePath (verTxtDocId ^. J.uri)
+        nfp <- getNormalizedFilePath (verTxtDocId ^. L.uri)
         pm <- handleMaybeM "Unable to GetParsedModule"
             $ liftIO
             $ runAction "classplugin.addMethodPlaceholders.GetParsedModule" state
@@ -60,17 +61,17 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
                 then mergeEdit (workspaceEdit caps old new) pragmaInsertion
                 else workspaceEdit caps old new
 
-        void $ lift $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+        void $ lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
 
         pure Null
     where
         toTextDocumentEdit edit =
-            TextDocumentEdit verTxtDocId (List [InL edit])
+            TextDocumentEdit (verTxtDocId ^.re _versionedTextDocumentIdentifier) [InL edit]
 
         mergeEdit :: WorkspaceEdit -> [TextEdit] -> WorkspaceEdit
         mergeEdit WorkspaceEdit{..} edits = WorkspaceEdit
             { _documentChanges =
-                (\(List x) -> List $ x ++ map (InL . toTextDocumentEdit) edits)
+                (\x -> x ++ map (InL . toTextDocumentEdit) edits)
                     <$> _documentChanges
             , ..
             }
@@ -81,17 +82,17 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
-codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState TextDocumentCodeAction
+codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginResponse $ do
     verTxtDocId <- lift $ getVersionedTextDoc docId
-    nfp <- getNormalizedFilePath (verTxtDocId ^. J.uri)
+    nfp <- getNormalizedFilePath (verTxtDocId ^. L.uri)
     actions <- join <$> mapM (mkActions nfp verTxtDocId) methodDiags
-    pure $ List actions
+    pure $ InL actions
     where
-        List diags = context ^. J.diagnostics
+        diags = context ^. L.diagnostics
 
-        ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
-        methodDiags = filter (\d -> isClassMethodWarning (d ^. J.message)) ghcDiags
+        ghcDiags = filter (\d -> d ^. L.source == Just "typecheck") diags
+        methodDiags = filter (\d -> isClassMethodWarning (d ^. L.message)) ghcDiags
 
         mkActions
             :: NormalizedFilePath
@@ -104,8 +105,8 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                 . runAction "classplugin.findClassIdentifier.GetHieAst" state
                 $ useWithStale GetHieAst docPath
             instancePosition <- handleMaybe "No range" $
-                              fromCurrentRange pmap range ^? _Just . J.start
-                              & fmap (J.character -~ 1)
+                              fromCurrentRange pmap range ^? _Just . L.start
+                              & fmap (L.character -~ 1)
             ident <- findClassIdentifier ast instancePosition
             cls <- findClassFromIdentifier docPath ident
             InstanceBindTypeSigsResult sigs <- handleMaybeM "Unable to GetInstanceBindTypeSigs"
@@ -121,7 +122,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                 $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
                 $ mkMethodGroups range sigs cls
             where
-                range = diag ^. J.range
+                range = diag ^. L.range
 
                 mkMethodGroups :: Range -> [InstanceBindTypeSig] -> Class -> [MethodGroup]
                 mkMethodGroups range sigs cls = minimalDef <> [allClassMethods]
@@ -142,15 +143,16 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                         title = "Add placeholders for " <> name
                         titleWithSig = title <> " with signature(s)"
 
+                mkCmdParams :: [(T.Text, T.Text)] -> Bool -> [Value]
                 mkCmdParams methodGroup withSig =
-                    [toJSON (AddMinimalMethodsParams verTxtDocId range (List methodGroup) withSig)]
+                    [toJSON (AddMinimalMethodsParams verTxtDocId range methodGroup withSig)]
 
                 mkCodeAction title cmd
                     = InR
                     $ CodeAction
                         title
-                        (Just CodeActionQuickFix)
-                        (Just (List []))
+                        (Just CodeActionKind_QuickFix)
+                        (Just [])
                         Nothing
                         Nothing
                         Nothing

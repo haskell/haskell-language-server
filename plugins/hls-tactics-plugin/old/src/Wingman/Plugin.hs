@@ -6,7 +6,7 @@ import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Plugin.CodeAction
 import qualified Development.IDE.GHC.ExactPrint                   as E
 import           Ide.Types
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Message
 import           Prelude hiding (span)
 import           Wingman.AbstractLSP
 import           Wingman.AbstractLSP.TacticActions (makeTacticInteraction)
@@ -18,7 +18,7 @@ import           Wingman.StaticPlugin
 import Development.IDE.Types.Logger (Recorder, cmapWithPrio, WithPriority, Pretty (pretty))
 
 data Log
-  = LogWingmanLanguageServer WingmanLanguageServer.Log 
+  = LogWingmanLanguageServer WingmanLanguageServer.Log
   | LogExactPrint E.Log
   deriving Show
 
@@ -35,7 +35,7 @@ descriptor recorder plId
       : fmap makeTacticInteraction [minBound .. maxBound]
       )
   $ (defaultPluginDescriptor plId)
-      { pluginHandlers = mkPluginHandler STextDocumentHover hoverProvider
+      { pluginHandlers = mkPluginHandler SMethod_TextDocumentHover hoverProvider
       , pluginRules = wingmanRules (cmapWithPrio LogWingmanLanguageServer recorder) plId
       , pluginConfigDescriptor =
           defaultConfigDescriptor

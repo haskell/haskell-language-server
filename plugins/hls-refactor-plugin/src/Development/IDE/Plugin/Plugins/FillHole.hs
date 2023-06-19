@@ -6,7 +6,7 @@ import           Control.Monad                             (guard)
 import           Data.Char
 import qualified Data.Text                                 as T
 import           Development.IDE.Plugin.Plugins.Diagnostic
-import           Language.LSP.Types                        (Diagnostic (..),
+import           Language.LSP.Protocol.Types               (Diagnostic (..),
                                                             TextEdit (TextEdit))
 import           Text.Regex.TDFA                           (MatchResult (..),
                                                             (=~))
