@@ -105,24 +105,3 @@ isExplicitFieldsCodeAction selectorName CodeAction {_title} =
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
-
-goldenWithHaskellAndCaps
-  :: Pretty b
-  => ClientCapabilities
-  -> PluginTestDescriptor b
-  -> TestName
-  -> FilePath
-  -> FilePath
-  -> FilePath
-  -> FilePath
-  -> (TextDocumentIdentifier -> Session ())
-  -> TestTree
-goldenWithHaskellAndCaps clientCaps plugin title testDataDir path desc ext act =
-  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
-  $ runSessionWithServerAndCaps plugin clientCaps testDataDir
-  $ TL.encodeUtf8 . TL.fromStrict
-  <$> do
-    doc <- openDoc (path <.> ext) "haskell"
-    void waitForBuildQueue
-    act doc
-    documentContents doc

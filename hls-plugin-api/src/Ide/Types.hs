@@ -406,19 +406,6 @@ instance PluginMethod Request Method_TextDocumentCodeAction where
 instance PluginMethod Request Method_CodeActionResolve where
   pluginEnabled _ msgParams pluginDesc config = pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
 
-      wasRequested :: (Command |? CodeAction) -> Bool
-      wasRequested (InL _) = True
-      wasRequested (InR ca)
-        | Nothing <- _only context = True
-        | Just allowed <- _only context
-        -- See https://github.com/microsoft/language-server-protocol/issues/970
-        -- This is somewhat vague, but due to the hierarchical nature of action kinds, we
-        -- should check whether the requested kind is a *prefix* of the action kind.
-        -- That means, for example, we will return actions with kinds `quickfix.import` and
-        -- `quickfix.somethingElse` if the requested kind is `quickfix`.
-        , Just caKind <- ca ^. L.kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
-        | otherwise = False
-
 instance PluginMethod Request Method_TextDocumentDefinition where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
@@ -554,13 +541,6 @@ instance PluginRequestMethod Method_TextDocumentCodeAction where
         -- `quickfix.somethingElse` if the requested kind is `quickfix`.
         , Just caKind <- ca ^. L.kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
         | otherwise = False
-
-      -- Copied form lsp-types 1.6 to get compilation working. May make more
-      -- sense to add it back to lsp-types 2.0
-      -- | Does the first 'CodeActionKind' subsume the other one, hierarchically. Reflexive.
-      codeActionKindSubsumes :: CodeActionKind -> CodeActionKind -> Bool
-      -- Simple but ugly implementation: prefix on the string representation
-      codeActionKindSubsumes parent child = toEnumBaseType parent `T.isPrefixOf` toEnumBaseType child
 
 instance PluginRequestMethod Method_CodeActionResolve where
     -- TODO: Make a more serious combineResponses function
