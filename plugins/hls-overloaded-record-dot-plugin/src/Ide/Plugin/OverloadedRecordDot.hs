@@ -261,10 +261,11 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
             logWith recorder Debug (LogCollectedRecordSelectors recSels)
             let crsDetails = IntMap.fromList $ zip uniques recSels
                 -- We need the rangeMap to be able to filter by range later
-                crsMap :: RangeMap Int
-                crsMap = RangeMap.fromList (location . (\x-> fromJust $ IntMap.lookup x crsDetails)) uniques
+                rangeAndUnique = mapM (\x -> (, x) . location <$> IntMap.lookup x crsDetails) uniques
+                crsMap :: Maybe (RangeMap Int)
+                crsMap = RangeMap.fromList' <$> rangeAndUnique
                 crsDetails :: IntMap.IntMap RecordSelectorExpr
-            pure ([], CRSR <$> Just crsMap <*> Just crsDetails <*> Just exts)
+            pure ([], CRSR <$> crsMap <*> Just crsDetails <*> Just exts)
     where getEnabledExtensions :: TcModuleResult -> [Extension]
           getEnabledExtensions = getExtensions . tmrParsed
           getRecordSelectors :: TcModuleResult -> [RecordSelectorExpr]
