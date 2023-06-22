@@ -1079,10 +1079,10 @@ getLinkableRule recorder =
         core_file = ml_core_file (ms_location ms)
     -- Can't use `GetModificationTime` rule because the core file was possibly written in this
     -- very session, so the results aren't reliable
-    core_t <- liftIO $ getModTime core_file
     case hirCoreFp of
-      Nothing -> error "called GetLinkable for a file without a linkable"
+      Nothing -> error ("called GetLinkable for a file without a linkable: " ++ core_file)
       Just (bin_core, hash) -> do
+        core_t <- liftIO $ getModTime core_file
         session <- use_ GhcSessionDeps f
         ShakeExtras{ideNc} <- getShakeExtras
         let namecache_updater = mkUpdater ideNc

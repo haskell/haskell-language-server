@@ -30,6 +30,7 @@ import           System.FilePath
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
 #endif
+import GHC.Unit.State
 
 data Import
   = FileImport !ArtifactsLocation
@@ -147,11 +148,19 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
             map snd import_paths
 #endif
 
-      mbFile <- locateModuleFile ((homeUnitId_ dflags, importPaths dflags) : import_paths') exts targetFor isSource $ unLoc modName
+      mbFile <- locateModuleFile ((homeUnitId_ dflags, importPaths dflags) : other_imports ) exts targetFor isSource $ unLoc modName
       case mbFile of
         Nothing          -> lookupInPackageDB env
         Just (uid, file) -> toModLocation uid file
   where
+    ue = hsc_unit_env env
+    units = homeUnitEnv_units $ ue_findHomeUnitEnv (homeUnitId_ dflags) ue
+    hpt_deps :: [UnitId]
+    hpt_deps = homeUnitDepends units
+
+    other_imports = map (\uid -> (uid, importPaths (homeUnitEnv_dflags (ue_findHomeUnitEnv uid ue)))) hpt_deps
+
+
     dflags = hsc_dflags env
     import_paths = mapMaybe (mkImportDirs env) comp_info
     toModLocation uid file = liftIO $ do

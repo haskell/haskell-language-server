@@ -90,6 +90,11 @@ source-repository-package
   type:git
   location: https://github.com/pepeiborra/ekg-json
   tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
+
+source-repository-package
+  type:git
+  location: https://github.com/wz1000/hie-bios
+  tag: 5459e06
 -- END DELETE
 
 allow-newer:

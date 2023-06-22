@@ -351,6 +351,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
 #if MIN_VERSION_ghc(9,3,0)
     -- TODO: support backpack
     nodeKeyToInstalledModule :: NodeKey -> Maybe InstalledModule
+    nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB mod IsBoot) uid)) = Nothing
     nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB mod _) uid)) = Just $ mkModule uid mod
     nodeKeyToInstalledModule _ = Nothing
     moduleToNodeKey :: Module -> NodeKey
@@ -1060,11 +1061,15 @@ mergeEnvs env (ms, deps) extraMods envs = do
         combineModules a b
           | HsSrcFile <- mi_hsc_src (hm_iface a) = a
           | otherwise = b
+
+        g a@(InstalledFound ml m) b | Just fp <- ml_hs_file ml, not ("boot" `isSuffixOf` fp) = a
+        g _ b = b
+
         concatFC :: FinderCacheState -> [FinderCache] -> IO FinderCache
         concatFC cur xs = do
           fcModules <- mapM (readIORef . fcModuleCache) xs
           fcFiles <- mapM (readIORef . fcFileCache) xs
-          fcModules' <- newIORef $! foldl' (plusInstalledModuleEnv const) cur fcModules
+          fcModules' <- newIORef $! foldl' (plusInstalledModuleEnv g) cur fcModules
           fcFiles' <- newIORef $! Map.unions fcFiles
           pure $ FinderCache fcModules' fcFiles'
 
