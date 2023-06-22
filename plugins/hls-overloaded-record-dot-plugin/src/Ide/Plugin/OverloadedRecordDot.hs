@@ -17,7 +17,7 @@ import           Control.Lens                         (_Just, (^.), (^?))
 import           Control.Monad                        (replicateM)
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Control.Monad.Trans.Class            (lift)
-import           Control.Monad.Trans.Except           (ExceptT)
+import           Control.Monad.Trans.Except           (ExceptT, throwE)
 import           Data.Aeson                           (FromJSON, Result (..),
                                                        ToJSON, fromJSON, toJSON)
 import           Data.Generics                        (GenericQ, everything,
@@ -79,10 +79,12 @@ import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.PluginUtils                      (getNormalizedFilePath,
                                                        handleMaybeM,
                                                        pluginResponse)
-import           Ide.Types                            (PluginDescriptor (..),
+import           Ide.Types                            (OwnedResolveData (..),
+                                                       PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
                                                        defaultPluginDescriptor,
+                                                       mkCodeActionHandlerWithResolve,
                                                        mkPluginHandler)
 import           Language.LSP.Protocol.Lens           (HasChanges (changes))
 import qualified Language.LSP.Protocol.Lens           as L
@@ -93,7 +95,7 @@ import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        CodeActionParams (..),
                                                        Command, TextEdit (..),
                                                        Uri (..),
-                                                       WorkspaceEdit (WorkspaceEdit),
+                                                       WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                        fromNormalizedUri,
                                                        normalizedFilePathToUri,
                                                        type (|?) (..))
@@ -116,7 +118,13 @@ instance Hashable CollectRecordSelectors
 instance NFData CollectRecordSelectors
 
 data CollectRecordSelectorsResult = CRSR
-    { records           :: RangeMap Int
+    { -- |We store everything in here that we need to create the unresolved
+      -- codeAction, the range, an uniquely identifiable int, and the expression
+      -- for the selector expression that we use to generate the name
+      records           :: RangeMap (Int, HsExpr (GhcPass 'Renamed))
+      -- |This is for when we need to fully generate a textEdit. It contains the
+      -- whole expression we are interested in indexed to the unique id we got
+      -- from the previous field
     , recordInfos       :: IntMap.IntMap RecordSelectorExpr
     , enabledExtensions :: [Extension]
     }
@@ -147,8 +155,12 @@ instance Pretty RecordSelectorExpr where
 instance NFData RecordSelectorExpr where
   rnf = rwhnf
 
+-- |The data that is serialized and placed in the data field of resolvable
+-- code actions
 data ORDResolveData = ORDRD {
+  -- |We need the uri to get shake results
   uri      :: Uri
+  -- |The unique id that allows us to find the specific codeAction we want
 , uniqueID :: Int
 } deriving (Generic, Show)
 instance ToJSON ORDResolveData
@@ -158,89 +170,65 @@ descriptor :: Recorder (WithPriority Log) -> PluginId
                 -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginHandlers =
-      mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider
-      <> mkPluginHandler SMethod_CodeActionResolve resolveProvider
-
+      mkCodeActionHandlerWithResolve codeActionProvider resolveProvider
     , pluginRules = collectRecSelsRule recorder
     }
 
 resolveProvider :: PluginMethodHandler IdeState 'Method_CodeActionResolve
 resolveProvider ideState pId ca@(CodeAction _ _ _ _ _ _ _ (Just resData)) =
     pluginResponse $ do
-        case fromJSON $ resData of
+        case fromJSON resData >>= \x -> fromJSON $ value x of
             Success (ORDRD uri int) -> do
                 nfp <- getNormalizedFilePath uri
                 CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
                 pragma <- getFirstPragma pId ideState nfp
-                let pragmaEdit =
-                        if OverloadedRecordDot `elem` exts
-                        then Nothing
-                        else Just $ insertNewPragma pragma OverloadedRecordDot
-                    edits (Just crs) = convertRecordSelectors crs : maybeToList pragmaEdit
-                    edits _ = []
-                    changes = Just $ WorkspaceEdit
-                                    (Just (Map.singleton (fromNormalizedUri
-                                            (normalizedFilePathToUri nfp))
-                                            (edits (IntMap.lookup int crsDetails))))
-                                    Nothing Nothing
-                pure $ ca {_edit = changes}
-            _ -> pure ca
+                pure $ ca {_edit = mkWorkspaceEdit uri int crsDetails exts pragma}
+            _ -> throwE "Unable to deserialize the data"
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
     pluginResponse $ do
         nfp <- getNormalizedFilePath (caDocId ^. L.uri)
-        pragma <- getFirstPragma pId ideState nfp
-        caps <- lift getClientCapabilities
         CRSR crsMap crsDetails exts <- collectRecSelResult ideState nfp
-        let supportsResolve :: Maybe Bool
-            supportsResolve = caps ^? L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just
-            pragmaEdit =
-                if OverloadedRecordDot `elem` exts
-                then Nothing
-                else Just $ insertNewPragma pragma OverloadedRecordDot
-            edits (Just crs) = convertRecordSelectors crs : maybeToList pragmaEdit
-            edits _ = []
-            changes crsM crsD =
-                case supportsResolve of
-                    Just False -> Just $ WorkspaceEdit
-                                    (Just (Map.singleton (fromNormalizedUri
-                                            (normalizedFilePathToUri nfp))
-                                            (edits (IntMap.lookup crsM crsD))))
-                                    Nothing Nothing
-                    _ -> Nothing
-            resolveData crsM =
-                case supportsResolve of
-                    Just True -> Just $ toJSON $ ORDRD (caDocId ^. L.uri) crsM
-                    _         -> Nothing
-            mkCodeAction crsD crsM  = InR CodeAction
+        let mkCodeAction (crsM, nse)  = InR CodeAction
                 { -- We pass the record selector to the title function, so that
                   -- we can have the name of the record selector in the title of
                   -- the codeAction. This allows the user can easily distinguish
                   -- between the different codeActions when using nested record
                   -- selectors, the disadvantage is we need to print out the
                   -- name of the record selector which will decrease performance
-                _title = mkCodeActionTitle exts crsM crsD
+                  _title = mkCodeActionTitle exts crsM nse
                 , _kind = Just CodeActionKind_RefactorRewrite
                 , _diagnostics = Nothing
                 , _isPreferred = Nothing
                 , _disabled = Nothing
-                , _edit = changes crsM crsD
+                , _edit = Nothing
                 , _command = Nothing
-                , _data_ = resolveData crsM
+                , _data_ = Just $ toJSON $ ORD pId $ toJSON $ ORDRD (caDocId ^. L.uri) crsM
                 }
-            actions = map (mkCodeAction crsDetails) (RangeMap.filterByRange caRange crsMap)
+            actions = map mkCodeAction (RangeMap.filterByRange caRange crsMap)
         pure $ InL actions
     where
-    mkCodeActionTitle :: [Extension] -> Int -> IntMap.IntMap RecordSelectorExpr-> Text
-    mkCodeActionTitle exts crsM crsD =
+    mkCodeActionTitle :: [Extension] -> Int -> HsExpr (GhcPass 'Renamed) -> Text
+    mkCodeActionTitle exts crsM se =
         if OverloadedRecordDot `elem` exts
             then title
             else title <> " (needs extension: OverloadedRecordDot)"
         where
-            title = "Convert `" <> name (IntMap.lookup crsM crsD) <> "` to record dot syntax"
-            name (Just (RecordSelectorExpr _ se _)) = printOutputable se
-            name _                                  = ""
+            title = "Convert `" <> printOutputable se <> "` to record dot syntax"
+
+mkWorkspaceEdit:: Uri -> Int -> IntMap.IntMap RecordSelectorExpr -> [Extension] -> NextPragmaInfo-> Maybe WorkspaceEdit
+mkWorkspaceEdit uri crsM crsD exts pragma =
+    Just $ WorkspaceEdit
+    { _changes = Just (Map.singleton uri (edits (IntMap.lookup crsM crsD)))
+    , _documentChanges = Nothing
+    , _changeAnnotations = Nothing}
+    where pragmaEdit =
+            if OverloadedRecordDot `elem` exts
+            then Nothing
+            else Just $ insertNewPragma pragma OverloadedRecordDot
+          edits (Just crs) = convertRecordSelectors crs : maybeToList pragmaEdit
+          edits _          = []
 
 collectRecSelsRule :: Recorder (WithPriority Log) -> Rules ()
 collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
@@ -259,13 +247,12 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
                 recSels = mapMaybe (rewriteRange pm) (getRecordSelectors tmr)
             uniques <- liftIO $ replicateM (length recSels) (hashUnique <$> newUnique)
             logWith recorder Debug (LogCollectedRecordSelectors recSels)
-            let crsDetails = IntMap.fromList $ zip uniques recSels
+            let crsUniquesAndDetails =  zip uniques recSels
                 -- We need the rangeMap to be able to filter by range later
-                rangeAndUnique = mapM (\x -> (, x) . location <$> IntMap.lookup x crsDetails) uniques
-                crsMap :: Maybe (RangeMap Int)
-                crsMap = RangeMap.fromList' <$> rangeAndUnique
-                crsDetails :: IntMap.IntMap RecordSelectorExpr
-            pure ([], CRSR <$> crsMap <*> Just crsDetails <*> Just exts)
+                rangeAndUnique = toRangeAndUnique <$> crsUniquesAndDetails
+                crsMap :: RangeMap (Int,  HsExpr (GhcPass 'Renamed))
+                crsMap = RangeMap.fromList' rangeAndUnique
+            pure ([], CRSR <$> Just crsMap <*> Just (IntMap.fromList crsUniquesAndDetails) <*> Just exts)
     where getEnabledExtensions :: TcModuleResult -> [Extension]
           getEnabledExtensions = getExtensions . tmrParsed
           getRecordSelectors :: TcModuleResult -> [RecordSelectorExpr]
@@ -277,6 +264,7 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
             case toCurrentRange pm (location recSel) of
                 Just newLoc -> Just $ recSel{location = newLoc}
                 Nothing     -> Nothing
+          toRangeAndUnique (id, RecordSelectorExpr l (unLoc -> se) _) = (l, (id, se))
 
 convertRecordSelectors :: RecordSelectorExpr ->  TextEdit
 convertRecordSelectors (RecordSelectorExpr l se re) =

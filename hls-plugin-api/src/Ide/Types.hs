@@ -12,6 +12,7 @@
 {-# LANGUAGE MonadComprehensions        #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE OverloadedLabels           #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE PolyKinds                  #-}
@@ -47,6 +48,8 @@ module Ide.Types
 , installSigUsr1Handler
 , responseError
 , lookupCommandProvider
+, OwnedResolveData(..)
+, mkCodeActionHandlerWithResolve
 )
     where
 
@@ -59,7 +62,9 @@ import           System.Posix.Signals
 #endif
 import           Control.Applicative           ((<|>))
 import           Control.Arrow                 ((&&&))
-import           Control.Lens                  ((.~), (^.))
+import           Control.Lens                  (_Just, (.~), (^.), (^?))
+import           Control.Monad.Trans.Class     (lift)
+import           Control.Monad.Trans.Except    (ExceptT (..), runExceptT)
 import           Data.Aeson                    hiding (Null, defaultOptions)
 import           Data.Default
 import           Data.Dependent.Map            (DMap)
@@ -74,6 +79,7 @@ import           Data.List.NonEmpty            (NonEmpty (..), toList)
 import qualified Data.Map                      as Map
 import           Data.Maybe
 import           Data.Ord
+import           Data.Row                      ((.!))
 import           Data.Semigroup
 import           Data.String
 import qualified Data.Text                     as T
@@ -85,7 +91,9 @@ import           Ide.Plugin.Properties
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server           (LspM, getVirtualFile)
+import           Language.LSP.Server           (LspM, LspT,
+                                                getClientCapabilities,
+                                                getVirtualFile)
 import           Language.LSP.VFS
 import           Numeric.Natural
 import           OpenTelemetry.Eventlog
@@ -404,7 +412,9 @@ instance PluginMethod Request Method_TextDocumentCodeAction where
       uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_CodeActionResolve where
-  pluginEnabled _ msgParams pluginDesc config = pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
+  pluginEnabled _ msgParams pluginDesc config =
+    pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
+    && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
 
 instance PluginMethod Request Method_TextDocumentDefinition where
   pluginEnabled _ msgParams pluginDesc _ =
@@ -856,7 +866,7 @@ type CommandFunction ideState a
 
 newtype PluginId = PluginId T.Text
   deriving (Show, Read, Eq, Ord)
-  deriving newtype (FromJSON, Hashable)
+  deriving newtype (ToJSON, FromJSON, Hashable)
 
 instance IsString PluginId where
   fromString = PluginId . T.pack
@@ -957,7 +967,6 @@ instance HasTracing WorkspaceSymbolParams where
 instance HasTracing CallHierarchyIncomingCallsParams
 instance HasTracing CallHierarchyOutgoingCallsParams
 instance HasTracing CompletionItem
-instance HasTracing CodeLens
 instance HasTracing CodeAction
 -- ---------------------------------------------------------------------
 
@@ -992,3 +1001,55 @@ getProcessID = fromIntegral <$> P.getProcessID
 
 installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 #endif
+
+-- |When provided with both a codeAction provider and an affiliated codeAction
+-- resolve provider, this function creates a handler that automatically uses
+-- your resolve provider to fill out you original codeAction if the client doesn't
+-- have codeAction resolve support. This means you don't have to check whether
+-- the client supports resolve and act accordingly in your own providers.
+mkCodeActionHandlerWithResolve
+  :: (ideState -> PluginId -> CodeActionParams -> LspM Config (Either ResponseError ([Command |? CodeAction] |? Null)))
+  -> (ideState -> PluginId -> CodeAction -> LspM Config (Either ResponseError CodeAction))
+  -> PluginHandlers ideState
+mkCodeActionHandlerWithResolve codeActionMethod codeResolveMethod =
+    let newCodeActionMethod ideState pid params = runExceptT $
+            do codeActionReturn <- ExceptT $ codeActionMethod ideState pid params
+               caps <- lift getClientCapabilities
+               case codeActionReturn of
+                r@(InR _) -> pure r
+                (InL ls) -> do
+                    let mapper :: (Command |? CodeAction) -> ExceptT ResponseError (LspT Config IO) (Command |? CodeAction)
+                        mapper c@(InL _) = pure c
+                        mapper (InR codeAction) = fmap (InR . dropData) $ ExceptT $ codeResolveMethod ideState pid codeAction
+                    if supportsResolve caps
+                        then pure $ InL ls
+                        else InL <$> traverse mapper ls --This is the actual part where we fill in the edit data for the client
+    in mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod
+    <> mkPluginHandler SMethod_CodeActionResolve codeResolveMethod
+    where supportsResolve :: ClientCapabilities -> Bool
+          supportsResolve caps =
+            caps ^? L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just == Just True
+            && case caps ^? L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just of
+                Just row -> "edit" `elem` row .! #properties
+                _        -> False
+          dropData :: CodeAction -> CodeAction
+          dropData ca = ca & L.data_ .~ Nothing
+
+-- |Allow plugins to "own" resolve data, allowing only them to be queried for
+-- the resolve action. This design has added flexibility at the cost of nested
+-- Value types
+data OwnedResolveData = ORD {
+  owner :: PluginId
+, value :: Value
+} deriving (Generic, Show)
+instance ToJSON OwnedResolveData
+instance FromJSON OwnedResolveData
+
+pluginResolverResponsible :: Maybe Value -> PluginDescriptor c -> Bool
+pluginResolverResponsible (Just val) pluginDesc =
+    case fromJSON val of
+       (Success (ORD o _)) -> pluginId pluginDesc == o
+       _                   -> True -- We want to fail open in case our resolver is not using the ORD type
+-- This is a wierd case, because anything that gets resolved should have a data
+-- field, but in any case, failing open is safe enough.
+pluginResolverResponsible Nothing _ = True

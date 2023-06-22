@@ -1,5 +1,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeOperators         #-}
 
@@ -8,6 +9,8 @@ module Main ( main ) where
 import           Control.Lens                   (_Just, set, (^.))
 import           Data.Either                    (rights)
 import           Data.Functor                   (void)
+import           Data.Maybe                     (isNothing)
+import           Data.Row
 import qualified Data.Text                      as T
 import qualified Data.Text.Lazy                 as TL
 import qualified Data.Text.Lazy.Encoding        as TL
@@ -32,36 +35,23 @@ plugin = mkPluginTestDescriptor OverloadedRecordDot.descriptor "overloaded-recor
 
 test :: TestTree
 test = testGroup "overloaded-record-dot"
-  [testGroup
-  "without resolve"
-  [ mkTest "Simple" "Simple" "name" 10 7 10 15,
-    mkTest "NoPragmaNeeded" "NoPragmaNeeded" "name" 11 7 11 15,
-    mkTest "NestedParens" "NestedParens" "name" 15 7 15 24,
-    mkTest "NestedDot" "NestedDot" "name" 17 7 17 22,
-    mkTest "NestedDollar" "NestedDollar" "name" 15 7 15 24,
-    mkTest "MultilineCase" "MultilineCase" "name" 10 7 12 15,
-    mkTest "Multiline" "Multiline" "name" 10 7 11 15,
-    mkTest "MultilineExpanded" "MultilineExpanded" "owner" 28 8 28 19
-  ],
-  testGroup
-  "with Resolve"
-  [ mkResolveTest "Simple" "Simple" "name" 10 7 10 15,
-    mkResolveTest "NoPragmaNeeded" "NoPragmaNeeded" "name" 11 7 11 15,
-    mkResolveTest "NestedParens" "NestedParens" "name" 15 7 15 24,
-    mkResolveTest "NestedDot" "NestedDot" "name" 17 7 17 22,
-    mkResolveTest "NestedDollar" "NestedDollar" "name" 15 7 15 24,
-    mkResolveTest "MultilineCase" "MultilineCase" "name" 10 7 12 15,
-    mkResolveTest "Multiline" "Multiline" "name" 10 7 11 15,
-    mkResolveTest "MultilineExpanded" "MultilineExpanded" "owner" 28 8 28 19
-  ],
-  testGroup
-  "benchmark"
-  [ mkTest "Benchmark without resolve" "Benchmark" "name1298" 1797 11 1797 27,
-    mkResolveTest "Benchmark with resolve" "Benchmark" "name1298" 1797 11 1797 27
-  ]]
+      (mkTest "Simple" "Simple" "name" 10 7 10 15
+    <> mkTest "NoPragmaNeeded" "NoPragmaNeeded" "name" 11 7 11 15
+    <> mkTest "NestedParens" "NestedParens" "name" 15 7 15 24
+    <> mkTest "NestedDot" "NestedDot" "name" 17 7 17 22
+    <> mkTest "NestedDollar" "NestedDollar" "name" 15 7 15 24
+    <> mkTest "MultilineCase" "MultilineCase" "name" 10 7 12 15
+    <> mkTest "Multiline" "Multiline" "name" 10 7 11 15
+    <> mkTest "MultilineExpanded" "MultilineExpanded" "owner" 28 8 28 19
+    <> mkTest "Benchmark" "Benchmark" "name1298" 1797 11 1797 27)
 
-mkTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> TestTree
+mkTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> [TestTree]
 mkTest title fp selectorName x1 y1 x2 y2 =
+    [mkNoResolveTest (title <> " without resolve") fp selectorName x1 y1 x2 y2,
+    mkResolveTest (title <> " with resolve") fp selectorName x1 y1 x2 y2]
+
+mkNoResolveTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> TestTree
+mkNoResolveTest title fp selectorName x1 y1 x2 y2 =
   goldenWithHaskellAndCaps noResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
     (act:_) <- getExplicitFieldsActions doc selectorName x1 y1 x2 y2
     executeCodeAction act
@@ -69,9 +59,11 @@ mkTest title fp selectorName x1 y1 x2 y2 =
 
 mkResolveTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> TestTree
 mkResolveTest title fp selectorName x1 y1 x2 y2 =
-  goldenWithHaskellDoc plugin title testDataDir fp "expected" "hs" $ \doc -> do
+  goldenWithHaskellAndCaps resolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
     ((Right act):_) <- getAndResolveExplicitFieldsActions doc selectorName x1 y1 x2 y2
     executeCodeAction act
+  where resolveCaps = set (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) (#properties .== ["edit"]) fullCaps
+
 
 getExplicitFieldsActions
   :: TextDocumentIdentifier
@@ -90,7 +82,7 @@ getAndResolveExplicitFieldsActions
   -> Session [Either ResponseError CodeAction]
 getAndResolveExplicitFieldsActions doc selectorName x1 y1 x2 y2 = do
     actions <- findExplicitFieldsAction selectorName <$> getCodeActions doc range
-    rsp <- mapM (request SMethod_CodeActionResolve) actions
+    rsp <- mapM (request SMethod_CodeActionResolve) (filter (\x -> isNothing (x ^. L.edit)) actions)
     pure $ (^. L.result) <$> rsp
 
   where
