@@ -469,11 +469,11 @@ filterUsages = id
 
 -- | Mitigation for https://gitlab.haskell.org/ghc/ghc/-/issues/22744
 shareUsages :: ModIface -> ModIface
-shareUsages iface = iface {mi_usages = usages}
+shareUsages iface = iface {- {mi_usages = usages}
   where usages = map go (mi_usages iface)
         go usg@UsageFile{} = usg {usg_file_path = fp}
           where !fp = shareFilePath (usg_file_path usg)
-        go usg = usg
+        go usg = usg -}
 
 
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
