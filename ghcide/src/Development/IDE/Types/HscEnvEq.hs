@@ -22,6 +22,7 @@ import           Data.Set                        (Set)
 import qualified Data.Set                        as Set
 import           Data.Unique                     (Unique)
 import qualified Data.Unique                     as Unique
+import           Development.IDE.Core.Shake      (ShakeExtras)
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util as Maybes
 import           Development.IDE.GHC.Error       (catchSrcErrors)
@@ -59,8 +60,8 @@ updateHscEnvEq oldHscEnvEq newHscEnv = do
   update <$> Unique.newUnique
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEq :: FilePath -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEq cradlePath hscEnv0 deps = do
+newHscEnvEq :: FilePath -> ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
+newHscEnvEq cradlePath se hscEnv0 deps = do
     let relativeToCradle = (takeDirectory cradlePath </>)
         hscEnv = removeImportPaths hscEnv0
 
@@ -68,10 +69,10 @@ newHscEnvEq cradlePath hscEnv0 deps = do
     importPathsCanon <-
       mapM makeAbsolute $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
 
-    newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) hscEnv deps
+    newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) se hscEnv deps
 
-newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
+newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
+newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
 
     let dflags = hsc_dflags hscEnv
 
@@ -115,7 +116,7 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
 newHscEnvEqPreserveImportPaths
-    :: HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
+    :: ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEqPreserveImportPaths = newHscEnvEqWithImportPaths Nothing
 
 -- | Unwrap the 'HscEnv' with the original import paths.

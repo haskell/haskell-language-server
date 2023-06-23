@@ -585,7 +585,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 
           -- New HscEnv for the component in question, returns the new HscEnvEq and
           -- a mapping from FilePath to the newly created HscEnvEq.
-          let new_cache = newComponentCache recorder optExtensions hieYaml _cfp hscEnv uids
+          let new_cache = newComponentCache recorder extras optExtensions hieYaml _cfp hscEnv uids
           (cs, res) <- new_cache new
           -- Modified cache targets for everything else in the hie.yaml file
           -- which now uses the same EPS and so on
@@ -793,6 +793,7 @@ setNameCache nc hsc = hsc { hsc_NC = nc }
 -- | Create a mapping from FilePaths to HscEnvEqs
 newComponentCache
          :: Recorder (WithPriority Log)
+         -> ShakeExtras
          -> [String]       -- File extensions to consider
          -> Maybe FilePath -- Path to cradle
          -> NormalizedFilePath -- Path to file that caused the creation of this component
@@ -800,7 +801,7 @@ newComponentCache
          -> [(UnitId, DynFlags)]
          -> ComponentInfo
          -> IO ( [TargetDetails], (IdeResult HscEnvEq, DependencyInfo))
-newComponentCache recorder exts cradlePath cfp hsc_env uids ci = do
+newComponentCache recorder extras exts cradlePath cfp hsc_env uids ci = do
     let df = componentDynFlags ci
     hscEnv' <-
 #if MIN_VERSION_ghc(9,3,0)
@@ -823,7 +824,7 @@ newComponentCache recorder exts cradlePath cfp hsc_env uids ci = do
 #endif
 
     let newFunc = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
-    henv <- newFunc hscEnv' uids
+    henv <- newFunc extras hscEnv' uids
     let targetEnv = ([], Just henv)
         targetDepends = componentDependencyInfo ci
         res = (targetEnv, targetDepends)

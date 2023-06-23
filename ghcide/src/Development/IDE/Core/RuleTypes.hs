@@ -31,7 +31,7 @@ import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
-import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
+import {-# SOURCE #-} Development.IDE.Types.HscEnvEq          (HscEnvEq)
 import           Development.IDE.Types.KnownTargets
 import           GHC.Generics                                 (Generic)
 
