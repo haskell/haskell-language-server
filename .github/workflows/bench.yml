@@ -27,15 +27,13 @@ jobs:
           paths_ignore: '[ "**/docs/**"
                          , "**.md"
                          , "**/LICENSE"
-                         , ".circleci/**"
                          , "**.nix"
-                         , "**/test/**"
                          , "flake.lock"
-                         , "**/README.md"
-                         , "FUNDING.yml"
-                         , "**/stack*.yaml"
-                         , ".gitlab-ci.yaml"
+                         , "**.yml"
+                         , "**.yaml"
+                         , ".circleci/**"
                          , ".gitlab/**"
+                         , ".github/**"
                          ]'
 
   bench_init:

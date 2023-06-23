@@ -65,17 +65,16 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v5.3.0
         with:
           cancel_others: false
-          paths_ignore: '["**/docs/**"
+          paths_ignore: '[ "**/docs/**"
                          , "**.md"
                          , "**/LICENSE"
                          , "**.nix"
                          , "flake.lock"
-                         , "**/README.md"
-                         , "FUNDING.yml"
+                         , "**.yml"
+                         , "**.yaml"
                          , ".circleci/**"
-                         , "**/stack*.yaml"
-                         , ".gitlab-ci.yaml"
                          , ".gitlab/**"
+                         , ".github/**"
                          ]'
 
   caching:

@@ -1,0 +1,40 @@
+[
+  { "package": "haskell-language-server", "excluded_ghcs" : [] }
+, { "package": "hie-compat", "excluded_ghcs" : [] }
+, { "package": "shake-bench", "excluded_ghcs" : ["9.6"] }
+, { "package": "hls-graph", "excluded_ghcs" : [] }
+, { "package": "ghcide", "excluded_ghcs" : [] }
+, { "package": "ghcide-bench", "excluded_ghcs" : [] }
+, { "package": "ghcide-test-utils", "excluded_ghcs" : [] }
+, { "package": "hls-plugin-api", "excluded_ghcs" : [] }
+, { "package": "hls-test-utils", "excluded_ghcs" : [] }
+, { "package": "hls-cabal-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-cabal-fmt-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-tactics-plugin", "excluded_ghcs" : ["9.2", "9.4", "9.6"] }
+, { "package": "hls-stylish-haskell-plugin", "excluded_ghcs" : ["9.6"] }
+, { "package": "hls-fourmolu-plugin", "excluded_ghcs" : ["9.6"] }
+, { "package": "hls-class-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-eval-plugin", "excluded_ghcs" : ["9.4"] }
+, { "package": "hls-explicit-imports-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-refine-imports-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-hlint-plugin", "excluded_ghcs" : ["9.6"] }
+, { "package": "hls-rename-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-retrie-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-haddock-comments-plugin", "excluded_ghcs" : ["9.2", "9.4", "9.6"] }
+, { "package": "hls-splice-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-floskell-plugin", "excluded_ghcs" : ["9.6"] }
+, { "package": "hls-pragmas-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-module-name-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-ormolu-plugin", "excluded_ghcs" : ["9.6"] }
+, { "package": "hls-call-hierarchy-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-alternate-number-format-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-qualify-imported-names-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-code-range-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-change-type-signature-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-stan-plugin", "excluded_ghcs" : [ "9.0", "9.2", "9.4", "9.6"] }
+, { "package": "hls-gadt-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-explicit-fixity-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-explicit-record-fields-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-refactor-plugin", "excluded_ghcs" : [] }
+, { "package": "hls-overloaded-record-dot-plugin", "excluded_ghcs" : ["8.10", "9.0"] }
+]

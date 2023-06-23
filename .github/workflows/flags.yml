@@ -34,12 +34,11 @@ jobs:
                          , "**/LICENSE"
                          , "**.nix"
                          , "flake.lock"
-                         , "**/README.md"
-                         , "FUNDING.yml"
+                         , "**.yml"
+                         , "**.yaml"
                          , ".circleci/**"
-                         , "**/stack*.yaml"
-                         , ".gitlab-ci.yaml"
                          , ".gitlab/**"
+                         , ".github/**"
                          ]'
 
   flags:
