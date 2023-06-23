@@ -6,26 +6,22 @@
 module Config (tests) where
 
 import           Control.DeepSeq
-import           Control.Lens               hiding (List, (.=))
 import           Control.Monad
 import           Data.Aeson
 import           Data.Hashable
-import qualified Data.HashMap.Strict        as HM
-import qualified Data.Map                   as Map
-import           Data.Proxy
-import qualified Data.Text                  as T
-import           Data.Typeable              (Typeable)
-import           Development.IDE            (RuleResult, action, define,
-                                             getFilesOfInterestUntracked,
-                                             getPluginConfigAction,
-                                             ideErrorText, uses_)
-import           Development.IDE.Test       (expectDiagnostics)
+import qualified Data.HashMap.Strict  as HM
+import qualified Data.Map             as Map
+import           Data.Typeable        (Typeable)
+import           Development.IDE      (RuleResult, action, define,
+                                       getFilesOfInterestUntracked,
+                                       getPluginConfigAction, ideErrorText,
+                                       uses_)
+import           Development.IDE.Test (expectDiagnostics)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens as L
-import           Language.LSP.Test          as Test
-import           System.FilePath            ((</>))
+import           Language.LSP.Test    as Test
+import           System.FilePath      ((</>))
 import           Test.Hls
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
