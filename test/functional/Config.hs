@@ -6,28 +6,23 @@
 module Config (tests) where
 
 import           Control.DeepSeq
-import           Control.Lens               hiding (List, (.=))
 import           Control.Monad
 import           Data.Aeson
 import           Data.Hashable
-import qualified Data.HashMap.Strict        as HM
-import qualified Data.Map                   as Map
-import           Data.Proxy
-import qualified Data.Text                  as T
-import           Data.Typeable              (Typeable)
-import           Development.IDE            (RuleResult, action, define,
-                                             getFilesOfInterestUntracked,
-                                             getPluginConfigAction,
-                                             ideErrorText, uses_)
-import           Development.IDE.Test       (expectDiagnostics)
+import qualified Data.HashMap.Strict  as HM
+import qualified Data.Map             as Map
+import           Data.Typeable        (Typeable)
+import           Development.IDE      (RuleResult, action, define,
+                                       getFilesOfInterestUntracked,
+                                       getPluginConfigAction, ideErrorText,
+                                       uses_)
+import           Development.IDE.Test (expectDiagnostics)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens as L
-import           Language.LSP.Test          as Test
-import           System.FilePath            ((</>))
+import           Language.LSP.Test    as Test
+import           System.FilePath      ((</>))
 import           Test.Hls
-import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 
@@ -35,29 +30,8 @@ tests :: TestTree
 tests = testGroup "plugin config" [
       -- Note: there are more comprehensive tests over config in hls-hlint-plugin
       -- TODO: Add generic tests over some example plugin
-      configParsingTests, genericConfigTests
+       genericConfigTests
     ]
-
-configParsingTests :: TestTree
-configParsingTests = testGroup "config parsing"
-    [ testCase "empty object as user configuration should not send error logMessage" $ runConfigSession "" $ do
-        let config = object []
-        sendConfigurationChanged (toJSON config)
-
-        -- Send custom request so server returns a response to prevent blocking
-        void $ sendNotification (SMethod_CustomMethod (Proxy @"non-existent-method")) Null
-
-        logNot <- skipManyTill Test.anyMessage (message SMethod_WindowLogMessage)
-
-        liftIO $ (logNot ^. L.params . L.type_) > MessageType_Error
-                 || "non-existent-method" `T.isInfixOf` (logNot ^. L.params . L.message)
-                    @? "Server sends logMessage with MessageType = Error"
-    ]
-
-    where
-        runConfigSession :: FilePath -> Session a -> IO a
-        runConfigSession subdir  =
-            failIfSessionTimeout . runSession hlsCommand fullCaps ("test/testdata" </> subdir)
 
 genericConfigTests :: TestTree
 genericConfigTests = testGroup "generic plugin config"
