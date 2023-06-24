@@ -349,7 +349,7 @@ common fourmolu
     cpp-options: -Dhls_fourmolu
 
 common ormolu
-  if flag(ormolu) && impl(ghc < 9.5)
+  if flag(ormolu) && impl(ghc < 9.7)
     build-depends: hls-ormolu-plugin == 2.1.0.0
     cpp-options: -Dhls_ormolu
 
