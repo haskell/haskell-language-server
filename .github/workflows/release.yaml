@@ -352,7 +352,7 @@ jobs:
 
   bindist-linux:
     name: Tar linux bindists (linux)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux-space]
     needs: ["build-linux"]
     env:
       TARBALL_EXT: tar.xz
