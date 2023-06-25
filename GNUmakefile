@@ -43,6 +43,7 @@ CP        := cp
 # by default don't run ghcup
 GHCUP       ?= echo
 GHCUP_GC    ?= $(GHCUP) gc
+GHCUP_RM    ?= $(GHCUP) rm
 
 CABAL_CACHE_BIN ?= echo
 
@@ -87,7 +88,8 @@ hls:
 	for ghc in $(GHCS) ; do \
 		$(GHCUP) install ghc `echo $$ghc` && \
 		$(GHCUP_GC) -p -s -c -t && \
-		$(MAKE) GHC_VERSION=`echo $$ghc` hls-ghc || exit 1 ; \
+		$(MAKE) GHC_VERSION=`echo $$ghc` hls-ghc || exit 1 && \
+		$(GHCUP_RM) `echo $$ghc` ; \
 	done
 
 hls-ghc:
@@ -108,7 +110,8 @@ bindist:
 	for ghc in $(GHCS) ; do \
 		$(GHCUP) install ghc `echo $$ghc` && \
 		$(GHCUP_GC) -p -s -c -t && \
-		$(MAKE) GHC_VERSION=`echo $$ghc` bindist-ghc || exit 1 ; \
+		$(MAKE) GHC_VERSION=`echo $$ghc` bindist-ghc || exit 1 && \
+		$(GHCUP_RM) `echo $$ghc` ; \
 	done
 	$(SED) -e "s/@@HLS_VERSION@@/$(HLS_VERSION)/" \
 		bindist/GNUmakefile.in > "$(BINDIST_OUT_DIR)/GNUmakefile"
