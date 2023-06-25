@@ -354,7 +354,7 @@ common ormolu
     cpp-options: -Dhls_ormolu
 
 common stylishHaskell
-  if flag(stylishHaskell) && impl(ghc < 9.5)
+  if flag(stylishHaskell) 
     build-depends: hls-stylish-haskell-plugin == 2.1.0.0
     cpp-options: -Dhls_stylishHaskell
 

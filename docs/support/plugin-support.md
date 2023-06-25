@@ -61,7 +61,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-ormolu-plugin`                 | 2    |                          |
 | `hls-rename-plugin`                 | 2    |                          |
 | `hls-refine-imports-plugin`         | 2    |                          |
-| `hls-stylish-haskell-plugin`        | 2    | 9.6                      |
+| `hls-stylish-haskell-plugin`        | 2    |                          |
 | `hls-tactics-plugin`                | 2    | 9.2, 9.4, 9.6            |
 | `hls-overloaded-recrod-dot-plugin`  | 2    | 8.10, 9.0                |
 | `hls-haddock-comments-plugin`       | 3    | 9.2, 9.4, 9.6            |
