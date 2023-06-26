@@ -176,13 +176,15 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
 resolveProvider :: PluginMethodHandler IdeState 'Method_CodeActionResolve
 resolveProvider ideState pId ca@(CodeAction _ _ _ _ _ _ _ (Just resData)) =
     pluginResponse $ do
-        case fromJSON resData of
-            Success (ORDRD uri int) -> do
-                nfp <- getNormalizedFilePath uri
-                CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
-                pragma <- getFirstPragma pId ideState nfp
-                pure $ ca {_edit = mkWorkspaceEdit uri int crsDetails exts pragma}
-            _ -> throwE "Unable to deserialize the data"
+        Success (ORDRD uri int) <- pure $ fromJSON resData
+        nfp <- getNormalizedFilePath uri
+        CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
+        pragma <- getFirstPragma pId ideState nfp
+        case IntMap.lookup int crsDetails of
+            Just rse -> pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
+            -- We need to throw a content modified error here, but we need fendor's
+            -- plugin error response pr to make it convenient to use here.
+            _        -> throwE "Content Modified Error"
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
@@ -216,18 +218,17 @@ codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
         where
             title = "Convert `" <> printOutputable se <> "` to record dot syntax"
 
-mkWorkspaceEdit:: Uri -> Int -> IntMap.IntMap RecordSelectorExpr -> [Extension] -> NextPragmaInfo-> Maybe WorkspaceEdit
-mkWorkspaceEdit uri crsM crsD exts pragma =
+mkWorkspaceEdit:: Uri -> RecordSelectorExpr -> [Extension] -> NextPragmaInfo-> Maybe WorkspaceEdit
+mkWorkspaceEdit uri recSel exts pragma =
     Just $ WorkspaceEdit
-    { _changes = Just (Map.singleton uri (edits (IntMap.lookup crsM crsD)))
+    { _changes =
+        Just (Map.singleton uri (convertRecordSelectors recSel : maybeToList pragmaEdit))
     , _documentChanges = Nothing
     , _changeAnnotations = Nothing}
     where pragmaEdit =
             if OverloadedRecordDot `elem` exts
             then Nothing
             else Just $ insertNewPragma pragma OverloadedRecordDot
-          edits (Just crs) = convertRecordSelectors crs : maybeToList pragmaEdit
-          edits _          = []
 
 collectRecSelsRule :: Recorder (WithPriority Log) -> Rules ()
 collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
