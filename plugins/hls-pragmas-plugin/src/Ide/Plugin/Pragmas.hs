@@ -137,7 +137,8 @@ warningBlacklist = ["deferred-type-errors"]
 -- | Offer to add a missing Language Pragma to the top of a file.
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
 suggestAddPragma :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
-suggestAddPragma mDynflags Diagnostic {_message} = genPragma _message
+suggestAddPragma mDynflags Diagnostic {_message, _source}
+    | _source == Just "typecheck" || _source == Just "parser" = genPragma _message
   where
     genPragma target =
       [("Add \"" <> r <> "\"", LangExt r) | r <- findPragma target, r `notElem` disabled]
@@ -149,6 +150,7 @@ suggestAddPragma mDynflags Diagnostic {_message} = genPragma _message
         -- When the module failed to parse, we don't have access to its
         -- dynFlags. In that case, simply don't disable any pragmas.
         []
+suggestAddPragma _ _ = []
 
 -- | Find all Pragmas are an infix of the search term.
 findPragma :: T.Text -> [T.Text]
