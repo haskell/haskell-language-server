@@ -149,6 +149,7 @@ arguments plugins = GhcideArguments
           <> help "Send logs to a file"
            )) <|> (optional (strOption
            ( long "logfile"
+          <> short 'l'
           <> metavar "LOGFILE"
           <> help "Send logs to a file"
           -- deprecated alias so users don't need to update their CLI calls
