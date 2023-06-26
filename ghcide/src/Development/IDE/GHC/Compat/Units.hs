@@ -24,6 +24,8 @@ module Development.IDE.GHC.Compat.Units (
     -- * UnitInfo
     UnitInfo,
     unitExposedModules,
+    unitLibraryDirs,
+    UnitInfo.unitId,
     unitDepends,
     unitHaddockInterfaces,
     unitInfoId,
@@ -272,6 +274,9 @@ preloadClosureUs = State.preloadClosure . unitState
 #else
 preloadClosureUs = const ()
 #endif
+
+unitLibraryDirs :: UnitInfo -> [FilePath]
+unitLibraryDirs = fmap ST.unpack . UnitInfo.unitLibraryDirs
 
 unitExposedModules :: UnitInfo -> [(ModuleName, Maybe Module)]
 unitExposedModules ue =

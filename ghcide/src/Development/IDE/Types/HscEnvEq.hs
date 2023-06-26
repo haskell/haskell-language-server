@@ -18,17 +18,23 @@ import           Control.DeepSeq                 (force)
 import           Control.Exception               (evaluate, mask, throwIO)
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM)
 import           Data.Either                     (fromRight)
+import qualified Data.Map                        as Map
 import           Data.Set                        (Set)
 import qualified Data.Set                        as Set
+import qualified Data.Text                       as T
 import           Data.Unique                     (Unique)
 import qualified Data.Unique                     as Unique
-import           Development.IDE.Core.Shake      (ShakeExtras)
+import           Development.IDE.Core.Compile    (indexHieFile, loadHieFile)
+import           Development.IDE.Core.Shake      (ShakeExtras(ideNc, logger), mkUpdater)
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util as Maybes
 import           Development.IDE.GHC.Error       (catchSrcErrors)
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
+import           Development.IDE.Types.Location  (toNormalizedFilePath')
+import qualified Development.IDE.Types.Logger    as Logger
+import           HieDb                           (SourceFile(FakeFile))
 import           OpenTelemetry.Eventlog          (withSpan)
 import           System.Directory                (makeAbsolute)
 import           System.FilePath
@@ -71,6 +77,10 @@ newHscEnvEq cradlePath se hscEnv0 deps = do
 
     newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) se hscEnv deps
 
+newtype UnitInfoOrd = UnitInfoOrd UnitInfo deriving Eq
+instance Ord UnitInfoOrd where
+  compare (UnitInfoOrd u1) (UnitInfoOrd u2) = compare (unitId u1) (unitId u2)
+
 newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
 
@@ -83,25 +93,70 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
         -- compute the package imports
         let pkgst   = unitState hscEnv
             depends = explicitUnits pkgst
-            modules =
-                [ m
-                | d        <- depends
-                , Just pkg <- [lookupPackageConfig d hscEnv]
-                , (modName, maybeOtherPkgMod) <- unitExposedModules pkg
-                , let m = case maybeOtherPkgMod of
-                        -- When module is re-exported from another package,
-                        -- the origin module is represented by value in Just
-                        Just otherPkgMod -> otherPkgMod
-                        Nothing          -> mkModule (unitInfoId pkg) modName
-                ]
+            packages = [ pkg
+                       | d <- depends
+                       , Just pkg <- [lookupPackageConfig d hscEnv]
+                       ]
+            modules = Map.fromSet
+                (\(UnitInfoOrd pkg) ->
+                  [ m
+                  | (modName, maybeOtherPkgMod) <- unitExposedModules pkg
+                  , let m = case maybeOtherPkgMod of
+                          -- When module is re-exported from another package,
+                          -- the origin module is represented by value in Just
+                          Just otherPkgMod -> otherPkgMod
+                          Nothing          -> mkModule (unitInfoId pkg) modName
+                  ]
+                )
+                (Set.fromList $ map UnitInfoOrd packages)
 
-            doOne m = do
+            logPackage :: UnitInfo -> IO ()
+            logPackage pkg = Logger.logDebug (logger se) $ "\n\n\n!!!!!!!!!!!! hscEnvEq :\n"
+              <> T.pack (concatMap show $ unitLibraryDirs pkg)
+              <> "\n!!!!!!!!!!!!!!!!!!!!!!\n\n\n"
+            doOnePackage :: UnitInfoOrd -> [Module] -> IO [ModIface]
+            doOnePackage (UnitInfoOrd pkg) ms = do
+              let pkgLibDir :: FilePath
+                  pkgLibDir = case unitLibraryDirs pkg of
+                    [] -> ""
+                    (libraryDir : _) -> libraryDir
+                  hieDir :: FilePath
+                  hieDir = pkgLibDir </> "extra-compliation-artifacts"
+              logPackage pkg
+              mapMaybeM (doOne hieDir) ms
+
+            doOne :: FilePath -> Module -> IO (Maybe ModIface)
+            doOne hieDir m = do
+                let toFilePath :: ModuleName -> FilePath
+                    toFilePath = separateDirectories . prettyModuleName
+                      where
+                        separateDirectories :: FilePath -> FilePath
+                        separateDirectories moduleNameString =
+                          case breakOnDot moduleNameString of
+                            [] -> ""
+                            ms -> foldr1 (</>) ms
+                        breakOnDot :: FilePath -> [FilePath]
+                        breakOnDot = words . map replaceDotWithSpace
+                        replaceDotWithSpace :: Char -> Char
+                        replaceDotWithSpace '.' = ' '
+                        replaceDotWithSpace c = c
+                        prettyModuleName :: ModuleName -> String
+                        prettyModuleName = filter (/= '"')
+                          . concat
+                          . drop 1
+                          . words
+                          . show
+                    hiePath :: FilePath
+                    hiePath = hieDir </> toFilePath (moduleName m) ++ ".hie"
                 modIface <- initIfaceLoad hscEnv $
                     loadInterface "" m (ImportByUser NotBoot)
-                return $ case modIface of
-                    Maybes.Failed    _r -> Nothing
-                    Maybes.Succeeded mi -> Just mi
-        modIfaces <- mapMaybeM doOne modules
+                case modIface of
+                    Maybes.Failed    _r -> return Nothing
+                    Maybes.Succeeded mi -> do
+                      hie <- loadHieFile (mkUpdater $ ideNc se) hiePath
+                      indexHieFile se (toNormalizedFilePath' hiePath) (FakeFile Nothing) (mi_src_hash mi) hie
+                      return $ Just mi
+        modIfaces <- concat . Map.elems <$> Map.traverseWithKey doOnePackage modules
         return $ createExportsMap modIfaces
 
     -- similar to envPackageExports, evaluated lazily
