@@ -79,8 +79,7 @@ import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.PluginUtils                      (getNormalizedFilePath,
                                                        handleMaybeM,
                                                        pluginResponse)
-import           Ide.Types                            (OwnedResolveData (..),
-                                                       PluginDescriptor (..),
+import           Ide.Types                            (PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
                                                        defaultPluginDescriptor,
@@ -177,7 +176,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
 resolveProvider :: PluginMethodHandler IdeState 'Method_CodeActionResolve
 resolveProvider ideState pId ca@(CodeAction _ _ _ _ _ _ _ (Just resData)) =
     pluginResponse $ do
-        case fromJSON resData >>= \x -> fromJSON $ value x of
+        case fromJSON resData of
             Success (ORDRD uri int) -> do
                 nfp <- getNormalizedFilePath uri
                 CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
@@ -204,7 +203,7 @@ codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
                 , _disabled = Nothing
                 , _edit = Nothing
                 , _command = Nothing
-                , _data_ = Just $ toJSON $ ORD pId $ toJSON $ ORDRD (caDocId ^. L.uri) crsM
+                , _data_ = Just $ toJSON $ ORDRD (caDocId ^. L.uri) crsM
                 }
             actions = map mkCodeAction (RangeMap.filterByRange caRange crsMap)
         pure $ InL actions
