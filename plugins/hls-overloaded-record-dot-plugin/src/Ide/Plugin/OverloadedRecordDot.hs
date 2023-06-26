@@ -176,15 +176,17 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
 resolveProvider :: PluginMethodHandler IdeState 'Method_CodeActionResolve
 resolveProvider ideState pId ca@(CodeAction _ _ _ _ _ _ _ (Just resData)) =
     pluginResponse $ do
-        Success (ORDRD uri int) <- pure $ fromJSON resData
-        nfp <- getNormalizedFilePath uri
-        CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
-        pragma <- getFirstPragma pId ideState nfp
-        case IntMap.lookup int crsDetails of
-            Just rse -> pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
-            -- We need to throw a content modified error here, but we need fendor's
-            -- plugin error response pr to make it convenient to use here.
-            _        -> throwE "Content Modified Error"
+        case fromJSON resData of
+            Success (ORDRD uri int) -> do
+                nfp <- getNormalizedFilePath uri
+                CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
+                pragma <- getFirstPragma pId ideState nfp
+                case IntMap.lookup int crsDetails of
+                    Just rse -> pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
+                    -- We need to throw a content modified error here, but we need fendor's
+                    -- plugin error response pr to make it convenient to use here.
+                    _        -> throwE "Content Modified Error"
+            _ -> throwE "Unable to deserialize the data"
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
