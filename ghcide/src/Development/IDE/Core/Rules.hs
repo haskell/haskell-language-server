@@ -100,6 +100,7 @@ import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
 import           Data.Typeable                                (cast)
+import qualified Data.Unique                                  as Unique
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists hiding (LogShake, Log)
 import           Development.IDE.Core.FileStore               (getFileContents,
@@ -771,35 +772,13 @@ ghcSessionDepsDefinition
         Bool ->
         GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
 ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
-    let hsc = hscEnv env
-
     mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
     case mbdeps of
         Nothing -> return Nothing
         Just deps -> do
             when checkForImportCycles $ void $ uses_ ReportImportCycles deps
-            ms <- msrModSummary <$> if fullModSummary
-                then use_ GetModSummary file
-                else use_ GetModSummaryWithoutTimestamps file
-
-            depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
-            ifaces <- uses_ GetModIface deps
-            let inLoadOrder = map (\HiFileResult{..} -> HomeModInfo hirModIface hirModDetails emptyHomeModInfoLinkable) ifaces
-#if MIN_VERSION_ghc(9,3,0)
-            -- On GHC 9.4+, the module graph contains not only ModSummary's but each `ModuleNode` in the graph
-            -- also points to all the direct descendants of the current module. To get the keys for the descendants
-            -- we must get their `ModSummary`s
-            !final_deps <- do
-              dep_mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
-             -- Don't want to retain references to the entire ModSummary when just the key will do
-              return $!! map (NodeKey_Module . msKey) dep_mss
-            let moduleNode = (ms, final_deps)
-#else
-            let moduleNode = ms
-#endif
-            session' <- liftIO $ mergeEnvs hsc moduleNode inLoadOrder depSessions
-
-            Just <$> liftIO (newHscEnvEqWithImportPaths (envImportPaths env) session' [])
+            let updateUnique newUnique = env { envUnique = newUnique }
+            Just . updateUnique <$> liftIO Unique.newUnique
 
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.

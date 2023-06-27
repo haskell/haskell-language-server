@@ -1,5 +1,5 @@
 module Development.IDE.Types.HscEnvEq
-(   HscEnvEq,
+(   HscEnvEq(envUnique),
     hscEnv, newHscEnvEq,
     hscEnvWithImportPaths,
     newHscEnvEqPreserveImportPaths,
