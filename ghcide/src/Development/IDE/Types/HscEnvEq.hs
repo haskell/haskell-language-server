@@ -4,6 +4,7 @@ module Development.IDE.Types.HscEnvEq
     hscEnvWithImportPaths,
     newHscEnvEqPreserveImportPaths,
     newHscEnvEqWithImportPaths,
+    updateHscEnvEq,
     envImportPaths,
     envPackageExports,
     envVisibleModuleNames,
@@ -50,6 +51,11 @@ data HscEnvEq = HscEnvEq
         -- So it's wrapped in IO here for error handling
         -- If Nothing, 'listVisibleModuleNames' panic
     }
+
+updateHscEnvEq :: HscEnvEq -> HscEnv -> IO HscEnvEq
+updateHscEnvEq oldHscEnvEq newHscEnv = do
+  let update newUnique = oldHscEnvEq { envUnique = newUnique, hscEnv = newHscEnv }
+  update <$> Unique.newUnique
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
 newHscEnvEq :: FilePath -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq

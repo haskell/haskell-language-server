@@ -799,7 +799,7 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
 #endif
             session' <- liftIO $ mergeEnvs hsc moduleNode inLoadOrder depSessions
 
-            Just <$> liftIO (newHscEnvEqWithImportPaths (envImportPaths env) session' [])
+            Just <$> liftIO (updateHscEnvEq env session')
 
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
