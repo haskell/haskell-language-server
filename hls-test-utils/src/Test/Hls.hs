@@ -20,6 +20,7 @@ module Test.Hls
     defaultTestRunner,
     goldenGitDiff,
     goldenWithHaskellDoc,
+    goldenWithHaskellAndCaps,
     goldenWithCabalDoc,
     goldenWithHaskellDocFormatter,
     goldenWithCabalDocFormatter,
@@ -142,6 +143,27 @@ goldenWithHaskellDoc
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
 goldenWithHaskellDoc = goldenWithDoc "haskell"
+
+goldenWithHaskellAndCaps
+  :: Pretty b
+  => ClientCapabilities
+  -> PluginTestDescriptor b
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithHaskellAndCaps clientCaps plugin title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServerAndCaps plugin clientCaps testDataDir
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "haskell"
+    void waitForBuildQueue
+    act doc
+    documentContents doc
 
 goldenWithCabalDoc
   :: Pretty b
