@@ -24,6 +24,8 @@ import qualified Data.Map                           as M
 import           Data.Maybe                         (catMaybes)
 import qualified Data.Text                          as T
 import           Development.IDE
+import           Development.IDE.Core.Compile       (sourceParser,
+                                                     sourceTypecheck)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Plugin.Completions (ghcideCompletionsPluginPriority)
 import qualified Development.IDE.Spans.Pragmas      as Pragmas
@@ -138,7 +140,7 @@ warningBlacklist = ["deferred-type-errors"]
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
 suggestAddPragma :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
 suggestAddPragma mDynflags Diagnostic {_message, _source}
-    | _source == Just "typecheck" || _source == Just "parser" = genPragma _message
+    | _source == Just sourceTypecheck || _source == Just sourceParser = genPragma _message
   where
     genPragma target =
       [("Add \"" <> r <> "\"", LangExt r) | r <- findPragma target, r `notElem` disabled]
