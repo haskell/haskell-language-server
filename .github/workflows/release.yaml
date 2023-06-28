@@ -173,7 +173,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.6.2", "9.2.8", "9.2.7", "9.0.2", "8.10.7"]
+        ghc: ["9.6.2", "9.4.5", "9.2.8", "9.2.7", "9.0.2", "8.10.7"]
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
