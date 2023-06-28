@@ -50,6 +50,7 @@ module Ide.Types
 , lookupCommandProvider
 , OwnedResolveData(..)
 , mkCodeActionHandlerWithResolve
+, mkCodeActionWithResolveAndCommand
 )
     where
 
@@ -1016,40 +1017,76 @@ mkCodeActionHandlerWithResolve codeActionMethod codeResolveMethod =
             do codeActionReturn <- ExceptT $ codeActionMethod ideState pid params
                caps <- lift getClientCapabilities
                case codeActionReturn of
-                r@(InR _) -> pure r
+                r@(InR Null) -> pure r
                 (InL ls) | -- If the client supports resolve, we will wrap the resolve data in a owned
                            -- resolve data type to allow the server to know who to send the resolve request to
-                           supportsResolve caps -> pure $ InL (wrapResolveData pid <$> ls)
+                           supportsCodeActionResolve caps -> pure $ InL (wrapCodeActionResolveData pid <$> ls)
                            --This is the actual part where we call resolveCodeAction which fills in the edit data for the client
                          | otherwise -> InL <$> traverse (resolveCodeAction ideState pid) ls
         newCodeResolveMethod ideState pid params =
-            codeResolveMethod ideState pid (unwrapResolveData params)
+            codeResolveMethod ideState pid (unwrapCodeActionResolveData params)
     in mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod
     <> mkPluginHandler SMethod_CodeActionResolve newCodeResolveMethod
     where
-        supportsResolve :: ClientCapabilities -> Bool
-        supportsResolve caps =
-            caps ^? L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just == Just True
-            && case caps ^? L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just of
-                Just row -> "edit" `elem` row .! #properties
-                _        -> False
         dropData :: CodeAction -> CodeAction
         dropData ca = ca & L.data_ .~ Nothing
         resolveCodeAction :: ideState -> PluginId -> (Command |? CodeAction) -> ExceptT ResponseError (LspT Config IO) (Command |? CodeAction)
         resolveCodeAction _ideState _pid c@(InL _) = pure c
         resolveCodeAction ideState pid (InR codeAction) =
             fmap (InR . dropData) $ ExceptT $ codeResolveMethod ideState pid codeAction
-        -- We don't wrap commands
-        wrapResolveData _pid c@(InL _) = c
-        wrapResolveData pid (InR c@(CodeAction{_data_=Just x})) =
-            InR $ c & L.data_ ?~ toJSON (ORD pid x)
-        -- Neither do we wrap code actions's without data fields,
-        wrapResolveData _pid c@(InR (CodeAction{_data_=Nothing})) = c
-        unwrapResolveData c@CodeAction{_data_ = Just x}
-            | Success ORD {value = v} <- fromJSON x = c & L.data_ ?~ v
-        -- If we can't successfully decode the value as a ORD type than
-        -- we just return the codeAction untouched.
-        unwrapResolveData c = c
+
+-- |When provided with both a codeAction provider that includes both a command
+-- and a data field and a resolve provider, this function creates a handler that
+-- defaults to using your command if the client doesn't have code action resolve
+-- support. This means you don't have to check whether the client supports resolve
+-- and act accordingly in your own providers.
+mkCodeActionWithResolveAndCommand
+  :: forall ideState. (ideState -> PluginId -> CodeActionParams -> LspM Config (Either ResponseError ([Command |? CodeAction] |? Null)))
+  -> (ideState -> PluginId -> CodeAction -> LspM Config (Either ResponseError CodeAction))
+  -> PluginHandlers ideState
+mkCodeActionWithResolveAndCommand codeActionMethod codeResolveMethod =
+    let newCodeActionMethod ideState pid params = runExceptT $
+            do codeActionReturn <- ExceptT $ codeActionMethod ideState pid params
+               caps <- lift getClientCapabilities
+               case codeActionReturn of
+                r@(InR Null) -> pure r
+                (InL ls) | -- If the client supports resolve, we will wrap the resolve data in a owned
+                           -- resolve data type to allow the server to know who to send the resolve request to
+                           -- and dump the command fields.
+                           supportsCodeActionResolve caps ->
+                            pure $ InL (dropCommands . wrapCodeActionResolveData pid <$> ls)
+                           -- If they do not we will drop the data field.
+                         | otherwise -> pure $ InL $ dropData <$> ls
+        newCodeResolveMethod ideState pid params =
+            codeResolveMethod ideState pid (unwrapCodeActionResolveData params)
+    in mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod
+    <> mkPluginHandler SMethod_CodeActionResolve newCodeResolveMethod
+  where dropData :: Command |? CodeAction -> Command |? CodeAction
+        dropData ca = ca & _R . L.data_ .~ Nothing
+        dropCommands :: Command |? CodeAction -> Command |? CodeAction
+        dropCommands ca = ca & _R . L.command .~ Nothing
+
+supportsCodeActionResolve :: ClientCapabilities -> Bool
+supportsCodeActionResolve caps =
+    caps ^? L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just == Just True
+    && case caps ^? L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just of
+        Just row -> "edit" `elem` row .! #properties
+        _        -> False
+
+-- We don't wrap commands
+wrapCodeActionResolveData :: PluginId -> (a |? CodeAction) -> a |? CodeAction
+wrapCodeActionResolveData _pid c@(InL _) = c
+wrapCodeActionResolveData pid (InR c@(CodeAction{_data_=Just x})) =
+    InR $ c & L.data_ ?~ toJSON (ORD pid x)
+-- Neither do we wrap code actions's without data fields,
+wrapCodeActionResolveData _pid c@(InR (CodeAction{_data_=Nothing})) = c
+
+unwrapCodeActionResolveData :: CodeAction -> CodeAction
+unwrapCodeActionResolveData c@CodeAction{_data_ = Just x}
+    | Success ORD {value = v} <- fromJSON x = c & L.data_ ?~ v
+-- If we can't successfully decode the value as a ORD type than
+-- we just return the codeAction untouched.
+unwrapCodeActionResolveData c = c
 
 -- |Allow plugins to "own" resolve data, allowing only them to be queried for
 -- the resolve action. This design has added flexibility at the cost of nested
