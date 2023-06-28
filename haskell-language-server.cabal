@@ -272,7 +272,7 @@ common tactic
     cpp-options: -Dhls_tactic
 
 common hlint
-  if flag(hlint) && impl(ghc < 9.5)
+  if flag(hlint)
     build-depends: hls-hlint-plugin == 2.1.0.0
     cpp-options: -Dhls_hlint
 
@@ -354,7 +354,7 @@ common ormolu
     cpp-options: -Dhls_ormolu
 
 common stylishHaskell
-  if flag(stylishHaskell) 
+  if flag(stylishHaskell)
     build-depends: hls-stylish-haskell-plugin == 2.1.0.0
     cpp-options: -Dhls_stylishHaskell
 

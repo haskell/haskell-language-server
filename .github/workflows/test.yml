@@ -162,11 +162,11 @@ jobs:
         name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin --test-options="$TEST_OPTS" || cabal test hls-splice-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test 
+      - if: matrix.test
         name: Test hls-stylish-haskell-plugin
         run: cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS" || cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test 
+      - if: matrix.test
         name: Test hls-ormolu-plugin
         run: cabal test hls-ormolu-plugin --test-options="$TEST_OPTS" || cabal test hls-ormolu-plugin --test-options="$TEST_OPTS"
 
@@ -194,7 +194,7 @@ jobs:
         name: Test hls-rename-plugin test suite
         run: cabal test hls-rename-plugin --test-options="$TEST_OPTS" || cabal test hls-rename-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.6'
+      - if: matrix.test
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin --test-options="$TEST_OPTS" || cabal test hls-hlint-plugin --test-options="$TEST_OPTS"
 
