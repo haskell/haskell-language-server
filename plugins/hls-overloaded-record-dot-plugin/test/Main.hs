@@ -1,12 +1,11 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeOperators         #-}
 
 module Main ( main ) where
 
-import           Control.Lens                   (_Just, set, (^.))
+import           Control.Lens                   ((^.))
 import           Data.Either                    (rights)
 import           Data.Functor                   (void)
 import           Data.Maybe                     (isNothing)
@@ -25,6 +24,8 @@ import qualified Ide.Plugin.OverloadedRecordDot as OverloadedRecordDot
 import           Language.LSP.Protocol.Lens     as L
 import           System.FilePath                ((<.>), (</>))
 import           Test.Hls
+import           Test.Hls.Util                  (codeActionNoResolveCaps,
+                                                 codeActionResolveCaps)
 
 main :: IO ()
 main =
@@ -52,17 +53,15 @@ mkTest title fp selectorName x1 y1 x2 y2 =
 
 mkNoResolveTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> TestTree
 mkNoResolveTest title fp selectorName x1 y1 x2 y2 =
-  goldenWithHaskellAndCaps noResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
+  goldenWithHaskellAndCaps codeActionNoResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
     (act:_) <- getExplicitFieldsActions doc selectorName x1 y1 x2 y2
     executeCodeAction act
-  where noResolveCaps = set (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) False fullCaps
 
 mkResolveTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> TestTree
 mkResolveTest title fp selectorName x1 y1 x2 y2 =
-  goldenWithHaskellAndCaps resolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
+  goldenWithHaskellAndCaps codeActionResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
     ((Right act):_) <- getAndResolveExplicitFieldsActions doc selectorName x1 y1 x2 y2
     executeCodeAction act
-  where resolveCaps = set (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) (#properties .== ["edit"]) fullCaps
 
 
 getExplicitFieldsActions
