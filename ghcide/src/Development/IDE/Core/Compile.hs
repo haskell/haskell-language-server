@@ -34,6 +34,8 @@ module Development.IDE.Core.Compile
   , ml_core_file
   , coreFileToLinkable
   , TypecheckHelpers(..)
+  , sourceTypecheck
+  , sourceParser
   ) where
 
 import           Control.Monad.IO.Class
@@ -141,6 +143,12 @@ import GHC.Driver.Config.CoreToStg.Prep
 import GHC.Core.Lint.Interactive
 #endif
 
+--Simple constansts to make sure the source is consistently named
+sourceTypecheck :: T.Text
+sourceTypecheck = "typecheck"
+sourceParser :: T.Text
+sourceParser = "parser"
+
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
     :: IdeOptions
@@ -184,13 +192,13 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         case initialized of
           Left errs -> return (errs, Nothing)
           Right (modSummary', hsc) -> do
-            (warnings, etcm) <- withWarnings "typecheck" $ \tweak ->
+            (warnings, etcm) <- withWarnings sourceTypecheck $ \tweak ->
                 let
                   session = tweak (hscSetFlags dflags hsc)
                    -- TODO: maybe settings ms_hspp_opts is unnecessary?
                   mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
                 in
-                  catchSrcErrors (hsc_dflags hsc) "typecheck" $ do
+                  catchSrcErrors (hsc_dflags hsc) sourceTypecheck $ do
                     tcRnModule session tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
             let errorPipeline = unDefer . hideDiag dflags . tagDiag
                 diags = map errorPipeline warnings
@@ -1254,7 +1262,7 @@ parseHeader dflags filename contents = do
    let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
    case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
      PFailedWithErrorMessages msgs ->
-        throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
+        throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
      POk pst rdr_module -> do
         let (warns, errs) = renderMessages $ getPsMessages pst dflags
 
@@ -1268,9 +1276,9 @@ parseHeader dflags filename contents = do
         -- errors are those from which a parse tree just can't
         -- be produced.
         unless (null errs) $
-            throwE $ diagFromErrMsgs "parser" dflags errs
+            throwE $ diagFromErrMsgs sourceParser dflags errs
 
-        let warnings = diagFromErrMsgs "parser" dflags warns
+        let warnings = diagFromErrMsgs sourceParser dflags warns
         return (warnings, rdr_module)
 
 -- | Given a buffer, flags, and file path, produce a
@@ -1287,7 +1295,7 @@ parseFileContents env customPreprocessor filename ms = do
        dflags = ms_hspp_opts ms
        contents = fromJust $ ms_hspp_buf ms
    case unP Compat.parseModule (initParserState (initParserOpts dflags) contents loc) of
-     PFailedWithErrorMessages msgs -> throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
+     PFailedWithErrorMessages msgs -> throwE $ diagFromErrMsgs sourceParser dflags $ msgs dflags
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
@@ -1297,9 +1305,9 @@ parseFileContents env customPreprocessor filename ms = do
                let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
 
                unless (null errs) $
-                  throwE $ diagFromStrings "parser" DiagnosticSeverity_Error errs
+                  throwE $ diagFromStrings sourceParser DiagnosticSeverity_Error errs
 
-               let preproc_warnings = diagFromStrings "parser" DiagnosticSeverity_Warning preproc_warns
+               let preproc_warnings = diagFromStrings sourceParser DiagnosticSeverity_Warning preproc_warns
                (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed psMessages
                let (warns, errs) = renderMessages msgs
 
@@ -1313,7 +1321,7 @@ parseFileContents env customPreprocessor filename ms = do
                -- errors are those from which a parse tree just can't
                -- be produced.
                unless (null errs) $
-                 throwE $ diagFromErrMsgs "parser" dflags errs
+                 throwE $ diagFromErrMsgs sourceParser dflags errs
 
 
                -- To get the list of extra source files, we take the list
@@ -1348,7 +1356,7 @@ parseFileContents env customPreprocessor filename ms = do
                srcs2 <- liftIO $ filterM doesFileExist srcs1
 
                let pm = ParsedModule ms parsed' srcs2 hpm_annotations
-                   warnings = diagFromErrMsgs "parser" dflags warns
+                   warnings = diagFromErrMsgs sourceParser dflags warns
                pure (warnings ++ preproc_warnings, pm)
 
 loadHieFile :: Compat.NameCacheUpdater -> FilePath -> IO GHC.HieFile

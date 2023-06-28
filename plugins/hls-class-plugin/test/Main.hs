@@ -16,6 +16,7 @@ import           Control.Monad                 (void)
 import           Data.Maybe
 import           Data.Row                      ((.==))
 import qualified Data.Text                     as T
+import           Development.IDE.Core.Compile  (sourceTypecheck)
 import qualified Ide.Plugin.Class              as Class
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
@@ -154,7 +155,7 @@ goldenCodeLens title path idx =
 goldenWithClass ::TestName -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 goldenWithClass title path desc act =
   goldenWithHaskellDoc classPlugin title testDataDir path (desc <.> "expected") "hs" $ \doc -> do
-    _ <- waitForDiagnosticsFromSource doc "typecheck"
+    _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
     actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
     act actions
     void $ skipManyTill anyMessage (getDocumentEdit doc)
@@ -164,7 +165,7 @@ expectCodeActionsAvailable title path actionTitles =
   testCase title $ do
     runSessionWithServer classPlugin testDataDir $ do
       doc <- openDoc (path <.> "hs") "haskell"
-      _ <- waitForDiagnosticsFromSource doc "typecheck"
+      _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
       caResults <- getAllCodeActions doc
       liftIO $ map (^? _CACodeAction . L.title) caResults
         @?= expectedActions
