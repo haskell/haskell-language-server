@@ -58,8 +58,7 @@ import           Data.Typeable
 import           Development.IDE                                    hiding
                                                                     (Error,
                                                                      getExtensions)
-import           Development.IDE.Core.Compile                       (sourceParser,
-                                                                     sourceTypecheck)
+import           Development.IDE.Core.Compile                       (sourceParser)
 import           Development.IDE.Core.Rules                         (defineNoFile,
                                                                      getParsedModuleWithComments)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
