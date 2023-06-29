@@ -24,6 +24,7 @@ module Development.IDE.GHC.Compat.Units (
     -- * UnitInfo
     UnitInfo,
     unitExposedModules,
+    unitHiddenModules,
     unitLibraryDirs,
     UnitInfo.unitId,
     unitDepends,
@@ -285,6 +286,9 @@ unitExposedModules ue =
 #else
   Packages.exposedModules ue
 #endif
+
+unitHiddenModules :: UnitInfo -> [ModuleName]
+unitHiddenModules = UnitInfo.unitHiddenModules
 
 unitDepends :: UnitInfo -> [UnitId]
 #if MIN_VERSION_ghc(9,0,0)

@@ -88,7 +88,27 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
     -- it's very important to delay the package exports computation
     envPackageExports <- onceAsync $ withSpan "Package Exports" $ \_sp -> do
         -- compute the package imports
-        modIfaces <- concat . Map.elems <$> loadPackagesWithModIFaces
+        let pkgst   = unitState hscEnv
+            depends = explicitUnits pkgst
+            modules =
+                [ m
+                | d        <- depends
+                , Just pkg <- [lookupPackageConfig d hscEnv]
+                , (modName, maybeOtherPkgMod) <- unitExposedModules pkg
+                , let m = case maybeOtherPkgMod of
+                        -- When module is re-exported from another package,
+                        -- the origin module is represented by value in Just
+                        Just otherPkgMod -> otherPkgMod
+                        Nothing          -> mkModule (unitInfoId pkg) modName
+                ]
+
+            doOne m = do
+                modIface <- initIfaceLoad hscEnv $
+                    loadInterface "" m (ImportByUser NotBoot)
+                return $ case modIface of
+                    Maybes.Failed    _r -> Nothing
+                    Maybes.Succeeded mi -> Just mi
+        modIfaces <- mapMaybeM doOne modules
         return $ createExportsMap modIfaces
 
     let dflags = hsc_dflags hscEnv
@@ -175,14 +195,18 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
             ]
         getModulesForPackage :: Package -> [Module]
         getModulesForPackage (Package package) =
-            [ m
-            | (modName, maybeOtherPkgMod) <- unitExposedModules package
-            , let m = case maybeOtherPkgMod of
-                    -- When module is re-exported from another package,
-                    -- the origin module is represented by value in Just
-                    Just otherPkgMod -> otherPkgMod
-                    Nothing          -> mkModule (unitInfoId package) modName
-            ]
+            map makeModule allModules
+            where
+                allModules :: [(ModuleName, Maybe Module)]
+                allModules = unitExposedModules package
+                    ++ zip (unitHiddenModules package) (repeat Nothing)
+                makeModule :: (ModuleName, Maybe Module)
+                           -> Module
+                makeModule (moduleName, Nothing) =
+                    mkModule (unitInfoId package) moduleName
+                -- When module is re-exported from another package,
+                -- the origin module is represented by value in Just
+                makeModule (_, Just otherPackageMod) = otherPackageMod
 
 newtype Package = Package UnitInfo deriving Eq
 instance Ord Package where
