@@ -58,6 +58,7 @@ import           Data.Typeable
 import           Development.IDE                                    hiding
                                                                     (Error,
                                                                      getExtensions)
+import           Development.IDE.Core.Compile                       (sourceParser)
 import           Development.IDE.Core.Rules                         (defineNoFile,
                                                                      getParsedModuleWithComments)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
@@ -271,7 +272,7 @@ rules recorder plugin = do
         LSP.Diagnostic {
             _range    = srcSpanToRange l
           , _severity = Just LSP.DiagnosticSeverity_Information
-          , _code     = Just (InR "parser")
+          , _code     = Just (InR sourceParser)
           , _source   = Just "hlint"
           , _message  = T.unlines [T.pack msg,T.pack contents]
           , _relatedInformation = Nothing
