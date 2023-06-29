@@ -10,7 +10,9 @@
 {-# LANGUAGE DataKinds #-}
 module Test.Hls.Util
   (  -- * Test Capabilities
-      codeActionSupportCaps
+      codeActionResolveCaps
+    , codeActionNoResolveCaps
+    , codeActionSupportCaps
     , expectCodeAction
     -- * Environment specifications
     -- for ignoring tests
@@ -51,7 +53,7 @@ where
 
 import           Control.Applicative.Combinators (skipManyTill, (<|>))
 import           Control.Exception               (catch, throwIO)
-import           Control.Lens                    ((&), (?~), (^.))
+import           Control.Lens                    ((&), (?~), (^.), _Just, (.~))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Data.Aeson                      as A
@@ -92,6 +94,15 @@ codeActionSupportCaps = def & L.textDocument ?~ textDocumentCaps
     codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True) Nothing Nothing Nothing Nothing
     literalSupport = #codeActionKind .==  (#valueSet .== [])
 
+codeActionResolveCaps :: ClientCapabilities
+codeActionResolveCaps = Test.fullCaps
+                          & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ (#properties .== ["edit"])
+                          & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ True
+
+codeActionNoResolveCaps :: ClientCapabilities
+codeActionNoResolveCaps = Test.fullCaps
+                          & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport) .~ Nothing
+                          & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ False
 -- ---------------------------------------------------------------------
 -- Environment specification for ignoring tests
 -- ---------------------------------------------------------------------
