@@ -118,8 +118,8 @@ instance NFData CollectRecordSelectors
 
 data CollectRecordSelectorsResult = CRSR
     { -- |We store everything in here that we need to create the unresolved
-      -- codeAction, the range, an uniquely identifiable int, and the expression
-      -- for the selector expression that we use to generate the name
+      -- codeAction: the range, an uniquely identifiable int, and the selector
+      --selector expression  (HSExpr) that we use to generate the name
       records           :: RangeMap (Int, HsExpr (GhcPass 'Renamed))
       -- |This is for when we need to fully generate a textEdit. It contains the
       -- whole expression we are interested in indexed to the unique id we got
@@ -183,8 +183,10 @@ resolveProvider ideState pId ca@(CodeAction _ _ _ _ _ _ _ (Just resData)) =
                 pragma <- getFirstPragma pId ideState nfp
                 case IntMap.lookup int crsDetails of
                     Just rse -> pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
-                    -- We need to throw a content modified error here, but we need fendor's
-                    -- plugin error response pr to make it convenient to use here.
+                    -- We need to throw a content modified error here, see
+                    -- https://github.com/microsoft/language-server-protocol/issues/1738
+                    -- but we need fendor's plugin error response pr to make it
+                    -- convenient to use here, so we will wait to do that till that's merged
                     _        -> throwE "Content Modified Error"
             _ -> throwE "Unable to deserialize the data"
 
@@ -247,6 +249,9 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
                 -- the OverloadedRecordDot pragma
                 exts = getEnabledExtensions tmr
                 recSels = mapMaybe (rewriteRange pm) (getRecordSelectors tmr)
+            -- We are creating a list as long as our rec selectors of unique int s
+            -- created by calling hashUnique on a Unique. The reason why we are
+            -- extracting the ints is because they don't need any work to serialize.
             uniques <- liftIO $ replicateM (length recSels) (hashUnique <$> newUnique)
             logWith recorder Debug (LogCollectedRecordSelectors recSels)
             let crsUniquesAndDetails =  zip uniques recSels
