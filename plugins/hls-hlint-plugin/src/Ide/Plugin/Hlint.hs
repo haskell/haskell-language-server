@@ -147,7 +147,6 @@ import           System.Environment                                 (setEnv,
 #endif
 import           Data.Aeson                                         (Result (Error, Success),
                                                                      fromJSON)
-import           Ide.Types                                          (mkCodeActionWithResolveAndCommand)
 import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
@@ -190,12 +189,12 @@ fromStrictMaybe  Strict.Nothing  = Nothing
 #endif
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId)
+descriptor recorder plId =
+  let (plCommands, plHandlers) = mkCodeActionWithResolveAndCommand codeActionProvider (resolveProvider recorder)
+  in (defaultPluginDescriptor plId)
   { pluginRules = rules recorder plId
   , pluginCommands =
-      [ PluginCommand "applyOne" "Apply a single hint" (applyOneCmd  recorder)
-      , PluginCommand "applyAll" "Apply all hints to the file" (applyAllCmd recorder)
-      , PluginCommand "ignoreAll" "Ignore all hints for this file" (ignoreAllCmd recorder)
+      [ PluginCommand "executeResolve" "Executes resolve for code action" (executeResolveCmd recorder plId)
       ]
   , pluginHandlers = mkCodeActionWithResolveAndCommand codeActionProvider (resolveProvider recorder)
   , pluginConfigDescriptor = defaultConfigDescriptor
@@ -447,12 +446,12 @@ resolveProvider recorder ideState _pluginId ca@CodeAction {_data_ = Just data_} 
         file <-  getNormalizedFilePath uri
         edit <- ExceptT $ liftIO $ applyHint recorder ideState file Nothing verTxtDocId
         pure $ ca & LSP.edit ?~ edit
-    (Success (AO (AOP verTxtDocId@(VersionedTextDocumentIdentifier uri _) pos hintTitle))) -> do
+    (Success (AO verTxtDocId@(VersionedTextDocumentIdentifier uri _) pos hintTitle)) -> do
         let oneHint = OneHint pos hintTitle
         file <-  getNormalizedFilePath uri
         edit <- ExceptT $ liftIO $ applyHint recorder ideState file (Just oneHint) verTxtDocId
         pure $ ca & LSP.edit ?~ edit
-    (Success (IH (IHP verTxtDocId@(VersionedTextDocumentIdentifier uri _) hintTitle ))) -> do
+    (Success (IH verTxtDocId@(VersionedTextDocumentIdentifier uri _) hintTitle )) -> do
         file <-  getNormalizedFilePath uri
         edit <- ExceptT $ liftIO $ ignoreHint recorder ideState file verTxtDocId hintTitle
         pure $ ca & LSP.edit ?~ edit
@@ -467,18 +466,18 @@ diagnosticToCodeActions pluginId verTxtDocId diagnostic
   , let isHintApplicable = "refact:" `T.isPrefixOf` code
   , let hint = T.replace "refact:" "" code
   , let suppressHintTitle = "Ignore hint \"" <> hint <> "\" in this module"
-  , let suppressHintArguments = IHP verTxtDocId hint
+  , let suppressHintArguments = IH verTxtDocId hint
   , let suppressHintCommand = mkLspCommand pluginId "ignoreAll" suppressHintTitle (Just [toJSON suppressHintArguments])
   = catMaybes
       -- Applying the hint is marked preferred because it addresses the underlying error.
       -- Disabling the rule isn't, because less often used and configuration can be adapted.
       [ if | isHintApplicable
            , let applyHintTitle = "Apply hint \"" <> hint <> "\""
-                 applyHintArguments = AOP verTxtDocId start hint
+                 applyHintArguments = AO verTxtDocId start hint
                  applyHintCommand = mkLspCommand pluginId "applyOne" applyHintTitle (Just [toJSON applyHintArguments]) ->
-               Just (mkCodeAction applyHintTitle diagnostic (Just (toJSON (AO applyHintArguments))) (Just applyHintCommand) True)
+               Just (mkCodeAction applyHintTitle diagnostic (Just (toJSON applyHintArguments)) (Just applyHintCommand) True)
            | otherwise -> Nothing
-      , Just (mkCodeAction suppressHintTitle diagnostic (Just (toJSON (IH suppressHintArguments))) (Just suppressHintCommand) False)
+      , Just (mkCodeAction suppressHintTitle diagnostic (Just (toJSON suppressHintArguments)) (Just suppressHintCommand) False)
       ]
   | otherwise = []
 
@@ -516,16 +515,16 @@ mkSuppressHintTextEdits dynFlags fileContents hint =
     combinedTextEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
-ignoreAllCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState IgnoreHintParams
-ignoreAllCmd recorder ideState IHP {verTxtDocId, ignoreHintTitle} =  do
-  let nfp = maybe (error $ show (verTxtDocId ^. LSP.uri)  ++ " is not a file.") toNormalizedFilePath'
-                  (uriToFilePath' (verTxtDocId ^. LSP.uri))
-  wspaceEdit <- liftIO $ ignoreHint recorder ideState nfp verTxtDocId ignoreHintTitle
-  case wspaceEdit of
-    Right contents -> do
-        _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing contents) (\_ -> pure ())
-        pure $ Right Null
-    Left string -> pure $ Left $ responseError $ T.pack string
+executeResolveCmd :: Recorder (WithPriority Log) -> PluginId -> CommandFunction IdeState CodeAction
+executeResolveCmd recorder pluginId ideState ca =  do
+  withIndefiniteProgress "Executing command..." Cancellable $ do
+    resolveResult <- resolveProvider recorder ideState pluginId ca
+    case resolveResult of
+      Right CodeAction {_edit = Just wedits } -> do
+          _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) (\_ -> pure ())
+          pure $ Right Null
+      Right _ -> pure $ Left $ responseError "No edit in CodeAction"
+      Left err -> pure $ Left err
 
 ignoreHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either String WorkspaceEdit)
 ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = do
@@ -543,34 +542,16 @@ ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = do
         pure $ Right workspaceEdit
     Nothing -> pure $ Left $  "Unable to get fileContents"
 
-applyAllCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState VersionedTextDocumentIdentifier
-applyAllCmd recorder ide verTxtDocId = do
-  let file = maybe (error $ show (verTxtDocId ^. LSP.uri) ++ " is not a file.")
-                    toNormalizedFilePath'
-                   (uriToFilePath' (verTxtDocId ^. LSP.uri))
-  withIndefiniteProgress "Applying all hints" Cancellable $ do
-    res <- liftIO $ applyHint recorder ide file Nothing verTxtDocId
-    logWith recorder Debug $ LogApplying file res
-    case res of
-      Left err -> pure $ Left (responseError (T.pack $ "hlint:applyAll: " ++ show err))
-      Right fs -> do
-        _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
-        pure $ Right Null
-
 -- ---------------------------------------------------------------------
-data HlintResolveCommands = AA VersionedTextDocumentIdentifier | AO ApplyOneParams | IH IgnoreHintParams
-  deriving (Generic, ToJSON, FromJSON)
-data ApplyOneParams = AOP
-  { verTxtDocId :: VersionedTextDocumentIdentifier
-  , start_pos   :: Position
-  -- | There can be more than one hint suggested at the same position, so HintTitle is used to distinguish between them.
-  , hintTitle   :: HintTitle
-  } deriving (Eq,Show,Generic,FromJSON,ToJSON)
-
-data IgnoreHintParams = IHP
-  { verTxtDocId     :: VersionedTextDocumentIdentifier
-  , ignoreHintTitle :: HintTitle
-  } deriving (Generic, ToJSON, FromJSON)
+data HlintResolveCommands = AA { verTxtDocId :: VersionedTextDocumentIdentifier}
+                          | AO { verTxtDocId :: VersionedTextDocumentIdentifier
+                               , start_pos   :: Position
+                               -- | There can be more than one hint suggested at the same position, so HintTitle is used to distinguish between them.
+                               , hintTitle   :: HintTitle
+                               }
+                          | IH { verTxtDocId     :: VersionedTextDocumentIdentifier
+                               , ignoreHintTitle :: HintTitle
+                               } deriving (Generic, ToJSON, FromJSON)
 
 type HintTitle = T.Text
 
@@ -578,21 +559,6 @@ data OneHint = OneHint
   { oneHintPos   :: Position
   , oneHintTitle :: HintTitle
   } deriving (Eq, Show)
-
-applyOneCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState ApplyOneParams
-applyOneCmd recorder ide (AOP verTxtDocId pos title) = do
-  let oneHint = OneHint pos title
-  let file = maybe (error $ show (verTxtDocId ^. LSP.uri)  ++ " is not a file.") toNormalizedFilePath'
-                   (uriToFilePath' (verTxtDocId ^. LSP.uri))
-  let progTitle = "Applying hint: " <> title
-  withIndefiniteProgress progTitle Cancellable $ do
-    res <- liftIO $ applyHint recorder ide file (Just oneHint) verTxtDocId
-    logWith recorder Debug $ LogApplying file res
-    case res of
-      Left err -> pure $ Left (responseError (T.pack $ "hlint:applyOne: " ++ show err))
-      Right fs -> do
-        _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
-        pure $ Right Null
 
 applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either String WorkspaceEdit)
 applyHint recorder ide nfp mhint verTxtDocId =
