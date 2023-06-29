@@ -23,6 +23,7 @@ import           Data.Maybe                           (isNothing, listToMaybe,
 import qualified Data.Set                             as Set
 import qualified Data.Text                            as T
 import           Development.IDE
+import           Development.IDE.Core.Compile         (sourceTypecheck)
 import           Development.IDE.Core.PositionMapping (fromCurrentRange)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
@@ -91,7 +92,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
     where
         diags = context ^. L.diagnostics
 
-        ghcDiags = filter (\d -> d ^. L.source == Just "typecheck") diags
+        ghcDiags = filter (\d -> d ^. L.source == Just sourceTypecheck) diags
         methodDiags = filter (\d -> isClassMethodWarning (d ^. L.message)) ghcDiags
 
         mkActions
