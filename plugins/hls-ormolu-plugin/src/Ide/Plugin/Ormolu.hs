@@ -56,9 +56,14 @@ provider ideState typ contents fp _ = withIndefiniteProgress title Cancellable $
         CabalNotFound                -> Nothing
         CabalDidNotMention cabalInfo -> Just cabalInfo
         CabalFound cabalInfo         -> Just cabalInfo
+#if MIN_VERSION_ormolu(0,7,0)
+      (fixityOverrides, moduleReexports) <- getDotOrmoluForSourceFile fp'
+      let conf' = refineConfig ModuleSource cabalInfo (Just fixityOverrides) (Just moduleReexports) conf
+#else
       fixityOverrides <- traverse getFixityOverridesForSourceFile cabalInfo
       let conf' = refineConfig ModuleSource cabalInfo fixityOverrides conf
-          cont' = cont
+#endif
+      let cont' = cont
 #else
       let conf' = conf
           cont' = T.unpack cont

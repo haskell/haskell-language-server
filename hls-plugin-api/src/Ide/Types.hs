@@ -451,6 +451,11 @@ instance PluginMethod Request Method_TextDocumentCodeLens where
     where
       uri = msgParams ^. L.textDocument . L.uri
 
+instance PluginMethod Request Method_CodeLensResolve where
+  pluginEnabled _ msgParams pluginDesc config =
+    pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
+    && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
+
 instance PluginMethod Request Method_TextDocumentRename where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcRenameOn (configForPlugin config pluginDesc)
@@ -570,6 +575,10 @@ instance PluginRequestMethod Method_WorkspaceSymbol where
     combineResponses _ _ _ _ xs = InL $ mconcat $ takeLefts $ toList xs
 
 instance PluginRequestMethod Method_TextDocumentCodeLens where
+
+instance PluginRequestMethod Method_CodeLensResolve where
+    -- A resolve request should only ever get one response
+    combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentRename where
 
@@ -969,6 +978,7 @@ instance HasTracing CallHierarchyIncomingCallsParams
 instance HasTracing CallHierarchyOutgoingCallsParams
 instance HasTracing CompletionItem
 instance HasTracing CodeAction
+instance HasTracing CodeLens
 -- ---------------------------------------------------------------------
 
 {-# NOINLINE pROCESS_ID #-}

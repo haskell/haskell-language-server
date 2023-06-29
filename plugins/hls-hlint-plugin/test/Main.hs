@@ -202,11 +202,11 @@ suggestionsTests =
         doc <- openDoc "IgnoreAnnHlint.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
-    , knownBrokenForGhcVersions [GHC92, GHC94] "apply-refact has different behavior on v0.10" $
+    , knownBrokenForGhcVersions [GHC92, GHC94, GHC96] "apply-refact has different behavior on v0.10" $
       testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "Comments.hs" "Redundant bracket" expectedComments
 
-    , onlyRunForGhcVersions [GHC92, GHC94] "only run test for apply-refact-0.10" $
+    , onlyRunForGhcVersions [GHC92, GHC94, GHC96] "only run test for apply-refact-0.10" $
       testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "Comments.hs" "Redundant bracket" expectedComments'
 

@@ -16,7 +16,7 @@ module Development.IDE.Types.Logger
   , cmap
   , cmapIO
   , cfilter
-  , withDefaultRecorder
+  , withFileRecorder
   , makeDefaultStderrRecorder
   , makeDefaultHandleRecorder
   , LoggingColumn(..)
@@ -157,35 +157,22 @@ makeDefaultStderrRecorder columns = do
   lock <- liftIO newLock
   makeDefaultHandleRecorder columns lock stderr
 
--- | If no path given then use stderr, otherwise use file.
-withDefaultRecorder
+withFileRecorder
   :: MonadUnliftIO m
-  => Maybe FilePath
-  -- ^ Log file path. `Nothing` uses stderr
+  => FilePath
+  -- ^ Log file path.
   -> Maybe [LoggingColumn]
   -- ^ logging columns to display. `Nothing` uses `defaultLoggingColumns`
-  -> (Recorder (WithPriority (Doc d)) -> m a)
-  -- ^ action given a recorder
+  -> (Either IOException (Recorder (WithPriority (Doc d))) -> m a)
+  -- ^ action given a recorder, or the exception if we failed to open the file
   -> m a
-withDefaultRecorder path columns action = do
+withFileRecorder path columns action = do
   lock <- liftIO newLock
   let makeHandleRecorder = makeDefaultHandleRecorder columns lock
-  case path of
-    Nothing -> do
-      recorder <- makeHandleRecorder stderr
-      let message = "No log file specified; using stderr."
-      logWith recorder Info message
-      action recorder
-    Just path -> do
-      fileHandle :: Either IOException Handle <- liftIO $ try (openFile path AppendMode)
-      case fileHandle of
-        Left e -> do
-          recorder <- makeHandleRecorder stderr
-          let exceptionMessage = pretty $ displayException e
-          let message = vcat [exceptionMessage, "Couldn't open log file" <+> pretty path <> "; falling back to stderr."]
-          logWith recorder Warning message
-          action recorder
-        Right fileHandle -> finally (makeHandleRecorder fileHandle >>= action) (liftIO $ hClose fileHandle)
+  fileHandle :: Either IOException Handle <- liftIO $ try (openFile path AppendMode)
+  case fileHandle of
+    Left e -> action $ Left e
+    Right fileHandle -> finally ((Right <$> makeHandleRecorder fileHandle) >>= action) (liftIO $ hClose fileHandle)
 
 makeDefaultHandleRecorder
   :: MonadIO m
