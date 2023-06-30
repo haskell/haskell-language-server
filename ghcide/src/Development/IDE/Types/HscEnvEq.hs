@@ -15,7 +15,7 @@ module Development.IDE.Types.HscEnvEq
 import           Control.Concurrent.Async        (Async, async, waitCatch)
 import           Control.Concurrent.Strict       (modifyVar, newVar)
 import           Control.DeepSeq                 (force)
-import           Control.Exception               (SomeException, evaluate, mask, throwIO)
+import           Control.Exception               (evaluate, mask, throwIO)
 import           Control.Exception.Safe          (tryAny)
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM, void)
 import           Data.Either                     (fromRight)
@@ -126,11 +126,6 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
         indexDependencyHieFiles :: IO ()
         indexDependencyHieFiles = void
             $ Map.traverseWithKey indexPackageHieFiles packagesWithModules
-        logPackage :: UnitInfo -> IO ()
-        logPackage package = Logger.logDebug (logger se) $ "!!!!!!!!!!!! hscEnvEq :\n"
-          <> T.pack (concatMap show $ unitLibraryDirs package) <> "\n"
-          <> T.pack (show $ unitId package)
-          <> "\n!!!!!!!!!!!!!!!!!!!!!!"
         indexPackageHieFiles :: Package -> [Module] -> IO ()
         indexPackageHieFiles (Package package) modules = do
             let pkgLibDir :: FilePath
@@ -139,25 +134,17 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
                   (libraryDir : _) -> libraryDir
                 hieDir :: FilePath
                 hieDir = pkgLibDir </> "extra-compilation-artifacts"
-            logPackage package
             modIfaces <- mapMaybeM loadModIFace modules
             traverse_ (indexModuleHieFile hieDir) modIfaces
-        logModule :: FilePath -> Either SomeException HieFile -> IO ()
-        logModule hiePath hieResults = Logger.logDebug (logger se) $ "!!!!!!!!!!!! hscEnvEq :\n"
-          <> T.pack hiePath
-          <> (case hieResults of
-                 Left e -> "\n" <> T.pack (show e)
-                 Right _ -> ""
-             )
-          <> "\n!!!!!!!!!!!!!!!!!!!!!!"
         indexModuleHieFile :: FilePath -> ModIface -> IO ()
         indexModuleHieFile hieDir modIface = do
             let hiePath :: FilePath
                 hiePath = hieDir </> toFilePath (moduleName $ mi_module modIface) ++ ".hie"
             hieResults <- tryAny $ loadHieFile (mkUpdater $ ideNc se) hiePath
-            logModule hiePath hieResults
             case hieResults of
-              Left _ -> return ()
+              Left e -> Logger.logDebug (logger se) $
+                  "Failed to index dependency HIE file:\n"
+                  <> T.pack (show e)
               Right hie ->
                   indexHieFile se (toNormalizedFilePath' hiePath) (FakeFile Nothing) (mi_src_hash modIface) hie
         toFilePath :: ModuleName -> FilePath
