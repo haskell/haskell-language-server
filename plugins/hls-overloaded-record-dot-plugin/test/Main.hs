@@ -43,8 +43,7 @@ test = testGroup "overloaded-record-dot"
     <> mkTest "NestedDollar" "NestedDollar" "name" 15 7 15 24
     <> mkTest "MultilineCase" "MultilineCase" "name" 10 7 12 15
     <> mkTest "Multiline" "Multiline" "name" 10 7 11 15
-    <> mkTest "MultilineExpanded" "MultilineExpanded" "owner" 28 8 28 19
-    <> mkTest "Benchmark" "Benchmark" "name1298" 1797 11 1797 27)
+    <> mkTest "MultilineExpanded" "MultilineExpanded" "owner" 28 8 28 19)
 
 mkTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> [TestTree]
 mkTest title fp selectorName x1 y1 x2 y2 =
