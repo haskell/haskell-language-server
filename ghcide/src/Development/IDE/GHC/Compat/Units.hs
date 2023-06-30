@@ -27,6 +27,7 @@ module Development.IDE.GHC.Compat.Units (
     unitHiddenModules,
     unitLibraryDirs,
     UnitInfo.unitId,
+    UnitInfo.mkUnit,
     unitDepends,
     unitHaddockInterfaces,
     unitInfoId,
@@ -124,7 +125,6 @@ type UnitInfoMap = PackageConfigMap
 type PreloadUnitClosure = ()
 type Unit = UnitId
 #endif
-
 
 #if !MIN_VERSION_ghc(9,0,0)
 unitString :: Unit -> String

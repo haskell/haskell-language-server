@@ -876,7 +876,7 @@ getModIfaceFromDiskAndIndexRule recorder =
         -- can just re-index the file we read from disk
         Right hf -> liftIO $ do
           logWith recorder Logger.Debug $ LogReindexingHieFile f
-          indexHieFile se (toNormalizedFilePath' hie_loc) (HieDb.RealFile $ fromNormalizedFilePath f) hash hf
+          indexHieFile se DontCheckForModule (toNormalizedFilePath' hie_loc) (HieDb.RealFile $ fromNormalizedFilePath f) hash hf
 
   return (Just x)
 
