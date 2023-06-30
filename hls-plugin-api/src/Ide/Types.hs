@@ -76,7 +76,7 @@ import           Data.GADT.Compare
 import           Data.Hashable                 (Hashable)
 import           Data.HashMap.Strict           (HashMap)
 import qualified Data.HashMap.Strict           as HashMap
-import           Data.List.Extra               (find, singleton, sortOn)
+import           Data.List.Extra               (find, sortOn)
 import           Data.List.NonEmpty            (NonEmpty (..), toList)
 import qualified Data.Map                      as Map
 import           Data.Maybe
@@ -1082,7 +1082,7 @@ mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
           let dat = toJSON <$> ca ^? _R -- We need to take the whole codeAction
               -- And put it in the argument for the Command, that way we can later
               -- pas it to the resolve handler (which expects a whole code action)
-              cmd = mkLspCommand plId (CommandId "codeActionResolve") "Execute Code Action" (singleton <$> dat)
+              cmd = mkLspCommand plId (CommandId "codeActionResolve") "Execute Code Action" (pure <$> dat)
           in ca
               & _R . L.data_ .~ Nothing -- Set the data field to nothing
               & _R . L.command ?~ cmd -- And set the command to our previously created command
