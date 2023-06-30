@@ -15,7 +15,8 @@ module Development.IDE.Types.HscEnvEq
 import           Control.Concurrent.Async        (Async, async, waitCatch)
 import           Control.Concurrent.Strict       (modifyVar, newVar)
 import           Control.DeepSeq                 (force)
-import           Control.Exception               (evaluate, mask, throwIO)
+import           Control.Exception               (SomeException, evaluate, mask, throwIO)
+import           Control.Exception.Safe          (tryAny)
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM, void)
 import           Data.Either                     (fromRight)
 import           Data.Foldable                   (traverse_)
@@ -123,15 +124,15 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
     return HscEnvEq{..}
     where
         indexDependencyHieFiles :: IO ()
-        indexDependencyHieFiles = do
-            packagesWithModIfaces <- loadPackagesWithModIFaces
-            void $ Map.traverseWithKey indexPackageHieFiles packagesWithModIfaces
+        indexDependencyHieFiles = void
+            $ Map.traverseWithKey indexPackageHieFiles packagesWithModules
         logPackage :: UnitInfo -> IO ()
-        logPackage package = Logger.logDebug (logger se) $ "\n\n\n!!!!!!!!!!!! hscEnvEq :\n"
-          <> T.pack (concatMap show $ unitLibraryDirs package)
-          <> "\n!!!!!!!!!!!!!!!!!!!!!!\n\n\n"
-        indexPackageHieFiles :: Package -> [ModIface] -> IO ()
-        indexPackageHieFiles (Package package) modIfaces = do
+        logPackage package = Logger.logDebug (logger se) $ "!!!!!!!!!!!! hscEnvEq :\n"
+          <> T.pack (concatMap show $ unitLibraryDirs package) <> "\n"
+          <> T.pack (show $ unitId package)
+          <> "\n!!!!!!!!!!!!!!!!!!!!!!"
+        indexPackageHieFiles :: Package -> [Module] -> IO ()
+        indexPackageHieFiles (Package package) modules = do
             let pkgLibDir :: FilePath
                 pkgLibDir = case unitLibraryDirs package of
                   [] -> ""
@@ -139,18 +140,26 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
                 hieDir :: FilePath
                 hieDir = pkgLibDir </> "extra-compilation-artifacts"
             logPackage package
+            modIfaces <- mapMaybeM loadModIFace modules
             traverse_ (indexModuleHieFile hieDir) modIfaces
-        logModule :: FilePath -> IO ()
-        logModule hiePath = Logger.logDebug (logger se) $ "\n\n\n!!!!!!!!!!!! hscEnvEq :\n"
+        logModule :: FilePath -> Either SomeException HieFile -> IO ()
+        logModule hiePath hieResults = Logger.logDebug (logger se) $ "!!!!!!!!!!!! hscEnvEq :\n"
           <> T.pack hiePath
-          <> "\n!!!!!!!!!!!!!!!!!!!!!!\n\n\n"
+          <> (case hieResults of
+                 Left e -> "\n" <> T.pack (show e)
+                 Right _ -> ""
+             )
+          <> "\n!!!!!!!!!!!!!!!!!!!!!!"
         indexModuleHieFile :: FilePath -> ModIface -> IO ()
         indexModuleHieFile hieDir modIface = do
             let hiePath :: FilePath
                 hiePath = hieDir </> toFilePath (moduleName $ mi_module modIface) ++ ".hie"
-            logModule hiePath
-            hie <- loadHieFile (mkUpdater $ ideNc se) hiePath
-            indexHieFile se (toNormalizedFilePath' hiePath) (FakeFile Nothing) (mi_src_hash modIface) hie
+            hieResults <- tryAny $ loadHieFile (mkUpdater $ ideNc se) hiePath
+            logModule hiePath hieResults
+            case hieResults of
+              Left _ -> return ()
+              Right hie ->
+                  indexHieFile se (toNormalizedFilePath' hiePath) (FakeFile Nothing) (mi_src_hash modIface) hie
         toFilePath :: ModuleName -> FilePath
         toFilePath = separateDirectories . prettyModuleName
             where
@@ -177,22 +186,13 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
             return $ case modIface of
                 Maybes.Failed    _r -> Nothing
                 Maybes.Succeeded mi -> Just mi
-        loadPackagesWithModIFaces :: IO (Map.Map Package [ModIface])
-        loadPackagesWithModIFaces = Map.traverseWithKey
-            (const $ mapMaybeM loadModIFace) packagesWithModules
         packagesWithModules :: Map.Map Package [Module]
         packagesWithModules = Map.fromSet getModulesForPackage packages
-        packageState :: UnitState
-        packageState = unitState hscEnv
-        dependencies :: [Unit]
-        dependencies = explicitUnits packageState
         packages :: Set Package
         packages = Set.fromList
             $ map Package
-            [ package
-            | d <- dependencies
-            , Just package <- [lookupPackageConfig d hscEnv]
-            ]
+            $ Map.elems
+            $ getUnitInfoMap hscEnv
         getModulesForPackage :: Package -> [Module]
         getModulesForPackage (Package package) =
             map makeModule allModules
