@@ -102,14 +102,7 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
                         Just otherPkgMod -> otherPkgMod
                         Nothing          -> mkModule (unitInfoId pkg) modName
                 ]
-
-            doOne m = do
-                modIface <- initIfaceLoad hscEnv $
-                    loadInterface "" m (ImportByUser NotBoot)
-                return $ case modIface of
-                    Maybes.Failed    _r -> Nothing
-                    Maybes.Succeeded mi -> Just mi
-        modIfaces <- mapMaybeM doOne modules
+        modIfaces <- mapMaybeM loadModIface modules
         return $ createExportsMap modIfaces
 
     let dflags = hsc_dflags hscEnv
@@ -134,7 +127,7 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
                   (libraryDir : _) -> libraryDir
                 hieDir :: FilePath
                 hieDir = pkgLibDir </> "extra-compilation-artifacts"
-            modIfaces <- mapMaybeM loadModIFace modules
+            modIfaces <- mapMaybeM loadModIface modules
             traverse_ (indexModuleHieFile hieDir) modIfaces
         indexModuleHieFile :: FilePath -> ModIface -> IO ()
         indexModuleHieFile hieDir modIface = do
@@ -166,8 +159,8 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
                     . drop 1
                     . words
                     . show
-        loadModIFace :: Module -> IO (Maybe ModIface)
-        loadModIFace m = do
+        loadModIface :: Module -> IO (Maybe ModIface)
+        loadModIface m = do
             modIface <- initIfaceLoad hscEnv $
                 loadInterface "" m (ImportByUser NotBoot)
             return $ case modIface of
