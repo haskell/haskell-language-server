@@ -799,6 +799,11 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
 #endif
             session' <- liftIO $ mergeEnvs hsc moduleNode inLoadOrder depSessions
 
+            -- Here we avoid a call to to `newHscEnvEqWithImportPaths`, which creates a new
+            -- ExportsMap when it is called. We only need to create the ExportsMap once per
+            -- session, while `ghcSessionDepsDefinition` will be called for each file we need
+            -- to compile. `updateHscEnvEq` will refresh the HscEnv (session') and also
+            -- generate a new Unique.
             Just <$> liftIO (updateHscEnvEq env session')
 
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
