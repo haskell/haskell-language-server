@@ -33,7 +33,8 @@ import           System.Directory                (makeAbsolute)
 import           System.FilePath
 
 -- | An 'HscEnv' with equality. Two values are considered equal
---   if they are created with the same call to 'newHscEnvEq'.
+--   if they are created with the same call to 'newHscEnvEq' or
+--   'updateHscEnvEq'.
 data HscEnvEq = HscEnvEq
     { envUnique             :: !Unique
     , hscEnv                :: !HscEnv
