@@ -36,6 +36,7 @@ tests = testGroup "hlint" [
     , configTests
     , ignoreHintTests
     , applyHintTests
+    , resolveTests
     ]
 
 getIgnoreHintText :: T.Text -> T.Text
@@ -43,6 +44,22 @@ getIgnoreHintText name = "Ignore hint \"" <> name <> "\" in this module"
 
 getApplyHintText :: T.Text -> T.Text
 getApplyHintText name = "Apply hint \"" <> name <> "\""
+
+resolveTests :: TestTree
+resolveTests = testGroup "hlint resolve tests"
+  [
+    ignoreHintGoldenResolveTest
+      "Resolve version of: Ignore hint in this module inserts -Wno-unrecognised-pragmas and hlint ignore pragma if warn unrecognized pragmas is off"
+      "UnrecognizedPragmasOff"
+      (Point 3 8)
+      "Eta reduce"
+  , applyHintGoldenResolveTest
+      "Resolve version of: [#2612] Apply hint works when operator fixities go right-to-left"
+      "RightToLeftFixities"
+      (Point 6 13)
+      "Avoid reverse"
+  ]
+
 
 ignoreHintTests :: TestTree
 ignoreHintTests = testGroup "hlint ignore hint tests"
@@ -334,7 +351,7 @@ testDir = "test/testdata"
 
 runHlintSession :: FilePath -> Session a -> IO a
 runHlintSession subdir  =
-    failIfSessionTimeout . runSessionWithServer hlintPlugin (testDir </> subdir)
+    failIfSessionTimeout . runSessionWithServerAndCaps hlintPlugin codeActionNoResolveCaps (testDir </> subdir)
 
 noHlintDiagnostics :: [Diagnostic] -> Assertion
 noHlintDiagnostics diags =
@@ -422,5 +439,29 @@ goldenTest testCaseName goldenFilename point hintText =
 
 setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintTest testName path =
-  goldenWithHaskellDoc hlintPlugin testName testDir path "expected" "hs"
+  goldenWithHaskellAndCaps codeActionNoResolveCaps hlintPlugin testName testDir path "expected" "hs"
 
+ignoreHintGoldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
+ignoreHintGoldenResolveTest testCaseName goldenFilename point hintName =
+  goldenResolveTest testCaseName goldenFilename point (getIgnoreHintText hintName)
+
+applyHintGoldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
+applyHintGoldenResolveTest testCaseName goldenFilename point hintName = do
+  goldenResolveTest testCaseName goldenFilename point (getApplyHintText hintName)
+
+goldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
+goldenResolveTest testCaseName goldenFilename point hintText =
+  setupGoldenHlintResolveTest testCaseName goldenFilename $ \document -> do
+    waitForDiagnosticsFromSource document "hlint"
+    actions <- getCodeActions document $ pointToRange point
+    case find ((== Just hintText) . getCodeActionTitle) actions of
+      Just (InR codeAction) -> do
+        rsp <- request SMethod_CodeActionResolve codeAction
+        case rsp ^. L.result of
+          Right ca -> executeCodeAction ca
+          Left re  -> liftIO $ assertFailure $ show re
+      _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
+
+setupGoldenHlintResolveTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
+setupGoldenHlintResolveTest testName path =
+  goldenWithHaskellAndCaps codeActionResolveCaps hlintPlugin testName testDir path "expected" "hs"

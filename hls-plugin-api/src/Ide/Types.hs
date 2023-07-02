@@ -67,6 +67,7 @@ import           Control.Lens                  (_Just, (.~), (?~), (^.), (^?))
 import           Control.Monad.Trans.Class     (lift)
 import           Control.Monad.Trans.Except    (ExceptT (..), runExceptT)
 import           Data.Aeson                    hiding (Null, defaultOptions)
+import qualified Data.Aeson
 import           Data.Default
 import           Data.Dependent.Map            (DMap)
 import qualified Data.Dependent.Map            as DMap
@@ -93,8 +94,10 @@ import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server           (LspM, LspT,
+                                                ProgressCancellable (Cancellable),
                                                 getClientCapabilities,
-                                                getVirtualFile)
+                                                getVirtualFile, sendRequest,
+                                                withIndefiniteProgress)
 import           Language.LSP.VFS
 import           Numeric.Natural
 import           OpenTelemetry.Eventlog
@@ -1051,10 +1054,12 @@ mkCodeActionHandlerWithResolve codeActionMethod codeResolveMethod =
 -- support. This means you don't have to check whether the client supports resolve
 -- and act accordingly in your own providers.
 mkCodeActionWithResolveAndCommand
-  :: forall ideState. (ideState -> PluginId -> CodeActionParams -> LspM Config (Either ResponseError ([Command |? CodeAction] |? Null)))
+  :: forall ideState.
+  PluginId
+  -> (ideState -> PluginId -> CodeActionParams -> LspM Config (Either ResponseError ([Command |? CodeAction] |? Null)))
   -> (ideState -> PluginId -> CodeAction -> LspM Config (Either ResponseError CodeAction))
-  -> PluginHandlers ideState
-mkCodeActionWithResolveAndCommand codeActionMethod codeResolveMethod =
+  -> ([PluginCommand ideState], PluginHandlers ideState)
+mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
     let newCodeActionMethod ideState pid params = runExceptT $
             do codeActionReturn <- ExceptT $ codeActionMethod ideState pid params
                caps <- lift getClientCapabilities
@@ -1062,19 +1067,35 @@ mkCodeActionWithResolveAndCommand codeActionMethod codeResolveMethod =
                 r@(InR Null) -> pure r
                 (InL ls) | -- If the client supports resolve, we will wrap the resolve data in a owned
                            -- resolve data type to allow the server to know who to send the resolve request to
-                           -- and dump the command fields.
                            supportsCodeActionResolve caps ->
-                            pure $ InL (dropCommands . wrapCodeActionResolveData pid <$> ls)
-                           -- If they do not we will drop the data field.
-                         | otherwise -> pure $ InL $ dropData <$> ls
+                            pure $ InL (wrapCodeActionResolveData pid <$> ls)
+                           -- If they do not we will drop the data field, in addition we will populate the command
+                           -- field with our command to execute the resolve, with the whole code action as it's argument.
+                         | otherwise -> pure $ InL $ moveDataToCommand <$> ls
         newCodeResolveMethod ideState pid params =
             codeResolveMethod ideState pid (unwrapCodeActionResolveData params)
-    in mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod
-    <> mkPluginHandler SMethod_CodeActionResolve newCodeResolveMethod
-  where dropData :: Command |? CodeAction -> Command |? CodeAction
-        dropData ca = ca & _R . L.data_ .~ Nothing
-        dropCommands :: Command |? CodeAction -> Command |? CodeAction
-        dropCommands ca = ca & _R . L.command .~ Nothing
+    in ([PluginCommand "codeActionResolve" "Executes resolve for code action" (executeResolveCmd plId codeResolveMethod)],
+    mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod
+    <> mkPluginHandler SMethod_CodeActionResolve newCodeResolveMethod)
+  where moveDataToCommand :: Command |? CodeAction -> Command |? CodeAction
+        moveDataToCommand ca =
+          let dat = toJSON <$> ca ^? _R -- We need to take the whole codeAction
+              -- And put it in the argument for the Command, that way we can later
+              -- pas it to the resolve handler (which expects a whole code action)
+              cmd = mkLspCommand plId (CommandId "codeActionResolve") "Execute Code Action" (pure <$> dat)
+          in ca
+              & _R . L.data_ .~ Nothing -- Set the data field to nothing
+              & _R . L.command ?~ cmd -- And set the command to our previously created command
+        executeResolveCmd :: PluginId -> PluginMethodHandler ideState Method_CodeActionResolve -> CommandFunction ideState CodeAction
+        executeResolveCmd pluginId resolveProvider ideState ca =  do
+          withIndefiniteProgress "Executing code action..." Cancellable $ do
+            resolveResult <- resolveProvider ideState pluginId ca
+            case resolveResult of
+              Right CodeAction {_edit = Just wedits } -> do
+                  _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) (\_ -> pure ())
+                  pure $ Right Data.Aeson.Null
+              Right _ -> pure $ Left $ responseError "No edit in CodeAction"
+              Left err -> pure $ Left err
 
 supportsCodeActionResolve :: ClientCapabilities -> Bool
 supportsCodeActionResolve caps =
