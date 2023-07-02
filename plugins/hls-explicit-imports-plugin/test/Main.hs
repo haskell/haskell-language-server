@@ -8,10 +8,12 @@ module Main
   ( main
   ) where
 
+import           Control.Lens                  ((^.))
 import           Data.Foldable                 (find, forM_)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import qualified Ide.Plugin.ExplicitImports    as ExplicitImports
+import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           System.FilePath               ((<.>), (</>))
 import           Test.Hls
@@ -26,7 +28,10 @@ main :: IO ()
 main = defaultTestRunner $
   testGroup
     "Make imports explicit"
-    [ codeActionGoldenTest "UsualCase" 3 0
+    [ codeActionAllGoldenTest "UsualCase" 3 0
+    , codeActionAllResolveGoldenTest "UsualCase" 3 0
+    , codeActionOnlyGoldenTest "OnlyThis" 3 0
+    , codeActionOnlyResolveGoldenTest "OnlyThis" 3 0
     , codeLensGoldenTest "UsualCase" 0
     , testCase "No CodeAction when exported" $
       runSessionWithServer explicitImportsPlugin testDataDir $ do
@@ -65,12 +70,39 @@ main = defaultTestRunner $
 
 -- code action tests
 
-codeActionGoldenTest :: FilePath -> Int -> Int -> TestTree
-codeActionGoldenTest fp l c = goldenWithExplicitImports fp $ \doc -> do
+codeActionAllGoldenTest :: FilePath -> Int -> Int -> TestTree
+codeActionAllGoldenTest fp l c = goldenWithExplicitImports " code action" fp codeActionNoResolveCaps $ \doc -> do
   actions <- getCodeActions doc (pointRange l c)
   case find ((== Just "Make all imports explicit") . caTitle) actions of
     Just (InR x) -> executeCodeAction x
     _            -> liftIO $ assertFailure "Unable to find CodeAction"
+
+codeActionAllResolveGoldenTest :: FilePath -> Int -> Int -> TestTree
+codeActionAllResolveGoldenTest fp l c = goldenWithExplicitImports " code action resolve" fp codeActionResolveCaps $ \doc -> do
+  actions <- getCodeActions doc (pointRange l c)
+  let Just (InR x) = find ((== Just "Make all imports explicit") . caTitle) actions
+  resolved <- resolveCodeAction x
+  executeCodeAction resolved
+
+codeActionOnlyGoldenTest :: FilePath -> Int -> Int -> TestTree
+codeActionOnlyGoldenTest fp l c = goldenWithExplicitImports " code action" fp codeActionNoResolveCaps $ \doc -> do
+  actions <- getCodeActions doc (pointRange l c)
+  case find ((== Just "Make this import explicit") . caTitle) actions of
+    Just (InR x) -> executeCodeAction x
+    _            -> liftIO $ assertFailure "Unable to find CodeAction"
+
+codeActionOnlyResolveGoldenTest :: FilePath -> Int -> Int -> TestTree
+codeActionOnlyResolveGoldenTest fp l c = goldenWithExplicitImports " code action resolve" fp codeActionResolveCaps $ \doc -> do
+  actions <- getCodeActions doc (pointRange l c)
+  let Just (InR x) = find ((== Just "Make this import explicit") . caTitle) actions
+  resolved <- resolveCodeAction x
+  executeCodeAction resolved
+
+resolveCodeAction :: CodeAction -> Session CodeAction
+resolveCodeAction ca = do
+  resolveResponse <- request SMethod_CodeActionResolve ca
+  let Right resolved = resolveResponse ^. L.result
+  pure resolved
 
 caTitle :: (Command |? CodeAction) -> Maybe Text
 caTitle (InR CodeAction {_title}) = Just _title
@@ -79,10 +111,16 @@ caTitle _                         = Nothing
 -- code lens tests
 
 codeLensGoldenTest :: FilePath -> Int -> TestTree
-codeLensGoldenTest fp codeLensIdx = goldenWithExplicitImports fp $ \doc -> do
-  codeLens <- (!! codeLensIdx) <$> getCodeLensesBy isExplicitImports doc
-  mapM_ executeCmd
-    [c | CodeLens{_command = Just c} <- [codeLens]]
+codeLensGoldenTest fp codeLensIdx = goldenWithExplicitImports " code lens" fp codeActionNoResolveCaps $ \doc -> do
+  (codeLens: _) <- getCodeLenses doc
+  CodeLens {_command = Just c} <- resolveCodeLens codeLens
+  executeCmd c
+
+resolveCodeLens :: CodeLens -> Session CodeLens
+resolveCodeLens cl = do
+  resolveResponse <- request SMethod_CodeLensResolve cl
+  let Right resolved = resolveResponse ^. L.result
+  pure resolved
 
 getCodeLensesBy :: (CodeLens -> Bool) -> TextDocumentIdentifier -> Session [CodeLens]
 getCodeLensesBy f doc = filter f <$> getCodeLenses doc
@@ -102,8 +140,8 @@ executeCmd cmd = do
 
 -- helpers
 
-goldenWithExplicitImports :: FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithExplicitImports fp = goldenWithHaskellDoc explicitImportsPlugin (fp <> " (golden)") testDataDir fp "expected" "hs"
+goldenWithExplicitImports :: String -> FilePath -> ClientCapabilities -> (TextDocumentIdentifier -> Session ()) -> TestTree
+goldenWithExplicitImports title fp caps = goldenWithHaskellAndCaps caps explicitImportsPlugin (fp <> title <> " (golden)") testDataDir fp "expected" "hs"
 
 testDataDir :: String
 testDataDir = "test" </> "testdata"

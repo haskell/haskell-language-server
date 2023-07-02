@@ -17,7 +17,6 @@ module Ide.Plugin.ExplicitImports
   , abbreviateImportTitle
   , Log(..)
   ) where
-
 import           Control.DeepSeq
 import           Control.Lens                         ((&), (?~))
 import           Control.Monad                        (replicateM)
@@ -29,8 +28,8 @@ import           Data.Aeson                           (Result (Success),
                                                        Value (Null), fromJSON)
 import           Data.Aeson.Types                     (FromJSON)
 import qualified Data.HashMap.Strict                  as HashMap
-import qualified Data.IntMap                          as IM (IntMap, fromList,
-                                                             (!?))
+import qualified Data.IntMap                          as IM (IntMap, elems,
+                                                             fromList, (!?))
 import           Data.IORef                           (readIORef)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (catMaybes, fromMaybe,
@@ -180,17 +179,18 @@ lensResolveProvider ideState plId cl@(CodeLens {_data_ = Just data_}) = pluginRe
 codeActionProvider :: (ModuleName -> Bool) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider pred ideState _pId (CodeActionParams _ _ docId range _context)
   | TextDocumentIdentifier {_uri} <- docId,
-    Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = do
-    minImports <- liftIO $ runAction "MinimalImports" ideState $ use MinimalImports nfp
-    case minImports of
-      Just (MinimalImportsResult _ minImports _) -> do
-        let relevantCodeActions = filterByRange range minImports
-            allExplicit =
-              [InR $ mkCodeAction "Make all imports explicit" (Just $ toJSON $ ResolveAll _uri)
-              | not $ null relevantCodeActions ]
-            toCodeAction uri (range, int) =
-              mkCodeAction "Make this import explicit" (Just $ toJSON $ ResolveOne uri int)
-        return $ Right $ InL ((InR . toCodeAction _uri <$> relevantCodeActions) <> allExplicit)
+    Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = pluginResponse $ do
+    (MinimalImportsResult _ minImports _) <-
+                  handleMaybeM "Unable to run Minimal Imports"
+                    $ liftIO
+                    $ runAction "MinimalImports" ideState $ use MinimalImports nfp
+    let relevantCodeActions = filterByRange range minImports
+        allExplicit =
+          [InR $ mkCodeAction "Make all imports explicit" (Just $ toJSON $ ResolveAll _uri)
+          | not $ null relevantCodeActions ]
+        toCodeAction uri (range, int) =
+          mkCodeAction "Make this import explicit" (Just $ toJSON $ ResolveOne uri int)
+    pure $ InL ((InR . toCodeAction _uri <$> relevantCodeActions) <> allExplicit)
  | otherwise = return $ Right $ InL []
     where mkCodeAction title data_  =
             CodeAction
@@ -204,7 +204,31 @@ codeActionProvider pred ideState _pId (CodeActionParams _ _ docId range _context
             , _data_ = data_}
 
 codeActionResolveProvider :: PluginMethodHandler IdeState Method_CodeActionResolve
-codeActionResolveProvider = undefined
+codeActionResolveProvider ideState plId ca@(CodeAction{_data_= Just value}) =
+  pluginResponse $ do
+    case fromJSON value of
+      Success (ResolveOne uri int) -> do
+        nfp <- getNormalizedFilePath uri
+        (MinimalImportsResult _ _ resolveMinImp) <-
+          handleMaybeM "Unable to run Minimal Imports"
+          $ liftIO
+          $ runAction "MinimalImports" ideState $ use MinimalImports nfp
+        (range, text) <- handleMaybe "Unable to resolve lens" $ resolveMinImp IM.!? int
+        let wedit = mkWorkspaceEdit uri [TextEdit range text]
+        pure $ ca & L.edit ?~ wedit
+      Success (ResolveAll uri) -> do
+        nfp <- getNormalizedFilePath uri
+        (MinimalImportsResult _ _ resolveMinImp) <-
+          handleMaybeM "Unable to run Minimal Imports"
+          $ liftIO
+          $ runAction "MinimalImports" ideState $ use MinimalImports nfp
+        let edits =  uncurry TextEdit <$> IM.elems resolveMinImp
+            wedit = mkWorkspaceEdit uri edits
+        pure $ ca & L.edit ?~ wedit
+  where mkWorkspaceEdit uri edits=
+          WorkspaceEdit {_changes = Just $ Map.fromList [(uri, edits)]
+                        , _documentChanges = Nothing
+                        , _changeAnnotations = Nothing}
 --------------------------------------------------------------------------------
 
 data MinimalImports = MinimalImports
@@ -262,7 +286,7 @@ minimalImportsRule recorder pred = define (cmapWithPrio LogShake recorder) $ \Mi
           , let L _ mn = ideclName imp
           , pred mn
           , let RealSrcSpan l _ = getLoc i
-          , let Just minImport = Map.lookup (realSrcSpanStart l) importsMap
+          , Just minImport <- [Map.lookup (realSrcSpanStart l) importsMap]
         ]
   uniques <- liftIO $ replicateM (length res) (U.hashUnique <$> U.newUnique)
   let uniqueAndRangeAndText = zip uniques res
@@ -323,6 +347,7 @@ isExplicitImport ImportDecl {ideclImportList = Just (Exactly, _)} = True
 isExplicitImport ImportDecl {ideclHiding = Just (False, _)}       = True
 #endif
 isExplicitImport _                                                = False
+
 -- This number is somewhat arbitrarily chosen. Ideally the protocol would tell us these things,
 -- but at the moment I don't believe we know it.
 -- 80 columns is traditional, but Haskellers tend to use longer lines (citation needed) and it's

@@ -55,5 +55,6 @@ test-suite tests
     , filepath
     , hls-explicit-imports-plugin
     , hls-test-utils
+    , lens
     , lsp-types
     , text
