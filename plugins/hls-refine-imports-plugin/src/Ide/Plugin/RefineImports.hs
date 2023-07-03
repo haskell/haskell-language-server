@@ -186,9 +186,9 @@ instance NFData RefineImportsResult where rnf = rwhnf
 refineImportsRule :: Recorder (WithPriority Log) -> Rules ()
 refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineImports nfp -> do
   -- Get the typechecking artifacts from the module
-  tmr <- use TypeCheck nfp
+  Just tmr <- use TypeCheck nfp
   -- We also need a GHC session with all the dependencies
-  hsc <- use GhcSessionDeps nfp
+  Just hsc <- use GhcSessionDeps nfp
 
   -- 2 layer map ModuleName -> ModuleName -> [Avails] (exports)
   import2Map <- do
@@ -205,7 +205,7 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
   -- We shouldn't blindly refine imports
   -- instead we should generate imports statements
   -- for modules/symbols actually got used
-  (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
+  Just (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
 
   let filterByImport
         :: LImportDecl GhcRn
@@ -259,7 +259,7 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
                 . Map.toList
                 $ filteredInnerImports)
         -- for every minimal imports
-        | Just minImports <- [mbMinImports]
+        | minImports <- [mbMinImports]
         , i@(L _ ImportDecl{ideclName = L _ mn}) <- minImports
         -- we check for the inner imports
         , Just innerImports <- [Map.lookup mn import2Map]
@@ -268,7 +268,7 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
         -- if no symbols from this modules then don't need to generate new import
         , not $ null filteredInnerImports
         ]
-  return ([], RefineImportsResult res <$ mbMinImports)
+  return ([], Just $ RefineImportsResult res)
 
   where
     -- Check if a name is exposed by AvailInfo (the available information of a module)
