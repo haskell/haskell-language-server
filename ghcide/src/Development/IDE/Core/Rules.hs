@@ -569,10 +569,28 @@ reportImportCyclesRule recorder =
 
 getHieAstsRule :: Recorder (WithPriority Log) -> Rules ()
 getHieAstsRule recorder =
-    define (cmapWithPrio LogShake recorder) $ \GetHieAst f -> do
-      tmr <- use_ TypeCheck f
-      hsc <- hscEnv <$> use_ GhcSessionDeps f
-      getHieAstRuleDefinition f hsc tmr
+    define (cmapWithPrio LogShake recorder) $ \GetHieAst f ->
+        case getSourceFileOrigin f of
+            FromProject -> do
+                tmr <- use_ TypeCheck f
+                hsc <- hscEnv <$> use_ GhcSessionDeps f
+                getHieAstRuleDefinition f hsc tmr
+            FromDependency -> do
+                se <- getShakeExtras
+                mHieFile <- liftIO
+                    $ runIdeAction "GetHieAst" se
+                    $ runMaybeT
+                    $ readHieFileForSrcFromDisk recorder f
+                pure ([], makeHieAstResult <$> mHieFile)
+    where
+        makeHieAstResult :: Compat.HieFile -> HieAstResult
+        makeHieAstResult hieFile =
+            HAR
+                (Compat.hie_module hieFile)
+                (Compat.hie_asts hieFile)
+                mempty
+                mempty
+                (HieFromDisk hieFile)
 
 persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do

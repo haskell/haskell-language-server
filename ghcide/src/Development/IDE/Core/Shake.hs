@@ -44,6 +44,8 @@ module Development.IDE.Core.Shake(
     define, defineNoDiagnostics,
     defineEarlyCutoff,
     defineNoFile, defineEarlyCutOffNoFile,
+    getSourceFileOrigin,
+    SourceFileOrigin(..),
     getDiagnostics,
     mRunLspT, mRunLspTCallback,
     getHiddenDiagnostics,
@@ -107,6 +109,7 @@ import qualified Data.HashMap.Strict                    as HMap
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
 import           Data.IORef
+import           Data.List                              (isInfixOf)
 import           Data.List.Extra                        (foldl', partition,
                                                          takeEnd)
 import qualified Data.Map.Strict                        as Map
@@ -1124,6 +1127,14 @@ defineEarlyCutOffNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> A
 defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k file -> do
     if file == emptyFilePath then do (hash, res) <- f k; return (Just hash, Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
+
+data SourceFileOrigin = FromProject | FromDependency
+
+getSourceFileOrigin :: NormalizedFilePath -> SourceFileOrigin
+getSourceFileOrigin f =
+    case isInfixOf ".hls/dependencies" (show f) of
+        True -> FromDependency
+        False -> FromProject
 
 defineEarlyCutoff'
     :: forall k v. IdeRule k v
