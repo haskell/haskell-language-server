@@ -19,7 +19,11 @@ source-repository head
     type:     git
     location: https://github.com/haskell/haskell-language-server.git
 
+common warnings
+    ghc-options: -Wall
+
 library
+  import:           warnings
   buildable: True
   exposed-modules:    Ide.Plugin.ExplicitImports
   hs-source-dirs:     src
@@ -44,6 +48,7 @@ library
     TypeOperators
 
 test-suite tests
+  import:           warnings
   buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010

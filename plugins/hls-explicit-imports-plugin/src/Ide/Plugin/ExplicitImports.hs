@@ -110,7 +110,7 @@ runImportCommand recorder ideState eird@(ResolveOne _ _) = pluginResponse $ do
           pure ()
         logErrors (Right _) = pure ()
 runImportCommand _ _ (ResolveAll _) = do
-  pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexepected argument for command handler: ResolveAll" Nothing
+  pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexpected argument for command handler: ResolveAll" Nothing
 
 -- | For every implicit import statement, return a code lens of the corresponding explicit import
 -- Example - for the module below:
@@ -126,12 +126,11 @@ lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Meth
 lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}}
   = pluginResponse $ do
     nfp <- getNormalizedFilePath _uri
-    mbMinImports <- liftIO $ runAction "MinimalImports" state $ useWithStale MinimalImports nfp
+    mbMinImports <- liftIO $ runAction "MinimalImports" state $ use MinimalImports nfp
     case mbMinImports of
-      Just (MinimalImportsResult minImports _ _, posMapping) -> do
-        let lens = [ generateLens _uri curRange int
-                    | (range, int) <- minImports
-                    , Just curRange <- [toCurrentRange posMapping range]]
+      Just (MinimalImportsResult minImports _ _) -> do
+        let lens = [ generateLens _uri range int
+                    | (range, int) <- minImports]
         pure $ InL lens
       _ ->
         pure $ InL []
@@ -158,11 +157,11 @@ lensResolveProvider _ ideState plId cl@(CodeLens {_data_ = Just data_@(A.fromJSO
               _arguments = Just [data_]
           in mkLspCommand pId importCommandId title _arguments
 lensResolveProvider _  _ _ (CodeLens {_data_ = Just (A.fromJSON -> A.Success (ResolveAll _))}) = do
-   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexepected argument for lens resolve handler: ResolveAll" Nothing
+   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexpected argument for lens resolve handler: ResolveAll" Nothing
 lensResolveProvider _  _ _ (CodeLens {_data_ = Just (A.fromJSON @EIResolveData -> (A.Error (T.pack -> str)))}) =
   pure $ Left $ ResponseError (InR ErrorCodes_ParseError) str Nothing
 lensResolveProvider _  _ _ (CodeLens {_data_ = _}) = do
-   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexepected argument for lens resolve handler: (Probably Nothing)" Nothing
+   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexpected argument for lens resolve handler: (Probably Nothing)" Nothing
 
 -- | If there are any implicit imports, provide both one code action per import
 --   to make that specific import explicit, and one code action to turn them all
@@ -201,7 +200,7 @@ codeActionResolveProvider _ ideState _ ca@(CodeAction{_data_= Just (A.fromJSON -
 codeActionResolveProvider _ _ _ (CodeAction{_data_= Just (A.fromJSON @EIResolveData -> A.Error (T.pack -> str))}) =
     pure $ Left $ ResponseError (InR ErrorCodes_ParseError) str Nothing
 codeActionResolveProvider _  _ _ (CodeAction {_data_ = _}) = do
-   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexepected argument for code action resolve handler: (Probably Nothing)" Nothing
+   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexpected argument for code action resolve handler: (Probably Nothing)" Nothing
 --------------------------------------------------------------------------------
 
 resolveWTextEdit :: IdeState -> EIResolveData -> ExceptT String (LspT Config IO) WorkspaceEdit
@@ -244,10 +243,10 @@ data MinimalImportsResult = MinimalImportsResult
     forLens        :: [(Range, Int)]
     -- |For the code actions we have the same data as for the code lenses, but
     -- we store it in a RangeMap, because that allows us to filter on a specific
-    -- range with better performance, and code actions are almost allways only
+    -- range with better performance, and code actions are almost always only
     -- requested for a specific range
   , forCodeActions :: RM.RangeMap (Range, Int)
-    -- |For resolve we have an intMap where for every previously provied unique id
+    -- |For resolve we have an intMap where for every previously provided unique id
     -- we provide a textEdit to allow our code actions or code lens to be resolved
   , forResolve     :: IM.IntMap TextEdit }
 
@@ -272,9 +271,9 @@ exportedModuleStrings _ = []
 minimalImportsRule :: Recorder (WithPriority Log) -> (ModuleName -> Bool) -> Rules ()
 minimalImportsRule recorder pred = define (cmapWithPrio LogShake recorder) $ \MinimalImports nfp -> do
   -- Get the typechecking artifacts from the module
-  Just tmr <- use TypeCheck nfp
+  Just (tmr, tmrpm) <- useWithStale TypeCheck nfp
   -- We also need a GHC session with all the dependencies
-  Just hsc <- use GhcSessionDeps nfp
+  Just (hsc, _) <- useWithStale GhcSessionDeps nfp
   -- Use the GHC api to extract the "minimal" imports
   Just (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
   let importsMap =
@@ -283,14 +282,16 @@ minimalImportsRule recorder pred = define (cmapWithPrio LogShake recorder) $ \Mi
             | L (locA -> RealSrcSpan l _) i <- mbMinImports
           ]
       res =
-        [ (realSrcSpanToRange l, minImport)
-          | i@(L _ imp) <- imports
-          , not (isQualifiedImport imp)
-          , not (isExplicitImport imp)
-          , let L _ mn = ideclName imp
-          , pred mn
-          , RealSrcSpan l _ <- [getLoc i]
-          , Just minImport <- [Map.lookup (realSrcSpanStart l) importsMap]
+        [ (newRange, minImport)
+          | imp@(L _ impDecl) <- imports
+          , not (isQualifiedImport impDecl)
+          , not (isExplicitImport impDecl)
+          , let L _ moduleName = ideclName impDecl
+          , pred moduleName
+          , RealSrcSpan location _ <- [getLoc imp]
+          , let range = realSrcSpanToRange location
+          , Just minImport <- [Map.lookup (realSrcSpanStart location) importsMap]
+          , Just newRange <- [toCurrentRange tmrpm range]
         ]
   uniqueAndRangeAndText <- liftIO $ for res $ \rt -> do
                                 u <- U.hashUnique <$> U.newUnique
@@ -385,10 +386,6 @@ abbreviateImportTitle input =
   in title
 
 --------------------------------------------------------------------------------
-
--- | A helper to run ide actions
-runIde :: IdeState -> Action a -> IO a
-runIde = runAction "importLens"
 
 within :: Range -> SrcSpan -> Bool
 within (Range start end) span =
