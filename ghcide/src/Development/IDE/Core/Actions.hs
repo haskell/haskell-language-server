@@ -13,6 +13,10 @@ module Development.IDE.Core.Actions
 , lookupMod
 ) where
 
+import           Control.Concurrent.MVar              (MVar, newEmptyMVar, putMVar, readMVar)
+import           Control.Concurrent.STM               (atomically)
+import           Control.Concurrent.STM.TQueue        (unGetTQueue)
+import           Control.Monad                        (unless)
 import           Control.Monad.Extra                  (mapMaybeM)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
@@ -51,48 +55,58 @@ lookupMod
   -> Unit
   -> Bool -- ^ Is this file a boot file?
   -> MaybeT IdeAction Uri
-lookupMod _dbchan hieFile moduleName uid _boot = MaybeT $ do
+lookupMod HieDbWriter{indexQueue} hieFile moduleName uid _boot = MaybeT $ do
   mProjectRoot <- (resRootPath =<<) <$> asks lspEnv
   case mProjectRoot of
     Nothing -> pure Nothing
     Just projectRoot -> do
-      let toFilePath :: ModuleName -> FilePath
-          toFilePath = separateDirectories . prettyModuleName
-            where
-              separateDirectories :: FilePath -> FilePath
-              separateDirectories moduleNameString =
-                case breakOnDot moduleNameString of
-                  [] -> ""
-                  ms -> foldr1 (</>) ms
-              breakOnDot :: FilePath -> [FilePath]
-              breakOnDot = words . map replaceDotWithSpace
-              replaceDotWithSpace :: Char -> Char
-              replaceDotWithSpace '.' = ' '
-              replaceDotWithSpace c = c
-              prettyModuleName :: ModuleName -> String
-              prettyModuleName = filter (/= '"')
-                . concat
-                . drop 1
-                . words
-                . show
-          writeOutDir :: FilePath
-          writeOutDir = projectRoot </> ".hls" </> "dependencies" </> show uid
-          writeOutFile :: FilePath
-          writeOutFile = toFilePath moduleName ++ ".hs"
-          writeOutPath :: FilePath
-          writeOutPath = writeOutDir </> writeOutFile
-          moduleUri :: Uri
-          moduleUri = AtPoint.toUri writeOutPath
+      completionToken <- liftIO $ newEmptyMVar
+      moduleUri <- writeAndIndexSource projectRoot completionToken
+      liftIO $ readMVar completionToken
+      pure $ Just moduleUri
+  where
+    writeAndIndexSource :: FilePath -> MVar () -> IdeAction Uri
+    writeAndIndexSource projectRoot completionToken = do
       fileExists <- liftIO $ doesFileExist writeOutPath
-      if fileExists
-      then pure $ Just moduleUri
-      else do
+      unless fileExists $ do
         nc <- asks ideNc
         liftIO $ do
           createDirectoryIfMissing True $ takeDirectory writeOutPath
           moduleSource <- hie_hs_src <$> loadHieFile (mkUpdater nc) hieFile
           BS.writeFile writeOutPath moduleSource
-        pure $ Just moduleUri
+      liftIO $ atomically $
+        unGetTQueue indexQueue $ \withHieDb -> withHieDb $ \db -> do
+          HieDb.addSrcFile db hieFile writeOutPath False
+          putMVar completionToken ()
+      pure $ moduleUri
+      where
+        writeOutDir :: FilePath
+        writeOutDir = projectRoot </> ".hls" </> "dependencies" </> show uid
+        writeOutFile :: FilePath
+        writeOutFile = toFilePath moduleName ++ ".hs"
+        writeOutPath :: FilePath
+        writeOutPath = writeOutDir </> writeOutFile
+        moduleUri :: Uri
+        moduleUri = AtPoint.toUri writeOutPath
+        toFilePath :: ModuleName -> FilePath
+        toFilePath = separateDirectories . prettyModuleName
+          where
+            separateDirectories :: FilePath -> FilePath
+            separateDirectories moduleNameString =
+              case breakOnDot moduleNameString of
+                [] -> ""
+                ms -> foldr1 (</>) ms
+            breakOnDot :: FilePath -> [FilePath]
+            breakOnDot = words . map replaceDotWithSpace
+            replaceDotWithSpace :: Char -> Char
+            replaceDotWithSpace '.' = ' '
+            replaceDotWithSpace c = c
+            prettyModuleName :: ModuleName -> String
+            prettyModuleName = filter (/= '"')
+              . concat
+              . drop 1
+              . words
+              . show
 
 
 
