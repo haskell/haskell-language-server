@@ -9,20 +9,17 @@ module Main
   ) where
 
 import           Control.Lens                  ((^.))
-import           Data.Foldable                 (find, forM_)
+import           Data.Foldable                 (find)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import qualified Ide.Plugin.ExplicitImports    as ExplicitImports
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
-import           System.FilePath               ((<.>), (</>))
+import           System.FilePath               ((</>))
 import           Test.Hls
 
 explicitImportsPlugin :: PluginTestDescriptor ExplicitImports.Log
 explicitImportsPlugin = mkPluginTestDescriptor ExplicitImports.descriptor "explicitImports"
-
-longModule :: T.Text
-longModule = "F" <> T.replicate 80 "o"
 
 main :: IO ()
 main = defaultTestRunner $
@@ -80,7 +77,7 @@ codeActionAllGoldenTest fp l c = goldenWithExplicitImports " code action" fp cod
 codeActionAllResolveGoldenTest :: FilePath -> Int -> Int -> TestTree
 codeActionAllResolveGoldenTest fp l c = goldenWithExplicitImports " code action resolve" fp codeActionResolveCaps $ \doc -> do
   actions <- getCodeActions doc (pointRange l c)
-  let Just (InR x) = find ((== Just "Make all imports explicit") . caTitle) actions
+  Just (InR x) <- pure $ find ((== Just "Make all imports explicit") . caTitle) actions
   resolved <- resolveCodeAction x
   executeCodeAction resolved
 
@@ -94,14 +91,14 @@ codeActionOnlyGoldenTest fp l c = goldenWithExplicitImports " code action" fp co
 codeActionOnlyResolveGoldenTest :: FilePath -> Int -> Int -> TestTree
 codeActionOnlyResolveGoldenTest fp l c = goldenWithExplicitImports " code action resolve" fp codeActionResolveCaps $ \doc -> do
   actions <- getCodeActions doc (pointRange l c)
-  let Just (InR x) = find ((== Just "Make this import explicit") . caTitle) actions
+  Just (InR x) <- pure $ find ((== Just "Make this import explicit") . caTitle) actions
   resolved <- resolveCodeAction x
   executeCodeAction resolved
 
 resolveCodeAction :: CodeAction -> Session CodeAction
 resolveCodeAction ca = do
   resolveResponse <- request SMethod_CodeActionResolve ca
-  let Right resolved = resolveResponse ^. L.result
+  Right resolved <- pure $ resolveResponse ^. L.result
   pure resolved
 
 caTitle :: (Command |? CodeAction) -> Maybe Text
@@ -111,7 +108,7 @@ caTitle _                         = Nothing
 -- code lens tests
 
 codeLensGoldenTest :: FilePath -> Int -> TestTree
-codeLensGoldenTest fp codeLensIdx = goldenWithExplicitImports " code lens" fp codeActionNoResolveCaps $ \doc -> do
+codeLensGoldenTest fp _ = goldenWithExplicitImports " code lens" fp codeActionNoResolveCaps $ \doc -> do
   (codeLens: _) <- getCodeLenses doc
   CodeLens {_command = Just c} <- resolveCodeLens codeLens
   executeCmd c
@@ -119,16 +116,8 @@ codeLensGoldenTest fp codeLensIdx = goldenWithExplicitImports " code lens" fp co
 resolveCodeLens :: CodeLens -> Session CodeLens
 resolveCodeLens cl = do
   resolveResponse <- request SMethod_CodeLensResolve cl
-  let Right resolved = resolveResponse ^. L.result
+  Right resolved <- pure $ resolveResponse ^. L.result
   pure resolved
-
-getCodeLensesBy :: (CodeLens -> Bool) -> TextDocumentIdentifier -> Session [CodeLens]
-getCodeLensesBy f doc = filter f <$> getCodeLenses doc
-
-isExplicitImports :: CodeLens -> Bool
-isExplicitImports (CodeLens _ (Just (Command _ cmd _)) _)
-  | ":explicitImports:" `T.isInfixOf` cmd = True
-isExplicitImports _ = False
 
 -- Execute command and wait for result
 executeCmd :: Command -> Session ()
