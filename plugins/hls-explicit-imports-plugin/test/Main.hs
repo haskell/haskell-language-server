@@ -1,5 +1,6 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns           #-}
+{-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE TypeOperators            #-}
 {-# LANGUAGE ViewPatterns             #-}
@@ -10,6 +11,7 @@ module Main
 
 import           Control.Lens                  ((^.))
 import           Data.Foldable                 (find)
+import           Data.Row                      ((.+), (.==))
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import qualified Ide.Plugin.ExplicitImports    as ExplicitImports
@@ -30,6 +32,7 @@ main = defaultTestRunner $
     , codeActionOnlyGoldenTest "OnlyThis" 3 0
     , codeActionOnlyResolveGoldenTest "OnlyThis" 3 0
     , codeLensGoldenTest "UsualCase" 0
+    , codeActionBreakFile "StaleAction" 4 0
     , testCase "No CodeAction when exported" $
       runSessionWithServer explicitImportsPlugin testDataDir $ do
         doc <- openDoc "Exported.hs" "haskell"
@@ -73,6 +76,18 @@ codeActionAllGoldenTest fp l c = goldenWithExplicitImports " code action" fp cod
   case find ((== Just "Make all imports explicit") . caTitle) actions of
     Just (InR x) -> executeCodeAction x
     _            -> liftIO $ assertFailure "Unable to find CodeAction"
+
+codeActionBreakFile :: FilePath -> Int -> Int -> TestTree
+codeActionBreakFile fp l c = goldenWithExplicitImports " code action" fp codeActionNoResolveCaps $ \doc -> do
+  _ <- waitForDiagnostics
+  changeDoc doc [edit]
+  actions <- getCodeActions doc (pointRange l c)
+  case find ((== Just "Make all imports explicit") . caTitle) actions of
+    Just (InR x) -> executeCodeAction x
+    _            -> liftIO $ assertFailure "Unable to find CodeAction"
+  where edit = TextDocumentContentChangeEvent $ InL $ #range .== pointRange 2 21
+                                                   .+ #rangeLength .== Nothing
+                                                   .+ #text .== "x"
 
 codeActionAllResolveGoldenTest :: FilePath -> Int -> Int -> TestTree
 codeActionAllResolveGoldenTest fp l c = goldenWithExplicitImports " code action resolve" fp codeActionResolveCaps $ \doc -> do

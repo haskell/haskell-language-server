@@ -62,4 +62,5 @@ test-suite tests
     , hls-test-utils
     , lens
     , lsp-types
+    , row-types
     , text
