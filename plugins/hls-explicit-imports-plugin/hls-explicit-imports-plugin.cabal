@@ -20,7 +20,7 @@ source-repository head
     location: https://github.com/haskell/haskell-language-server.git
 
 common warnings
-    ghc-options: -Wall
+    ghc-options: -Wall -Werror
 
 library
   import:           warnings
