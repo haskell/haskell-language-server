@@ -15,6 +15,9 @@ import           Control.Arrow                        (Arrow (second))
 import           Control.DeepSeq                      (rwhnf)
 import           Control.Monad                        (join)
 import           Control.Monad.IO.Class               (liftIO)
+import           Control.Monad.Trans.Class            (lift)
+import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
+                                                       runMaybeT)
 import           Data.Aeson.Types
 import           Data.IORef                           (readIORef)
 import           Data.List                            (intercalate)
@@ -184,28 +187,28 @@ instance Show RefineImportsResult where show _ = "<refineImportsResult>"
 instance NFData RefineImportsResult where rnf = rwhnf
 
 refineImportsRule :: Recorder (WithPriority Log) -> Rules ()
-refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineImports nfp -> do
+refineImportsRule recorder = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \RefineImports nfp -> runMaybeT $ do
   -- Get the typechecking artifacts from the module
-  Just tmr <- use TypeCheck nfp
+  tmr <- MaybeT $ use TypeCheck nfp
   -- We also need a GHC session with all the dependencies
-  Just hsc <- use GhcSessionDeps nfp
+  hsc <- MaybeT $ use GhcSessionDeps nfp
 
   -- 2 layer map ModuleName -> ModuleName -> [Avails] (exports)
   import2Map <- do
     -- first layer is from current(editing) module to its imports
-    ImportMap currIm <- use_ GetImportMap nfp
+    ImportMap currIm <- lift $ use_ GetImportMap nfp
     forM currIm $ \path -> do
       -- second layer is from the imports of first layer to their imports
-      ImportMap importIm <- use_ GetImportMap path
+      ImportMap importIm <- lift $ use_ GetImportMap path
       forM importIm $ \imp_path -> do
-        imp_hir <- use_ GetModIface imp_path
+        imp_hir <- lift $ use_ GetModIface imp_path
         return $ mi_exports $ hirModIface imp_hir
 
   -- Use the GHC api to extract the "minimal" imports
   -- We shouldn't blindly refine imports
   -- instead we should generate imports statements
   -- for modules/symbols actually got used
-  Just (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
+  (imports, mbMinImports) <- MaybeT $ liftIO $ extractMinimalImports hsc tmr
 
   let filterByImport
         :: LImportDecl GhcRn
@@ -268,7 +271,7 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
         -- if no symbols from this modules then don't need to generate new import
         , not $ null filteredInnerImports
         ]
-  return ([], Just $ RefineImportsResult res)
+  pure $ RefineImportsResult res
 
   where
     -- Check if a name is exposed by AvailInfo (the available information of a module)

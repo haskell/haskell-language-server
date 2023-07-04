@@ -122,7 +122,7 @@ runImportCommand _ _ (ResolveAll _) = do
 -- the provider should produce one code lens associated to the import statement:
 --
 -- > import Data.List (intercalate, sortBy)
-lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeLens
+lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
 lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}}
   = pluginResponse $ do
     nfp <- getNormalizedFilePath _uri
@@ -140,7 +140,7 @@ lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {
                    , _range = range
                    , _command = Nothing }
 
-lensResolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_CodeLensResolve
+lensResolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_CodeLensResolve
 lensResolveProvider _ ideState plId cl@(CodeLens {_data_ = Just data_@(A.fromJSON -> A.Success (ResolveOne uri uid))})
   = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
@@ -166,7 +166,7 @@ lensResolveProvider _  _ _ (CodeLens {_data_ = _}) = do
 -- | If there are any implicit imports, provide both one code action per import
 --   to make that specific import explicit, and one code action to turn them all
 --   into explicit imports.
-codeActionProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
+codeActionProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier {_uri} range _context)
   = pluginResponse $ do
     nfp <- getNormalizedFilePath _uri
@@ -192,7 +192,7 @@ codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier 
             , _disabled = Nothing
             , _data_ = data_}
 
-codeActionResolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_CodeActionResolve
+codeActionResolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_CodeActionResolve
 codeActionResolveProvider _ ideState _ ca@(CodeAction{_data_= Just (A.fromJSON -> A.Success rd)}) =
   pluginResponse $ do
     wedit <- resolveWTextEdit ideState rd
@@ -269,13 +269,13 @@ exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
 exportedModuleStrings _ = []
 
 minimalImportsRule :: Recorder (WithPriority Log) -> (ModuleName -> Bool) -> Rules ()
-minimalImportsRule recorder modFilter = define (cmapWithPrio LogShake recorder) $ \MinimalImports nfp -> do
+minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \MinimalImports nfp -> runMaybeT $ do
   -- Get the typechecking artifacts from the module
-  Just (tmr, tmrpm) <- useWithStale TypeCheck nfp
+  (tmr, tmrpm) <- MaybeT $ useWithStale TypeCheck nfp
   -- We also need a GHC session with all the dependencies
-  Just (hsc, _) <- useWithStale GhcSessionDeps nfp
+  (hsc, _) <- MaybeT $ useWithStale GhcSessionDeps nfp
   -- Use the GHC api to extract the "minimal" imports
-  Just (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
+  (imports, mbMinImports) <- MaybeT $ liftIO $ extractMinimalImports hsc tmr
   let importsMap =
         Map.fromList
           [ (realSrcSpanStart l, printOutputable i)
@@ -297,10 +297,10 @@ minimalImportsRule recorder modFilter = define (cmapWithPrio LogShake recorder) 
                                 u <- U.hashUnique <$> U.newUnique
                                 pure (u,  rt)
   let rangeAndUnique =  [ (r, u) | (u, (r, _)) <- uniqueAndRangeAndText ]
-  return ([], Just $ MinimalImportsResult
+  pure MinimalImportsResult
                       { forLens = rangeAndUnique
                       , forCodeActions = RM.fromList fst rangeAndUnique
-                      , forResolve =  IM.fromList ((\(i, (r, t)) -> (i, TextEdit r t)) <$> uniqueAndRangeAndText) })
+                      , forResolve =  IM.fromList ((\(i, (r, t)) -> (i, TextEdit r t)) <$> uniqueAndRangeAndText) }
 
 --------------------------------------------------------------------------------
 
@@ -336,6 +336,9 @@ extractMinimalImports hsc TcModuleResult {..} = runMaybeT $ do
       notExported []  _ = True
       notExported exports (L _ ImportDecl{ideclName = L _ name}) =
           not $ any (\e -> ("module " ++ moduleNameString name) == e) exports
+#if !MIN_VERSION_ghc (9,0,0)
+      notExported _ _ = True
+#endif
 
 isExplicitImport :: ImportDecl GhcRn -> Bool
 #if MIN_VERSION_ghc (9,5,0)
