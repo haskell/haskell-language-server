@@ -48,9 +48,7 @@ module Ide.Types
 , installSigUsr1Handler
 , responseError
 , lookupCommandProvider
-, OwnedResolveData(..)
-, mkCodeActionHandlerWithResolve
-, mkCodeActionWithResolveAndCommand
+, PluginResolveData(..)
 )
     where
 
@@ -64,10 +62,7 @@ import           System.Posix.Signals
 import           Control.Applicative           ((<|>))
 import           Control.Arrow                 ((&&&))
 import           Control.Lens                  (_Just, (.~), (?~), (^.), (^?))
-import           Control.Monad.Trans.Class     (lift)
-import           Control.Monad.Trans.Except    (ExceptT (..), runExceptT)
 import           Data.Aeson                    hiding (Null, defaultOptions)
-import qualified Data.Aeson
 import           Data.Default
 import           Data.Dependent.Map            (DMap)
 import qualified Data.Dependent.Map            as DMap
@@ -81,7 +76,6 @@ import           Data.List.NonEmpty            (NonEmpty (..), toList)
 import qualified Data.Map                      as Map
 import           Data.Maybe
 import           Data.Ord
-import           Data.Row                      ((.!))
 import           Data.Semigroup
 import           Data.String
 import qualified Data.Text                     as T
@@ -93,11 +87,7 @@ import           Ide.Plugin.Properties
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server           (LspM, LspT,
-                                                ProgressCancellable (Cancellable),
-                                                getClientCapabilities,
-                                                getVirtualFile, sendRequest,
-                                                withIndefiniteProgress)
+import           Language.LSP.Server           (LspM, LspT, getVirtualFile)
 import           Language.LSP.VFS
 import           Numeric.Natural
 import           OpenTelemetry.Eventlog
@@ -477,7 +467,9 @@ instance PluginMethod Request Method_TextDocumentDocumentSymbol where
       uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_CompletionItemResolve where
-  pluginEnabled _ msgParams pluginDesc config = pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
+  pluginEnabled _ msgParams pluginDesc config =
+    pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
+    && pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
 
 instance PluginMethod Request Method_TextDocumentCompletion where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
@@ -558,9 +550,8 @@ instance PluginRequestMethod Method_TextDocumentCodeAction where
         | otherwise = False
 
 instance PluginRequestMethod Method_CodeActionResolve where
-    -- CodeAction resolve is currently only used to changed the edit field, thus
-    -- that's the only field we are combining.
-    combineResponses _ _ _ codeAction (toList -> codeActions) = codeAction & L.edit .~ mconcat ((^. L.edit) <$> codeActions)
+    --  Resolve method should only ever get one response
+    combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentDefinition where
   combineResponses _ _ _ _ (x :| _) = x
@@ -624,16 +615,8 @@ instance PluginRequestMethod Method_TextDocumentDocumentSymbol where
         in [si] <> children'
 
 instance PluginRequestMethod Method_CompletionItemResolve where
-  -- resolving completions can only change the detail, additionalTextEdit or documentation fields
-  combineResponses _ _ _ _ (x :| xs) = go x xs
-    where go :: CompletionItem -> [CompletionItem] -> CompletionItem
-          go !comp [] = comp
-          go !comp1 (comp2:xs)
-            = go (comp1
-                 & L.detail              .~ comp1 ^. L.detail <> comp2 ^. L.detail
-                 & L.documentation       .~ ((comp1 ^. L.documentation) <|> (comp2 ^. L.documentation)) -- difficult to write generic concatentation for docs
-                 & L.additionalTextEdits .~ comp1 ^. L.additionalTextEdits <> comp2 ^. L.additionalTextEdits)
-                 xs
+  -- resolve method's should only ever get one response
+  combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentCompletion where
   combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
@@ -792,13 +775,71 @@ type PluginNotificationMethodHandler a m = a -> VFS -> PluginId -> MessageParams
 
 -- | Make a handler for plugins with no extra data
 mkPluginHandler
-  :: PluginRequestMethod m
+  :: forall ideState m. PluginRequestMethod m
   => SClientMethod m
   -> PluginMethodHandler ideState m
   -> PluginHandlers ideState
-mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandler f')
+mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandler (f' m))
   where
-    f' pid ide params = pure <$> f ide pid params
+    f' :: SMethod m -> PluginId -> ideState -> MessageParams m -> LspT Config IO (NonEmpty (Either ResponseError (MessageResult m)))
+    -- We need to have separate functions for each method that supports resolve, so far we only support CodeActions
+    -- CodeLens, and Completion methods.
+    f' SMethod_TextDocumentCodeAction pid ide params@CodeActionParams{_textDocument=TextDocumentIdentifier {_uri}} =
+      pure . fmap (wrapCodeActions pid _uri) <$> f ide pid params
+    f' SMethod_TextDocumentCodeLens pid ide params@CodeLensParams{_textDocument=TextDocumentIdentifier {_uri}} =
+      pure . fmap (wrapCodeLenses pid _uri) <$> f ide pid params
+    f' SMethod_TextDocumentCompletion pid ide params@CompletionParams{_textDocument=TextDocumentIdentifier {_uri}} =
+      pure . fmap (wrapCompletions pid _uri) <$> f ide pid params
+
+    -- If resolve handlers aren't declared with mkPluginHandler we won't need these here anymore
+    f' SMethod_CodeActionResolve pid ide params =
+      pure <$> f ide pid (unwrapResolveData params)
+    f' SMethod_CodeLensResolve pid ide params =
+      pure <$> f ide pid (unwrapResolveData params)
+    f' SMethod_CompletionItemResolve pid ide params =
+      pure <$> f ide pid (unwrapResolveData params)
+
+    -- This is the default case for all other methods
+    f' _ pid ide params = pure <$> f ide pid params
+
+    -- Todo: use fancy pancy lenses to make this a few lines
+    wrapCodeActions pid uri (InL ls) =
+      let wrapCodeActionItem pid uri (InR c) = InR $ wrapResolveData pid uri c
+          wrapCodeActionItem _ _ command@(InL _) = command
+      in InL $ wrapCodeActionItem pid uri <$> ls
+    wrapCodeActions _ _ (InR r) = InR r
+
+    wrapCodeLenses pid uri (InL ls) = InL $ wrapResolveData pid uri <$> ls
+    wrapCodeLenses _ _ (InR r)      = InR r
+
+    wrapCompletions pid uri (InL ls) = InL $ wrapResolveData pid uri <$> ls
+    wrapCompletions pid uri (InR (InL cl@(CompletionList{_items}))) =
+      InR $ InL $ cl & L.items .~ (wrapResolveData pid uri <$> _items)
+    wrapCompletions _ _ (InR (InR r)) = InR $ InR r
+
+wrapResolveData :: L.HasData_ a (Maybe Value) => PluginId -> Uri -> a -> a
+wrapResolveData pid uri hasData =
+  hasData & L.data_ .~  (toJSON .PRD pid uri <$> data_)
+  where data_ = hasData ^? L.data_ . _Just
+
+unwrapResolveData :: L.HasData_ a (Maybe Value) => a -> a
+unwrapResolveData hasData
+    | Just x <- hasData ^. L.data_
+    , Success PRD {value = v} <- fromJSON x = hasData & L.data_ ?~ v
+-- If we can't successfully decode the value as a ORD type than
+-- we just return the type untouched?
+unwrapResolveData c = c
+
+-- |Allow plugins to "own" resolve data, allowing only them to be queried for
+-- the resolve action. This design has added flexibility at the cost of nested
+-- Value types
+data PluginResolveData = PRD {
+  owner :: PluginId
+, uri   :: Uri
+, value :: Value
+} deriving (Generic, Show)
+instance ToJSON PluginResolveData
+instance FromJSON PluginResolveData
 
 -- | Make a handler for plugins with no extra data
 mkPluginNotificationHandler
@@ -876,6 +917,17 @@ type CommandFunction ideState a
   -> LspM Config (Either ResponseError Value)
 
 -- ---------------------------------------------------------------------
+
+-- Will something like this work?
+type ResolveFunction ideState a m
+  = ideState
+  -> PluginId
+  -> MessageParams m
+  -> Uri
+  -> a
+  -> LspM Config (Either ResponseError (MessageResult m))
+
+
 
 newtype PluginId = PluginId T.Text
   deriving (Show, Read, Eq, Ord)
@@ -1016,124 +1068,11 @@ getProcessID = fromIntegral <$> P.getProcessID
 installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 #endif
 
--- |When provided with both a codeAction provider and an affiliated codeAction
--- resolve provider, this function creates a handler that automatically uses
--- your resolve provider to fill out you original codeAction if the client doesn't
--- have codeAction resolve support. This means you don't have to check whether
--- the client supports resolve and act accordingly in your own providers.
-mkCodeActionHandlerWithResolve
-  :: forall ideState. (ideState -> PluginId -> CodeActionParams -> LspM Config (Either ResponseError ([Command |? CodeAction] |? Null)))
-  -> (ideState -> PluginId -> CodeAction -> LspM Config (Either ResponseError CodeAction))
-  -> PluginHandlers ideState
-mkCodeActionHandlerWithResolve codeActionMethod codeResolveMethod =
-    let newCodeActionMethod ideState pid params = runExceptT $
-            do codeActionReturn <- ExceptT $ codeActionMethod ideState pid params
-               caps <- lift getClientCapabilities
-               case codeActionReturn of
-                r@(InR Null) -> pure r
-                (InL ls) | -- If the client supports resolve, we will wrap the resolve data in a owned
-                           -- resolve data type to allow the server to know who to send the resolve request to
-                           supportsCodeActionResolve caps -> pure $ InL (wrapCodeActionResolveData pid <$> ls)
-                           --This is the actual part where we call resolveCodeAction which fills in the edit data for the client
-                         | otherwise -> InL <$> traverse (resolveCodeAction ideState pid) ls
-        newCodeResolveMethod ideState pid params =
-            codeResolveMethod ideState pid (unwrapCodeActionResolveData params)
-    in mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod
-    <> mkPluginHandler SMethod_CodeActionResolve newCodeResolveMethod
-    where
-        dropData :: CodeAction -> CodeAction
-        dropData ca = ca & L.data_ .~ Nothing
-        resolveCodeAction :: ideState -> PluginId -> (Command |? CodeAction) -> ExceptT ResponseError (LspT Config IO) (Command |? CodeAction)
-        resolveCodeAction _ideState _pid c@(InL _) = pure c
-        resolveCodeAction ideState pid (InR codeAction) =
-            fmap (InR . dropData) $ ExceptT $ codeResolveMethod ideState pid codeAction
-
--- |When provided with both a codeAction provider that includes both a command
--- and a data field and a resolve provider, this function creates a handler that
--- defaults to using your command if the client doesn't have code action resolve
--- support. This means you don't have to check whether the client supports resolve
--- and act accordingly in your own providers.
-mkCodeActionWithResolveAndCommand
-  :: forall ideState.
-  PluginId
-  -> (ideState -> PluginId -> CodeActionParams -> LspM Config (Either ResponseError ([Command |? CodeAction] |? Null)))
-  -> (ideState -> PluginId -> CodeAction -> LspM Config (Either ResponseError CodeAction))
-  -> ([PluginCommand ideState], PluginHandlers ideState)
-mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
-    let newCodeActionMethod ideState pid params = runExceptT $
-            do codeActionReturn <- ExceptT $ codeActionMethod ideState pid params
-               caps <- lift getClientCapabilities
-               case codeActionReturn of
-                r@(InR Null) -> pure r
-                (InL ls) | -- If the client supports resolve, we will wrap the resolve data in a owned
-                           -- resolve data type to allow the server to know who to send the resolve request to
-                           supportsCodeActionResolve caps ->
-                            pure $ InL (wrapCodeActionResolveData pid <$> ls)
-                           -- If they do not we will drop the data field, in addition we will populate the command
-                           -- field with our command to execute the resolve, with the whole code action as it's argument.
-                         | otherwise -> pure $ InL $ moveDataToCommand <$> ls
-        newCodeResolveMethod ideState pid params =
-            codeResolveMethod ideState pid (unwrapCodeActionResolveData params)
-    in ([PluginCommand "codeActionResolve" "Executes resolve for code action" (executeResolveCmd plId codeResolveMethod)],
-    mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod
-    <> mkPluginHandler SMethod_CodeActionResolve newCodeResolveMethod)
-  where moveDataToCommand :: Command |? CodeAction -> Command |? CodeAction
-        moveDataToCommand ca =
-          let dat = toJSON <$> ca ^? _R -- We need to take the whole codeAction
-              -- And put it in the argument for the Command, that way we can later
-              -- pas it to the resolve handler (which expects a whole code action)
-              cmd = mkLspCommand plId (CommandId "codeActionResolve") "Execute Code Action" (pure <$> dat)
-          in ca
-              & _R . L.data_ .~ Nothing -- Set the data field to nothing
-              & _R . L.command ?~ cmd -- And set the command to our previously created command
-        executeResolveCmd :: PluginId -> PluginMethodHandler ideState Method_CodeActionResolve -> CommandFunction ideState CodeAction
-        executeResolveCmd pluginId resolveProvider ideState ca =  do
-          withIndefiniteProgress "Executing code action..." Cancellable $ do
-            resolveResult <- resolveProvider ideState pluginId ca
-            case resolveResult of
-              Right CodeAction {_edit = Just wedits } -> do
-                  _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) (\_ -> pure ())
-                  pure $ Right Data.Aeson.Null
-              Right _ -> pure $ Left $ responseError "No edit in CodeAction"
-              Left err -> pure $ Left err
-
-supportsCodeActionResolve :: ClientCapabilities -> Bool
-supportsCodeActionResolve caps =
-    caps ^? L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just == Just True
-    && case caps ^? L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just of
-        Just row -> "edit" `elem` row .! #properties
-        _        -> False
-
--- We don't wrap commands
-wrapCodeActionResolveData :: PluginId -> (a |? CodeAction) -> a |? CodeAction
-wrapCodeActionResolveData _pid c@(InL _) = c
-wrapCodeActionResolveData pid (InR c@(CodeAction{_data_=Just x})) =
-    InR $ c & L.data_ ?~ toJSON (ORD pid x)
--- Neither do we wrap code actions's without data fields,
-wrapCodeActionResolveData _pid c@(InR (CodeAction{_data_=Nothing})) = c
-
-unwrapCodeActionResolveData :: CodeAction -> CodeAction
-unwrapCodeActionResolveData c@CodeAction{_data_ = Just x}
-    | Success ORD {value = v} <- fromJSON x = c & L.data_ ?~ v
--- If we can't successfully decode the value as a ORD type than
--- we just return the codeAction untouched.
-unwrapCodeActionResolveData c = c
-
--- |Allow plugins to "own" resolve data, allowing only them to be queried for
--- the resolve action. This design has added flexibility at the cost of nested
--- Value types
-data OwnedResolveData = ORD {
-  owner :: PluginId
-, value :: Value
-} deriving (Generic, Show)
-instance ToJSON OwnedResolveData
-instance FromJSON OwnedResolveData
 
 pluginResolverResponsible :: Maybe Value -> PluginDescriptor c -> Bool
 pluginResolverResponsible (Just val) pluginDesc =
     case fromJSON val of
-       (Success (ORD o _)) -> pluginId pluginDesc == o
-       _                   -> True -- We want to fail open in case our resolver is not using the ORD type
--- This is a wierd case, because anything that gets resolved should have a data
--- field, but in any case, failing open is safe enough.
-pluginResolverResponsible Nothing _ = True
+       (Success (PRD o _ _)) -> pluginId pluginDesc == o
+       _                     -> False -- If we can't decode the data, something is seriously wrong
+-- If there is no data stored, than we can't resolve it
+pluginResolverResponsible Nothing _ = False
