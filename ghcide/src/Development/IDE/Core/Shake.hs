@@ -1174,11 +1174,19 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     Just (Succeeded ver v, _) -> Stale Nothing ver v
                     Just (Stale d ver v, _)   -> Stale d ver v
                     Just (Failed b, _)        -> Failed b
-                (bs, (diags, res)) <- actionCatch
-                    (do v <- action staleV; liftIO $ evaluate $ force v) $
-                    \(e :: SomeException) -> do
-                        pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
-
+                (bs, (diags, res)) <- do
+                    let doAction = actionCatch
+                            (do v <- action staleV; liftIO $ evaluate $ force v) $
+                            \(e :: SomeException) -> do
+                                pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
+                    case getSourceFileOrigin file of
+                        FromProject -> doAction
+                        FromDependency -> case eqT @k @GetHieAst of
+                            Just Refl -> doAction
+                            Nothing -> error $
+                                "defineEarlyCutoff': Undefined action for dependency source files\n"
+                                ++ show file ++ "\n"
+                                ++ show key
                 ver <- estimateFileVersionUnsafely key res file
                 (bs, res) <- case res of
                     Nothing -> do

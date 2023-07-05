@@ -137,16 +137,22 @@ kick = do
             mRunLspT lspEnv $
                 LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
                 toJSON $ map fromNormalizedFilePath files
+        isProjectFile :: NormalizedFilePath -> Bool
+        isProjectFile file = case getSourceFileOrigin file of
+            FromProject -> True
+            FromDependency -> False
+        projectFiles :: [NormalizedFilePath]
+        projectFiles = filter isProjectFile files
 
     signal (Proxy @"kick/start")
     liftIO $ progressUpdate progress KickStarted
 
     -- Update the exports map
-    results <- uses GenerateCore files
+    results <- uses GenerateCore projectFiles
             <* uses GetHieAst files
             -- needed to have non local completions on the first edit
             -- when the first edit breaks the module header
-            <* uses NonLocalCompletions files
+            <* uses NonLocalCompletions projectFiles
     let mguts = catMaybes results
     void $ liftIO $ atomically $ modifyTVar' exportsMap (updateExportsMapMg mguts)
 
