@@ -11,6 +11,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadComprehensions        #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE MultiWayIf                 #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedLabels           #-}
 {-# LANGUAGE OverloadedStrings          #-}
@@ -76,6 +77,7 @@ import           Data.GADT.Compare
 import           Data.Hashable                 (Hashable)
 import           Data.HashMap.Strict           (HashMap)
 import qualified Data.HashMap.Strict           as HashMap
+import           Data.Kind                     (Type)
 import           Data.List.Extra               (find, sortOn)
 import           Data.List.NonEmpty            (NonEmpty (..), toList)
 import qualified Data.Map                      as Map
@@ -264,7 +266,7 @@ instance ToJSON PluginConfig where
 
 -- ---------------------------------------------------------------------
 
-data PluginDescriptor (ideState :: *) =
+data PluginDescriptor (ideState :: Type) =
   PluginDescriptor { pluginId           :: !PluginId
                    -- ^ Unique identifier of the plugin.
                    , pluginPriority     :: Natural
@@ -477,7 +479,9 @@ instance PluginMethod Request Method_TextDocumentDocumentSymbol where
       uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_CompletionItemResolve where
-  pluginEnabled _ msgParams pluginDesc config = pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
+  pluginEnabled _ msgParams pluginDesc config =
+    pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
+    && pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
 
 instance PluginMethod Request Method_TextDocumentCompletion where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
@@ -1048,11 +1052,13 @@ mkCodeActionHandlerWithResolve codeActionMethod codeResolveMethod =
         resolveCodeAction ideState pid (InR codeAction) =
             fmap (InR . dropData) $ ExceptT $ codeResolveMethod ideState pid codeAction
 
--- |When provided with both a codeAction provider that includes both a command
--- and a data field and a resolve provider, this function creates a handler that
--- defaults to using your command if the client doesn't have code action resolve
--- support. This means you don't have to check whether the client supports resolve
--- and act accordingly in your own providers.
+-- |When provided with both a codeAction provider with a data field and a resolve
+--  provider, this function creates a handler that creates a command that uses
+-- your resolve if the client doesn't have code action resolve support. This means
+-- you don't have to check whether the client supports resolve and act
+-- accordingly in your own providers. see Note [Code action resolve fallback to commands]
+-- Also: This helper only works with workspace edits, not commands. Any command set
+-- either in the original code action or in the resolve will be ignored.
 mkCodeActionWithResolveAndCommand
   :: forall ideState.
   PluginId
@@ -1069,8 +1075,17 @@ mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
                            -- resolve data type to allow the server to know who to send the resolve request to
                            supportsCodeActionResolve caps ->
                             pure $ InL (wrapCodeActionResolveData pid <$> ls)
-                           -- If they do not we will drop the data field, in addition we will populate the command
-                           -- field with our command to execute the resolve, with the whole code action as it's argument.
+                           {- Note [Code action resolve fallback to commands]
+                              To make supporting code action resolve easy for plugins, we want to let them
+                              provide one implementation that can be used both when clients support
+                              resolve, and when they don't.
+
+                              The way we do this is to have them always implement a resolve handler.
+                              Then, if the client doesn't support resolve, we instead install the resolve
+                              handler as a _command_ handler, passing the code action literal itself
+                              as the command argument. This allows the command handler to have
+                              the same interface as the resolve handler!
+                              -}
                          | otherwise -> pure $ InL $ moveDataToCommand <$> ls
         newCodeResolveMethod ideState pid params =
             codeResolveMethod ideState pid (unwrapCodeActionResolveData params)
@@ -1081,19 +1096,29 @@ mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
         moveDataToCommand ca =
           let dat = toJSON <$> ca ^? _R -- We need to take the whole codeAction
               -- And put it in the argument for the Command, that way we can later
-              -- pas it to the resolve handler (which expects a whole code action)
+              -- pass it to the resolve handler (which expects a whole code action)
+              -- It should be noted that mkLspCommand already specifies the command
+              -- to the plugin, so we don't need to do that here.
               cmd = mkLspCommand plId (CommandId "codeActionResolve") "Execute Code Action" (pure <$> dat)
           in ca
               & _R . L.data_ .~ Nothing -- Set the data field to nothing
               & _R . L.command ?~ cmd -- And set the command to our previously created command
         executeResolveCmd :: PluginId -> PluginMethodHandler ideState Method_CodeActionResolve -> CommandFunction ideState CodeAction
         executeResolveCmd pluginId resolveProvider ideState ca =  do
-          withIndefiniteProgress "Executing code action..." Cancellable $ do
+          withIndefiniteProgress "Applying edits for code action..." Cancellable $ do
             resolveResult <- resolveProvider ideState pluginId ca
             case resolveResult of
-              Right CodeAction {_edit = Just wedits } -> do
-                  _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) (\_ -> pure ())
-                  pure $ Right Data.Aeson.Null
+              Right CodeAction {_edit = Just wedits, ..} ->
+                  if | ca ^. L.title == _title
+                     , ca ^. L.kind == _kind
+                     , ca ^. L.diagnostics == _diagnostics
+                     , ca ^. L.command == _command
+                     , ca ^. L.isPreferred == _isPreferred
+                     , ca ^. L.data_ == _data_
+                     , ca ^. L.disabled == _disabled -> do
+                        _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) (\_ -> pure ())
+                        pure $ Right Data.Aeson.Null
+                     | otherwise -> pure $ Left $ responseError "CodeAction fields beside edit changed during resolve"
               Right _ -> pure $ Left $ responseError "No edit in CodeAction"
               Left err -> pure $ Left err
 
