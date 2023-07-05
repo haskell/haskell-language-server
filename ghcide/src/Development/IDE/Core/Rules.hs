@@ -569,19 +569,20 @@ reportImportCyclesRule recorder =
 
 getHieAstsRule :: Recorder (WithPriority Log) -> Rules ()
 getHieAstsRule recorder =
-    define (cmapWithPrio LogShake recorder) $ \GetHieAst f ->
-        case getSourceFileOrigin f of
-            FromProject -> do
-                tmr <- use_ TypeCheck f
-                hsc <- hscEnv <$> use_ GhcSessionDeps f
-                getHieAstRuleDefinition f hsc tmr
-            FromDependency -> do
+    define (cmapWithPrio LogShake recorder) $ \GetHieAst f -> do
+        isFoi <- use_ IsFileOfInterest f
+        case isFoi of
+            IsFOI ReadOnly -> do
                 se <- getShakeExtras
                 mHieFile <- liftIO
                     $ runIdeAction "GetHieAst" se
                     $ runMaybeT
                     $ readHieFileForSrcFromDisk recorder f
                 pure ([], makeHieAstResult <$> mHieFile)
+            _ -> do
+                tmr <- use_ TypeCheck f
+                hsc <- hscEnv <$> use_ GhcSessionDeps f
+                getHieAstRuleDefinition f isFoi hsc tmr
     where
         makeHieAstResult :: Compat.HieFile -> HieAstResult
         makeHieAstResult hieFile =
@@ -604,12 +605,11 @@ persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybe
       del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
 
-getHieAstRuleDefinition :: NormalizedFilePath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
-getHieAstRuleDefinition f hsc tmr = do
+getHieAstRuleDefinition :: NormalizedFilePath -> IsFileOfInterestResult -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
+getHieAstRuleDefinition f isFoi hsc tmr = do
   (diags, masts) <- liftIO $ generateHieAsts hsc tmr
   se <- getShakeExtras
 
-  isFoi <- use_ IsFileOfInterest f
   diagsWrite <- case isFoi of
     IsFOI Modified{firstOpen = False} -> do
       when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $

@@ -61,10 +61,14 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier _uri _version) []
       whenUriFile _uri $ \file -> do
+          let foiStatus = case getSourceFileOrigin file of
+                  FromProject -> Modified{firstOpen=True}
+                  FromDependency -> ReadOnly
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
-          addFileOfInterest ide file Modified{firstOpen=True}
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
+          addFileOfInterest ide file foiStatus
+          unless (foiStatus == ReadOnly)
+              $ setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
           logDebug (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $

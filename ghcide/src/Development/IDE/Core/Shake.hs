@@ -1181,9 +1181,9 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                                 pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
                     case getSourceFileOrigin file of
                         FromProject -> doAction
-                        FromDependency -> case eqT @k @GetHieAst of
-                            Just Refl -> doAction
-                            Nothing -> error $
+                        FromDependency -> if isSafeDependencyRule key
+                            then doAction
+                            else error $
                                 "defineEarlyCutoff': Undefined action for dependency source files\n"
                                 ++ show file ++ "\n"
                                 ++ show key
@@ -1229,6 +1229,15 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
         --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
+    isSafeDependencyRule
+        :: forall k v
+         . IdeRule k v
+        => k
+        -> Bool
+    isSafeDependencyRule _k
+        | Just Refl <- eqT @k @GetHieAst = True
+        | Just Refl <- eqT @k @IsFileOfInterest = True
+        | otherwise = False
 
 traceA :: A v -> String
 traceA (A Failed{})    = "Failed"

@@ -130,19 +130,18 @@ scheduleGarbageCollection state = do
 --   Could be improved
 kick :: Action ()
 kick = do
-    files <- HashMap.keys <$> getFilesOfInterestUntracked
+    filesOfInterestMap <- getFilesOfInterestUntracked
     ShakeExtras{exportsMap, ideTesting = IdeTesting testing, lspEnv, progress} <- getShakeExtras
     let signal :: KnownSymbol s => Proxy s -> Action ()
         signal msg = when testing $ liftIO $
             mRunLspT lspEnv $
                 LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
                 toJSON $ map fromNormalizedFilePath files
-        isProjectFile :: NormalizedFilePath -> Bool
-        isProjectFile file = case getSourceFileOrigin file of
-            FromProject -> True
-            FromDependency -> False
+        files :: [NormalizedFilePath]
+        files = HashMap.keys filesOfInterestMap
         projectFiles :: [NormalizedFilePath]
-        projectFiles = filter isProjectFile files
+        projectFiles = HashMap.keys
+            $ HashMap.filter (/= ReadOnly) filesOfInterestMap
 
     signal (Proxy @"kick/start")
     liftIO $ progressUpdate progress KickStarted
