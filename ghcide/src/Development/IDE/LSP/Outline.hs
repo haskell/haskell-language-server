@@ -39,7 +39,9 @@ moduleOutline
 moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
   = liftIO $ case uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do
-      mb_decls <- fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule fp)
+      mb_decls <- case getSourceFileOrigin fp of
+        FromDependency -> pure Nothing
+        FromProject -> fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule fp)
       pure $ Right $ case mb_decls of
         Nothing -> InL []
         Just ParsedModule { pm_parsed_source = L _ltop HsModule { hsmodName, hsmodDecls, hsmodImports } }
