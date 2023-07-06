@@ -34,6 +34,7 @@ import           Language.LSP.Protocol.Types          hiding
 -- compiler and infrastructure
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Shake           (IdeAction)
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util      as Util
 import           Development.IDE.GHC.Util             (printOutputable)
@@ -184,26 +185,24 @@ documentHighlight hf rf pos = pure highlights
         else DocumentHighlightKind_Read
 
 gotoTypeDefinition
-  :: MonadIO m
-  => WithHieDb
-  -> LookupModule m
+  :: WithHieDb
+  -> LookupModule IdeAction
   -> IdeOptions
   -> HieAstResult
   -> Position
-  -> MaybeT m [Location]
+  -> MaybeT IdeAction [Location]
 gotoTypeDefinition withHieDb lookupModule ideOpts srcSpans pos
   = lift $ typeLocationsAtPoint withHieDb lookupModule ideOpts pos srcSpans
 
 -- | Locate the definition of the name at a given position.
 gotoDefinition
-  :: MonadIO m
-  => WithHieDb
-  -> LookupModule m
+  :: WithHieDb
+  -> LookupModule IdeAction
   -> IdeOptions
   -> M.Map ModuleName NormalizedFilePath
   -> HieASTs a
   -> Position
-  -> MaybeT m [Location]
+  -> MaybeT IdeAction [Location]
 gotoDefinition withHieDb getHieFile ideOpts imports srcSpans pos
   = lift $ locationsAtPoint withHieDb getHieFile ideOpts imports pos srcSpans
 
@@ -286,14 +285,12 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) mDkMap mEnv pos = listToMaybe $ pointCo
             _ -> Just $ "*Defined " <> printOutputable (pprNameDefnLoc name) <> "*"
 
 typeLocationsAtPoint
-  :: forall m
-   . MonadIO m
-  => WithHieDb
-  -> LookupModule m
+  :: WithHieDb
+  -> LookupModule IdeAction
   -> IdeOptions
   -> Position
   -> HieAstResult
-  -> m [Location]
+  -> IdeAction [Location]
 typeLocationsAtPoint withHieDb lookupModule _ideOptions pos (HAR _ ast _ _ hieKind) =
   case hieKind of
     HieFromDisk hf ->
@@ -336,15 +333,13 @@ getTypes :: [Type] -> [Name]
 getTypes ts = concatMap namesInType ts
 
 locationsAtPoint
-  :: forall m a
-   . MonadIO m
-  => WithHieDb
-  -> LookupModule m
+  :: WithHieDb
+  -> LookupModule IdeAction
   -> IdeOptions
   -> M.Map ModuleName NormalizedFilePath
   -> Position
   -> HieASTs a
-  -> m [Location]
+  -> IdeAction [Location]
 locationsAtPoint withHieDb lookupModule _ideOptions imports pos ast =
   let ns = concat $ pointCommand ast pos (M.keys . getNodeIds)
       zeroPos = Position 0 0
@@ -353,7 +348,7 @@ locationsAtPoint withHieDb lookupModule _ideOptions imports pos ast =
     in fmap (nubOrd . concat) $ mapMaybeM (either (pure . modToLocation) $ nameToLocation withHieDb lookupModule) ns
 
 -- | Given a 'Name' attempt to find the location where it is defined.
-nameToLocation :: MonadIO m => WithHieDb -> LookupModule m -> Name -> m (Maybe [Location])
+nameToLocation :: WithHieDb -> LookupModule IdeAction -> Name -> IdeAction (Maybe [Location])
 nameToLocation withHieDb lookupModule name = runMaybeT $
   case nameSrcSpan name of
     sp@(RealSrcSpan rsp _)
@@ -389,7 +384,7 @@ nameToLocation withHieDb lookupModule name = runMaybeT $
             xs -> lift $ mapMaybeM (runMaybeT . defRowToLocation lookupModule) xs
         xs -> lift $ mapMaybeM (runMaybeT . defRowToLocation lookupModule) xs
 
-defRowToLocation :: Monad m => LookupModule m -> Res DefRow -> MaybeT m Location
+defRowToLocation :: LookupModule IdeAction -> Res DefRow -> MaybeT IdeAction Location
 defRowToLocation lookupModule (row:.info) = do
   let start = Position (fromIntegral $ defSLine row - 1) (fromIntegral $ defSCol row - 1)
       end   = Position (fromIntegral $ defELine row - 1) (fromIntegral $ defECol row - 1)
