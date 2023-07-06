@@ -50,6 +50,9 @@ tests: True
 package mfsolve
   tests: False
 
+package haskell-language-server
+  ghc-options: -rtsopts
+
 package *
   ghc-options: -haddock
   test-show-details: direct
