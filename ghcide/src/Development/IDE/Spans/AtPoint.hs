@@ -211,11 +211,11 @@ gotoDefinition withHieDb getHieFile ideOpts imports srcSpans pos
 atPoint
   :: IdeOptions
   -> HieAstResult
-  -> DocAndKindMap
-  -> HscEnv
+  -> Maybe DocAndKindMap
+  -> Maybe HscEnv
   -> Position
   -> Maybe (Maybe Range, [T.Text])
-atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ pointCommand hf pos hoverInfo
+atPoint IdeOptions{} (HAR _ hf _ _ kind) mDkMap mEnv pos = listToMaybe $ pointCommand hf pos hoverInfo
   where
     -- Hover info for values/data
     hoverInfo ast = (Just range, prettyNames ++ pTypes)
@@ -245,22 +245,33 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
         prettyName (Right n, dets) = T.unlines $
           wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
           : maybeToList (pretty (definedAt n) (prettyPackageName n))
-          ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
+          ++ catMaybes [ T.unlines . spanDocToMarkdown <$> maybeDoc
                        ]
-          where maybeKind = fmap printOutputable $ safeTyThingType =<< lookupNameEnv km n
+          where maybeKind = do
+                  (DKMap _ km) <- mDkMap
+                  nameEnv <- lookupNameEnv km n
+                  printOutputable <$> safeTyThingType nameEnv
+                maybeDoc = do
+                  (DKMap dm _) <- mDkMap
+                  lookupNameEnv dm n
                 pretty Nothing Nothing = Nothing
                 pretty (Just define) Nothing = Just $ define <> "\n"
                 pretty Nothing (Just pkgName) = Just $ pkgName <> "\n"
                 pretty (Just define) (Just pkgName) = Just $ define <> " " <> pkgName <> "\n"
         prettyName (Left m,_) = printOutputable m
 
-        prettyPackageName n = do
-          m <- nameModule_maybe n
-          let pid = moduleUnit m
-          conf <- lookupUnit env pid
-          let pkgName = T.pack $ unitPackageNameString conf
-              version = T.pack $ showVersion (unitPackageVersion conf)
-          pure $ "*(" <> pkgName <> "-" <> version <> ")*"
+        prettyPackageName n = case mEnv of
+          Just env -> do
+            pid <- getUnit n
+            conf <- lookupUnit env pid
+            let pkgName = T.pack $ unitPackageNameString conf
+                version = T.pack $ showVersion (unitPackageVersion conf)
+            pure $ "*(" <> pkgName <> "-" <> version <> ")*"
+          Nothing -> do
+            u <- getUnit n
+            let pkgStr = takeWhile (/= ':') $ show $ toUnitId u
+            pure $ "*(" <> T.pack pkgStr <> ")*"
+        getUnit n = moduleUnit <$> nameModule_maybe n
 
         prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = case kind of

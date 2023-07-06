@@ -124,11 +124,15 @@ getAtPoint file pos = runMaybeT $ do
   opts <- liftIO $ getIdeOptionsIO ide
 
   (hf, mapping) <- useE GetHieAst file
-  env <- hscEnv . fst <$> useE GhcSession file
-  dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> runMaybeT (useE GetDocMap file)
+  (mEnv, mDkMap) <- case getSourceFileOrigin file of
+    FromDependency -> pure (Nothing, Nothing)
+    FromProject -> do
+      env <- hscEnv . fst <$> useE GhcSession file
+      dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> runMaybeT (useE GetDocMap file)
+      pure (Just env, Just dkMap)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-  MaybeT $ pure $ first (toCurrentRange mapping =<<) <$> AtPoint.atPoint opts hf dkMap env pos'
+  MaybeT $ pure $ first (toCurrentRange mapping =<<) <$> AtPoint.atPoint opts hf mDkMap mEnv pos'
 
 -- | For each Loacation, determine if we have the PositionMapping
 -- for the correct file. If not, get the correct position mapping
