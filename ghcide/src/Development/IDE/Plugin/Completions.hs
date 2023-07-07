@@ -49,7 +49,6 @@ import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server                      as LSP
-import qualified Language.LSP.VFS                         as VFS
 import           Numeric.Natural
 import           Text.Fuzzy.Parallel                      (Scored (..))
 
