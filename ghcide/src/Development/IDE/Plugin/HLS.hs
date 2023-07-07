@@ -54,12 +54,16 @@ data Log
     = LogPluginError PluginId ResponseError
     | LogNoPluginForMethod (Some SMethod)
     | LogInvalidCommandIdentifier
+    | LogNoResolveData
+    | LogParseError String (Maybe A.Value)
 instance Pretty Log where
   pretty = \case
     LogPluginError (PluginId pId) err -> pretty pId <> ":" <+> prettyResponseError err
     LogNoPluginForMethod (Some method) ->
         "No plugin enabled for " <> pretty (show method)
     LogInvalidCommandIdentifier-> "Invalid command identifier"
+    LogNoResolveData -> "No resolve data in resolve request"
+    LogParseError msg value -> "Error while parsing: " <> pretty msg <> ", value = " <> viaShow value
 
 instance Show Log where show = renderString . layoutCompact . pretty
 
@@ -99,11 +103,19 @@ logAndReturnError recorder p errCode msg = do
     logWith recorder Warning $ LogPluginError p err
     pure $ Left err
 
+-- | Build a ResponseError and log it before returning to the caller
+logAndReturnError' :: Recorder (WithPriority Log) -> (LSPErrorCodes |? ErrorCodes) -> Log -> LSP.LspT Config IO (Either ResponseError a)
+logAndReturnError' recorder errCode msg = do
+    let err = ResponseError errCode (T.pack $ show msg) Nothing
+    logWith recorder Warning $ msg
+    pure $ Left err
+
 -- | Map a set of plugins to the underlying ghcide engine.
 asGhcIdePlugin :: Recorder (WithPriority Log) -> IdePlugins IdeState -> Plugin Config
 asGhcIdePlugin recorder (IdePlugins ls) =
     mkPlugin rulesPlugins HLS.pluginRules <>
     mkPlugin (executeCommandPlugins recorder) HLS.pluginCommands <>
+    mkPlugin (extensibleResolvePlugins recorder) id <>
     mkPlugin (extensiblePlugins recorder) id <>
     mkPlugin (extensibleNotificationPlugins recorder) id <>
     mkPluginFromDescriptor dynFlagsPlugins HLS.pluginModifyDynflags
@@ -201,6 +213,46 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
 
 -- ---------------------------------------------------------------------
 
+extensibleResolvePlugins ::  Recorder (WithPriority Log) -> [(PluginId, PluginDescriptor IdeState)] -> Plugin Config
+extensibleResolvePlugins recorder xs = mempty { P.pluginHandlers = handlers }
+  where
+    IdeResolveHandlers handlers' = foldMap bakePluginId xs
+    bakePluginId :: (PluginId, PluginDescriptor IdeState) -> IdeResolveHandlers
+    bakePluginId (pid,pluginDesc) = IdeResolveHandlers $ DMap.map
+      (\f -> IdeResolveHandler [(pid,pluginDesc,f)])
+      hs
+      where
+        PluginResolveHandlers hs = HLS.pluginResolveHandlers pluginDesc
+    handlers = mconcat $ do
+      (ResolveMethod m :=> IdeResolveHandler fs') <- DMap.assocs handlers'
+      pure $ requestHandler m $ \ide params -> do
+        case A.fromJSON <$> (params ^. L.data_) of
+          (Just (A.Success (HLS.PluginResolveData owner uri value) )) -> do
+            -- Only run plugins that are allowed to run on this request
+            let fs = filter (\(pid,_ , _) -> pid == owner) fs'
+            -- Clients generally don't display ResponseErrors so instead we log any that we come across
+            case nonEmpty fs of
+                Nothing -> do
+                    logWith recorder Warning (LogNoPluginForMethod $ Some m)
+                    let err = ResponseError (InR ErrorCodes_InvalidRequest) msg Nothing
+                        msg = pluginNotEnabled m fs'
+                    return $ Left err
+                Just ((pid, _, ResolveHandler handler) NE.:| _) -> do
+                    let msg e pid = "Exception in plugin " <> T.pack (show pid) <> " while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
+                    case A.fromJSON value of
+                        A.Success decodedValue -> do
+                            otTracedProvider pid (fromString $ show m) $ do
+                                handler ide pid params uri decodedValue
+                                `catchAny` (\e -> pure $ Left $ ResponseError (InR ErrorCodes_InternalError) (msg e pid) Nothing)
+                        A.Error err -> do
+                            logAndReturnError' recorder (InR ErrorCodes_ParseError) (LogParseError err (Just value))
+
+          Nothing -> do
+            logAndReturnError' recorder (InR ErrorCodes_InvalidParams) LogNoResolveData
+          (Just (A.Error str)) -> do
+            logAndReturnError' recorder (InR ErrorCodes_ParseError) (LogParseError str (params ^. L.data_))
+-- ---------------------------------------------------------------------
+
 extensiblePlugins ::  Recorder (WithPriority Log) -> [(PluginId, PluginDescriptor IdeState)] -> Plugin Config
 extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
   where
@@ -286,6 +338,10 @@ combineErrors xs  = ResponseError (InR ErrorCodes_InternalError) (T.pack (show x
 newtype IdeHandler (m :: Method ClientToServer Request)
   = IdeHandler [(PluginId, PluginDescriptor IdeState, IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (MessageResult m))))]
 
+newtype IdeResolveHandler (m :: Method ClientToServer Request)
+  = IdeResolveHandler [(PluginId, PluginDescriptor IdeState, PluginResolveHandler IdeState m)]
+
+
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeNotificationHandler (m :: Method ClientToServer Notification)
   = IdeNotificationHandler [(PluginId, PluginDescriptor IdeState, IdeState -> VFS -> MessageParams m -> LSP.LspM Config ())]
@@ -293,6 +349,7 @@ newtype IdeNotificationHandler (m :: Method ClientToServer Notification)
 
 -- | Combine the 'PluginHandlers' for all plugins
 newtype IdeHandlers             = IdeHandlers             (DMap IdeMethod       IdeHandler)
+newtype IdeResolveHandlers      = IdeResolveHandlers      (DMap ResolveMethod   IdeResolveHandler)
 newtype IdeNotificationHandlers = IdeNotificationHandlers (DMap IdeNotification IdeNotificationHandler)
 
 instance Semigroup IdeHandlers where
@@ -301,6 +358,13 @@ instance Semigroup IdeHandlers where
       go _ (IdeHandler a) (IdeHandler b) = IdeHandler (a <> b)
 instance Monoid IdeHandlers where
   mempty = IdeHandlers mempty
+
+instance Semigroup IdeResolveHandlers where
+  (IdeResolveHandlers a) <> (IdeResolveHandlers b) = IdeResolveHandlers $ DMap.unionWithKey go a b
+    where
+      go _ (IdeResolveHandler a) (IdeResolveHandler b) = IdeResolveHandler (a <> b)
+instance Monoid IdeResolveHandlers where
+  mempty = IdeResolveHandlers mempty
 
 instance Semigroup IdeNotificationHandlers where
   (IdeNotificationHandlers a) <> (IdeNotificationHandlers b) = IdeNotificationHandlers $ DMap.unionWithKey go a b

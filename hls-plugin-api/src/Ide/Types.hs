@@ -49,6 +49,11 @@ module Ide.Types
 , responseError
 , lookupCommandProvider
 , PluginResolveData(..)
+, PluginResolveHandlers(..)
+, PluginResolveHandler(..)
+, ResolveFunction
+, ResolveMethod(..)
+, mkResolveHandler
 )
     where
 
@@ -61,7 +66,7 @@ import           System.Posix.Signals
 #endif
 import           Control.Applicative           ((<|>))
 import           Control.Arrow                 ((&&&))
-import           Control.Lens                  (_Just, (.~), (?~), (^.), (^?))
+import           Control.Lens                  (_Just, (.~), (^.), (^?))
 import           Data.Aeson                    hiding (Null, defaultOptions)
 import           Data.Default
 import           Data.Dependent.Map            (DMap)
@@ -262,6 +267,7 @@ data PluginDescriptor (ideState :: *) =
                    , pluginRules        :: !(Rules ())
                    , pluginCommands     :: ![PluginCommand ideState]
                    , pluginHandlers     :: PluginHandlers ideState
+                   , pluginResolveHandlers:: PluginResolveHandlers ideState
                    , pluginConfigDescriptor :: ConfigDescriptor
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
                    , pluginModifyDynflags :: DynFlagsModifications
@@ -405,11 +411,6 @@ instance PluginMethod Request Method_TextDocumentCodeAction where
     where
       uri = msgParams ^. L.textDocument . L.uri
 
-instance PluginMethod Request Method_CodeActionResolve where
-  pluginEnabled _ msgParams pluginDesc config =
-    pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
-    && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
-
 instance PluginMethod Request Method_TextDocumentDefinition where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
@@ -444,11 +445,6 @@ instance PluginMethod Request Method_TextDocumentCodeLens where
     where
       uri = msgParams ^. L.textDocument . L.uri
 
-instance PluginMethod Request Method_CodeLensResolve where
-  pluginEnabled _ msgParams pluginDesc config =
-    pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
-    && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
-
 instance PluginMethod Request Method_TextDocumentRename where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcRenameOn (configForPlugin config pluginDesc)
@@ -465,11 +461,6 @@ instance PluginMethod Request Method_TextDocumentDocumentSymbol where
       && pluginEnabledConfig plcSymbolsOn (configForPlugin config pluginDesc)
     where
       uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_CompletionItemResolve where
-  pluginEnabled _ msgParams pluginDesc config =
-    pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
-    && pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
 
 instance PluginMethod Request Method_TextDocumentCompletion where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
@@ -549,10 +540,6 @@ instance PluginRequestMethod Method_TextDocumentCodeAction where
         , Just caKind <- ca ^. L.kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
         | otherwise = False
 
-instance PluginRequestMethod Method_CodeActionResolve where
-    --  Resolve method should only ever get one response
-    combineResponses _ _ _ _ (x :| _) = x
-
 instance PluginRequestMethod Method_TextDocumentDefinition where
   combineResponses _ _ _ _ (x :| _) = x
 
@@ -570,9 +557,6 @@ instance PluginRequestMethod Method_WorkspaceSymbol where
 
 instance PluginRequestMethod Method_TextDocumentCodeLens where
 
-instance PluginRequestMethod Method_CodeLensResolve where
-    -- A resolve request should only ever get one response
-    combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentRename where
 
@@ -613,10 +597,6 @@ instance PluginRequestMethod Method_TextDocumentDocumentSymbol where
             name' = ds ^. L.name
             si = SymbolInformation name' (ds ^. L.kind) Nothing parent (ds ^. L.deprecated) loc
         in [si] <> children'
-
-instance PluginRequestMethod Method_CompletionItemResolve where
-  -- resolve method's should only ever get one response
-  combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentCompletion where
   combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
@@ -791,14 +771,6 @@ mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandl
     f' SMethod_TextDocumentCompletion pid ide params@CompletionParams{_textDocument=TextDocumentIdentifier {_uri}} =
       pure . fmap (wrapCompletions pid _uri) <$> f ide pid params
 
-    -- If resolve handlers aren't declared with mkPluginHandler we won't need these here anymore
-    f' SMethod_CodeActionResolve pid ide params =
-      pure <$> f ide pid (unwrapResolveData params)
-    f' SMethod_CodeLensResolve pid ide params =
-      pure <$> f ide pid (unwrapResolveData params)
-    f' SMethod_CompletionItemResolve pid ide params =
-      pure <$> f ide pid (unwrapResolveData params)
-
     -- This is the default case for all other methods
     f' _ pid ide params = pure <$> f ide pid params
 
@@ -816,30 +788,6 @@ mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandl
     wrapCompletions pid uri (InR (InL cl@(CompletionList{_items}))) =
       InR $ InL $ cl & L.items .~ (wrapResolveData pid uri <$> _items)
     wrapCompletions _ _ (InR (InR r)) = InR $ InR r
-
-wrapResolveData :: L.HasData_ a (Maybe Value) => PluginId -> Uri -> a -> a
-wrapResolveData pid uri hasData =
-  hasData & L.data_ .~  (toJSON .PRD pid uri <$> data_)
-  where data_ = hasData ^? L.data_ . _Just
-
-unwrapResolveData :: L.HasData_ a (Maybe Value) => a -> a
-unwrapResolveData hasData
-    | Just x <- hasData ^. L.data_
-    , Success PRD {value = v} <- fromJSON x = hasData & L.data_ ?~ v
--- If we can't successfully decode the value as a ORD type than
--- we just return the type untouched?
-unwrapResolveData c = c
-
--- |Allow plugins to "own" resolve data, allowing only them to be queried for
--- the resolve action. This design has added flexibility at the cost of nested
--- Value types
-data PluginResolveData = PRD {
-  owner :: PluginId
-, uri   :: Uri
-, value :: Value
-} deriving (Generic, Show)
-instance ToJSON PluginResolveData
-instance FromJSON PluginResolveData
 
 -- | Make a handler for plugins with no extra data
 mkPluginNotificationHandler
@@ -872,6 +820,7 @@ defaultPluginDescriptor plId =
     mempty
     mempty
     mempty
+    mempty
     defaultConfigDescriptor
     mempty
     mempty
@@ -889,6 +838,7 @@ defaultCabalPluginDescriptor plId =
   PluginDescriptor
     plId
     defaultPluginPriority
+    mempty
     mempty
     mempty
     mempty
@@ -918,17 +868,74 @@ type CommandFunction ideState a
 
 -- ---------------------------------------------------------------------
 
+newtype PluginResolveHandlers ideState             = PluginResolveHandlers             (DMap ResolveMethod       (PluginResolveHandler ideState))
+instance Semigroup (PluginResolveHandlers a) where
+  (PluginResolveHandlers a) <> (PluginResolveHandlers b) = PluginResolveHandlers $ DMap.union a b
+
+instance Monoid (PluginResolveHandlers a) where
+  mempty = PluginResolveHandlers mempty
+
+class (HasTracing (MessageParams m), L.HasData_ (MessageParams m) (Maybe Value)) => PluginResolveMethod (m :: Method ClientToServer Request) where
+instance PluginResolveMethod Method_CodeActionResolve
+instance PluginResolveMethod Method_CodeLensResolve
+instance PluginResolveMethod Method_CompletionItemResolve
+instance PluginResolveMethod Method_DocumentLinkResolve
+instance PluginResolveMethod Method_InlayHintResolve
+instance PluginResolveMethod Method_WorkspaceSymbolResolve
+
+
+data ResolveMethod (m :: Method ClientToServer Request) = PluginResolveMethod m => ResolveMethod (SMethod m)
+instance GEq ResolveMethod where
+  geq (ResolveMethod a) (ResolveMethod b) = geq a b
+instance GCompare ResolveMethod where
+  gcompare (ResolveMethod a) (ResolveMethod b) = gcompare a b
+
 -- Will something like this work?
-type ResolveFunction ideState a m
-  = ideState
+data PluginResolveHandler ideState (m :: Method ClientToServer Request)
+  = forall a. (FromJSON a) => ResolveHandler
+  (ideState
+  -> PluginId
+  -> MessageParams m
+  -> Uri
+  -> a
+  -> LspM Config (Either ResponseError (MessageResult m)))
+
+type ResolveFunction ideState a (m :: Method ClientToServer Request) =
+  ideState
   -> PluginId
   -> MessageParams m
   -> Uri
   -> a
   -> LspM Config (Either ResponseError (MessageResult m))
 
+-- | Make a handler for plugins with no extra data
+mkResolveHandler
+  :: forall ideState a m. (FromJSON a, PluginResolveMethod m)
+  =>  SClientMethod m
+  -> (ideState
+  ->PluginId
+  -> MessageParams m
+  -> Uri
+  -> a
+  -> LspM Config (Either ResponseError (MessageResult m)))
+  -> PluginResolveHandlers ideState
+mkResolveHandler m f = PluginResolveHandlers $ DMap.singleton (ResolveMethod m) (ResolveHandler f)
 
+wrapResolveData :: L.HasData_ a (Maybe Value) => PluginId -> Uri -> a -> a
+wrapResolveData pid uri hasData =
+  hasData & L.data_ .~  (toJSON .PluginResolveData pid uri <$> data_)
+  where data_ = hasData ^? L.data_ . _Just
 
+-- |Allow plugins to "own" resolve data, allowing only them to be queried for
+-- the resolve action. This design has added flexibility at the cost of nested
+-- Value types
+data PluginResolveData = PluginResolveData {
+  resolvePlugin :: PluginId
+, resolveURI    :: Uri
+, resolveValue  :: Value
+} deriving (Generic, Show)
+instance ToJSON PluginResolveData
+instance FromJSON PluginResolveData
 newtype PluginId = PluginId T.Text
   deriving (Show, Read, Eq, Ord)
   deriving newtype (ToJSON, FromJSON, Hashable)
@@ -1031,11 +1038,16 @@ instance HasTracing WorkspaceSymbolParams where
   traceWithSpan sp (WorkspaceSymbolParams _ _ query) = setTag sp "query" (encodeUtf8 query)
 instance HasTracing CallHierarchyIncomingCallsParams
 instance HasTracing CallHierarchyOutgoingCallsParams
-instance HasTracing CompletionItem
+
+-- Instances for resolve types
 instance HasTracing CodeAction
 instance HasTracing CodeLens
+instance HasTracing CompletionItem
+instance HasTracing DocumentLink
+instance HasTracing InlayHint
+instance HasTracing WorkspaceSymbol
 -- ---------------------------------------------------------------------
-
+--Experimental resolve refactoring
 {-# NOINLINE pROCESS_ID #-}
 pROCESS_ID :: T.Text
 pROCESS_ID = unsafePerformIO getPid
@@ -1068,11 +1080,3 @@ getProcessID = fromIntegral <$> P.getProcessID
 installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 #endif
 
-
-pluginResolverResponsible :: Maybe Value -> PluginDescriptor c -> Bool
-pluginResolverResponsible (Just val) pluginDesc =
-    case fromJSON val of
-       (Success (PRD o _ _)) -> pluginId pluginDesc == o
-       _                     -> False -- If we can't decode the data, something is seriously wrong
--- If there is no data stored, than we can't resolve it
-pluginResolverResponsible Nothing _ = False

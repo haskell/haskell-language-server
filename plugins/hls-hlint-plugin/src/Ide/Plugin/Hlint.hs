@@ -117,6 +117,7 @@ import qualified Refact.Fixity                                      as Refact
 import           Ide.Plugin.Config                                  hiding
                                                                     (Config)
 import           Ide.Plugin.Properties
+import           Ide.Plugin.Resolve
 import           Ide.PluginUtils
 import           Ide.Types                                          hiding
                                                                     (Config)
@@ -188,11 +189,12 @@ fromStrictMaybe  Strict.Nothing  = Nothing
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-  let (pluginCommands, pluginHandlers) = mkCodeActionWithResolveAndCommand plId codeActionProvider (resolveProvider recorder)
+  let (pluginCommands, pluginHandlers, resolveHandlers) = mkCodeActionWithResolveAndCommand plId codeActionProvider (resolveProvider recorder)
   in (defaultPluginDescriptor plId)
   { pluginRules = rules recorder plId
   , pluginCommands = pluginCommands
   , pluginHandlers = pluginHandlers
+  , pluginResolveHandlers = resolveHandlers
   , pluginConfigDescriptor = defaultConfigDescriptor
       { configHasDiagnostics = True
       , configCustomConfig = mkCustomConfig properties
@@ -434,24 +436,20 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
 
     diags = context ^. LSP.diagnostics
 
-resolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_CodeActionResolve
-resolveProvider recorder ideState _pluginId ca@CodeAction {_data_ = Just data_} = pluginResponse $ do
-  case fromJSON data_ of
-    (Success (AA verTxtDocId@(VersionedTextDocumentIdentifier uri _))) -> do
-        file <-  getNormalizedFilePath uri
+resolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState HlintResolveCommands Method_CodeActionResolve
+resolveProvider recorder ideState _plId ca uri resolveValue = pluginResponse $ do
+  file <-  getNormalizedFilePath uri
+  case resolveValue of
+    (AA verTxtDocId) -> do
         edit <- ExceptT $ liftIO $ applyHint recorder ideState file Nothing verTxtDocId
         pure $ ca & LSP.edit ?~ edit
-    (Success (AO verTxtDocId@(VersionedTextDocumentIdentifier uri _) pos hintTitle)) -> do
+    (AO verTxtDocId pos hintTitle) -> do
         let oneHint = OneHint pos hintTitle
-        file <-  getNormalizedFilePath uri
         edit <- ExceptT $ liftIO $ applyHint recorder ideState file (Just oneHint) verTxtDocId
         pure $ ca & LSP.edit ?~ edit
-    (Success (IH verTxtDocId@(VersionedTextDocumentIdentifier uri _) hintTitle )) -> do
-        file <-  getNormalizedFilePath uri
+    (IH verTxtDocId hintTitle ) -> do
         edit <- ExceptT $ liftIO $ ignoreHint recorder ideState file verTxtDocId hintTitle
         pure $ ca & LSP.edit ?~ edit
-    Error s-> throwE ("JSON decoding error: " <> s)
-resolveProvider _ _ _ _ = pluginResponse $ throwE "CodeAction with no data field"
 
 -- | Convert a hlint diagnostic into an apply and an ignore code action
 -- if applicable
