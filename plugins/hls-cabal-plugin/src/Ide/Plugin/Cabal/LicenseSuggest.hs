@@ -6,6 +6,7 @@
 module Ide.Plugin.Cabal.LicenseSuggest
 ( licenseErrorSuggestion
 , licenseErrorAction
+, licenseNames
   -- * Re-exports
 , T.Text
 , Diagnostic(..)
@@ -77,7 +78,7 @@ licenseErrorSuggestion ::
 licenseErrorSuggestion msg =
    (getMatch <$> msg =~~ regex) >>= \case
           [original] ->
-            let matches = map Fuzzy.original $ Fuzzy.simpleFilter 1000 10 original licenseNames
+            let matches = map Fuzzy.original $ Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults original licenseNames
             in [(original,candidate) | candidate <- List.sortBy (lengthDistance original) matches]
           _ -> []
   where
