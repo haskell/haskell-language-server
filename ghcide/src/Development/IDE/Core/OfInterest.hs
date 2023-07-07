@@ -78,6 +78,7 @@ ofInterestRules recorder = do
     summarize (IsFOI OnDisk)           = BS.singleton 1
     summarize (IsFOI (Modified False)) = BS.singleton 2
     summarize (IsFOI (Modified True))  = BS.singleton 3
+    summarize (IsFOI ReadOnly)         = BS.singleton 4
 
 ------------------------------------------------------------
 newtype GarbageCollectVar = GarbageCollectVar (Var Bool)
