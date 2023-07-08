@@ -51,15 +51,18 @@ import           UnliftIO.Exception            (catchAny)
 --
 
 data Log
-    = LogPluginError PluginId ResponseError
+    =  LogPluginError PluginId ResponseError
     | LogNoPluginForMethod (Some SMethod)
     | LogInvalidCommandIdentifier
+    | ExceptionInPlugin PluginId (Some SMethod) SomeException
 instance Pretty Log where
   pretty = \case
     LogPluginError (PluginId pId) err -> pretty pId <> ":" <+> prettyResponseError err
     LogNoPluginForMethod (Some method) ->
         "No plugin enabled for " <> pretty (show method)
     LogInvalidCommandIdentifier-> "Invalid command identifier"
+    ExceptionInPlugin plId (Some method) exception ->
+        "Exception in plugin " <> viaShow plId <> " while processing "<> viaShow method <> ": " <> viaShow exception
 
 instance Show Log where show = renderString . layoutCompact . pretty
 
@@ -101,6 +104,13 @@ logAndReturnError :: Recorder (WithPriority Log) -> PluginId -> (LSPErrorCodes |
 logAndReturnError recorder p errCode msg = do
     let err = ResponseError errCode msg Nothing
     logWith recorder Warning $ LogPluginError p err
+    pure $ Left err
+
+-- | Logs the provider error before returning it to the caller
+logAndReturnError' :: Recorder (WithPriority Log) -> (LSPErrorCodes |? ErrorCodes) -> Log -> LSP.LspT Config IO (Either ResponseError a)
+logAndReturnError' recorder errCode msg = do
+    let err = ResponseError errCode (fromString $ show msg) Nothing
+    logWith recorder Warning $ msg
     pure $ Left err
 
 -- | Map a set of plugins to the underlying ghcide engine.
@@ -203,7 +213,7 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
             A.Error err -> logAndReturnError recorder p (InR ErrorCodes_InvalidParams) (failedToParseArgs com p err arg)
             A.Success a ->
                 f ide a `catchAny`
-                (\e -> pure $ Left $ ResponseError (InR ErrorCodes_InternalError) (exceptionInPlugin p SMethod_WorkspaceApplyEdit e) Nothing)
+                (\e -> logAndReturnError' recorder (InR ErrorCodes_InternalError) (ExceptionInPlugin p (Some SMethod_WorkspaceApplyEdit) e))
 
 -- ---------------------------------------------------------------------
 
@@ -266,7 +276,10 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
           Just fs -> do
             -- We run the notifications in order, so the core ghcide provider
             -- (which restarts the shake process) hopefully comes last
-            mapM_ (\(pid,_,f) -> otTracedProvider pid (fromString $ show m) $ f ide vfs params) fs
+            mapM_ (\(pid,_,f) -> otTracedProvider pid (fromString $ show m) $ f ide vfs params
+                                    `catchAny`
+                                    (\e -> logWith recorder Warning (ExceptionInPlugin pid (Some m) e))) fs
+
 
 -- ---------------------------------------------------------------------
 
