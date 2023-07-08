@@ -1158,7 +1158,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     -- No changes in the dependencies and we have
                     -- an existing successful result.
                     Just (v@(Succeeded _ x), diags) -> do
-                        ver <- estimateFileVersionUnsafely key (Just x) file
+                        ver <- estimateFileVersionUnsafely key FromProject (Just x) file
                         doDiagnostics (vfsVersion =<< ver) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
@@ -1174,20 +1174,20 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     Just (Succeeded ver v, _) -> Stale Nothing ver v
                     Just (Stale d ver v, _)   -> Stale d ver v
                     Just (Failed b, _)        -> Failed b
-                (bs, (diags, res)) <- do
+                (fileOrigin, (bs, (diags, res))) <- do
                     let doAction = actionCatch
                             (do v <- action staleV; liftIO $ evaluate $ force v) $
                             \(e :: SomeException) -> do
                                 pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
                     case getSourceFileOrigin file of
-                        FromProject -> doAction
+                        FromProject -> (\r -> (FromProject, r)) <$> doAction
                         FromDependency -> if isSafeDependencyRule key
-                            then doAction
+                            then (\r -> (FromDependency, r)) <$> doAction
                             else error $
                                 "defineEarlyCutoff': Undefined action for dependency source files\n"
                                 ++ show file ++ "\n"
                                 ++ show key
-                ver <- estimateFileVersionUnsafely key res file
+                ver <- estimateFileVersionUnsafely key fileOrigin res file
                 (bs, res) <- case res of
                     Nothing -> do
                         pure (toShakeValue ShakeStale bs, staleV)
@@ -1214,10 +1214,11 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
         :: forall k v
          . IdeRule k v
         => k
+        -> SourceFileOrigin
         -> Maybe v
         -> NormalizedFilePath
         -> Action (Maybe FileVersion)
-    estimateFileVersionUnsafely _k v fp
+    estimateFileVersionUnsafely _k fileOrigin v fp
         | fp == emptyFilePath = pure Nothing
         | Just Refl <- eqT @k @GetModificationTime = pure v
         -- GetModificationTime depends on these rules, so avoid creating a cycle
@@ -1228,7 +1229,10 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
         -- For all other rules - compute the version properly without:
         --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
         --  * creating bogus "file does not exists" diagnostics
-        | otherwise = useWithoutDependency (GetModificationTime_ False) fp
+        | otherwise =
+             case fileOrigin of
+                 FromDependency -> pure Nothing
+                 FromProject -> useWithoutDependency (GetModificationTime_ False) fp
     isSafeDependencyRule
         :: forall k v
          . IdeRule k v
