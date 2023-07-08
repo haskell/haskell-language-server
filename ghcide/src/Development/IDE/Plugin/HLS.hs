@@ -92,6 +92,10 @@ failedToParseArgs (CommandId com) (PluginId pid) err arg =
     "Error while parsing args for " <> com <> " in plugin " <> pid <> ": "
         <> T.pack err <> ", arg = " <> T.pack (show arg)
 
+exceptionInPlugin :: PluginId -> SMethod m -> SomeException -> Text
+exceptionInPlugin plId method exception =
+    "Exception in plugin " <> T.pack (show plId) <> " while processing "<> T.pack (show method) <> ": " <> T.pack (show exception)
+
 -- | Build a ResponseError and log it before returning to the caller
 logAndReturnError :: Recorder (WithPriority Log) -> PluginId -> (LSPErrorCodes |? ErrorCodes) -> Text -> LSP.LspT Config IO (Either ResponseError a)
 logAndReturnError recorder p errCode msg = do
@@ -177,9 +181,9 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
                 -- If we have a command, continue to execute it
                 Just (Command _ innerCmdId innerArgs)
                     -> execCmd ide (ExecuteCommandParams Nothing innerCmdId innerArgs)
-                Nothing -> return $ Right $ InL A.Null
+                Nothing -> return $ Right $ InR Null
 
-            A.Error _str -> return $ Right $ InL A.Null
+            A.Error _str -> return $ Right $ InR Null
 
         -- Just an ordinary HIE command
         Just (plugin, cmd) -> runPluginCommand ide plugin cmd cmdParams
@@ -197,7 +201,9 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
           Nothing -> logAndReturnError recorder p (InR ErrorCodes_InvalidRequest) (commandDoesntExist com p xs)
           Just (PluginCommand _ _ f) -> case A.fromJSON arg of
             A.Error err -> logAndReturnError recorder p (InR ErrorCodes_InvalidParams) (failedToParseArgs com p err arg)
-            A.Success a -> fmap InL <$> f ide a
+            A.Success a ->
+                f ide a `catchAny`
+                (\e -> pure $ Left $ ResponseError (InR ErrorCodes_InternalError) (exceptionInPlugin p SMethod_WorkspaceApplyEdit e) Nothing)
 
 -- ---------------------------------------------------------------------
 
@@ -225,9 +231,8 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
                 msg = pluginNotEnabled m fs'
             return $ Left err
           Just fs -> do
-            let msg e pid = "Exception in plugin " <> T.pack (show pid) <> " while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
-                handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
-            es <- runConcurrently msg (show m) handlers ide params
+            let  handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
+            es <- runConcurrently exceptionInPlugin m handlers ide params
 
             let (errs,succs) = partitionEithers $ toList $ join $ NE.zipWith (\(pId,_) -> fmap (first (pId,))) handlers es
             unless (null errs) $ forM_ errs $ \(pId, err) ->
@@ -267,16 +272,16 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
 
 runConcurrently
   :: MonadUnliftIO m
-  => (SomeException -> PluginId -> T.Text)
-  -> String -- ^ label
+  => (PluginId -> SMethod method -> SomeException -> T.Text)
+  -> SMethod method -- ^ label
   -> NonEmpty (PluginId, a -> b -> m (NonEmpty (Either ResponseError d)))
   -- ^ Enabled plugin actions that we are allowed to run
   -> a
   -> b
   -> m (NonEmpty(NonEmpty (Either ResponseError d)))
-runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString method) $ do
+runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString (show method)) $ do
   f a b
-     `catchAny` (\e -> pure $ pure $ Left $ ResponseError (InR ErrorCodes_InternalError) (msg e pid) Nothing)
+     `catchAny` (\e -> pure $ pure $ Left $ ResponseError (InR ErrorCodes_InternalError) (msg pid method e) Nothing)
 
 combineErrors :: [ResponseError] -> ResponseError
 combineErrors [x] = x

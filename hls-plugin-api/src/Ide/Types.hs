@@ -873,7 +873,7 @@ data PluginCommand ideState = forall a. (FromJSON a) =>
 type CommandFunction ideState a
   = ideState
   -> a
-  -> LspM Config (Either ResponseError Value)
+  -> LspM Config (Either ResponseError (Value |? Null))
 
 -- ---------------------------------------------------------------------
 
@@ -1093,7 +1093,7 @@ mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
             case resolveResult of
               Right CodeAction {_edit = Just wedits } -> do
                   _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) (\_ -> pure ())
-                  pure $ Right Data.Aeson.Null
+                  pure $ Right $ InR Null
               Right _ -> pure $ Left $ responseError "No edit in CodeAction"
               Left err -> pure $ Left err
 

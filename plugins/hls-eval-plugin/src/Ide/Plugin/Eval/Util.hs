@@ -18,7 +18,7 @@ import           Control.Exception                     (SomeException, evaluate,
 import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Control.Monad.Trans.Except            (ExceptT (..),
                                                         runExceptT)
-import           Data.Aeson                            (Value (Null))
+import           Data.Aeson                            (Value)
 import           Data.String                           (IsString (fromString))
 import qualified Data.Text                             as T
 import           Development.IDE                       (IdeState, Priority (..),
@@ -32,7 +32,7 @@ import           GHC.Stack                             (HasCallStack, callStack,
                                                         srcLocStartCol,
                                                         srcLocStartLine)
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types           hiding (Null)
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
 import           System.FilePath                       (takeExtension)
 import           System.Time.Extra                     (duration, showDuration)
@@ -66,7 +66,7 @@ logLevel = Debug -- Info
 isLiterate :: FilePath -> Bool
 isLiterate x = takeExtension x `elem` [".lhs", ".lhs-boot"]
 
-response' :: ExceptT String (LspM c) WorkspaceEdit -> LspM c (Either ResponseError Value)
+response' :: ExceptT String (LspM c) WorkspaceEdit -> LspM c (Either ResponseError (Value |? Null))
 response' act = do
     res <- runExceptT act
              `catchAny` showErr
@@ -75,7 +75,7 @@ response' act = do
           return $ Left (ResponseError (InR ErrorCodes_InternalError) (fromString e) Nothing)
       Right a -> do
         _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing a) (\_ -> pure ())
-        return $ Right Null
+        return $ Right $ InR Null
 
 gStrictTry :: (MonadIO m, MonadCatch m) => m b -> m (Either String b)
 gStrictTry op =

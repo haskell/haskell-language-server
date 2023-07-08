@@ -12,7 +12,7 @@ import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except           (ExceptT, throwE)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson
+import           Data.Aeson                           hiding (Null)
 import           Data.Bifunctor                       (second)
 import           Data.Either.Extra                    (rights)
 import           Data.List
@@ -37,7 +37,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types          hiding (Null)
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
@@ -64,7 +64,7 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
 
         void $ lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
 
-        pure Null
+        pure $ InR Null
     where
         toTextDocumentEdit edit =
             TextDocumentEdit (verTxtDocId ^.re _versionedTextDocumentIdentifier) [InL edit]
