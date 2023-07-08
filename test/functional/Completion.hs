@@ -19,7 +19,7 @@ getResolvedCompletions :: TextDocumentIdentifier -> Position -> Session [Complet
 getResolvedCompletions doc pos = do
   xs <- getCompletions doc pos
   forM xs $ \item -> do
-    if isJust (item ^. detail)
+    if isJust (item ^. data_)
       then do
         rsp <- request SMethod_CompletionItemResolve item
         case rsp ^. result of
