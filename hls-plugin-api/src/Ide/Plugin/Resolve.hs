@@ -5,7 +5,8 @@
 {-# LANGUAGE RankNTypes               #-}
 {-# LANGUAGE ScopedTypeVariables      #-}
 
-module Ide.Plugin.Resolve (mkCodeActionHandlerWithResolve,
+module Ide.Plugin.Resolve
+(mkCodeActionHandlerWithResolve,
 mkCodeActionWithResolveAndCommand) where
 
 import           Control.Lens                  (_Just, (&), (.~), (?~), (^.),
@@ -27,7 +28,7 @@ import           Language.LSP.Server           (LspM, LspT,
                                                 sendRequest,
                                                 withIndefiniteProgress)
 
-  -- |When provided with both a codeAction provider and an affiliated codeAction
+-- |When provided with both a codeAction provider and an affiliated codeAction
 -- resolve provider, this function creates a handler that automatically uses
 -- your resolve provider to fill out you original codeAction if the client doesn't
 -- have codeAction resolve support. This means you don't have to check whether
@@ -125,9 +126,8 @@ mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
         executeResolveCmd _ _ CodeAction{_data_= value} = pure $ Left $ invalidParamsError ("CodeAction data field empty: " <> (T.pack $ show value))
 
 
--- |Allow plugins to "own" resolve data, allowing only them to be queried for
--- the resolve action. This design has added flexibility at the cost of nested
--- Value types
+-- |To execute the resolve provider as a command, we need to additionally store
+-- the URI that was provided to the original code action.
 data WithURI = WithURI {
  _uri    :: Uri
 , _value :: A.Value
