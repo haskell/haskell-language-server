@@ -55,6 +55,7 @@ data Log
     | LogNoPluginForMethod (Some SMethod)
     | LogInvalidCommandIdentifier
     | ExceptionInPlugin PluginId (Some SMethod) SomeException
+
 instance Pretty Log where
   pretty = \case
     LogPluginError (PluginId pId) err -> pretty pId <> ":" <+> prettyResponseError err
@@ -212,7 +213,7 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
           Just (PluginCommand _ _ f) -> case A.fromJSON arg of
             A.Error err -> logAndReturnError recorder p (InR ErrorCodes_InvalidParams) (failedToParseArgs com p err arg)
             A.Success a ->
-                f ide a `catchAny`
+                f ide a `catchAny` -- See Note [Exception handling in plugins]
                 (\e -> logAndReturnError' recorder (InR ErrorCodes_InternalError) (ExceptionInPlugin p (Some SMethod_WorkspaceApplyEdit) e))
 
 -- ---------------------------------------------------------------------
@@ -277,7 +278,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
             -- We run the notifications in order, so the core ghcide provider
             -- (which restarts the shake process) hopefully comes last
             mapM_ (\(pid,_,f) -> otTracedProvider pid (fromString $ show m) $ f ide vfs params
-                                    `catchAny`
+                                    `catchAny` -- See Note [Exception handling in plugins]
                                     (\e -> logWith recorder Warning (ExceptionInPlugin pid (Some m) e))) fs
 
 
@@ -293,7 +294,7 @@ runConcurrently
   -> b
   -> m (NonEmpty(NonEmpty (Either ResponseError d)))
 runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString (show method)) $ do
-  f a b
+  f a b  -- See Note [Exception handling in plugins]
      `catchAny` (\e -> pure $ pure $ Left $ ResponseError (InR ErrorCodes_InternalError) (msg pid method e) Nothing)
 
 combineErrors :: [ResponseError] -> ResponseError
@@ -326,3 +327,16 @@ instance Semigroup IdeNotificationHandlers where
       go _ (IdeNotificationHandler a) (IdeNotificationHandler b) = IdeNotificationHandler (a <> b)
 instance Monoid IdeNotificationHandlers where
   mempty = IdeNotificationHandlers mempty
+
+{- Note [Exception handling in plugins]
+Plugins run in LspM, and so have access to IO. This means they are likely to
+throw exceptions, even if only by accident or through calling libraries that
+throw exceptions. Ultimately, we're running a bunch of less-trusted IO code,
+so we should be robust to it throwing.
+
+We don't want these to bring down HLS. So we catch and log exceptions wherever
+we run a handler defined in a plugin.
+
+The flip side of this is that it's okay for plugins to throw exceptions as a
+way of signalling failure!
+-}
