@@ -286,7 +286,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
 runConcurrently
   :: MonadUnliftIO m
   => (PluginId -> SMethod method -> SomeException -> T.Text)
-  -> SMethod method -- ^ label
+  -> SMethod method -- ^ Method (used for errors and tracing)
   -> NonEmpty (PluginId, a -> b -> m (NonEmpty (Either ResponseError d)))
   -- ^ Enabled plugin actions that we are allowed to run
   -> a
