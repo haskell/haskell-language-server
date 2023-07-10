@@ -19,8 +19,13 @@ source-repository head
     type:     git
     location: https://github.com/haskell/haskell-language-server.git
 
+flag pedantic
+  description: Enable -Werror
+  default:     False
+  manual:      True
+
 common warnings
-    ghc-options: -Wall -Werror
+    ghc-options: -Wall
 
 library
   import:           warnings
@@ -47,6 +52,9 @@ library
     DataKinds
     TypeOperators
 
+  if flag(pedantic)
+    ghc-options: -Werror
+
 test-suite tests
   import:           warnings
   buildable: True
@@ -57,6 +65,7 @@ test-suite tests
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
     , base
+    , extra
     , filepath
     , hls-explicit-imports-plugin
     , hls-test-utils

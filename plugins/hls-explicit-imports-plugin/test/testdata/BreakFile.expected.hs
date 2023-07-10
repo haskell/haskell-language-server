@@ -1,8 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
-module StaleAction where
+module BreakFile whexe
 
-import A
+import A ( a1 )
 
 main = putStrLn $ "hello " ++ a1
-
-testing = undefined

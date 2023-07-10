@@ -160,8 +160,8 @@ lensResolveProvider _  _ _ (CodeLens {_data_ = Just (A.fromJSON -> A.Success (Re
    pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexpected argument for lens resolve handler: ResolveAll" Nothing
 lensResolveProvider _  _ _ (CodeLens {_data_ = Just (A.fromJSON @EIResolveData -> (A.Error (T.pack -> str)))}) =
   pure $ Left $ ResponseError (InR ErrorCodes_ParseError) str Nothing
-lensResolveProvider _  _ _ (CodeLens {_data_ = _}) = do
-   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexpected argument for lens resolve handler: (Probably Nothing)" Nothing
+lensResolveProvider _  _ _ (CodeLens {_data_ = v}) = do
+   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) ("Unexpected argument for lens resolve handler: " <> (T.pack $ show v)) Nothing
 
 -- | If there are any implicit imports, provide both one code action per import
 --   to make that specific import explicit, and one code action to turn them all
@@ -199,8 +199,8 @@ codeActionResolveProvider _ ideState _ ca@(CodeAction{_data_= Just (A.fromJSON -
     pure $ ca & L.edit ?~ wedit
 codeActionResolveProvider _ _ _ (CodeAction{_data_= Just (A.fromJSON @EIResolveData -> A.Error (T.pack -> str))}) =
     pure $ Left $ ResponseError (InR ErrorCodes_ParseError) str Nothing
-codeActionResolveProvider _  _ _ (CodeAction {_data_ = _}) = do
-   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexpected argument for code action resolve handler: (Probably Nothing)" Nothing
+codeActionResolveProvider _  _ _ (CodeAction {_data_ = v}) = do
+   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) ("Unexpected argument for code action resolve handler: " <> (T.pack $ show v)) Nothing
 --------------------------------------------------------------------------------
 
 resolveWTextEdit :: IdeState -> EIResolveData -> ExceptT String (LspT Config IO) WorkspaceEdit

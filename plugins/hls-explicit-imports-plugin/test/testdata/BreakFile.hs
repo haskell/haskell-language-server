@@ -1,8 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
-module StaleAction where
+module BreakFile where
 
 import A
 
 main = putStrLn $ "hello " ++ a1
-
-testing = undefined

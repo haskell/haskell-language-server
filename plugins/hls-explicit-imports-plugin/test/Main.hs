@@ -1,15 +1,16 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE NamedFieldPuns           #-}
 {-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE TypeOperators            #-}
 {-# LANGUAGE ViewPatterns             #-}
-
 module Main
   ( main
   ) where
 
 import           Control.Lens                  ((^.))
+import           Data.Either.Extra
 import           Data.Foldable                 (find)
 import           Data.Row                      ((.+), (.==))
 import           Data.Text                     (Text)
@@ -32,7 +33,8 @@ main = defaultTestRunner $
     , codeActionOnlyGoldenTest "OnlyThis" 3 0
     , codeActionOnlyResolveGoldenTest "OnlyThis" 3 0
     , codeLensGoldenTest "UsualCase" 0
-    , codeActionBreakFile "StaleAction" 4 0
+    , codeActionBreakFile "BreakFile" 4 0
+    , codeActionStaleAction "StaleAction" 4 0
     , testCase "No CodeAction when exported" $
       runSessionWithServer explicitImportsPlugin testDataDir $ do
         doc <- openDoc "Exported.hs" "haskell"
@@ -89,6 +91,22 @@ codeActionBreakFile fp l c = goldenWithExplicitImports " code action" fp codeAct
                                                    .+ #rangeLength .== Nothing
                                                    .+ #text .== "x"
 
+codeActionStaleAction :: FilePath -> Int -> Int -> TestTree
+codeActionStaleAction fp l c = goldenWithExplicitImports " code action" fp codeActionResolveCaps $ \doc -> do
+  _ <- waitForDiagnostics
+  actions <- getCodeActions doc (pointRange l c)
+  changeDoc doc [edit]
+  _ <- waitForDiagnostics
+  case find ((== Just "Make this import explicit") . caTitle) actions of
+    Just (InR x) ->
+      maybeResolveCodeAction x >>=
+        \case Just _ -> liftIO $ assertFailure "Code action still valid"
+              Nothing -> pure ()
+    _            -> liftIO $ assertFailure "Unable to find CodeAction"
+  where edit = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 6 0) (Position 6 0)
+                                                   .+ #rangeLength .== Nothing
+                                                   .+ #text .== "\ntesting = undefined"
+
 codeActionAllResolveGoldenTest :: FilePath -> Int -> Int -> TestTree
 codeActionAllResolveGoldenTest fp l c = goldenWithExplicitImports " code action resolve" fp codeActionResolveCaps $ \doc -> do
   actions <- getCodeActions doc (pointRange l c)
@@ -110,11 +128,18 @@ codeActionOnlyResolveGoldenTest fp l c = goldenWithExplicitImports " code action
   resolved <- resolveCodeAction x
   executeCodeAction resolved
 
+-- TODO: use the one from lsp-test once that's released
 resolveCodeAction :: CodeAction -> Session CodeAction
 resolveCodeAction ca = do
   resolveResponse <- request SMethod_CodeActionResolve ca
   Right resolved <- pure $ resolveResponse ^. L.result
   pure resolved
+
+maybeResolveCodeAction :: CodeAction -> Session (Maybe CodeAction)
+maybeResolveCodeAction ca = do
+  resolveResponse <- request SMethod_CodeActionResolve ca
+  let resolved = resolveResponse ^. L.result
+  pure $ eitherToMaybe resolved
 
 caTitle :: (Command |? CodeAction) -> Maybe Text
 caTitle (InR CodeAction {_title}) = Just _title
@@ -128,6 +153,7 @@ codeLensGoldenTest fp _ = goldenWithExplicitImports " code lens" fp codeActionNo
   CodeLens {_command = Just c} <- resolveCodeLens codeLens
   executeCmd c
 
+-- TODO: use the one from lsp-test once that's released
 resolveCodeLens :: CodeLens -> Session CodeLens
 resolveCodeLens cl = do
   resolveResponse <- request SMethod_CodeLensResolve cl
