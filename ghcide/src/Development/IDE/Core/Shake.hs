@@ -1237,6 +1237,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
     isSafeDependencyRule _k
         | Just Refl <- eqT @k @GetHieAst = True
         | Just Refl <- eqT @k @IsFileOfInterest = True
+        | Just Refl <- eqT @k @GetModificationTime = True
         | otherwise = False
 
 traceA :: A v -> String
