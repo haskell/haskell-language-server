@@ -389,9 +389,19 @@ defRowToLocation lookupModule (row:.info) = do
   let start = Position (fromIntegral $ defSLine row - 1) (fromIntegral $ defSCol row - 1)
       end   = Position (fromIntegral $ defELine row - 1) (fromIntegral $ defECol row - 1)
       range = Range start end
+      lookupMod = lookupModule (defSrc row) (modInfoName info) (modInfoUnit info) (modInfoIsBoot info)
   file <- case modInfoSrcFile info of
-    Just src -> pure $ toUri src
-    Nothing -> lookupModule (defSrc row) (modInfoName info) (modInfoUnit info) (modInfoIsBoot info)
+    Just src -> do
+      -- Checking that the file exists covers the case where a
+      -- dependency file in .hls is in the database but got deleted
+      -- for any reason.
+      -- See the function `lookupMod` in Development.IDE.Core.Actions
+      -- for where dependency files get created and indexed in hiedb.
+      fileExists <- liftIO $ doesFileExist src
+      if fileExists
+      then pure $ toUri src
+      else lookupMod
+    Nothing -> lookupMod
   pure $ Location file range
 
 toUri :: FilePath -> Uri
