@@ -68,7 +68,7 @@ library
         hls-plugin-api == 2.1.0.0,
         lens,
         list-t,
-        hiedb == 0.4.3.*,
+        hiedb,
         lsp-types ^>= 2.0.0.1,
         lsp ^>= 2.0.0.0 ,
         mtl,

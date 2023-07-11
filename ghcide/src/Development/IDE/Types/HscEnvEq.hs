@@ -13,10 +13,14 @@ module Development.IDE.Types.HscEnvEq
 
 
 import           Control.Concurrent.Async        (Async, async, waitCatch)
+import           Control.Concurrent.MVar         (newEmptyMVar, putMVar, readMVar)
+import           Control.Concurrent.STM          (atomically)
+import           Control.Concurrent.STM.TQueue   (unGetTQueue)
 import           Control.Concurrent.Strict       (modifyVar, newVar)
 import           Control.DeepSeq                 (force)
 import           Control.Exception               (evaluate, mask, throwIO)
 import           Control.Exception.Safe          (tryAny)
+import           Control.Monad                   (unless)
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM, void)
 import           Data.Either                     (fromRight)
 import           Data.Foldable                   (traverse_)
@@ -27,7 +31,7 @@ import qualified Data.Text                       as T
 import           Data.Unique                     (Unique)
 import qualified Data.Unique                     as Unique
 import           Development.IDE.Core.Compile    (HieDbModuleQuery(HieDbModuleQuery), indexHieFile, loadHieFile)
-import           Development.IDE.Core.Shake      (ShakeExtras(ideNc, logger), mkUpdater)
+import           Development.IDE.Core.Shake      (HieDbWriter(indexQueue), ShakeExtras(hiedbWriter, ideNc, logger, lspEnv), mkUpdater)
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util as Maybes
 import           Development.IDE.GHC.Error       (catchSrcErrors)
@@ -36,9 +40,10 @@ import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
 import           Development.IDE.Types.Location  (toNormalizedFilePath')
 import qualified Development.IDE.Types.Logger    as Logger
-import           HieDb                           (SourceFile(FakeFile))
+import           HieDb                           (SourceFile(FakeFile), removeDependencySrcFiles)
+import           Language.LSP.Server             (resRootPath)
 import           OpenTelemetry.Eventlog          (withSpan)
-import           System.Directory                (makeAbsolute)
+import           System.Directory                (doesDirectoryExist, makeAbsolute)
 import           System.FilePath
 
 -- | An 'HscEnv' with equality. Two values are considered equal
@@ -117,8 +122,22 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
     return HscEnvEq{..}
     where
         indexDependencyHieFiles :: IO ()
-        indexDependencyHieFiles = void
-            $ Map.traverseWithKey indexPackageHieFiles packagesWithModules
+        indexDependencyHieFiles = do
+            dotHlsDirExists <- maybe (pure False) doesDirectoryExist mHlsDir
+            unless dotHlsDirExists deleteMissingDependencySources
+            void $ Map.traverseWithKey indexPackageHieFiles packagesWithModules
+        mHlsDir :: Maybe FilePath
+        mHlsDir = do
+            projectDir <- resRootPath =<< lspEnv se
+            pure $ projectDir </> ".hls"
+        deleteMissingDependencySources :: IO ()
+        deleteMissingDependencySources = do
+            completionToken <- newEmptyMVar
+            atomically $ unGetTQueue (indexQueue $ hiedbWriter se) $
+                \withHieDb -> withHieDb $ \db -> do
+                    removeDependencySrcFiles db
+                    putMVar completionToken ()
+            readMVar completionToken
         indexPackageHieFiles :: Package -> [Module] -> IO ()
         indexPackageHieFiles (Package package) modules = do
             let pkgLibDir :: FilePath
