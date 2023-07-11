@@ -37,7 +37,7 @@ import           Control.Monad.IO.Unlift
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson
+import           Data.Aeson                      hiding (Null)
 import           Data.Foldable                   (Foldable (foldl'))
 import           Data.Function
 import           Data.Generics
@@ -64,7 +64,7 @@ import           Ide.Plugin.Splice.Types
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint (uniqueSrcSpanT)
 import           Language.LSP.Server
-import           Language.LSP.Protocol.Types        hiding (Null)
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Protocol.Message
 import qualified Language.LSP.Protocol.Lens         as J
 
@@ -192,11 +192,11 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                 Right edits ->
                     pure (Right edits)
     case res of
-      Nothing -> pure $ Right Null
+      Nothing -> pure $ Right $ InR Null
       Just (Left err) -> pure $ Left err
       Just (Right edit) -> do
         _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
-        pure $ Right Null
+        pure $ Right $ InR Null
 
     where
         range = realSrcSpanToRange spliceSpan

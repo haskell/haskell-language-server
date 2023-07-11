@@ -33,8 +33,7 @@ import           Control.Monad.Trans.Except           (ExceptT (ExceptT),
 import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Writer.Strict
 import           Data.Aeson                           (FromJSON (..),
-                                                       ToJSON (..),
-                                                       Value (Null))
+                                                       ToJSON (..), Value)
 import           Data.Bifunctor                       (second)
 import qualified Data.ByteString                      as BS
 import           Data.Coerce
@@ -118,7 +117,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message        as LSP
-import           Language.LSP.Protocol.Types          as LSP hiding (Null)
+import           Language.LSP.Protocol.Types          as LSP
 import           Language.LSP.Server                  (LspM,
                                                        ProgressCancellable (Cancellable),
                                                        sendNotification,
@@ -209,7 +208,7 @@ data RunRetrieParams = RunRetrieParams
 runRetrieCmd ::
   IdeState ->
   RunRetrieParams ->
-  LspM c (Either ResponseError Value)
+  LspM c (Either ResponseError (Value |? Null))
 runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
   withIndefiniteProgress description Cancellable $ do
     runMaybeT $ do
@@ -236,7 +235,7 @@ runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
                         ["-" <> T.pack (show e) | e <- errors]
         lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
         return ()
-    return $ Right Null
+    return $ Right $ InR Null
 
 data RunRetrieInlineThisParams = RunRetrieInlineThisParams
   { inlineIntoThisLocation :: !Location,
@@ -246,7 +245,7 @@ data RunRetrieInlineThisParams = RunRetrieInlineThisParams
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
 runRetrieInlineThisCmd :: IdeState
-    -> RunRetrieInlineThisParams -> LspM c (Either ResponseError Value)
+    -> RunRetrieInlineThisParams -> LspM c (Either ResponseError (Value |? Null))
 runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = pluginResponse $ do
     nfp <- handleMaybe "uri" $ uriToNormalizedFilePath $ toNormalizedUri $ getLocationUri inlineIntoThisLocation
     nfpSource <- handleMaybe "sourceUri" $
@@ -287,7 +286,7 @@ runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = pluginResponse $ do
                     , RealSrcSpan intoRange Nothing `GHC.isSubspanOf` replLocation]
             lift $ sendRequest SMethod_WorkspaceApplyEdit
                 (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-            return Null
+            return $ InR Null
 
 -- Override to skip adding binders to the context, which prevents inlining
 -- nested defined functions
