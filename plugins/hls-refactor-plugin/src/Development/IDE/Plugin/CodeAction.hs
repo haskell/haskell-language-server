@@ -22,7 +22,6 @@ import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                                        as A
 import           Data.Char
 import qualified Data.DList                                        as DL
 import           Data.Function
@@ -85,7 +84,7 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     Command,
                                                                     Diagnostic (..),
                                                                     MessageType (..),
-                                                                    Null,
+                                                                    Null (Null),
                                                                     ShowMessageParams (..),
                                                                     TextDocumentIdentifier (TextDocumentIdentifier),
                                                                     TextEdit (TextEdit, _range),
@@ -212,7 +211,7 @@ extendImportHandler ideState edit@ExtendImport {..} = do
           <> printOutputable srcSpan
           <> ")"
     void $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right A.Null
+  return $ Right $ InR Null
 
 extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
 extendImportHandler' ideState ExtendImport {..}

@@ -103,7 +103,7 @@ runContinuation plId cont state (fc, b) = do
       res <- c_runCommand cont env args fc b
 
       -- This block returns a maybe error.
-      fmap (maybe (Right A.Null) Left . coerce . foldMap Last) $
+      fmap (maybe (Right $ InR Null) Left . coerce . foldMap Last) $
         for res $ \case
           ErrorMessages errs -> do
             traverse_ showUserFacingMessage errs
