@@ -21,7 +21,7 @@ module Ide.Plugin.ExplicitImports
 import           Control.DeepSeq
 import           Control.Monad.IO.Class
 import           Data.Aeson                           (ToJSON (toJSON),
-                                                       Value (Null))
+                                                       Value ())
 import           Data.Aeson.Types                     (FromJSON)
 import qualified Data.HashMap.Strict                  as HashMap
 import           Data.IORef                           (readIORef)
@@ -41,7 +41,7 @@ import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types          hiding (Null)
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
 
 importCommandId :: CommandId
@@ -97,7 +97,7 @@ runImportCommand :: CommandFunction IdeState ImportCommandParams
 runImportCommand _state (ImportCommandParams edit) = do
   -- This command simply triggers a workspace edit!
   _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
-  return (Right Null)
+  return (Right $ InR Null)
 
 -- | For every implicit import statement, return a code lens of the corresponding explicit import
 -- Example - for the module below:
