@@ -75,9 +75,9 @@ defaults: &defaults
 
 version: 2
 jobs:
-  stackage-lts19:
+  stackage-lts21:
     environment:
-      - STACK_FILE: "stack-lts19.yaml"
+      - STACK_FILE: "stack-lts21.yaml"
     <<: *defaults
 
   stackage-nightly:
@@ -90,5 +90,5 @@ workflows:
   version: 2
   multiple-ghcs:
     jobs:
-      - stackage-lts19
+      - stackage-lts21
       - stackage-nightly
