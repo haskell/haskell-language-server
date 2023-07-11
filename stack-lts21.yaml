@@ -42,6 +42,9 @@ packages:
 ghc-options:
   "$everything": -haddock
 
+# stylish-haskell>strict
+allow-newer: true
+
 extra-deps:
 - floskell-0.10.7
 - hiedb-0.4.3.0
@@ -51,7 +54,6 @@ extra-deps:
 - algebraic-graphs-0.6.1
 - retrie-1.2.2
 - stylish-haskell-0.14.4.0
-- strict-0.4.0.1
 
 configure-options:
   ghcide:
