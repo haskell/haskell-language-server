@@ -27,7 +27,6 @@ import           Control.Monad.Trans.Except           (ExceptT)
 import           Control.Monad.Trans.Maybe
 import qualified Data.Aeson                           as A (Result (..),
                                                             ToJSON (toJSON),
-                                                            Value (),
                                                             fromJSON)
 import           Data.Aeson.Types                     (FromJSON)
 import qualified Data.IntMap                          as IM (IntMap, elems,
@@ -104,7 +103,7 @@ runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState EIRe
 runImportCommand recorder ideState eird@(ResolveOne _ _) = pluginResponse $ do
   wedit <- resolveWTextEdit ideState eird
   _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) logErrors
-  return InR $ Null
+  return $ InR  Null
   where logErrors (Left re@(ResponseError{})) = do
           logWith recorder Error (LogWAEResponseError re)
           pure ()
