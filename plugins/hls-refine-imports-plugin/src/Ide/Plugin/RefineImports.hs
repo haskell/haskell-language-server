@@ -18,7 +18,7 @@ import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        runMaybeT)
-import           Data.Aeson.Types
+import           Data.Aeson.Types                     hiding (Null)
 import           Data.IORef                           (readIORef)
 import           Data.List                            (intercalate)
 import qualified Data.Map.Strict                      as Map
@@ -60,7 +60,7 @@ import           Language.LSP.Protocol.Types                   (ApplyWorkspaceEd
                                                        TextEdit (..),
                                                        WorkspaceEdit (..),
                                                        type (|?) (InL, InR),
-                                                       uriToNormalizedFilePath)
+                                                       uriToNormalizedFilePath, Null (Null))
 import           Language.LSP.Protocol.Message         (Method (Method_TextDocumentCodeAction, Method_TextDocumentCodeLens),
                                                        SMethod (SMethod_TextDocumentCodeAction, SMethod_TextDocumentCodeLens, SMethod_WorkspaceApplyEdit),)
 newtype Log = LogShake Shake.Log deriving Show
@@ -103,7 +103,7 @@ runRefineImportCommand :: CommandFunction IdeState RefineImportCommandParams
 runRefineImportCommand _state (RefineImportCommandParams edit) = do
   -- This command simply triggers a workspace edit!
   _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
-  return (Right Null)
+  return (Right $ InR Null)
 
 lensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 lensProvider
