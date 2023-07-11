@@ -48,11 +48,7 @@ module Ide.Types
 , installSigUsr1Handler
 , responseError
 , lookupCommandProvider
-, PluginResolveData(..)
-, PluginResolveHandlers(..)
-, PluginResolveHandler(..)
 , ResolveFunction
-, ResolveMethod(..)
 , mkResolveHandler
 )
     where
@@ -267,7 +263,6 @@ data PluginDescriptor (ideState :: *) =
                    , pluginRules        :: !(Rules ())
                    , pluginCommands     :: ![PluginCommand ideState]
                    , pluginHandlers     :: PluginHandlers ideState
-                   , pluginResolveHandlers:: PluginResolveHandlers ideState
                    , pluginConfigDescriptor :: ConfigDescriptor
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
                    , pluginModifyDynflags :: DynFlagsModifications
@@ -411,6 +406,11 @@ instance PluginMethod Request Method_TextDocumentCodeAction where
     where
       uri = msgParams ^. L.textDocument . L.uri
 
+instance PluginMethod Request Method_CodeActionResolve where
+  pluginEnabled _ msgParams pluginDesc config =
+    pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
+    && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
+
 instance PluginMethod Request Method_TextDocumentDefinition where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
@@ -445,6 +445,11 @@ instance PluginMethod Request Method_TextDocumentCodeLens where
     where
       uri = msgParams ^. L.textDocument . L.uri
 
+instance PluginMethod Request Method_CodeLensResolve where
+  pluginEnabled _ msgParams pluginDesc config =
+    pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
+    && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
+
 instance PluginMethod Request Method_TextDocumentRename where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcRenameOn (configForPlugin config pluginDesc)
@@ -461,6 +466,10 @@ instance PluginMethod Request Method_TextDocumentDocumentSymbol where
       && pluginEnabledConfig plcSymbolsOn (configForPlugin config pluginDesc)
     where
       uri = msgParams ^. L.textDocument . L.uri
+
+instance PluginMethod Request Method_CompletionItemResolve where
+  pluginEnabled _ msgParams pluginDesc config = pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
+    && pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
 
 instance PluginMethod Request Method_TextDocumentCompletion where
   pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
@@ -540,6 +549,10 @@ instance PluginRequestMethod Method_TextDocumentCodeAction where
         , Just caKind <- ca ^. L.kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
         | otherwise = False
 
+instance PluginRequestMethod Method_CodeActionResolve where
+    -- Resolve methods should only have one response
+    combineResponses _ _ _ _ (x :| _) = x
+
 instance PluginRequestMethod Method_TextDocumentDefinition where
   combineResponses _ _ _ _ (x :| _) = x
 
@@ -557,6 +570,9 @@ instance PluginRequestMethod Method_WorkspaceSymbol where
 
 instance PluginRequestMethod Method_TextDocumentCodeLens where
 
+instance PluginRequestMethod Method_CodeLensResolve where
+    -- A resolve request should only ever get one response
+    combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentRename where
 
@@ -597,6 +613,10 @@ instance PluginRequestMethod Method_TextDocumentDocumentSymbol where
             name' = ds ^. L.name
             si = SymbolInformation name' (ds ^. L.kind) Nothing parent (ds ^. L.deprecated) loc
         in [si] <> children'
+
+instance PluginRequestMethod Method_CompletionItemResolve where
+  -- resolve methods should only have one response
+  combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentCompletion where
   combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
@@ -820,7 +840,6 @@ defaultPluginDescriptor plId =
     mempty
     mempty
     mempty
-    mempty
     defaultConfigDescriptor
     mempty
     mempty
@@ -838,7 +857,6 @@ defaultCabalPluginDescriptor plId =
   PluginDescriptor
     plId
     defaultPluginPriority
-    mempty
     mempty
     mempty
     mempty
@@ -868,38 +886,6 @@ type CommandFunction ideState a
 
 -- ---------------------------------------------------------------------
 
-newtype PluginResolveHandlers ideState             = PluginResolveHandlers             (DMap ResolveMethod       (PluginResolveHandler ideState))
-instance Semigroup (PluginResolveHandlers a) where
-  (PluginResolveHandlers a) <> (PluginResolveHandlers b) = PluginResolveHandlers $ DMap.union a b
-
-instance Monoid (PluginResolveHandlers a) where
-  mempty = PluginResolveHandlers mempty
-
-class (HasTracing (MessageParams m), L.HasData_ (MessageParams m) (Maybe Value)) => PluginResolveMethod (m :: Method ClientToServer Request) where
-instance PluginResolveMethod Method_CodeActionResolve
-instance PluginResolveMethod Method_CodeLensResolve
-instance PluginResolveMethod Method_CompletionItemResolve
-instance PluginResolveMethod Method_DocumentLinkResolve
-instance PluginResolveMethod Method_InlayHintResolve
-instance PluginResolveMethod Method_WorkspaceSymbolResolve
-
-
-data ResolveMethod (m :: Method ClientToServer Request) = PluginResolveMethod m => ResolveMethod (SMethod m)
-instance GEq ResolveMethod where
-  geq (ResolveMethod a) (ResolveMethod b) = geq a b
-instance GCompare ResolveMethod where
-  gcompare (ResolveMethod a) (ResolveMethod b) = gcompare a b
-
--- Will something like this work?
-data PluginResolveHandler ideState (m :: Method ClientToServer Request)
-  = forall a. (FromJSON a) => ResolveHandler
-  (ideState
-  -> PluginId
-  -> MessageParams m
-  -> Uri
-  -> a
-  -> LspM Config (Either ResponseError (MessageResult m)))
-
 type ResolveFunction ideState a (m :: Method ClientToServer Request) =
   ideState
   -> PluginId
@@ -910,7 +896,7 @@ type ResolveFunction ideState a (m :: Method ClientToServer Request) =
 
 -- | Make a handler for plugins with no extra data
 mkResolveHandler
-  :: forall ideState a m. (FromJSON a, PluginResolveMethod m)
+  :: forall ideState a m. (FromJSON a,  PluginRequestMethod m, L.HasData_ (MessageParams m) (Maybe Value))
   =>  SClientMethod m
   -> (ideState
   ->PluginId
@@ -918,8 +904,22 @@ mkResolveHandler
   -> Uri
   -> a
   -> LspM Config (Either ResponseError (MessageResult m)))
-  -> PluginResolveHandlers ideState
-mkResolveHandler m f = PluginResolveHandlers $ DMap.singleton (ResolveMethod m) (ResolveHandler f)
+  -> PluginHandlers ideState
+mkResolveHandler m f = mkPluginHandler m f'
+  where f' ideState plId params = do
+          case fromJSON <$> (params ^. L.data_) of
+            (Just (Success (PluginResolveData owner uri value) )) -> do
+              if owner == plId
+              then
+                case fromJSON value of
+                  Success decodedValue -> do
+                    f ideState plId params uri decodedValue
+                  Error err -> do
+                    pure $ Left $ ResponseError (InR ErrorCodes_ParseError) (parseError value err) Nothing
+              else pure $ Left $ ResponseError (InR ErrorCodes_InvalidRequest) invalidRequest Nothing
+            _ -> pure $ Left $ ResponseError (InR ErrorCodes_InvalidRequest) invalidRequest Nothing
+        invalidRequest = "The resolve request incorrectly got routed to the wrong resolve handler!"
+        parseError value err = "Unable to decode: " <> (T.pack $ show value) <> ". Error: " <> (T.pack $ show err)
 
 wrapResolveData :: L.HasData_ a (Maybe Value) => PluginId -> Uri -> a -> a
 wrapResolveData pid uri hasData =
@@ -1080,3 +1080,8 @@ getProcessID = fromIntegral <$> P.getProcessID
 installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 #endif
 
+pluginResolverResponsible :: Maybe Value -> PluginDescriptor c -> Bool
+pluginResolverResponsible (Just (fromJSON -> (Success (PluginResolveData o _ _)))) pluginDesc =
+  pluginId pluginDesc == o
+-- We want to fail closed
+pluginResolverResponsible _ _ = False

@@ -189,12 +189,11 @@ fromStrictMaybe  Strict.Nothing  = Nothing
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-  let (pluginCommands, pluginHandlers, resolveHandlers) = mkCodeActionWithResolveAndCommand plId codeActionProvider (resolveProvider recorder)
+  let (pluginCommands, pluginHandlers) = mkCodeActionWithResolveAndCommand plId codeActionProvider (resolveProvider recorder)
   in (defaultPluginDescriptor plId)
   { pluginRules = rules recorder plId
   , pluginCommands = pluginCommands
   , pluginHandlers = pluginHandlers
-  , pluginResolveHandlers = resolveHandlers
   , pluginConfigDescriptor = defaultConfigDescriptor
       { configHasDiagnostics = True
       , configCustomConfig = mkCustomConfig properties

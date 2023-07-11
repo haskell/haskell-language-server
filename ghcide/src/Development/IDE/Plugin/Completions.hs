@@ -66,7 +66,7 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions recorder
   , pluginHandlers = mkPluginHandler SMethod_TextDocumentCompletion getCompletionsLSP
-  , pluginResolveHandlers = mkResolveHandler SMethod_CompletionItemResolve resolveCompletion
+                     <> mkResolveHandler SMethod_CompletionItemResolve resolveCompletion
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   , pluginPriority = ghcideCompletionsPluginPriority
   }

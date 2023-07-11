@@ -168,10 +168,9 @@ instance FromJSON ORDResolveData
 
 descriptor :: Recorder (WithPriority Log) -> PluginId
                 -> PluginDescriptor IdeState
-descriptor recorder plId = let (pluginHandler, resolveHandler) = mkCodeActionHandlerWithResolve codeActionProvider resolveProvider
+descriptor recorder plId = let pluginHandler = mkCodeActionHandlerWithResolve codeActionProvider resolveProvider
   in (defaultPluginDescriptor plId)
     { pluginHandlers = pluginHandler
-    , pluginResolveHandlers = resolveHandler
     , pluginRules = collectRecSelsRule recorder
     }
 

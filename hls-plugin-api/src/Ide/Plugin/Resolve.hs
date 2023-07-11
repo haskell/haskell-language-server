@@ -37,7 +37,7 @@ mkCodeActionHandlerWithResolve
   :: forall ideState a. (A.FromJSON a) =>
    (ideState -> PluginId -> CodeActionParams -> LspM Config (Either ResponseError ([Command |? CodeAction] |? Null)))
   -> (ideState -> PluginId -> CodeAction -> Uri -> a -> LspM Config (Either ResponseError CodeAction))
-  -> (PluginHandlers ideState, PluginResolveHandlers ideState)
+  -> PluginHandlers ideState
 mkCodeActionHandlerWithResolve codeActionMethod codeResolveMethod =
     let newCodeActionMethod ideState pid params = runExceptT $
             do codeActionReturn <- ExceptT $ codeActionMethod ideState pid params
@@ -50,7 +50,7 @@ mkCodeActionHandlerWithResolve codeActionMethod codeResolveMethod =
                            --This is the actual part where we call resolveCodeAction which fills in the edit data for the client
                          | otherwise -> InL <$> traverse (resolveCodeAction (params ^. L.textDocument . L.uri) ideState pid) ls
     in (mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod
-    , mkResolveHandler SMethod_CodeActionResolve codeResolveMethod)
+    <> mkResolveHandler SMethod_CodeActionResolve codeResolveMethod)
     where
         dropData :: CodeAction -> CodeAction
         dropData ca = ca & L.data_ .~ Nothing
@@ -77,7 +77,7 @@ mkCodeActionWithResolveAndCommand
   PluginId
   -> (ideState -> PluginId -> CodeActionParams -> LspM Config (Either ResponseError ([Command |? CodeAction] |? Null)))
   -> (ideState -> PluginId -> CodeAction -> Uri -> a -> LspM Config (Either ResponseError CodeAction))
-  -> ([PluginCommand ideState], PluginHandlers ideState, PluginResolveHandlers ideState)
+  -> ([PluginCommand ideState], PluginHandlers ideState)
 mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
     let newCodeActionMethod ideState pid params = runExceptT $
             do codeActionReturn <- ExceptT $ codeActionMethod ideState pid params
@@ -91,9 +91,9 @@ mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
                            -- If they do not we will drop the data field, in addition we will populate the command
                            -- field with our command to execute the resolve, with the whole code action as it's argument.
                          | otherwise -> pure $ InL $ moveDataToCommand (params ^. L.textDocument . L.uri) <$> ls
-    in ([PluginCommand "codeActionResolve" "Executes resolve for code action" (executeResolveCmd (codeResolveMethod))],
-    mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod,
-    mkResolveHandler SMethod_CodeActionResolve codeResolveMethod)
+    in ([PluginCommand "codeActionResolve" "Executes resolve for code action" (executeResolveCmd codeResolveMethod)],
+    mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod
+    <> mkResolveHandler SMethod_CodeActionResolve codeResolveMethod)
   where moveDataToCommand :: Uri -> Command |? CodeAction -> Command |? CodeAction
         moveDataToCommand uri ca =
           let dat = A.toJSON . wrapWithURI uri <$> ca ^? _R -- We need to take the whole codeAction
