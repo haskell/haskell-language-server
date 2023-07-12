@@ -19,7 +19,8 @@ module Ide.PluginUtils
     getPluginConfig,
     configForPlugin,
     pluginEnabled,
-    extractRange,
+    extractOverlappingLinesWithRange,
+    extractTextInRange,
     fullRange,
     mkLspCommand,
     mkLspCmdId,
@@ -41,7 +42,7 @@ where
 
 
 import           Control.Arrow                 ((&&&))
-import           Control.Lens                  (re, (^.))
+import           Control.Lens                  (_head, _last, re, (%~), (^.))
 import           Control.Monad.Extra           (maybeM)
 import           Control.Monad.Trans.Class     (lift)
 import           Control.Monad.Trans.Except    (ExceptT, runExceptT, throwE)
@@ -223,10 +224,26 @@ usePropertyLsp kn pId p = do
 
 -- ---------------------------------------------------------------------
 
-extractRange :: Range -> T.Text -> T.Text
-extractRange (Range (Position sl _) (Position el _)) s = newS
+-- | Extracts lines in the text overlapping the given range.
+--
+-- See also: 'extractTextInRange'
+extractOverlappingLinesWithRange :: Range -> T.Text -> T.Text
+extractOverlappingLinesWithRange (Range (Position sl _) (Position el _)) s = newS
   where focusLines = take (fromIntegral $ el-sl+1) $ drop (fromIntegral sl) $ T.lines s
         newS = T.unlines focusLines
+
+-- | Extracts strictly matching text in the range.
+--
+-- See also: 'extractOverlappingLinesWithRange'
+extractTextInRange :: Range -> T.Text -> T.Text
+extractTextInRange (Range (Position sl sc) (Position el ec)) s = newS
+  where focusLines = take (fromIntegral $ el-sl+1) $ drop (fromIntegral sl) $ T.lines s
+        -- NOTE: We have to trim the last line first to handle the single-line case
+        newS = focusLines
+            & _last %~ T.take (fromIntegral ec)
+            & _head %~ T.drop (fromIntegral sc)
+            & T.unlines
+
 
 -- | Gets the range that covers the entire text
 fullRange :: T.Text -> Range
