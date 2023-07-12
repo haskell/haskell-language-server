@@ -99,7 +99,6 @@ import           Language.LSP.VFS                                  (VirtualFile,
 import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 #if MIN_VERSION_ghc(9,2,0)
-import           Debug.Trace                                       (trace)
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
@@ -1475,9 +1474,8 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
         where moduleText = moduleNameText identInfo
 
 suggestNewImport :: DynFlags -> ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
-suggestNewImport df packageExportsMap ps fileContents diag@Diagnostic{_message, ..}
+suggestNewImport df packageExportsMap ps fileContents Diagnostic{_message, ..}
   | msg <- unifySpaces _message
-  , trace ("suggestNew: " <> show diag) True
   , Just thingMissing <- extractNotInScopeName msg
   , qual <- extractQualifiedModuleName msg
   , qual' <-
