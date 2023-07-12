@@ -125,7 +125,7 @@ mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
                     case resolveResult of
                       Right ca2@CodeAction {_edit = Just wedits } | diffCodeActions ca ca2 == ["edit"] -> do
                           _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) (\_ -> pure ())
-                          pure $ Right A.Null
+                          pure $ Right $ InR Null
                       Right ca2@CodeAction {_edit = Just _ }  ->
                         pure $ Left $
                           internalError $
