@@ -35,6 +35,7 @@ library
     , hls-plugin-api               == 2.1.0.0
     , lsp
     , text
+    , transformers
     , unordered-containers
 
   default-language:   Haskell2010
