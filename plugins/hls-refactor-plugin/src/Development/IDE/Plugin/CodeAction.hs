@@ -64,11 +64,11 @@ import           Development.IDE.Plugin.Plugins.ImportUtils
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger                      hiding
-                                                                   (group)
 import           Development.IDE.Types.Options
 import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
+import           Ide.Logger                                        hiding
+                                                                   (group)
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Parser.Annotation                             (TokenLocation (..))
 #endif

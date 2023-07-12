@@ -81,7 +81,7 @@ import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger            (Pretty (pretty),
+import           Ide.Logger            (Pretty (pretty),
                                                           Recorder,
                                                           WithPriority,
                                                           cmapWithPrio)

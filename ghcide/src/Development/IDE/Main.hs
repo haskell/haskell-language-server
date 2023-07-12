@@ -77,7 +77,7 @@ import           Development.IDE.Session                  (SessionLoadingOptions
 import qualified Development.IDE.Session                  as Session
 import           Development.IDE.Types.Location           (NormalizedUri,
                                                            toNormalizedFilePath')
-import           Development.IDE.Types.Logger             (Logger,
+import           Ide.Logger             (Logger,
                                                            Pretty (pretty),
                                                            Priority (Info, Warning),
                                                            Recorder,

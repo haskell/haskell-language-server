@@ -36,7 +36,7 @@ import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageE
                                                            hscEnv)
 import qualified Development.IDE.Types.KnownTargets       as KT
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger             (Pretty (pretty),
+import           Ide.Logger                               (Pretty (pretty),
                                                            Recorder,
                                                            WithPriority,
                                                            cmapWithPrio)

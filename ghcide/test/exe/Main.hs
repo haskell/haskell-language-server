@@ -130,7 +130,7 @@ import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
 import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds),
                                                            WaitForIdeRuleResult (..),
                                                            blockCommandId)
-import           Development.IDE.Types.Logger             (Logger (Logger),
+import           Ide.Logger             (Logger (Logger),
                                                            LoggingColumn (DataColumn, PriorityColumn),
                                                            Pretty (pretty),
                                                            Priority (Debug),

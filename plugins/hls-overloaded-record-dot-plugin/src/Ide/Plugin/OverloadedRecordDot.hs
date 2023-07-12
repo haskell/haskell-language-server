@@ -70,10 +70,10 @@ import           Development.IDE.Graph.Classes        (Hashable, NFData (rnf))
 import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
                                                        getFirstPragma,
                                                        insertNewPragma)
-import           Development.IDE.Types.Logger         (Priority (..),
+import           GHC.Generics                         (Generic)
+import           Ide.Logger                           (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))
-import           GHC.Generics                         (Generic)
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.PluginUtils                      (getNormalizedFilePath,

@@ -27,11 +27,11 @@ import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger          (Pretty (pretty),
-                                                        Recorder, WithPriority,
-                                                        cmapWithPrio)
 import           Development.IDE.Types.Options
 import qualified Focus
+import           Ide.Logger                            (Pretty (pretty),
+                                                        Recorder, WithPriority,
+                                                        cmapWithPrio)
 import           Ide.Plugin.Config                     (Config)
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                   hiding (getVirtualFile)

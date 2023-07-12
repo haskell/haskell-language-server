@@ -153,9 +153,9 @@ import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
 import System.Info.Extra (isWindows)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
-import Development.IDE.Types.Logger (Recorder, logWith, cmapWithPrio, WithPriority, Pretty (pretty), (<+>), nest, vcat)
+import Ide.Logger (Recorder, logWith, cmapWithPrio, WithPriority, Pretty (pretty), (<+>), nest, vcat)
 import qualified Development.IDE.Core.Shake as Shake
-import qualified Development.IDE.Types.Logger as Logger
+import qualified Ide.Logger as Logger
 import qualified Development.IDE.Types.Shake as Shake
 import           Development.IDE.GHC.CoreFile
 import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)

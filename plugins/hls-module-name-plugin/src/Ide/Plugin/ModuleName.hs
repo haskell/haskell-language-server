@@ -51,7 +51,7 @@ import           Development.IDE.GHC.Compat           (GenLocated (L),
                                                        locA, moduleNameString,
                                                        pattern RealSrcSpan,
                                                        pm_parsed_source, unLoc)
-import           Development.IDE.Types.Logger         (Pretty (..))
+import           Ide.Logger                           (Pretty (..))
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types

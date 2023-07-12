@@ -65,13 +65,6 @@ import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
                                                        newHscEnvEqPreserveImportPaths)
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger         (Pretty (pretty),
-                                                       Priority (Debug, Error, Info, Warning),
-                                                       Recorder, WithPriority,
-                                                       cmapWithPrio, logWith,
-                                                       nest,
-                                                       toCologActionWithPrio,
-                                                       vcat, viaShow, (<+>))
 import           Development.IDE.Types.Options
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
@@ -79,6 +72,13 @@ import           HIE.Bios.Environment                 hiding (getCacheDir)
 import           HIE.Bios.Types                       hiding (Log)
 import qualified HIE.Bios.Types                       as HieBios
 import           Hie.Implicit.Cradle                  (loadImplicitHieCradle)
+import           Ide.Logger                           (Pretty (pretty),
+                                                       Priority (Debug, Error, Info, Warning),
+                                                       Recorder, WithPriority,
+                                                       cmapWithPrio, logWith,
+                                                       nest,
+                                                       toCologActionWithPrio,
+                                                       vcat, viaShow, (<+>))
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Server
 import           System.Directory
