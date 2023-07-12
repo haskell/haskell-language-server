@@ -13,7 +13,9 @@ module Development.IDE.Core.Rules(
     -- * Types
     IdeState, GetParsedModule(..), TransitiveDependencies(..),
     Priority(..), GhcSessionIO(..), GetClientSettings(..),
+    HieFileCheck(..),
     -- * Functions
+    checkHieFile,
     priorityTypeCheck,
     priorityGenerateCore,
     priorityFilesOfInterest,
@@ -78,6 +80,7 @@ import           Data.Aeson                                   (Result (Success),
                                                                toJSON)
 import qualified Data.Aeson.Types                             as A
 import qualified Data.Binary                                  as B
+import           Data.Bool                                    (bool)
 import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
@@ -129,7 +132,7 @@ import qualified Development.IDE.Spans.AtPoint                as AtPoint
 import           Development.IDE.Spans.Documentation
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics            as Diag
-import           Development.IDE.Types.HscEnvEq
+import {-# SOURCE #-} Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified GHC.LanguageExtensions                       as LangExt
@@ -172,8 +175,9 @@ data Log
   = LogShake Shake.Log
   | LogReindexingHieFile !NormalizedFilePath
   | LogLoadingHieFile !NormalizedFilePath
-  | LogLoadingHieFileFail !FilePath !SomeException
-  | LogLoadingHieFileSuccess !FilePath
+  | LogMissingHieFile !NormalizedFilePath
+  | LogLoadingHieFileFail !NormalizedFilePath !SomeException
+  | LogLoadingHieFileSuccess !NormalizedFilePath
   | LogTypecheckedFOI !NormalizedFilePath
   deriving Show
 
@@ -184,13 +188,15 @@ instance Pretty Log where
       "Re-indexing hie file for" <+> pretty (fromNormalizedFilePath path)
     LogLoadingHieFile path ->
       "LOADING HIE FILE FOR" <+> pretty (fromNormalizedFilePath path)
+    LogMissingHieFile path ->
+      "MISSING HIE FILE" <+> pretty (fromNormalizedFilePath path)
     LogLoadingHieFileFail path e ->
       nest 2 $
         vcat
-          [ "FAILED LOADING HIE FILE FOR" <+> pretty path
+          [ "FAILED LOADING HIE FILE" <+> pretty (fromNormalizedFilePath path)
           , pretty (displayException e) ]
     LogLoadingHieFileSuccess path ->
-      "SUCCEEDED LOADING HIE FILE FOR" <+> pretty path
+      "SUCCEEDED LOADING HIE FILE" <+> pretty (fromNormalizedFilePath path)
     LogTypecheckedFOI path -> vcat
       [ "Typechecked a file which is not currently open in the editor:" <+> pretty (fromNormalizedFilePath path)
       , "This can indicate a bug which results in excessive memory usage."
@@ -665,14 +671,14 @@ readHieFileForSrcFromDisk :: Recorder (WithPriority Log) -> NormalizedFilePath -
 readHieFileForSrcFromDisk recorder file = do
   ShakeExtras{withHieDb} <- ask
   row <- MaybeT $ liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb $ fromNormalizedFilePath file)
-  let hie_loc = HieDb.hieModuleHieFile row
+  let hie_loc = toNormalizedFilePath' $ HieDb.hieModuleHieFile row
   liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFile file
   exceptToMaybeT $ readHieFileFromDisk recorder hie_loc
 
-readHieFileFromDisk :: Recorder (WithPriority Log) -> FilePath -> ExceptT SomeException IdeAction Compat.HieFile
+readHieFileFromDisk :: Recorder (WithPriority Log) -> NormalizedFilePath -> ExceptT SomeException IdeAction Compat.HieFile
 readHieFileFromDisk recorder hie_loc = do
   nc <- asks ideNc
-  res <- liftIO $ tryAny $ loadHieFile (mkUpdater nc) hie_loc
+  res <- liftIO $ tryAny $ loadHieFile (mkUpdater nc) (fromNormalizedFilePath hie_loc)
   let log = (liftIO .) . logWith recorder
   case res of
     Left e -> log Logger.Debug $ LogLoadingHieFileFail hie_loc e
@@ -854,6 +860,43 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
           let !fp = Just $! hiFileFingerPrint x
           return (fp, (diags, Just x))
 
+data HieFileCheck
+  = HieFileMissing
+  | HieAlreadyIndexed
+  | CouldNotLoadHie SomeException
+  | DoIndexing Util.Fingerprint HieFile
+
+checkHieFile
+  :: Recorder (WithPriority Log)
+  -> ShakeExtras
+  -> String
+  -> NormalizedFilePath
+  -> IO HieFileCheck
+checkHieFile recorder se@ShakeExtras{withHieDb} tag hieFileLocation = do
+  hieFileExists <- doesFileExist $ fromNormalizedFilePath hieFileLocation
+  bool logHieFileMissing checkExistingHieFile hieFileExists
+  where
+    logHieFileMissing :: IO HieFileCheck
+    logHieFileMissing = do
+      let log :: Log
+          log = LogMissingHieFile hieFileLocation
+      logWith recorder Logger.Debug log
+      pure HieFileMissing
+    checkExistingHieFile :: IO HieFileCheck
+    checkExistingHieFile = do
+      hash <- Util.getFileHash $ fromNormalizedFilePath hieFileLocation
+      mrow <- withHieDb (\hieDb -> HieDb.lookupHieFileFromHash hieDb hash)
+      dbHieFileLocation <- traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
+      bool (tryLoadingHieFile hash) (pure HieAlreadyIndexed) $
+        Just hieFileLocation == fmap toNormalizedFilePath' dbHieFileLocation
+    tryLoadingHieFile :: Util.Fingerprint -> IO HieFileCheck
+    tryLoadingHieFile hash = do
+      ehf <- runIdeAction tag se $ runExceptT $
+        readHieFileFromDisk recorder hieFileLocation
+      pure $ case ehf of
+        Left err -> CouldNotLoadHie err
+        Right hf -> DoIndexing hash hf
+
 -- | Check state of hiedb after loading an iface from disk - have we indexed the corresponding `.hie` file?
 -- This function is responsible for ensuring database consistency
 -- Whenever we read a `.hi` file, we must check to ensure we have also
@@ -871,31 +914,20 @@ getModIfaceFromDiskAndIndexRule recorder =
 
   -- GetModIfaceFromDisk should have written a `.hie` file, must check if it matches version in db
   let ms = hirModSummary x
-      hie_loc = Compat.ml_hie_file $ ms_location ms
-  hash <- liftIO $ Util.getFileHash hie_loc
-  mrow <- liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb (fromNormalizedFilePath f))
-  hie_loc' <- liftIO $ traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
-  case mrow of
-    Just row
-      | hash == HieDb.modInfoHash (HieDb.hieModInfo row)
-      && Just hie_loc == hie_loc'
-      -> do
-      -- All good, the db has indexed the file
-      when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
-        LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
-          toJSON $ fromNormalizedFilePath f
-    -- Not in db, must re-index
-    _ -> do
-      ehf <- liftIO $ runIdeAction "GetModIfaceFromDiskAndIndex" se $ runExceptT $
-        readHieFileFromDisk recorder hie_loc
-      case ehf of
-        -- Uh oh, we failed to read the file for some reason, need to regenerate it
-        Left err -> fail $ "failed to read .hie file " ++ show hie_loc ++ ": " ++ displayException err
-        -- can just re-index the file we read from disk
-        Right hf -> liftIO $ do
-          logWith recorder Logger.Debug $ LogReindexingHieFile f
-          indexHieFile se (toNormalizedFilePath' hie_loc) (HieDb.RealFile $ fromNormalizedFilePath f) hash hf
-
+      hie_loc = toNormalizedFilePath' $ Compat.ml_hie_file $ ms_location ms
+      hieFailure :: Maybe SomeException -> Action ()
+      hieFailure mErr = fail $ "failed to read .hie file " ++ show hie_loc ++ ": " ++
+        maybe "Does not exist" displayException mErr
+  hieCheck <- liftIO $ checkHieFile recorder se "GetModIfaceFromDiskAndIndex" hie_loc
+  case hieCheck of
+    HieFileMissing -> hieFailure Nothing
+    HieAlreadyIndexed -> when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
+      LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
+        toJSON $ fromNormalizedFilePath f
+    CouldNotLoadHie err -> hieFailure $ Just err
+    DoIndexing hash hf -> liftIO $ do
+      logWith recorder Logger.Debug $ LogReindexingHieFile f
+      indexHieFile se hie_loc (HieDb.RealFile $ fromNormalizedFilePath f) hash hf
   return (Just x)
 
 newtype DisplayTHWarning = DisplayTHWarning (IO())

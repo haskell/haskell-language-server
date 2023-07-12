@@ -19,7 +19,6 @@ import           Control.Concurrent.STM.TQueue   (unGetTQueue)
 import           Control.Concurrent.Strict       (modifyVar, newVar)
 import           Control.DeepSeq                 (force)
 import           Control.Exception               (evaluate, mask, throwIO)
-import           Control.Exception.Safe          (tryAny)
 import           Control.Monad                   (unless)
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM, void)
 import           Data.Either                     (fromRight)
@@ -27,19 +26,19 @@ import           Data.Foldable                   (traverse_)
 import qualified Data.Map                        as Map
 import           Data.Set                        (Set)
 import qualified Data.Set                        as Set
-import qualified Data.Text                       as T
 import           Data.Unique                     (Unique)
 import qualified Data.Unique                     as Unique
-import           Development.IDE.Core.Compile    (indexHieFile, loadHieFile)
-import           Development.IDE.Core.Shake      (HieDbWriter(indexQueue), ShakeExtras(hiedbWriter, ideNc, logger, lspEnv), mkUpdater)
+import           Development.IDE.Core.Compile    (indexHieFile)
+import           Development.IDE.Core.Rules      (HieFileCheck(..), Log, checkHieFile)
+import           Development.IDE.Core.Shake      (HieDbWriter(indexQueue), ShakeExtras(hiedbWriter, lspEnv))
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util as Maybes
 import           Development.IDE.GHC.Error       (catchSrcErrors)
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
-import           Development.IDE.Types.Location  (toNormalizedFilePath')
-import qualified Development.IDE.Types.Logger    as Logger
+import           Development.IDE.Types.Location  (NormalizedFilePath, toNormalizedFilePath')
+import           Development.IDE.Types.Logger    (Recorder, WithPriority)
 import           HieDb                           (SourceFile(FakeFile), removeDependencySrcFiles)
 import           Language.LSP.Server             (resRootPath)
 import           OpenTelemetry.Eventlog          (withSpan)
@@ -73,8 +72,8 @@ updateHscEnvEq oldHscEnvEq newHscEnv = do
   update <$> Unique.newUnique
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEq :: FilePath -> ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEq cradlePath se hscEnv0 deps = do
+newHscEnvEq :: FilePath -> Recorder (WithPriority Log) -> ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
+newHscEnvEq cradlePath recorder se hscEnv0 deps = do
     let relativeToCradle = (takeDirectory cradlePath </>)
         hscEnv = removeImportPaths hscEnv0
 
@@ -82,10 +81,10 @@ newHscEnvEq cradlePath se hscEnv0 deps = do
     importPathsCanon <-
       mapM makeAbsolute $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
 
-    newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) se hscEnv deps
+    newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) recorder se hscEnv deps
 
-newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
+newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> Recorder (WithPriority Log) -> ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
+newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
 
     indexDependencyHieFiles
 
@@ -150,15 +149,16 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
             traverse_ (indexModuleHieFile hieDir) modIfaces
         indexModuleHieFile :: FilePath -> ModIface -> IO ()
         indexModuleHieFile hieDir modIface = do
-            let hiePath :: FilePath
-                hiePath = hieDir </> toFilePath (moduleName $ mi_module modIface) ++ ".hie"
-            hieResults <- tryAny $ loadHieFile (mkUpdater $ ideNc se) hiePath
-            case hieResults of
-              Left e -> Logger.logDebug (logger se) $
-                  "Failed to index dependency HIE file:\n"
-                  <> T.pack (show e)
-              Right hie ->
-                  indexHieFile se (toNormalizedFilePath' hiePath) (FakeFile Nothing) (mi_src_hash modIface) hie
+            let hiePath :: NormalizedFilePath
+                hiePath = toNormalizedFilePath' $
+                  hieDir </> toFilePath (moduleName $ mi_module modIface) ++ ".hie"
+            hieCheck <- checkHieFile recorder se "newHscEnvEqWithImportPaths" hiePath
+            case hieCheck of
+                HieFileMissing -> return ()
+                HieAlreadyIndexed -> return ()
+                CouldNotLoadHie _e -> return ()
+                DoIndexing hash hie ->
+                    indexHieFile se hiePath (FakeFile Nothing) hash hie
         toFilePath :: ModuleName -> FilePath
         toFilePath = separateDirectories . prettyModuleName
             where
@@ -214,7 +214,7 @@ instance Ord Package where
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
 newHscEnvEqPreserveImportPaths
-    :: ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
+    :: Recorder (WithPriority Log) -> ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEqPreserveImportPaths = newHscEnvEqWithImportPaths Nothing
 
 -- | Unwrap the 'HscEnv' with the original import paths.

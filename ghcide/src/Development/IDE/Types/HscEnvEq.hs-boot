@@ -1,8 +1,16 @@
-module Development.IDE.Types.HscEnvEq (HscEnvEq) where
+module Development.IDE.Types.HscEnvEq
+(   HscEnvEq,
+    hscEnv,
+    hscEnvWithImportPaths,
+    updateHscEnvEq,
+    envImportPaths,
+    deps
+) where
 
 import           Data.Set                        (Set)
 import           Data.Unique                     (Unique)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap)
 
 -- | An 'HscEnv' with equality. Two values are considered equal
@@ -24,3 +32,11 @@ data HscEnvEq = HscEnvEq
         -- So it's wrapped in IO here for error handling
         -- If Nothing, 'listVisibleModuleNames' panic
     }
+
+instance Show HscEnvEq
+instance Hashable HscEnvEq
+instance NFData HscEnvEq
+
+updateHscEnvEq :: HscEnvEq -> HscEnv -> IO HscEnvEq
+
+hscEnvWithImportPaths :: HscEnvEq -> HscEnv

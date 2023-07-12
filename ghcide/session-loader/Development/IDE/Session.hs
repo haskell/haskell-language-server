@@ -48,6 +48,7 @@ import qualified Data.Text                            as T
 import           Data.Time.Clock
 import           Data.Version
 import           Development.IDE.Core.RuleTypes
+import qualified Development.IDE.Core.Rules           as Rules
 import           Development.IDE.Core.Shake           hiding (Log, Priority,
                                                        withHieDb)
 import qualified Development.IDE.GHC.Compat           as Compat
@@ -127,6 +128,7 @@ data Log
   | LogNoneCradleFound FilePath
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
   | LogHieBios HieBios.Log
+  | LogRules Rules.Log
 deriving instance Show Log
 
 instance Pretty Log where
@@ -197,6 +199,7 @@ instance Pretty Log where
     LogNewComponentCache componentCache ->
       "New component cache HscEnvEq:" <+> viaShow componentCache
     LogHieBios log -> pretty log
+    LogRules log -> pretty log
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -824,7 +827,7 @@ newComponentCache recorder extras exts cradlePath cfp hsc_env uids ci = do
 #endif
 
     let newFunc = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
-    henv <- newFunc extras hscEnv' uids
+    henv <- newFunc (cmapWithPrio LogRules recorder) extras hscEnv' uids
     let targetEnv = ([], Just henv)
         targetDepends = componentDependencyInfo ci
         res = (targetEnv, targetDepends)
