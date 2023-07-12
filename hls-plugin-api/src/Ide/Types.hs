@@ -62,7 +62,7 @@ import           System.Posix.Signals
 #endif
 import           Control.Applicative           ((<|>))
 import           Control.Arrow                 ((&&&))
-import           Control.Lens                  (_Just, (.~), (^.), (^?))
+import           Control.Lens                  (_Just, (.~), (?~), (^.), (^?))
 import           Data.Aeson                    hiding (Null, defaultOptions)
 import           Data.Default
 import           Data.Dependent.Map            (DMap)
@@ -912,9 +912,10 @@ mkResolveHandler m f = mkPluginHandler m f'
               if owner == plId
               then
                 case fromJSON value of
-                  Success decodedValue -> do
-                    f ideState plId params uri decodedValue
-                  Error err -> do
+                  Success decodedValue ->
+                    let newParams = params & L.data_ ?~ value
+                    in f ideState plId newParams uri decodedValue
+                  Error err ->
                     pure $ Left $ ResponseError (InR ErrorCodes_ParseError) (parseError value err) Nothing
               else pure $ Left $ ResponseError (InR ErrorCodes_InvalidRequest) invalidRequest Nothing
             _ -> pure $ Left $ ResponseError (InR ErrorCodes_InvalidRequest) invalidRequest Nothing

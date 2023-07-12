@@ -138,7 +138,7 @@ lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {
                    , _command = Nothing }
 
 lensResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState EIResolveData 'Method_CodeLensResolve
-lensResolveProvider _ ideState plId cl@(CodeLens {_data_ = data_}) uri (ResolveOne _ uid)
+lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid)
   = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
     (MinimalImportsResult{forResolve}) <-
@@ -151,8 +151,7 @@ lensResolveProvider _ ideState plId cl@(CodeLens {_data_ = data_}) uri (ResolveO
   where mkCommand ::  PluginId -> TextEdit -> Command
         mkCommand pId TextEdit{_newText} =
           let title = abbreviateImportTitle _newText
-              _arguments = pure <$> data_
-          in mkLspCommand pId importCommandId title _arguments
+          in mkLspCommand pId importCommandId title (Just $ [A.toJSON rd])
 lensResolveProvider _ _ _ _ _ (ResolveAll _) = do
    pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexpected argument for lens resolve handler: ResolveAll" Nothing
 

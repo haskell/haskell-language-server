@@ -144,8 +144,6 @@ import           GHC.Generics                                       (Generic)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 #endif
-import           Data.Aeson                                         (Result (Error, Success),
-                                                                     fromJSON)
 import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
