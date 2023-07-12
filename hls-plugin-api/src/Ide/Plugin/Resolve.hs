@@ -15,6 +15,7 @@ import           Control.Monad.Trans.Class     (MonadTrans (lift))
 import           Control.Monad.Trans.Except    (ExceptT (..), runExceptT,
                                                 throwE)
 import qualified Data.Aeson                    as A
+import           Data.Maybe                    (catMaybes)
 import           Data.Row                      ((.!))
 import qualified Data.Text                     as T
 import           GHC.Generics                  (Generic)
@@ -67,11 +68,13 @@ mkCodeActionHandlerWithResolve codeActionMethod codeResolveMethod =
                   _ -> throwE $ invalidParamsError "Returned CodeAction has no data field"
         resolveCodeAction _ _ _ (InR CodeAction{_data_=Nothing}) = throwE $ invalidParamsError "CodeAction has no data field"
 
--- |When provided with both a codeAction provider that includes both a command
--- and a data field and a resolve provider, this function creates a handler that
--- defaults to using your command if the client doesn't have code action resolve
--- support. This means you don't have to check whether the client supports resolve
--- and act accordingly in your own providers.
+-- |When provided with both a codeAction provider with a data field and a resolve
+--  provider, this function creates a handler that creates a command that uses
+-- your resolve if the client doesn't have code action resolve support. This means
+-- you don't have to check whether the client supports resolve and act
+-- accordingly in your own providers. see Note [Code action resolve fallback to commands]
+-- Also: This helper only works with workspace edits, not commands. Any command set
+-- either in the original code action or in the resolve will be ignored.
 mkCodeActionWithResolveAndCommand
   :: forall ideState a. (A.FromJSON a) =>
   PluginId
@@ -98,7 +101,9 @@ mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
         moveDataToCommand uri ca =
           let dat = A.toJSON . wrapWithURI uri <$> ca ^? _R -- We need to take the whole codeAction
               -- And put it in the argument for the Command, that way we can later
-              -- pas it to the resolve handler (which expects a whole code action)
+              -- pass it to the resolve handler (which expects a whole code action)
+              -- It should be noted that mkLspCommand already specifies the command
+              -- to the plugin, so we don't need to do that here.
               cmd = mkLspCommand plId (CommandId "codeActionResolve") "Execute Code Action" (pure <$> dat)
           in ca
               & _R . L.data_ .~ Nothing -- Set the data field to nothing
@@ -109,7 +114,7 @@ mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
           where data_ = codeAction ^? L.data_ . _Just
         executeResolveCmd :: (ideState -> PluginId -> CodeAction -> Uri -> a -> LspM Config (Either ResponseError CodeAction))-> CommandFunction ideState CodeAction
         executeResolveCmd resolveProvider ideState ca@CodeAction{_data_=Just value} =  do
-          withIndefiniteProgress "Executing code action..." Cancellable $ do
+          withIndefiniteProgress "Applying edits for code action..." Cancellable $ do
             case A.fromJSON value of
               A.Error err -> pure $ Left $ parseError (Just value) (T.pack err)
               A.Success (WithURI uri innerValue) -> do
@@ -118,13 +123,32 @@ mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
                   A.Success innerValueDecoded -> do
                     resolveResult <- resolveProvider ideState plId ca uri innerValueDecoded
                     case resolveResult of
-                      Right CodeAction {_edit = Just wedits } -> do
+                      Right ca2@CodeAction {_edit = Just wedits } | diffCodeActions ca ca2 == ["edit"] -> do
                           _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) (\_ -> pure ())
                           pure $ Right A.Null
-                      Right _ -> pure $ Left $ invalidParamsError "Returned CodeAction has no data field"
+                      Right ca2@CodeAction {_edit = Just _ }  ->
+                        pure $ Left $
+                          internalError $
+                            "The resolve provider unexpectedly returned a code action with the following differing fields: "
+                            <> (T.pack $ show $  diffCodeActions ca ca2)
+                      Right _ -> pure $ Left $ internalError "The resolve provider unexpectedly returned a result with no data field"
                       Left err -> pure $ Left err
-        executeResolveCmd _ _ CodeAction{_data_= value} = pure $ Left $ invalidParamsError ("CodeAction data field empty: " <> (T.pack $ show value))
+        executeResolveCmd _ _ CodeAction{_data_= value} = pure $ Left $ invalidParamsError ("The code action to resolve has an illegal data field: " <> (T.pack $ show value))
 
+
+-- TODO: Remove once provided by lsp-types
+-- |Compares two CodeActions and returns a list of fields that are not equal
+diffCodeActions :: CodeAction -> CodeAction -> [T.Text]
+diffCodeActions ca ca2 =
+  let titleDiff = if ca ^. L.title == ca2 ^. L.title then Nothing else Just "title"
+      kindDiff = if ca ^. L.kind == ca2 ^. L.kind then Nothing else Just "kind"
+      diagnosticsDiff = if ca ^. L.diagnostics == ca2 ^. L.diagnostics then Nothing else Just "diagnostics"
+      commandDiff = if ca ^. L.command == ca2 ^. L.command then Nothing else Just "diagnostics"
+      isPreferredDiff = if ca ^. L.isPreferred == ca2 ^. L.isPreferred then Nothing else Just "isPreferred"
+      dataDiff = if ca ^. L.data_ == ca2 ^. L.data_ then Nothing else Just "data"
+      disabledDiff = if ca ^. L.disabled == ca2 ^. L.disabled then Nothing else Just "disabled"
+      editDiff = if ca ^. L.edit == ca2 ^. L.edit then Nothing else Just "edit"
+  in catMaybes [titleDiff, kindDiff, diagnosticsDiff, commandDiff, isPreferredDiff, dataDiff, disabledDiff, editDiff]
 
 -- |To execute the resolve provider as a command, we need to additionally store
 -- the URI that was provided to the original code action.
@@ -142,8 +166,22 @@ supportsCodeActionResolve caps =
         Just row -> "edit" `elem` row .! #properties
         _        -> False
 
+internalError :: T.Text -> ResponseError
+internalError msg = ResponseError (InR ErrorCodes_InternalError) ("Ide.Plugin.Resolve: Internal Error : " <> msg) Nothing
+
 invalidParamsError :: T.Text -> ResponseError
-invalidParamsError msg = ResponseError (InR ErrorCodes_InternalError) ("Ide.Plugin.Resolve: " <> msg) Nothing
+invalidParamsError msg = ResponseError (InR ErrorCodes_InvalidParams) ("Ide.Plugin.Resolve: : " <> msg) Nothing
 
 parseError :: Maybe A.Value -> T.Text -> ResponseError
-parseError value errMsg = ResponseError (InR ErrorCodes_InternalError) ("Ide.Plugin.Resolve: Error parsing value:"<> (T.pack $ show value) <> " Error: "<> errMsg) Nothing
+parseError value errMsg = ResponseError (InR ErrorCodes_ParseError) ("Ide.Plugin.Resolve: Error parsing value:"<> (T.pack $ show value) <> " Error: "<> errMsg) Nothing
+
+{- Note [Code action resolve fallback to commands]
+  To make supporting code action resolve easy for plugins, we want to let them
+  provide one implementation that can be used both when clients support
+  resolve, and when they don't.
+  The way we do this is to have them always implement a resolve handler.
+  Then, if the client doesn't support resolve, we instead install the resolve
+  handler as a _command_ handler, passing the code action literal itself
+  as the command argument. This allows the command handler to have
+  the same interface as the resolve handler!
+  -}
