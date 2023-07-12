@@ -43,9 +43,9 @@ import           Language.LSP.Protocol.Types              hiding
 import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
-import           System.Info.Extra                        (isMac, isWindows)
-import qualified System.IO.Extra
 import           System.IO.Extra                          hiding (withTempDir)
+import qualified System.IO.Extra
+import           System.Info.Extra                        (isMac, isWindows)
 import           System.Time.Extra
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
@@ -1670,10 +1670,11 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = empty"                   []                "import Control.Applicative (empty)"
     , test True []          "f = empty"                   []                "import Control.Applicative"
     , test True []          "f = (&)"                     []                "import Data.Function ((&))"
-    , ignoreForGHC94 "On GHC 9.4 the error message doesn't contain the qualified module name: https://gitlab.haskell.org/ghc/ghc/-/issues/20472"
-      $ test True []          "f = NE.nonEmpty"             []                "import qualified Data.List.NonEmpty as NE"
-    , ignoreForGHC94 "On GHC 9.4 the error message doesn't contain the qualified module name: https://gitlab.haskell.org/ghc/ghc/-/issues/20472"
-      $ test True []          "f = Data.List.NonEmpty.nonEmpty" []            "import qualified Data.List.NonEmpty"
+    , test True []          "f = NE.nonEmpty"             []                "import qualified Data.List.NonEmpty as NE"
+    , test True []          "f = (NE.:|)"             []                "import qualified Data.List.NonEmpty as NE"
+    , test True []          "f = (Data.List.NonEmpty.:|)" []            "import qualified Data.List.NonEmpty"
+    , test True []          "f = (B..|.)"             []                "import qualified Data.Bits as B"
+    , test True []          "f = (Data.Bits..|.)" []            "import qualified Data.Bits"
     , test True []          "f :: Typeable a => a"        ["f = undefined"] "import Data.Typeable (Typeable)"
     , test True []          "f = pack"                    []                "import Data.Text (pack)"
     , test True []          "f :: Text"                   ["f = undefined"] "import Data.Text (Text)"
@@ -1682,17 +1683,14 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits((.|.)))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits ((.|.))"
     , test True []          "f :: a ~~ b"                 []                "import Data.Type.Equality ((~~))"
-    , ignoreForGHC94 "On GHC 9.4 the error message doesn't contain the qualified module name: https://gitlab.haskell.org/ghc/ghc/-/issues/20472"
-      $ test True
+    , test True
       ["qualified Data.Text as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
-    , ignoreForGHC94 "On GHC 9.4 the error message doesn't contain the qualified module name: https://gitlab.haskell.org/ghc/ghc/-/issues/20472"
-      $ test True
+    , test True
       [ "qualified Data.Text as T"
       , "qualified Data.Function as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
-    , ignoreForGHC94 "On GHC 9.4 the error message doesn't contain the qualified module name: https://gitlab.haskell.org/ghc/ghc/-/issues/20472"
-      $ test True
+    , test True
       [ "qualified Data.Text as T"
       , "qualified Data.Function as T"
       , "qualified Data.Functor as T"

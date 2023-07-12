@@ -38,8 +38,8 @@ import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
 import qualified Data.Text.Utf16.Rope                              as Rope
-import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake                        hiding (Log)
 import           Development.IDE.GHC.Compat                        hiding
@@ -72,7 +72,8 @@ import qualified GHC.LanguageExtensions                            as Lang
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Parser.Annotation                             (TokenLocation (..))
 #endif
-import           Ide.PluginUtils                                   (subRange)
+import           Ide.PluginUtils                                   (extractTextInRange,
+                                                                    subRange)
 import           Ide.Types
 import           Language.LSP.Protocol.Message                     (ResponseError,
                                                                     SMethod (..))
@@ -98,6 +99,7 @@ import           Language.LSP.VFS                                  (VirtualFile,
 import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 #if MIN_VERSION_ghc(9,2,0)
+import           Debug.Trace                                       (trace)
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
@@ -1473,8 +1475,9 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
         where moduleText = moduleNameText identInfo
 
 suggestNewImport :: DynFlags -> ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
-suggestNewImport df packageExportsMap ps fileContents Diagnostic{_message}
+suggestNewImport df packageExportsMap ps fileContents diag@Diagnostic{_message, ..}
   | msg <- unifySpaces _message
+  , trace ("suggestNew: " <> show diag) True
   , Just thingMissing <- extractNotInScopeName msg
   , qual <- extractQualifiedModuleName msg
   , qual' <-
@@ -1482,16 +1485,45 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{_message}
         >>= (findImportDeclByModuleName hsmodImports . T.unpack)
         >>= ideclAs . unLoc
         <&> T.pack . moduleNameString . unLoc
+  , -- tentative workaround for detecting qualification in GHC 9.4
+    -- FIXME: We can delete this after dropping the support for GHC 9.4
+    qualGHC94 <-
+        guard (ghcVersion == GHC94)
+            *> extractQualifiedModuleNameFromMissingName (extractTextInRange _range fileContents)
   , Just (range, indent) <- newImportInsertRange ps fileContents
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
   = let qis = qualifiedImportStyle df
+        -- FIXME: we can use thingMissing once the support for GHC 9.4 is dropped.
+        missing
+            | GHC94 <- ghcVersion
+            , isNothing (qual <|> qual')
+            , Just q <- qualGHC94 =
+                mapNotInScope ((q <> ".") <>) thingMissing
+            | otherwise = thingMissing
         suggestions = nubSortBy simpleCompareImportSuggestion
-          (constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions qis) in
+          (constructNewImportSuggestions packageExportsMap (qual <|> qual' <|> qualGHC94, missing) extendImportSuggestions qis) in
     map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
     L _ HsModule {..} = astA ps
 suggestNewImport _ _ _ _ _ = []
+
+-- tentative workaround for detecting qualification in GHC 9.4
+-- FIXME: We can delete this after dropping the support for GHC 9.4
+extractQualifiedModuleNameFromMissingName :: T.Text -> Maybe T.Text
+extractQualifiedModuleNameFromMissingName (T.strip -> missing)
+    | -- Case 1: parenthesized operator
+        Just (nam : _) <-
+            matchRegexUnifySpaces missing
+                "\\`\\(([A-Z][A-Za-z0-9_]*(\\.[A-Z][A-Za-z0-9_]*)*)\\..+\\)\\'"
+        = Just nam
+    | -- Case 2: alphabetic name without parens
+        Just (nam : _) <-
+            matchRegexUnifySpaces missing
+                "\\`([A-Z][A-Za-z0-9_]*(\\.[A-Z][A-Za-z0-9_]*)*)\\..+\\'"
+        = Just nam
+    | otherwise = Nothing
+
 
 constructNewImportSuggestions
   :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> QualifiedImportStyle -> [ImportSuggestion]
@@ -1739,6 +1771,11 @@ data NotInScope
     | NotInScopeTypeConstructorOrClass T.Text
     | NotInScopeThing T.Text
     deriving Show
+
+mapNotInScope :: (T.Text -> T.Text) -> NotInScope -> NotInScope
+mapNotInScope f (NotInScopeDataConstructor d) = NotInScopeDataConstructor (f d)
+mapNotInScope f (NotInScopeTypeConstructorOrClass d) = NotInScopeTypeConstructorOrClass (f d)
+mapNotInScope f (NotInScopeThing d) = NotInScopeThing (f d)
 
 notInScope :: NotInScope -> T.Text
 notInScope (NotInScopeDataConstructor t)        = t
