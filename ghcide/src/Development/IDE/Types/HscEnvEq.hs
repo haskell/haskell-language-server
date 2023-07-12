@@ -30,7 +30,7 @@ import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
 import           Data.Unique                     (Unique)
 import qualified Data.Unique                     as Unique
-import           Development.IDE.Core.Compile    (HieDbModuleQuery(HieDbModuleQuery), indexHieFile, loadHieFile)
+import           Development.IDE.Core.Compile    (indexHieFile, loadHieFile)
 import           Development.IDE.Core.Shake      (HieDbWriter(indexQueue), ShakeExtras(hiedbWriter, ideNc, logger, lspEnv), mkUpdater)
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util as Maybes
@@ -146,25 +146,19 @@ newHscEnvEqWithImportPaths envImportPaths se hscEnv deps = do
                   (libraryDir : _) -> libraryDir
                 hieDir :: FilePath
                 hieDir = pkgLibDir </> "extra-compilation-artifacts"
-                packageUnit :: Unit
-                packageUnit = mkUnit package
             modIfaces <- mapMaybeM loadModIface modules
-            traverse_ (indexModuleHieFile hieDir packageUnit) modIfaces
-        indexModuleHieFile :: FilePath -> Unit -> ModIface -> IO ()
-        indexModuleHieFile hieDir packageUnit modIface = do
-            let modName :: ModuleName
-                modName = moduleName $ mi_module modIface
-                hiePath :: FilePath
-                hiePath = hieDir </> toFilePath modName ++ ".hie"
-                query :: HieDbModuleQuery
-                query = HieDbModuleQuery modName packageUnit
+            traverse_ (indexModuleHieFile hieDir) modIfaces
+        indexModuleHieFile :: FilePath -> ModIface -> IO ()
+        indexModuleHieFile hieDir modIface = do
+            let hiePath :: FilePath
+                hiePath = hieDir </> toFilePath (moduleName $ mi_module modIface) ++ ".hie"
             hieResults <- tryAny $ loadHieFile (mkUpdater $ ideNc se) hiePath
             case hieResults of
               Left e -> Logger.logDebug (logger se) $
                   "Failed to index dependency HIE file:\n"
                   <> T.pack (show e)
               Right hie ->
-                  indexHieFile se query (toNormalizedFilePath' hiePath) (FakeFile Nothing) (mi_src_hash modIface) hie
+                  indexHieFile se (toNormalizedFilePath' hiePath) (FakeFile Nothing) (mi_src_hash modIface) hie
         toFilePath :: ModuleName -> FilePath
         toFilePath = separateDirectories . prettyModuleName
             where

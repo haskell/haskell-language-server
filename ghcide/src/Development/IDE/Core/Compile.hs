@@ -21,7 +21,6 @@ module Development.IDE.Core.Compile
   , generateByteCode
   , generateHieAsts
   , writeAndIndexHieFile
-  , HieDbModuleQuery(..)
   , indexHieFile
   , writeHiFile
   , getModSummaryFromImports
@@ -860,10 +859,6 @@ spliceExpressions Splices{..} =
         , DL.fromList $ map fst awSplices
         ]
 
-data HieDbModuleQuery
-  = HieDbModuleQuery ModuleName Unit
-  | DontCheckForModule
-
 -- | In addition to indexing the `.hie` file, this function is responsible for
 -- maintaining the 'IndexQueue' state and notifying the user about indexing
 -- progress.
@@ -892,14 +887,16 @@ data HieDbModuleQuery
 -- TVar to 0 in order to set it up for a fresh indexing session. Otherwise, we
 -- can just increment the 'indexCompleted' TVar and exit.
 --
-indexHieFile :: ShakeExtras -> HieDbModuleQuery -> NormalizedFilePath -> HieDb.SourceFile -> Util.Fingerprint -> Compat.HieFile -> IO ()
-indexHieFile se query hiePath sourceFile !hash hf = do
+indexHieFile :: ShakeExtras -> NormalizedFilePath -> HieDb.SourceFile -> Util.Fingerprint -> Compat.HieFile -> IO ()
+indexHieFile se hiePath sourceFile !hash hf = do
  IdeOptions{optProgressStyle} <- getIdeOptionsIO se
  atomically $ do
   pending <- readTVar indexPending
   case HashMap.lookup hiePath pending of
     Just pendingHash | pendingHash == hash -> pure () -- An index is already scheduled
     _ -> do
+      -- hiedb doesn't use the Haskell src, so we clear it to avoid unnecessarily keeping it around
+      let !hf' = hf{hie_hs_src = mempty}
       modifyTVar' indexPending $ HashMap.insert hiePath hash
       writeTQueue indexQueue $ \withHieDb -> do
         -- We are now in the worker thread
@@ -914,24 +911,8 @@ indexHieFile se query hiePath sourceFile !hash hf = do
           -- Using bracket, so even if an exception happen during withHieDb call,
           -- the `post` (which clean the progress indicator) will still be called.
           bracket_ (pre optProgressStyle) post $
-            withHieDb indexIfNotAlready
+            withHieDb (\db -> HieDb.addRefsFromLoaded db (fromNormalizedFilePath hiePath) sourceFile hash hf')
   where
-    -- hiedb doesn't use the Haskell src, so we clear it to avoid unnecessarily keeping it around
-    hf' :: Compat.HieFile
-    !hf' = hf{hie_hs_src = mempty}
-    indexIfNotAlready :: HieDb -> IO ()
-    indexIfNotAlready db = case query of
-      DontCheckForModule -> doIndexing
-      HieDbModuleQuery moduleName unit -> do
-        mRow <- HieDb.lookupHieFile db moduleName unit
-        case mRow of
-          Nothing -> doIndexing
-          Just _row -> return ()
-      where
-        doIndexing :: IO ()
-        doIndexing =
-          HieDb.addRefsFromLoaded db (fromNormalizedFilePath hiePath) sourceFile hash hf'
-
     HieDbWriter{..} = hiedbWriter se
 
     -- Get a progress token to report progress and update it for the current file
@@ -1024,7 +1005,7 @@ writeAndIndexHieFile hscEnv se mod_summary srcPath exports ast source =
       GHC.mkHieFile' mod_summary exports ast source
     atomicFileWrite se targetPath $ flip GHC.writeHieFile hf
     hash <- Util.getFileHash targetPath
-    indexHieFile se DontCheckForModule (toNormalizedFilePath' targetPath) (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf
+    indexHieFile se (toNormalizedFilePath' targetPath) (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf
   where
     dflags       = hsc_dflags hscEnv
     mod_location = ms_location mod_summary
