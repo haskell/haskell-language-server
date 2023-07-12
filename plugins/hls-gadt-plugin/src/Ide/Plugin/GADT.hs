@@ -12,8 +12,7 @@ import           Control.Lens                  ((^.))
 import           Control.Monad.Except
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
-import           Data.Aeson                    (FromJSON, ToJSON, Value (Null),
-                                                toJSON)
+import           Data.Aeson                    (FromJSON, ToJSON, Value, toJSON)
 import           Data.Either.Extra             (maybeToEither)
 import qualified Data.Map                      as Map
 import qualified Data.Text                     as T
@@ -29,7 +28,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types   hiding (Null)
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server           (sendRequest)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -72,7 +71,7 @@ toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = pluginResponse $ do
             (ApplyWorkspaceEditParams Nothing (workSpaceEdit nfp (TextEdit range txt : insertEdit)))
             (\_ -> pure ())
 
-    pure Null
+    pure $ InR Null
     where
         workSpaceEdit nfp edits = WorkspaceEdit
             (pure $ Map.fromList

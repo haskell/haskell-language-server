@@ -882,7 +882,7 @@ data PluginCommand ideState = forall a. (FromJSON a) =>
 type CommandFunction ideState a
   = ideState
   -> a
-  -> LspM Config (Either ResponseError Value)
+  -> LspM Config (Either ResponseError (Value |? Null))
 
 -- ---------------------------------------------------------------------
 
