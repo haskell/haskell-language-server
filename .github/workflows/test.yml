@@ -41,6 +41,7 @@ jobs:
                          , "**/stack*.yaml"
                          , ".gitlab-ci.yaml"
                          , ".gitlab/**"
+                         , "CODEOWNERS"
                          ]'
       # If we only change ghcide downstream packages we have not test ghcide itself
       - id: skip_ghcide_check
