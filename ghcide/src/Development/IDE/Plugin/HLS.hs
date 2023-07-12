@@ -51,15 +51,19 @@ import           UnliftIO.Exception            (catchAny)
 --
 
 data Log
-    = LogPluginError PluginId ResponseError
+    =  LogPluginError PluginId ResponseError
     | LogNoPluginForMethod (Some SMethod)
     | LogInvalidCommandIdentifier
+    | ExceptionInPlugin PluginId (Some SMethod) SomeException
+
 instance Pretty Log where
   pretty = \case
     LogPluginError (PluginId pId) err -> pretty pId <> ":" <+> prettyResponseError err
     LogNoPluginForMethod (Some method) ->
         "No plugin enabled for " <> pretty (show method)
     LogInvalidCommandIdentifier-> "Invalid command identifier"
+    ExceptionInPlugin plId (Some method) exception ->
+        "Exception in plugin " <> viaShow plId <> " while processing "<> viaShow method <> ": " <> viaShow exception
 
 instance Show Log where show = renderString . layoutCompact . pretty
 
@@ -92,11 +96,22 @@ failedToParseArgs (CommandId com) (PluginId pid) err arg =
     "Error while parsing args for " <> com <> " in plugin " <> pid <> ": "
         <> T.pack err <> ", arg = " <> T.pack (show arg)
 
+exceptionInPlugin :: PluginId -> SMethod m -> SomeException -> Text
+exceptionInPlugin plId method exception =
+    "Exception in plugin " <> T.pack (show plId) <> " while processing "<> T.pack (show method) <> ": " <> T.pack (show exception)
+
 -- | Build a ResponseError and log it before returning to the caller
 logAndReturnError :: Recorder (WithPriority Log) -> PluginId -> (LSPErrorCodes |? ErrorCodes) -> Text -> LSP.LspT Config IO (Either ResponseError a)
 logAndReturnError recorder p errCode msg = do
     let err = ResponseError errCode msg Nothing
     logWith recorder Warning $ LogPluginError p err
+    pure $ Left err
+
+-- | Logs the provider error before returning it to the caller
+logAndReturnError' :: Recorder (WithPriority Log) -> (LSPErrorCodes |? ErrorCodes) -> Log -> LSP.LspT Config IO (Either ResponseError a)
+logAndReturnError' recorder errCode msg = do
+    let err = ResponseError errCode (fromString $ show msg) Nothing
+    logWith recorder Warning $ msg
     pure $ Left err
 
 -- | Map a set of plugins to the underlying ghcide engine.
@@ -177,9 +192,9 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
                 -- If we have a command, continue to execute it
                 Just (Command _ innerCmdId innerArgs)
                     -> execCmd ide (ExecuteCommandParams Nothing innerCmdId innerArgs)
-                Nothing -> return $ Right $ InL A.Null
+                Nothing -> return $ Right $ InR Null
 
-            A.Error _str -> return $ Right $ InL A.Null
+            A.Error _str -> return $ Right $ InR Null
 
         -- Just an ordinary HIE command
         Just (plugin, cmd) -> runPluginCommand ide plugin cmd cmdParams
@@ -197,7 +212,9 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
           Nothing -> logAndReturnError recorder p (InR ErrorCodes_InvalidRequest) (commandDoesntExist com p xs)
           Just (PluginCommand _ _ f) -> case A.fromJSON arg of
             A.Error err -> logAndReturnError recorder p (InR ErrorCodes_InvalidParams) (failedToParseArgs com p err arg)
-            A.Success a -> fmap InL <$> f ide a
+            A.Success a ->
+                f ide a `catchAny` -- See Note [Exception handling in plugins]
+                (\e -> logAndReturnError' recorder (InR ErrorCodes_InternalError) (ExceptionInPlugin p (Some SMethod_WorkspaceApplyEdit) e))
 
 -- ---------------------------------------------------------------------
 
@@ -225,9 +242,8 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
                 msg = pluginNotEnabled m fs'
             return $ Left err
           Just fs -> do
-            let msg e pid = "Exception in plugin " <> T.pack (show pid) <> " while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
-                handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
-            es <- runConcurrently msg (show m) handlers ide params
+            let  handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
+            es <- runConcurrently exceptionInPlugin m handlers ide params
 
             let (errs,succs) = partitionEithers $ toList $ join $ NE.zipWith (\(pId,_) -> fmap (first (pId,))) handlers es
             unless (null errs) $ forM_ errs $ \(pId, err) ->
@@ -261,22 +277,25 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
           Just fs -> do
             -- We run the notifications in order, so the core ghcide provider
             -- (which restarts the shake process) hopefully comes last
-            mapM_ (\(pid,_,f) -> otTracedProvider pid (fromString $ show m) $ f ide vfs params) fs
+            mapM_ (\(pid,_,f) -> otTracedProvider pid (fromString $ show m) $ f ide vfs params
+                                    `catchAny` -- See Note [Exception handling in plugins]
+                                    (\e -> logWith recorder Warning (ExceptionInPlugin pid (Some m) e))) fs
+
 
 -- ---------------------------------------------------------------------
 
 runConcurrently
   :: MonadUnliftIO m
-  => (SomeException -> PluginId -> T.Text)
-  -> String -- ^ label
+  => (PluginId -> SMethod method -> SomeException -> T.Text)
+  -> SMethod method -- ^ Method (used for errors and tracing)
   -> NonEmpty (PluginId, a -> b -> m (NonEmpty (Either ResponseError d)))
   -- ^ Enabled plugin actions that we are allowed to run
   -> a
   -> b
   -> m (NonEmpty(NonEmpty (Either ResponseError d)))
-runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString method) $ do
-  f a b
-     `catchAny` (\e -> pure $ pure $ Left $ ResponseError (InR ErrorCodes_InternalError) (msg e pid) Nothing)
+runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString (show method)) $ do
+  f a b  -- See Note [Exception handling in plugins]
+     `catchAny` (\e -> pure $ pure $ Left $ ResponseError (InR ErrorCodes_InternalError) (msg pid method e) Nothing)
 
 combineErrors :: [ResponseError] -> ResponseError
 combineErrors [x] = x
@@ -308,3 +327,16 @@ instance Semigroup IdeNotificationHandlers where
       go _ (IdeNotificationHandler a) (IdeNotificationHandler b) = IdeNotificationHandler (a <> b)
 instance Monoid IdeNotificationHandlers where
   mempty = IdeNotificationHandlers mempty
+
+{- Note [Exception handling in plugins]
+Plugins run in LspM, and so have access to IO. This means they are likely to
+throw exceptions, even if only by accident or through calling libraries that
+throw exceptions. Ultimately, we're running a bunch of less-trusted IO code,
+so we should be robust to it throwing.
+
+We don't want these to bring down HLS. So we catch and log exceptions wherever
+we run a handler defined in a plugin.
+
+The flip side of this is that it's okay for plugins to throw exceptions as a
+way of signalling failure!
+-}

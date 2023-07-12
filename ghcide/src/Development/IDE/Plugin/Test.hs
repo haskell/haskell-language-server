@@ -16,8 +16,9 @@ import           Control.Concurrent                   (threadDelay)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
-import           Data.Aeson
-import           Data.Aeson.Types
+import           Data.Aeson                           (FromJSON (parseJSON),
+                                                       ToJSON (toJSON), Value)
+import qualified Data.Aeson.Types                     as A
 import           Data.Bifunctor
 import           Data.CaseInsensitive                 (CI, original)
 import qualified Data.HashMap.Strict                  as HM
@@ -46,7 +47,7 @@ import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Config                    (CheckParents)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types          hiding (Null)
+import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server                  as LSP
 import qualified "list-t" ListT
 import qualified StmContainers.Map                    as STM
@@ -80,7 +81,7 @@ plugin = (defaultPluginDescriptor "test") {
     }
   where
       testRequestHandler' ide req
-        | Just customReq <- parseMaybe parseJSON req
+        | Just customReq <- A.parseMaybe parseJSON req
         = testRequestHandler ide customReq
         | otherwise
         = return $ Left
@@ -94,7 +95,7 @@ testRequestHandler _ (BlockSeconds secs) = do
     LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/request")) $
       toJSON secs
     liftIO $ sleep secs
-    return (Right Null)
+    return (Right A.Null)
 testRequestHandler s (GetInterfaceFilesDir file) = liftIO $ do
     let nfp = fromUri $ toNormalizedUri file
     sess <- runAction "Test - GhcSession" s $ use_ GhcSession nfp
@@ -107,7 +108,7 @@ testRequestHandler s WaitForShakeQueue = liftIO $ do
     atomically $ do
         n <- countQueue $ actionQueue $ shakeExtras s
         when (n>0) retry
-    return $ Right Null
+    return $ Right A.Null
 testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
     let nfp = fromUri $ toNormalizedUri file
     success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) nfp
@@ -172,6 +173,6 @@ blockCommandDescriptor plId = (defaultPluginDescriptor plId) {
 
 blockCommandHandler :: CommandFunction state ExecuteCommandParams
 blockCommandHandler _ideState _params = do
-  LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/command")) Null
+  LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/command")) A.Null
   liftIO $ threadDelay maxBound
-  return (Right Null)
+  return (Right $ InR Null)

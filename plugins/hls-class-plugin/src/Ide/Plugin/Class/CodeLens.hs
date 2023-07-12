@@ -7,7 +7,7 @@ module Ide.Plugin.Class.CodeLens where
 
 import           Control.Lens                         ((^.))
 import           Control.Monad.IO.Class               (liftIO)
-import           Data.Aeson
+import           Data.Aeson                           hiding (Null)
 import           Data.Maybe                           (mapMaybe, maybeToList)
 import qualified Data.Text                            as T
 import           Development.IDE
@@ -21,7 +21,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types          hiding (Null)
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                  (sendRequest)
 
 codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
@@ -143,4 +143,4 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
 codeLensCommandHandler :: CommandFunction IdeState WorkspaceEdit
 codeLensCommandHandler _ wedit = do
   _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right Null
+  return $ Right $ InR Null

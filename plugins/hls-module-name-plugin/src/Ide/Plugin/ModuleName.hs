@@ -21,7 +21,7 @@ import           Control.Monad                        (forM_, void)
 import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                           (Value (Null), toJSON)
+import           Data.Aeson                           (Value, toJSON)
 import           Data.Char                            (isLower)
 import           Data.List                            (intercalate, isPrefixOf,
                                                        minimumBy)
@@ -54,7 +54,7 @@ import           Development.IDE.GHC.Compat           (GenLocated (L),
 import           Development.IDE.Types.Logger         (Pretty (..))
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types          hiding (Null)
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
 import           Language.LSP.VFS                     (virtualFileText)
 import           System.Directory                     (makeAbsolute)
@@ -94,7 +94,7 @@ command recorder state uri = do
       edit = WorkspaceEdit (Just $ Map.singleton aUri [TextEdit aRange aCode]) Nothing Nothing
     in
       void $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (const (pure ()))
-  pure $ Right Null
+  pure $ Right $ InR Null
 
 -- | A source code change
 data Action = Replace
