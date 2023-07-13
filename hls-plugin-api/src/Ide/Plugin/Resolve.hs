@@ -159,6 +159,9 @@ data WithURI = WithURI {
 instance A.ToJSON WithURI
 instance A.FromJSON WithURI
 
+-- |Checks if the the client supports resolve for code action. We currently only check
+--  whether resolve for the edit field is supported, because that's the only one we care
+-- about at the moment.
 supportsCodeActionResolve :: ClientCapabilities -> Bool
 supportsCodeActionResolve caps =
     caps ^? L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just == Just True

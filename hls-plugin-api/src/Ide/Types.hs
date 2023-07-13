@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE BlockArguments             #-}
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE ConstraintKinds            #-}
 {-# LANGUAGE DefaultSignatures          #-}
@@ -773,7 +774,7 @@ type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config (
 
 type PluginNotificationMethodHandler a m = a -> VFS -> PluginId -> MessageParams m -> LspM Config ()
 
--- | Make a handler for plugins with no extra data
+-- | Make a handler for plugins
 mkPluginHandler
   :: forall ideState m. PluginRequestMethod m
   => SClientMethod m
@@ -894,7 +895,8 @@ type ResolveFunction ideState a (m :: Method ClientToServer Request) =
   -> a
   -> LspM Config (Either ResponseError (MessageResult m))
 
--- | Make a handler for plugins with no extra data
+-- | Make a handler for resolve methods. In here we take your provided ResolveFunction
+-- and turn it into a PluginHandlers
 mkResolveHandler
   :: forall ideState a m. (FromJSON a,  PluginRequestMethod m, L.HasData_ (MessageParams m) (Maybe Value))
   =>  SClientMethod m
@@ -905,26 +907,26 @@ mkResolveHandler
   -> a
   -> LspM Config (Either ResponseError (MessageResult m)))
   -> PluginHandlers ideState
-mkResolveHandler m f = mkPluginHandler m f'
-  where f' ideState plId params = do
-          case fromJSON <$> (params ^. L.data_) of
-            (Just (Success (PluginResolveData owner uri value) )) -> do
-              if owner == plId
-              then
-                case fromJSON value of
-                  Success decodedValue ->
-                    let newParams = params & L.data_ ?~ value
-                    in f ideState plId newParams uri decodedValue
-                  Error err ->
-                    pure $ Left $ ResponseError (InR ErrorCodes_ParseError) (parseError value err) Nothing
-              else pure $ Left $ ResponseError (InR ErrorCodes_InvalidRequest) invalidRequest Nothing
-            _ -> pure $ Left $ ResponseError (InR ErrorCodes_InvalidRequest) invalidRequest Nothing
-        invalidRequest = "The resolve request incorrectly got routed to the wrong resolve handler!"
+mkResolveHandler m f = mkPluginHandler m $ \ideState plId params -> do
+  case fromJSON <$> (params ^. L.data_) of
+    (Just (Success (PluginResolveData owner uri value) )) -> do
+      if owner == plId
+      then
+        case fromJSON value of
+          Success decodedValue ->
+            let newParams = params & L.data_ ?~ value
+            in f ideState plId newParams uri decodedValue
+          Error err ->
+            pure $ Left $ ResponseError (InR ErrorCodes_ParseError) (parseError value err) Nothing
+      else pure $ Left $ ResponseError (InR ErrorCodes_InternalError) invalidRequest Nothing
+    (Just (Error err)) -> pure $ Left $ ResponseError (InR ErrorCodes_ParseError) (parseError value err) Nothing
+    _ -> pure $ Left $ ResponseError (InR ErrorCodes_InternalError) invalidRequest Nothing
+  where invalidRequest = "The resolve request incorrectly got routed to the wrong resolve handler!"
         parseError value err = "Unable to decode: " <> (T.pack $ show value) <> ". Error: " <> (T.pack $ show err)
 
 wrapResolveData :: L.HasData_ a (Maybe Value) => PluginId -> Uri -> a -> a
 wrapResolveData pid uri hasData =
-  hasData & L.data_ .~  (toJSON .PluginResolveData pid uri <$> data_)
+  hasData & L.data_ .~  (toJSON . PluginResolveData pid uri <$> data_)
   where data_ = hasData ^? L.data_ . _Just
 
 -- |Allow plugins to "own" resolve data, allowing only them to be queried for
@@ -934,9 +936,10 @@ data PluginResolveData = PluginResolveData {
   resolvePlugin :: PluginId
 , resolveURI    :: Uri
 , resolveValue  :: Value
-} deriving (Generic, Show)
-instance ToJSON PluginResolveData
-instance FromJSON PluginResolveData
+}
+  deriving (Generic, Show)
+  deriving anyclass (ToJSON, FromJSON)
+
 newtype PluginId = PluginId T.Text
   deriving (Show, Read, Eq, Ord)
   deriving newtype (ToJSON, FromJSON, Hashable)
