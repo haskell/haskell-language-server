@@ -13,34 +13,34 @@ module Ide.Plugin.CallHierarchy.Internal (
 , outgoingCalls
 ) where
 
-import           Control.Lens                   ((^.))
+import           Control.Lens                     ((^.))
 import           Control.Monad.IO.Class
-import           Data.Aeson                     as A
-import           Data.List                      (groupBy, sortBy)
-import qualified Data.Map                       as M
+import           Data.Aeson                       as A
+import           Data.List                        (groupBy, sortBy)
+import qualified Data.Map                         as M
 import           Data.Maybe
-import qualified Data.Set                       as S
-import qualified Data.Text                      as T
+import qualified Data.Set                         as S
+import qualified Data.Text                        as T
 import           Data.Tuple.Extra
 import           Development.IDE
+import qualified Development.IDE.Core.PluginUtils as PluginUtils
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat     as Compat
+import           Development.IDE.GHC.Compat       as Compat
 import           Development.IDE.Spans.AtPoint
-import           HieDb                          (Symbol (Symbol))
-import qualified Ide.Plugin.CallHierarchy.Query as Q
+import           HieDb                            (Symbol (Symbol))
+import qualified Ide.Plugin.CallHierarchy.Query   as Q
 import           Ide.Plugin.CallHierarchy.Types
-import           Ide.PluginUtils                (getNormalizedFilePath,
-                                                 handleMaybe, pluginResponse,
-                                                 throwPluginError)
+import           Ide.PluginUtils                  (getNormalizedFilePath,
+                                                   handleMaybe)
 import           Ide.Types
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens        as L
-import           Text.Read                      (readMaybe)
+import qualified Language.LSP.Types.Lens          as L
+import           Text.Read                        (readMaybe)
 
 -- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHierarchy
-prepareCallHierarchy state _ param = pluginResponse $ do
-    nfp <- getNormalizedFilePath (param ^. L.textDocument ^. L.uri)
+prepareCallHierarchy state _ param = PluginUtils.pluginResponse $ do
+    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath (param ^. L.textDocument ^. L.uri)
     items <- liftIO
         $ runAction "CallHierarchy.prepareHierarchy" state
         $ prepareCallHierarchyItem nfp (param ^. L.position)
@@ -174,7 +174,7 @@ deriving instance Ord Value
 
 -- | Render incoming calls request.
 incomingCalls :: PluginMethodHandler IdeState CallHierarchyIncomingCalls
-incomingCalls state pluginId param = pluginResponse $ do
+incomingCalls state pluginId param = PluginUtils.pluginResponse $ do
     calls <- liftIO
         $ runAction "CallHierarchy.incomingCalls" state
         $ queryCalls
@@ -189,7 +189,7 @@ incomingCalls state pluginId param = pluginResponse $ do
 
 -- | Render outgoing calls request.
 outgoingCalls :: PluginMethodHandler IdeState CallHierarchyOutgoingCalls
-outgoingCalls state pluginId param = pluginResponse $ do
+outgoingCalls state pluginId param = PluginUtils.pluginResponse $ do
     calls <- liftIO
         $ runAction "CallHierarchy.outgoingCalls" state
         $ queryCalls

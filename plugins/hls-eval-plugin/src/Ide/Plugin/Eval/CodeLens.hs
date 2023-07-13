@@ -29,8 +29,8 @@ import           Control.Exception                            (try)
 import qualified Control.Exception                            as E
 import           Control.Lens                                 (_1, _3, ix, (%~),
                                                                (<&>), (^.))
-import           Control.Monad                                (guard,
-                                                               void, when)
+import           Control.Monad                                (guard, void,
+                                                               when)
 import           Control.Monad.IO.Class                       (MonadIO (liftIO))
 import           Control.Monad.Trans.Except                   (ExceptT (..))
 import           Data.Aeson                                   (toJSON)
@@ -46,25 +46,24 @@ import           Data.String                                  (IsString)
 import           Data.Text                                    (Text)
 import qualified Data.Text                                    as T
 import           Data.Typeable                                (Typeable)
-import Development.IDE.Core.RuleTypes
-    ( NeedsCompilation(NeedsCompilation),
-      LinkableResult(linkableHomeMod),
-      tmrTypechecked,
-      TypeCheck(..))
-import Development.IDE.Core.Rules ( runAction, IdeState )
-import Development.IDE.Core.Shake
-    ( useWithStale_,
-      use_,
-      uses_ )
-import Development.IDE.GHC.Util
-    ( printOutputable, evalGhcEnv, modifyDynFlags )
-import Development.IDE.Types.Location
-    ( toNormalizedFilePath', uriToFilePath' )
+import           Development.IDE.Core.Rules                   (IdeState,
+                                                               runAction)
+import           Development.IDE.Core.RuleTypes               (LinkableResult (linkableHomeMod),
+                                                               NeedsCompilation (NeedsCompilation),
+                                                               TypeCheck (..),
+                                                               tmrTypechecked)
+import           Development.IDE.Core.Shake                   (useWithStale_,
+                                                               use_, uses_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import           Development.IDE.GHC.Compat.Util              (GhcException,
                                                                OverridingBool (..))
+import           Development.IDE.GHC.Util                     (evalGhcEnv,
+                                                               modifyDynFlags,
+                                                               printOutputable)
 import           Development.IDE.Import.DependencyInformation (reachableModules)
+import           Development.IDE.Types.Location               (toNormalizedFilePath',
+                                                               uriToFilePath')
 import           GHC                                          (ClsInst,
                                                                ExecOptions (execLineNumber, execSourceFile),
                                                                FamInst,
@@ -75,33 +74,34 @@ import           GHC                                          (ClsInst,
                                                                exprType,
                                                                getInfo,
                                                                getInteractiveDynFlags,
-                                                               isImport, isStmt, parseName,
+                                                               isImport, isStmt,
+                                                               parseName,
                                                                pprFamInst,
                                                                pprInstance,
                                                                typeKind)
 
 
-import Development.IDE.Core.RuleTypes
-    ( ModSummaryResult(msrModSummary),
-      GetModSummary(GetModSummary),
-      GhcSessionDeps(GhcSessionDeps),
-      GetDependencyInformation(GetDependencyInformation),
-      GetLinkable(GetLinkable) )
-import Development.IDE.Core.Shake ( VFSModified(VFSUnmodified) )
-import Development.IDE.Types.HscEnvEq ( HscEnvEq(hscEnv) )
-import qualified Development.IDE.GHC.Compat.Core as Compat
-    ( InteractiveImport(IIModule) )
-import qualified Development.IDE.GHC.Compat.Core as SrcLoc
-    ( unLoc, HasSrcSpan(getLoc) )
+import           Development.IDE.Core.RuleTypes               (GetDependencyInformation (GetDependencyInformation),
+                                                               GetLinkable (GetLinkable),
+                                                               GetModSummary (GetModSummary),
+                                                               GhcSessionDeps (GhcSessionDeps),
+                                                               ModSummaryResult (msrModSummary))
+import           Development.IDE.Core.Shake                   (VFSModified (VFSUnmodified))
+import qualified Development.IDE.GHC.Compat.Core              as Compat (InteractiveImport (IIModule))
+import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (HasSrcSpan (getLoc),
+                                                                         unLoc)
+import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
 #if MIN_VERSION_ghc(9,2,0)
 #endif
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
 import           Development.IDE.Core.FileStore               (setSomethingModified)
+import qualified Development.IDE.Core.PluginUtils             as PluginUtils
 import           Development.IDE.Types.Shake                  (toKey)
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
 #endif
+import           Development.IDE.Core.PluginUtils             (GhcidePluginError)
 import           Ide.Plugin.Eval.Code                         (Statement,
                                                                asStatements,
                                                                myExecStmt,
@@ -124,8 +124,7 @@ import           Ide.Plugin.Eval.Util                         (gStrictTry,
                                                                logWith,
                                                                response', timed)
 import           Ide.PluginUtils                              (handleMaybe,
-                                                               handleMaybeM,
-                                                               pluginResponse)
+                                                               handleMaybeM)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types                           hiding
@@ -142,14 +141,14 @@ codeLens st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
      in perf "codeLens" $
-            pluginResponse $ do
+            PluginUtils.pluginResponse $ do
                 let TextDocumentIdentifier uri = _textDocument
-                fp <- handleMaybe "uri" $ uriToFilePath' uri
+                fp <- PluginUtils.uriToFilePath' uri
                 let nfp = toNormalizedFilePath' fp
                     isLHS = isLiterate fp
                 dbg "fp" fp
-                (comments, _) <- liftIO $
-                    runAction "eval.GetParsedModuleWithComments" st $ useWithStale_ GetEvalComments nfp
+                (comments, _) <-
+                    PluginUtils.runAction "eval.GetParsedModuleWithComments" st $ PluginUtils.useWithStale_ GetEvalComments nfp
                 -- dbg "excluded comments" $ show $  DL.toList $
                 --     foldMap (\(L a b) ->
                 --         case b of
@@ -208,12 +207,12 @@ runEvalCmd :: PluginId -> CommandFunction IdeState EvalParams
 runEvalCmd plId st EvalParams{..} =
     let dbg = logWith st
         perf = timed dbg
-        cmd :: ExceptT String (LspM Config) WorkspaceEdit
+        cmd :: ExceptT GhcidePluginError (LspM Config) WorkspaceEdit
         cmd = do
             let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
             let TextDocumentIdentifier{_uri} = module_
-            fp <- handleMaybe "uri" $ uriToFilePath' _uri
+            fp <- PluginUtils.uriToFilePath' _uri
             let nfp = toNormalizedFilePath' fp
             mdlText <- moduleText _uri
 
@@ -300,9 +299,9 @@ finalReturn txt =
         p = Position l c
      in TextEdit (Range p p) "\n"
 
-moduleText :: (IsString e, MonadLsp c m) => Uri -> ExceptT e m Text
+moduleText :: MonadLsp c m => Uri -> ExceptT GhcidePluginError m Text
 moduleText uri =
-    handleMaybeM "mdlText" $
+    handleMaybeM (PluginUtils.mkPluginErrorMessage "mdlText") $
       (virtualFileText <$>)
           <$> getVirtualFile
               (toNormalizedUri uri)
@@ -366,7 +365,7 @@ asEdit (MultiLine commRange) test resultLines
 asEdit _ test resultLines =
     TextEdit (resultRange test) (T.unlines resultLines)
 
-{-
+{- |
 The result of evaluating a test line can be:
 * a value
 * nothing

@@ -15,7 +15,7 @@ import qualified Data.List                       as List
 import qualified Data.Maybe                      as Maybe
 import           Data.Text                       (Text, pack)
 import qualified Data.Text                       as Text
-import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, runAction, useWithStale, GhcSession (..), getFileContents, hscEnv)
+import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import qualified Language.LSP.Types              as LSP
@@ -23,7 +23,8 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Except (ExceptT)
 import Ide.Types (PluginId(..))
 import qualified Data.Text as T
-import Ide.PluginUtils (handleMaybeM)
+import qualified Development.IDE.Core.PluginUtils as PluginUtils
+import Development.IDE.Core.PluginUtils (GhcidePluginError)
 
 getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
 getNextPragmaInfo dynFlags sourceText =
@@ -51,13 +52,13 @@ insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit prag
         pragmaInsertPosition = LSP.Position (fromIntegral nextPragmaLine) 0
         pragmaInsertRange = LSP.Range pragmaInsertPosition pragmaInsertPosition
 
-getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
-getFirstPragma (PluginId pId) state nfp = handleMaybeM "Could not get NextPragmaInfo" $ do
-  ghcSession <- liftIO $ runAction (T.unpack pId <> ".GhcSession") state $ useWithStale GhcSession nfp
-  (_, fileContents) <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp
+getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT GhcidePluginError m NextPragmaInfo
+getFirstPragma (PluginId pId) state nfp = do
+  ghcSession <- PluginUtils.runAction (T.unpack pId <> ".GhcSession") state $ PluginUtils.useWithStale GhcSession nfp
+  (_, fileContents) <- PluginUtils.runAction (T.unpack pId <> ".GetFileContents") state $ PluginUtils.hoistAction $ getFileContents nfp
   case ghcSession of
-    Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
-    Nothing                                           -> pure Nothing
+    (hscEnv -> hsc_dflags -> sessionDynFlags, _) ->
+      pure $ getNextPragmaInfo sessionDynFlags fileContents
 
 -- Pre-declaration comments parser -----------------------------------------------------
 

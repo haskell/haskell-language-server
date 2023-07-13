@@ -77,7 +77,7 @@ module Development.IDE.Core.Shake(
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
     Log(..),
-    VFSModified(..), getClientConfigAction
+    VFSModified(..), getClientConfigAction,
     ) where
 
 import           Control.Concurrent.Async
@@ -964,11 +964,15 @@ useWithStale key file = runIdentity <$> usesWithStale key (Identity file)
 
 -- | Request a Rule result, it not available return the last computed result which may be stale.
 --   Errors out if none available.
+--
+-- The thrown error is a 'BadDependency' error which is caught by the rule system.
 useWithStale_ :: IdeRule k v
     => k -> NormalizedFilePath -> Action (v, PositionMapping)
 useWithStale_ key file = runIdentity <$> usesWithStale_ key (Identity file)
 
 -- | Plural version of 'useWithStale_'
+--
+-- The thrown error is a 'BadDependency' error which is caught by the rule system.
 usesWithStale_ :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> Action (f (v, PositionMapping))
 usesWithStale_ key files = do
     res <- usesWithStale key files

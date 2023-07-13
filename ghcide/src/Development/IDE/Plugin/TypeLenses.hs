@@ -28,9 +28,9 @@ import           Development.IDE                      (GhcSession (..),
                                                        HscEnvEq (hscEnv),
                                                        RuleResult, Rules,
                                                        define, srcSpanToRange,
-                                                       usePropertyAction,
-                                                       useWithStale)
+                                                       usePropertyAction)
 import           Development.IDE.Core.Compile         (TcModuleResult (..))
+import qualified Development.IDE.Core.PluginUtils     as PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
 import           Development.IDE.Core.Rules           (IdeState, runAction)
@@ -51,7 +51,8 @@ import           Development.IDE.Types.Logger         (Pretty (pretty),
                                                        cmapWithPrio)
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils
+import           Ide.PluginUtils                      (getNormalizedFilePath,
+                                                       mkLspCommand)
 import           Ide.Types                            (CommandFunction,
                                                        CommandId (CommandId),
                                                        PluginCommand (PluginCommand),
@@ -103,28 +104,22 @@ properties = emptyProperties
     ] Always
 
 codeLensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
-codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = pluginResponse $ do
+codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = PluginUtils.pluginResponse $ do
     mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
-    nfp <- getNormalizedFilePath uri
-    env <- hscEnv . fst
-            <$> (handleMaybeM "Unable to get GhcSession"
-                $ liftIO
-                $ runAction "codeLens.GhcSession" ideState (useWithStale GhcSession nfp)
-                )
-    tmr <- fst <$> (
-                handleMaybeM "Unable to TypeCheck"
-              $ liftIO
-              $ runAction "codeLens.TypeCheck" ideState (useWithStale TypeCheck nfp)
-              )
-    bindings <- fst <$> (
-                handleMaybeM "Unable to GetBindings"
-                $ liftIO
-                $ runAction "codeLens.GetBindings" ideState (useWithStale GetBindings nfp)
-                )
+    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath uri
+    env <- hscEnv . fst <$>
+      PluginUtils.runAction "codeLens.GhcSession" ideState
+        (PluginUtils.useWithStale GhcSession nfp)
+
+    (tmr, _) <- PluginUtils.runAction "codeLens.TypeCheck" ideState
+      (PluginUtils.useWithStale TypeCheck nfp)
+
+    (bindings, _) <- PluginUtils.runAction "codeLens.GetBindings" ideState
+      (PluginUtils.useWithStale GetBindings nfp)
+
     (gblSigs@(GlobalBindingTypeSigsResult gblSigs'), gblSigsMp) <-
-      handleMaybeM "Unable to GetGlobalBindingTypeSigs"
-      $ liftIO
-      $ runAction "codeLens.GetGlobalBindingTypeSigs" ideState (useWithStale GetGlobalBindingTypeSigs nfp)
+      PluginUtils.runAction "codeLens.GetGlobalBindingTypeSigs" ideState
+        (PluginUtils.useWithStale GetGlobalBindingTypeSigs nfp)
 
     diag <- liftIO $ atomically $ getDiagnostics ideState
     hDiag <- liftIO $ atomically $ getHiddenDiagnostics ideState

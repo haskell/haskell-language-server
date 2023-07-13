@@ -41,6 +41,7 @@ import           Development.IDE.GHC.Compat           (HsExpr (HsRecFld))
 #endif
 
 import           Control.DeepSeq                      (rwhnf)
+import qualified Development.IDE.Core.PluginUtils     as PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping (PositionMapping),
                                                        toCurrentRange)
 import           Development.IDE.GHC.Compat           (Extension (OverloadedRecordDot),
@@ -68,7 +69,8 @@ import           Development.IDE.Types.Logger         (Priority (..),
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
-import           Ide.PluginUtils                      (getNormalizedFilePath,
+import           Ide.PluginUtils                      (PluginError,
+                                                       getNormalizedFilePath,
                                                        handleMaybeM,
                                                        pluginResponse)
 import           Ide.Types                            (PluginDescriptor (..),
@@ -88,6 +90,7 @@ import           Language.LSP.Types                   (CodeAction (..),
                                                        normalizedFilePathToUri,
                                                        type (|?) (InR))
 import qualified Language.LSP.Types.Lens              as L
+
 data Log
     = LogShake Shake.Log
     | LogCollectedRecordSelectors [RecordSelectorExpr]
@@ -146,8 +149,8 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
 
 codeActionProvider :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
-    pluginResponse $ do
-        nfp <- getNormalizedFilePath (caDocId ^. L.uri)
+    PluginUtils.pluginResponse $ do
+        nfp <- PluginUtils.withPluginError $ getNormalizedFilePath (caDocId ^. L.uri)
         pragma <- getFirstPragma pId ideState nfp
         CRSR crsMap exts <- collectRecSelResult ideState nfp
         let pragmaEdit =
@@ -271,10 +274,8 @@ getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecFld _ _)
 getRecSels _ = ([], False)
 
 collectRecSelResult :: MonadIO m => IdeState -> NormalizedFilePath
-                        -> ExceptT String m CollectRecordSelectorsResult
+                        -> ExceptT PluginUtils.GhcidePluginError m CollectRecordSelectorsResult
 collectRecSelResult ideState =
-    handleMaybeM "Unable to TypeCheck"
-        . liftIO
-        . runAction "overloadedRecordDot.collectRecordSelectors" ideState
-        . use CollectRecordSelectors
+    PluginUtils.runAction "overloadedRecordDot.collectRecordSelectors" ideState
+        . PluginUtils.use CollectRecordSelectors
 

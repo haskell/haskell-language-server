@@ -6,15 +6,14 @@
 module Ide.Plugin.Class.CodeLens where
 
 import           Control.Lens                         ((^.))
-import           Control.Monad.IO.Class               (liftIO)
 import           Data.Aeson
 import           Data.Maybe                           (mapMaybe, maybeToList)
 import qualified Data.Text                            as T
 import           Development.IDE
+import qualified Development.IDE.Core.PluginUtils     as PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import           GHC.LanguageExtensions.Type
 import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
 import           Ide.PluginUtils
@@ -24,23 +23,18 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens              as J
 
 codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
-codeLens state plId CodeLensParams{..} = pluginResponse $ do
-    nfp <- getNormalizedFilePath uri
-    (tmr, _) <- handleMaybeM "Unable to typecheck"
-        $ liftIO
-        $ runAction "classplugin.TypeCheck" state
+codeLens state plId CodeLensParams{..} = PluginUtils.pluginResponse $ do
+    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath uri
+    (tmr, _) <- PluginUtils.runAction "classplugin.TypeCheck" state
         -- Using stale results means that we can almost always return a value. In practice
         -- this means the lenses don't 'flicker'
-        $ useWithStale TypeCheck nfp
+        $ PluginUtils.useWithStale TypeCheck nfp
 
     -- All instance binds
-    (InstanceBindTypeSigsResult allBinds, mp) <-
-        handleMaybeM "Unable to get InstanceBindTypeSigsResult"
-        $ liftIO
-        $ runAction "classplugin.GetInstanceBindTypeSigs" state
+    (InstanceBindTypeSigsResult allBinds, mp) <- PluginUtils.runAction "classplugin.GetInstanceBindTypeSigs" state
         -- Using stale results means that we can almost always return a value. In practice
         -- this means the lenses don't 'flicker'
-        $ useWithStale GetInstanceBindTypeSigs nfp
+        $ PluginUtils.useWithStale GetInstanceBindTypeSigs nfp
 
     pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
 
