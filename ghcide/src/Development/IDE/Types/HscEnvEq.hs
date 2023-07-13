@@ -151,7 +151,7 @@ newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
         indexModuleHieFile hieDir modIface = do
             let hiePath :: NormalizedFilePath
                 hiePath = toNormalizedFilePath' $
-                  hieDir </> toFilePath (moduleName $ mi_module modIface) ++ ".hie"
+                  hieDir </> moduleNameSlashes (moduleName $ mi_module modIface) ++ ".hie"
             hieCheck <- checkHieFile recorder se "newHscEnvEqWithImportPaths" hiePath
             case hieCheck of
                 HieFileMissing -> return ()
@@ -159,25 +159,6 @@ newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
                 CouldNotLoadHie _e -> return ()
                 DoIndexing hash hie ->
                     indexHieFile se hiePath (FakeFile Nothing) hash hie
-        toFilePath :: ModuleName -> FilePath
-        toFilePath = separateDirectories . prettyModuleName
-            where
-                separateDirectories :: FilePath -> FilePath
-                separateDirectories moduleNameString =
-                    case breakOnDot moduleNameString of
-                        [] -> ""
-                        ms -> foldr1 (</>) ms
-                breakOnDot :: FilePath -> [FilePath]
-                breakOnDot = words . map replaceDotWithSpace
-                replaceDotWithSpace :: Char -> Char
-                replaceDotWithSpace '.' = ' '
-                replaceDotWithSpace c = c
-                prettyModuleName :: ModuleName -> String
-                prettyModuleName = filter (/= '"')
-                    . concat
-                    . drop 1
-                    . words
-                    . show
         loadModIface :: Module -> IO (Maybe ModIface)
         loadModIface m = do
             modIface <- initIfaceLoad hscEnv $

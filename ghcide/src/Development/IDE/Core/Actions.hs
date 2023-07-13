@@ -83,30 +83,11 @@ lookupMod HieDbWriter{indexQueue} hieFile moduleName uid _boot = MaybeT $ do
         writeOutDir :: FilePath
         writeOutDir = projectRoot </> ".hls" </> "dependencies" </> show uid
         writeOutFile :: FilePath
-        writeOutFile = toFilePath moduleName ++ ".hs"
+        writeOutFile = moduleNameSlashes moduleName ++ ".hs"
         writeOutPath :: FilePath
         writeOutPath = writeOutDir </> writeOutFile
         moduleUri :: Uri
         moduleUri = AtPoint.toUri writeOutPath
-        toFilePath :: ModuleName -> FilePath
-        toFilePath = separateDirectories . prettyModuleName
-          where
-            separateDirectories :: FilePath -> FilePath
-            separateDirectories moduleNameString =
-              case breakOnDot moduleNameString of
-                [] -> ""
-                ms -> foldr1 (</>) ms
-            breakOnDot :: FilePath -> [FilePath]
-            breakOnDot = words . map replaceDotWithSpace
-            replaceDotWithSpace :: Char -> Char
-            replaceDotWithSpace '.' = ' '
-            replaceDotWithSpace c = c
-            prettyModuleName :: ModuleName -> String
-            prettyModuleName = filter (/= '"')
-              . concat
-              . drop 1
-              . words
-              . show
 
 
 
