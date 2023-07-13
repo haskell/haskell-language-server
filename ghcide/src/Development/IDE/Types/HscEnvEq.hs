@@ -145,13 +145,12 @@ newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
                   (libraryDir : _) -> libraryDir
                 hieDir :: FilePath
                 hieDir = pkgLibDir </> "extra-compilation-artifacts"
-            modIfaces <- mapMaybeM loadModIface modules
-            traverse_ (indexModuleHieFile hieDir) modIfaces
-        indexModuleHieFile :: FilePath -> ModIface -> IO ()
-        indexModuleHieFile hieDir modIface = do
+            traverse_ (indexModuleHieFile hieDir) modules
+        indexModuleHieFile :: FilePath -> Module -> IO ()
+        indexModuleHieFile hieDir m = do
             let hiePath :: NormalizedFilePath
                 hiePath = toNormalizedFilePath' $
-                  hieDir </> moduleNameSlashes (moduleName $ mi_module modIface) ++ ".hie"
+                  hieDir </> moduleNameSlashes (moduleName m) ++ ".hie"
             hieCheck <- checkHieFile recorder se "newHscEnvEqWithImportPaths" hiePath
             case hieCheck of
                 HieFileMissing -> return ()
