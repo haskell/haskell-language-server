@@ -919,7 +919,7 @@ mkResolveHandler m f = mkPluginHandler m $ \ideState plId params -> do
           Error err ->
             pure $ Left $ ResponseError (InR ErrorCodes_ParseError) (parseError value err) Nothing
       else pure $ Left $ ResponseError (InR ErrorCodes_InternalError) invalidRequest Nothing
-    (Just (Error err)) -> pure $ Left $ ResponseError (InR ErrorCodes_ParseError) (parseError value err) Nothing
+    (Just (Error err)) -> pure $ Left $ ResponseError (InR ErrorCodes_ParseError) (parseError (params ^. L.data_) err) Nothing
     _ -> pure $ Left $ ResponseError (InR ErrorCodes_InternalError) invalidRequest Nothing
   where invalidRequest = "The resolve request incorrectly got routed to the wrong resolve handler!"
         parseError value err = "Unable to decode: " <> (T.pack $ show value) <> ". Error: " <> (T.pack $ show err)
