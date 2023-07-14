@@ -41,7 +41,7 @@ addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsP
 addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
     caps <- getClientCapabilities
     PluginUtils.pluginResponse $ do
-        nfp <- PluginUtils.withPluginError $ getNormalizedFilePath (verTxtDocId ^. J.uri)
+        nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (verTxtDocId ^. J.uri)
         pm <- PluginUtils.runAction "classplugin.addMethodPlaceholders.GetParsedModule" state
             $ PluginUtils.use GetParsedModule nfp
         (hsc_dflags . hscEnv -> df) <- PluginUtils.runAction "classplugin.addMethodPlaceholders.GhcSessionDeps" state
@@ -79,7 +79,7 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState TextDocumentCodeAction
 codeAction recorder state plId (CodeActionParams _ _ docId _ context) = PluginUtils.pluginResponse $ do
     verTxtDocId <- lift $ getVersionedTextDoc docId
-    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath (verTxtDocId ^. J.uri)
+    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (verTxtDocId ^. J.uri)
     actions <- join <$> mapM (mkActions nfp verTxtDocId) methodDiags
     pure $ List actions
     where

@@ -19,7 +19,6 @@ import           GHC.Parser.Annotation                 (AnnContext, AnnList,
 
 import           Compat.HieTypes
 import           Control.Lens                          ((^.))
-import           Compat.HieTypes
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
@@ -59,7 +58,6 @@ import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens               as LSP
-import           Compat.HieTypes
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -246,7 +244,7 @@ removeGenerated HAR{..} = HAR{hieAst = go hieAst,..}
 #endif
 
 handleUriToNfp :: (Monad m) => Uri -> ExceptT PluginUtils.GhcidePluginError m NormalizedFilePath
-handleUriToNfp uri = PluginUtils.withPluginError $ getNormalizedFilePath uri
+handleUriToNfp uri = PluginUtils.withPluginError $ getNormalizedFilePath' uri
 
 -- head is safe since groups are non-empty
 collectWith :: (Hashable a, Eq a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]

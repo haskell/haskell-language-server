@@ -24,7 +24,7 @@ import qualified Language.LSP.Types.Lens              as J
 
 codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
 codeLens state plId CodeLensParams{..} = PluginUtils.pluginResponse $ do
-    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath uri
+    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
     (tmr, _) <- PluginUtils.runAction "classplugin.TypeCheck" state
         -- Using stale results means that we can almost always return a value. In practice
         -- this means the lenses don't 'flicker'

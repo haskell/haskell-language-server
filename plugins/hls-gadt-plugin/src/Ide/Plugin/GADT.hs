@@ -54,7 +54,7 @@ toGADTSyntaxCommandId = "GADT.toGADT"
 -- | A command replaces H98 data decl with GADT decl in place
 toGADTCommand :: PluginId -> CommandFunction IdeState ToGADTParams
 toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = pluginResponseM handleGhcidePluginError $ do
-    nfp <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath uri
+    nfp <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath' uri
     (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
     (L ann decl) <- case decls of
         [d] -> pure d
@@ -85,7 +85,7 @@ toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = pluginResponseM handl
 
 codeActionHandler :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionHandler state plId (CodeActionParams _ _ doc range _) = pluginResponseM handleGhcidePluginError $ do
-    nfp <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath (doc ^. L.uri)
+    nfp <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath' (doc ^. L.uri)
     (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
     let actions = map (mkAction . printOutputable . tcdLName . unLoc) inRangeH98Decls
     pure $ List actions

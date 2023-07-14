@@ -63,7 +63,7 @@ import           Development.IDE.Types.Logger     (Priority (..), cmapWithPrio,
 import           GHC.Generics                     (Generic)
 import           Ide.Plugin.RangeMap              (RangeMap)
 import qualified Ide.Plugin.RangeMap              as RangeMap
-import           Ide.PluginUtils                  (getNormalizedFilePath)
+import           Ide.PluginUtils                  (getNormalizedFilePath')
 import           Ide.Types                        (PluginDescriptor (..),
                                                    PluginId (..),
                                                    PluginMethodHandler,
@@ -101,7 +101,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
 
 codeActionProvider :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = PluginUtils.pluginResponse $ do
-  nfp <- PluginUtils.withPluginError $ getNormalizedFilePath (docId ^. L.uri)
+  nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (docId ^. L.uri)
   pragma <- getFirstPragma pId ideState nfp
   CRR recMap exts <- collectRecords' ideState nfp
   let actions = map (mkCodeAction nfp exts pragma) (RangeMap.filterByRange range recMap)

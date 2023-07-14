@@ -38,7 +38,7 @@ import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
                                                        codeRangeRule, crkToFrk)
 import qualified Ide.Plugin.CodeRange.Rules           as Rules (Log)
-import           Ide.PluginUtils                      (getNormalizedFilePath,
+import           Ide.PluginUtils                      (getNormalizedFilePath',
                                                        mkSimpleResponseError,
                                                        pluginResponseM,
                                                        positionInRange,
@@ -80,7 +80,7 @@ instance Pretty Log where
 foldingRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError (List FoldingRange))
 foldingRangeHandler recorder ide _ FoldingRangeParams{..} =
     pluginResponseM handleErrors $ do
-        filePath <- withError PluginUtils.CoreError $ getNormalizedFilePath uri
+        filePath <- withError PluginUtils.CoreError $ getNormalizedFilePath' uri
         foldingRanges <- PluginUtils.runAction "FoldingRange" ide $ getFoldingRanges filePath
         pure . List $ foldingRanges
   where
@@ -101,7 +101,7 @@ getFoldingRanges file = do
 selectionRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
     pluginResponseM handleErrors $ do
-        filePath <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath uri
+        filePath <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath' uri
         fmap List . runIdeAction' $ getSelectionRanges filePath positions
   where
     uri :: Uri

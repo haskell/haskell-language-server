@@ -70,7 +70,7 @@ import           GHC.Generics                         (Generic)
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.PluginUtils                      (PluginError,
-                                                       getNormalizedFilePath,
+                                                       getNormalizedFilePath',
                                                        handleMaybeM,
                                                        pluginResponse)
 import           Ide.Types                            (PluginDescriptor (..),
@@ -150,7 +150,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
 codeActionProvider :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
     PluginUtils.pluginResponse $ do
-        nfp <- PluginUtils.withPluginError $ getNormalizedFilePath (caDocId ^. L.uri)
+        nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (caDocId ^. L.uri)
         pragma <- getFirstPragma pId ideState nfp
         CRSR crsMap exts <- collectRecSelResult ideState nfp
         let pragmaEdit =

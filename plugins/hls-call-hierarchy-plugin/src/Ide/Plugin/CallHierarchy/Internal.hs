@@ -30,7 +30,7 @@ import           Development.IDE.Spans.AtPoint
 import           HieDb                            (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query   as Q
 import           Ide.Plugin.CallHierarchy.Types
-import           Ide.PluginUtils                  (getNormalizedFilePath,
+import           Ide.PluginUtils                  (getNormalizedFilePath',
                                                    handleMaybe)
 import           Ide.Types
 import           Language.LSP.Types
@@ -40,7 +40,7 @@ import           Text.Read                        (readMaybe)
 -- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHierarchy
 prepareCallHierarchy state _ param = PluginUtils.pluginResponse $ do
-    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath (param ^. L.textDocument ^. L.uri)
+    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (param ^. L.textDocument ^. L.uri)
     items <- liftIO
         $ runAction "CallHierarchy.prepareHierarchy" state
         $ prepareCallHierarchyItem nfp (param ^. L.position)

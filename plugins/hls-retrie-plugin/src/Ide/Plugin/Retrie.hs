@@ -213,7 +213,7 @@ runRetrieCmd ::
 runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
   withIndefiniteProgress description Cancellable $ do
     PluginUtils.pluginResponse $ do
-        nfp <- PluginUtils.withPluginError $ getNormalizedFilePath uri
+        nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
         (session, _) <-
             PluginUtils.runAction "Retrie.GhcSessionDeps" state $
                 PluginUtils.useWithStale GhcSessionDeps
@@ -248,9 +248,9 @@ runRetrieInlineThisCmd :: IdeState
     -> RunRetrieInlineThisParams -> LspM c (Either ResponseError Value)
 runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = PluginUtils.pluginResponse $ do
     nfp <- PluginUtils.withPluginError $
-        getNormalizedFilePath $ getLocationUri inlineIntoThisLocation
+        getNormalizedFilePath' $ getLocationUri inlineIntoThisLocation
     nfpSource <- PluginUtils.withPluginError $
-        getNormalizedFilePath $ getLocationUri inlineFromThisLocation
+        getNormalizedFilePath' $ getLocationUri inlineFromThisLocation
     -- What we do here:
     --   Find the identifier in the given position
     --   Construct an inline rewrite for it
@@ -341,7 +341,7 @@ extractImports _ _ _ = []
 provider :: PluginMethodHandler IdeState TextDocumentCodeAction
 provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = PluginUtils.pluginResponse $ do
   let (J.CodeActionContext _diags _monly) = ca
-  nfp <- PluginUtils.withPluginError $ getNormalizedFilePath uri
+  nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
 
   (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
     <- PluginUtils.runAction "retrie" state $

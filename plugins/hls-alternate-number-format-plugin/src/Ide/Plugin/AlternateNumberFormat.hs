@@ -30,7 +30,7 @@ import           Ide.Plugin.Conversion            (AlternateFormat,
 import           Ide.Plugin.Literals
 import           Ide.Plugin.RangeMap              (RangeMap)
 import qualified Ide.Plugin.RangeMap              as RangeMap
-import           Ide.PluginUtils                  (getNormalizedFilePath)
+import           Ide.PluginUtils                  (getNormalizedFilePath')
 import           Ide.Types
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens          as L
@@ -82,7 +82,7 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = PluginUtils.pluginResponse $ do
-    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath (docId ^. L.uri)
+    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (docId ^. L.uri)
     CLR{..} <- requestLiterals pId state nfp
     pragma <- getFirstPragma pId state nfp
         -- remove any invalid literals (see validTarget comment)
