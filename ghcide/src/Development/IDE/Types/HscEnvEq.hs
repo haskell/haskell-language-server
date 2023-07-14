@@ -24,6 +24,7 @@ import           Control.Monad.Extra             (eitherM, join, mapMaybeM, void
 import           Data.Either                     (fromRight)
 import           Data.Foldable                   (traverse_)
 import qualified Data.Map                        as Map
+import           Data.Maybe                      (isNothing)
 import           Data.Set                        (Set)
 import qualified Data.Set                        as Set
 import           Data.Unique                     (Unique)
@@ -176,16 +177,15 @@ newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
         getModulesForPackage (Package package) =
             map makeModule allModules
             where
-                allModules :: [(ModuleName, Maybe Module)]
-                allModules = unitExposedModules package
-                    ++ zip (unitHiddenModules package) (repeat Nothing)
-                makeModule :: (ModuleName, Maybe Module)
+                allModules :: [ModuleName]
+                allModules = map fst
+                    ( filter (isNothing . snd)
+                    $ unitExposedModules package
+                    )
+                    ++ unitHiddenModules package
+                makeModule :: ModuleName
                            -> Module
-                makeModule (moduleName, Nothing) =
-                    mkModule (unitInfoId package) moduleName
-                -- When module is re-exported from another package,
-                -- the origin module is represented by value in Just
-                makeModule (_, Just otherPackageMod) = otherPackageMod
+                makeModule = mkModule (unitInfoId package)
 
 newtype Package = Package UnitInfo deriving Eq
 instance Ord Package where
