@@ -593,10 +593,13 @@ getHieAstsRule recorder =
         makeHieAstResult hieFile =
             HAR
                 (Compat.hie_module hieFile)
-                (Compat.hie_asts hieFile)
-                mempty
+                hieAsts
+                (Compat.generateReferencesMap $ M.elems $ getAsts hieAsts)
                 mempty
                 (HieFromDisk hieFile)
+            where
+                hieAsts :: HieASTs TypeIndex
+                hieAsts = Compat.hie_asts hieFile
 
 persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
