@@ -14,7 +14,7 @@ import qualified Data.Text                                    as T
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Plugin.CodeAction.ExactPrint (wildCardSymbol)
 import           Development.IDE.Types.Exports
-import           Language.LSP.Types                           (CodeActionKind (..))
+import           Language.LSP.Protocol.Types                  (CodeActionKind (..))
 
 -- | Possible import styles for an 'IdentInfo'.
 --
@@ -80,12 +80,12 @@ unImportStyle (ImportAllConstructors x) = (Just $ T.unpack x, wildCardSymbol)
 
 
 quickFixImportKind' :: T.Text -> ImportStyle -> CodeActionKind
-quickFixImportKind' x (ImportTopLevel _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.topLevel"
-quickFixImportKind' x (ImportViaParent _ _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.withParent"
-quickFixImportKind' x (ImportAllConstructors _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.allConstructors"
+quickFixImportKind' x (ImportTopLevel _) = CodeActionKind_Custom $ "quickfix.import." <> x <> ".list.topLevel"
+quickFixImportKind' x (ImportViaParent _ _) = CodeActionKind_Custom $ "quickfix.import." <> x <> ".list.withParent"
+quickFixImportKind' x (ImportAllConstructors _) = CodeActionKind_Custom $ "quickfix.import." <> x <> ".list.allConstructors"
 
 quickFixImportKind :: T.Text -> CodeActionKind
-quickFixImportKind x = CodeActionUnknown $ "quickfix.import." <> x
+quickFixImportKind x = CodeActionKind_Custom $ "quickfix.import." <> x
 
 -- | Possible import styles for qualified imports
 data QualifiedImportStyle = QualifiedImportPostfix | QualifiedImportPrefix

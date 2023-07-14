@@ -15,7 +15,7 @@ import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.Pragmas    (getNextPragmaInfo,
                                                    insertNewPragma)
 import           Ide.PluginUtils
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Types
 
 -- | All instance bindings are started with `$c`
 bindingPrefix :: IsString s => s

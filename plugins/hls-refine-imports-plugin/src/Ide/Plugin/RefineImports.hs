@@ -15,8 +15,10 @@ import           Control.Arrow                        (Arrow (second))
 import           Control.DeepSeq                      (rwhnf)
 import           Control.Monad                        (join)
 import           Control.Monad.IO.Class               (liftIO)
-import           Data.Aeson.Types
-import qualified Data.HashMap.Strict                  as HashMap
+import           Control.Monad.Trans.Class            (lift)
+import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
+                                                       runMaybeT)
+import           Data.Aeson.Types                     hiding (Null)
 import           Data.IORef                           (readIORef)
 import           Data.List                            (intercalate)
 import qualified Data.Map.Strict                      as Map
@@ -48,20 +50,19 @@ import           Ide.Plugin.ExplicitImports           (extractMinimalImports,
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types                   (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
-                                                       CodeAction (CodeAction, _command, _diagnostics, _disabled, _edit, _isPreferred, _kind, _title, _xdata),
-                                                       CodeActionKind (CodeActionUnknown),
+import           Language.LSP.Protocol.Types                   (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
+                                                       CodeAction (CodeAction, _command, _diagnostics, _disabled, _edit, _isPreferred, _kind, _title, _data_),
+                                                       CodeActionKind (CodeActionKind_Custom),
                                                        CodeActionParams (CodeActionParams),
                                                        CodeLens (..),
                                                        CodeLensParams (CodeLensParams, _textDocument),
-                                                       Method (TextDocumentCodeAction, TextDocumentCodeLens),
-                                                       SMethod (STextDocumentCodeAction, STextDocumentCodeLens, SWorkspaceApplyEdit),
                                                        TextDocumentIdentifier (TextDocumentIdentifier, _uri),
                                                        TextEdit (..),
                                                        WorkspaceEdit (..),
-                                                       type (|?) (InR),
-                                                       uriToNormalizedFilePath)
-
+                                                       type (|?) (InL, InR),
+                                                       uriToNormalizedFilePath, Null (Null))
+import           Language.LSP.Protocol.Message         (Method (Method_TextDocumentCodeAction, Method_TextDocumentCodeLens),
+                                                       SMethod (SMethod_TextDocumentCodeAction, SMethod_TextDocumentCodeLens, SMethod_WorkspaceApplyEdit),)
 newtype Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
@@ -75,9 +76,9 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
   , pluginRules = refineImportsRule recorder
   , pluginHandlers = mconcat
       [ -- This plugin provides code lenses
-        mkPluginHandler STextDocumentCodeLens lensProvider
+        mkPluginHandler SMethod_TextDocumentCodeLens lensProvider
         -- This plugin provides code actions
-      , mkPluginHandler STextDocumentCodeAction codeActionProvider
+      , mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider
       ]
   }
 
@@ -101,10 +102,10 @@ refineImportCommand =
 runRefineImportCommand :: CommandFunction IdeState RefineImportCommandParams
 runRefineImportCommand _state (RefineImportCommandParams edit) = do
   -- This command simply triggers a workspace edit!
-  _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
-  return (Right Null)
+  _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+  return (Right $ InR Null)
 
-lensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
+lensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 lensProvider
   state -- ghcide state
   pId
@@ -125,13 +126,13 @@ lensProvider
                 | (imp, Just refinedImports) <- result
                 , Just edit <- [mkExplicitEdit posMapping imp refinedImports]
                 ]
-            return $ Right (List $ catMaybes commands)
-          _ -> return $ Right (List [])
+            return $ Right (InL $ catMaybes commands)
+          _ -> return $ Right (InL [])
     | otherwise =
-      return $ Right (List [])
+      return $ Right (InL [])
 
 -- | Provide one code action to refine all imports
-codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
+codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
   | TextDocumentIdentifier {_uri} <- docId,
     Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $
@@ -144,7 +145,7 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
                 any (within range) rangesImports
             _ -> False
       if not insideImport
-        then return (Right (List []))
+        then return (Right (InL []))
         else do
           mbRefinedImports <- runIde ideState $ use RefineImports nfp
           let edits =
@@ -155,20 +156,20 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
                 ]
               caExplicitImports = InR CodeAction {..}
               _title = "Refine all imports"
-              _kind = Just $ CodeActionUnknown "quickfix.import.refine"
+              _kind = Just $ CodeActionKind_Custom "quickfix.import.refine"
               _command = Nothing
               _edit = Just WorkspaceEdit
                 {_changes, _documentChanges, _changeAnnotations}
-              _changes = Just $ HashMap.singleton _uri $ List edits
+              _changes = Just $ Map.singleton _uri edits
               _documentChanges = Nothing
               _diagnostics = Nothing
               _isPreferred = Nothing
               _disabled = Nothing
-              _xdata = Nothing
+              _data_ = Nothing
               _changeAnnotations = Nothing
-          return $ Right $ List [caExplicitImports | not (null edits)]
+          return $ Right $ InL [caExplicitImports | not (null edits)]
   | otherwise =
-    return $ Right $ List []
+    return $ Right $ InL []
 
 --------------------------------------------------------------------------------
 
@@ -186,28 +187,28 @@ instance Show RefineImportsResult where show _ = "<refineImportsResult>"
 instance NFData RefineImportsResult where rnf = rwhnf
 
 refineImportsRule :: Recorder (WithPriority Log) -> Rules ()
-refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineImports nfp -> do
+refineImportsRule recorder = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \RefineImports nfp -> runMaybeT $ do
   -- Get the typechecking artifacts from the module
-  tmr <- use TypeCheck nfp
+  tmr <- MaybeT $ use TypeCheck nfp
   -- We also need a GHC session with all the dependencies
-  hsc <- use GhcSessionDeps nfp
+  hsc <- MaybeT $ use GhcSessionDeps nfp
 
   -- 2 layer map ModuleName -> ModuleName -> [Avails] (exports)
   import2Map <- do
     -- first layer is from current(editing) module to its imports
-    ImportMap currIm <- use_ GetImportMap nfp
+    ImportMap currIm <- lift $ use_ GetImportMap nfp
     forM currIm $ \path -> do
       -- second layer is from the imports of first layer to their imports
-      ImportMap importIm <- use_ GetImportMap path
+      ImportMap importIm <- lift $ use_ GetImportMap path
       forM importIm $ \imp_path -> do
-        imp_hir <- use_ GetModIface imp_path
+        imp_hir <- lift $ use_ GetModIface imp_path
         return $ mi_exports $ hirModIface imp_hir
 
   -- Use the GHC api to extract the "minimal" imports
   -- We shouldn't blindly refine imports
   -- instead we should generate imports statements
   -- for modules/symbols actually got used
-  (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
+  (imports, mbMinImports) <- MaybeT $ liftIO $ extractMinimalImports hsc tmr
 
   let filterByImport
         :: LImportDecl GhcRn
@@ -261,7 +262,7 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
                 . Map.toList
                 $ filteredInnerImports)
         -- for every minimal imports
-        | Just minImports <- [mbMinImports]
+        | minImports <- [mbMinImports]
         , i@(L _ ImportDecl{ideclName = L _ mn}) <- minImports
         -- we check for the inner imports
         , Just innerImports <- [Map.lookup mn import2Map]
@@ -270,7 +271,7 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
         -- if no symbols from this modules then don't need to generate new import
         , not $ null filteredInnerImports
         ]
-  return ([], RefineImportsResult res <$ mbMinImports)
+  pure $ RefineImportsResult res
 
   where
     -- Check if a name is exposed by AvailInfo (the available information of a module)
@@ -299,10 +300,10 @@ generateLens pId uri edits@TextEdit {_range, _newText} = do
   -- The title of the command is just the minimal explicit import decl
   let title = "Refine imports to " <> T.intercalate ", " (T.lines _newText)
       -- the code lens has no extra data
-      _xdata = Nothing
+      _data_ = Nothing
       -- an edit that replaces the whole declaration with the explicit one
       edit = WorkspaceEdit (Just editsMap) Nothing Nothing
-      editsMap = HashMap.fromList [(uri, List [edits])]
+      editsMap = Map.fromList [(uri, [edits])]
       -- the command argument is simply the edit
       _arguments = Just [toJSON $ RefineImportCommandParams edit]
       -- create the command

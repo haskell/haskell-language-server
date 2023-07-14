@@ -13,16 +13,24 @@ module Ide.Plugin.OverloadedRecordDot
 
 -- based off of Berk Okzuturk's hls-explicit-records-fields-plugin
 
-import           Control.Lens                         ((^.))
+import           Control.Lens                         (_Just, (^.), (^?))
+import           Control.Monad                        (replicateM)
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
-import           Control.Monad.Trans.Except           (ExceptT)
+import           Control.Monad.Trans.Class            (lift)
+import           Control.Monad.Trans.Except           (ExceptT, throwE)
+import           Data.Aeson                           (FromJSON, Result (..),
+                                                       ToJSON, fromJSON, toJSON)
 import           Data.Generics                        (GenericQ, everything,
                                                        everythingBut, mkQ)
-import qualified Data.HashMap.Strict                  as HashMap
-import           Data.Maybe                           (mapMaybe, maybeToList)
+import qualified Data.IntMap.Strict                   as IntMap
+import qualified Data.Map                             as Map
+import           Data.Maybe                           (fromJust, mapMaybe,
+                                                       maybeToList)
 import           Data.Text                            (Text)
+import           Data.Unique                          (hashUnique, newUnique)
 import           Development.IDE                      (IdeState,
                                                        NormalizedFilePath,
+                                                       NormalizedUri,
                                                        Pretty (..), Range,
                                                        Recorder (..), Rules,
                                                        WithPriority (..),
@@ -70,6 +78,7 @@ import           GHC.Generics                         (Generic)
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.PluginUtils                      (PluginError,
+                                                       getNormalizedFilePath,
                                                        getNormalizedFilePath',
                                                        handleMaybeM,
                                                        pluginResponse)
@@ -77,19 +86,22 @@ import           Ide.Types                            (PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
                                                        defaultPluginDescriptor,
+                                                       mkCodeActionHandlerWithResolve,
                                                        mkPluginHandler)
-import           Language.LSP.Types                   (CodeAction (..),
-                                                       CodeActionKind (CodeActionRefactorRewrite),
+import           Language.LSP.Protocol.Lens           (HasChanges (changes))
+import qualified Language.LSP.Protocol.Lens           as L
+import           Language.LSP.Protocol.Message        (Method (..),
+                                                       SMethod (..))
+import           Language.LSP.Protocol.Types          (CodeAction (..),
+                                                       CodeActionKind (CodeActionKind_RefactorRewrite),
                                                        CodeActionParams (..),
-                                                       Command, List (..),
-                                                       Method (..),
-                                                       SMethod (..),
-                                                       TextEdit (..),
-                                                       WorkspaceEdit (WorkspaceEdit),
+                                                       Command, TextEdit (..),
+                                                       Uri (..),
+                                                       WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                        fromNormalizedUri,
                                                        normalizedFilePathToUri,
-                                                       type (|?) (InR))
-import qualified Language.LSP.Types.Lens              as L
+                                                       type (|?) (..))
+import           Language.LSP.Server                  (getClientCapabilities)
 
 data Log
     = LogShake Shake.Log
@@ -109,7 +121,14 @@ instance Hashable CollectRecordSelectors
 instance NFData CollectRecordSelectors
 
 data CollectRecordSelectorsResult = CRSR
-    { recordInfos       :: RangeMap RecordSelectorExpr
+    { -- |We store everything in here that we need to create the unresolved
+      -- codeAction: the range, an uniquely identifiable int, and the selector
+      --selector expression  (HSExpr) that we use to generate the name
+      records           :: RangeMap (Int, HsExpr (GhcPass 'Renamed))
+      -- |This is for when we need to fully generate a textEdit. It contains the
+      -- whole expression we are interested in indexed to the unique id we got
+      -- from the previous field
+    , recordInfos       :: IntMap.IntMap RecordSelectorExpr
     , enabledExtensions :: [Extension]
     }
     deriving (Generic)
@@ -139,56 +158,85 @@ instance Pretty RecordSelectorExpr where
 instance NFData RecordSelectorExpr where
   rnf = rwhnf
 
+-- |The data that is serialized and placed in the data field of resolvable
+-- code actions
+data ORDResolveData = ORDRD {
+  -- |We need the uri to get shake results
+  uri      :: Uri
+  -- |The unique id that allows us to find the specific codeAction we want
+, uniqueID :: Int
+} deriving (Generic, Show)
+instance ToJSON ORDResolveData
+instance FromJSON ORDResolveData
+
 descriptor :: Recorder (WithPriority Log) -> PluginId
                 -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginHandlers =
-        mkPluginHandler STextDocumentCodeAction codeActionProvider
+      mkCodeActionHandlerWithResolve codeActionProvider resolveProvider
     , pluginRules = collectRecSelsRule recorder
     }
 
-codeActionProvider :: PluginMethodHandler IdeState 'TextDocumentCodeAction
+resolveProvider :: PluginMethodHandler IdeState 'Method_CodeActionResolve
+resolveProvider ideState pId ca@(CodeAction _ _ _ _ _ _ _ (Just resData)) =
+    PluginUtils.pluginResponse' $ do
+        case fromJSON resData of
+            Success (ORDRD uri int) -> do
+                nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
+                CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
+                pragma <- getFirstPragma pId ideState nfp
+                case IntMap.lookup int crsDetails of
+                    Just rse -> pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
+                    -- We need to throw a content modified error here, see
+                    -- https://github.com/microsoft/language-server-protocol/issues/1738
+                    -- but we need fendor's plugin error response pr to make it
+                    -- convenient to use here, so we will wait to do that till that's merged
+                    _        -> throwE $ PluginUtils.mkPluginErrorMessage "Content Modified Error"
+            _ -> throwE $ PluginUtils.mkPluginErrorMessage "Unable to deserialize the data"
+
+codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
-    PluginUtils.pluginResponse $ do
+    PluginUtils.pluginResponse' $ do
         nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (caDocId ^. L.uri)
-        pragma <- getFirstPragma pId ideState nfp
-        CRSR crsMap exts <- collectRecSelResult ideState nfp
-        let pragmaEdit =
-                if OverloadedRecordDot `elem` exts
-                then Nothing
-                else Just $ insertNewPragma pragma OverloadedRecordDot
-            edits crs = convertRecordSelectors crs : maybeToList pragmaEdit
-            changes crs =
-                Just $ HashMap.singleton (fromNormalizedUri
-                                            (normalizedFilePathToUri nfp))
-                                            (List (edits crs))
-            mkCodeAction crs = InR CodeAction
+        CRSR crsMap crsDetails exts <- collectRecSelResult ideState nfp
+        let mkCodeAction (crsM, nse)  = InR CodeAction
                 { -- We pass the record selector to the title function, so that
                   -- we can have the name of the record selector in the title of
                   -- the codeAction. This allows the user can easily distinguish
                   -- between the different codeActions when using nested record
                   -- selectors, the disadvantage is we need to print out the
                   -- name of the record selector which will decrease performance
-                _title = mkCodeActionTitle exts crs
-                , _kind = Just CodeActionRefactorRewrite
+                  _title = mkCodeActionTitle exts crsM nse
+                , _kind = Just CodeActionKind_RefactorRewrite
                 , _diagnostics = Nothing
                 , _isPreferred = Nothing
                 , _disabled = Nothing
-                , _edit = Just $ WorkspaceEdit (changes crs) Nothing Nothing
+                , _edit = Nothing
                 , _command = Nothing
-                , _xdata = Nothing
+                , _data_ = Just $ toJSON $ ORDRD (caDocId ^. L.uri) crsM
                 }
             actions = map mkCodeAction (RangeMap.filterByRange caRange crsMap)
-        pure $ List actions
+        pure $ InL actions
     where
-    mkCodeActionTitle :: [Extension] -> RecordSelectorExpr-> Text
-    mkCodeActionTitle exts (RecordSelectorExpr _ se _) =
+    mkCodeActionTitle :: [Extension] -> Int -> HsExpr (GhcPass 'Renamed) -> Text
+    mkCodeActionTitle exts crsM se =
         if OverloadedRecordDot `elem` exts
             then title
             else title <> " (needs extension: OverloadedRecordDot)"
         where
-            title = "Convert `" <> name <> "` to record dot syntax"
-            name = printOutputable se
+            title = "Convert `" <> printOutputable se <> "` to record dot syntax"
+
+mkWorkspaceEdit:: Uri -> RecordSelectorExpr -> [Extension] -> NextPragmaInfo-> Maybe WorkspaceEdit
+mkWorkspaceEdit uri recSel exts pragma =
+    Just $ WorkspaceEdit
+    { _changes =
+        Just (Map.singleton uri (convertRecordSelectors recSel : maybeToList pragmaEdit))
+    , _documentChanges = Nothing
+    , _changeAnnotations = Nothing}
+    where pragmaEdit =
+            if OverloadedRecordDot `elem` exts
+            then Nothing
+            else Just $ insertNewPragma pragma OverloadedRecordDot
 
 collectRecSelsRule :: Recorder (WithPriority Log) -> Rules ()
 collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
@@ -205,11 +253,17 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
                 -- the OverloadedRecordDot pragma
                 exts = getEnabledExtensions tmr
                 recSels = mapMaybe (rewriteRange pm) (getRecordSelectors tmr)
+            -- We are creating a list as long as our rec selectors of unique int s
+            -- created by calling hashUnique on a Unique. The reason why we are
+            -- extracting the ints is because they don't need any work to serialize.
+            uniques <- liftIO $ replicateM (length recSels) (hashUnique <$> newUnique)
             logWith recorder Debug (LogCollectedRecordSelectors recSels)
-            let -- We need the rangeMap to be able to filter by range later
-                crsMap :: RangeMap RecordSelectorExpr
-                crsMap = RangeMap.fromList location recSels
-            pure ([], CRSR <$> Just crsMap <*> Just exts)
+            let crsUniquesAndDetails =  zip uniques recSels
+                -- We need the rangeMap to be able to filter by range later
+                rangeAndUnique = toRangeAndUnique <$> crsUniquesAndDetails
+                crsMap :: RangeMap (Int,  HsExpr (GhcPass 'Renamed))
+                crsMap = RangeMap.fromList' rangeAndUnique
+            pure ([], CRSR <$> Just crsMap <*> Just (IntMap.fromList crsUniquesAndDetails) <*> Just exts)
     where getEnabledExtensions :: TcModuleResult -> [Extension]
           getEnabledExtensions = getExtensions . tmrParsed
           getRecordSelectors :: TcModuleResult -> [RecordSelectorExpr]
@@ -221,6 +275,7 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
             case toCurrentRange pm (location recSel) of
                 Just newLoc -> Just $ recSel{location = newLoc}
                 Nothing     -> Nothing
+          toRangeAndUnique (id, RecordSelectorExpr l (unLoc -> se) _) = (l, (id, se))
 
 convertRecordSelectors :: RecordSelectorExpr ->  TextEdit
 convertRecordSelectors (RecordSelectorExpr l se re) =

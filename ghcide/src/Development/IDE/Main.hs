@@ -235,7 +235,7 @@ defaultArguments recorder logger plugins = Arguments
             { optCheckProject = pure $ checkProject config
             , optCheckParents = pure $ checkParents config
             }
-        , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
+        , argsLspOptions = def {LSP.optCompletionTriggerCharacters = Just "."}
         , argsDefaultHlsConfig = def
         , argsGetHieDbLoc = getHieDbLoc
         , argsDebouncer = newAsyncDebouncer
@@ -293,7 +293,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
     let hlsPlugin = asGhcIdePlugin (cmapWithPrio LogPluginHLS recorder) argsHlsPlugins
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
-        options = argsLspOptions { LSP.executeCommandCommands = LSP.executeCommandCommands argsLspOptions <> Just hlsCommands }
+        options = argsLspOptions { LSP.optExecuteCommandCommands = LSP.optExecuteCommandCommands argsLspOptions <> Just hlsCommands }
         argsOnConfigChange = getConfigFromNotification argsHlsPlugins
         rules = argsRules >> pluginRules plugins
 

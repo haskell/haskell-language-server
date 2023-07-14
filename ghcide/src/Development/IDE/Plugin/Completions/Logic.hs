@@ -1,7 +1,8 @@
-{-# LANGUAGE CPP        #-}
-{-# LANGUAGE GADTs      #-}
-{-# LANGUAGE MultiWayIf #-}
-
+{-# LANGUAGE CPP              #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs            #-}
+{-# LANGUAGE MultiWayIf       #-}
+{-# LANGUAGE OverloadedLabels #-}
 
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
@@ -14,15 +15,19 @@ module Development.IDE.Plugin.Completions.Logic (
 ) where
 
 import           Control.Applicative
+import           Control.Lens                             hiding (Context)
 import           Data.Char                                (isAlphaNum, isUpper)
+import           Data.Default                             (def)
 import           Data.Generics
 import           Data.List.Extra                          as List hiding
                                                                   (stripPrefix)
 import qualified Data.Map                                 as Map
+import           Data.Row
 
 import           Data.Maybe                               (catMaybes, fromMaybe,
-                                                           isJust, listToMaybe,
-                                                           mapMaybe, isNothing)
+                                                           isJust, isNothing,
+                                                           listToMaybe,
+                                                           mapMaybe)
 import qualified Data.Text                                as T
 import qualified Text.Fuzzy.Parallel                      as Fuzzy
 
@@ -41,7 +46,7 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat               hiding (ppr)
 import qualified Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.CoreFile            (occNamePrefixes)
+import           Development.IDE.GHC.CoreFile             (occNamePrefixes)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
@@ -64,8 +69,8 @@ import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
                                                            IdePlugins (..),
                                                            PluginId)
-import           Language.LSP.Types
-import           Language.LSP.Types.Capabilities
+import qualified Language.LSP.Protocol.Lens               as L
+import           Language.LSP.Protocol.Types
 import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
@@ -76,7 +81,7 @@ import           Development.IDE
 import           Development.IDE.Spans.AtPoint            (pointCommand)
 
 #if MIN_VERSION_ghc(9,5,0)
-import Language.Haskell.Syntax.Basic
+import           Language.Haskell.Syntax.Basic
 #endif
 
 -- Chunk size used for parallelizing fuzzy matching
@@ -172,11 +177,11 @@ getCContext pos pm
 occNameToComKind :: OccName -> CompletionItemKind
 occNameToComKind oc
   | isVarOcc  oc = case occNameString oc of
-                     i:_ | isUpper i -> CiConstructor
-                     _               -> CiFunction
-  | isTcOcc   oc = CiStruct
-  | isDataOcc oc = CiConstructor
-  | otherwise    = CiVariable
+                     i:_ | isUpper i -> CompletionItemKind_Constructor
+                     _               -> CompletionItemKind_Function
+  | isTcOcc   oc = CompletionItemKind_Struct
+  | isDataOcc oc = CompletionItemKind_Constructor
+  | otherwise    = CompletionItemKind_Variable
 
 
 showModName :: ModuleName -> T.Text
@@ -215,13 +220,15 @@ mkCompl
                   _sortText = Nothing,
                   _filterText = Nothing,
                   _insertText = Just insertText,
-                  _insertTextFormat = Just Snippet,
+                  _insertTextFormat = Just InsertTextFormat_Snippet,
                   _insertTextMode = Nothing,
                   _textEdit = Nothing,
                   _additionalTextEdits = Nothing,
                   _commitCharacters = Nothing,
                   _command = mbCommand,
-                  _xdata = toJSON <$> fmap (CompletionResolveData uri (isNothing typeText)) nameDetails}
+                  _data_ = toJSON <$> fmap (CompletionResolveData uri (isNothing typeText)) nameDetails,
+                  _labelDetails = Nothing,
+                  _textEditText = Nothing}
   removeSnippetsWhen (isJust isInfix) ci
 
   where kind = Just compKind
@@ -230,8 +237,8 @@ mkCompl
           Local pos  -> "*Defined at " <> pprLineCol (srcSpanStart pos) <> " in this module*\n"
           ImportedFrom mod -> "*Imported from '" <> mod <> "'*\n"
           DefinedIn mod -> "*Defined in '" <> mod <> "'*\n"
-        documentation = Just $ CompletionDocMarkup $
-                        MarkupContent MkMarkdown $
+        documentation = Just $ InR $
+                        MarkupContent MarkupKind_Markdown $
                         T.intercalate sectionSeparator docs'
         pprLineCol :: SrcLoc -> T.Text
         pprLineCol (UnhelpfulLoc fs) = T.pack $ unpackFS fs
@@ -253,8 +260,8 @@ mkNameCompItem doc thingParent origName provenance isInfix !imp mod = CI {..}
     typeText = Nothing
     label = stripPrefix $ printOutputable origName
     insertText = case isInfix of
-            Nothing -> label
-            Just LeftSide -> label <> "`"
+            Nothing         -> label
+            Just LeftSide   -> label <> "`"
 
             Just Surrounded -> label
     additionalTextEdits =
@@ -278,30 +285,32 @@ showForSnippet x = printOutputable x
 
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
-  CompletionItem label (Just CiModule) Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing
+    (defaultCompletionItemWithLabel label)
+    { _kind = Just CompletionItemKind_Module }
 
 mkModuleFunctionImport :: T.Text -> T.Text -> CompletionItem
 mkModuleFunctionImport moduleName label =
-  CompletionItem label (Just CiFunction) Nothing (Just moduleName)
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing
+    (defaultCompletionItemWithLabel label)
+    { _kind = Just CompletionItemKind_Function
+    , _detail = Just moduleName }
 
 mkImportCompl :: T.Text -> T.Text -> CompletionItem
 mkImportCompl enteredQual label =
-  CompletionItem m (Just CiModule) Nothing (Just label)
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing
+    (defaultCompletionItemWithLabel m)
+    { _kind = Just CompletionItemKind_Module
+    , _detail = Just label }
   where
     m = fromMaybe "" (T.stripPrefix enteredQual label)
 
 mkExtCompl :: T.Text -> CompletionItem
 mkExtCompl label =
-  CompletionItem label (Just CiKeyword) Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing Nothing
+    (defaultCompletionItemWithLabel label)
+    { _kind = Just CompletionItemKind_Keyword }
 
+defaultCompletionItemWithLabel :: T.Text -> CompletionItem
+defaultCompletionItemWithLabel label =
+    CompletionItem label def def def def def def def def def
+                         def def def def def def def def def
 
 fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
 fromIdentInfo doc id@IdentInfo{..} q = CI
@@ -439,20 +448,20 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
     compls = concat
         [ case decl of
             SigD _ (TypeSig _ ids typ) ->
-                [mkComp id CiFunction (Just $ showForSnippet typ) | id <- ids]
+                [mkComp id CompletionItemKind_Function (Just $ showForSnippet typ) | id <- ids]
             ValD _ FunBind{fun_id} ->
-                [ mkComp fun_id CiFunction Nothing
+                [ mkComp fun_id CompletionItemKind_Function Nothing
                 | not (hasTypeSig fun_id)
                 ]
             ValD _ PatBind{pat_lhs} ->
-                [mkComp id CiVariable Nothing
+                [mkComp id CompletionItemKind_Variable Nothing
                 | VarPat _ id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
             TyClD _ ClassDecl{tcdLName, tcdSigs, tcdATs} ->
-                mkComp tcdLName CiInterface (Just $ showForSnippet tcdLName) :
-                [ mkComp id CiFunction (Just $ showForSnippet typ)
+                mkComp tcdLName CompletionItemKind_Interface (Just $ showForSnippet tcdLName) :
+                [ mkComp id CompletionItemKind_Function (Just $ showForSnippet typ)
                 | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
                 , id <- ids] ++
-                [ mkComp fdLName CiStruct (Just $ showForSnippet fdLName)
+                [ mkComp fdLName CompletionItemKind_Struct (Just $ showForSnippet fdLName)
                 | L _ (FamilyDecl{fdLName}) <- tcdATs]
             TyClD _ x ->
                 let generalCompls = [mkComp id cl (Just $ showForSnippet $ tyClDeclLName x)
@@ -464,16 +473,16 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
                    -- the constructors and snippets will be duplicated here giving the user 2 choices.
                    generalCompls ++ recordCompls
             ForD _ ForeignImport{fd_name,fd_sig_ty} ->
-                [mkComp fd_name CiVariable (Just $ showForSnippet fd_sig_ty)]
+                [mkComp fd_name CompletionItemKind_Variable (Just $ showForSnippet fd_sig_ty)]
             ForD _ ForeignExport{fd_name,fd_sig_ty} ->
-                [mkComp fd_name CiVariable (Just $ showForSnippet fd_sig_ty)]
+                [mkComp fd_name CompletionItemKind_Variable (Just $ showForSnippet fd_sig_ty)]
             _ -> []
             | L (locA -> pos) decl <- hsmodDecls,
             let mkComp = mkLocalComp pos
         ]
 
     mkLocalComp pos n ctyp ty =
-        CI ctyp pn (Local pos) pn ty Nothing (ctyp `elem` [CiStruct, CiInterface]) Nothing (Just $ NameDetails (ms_mod $ pm_mod_summary pm) occ) True
+        CI ctyp pn (Local pos) pn ty Nothing (ctyp `elem` [CompletionItemKind_Struct, CompletionItemKind_Interface]) Nothing (Just $ NameDetails (ms_mod $ pm_mod_summary pm) occ) True
       where
         occ = rdrNameOcc $ unLoc n
         pn = showForSnippet n
@@ -520,7 +529,7 @@ toggleSnippets ClientCapabilities {_textDocument} CompletionsConfig{..} =
   removeSnippetsWhen (not $ enableSnippets && supported)
   where
     supported =
-      Just True == (_textDocument >>= _completion >>= _completionItem >>= _snippetSupport)
+      Just True == (_textDocument >>= _completion >>= view L.completionItem >>= (\x -> x .! #snippetSupport))
 
 toggleAutoExtend :: CompletionsConfig -> CompItem -> CompItem
 toggleAutoExtend CompletionsConfig{enableAutoExtend=False} x = x {additionalTextEdits = Nothing}
@@ -531,7 +540,7 @@ removeSnippetsWhen condition x =
   if condition
     then
       x
-        { _insertTextFormat = Just PlainText,
+        { _insertTextFormat = Just InsertTextFormat_PlainText,
           _insertText = Nothing
         }
     else x
@@ -613,7 +622,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
               -- to get the record's module, which isn't included in the type information used to get the fields.
               dotFieldSelectorToCompl :: T.Text -> T.Text -> (Bool, CompItem)
               dotFieldSelectorToCompl recname label = (True, CI
-                { compKind = CiField
+                { compKind = CompletionItemKind_Field
                 , insertText = label
                 , provenance = DefinedIn recname
                 , label = label
@@ -790,7 +799,7 @@ mkRecordSnippetCompItem :: Uri -> Maybe T.Text -> T.Text -> [T.Text] -> Provenan
 mkRecordSnippetCompItem uri parent ctxStr compl importedFrom imp = r
   where
       r  = CI {
-            compKind = CiSnippet
+            compKind = CompletionItemKind_Snippet
           , insertText = buildSnippet
           , provenance = importedFrom
           , typeText = Nothing

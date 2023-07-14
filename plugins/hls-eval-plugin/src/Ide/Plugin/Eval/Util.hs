@@ -18,7 +18,7 @@ import           Control.Exception                     (SomeException, evaluate,
 import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Control.Monad.Trans.Except            (ExceptT (..),
                                                         runExceptT)
-import           Data.Aeson                            (Value (Null))
+import           Data.Aeson                            (Value)
 import           Data.String                           (IsString (fromString))
 import qualified Data.Text                             as T
 import           Development.IDE                       (IdeState, Priority (..),
@@ -34,8 +34,9 @@ import           GHC.Stack                             (HasCallStack, callStack,
                                                         srcLocStartCol,
                                                         srcLocStartLine)
 import           Ide.PluginUtils                       (prettyPluginError)
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import           Language.LSP.Types
 import           System.FilePath                       (takeExtension)
 import           System.Time.Extra                     (duration, showDuration)
 import           UnliftIO.Exception                    (catchAny)
@@ -68,7 +69,7 @@ logLevel = Debug -- Info
 isLiterate :: FilePath -> Bool
 isLiterate x = takeExtension x `elem` [".lhs", ".lhs-boot"]
 
-response' :: ExceptT GhcidePluginError (LspM c) WorkspaceEdit -> LspM c (Either ResponseError Value)
+response' :: ExceptT GhcidePluginError (LspM c) WorkspaceEdit -> LspM c (Either ResponseError (Value |? Null))
 response' act = do
     res <- runExceptT act
              `catchAny` \e -> do
@@ -78,8 +79,8 @@ response' act = do
       Left e ->
           return $ Left $ PluginUtils.handlePluginError e
       Right a -> do
-        _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing a) (\_ -> pure ())
-        return $ Right Null
+        _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing a) (\_ -> pure ())
+        return $ Right $ InR Null
 
 gStrictTry :: (MonadIO m, MonadCatch m) => m b -> m (Either String b)
 gStrictTry op =

@@ -24,6 +24,7 @@ import           Control.Concurrent.STM               (readTVarIO)
 import           Control.Exception.Safe               (Exception (..),
                                                        SomeException, assert,
                                                        catch, throwIO, try)
+import           Control.Lens.Operators
 import           Control.Monad                        (forM, unless, when)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
@@ -32,8 +33,7 @@ import           Control.Monad.Trans.Except           (ExceptT (ExceptT),
 import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Writer.Strict
 import           Data.Aeson                           (FromJSON (..),
-                                                       ToJSON (..),
-                                                       Value (Null))
+                                                       ToJSON (..), Value)
 import           Data.Bifunctor                       (second)
 import qualified Data.ByteString                      as BS
 import           Data.Coerce
@@ -46,6 +46,7 @@ import qualified Data.HashSet                         as Set
 import           Data.IORef.Extra                     (atomicModifyIORef'_,
                                                        newIORef, readIORef)
 import           Data.List.Extra                      (find, nubOrdOn)
+import qualified Data.Map                             as Map
 import           Data.Maybe                           (catMaybes, fromJust,
                                                        listToMaybe)
 import           Data.String                          (IsString)
@@ -114,15 +115,14 @@ import           GHC.Generics                         (Generic)
 import           GHC.Hs.Dump
 import           Ide.PluginUtils
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens           as L
+import           Language.LSP.Protocol.Message        as LSP
+import           Language.LSP.Protocol.Types          as LSP
 import           Language.LSP.Server                  (LspM,
                                                        ProgressCancellable (Cancellable),
                                                        sendNotification,
                                                        sendRequest,
                                                        withIndefiniteProgress)
-import           Language.LSP.Types                   as J hiding
-                                                           (SemanticTokenAbsolute (length, line),
-                                                            SemanticTokenRelative (length),
-                                                            SemanticTokensEdit (_start))
 import           Retrie                               (Annotated (astA),
                                                        AnnotatedModule,
                                                        Fixity (Fixity),
@@ -179,7 +179,7 @@ import           Development.IDE.Types.Shake          (WithHieDb)
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
-    { pluginHandlers = mkPluginHandler STextDocumentCodeAction provider,
+    { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction provider,
       pluginCommands = [retrieCommand, retrieInlineThisCommand]
     }
 
@@ -209,10 +209,10 @@ data RunRetrieParams = RunRetrieParams
 runRetrieCmd ::
   IdeState ->
   RunRetrieParams ->
-  LspM c (Either ResponseError Value)
+  LspM c (Either ResponseError (Value |? Null))
 runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
   withIndefiniteProgress description Cancellable $ do
-    PluginUtils.pluginResponse $ do
+    PluginUtils.pluginResponse' $ do
         nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
         (session, _) <-
             PluginUtils.runAction "Retrie.GhcSessionDeps" state $
@@ -228,14 +228,14 @@ runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
                 nfp
                 restrictToOriginatingFile
         unless (null errors) $
-            lift $ sendNotification SWindowShowMessage $
-                    ShowMessageParams MtWarning $
+            lift $ sendNotification SMethod_WindowShowMessage $
+                    ShowMessageParams MessageType_Warning $
                     T.unlines $
                         "## Found errors during rewrite:" :
                         ["-" <> T.pack (show e) | e <- errors]
-        lift $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
+        lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
         return ()
-    return $ Right Null
+    return $ Right $ InR Null
 
 data RunRetrieInlineThisParams = RunRetrieInlineThisParams
   { inlineIntoThisLocation :: !Location,
@@ -245,8 +245,8 @@ data RunRetrieInlineThisParams = RunRetrieInlineThisParams
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
 runRetrieInlineThisCmd :: IdeState
-    -> RunRetrieInlineThisParams -> LspM c (Either ResponseError Value)
-runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = PluginUtils.pluginResponse $ do
+    -> RunRetrieInlineThisParams -> LspM c (Either ResponseError (Value |? Null))
+runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = PluginUtils.pluginResponse' $ do
     nfp <- PluginUtils.withPluginError $
         getNormalizedFilePath' $ getLocationUri inlineIntoThisLocation
     nfpSource <- PluginUtils.withPluginError $
@@ -285,9 +285,9 @@ runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = PluginUtils.pluginR
                 ourReplacement = [ r
                     | r@Replacement{..} <- replacements
                     , RealSrcSpan intoRange Nothing `GHC.isSubspanOf` replLocation]
-            lift $ sendRequest SWorkspaceApplyEdit
+            lift $ sendRequest SMethod_WorkspaceApplyEdit
                 (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-            return Null
+            return $ InR Null
 
 -- Override to skip adding binders to the context, which prevents inlining
 -- nested defined functions
@@ -338,9 +338,9 @@ extractImports _ _ _ = []
 
 -------------------------------------------------------------------------------
 
-provider :: PluginMethodHandler IdeState TextDocumentCodeAction
-provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = PluginUtils.pluginResponse $ do
-  let (J.CodeActionContext _diags _monly) = ca
+provider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
+provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = PluginUtils.pluginResponse' $ do
+  let (LSP.CodeActionContext _diags _monly _) = ca
   nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
 
   (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
@@ -350,7 +350,7 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
   extras@ShakeExtras{ withHieDb, hiedbWriter } <- liftIO $ runAction "" state getShakeExtras
 
   range <- handleMaybe (PluginUtils.mkPluginErrorMessage "range") $ fromCurrentRange posMapping range
-  let pos = _start range
+  let pos = range ^. L.start
   let rewrites =
         concatMap (suggestBindRewrites uri pos ms_mod) topLevelBinds
           ++ concatMap (suggestRuleRewrites uri pos ms_mod) hs_ruleds
@@ -370,10 +370,10 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
     suggestBindInlines plId uri topLevelBinds range withHieDb (lookupMod hiedbWriter)
   let inlineCommands =
         [ Just $
-            CodeAction _title (Just CodeActionRefactorInline) Nothing Nothing Nothing Nothing (Just c) Nothing
+            CodeAction _title (Just CodeActionKind_RefactorInline) Nothing Nothing Nothing Nothing (Just c) Nothing
         | c@Command{..} <- inlineSuggestions
         ]
-  return $ J.List [InR c | c <- retrieCommands ++ catMaybes inlineCommands]
+  return $ InL [InR c | c <- retrieCommands ++ catMaybes inlineCommands]
 
 getLocationUri :: Location -> Uri
 getLocationUri Location{_uri} = _uri
@@ -419,11 +419,11 @@ suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L (locA -> l') 
         unfoldRewrite restrictToOriginatingFile =
             let rewrites = [Unfold (qualify ms_mod pprName)]
                 description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
-            in (description, CodeActionRefactorInline, RunRetrieParams {..})
+            in (description, CodeActionKind_RefactorInline, RunRetrieParams {..})
         foldRewrite restrictToOriginatingFile =
           let rewrites = [Fold (qualify ms_mod pprName)]
               description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
-           in (description, CodeActionRefactorExtract, RunRetrieParams {..})
+           in (description, CodeActionKind_RefactorExtract, RunRetrieParams {..})
      in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
 suggestBindRewrites _ _ _ _ = []
 
@@ -480,11 +480,11 @@ suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName} =
         unfoldRewrite restrictToOriginatingFile =
             let rewrites = [TypeForward (qualify ms_mod pprName)]
                 description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
-           in (description, CodeActionRefactorInline, RunRetrieParams {..})
+           in (description, CodeActionKind_RefactorInline, RunRetrieParams {..})
         foldRewrite restrictToOriginatingFile =
           let rewrites = [TypeBackward (qualify ms_mod pprName)]
               description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
-           in (description, CodeActionRefactorExtract, RunRetrieParams {..})
+           in (description, CodeActionKind_RefactorExtract, RunRetrieParams {..})
      in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
 suggestTypeRewrites _ _ _ = []
 
@@ -517,7 +517,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
                             describeRestriction restrictToOriginatingFile
 
         in ( description,
-            CodeActionRefactor,
+            CodeActionKind_Refactor,
             RunRetrieParams {..}
             )
     backwardsRewrite ruleName restrictToOriginatingFile =
@@ -525,7 +525,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
               description = "Apply rule " <> T.pack ruleName <> " backwards" <>
                               describeRestriction restrictToOriginatingFile
            in ( description,
-                CodeActionRefactor,
+                CodeActionKind_Refactor,
                 RunRetrieParams {..}
               )
 
@@ -703,8 +703,8 @@ constructInlineFromIdentifer originParsedModule originSpan = do
                 constructfromFunMatches imports fun_id fun_matches
             _ -> return $ error "cound not find source code to inline"
 
-asEditMap :: [(Uri, TextEdit)] -> WorkspaceEditMap
-asEditMap = coerce . HM.fromListWith (++) . map (second pure)
+asEditMap :: [(Uri, TextEdit)] -> Map.Map Uri [TextEdit]
+asEditMap = Map.fromListWith (++) . map (second pure)
 
 asTextEdits :: Change -> [(Uri, TextEdit)]
 asTextEdits NoChange = []

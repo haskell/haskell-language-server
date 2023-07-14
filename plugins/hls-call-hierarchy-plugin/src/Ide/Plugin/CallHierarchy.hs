@@ -3,12 +3,12 @@ module Ide.Plugin.CallHierarchy (descriptor) where
 import           Development.IDE
 import qualified Ide.Plugin.CallHierarchy.Internal as X
 import           Ide.Types
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Message
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
     { Ide.Types.pluginHandlers =
-        mkPluginHandler STextDocumentPrepareCallHierarchy X.prepareCallHierarchy
-     <> mkPluginHandler SCallHierarchyIncomingCalls X.incomingCalls
-     <> mkPluginHandler SCallHierarchyOutgoingCalls X.outgoingCalls
+        mkPluginHandler SMethod_TextDocumentPrepareCallHierarchy X.prepareCallHierarchy
+     <> mkPluginHandler SMethod_CallHierarchyIncomingCalls X.incomingCalls
+     <> mkPluginHandler SMethod_CallHierarchyOutgoingCalls X.outgoingCalls
     }

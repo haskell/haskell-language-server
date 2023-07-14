@@ -55,15 +55,16 @@ import           Development.IDE.Types.Logger       (Doc, Logger (Logger),
 import           GHC.Stack.Types                    (emptyCallStack)
 import           Ide.Plugin.Config                  (Config)
 import           Ide.Types                          (IdePlugins (IdePlugins))
+import           Language.LSP.Protocol.Message      (Method (Method_Initialize),
+                                                     ResponseError,
+                                                     SMethod (SMethod_Exit, SMethod_WindowShowMessageRequest),
+                                                     TRequestMessage)
+import           Language.LSP.Protocol.Types        (MessageActionItem (MessageActionItem),
+                                                     MessageType (MessageType_Error),
+                                                     ShowMessageRequestParams (ShowMessageRequestParams),
+                                                     type (|?) (InL))
 import           Language.LSP.Server                (LspM)
 import qualified Language.LSP.Server                as LSP
-import           Language.LSP.Types                 (MessageActionItem (MessageActionItem),
-                                                     MessageType (MtError),
-                                                     Method (Initialize),
-                                                     RequestMessage,
-                                                     ResponseError,
-                                                     SMethod (SExit, SWindowShowMessageRequest),
-                                                     ShowMessageRequestParams (ShowMessageRequestParams))
 
 -- ---------------------------------------------------------------------
 
@@ -288,12 +289,12 @@ launchErrorLSP recorder errorMsg = do
         -- Forcefully exit
         let exit = void $ tryPutMVar clientMsgVar ()
 
-        let doInitialize :: LSP.LanguageContextEnv Config -> RequestMessage Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv Config, ()))
+        let doInitialize :: LSP.LanguageContextEnv Config -> TRequestMessage Method_Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv Config, ()))
             doInitialize env _ = do
 
               let restartTitle = "Try to restart"
-              void $ LSP.runLspT env $ LSP.sendRequest SWindowShowMessageRequest (ShowMessageRequestParams MtError errorMsg (Just [MessageActionItem restartTitle])) $ \case
-                    Right (Just (MessageActionItem title))
+              void $ LSP.runLspT env $ LSP.sendRequest SMethod_WindowShowMessageRequest (ShowMessageRequestParams MessageType_Error errorMsg (Just [MessageActionItem restartTitle])) $ \case
+                    Right (InL (MessageActionItem title))
                        | title == restartTitle -> liftIO exit
                     _ -> pure ()
 
@@ -314,4 +315,4 @@ launchErrorLSP recorder errorMsg = do
     setup
 
 exitHandler :: IO () -> LSP.Handlers (ErrorLSPM c)
-exitHandler exit = LSP.notificationHandler SExit $ const $ liftIO exit
+exitHandler exit = LSP.notificationHandler SMethod_Exit $ const $ liftIO exit

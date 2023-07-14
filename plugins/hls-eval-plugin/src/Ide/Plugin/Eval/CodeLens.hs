@@ -36,11 +36,11 @@ import           Control.Monad.Trans.Except                   (ExceptT (..))
 import           Data.Aeson                                   (toJSON)
 import           Data.Char                                    (isSpace)
 import           Data.Foldable                                (toList)
-import qualified Data.HashMap.Strict                          as HashMap
 import           Data.List                                    (dropWhileEnd,
                                                                find,
                                                                intercalate,
                                                                intersperse)
+import qualified Data.Map                                     as Map
 import           Data.Maybe                                   (catMaybes)
 import           Data.String                                  (IsString)
 import           Data.Text                                    (Text)
@@ -126,22 +126,21 @@ import           Ide.Plugin.Eval.Util                         (gStrictTry,
 import           Ide.PluginUtils                              (handleMaybe,
                                                                handleMaybeM)
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens                   as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import           Language.LSP.Types                           hiding
-                                                              (SemanticTokenAbsolute (length, line),
-                                                               SemanticTokenRelative (length))
-import           Language.LSP.Types.Lens                      (end, line)
 import           Language.LSP.VFS                             (virtualFileText)
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
-codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
+codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLens st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
      in perf "codeLens" $
-            PluginUtils.pluginResponse $ do
+            PluginUtils.pluginResponse' $ do
                 let TextDocumentIdentifier uri = _textDocument
                 fp <- PluginUtils.uriToFilePath' uri
                 let nfp = toNormalizedFilePath' fp
@@ -170,7 +169,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                               args = EvalParams (setupSections ++ [section]) _textDocument ident
                               cmd' =
                                 (cmd :: Command)
-                                    { _arguments = Just (List [toJSON args])
+                                    { _arguments = Just [toJSON args]
                                     , _title =
                                         if trivial resultRange
                                             then "Evaluate..."
@@ -191,7 +190,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                             , "lenses."
                             ]
 
-                return $ List lenses
+                return $ InL lenses
   where
     trivial (Range p p') = p == p'
 
@@ -233,7 +232,7 @@ runEvalCmd plId st EvalParams{..} =
                         evalGhcEnv final_hscEnv $ do
                             runTests evalCfg (st, fp) tests
 
-            let workspaceEditsMap = HashMap.fromList [(_uri, List $ addFinalReturn mdlText edits)]
+            let workspaceEditsMap = Map.fromList [(_uri, addFinalReturn mdlText edits)]
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
 
             return workspaceEdits
@@ -354,12 +353,12 @@ runTests EvalConfig{..} e@(_st, _) tests = do
 asEdit :: Format -> Test -> [Text] -> TextEdit
 asEdit (MultiLine commRange) test resultLines
     -- A test in a block comment, ending with @-\}@ without newline in-between.
-    | testRange test ^. end.line == commRange ^. end . line
+    | testRange test ^. L.end . L.line == commRange ^. L.end . L.line
     =
     TextEdit
         (Range
-            (testRange test ^. end)
-            (resultRange test ^. end)
+            (testRange test ^. L.end)
+            (resultRange test ^. L.end)
         )
         ("\n" <> T.unlines (resultLines <> ["-}"]))
 asEdit _ test resultLines =

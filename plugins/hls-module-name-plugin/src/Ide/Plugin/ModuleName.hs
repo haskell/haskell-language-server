@@ -21,12 +21,12 @@ import           Control.Monad                        (forM_, void)
 import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                           (Value (Null), toJSON)
+import           Data.Aeson                           (Value, toJSON)
 import           Data.Char                            (isLower)
-import qualified Data.HashMap.Strict                  as HashMap
 import           Data.List                            (intercalate, isPrefixOf,
                                                        minimumBy)
 import qualified Data.List.NonEmpty                   as NE
+import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, maybeToList)
 import           Data.Ord                             (comparing)
 import           Data.String                          (IsString)
@@ -53,11 +53,9 @@ import           Development.IDE.GHC.Compat           (GenLocated (L),
                                                        pm_parsed_source, unLoc)
 import           Development.IDE.Types.Logger         (Pretty (..))
 import           Ide.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import           Language.LSP.Types                   hiding
-                                                      (SemanticTokenAbsolute (length, line),
-                                                       SemanticTokenRelative (length),
-                                                       SemanticTokensEdit (_start))
 import           Language.LSP.VFS                     (virtualFileText)
 import           System.Directory                     (makeAbsolute)
 import           System.FilePath                      (dropExtension, normalise,
@@ -69,7 +67,7 @@ import           System.FilePath                      (dropExtension, normalise,
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
     (defaultPluginDescriptor plId)
-        { pluginHandlers = mkPluginHandler STextDocumentCodeLens (codeLens recorder)
+        { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeLens (codeLens recorder)
         , pluginCommands = [PluginCommand updateModuleNameCommand "set name of module to match with file path" (command recorder)]
         }
 
@@ -77,9 +75,9 @@ updateModuleNameCommand :: IsString p => p
 updateModuleNameCommand = "updateModuleName"
 
 -- | Generate code lenses
-codeLens :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'TextDocumentCodeLens
+codeLens :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
 codeLens recorder state pluginId CodeLensParams{_textDocument=TextDocumentIdentifier uri} =
-  Right . List . maybeToList . (asCodeLens <$>) <$> action recorder state uri
+  Right . InL . maybeToList . (asCodeLens <$>) <$> action recorder state uri
   where
     asCodeLens :: Action -> CodeLens
     asCodeLens Replace{..} = CodeLens aRange (Just cmd) Nothing
@@ -93,10 +91,10 @@ command recorder state uri = do
   forM_ actMaybe $ \Replace{..} ->
     let
       -- | Convert an Action to the corresponding edit operation
-      edit = WorkspaceEdit (Just . HashMap.singleton aUri $ List [TextEdit aRange aCode]) Nothing Nothing
+      edit = WorkspaceEdit (Just $ Map.singleton aUri [TextEdit aRange aCode]) Nothing Nothing
     in
-      void $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (const (pure ()))
-  pure $ Right Null
+      void $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (const (pure ()))
+  pure $ Right $ InR Null
 
 -- | A source code change
 data Action = Replace

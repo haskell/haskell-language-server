@@ -54,36 +54,32 @@ module Ide.PluginUtils
 where
 
 
-import           Control.Arrow                   ((&&&))
-import           Control.Lens                    ((^.))
-import           Control.Monad.Extra             (maybeM)
-import           Control.Monad.IO.Class          (MonadIO, liftIO)
-import           Control.Monad.Trans.Class       (lift)
-import           Control.Monad.Trans.Except      (ExceptT (..), mapExceptT,
-                                                  runExceptT, throwE,
-                                                  withExceptT)
+import           Control.Arrow                 ((&&&))
+import           Control.Lens                  (re, (^.))
+import           Control.Monad.Extra           (maybeM)
+import           Control.Monad.IO.Class        (MonadIO, liftIO)
+import           Control.Monad.Trans.Class     (lift)
+import           Control.Monad.Trans.Except    (ExceptT (..), mapExceptT,
+                                                runExceptT, throwE, withExceptT)
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
-import           Data.Bifunctor                  (Bifunctor (first))
-import           Data.Char                       (isPrint, showLitChar)
-import           Data.Functor                    (void)
-import qualified Data.HashMap.Strict             as H
-import qualified Data.Text                       as T
-import           Data.Void                       (Void)
+import           Data.Bifunctor                (Bifunctor (first))
+import           Data.Char                     (isPrint, showLitChar)
+import           Data.Functor                  (void)
+import qualified Data.Map                      as M
+import           Data.String                   (IsString (fromString))
+import qualified Data.Text                     as T
+import           Data.Void                     (Void)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens    as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start))
-import qualified Language.LSP.Types              as J
-import           Language.LSP.Types.Capabilities
-import qualified Language.LSP.Types.Lens         as J
-import qualified Text.Megaparsec                 as P
-import qualified Text.Megaparsec.Char            as P
-import qualified Text.Megaparsec.Char.Lexer      as P
+import qualified Text.Megaparsec               as P
+import qualified Text.Megaparsec.Char          as P
+import qualified Text.Megaparsec.Char.Lexer    as P
 
 -- ---------------------------------------------------------------------
 
@@ -122,14 +118,14 @@ diffText clientCaps old new withDeletions =
     supports = clientSupportsDocumentChanges clientCaps
   in diffText' supports old new withDeletions
 
-makeDiffTextEdit :: T.Text -> T.Text -> List TextEdit
+makeDiffTextEdit :: T.Text -> T.Text -> [TextEdit]
 makeDiffTextEdit f1 f2 = diffTextEdit f1 f2 IncludeDeletions
 
-makeDiffTextEditAdditive :: T.Text -> T.Text -> List TextEdit
+makeDiffTextEditAdditive :: T.Text -> T.Text -> [TextEdit]
 makeDiffTextEditAdditive f1 f2 = diffTextEdit f1 f2 SkipDeletions
 
-diffTextEdit :: T.Text -> T.Text -> WithDeletions -> List TextEdit
-diffTextEdit fText f2Text withDeletions = J.List r
+diffTextEdit :: T.Text -> T.Text -> WithDeletions -> [TextEdit]
+diffTextEdit fText f2Text withDeletions = r
   where
     r = map diffOperationToTextEdit diffOps
     d = getGroupedDiff (lines $ T.unpack fText) (lines $ T.unpack f2Text)
@@ -141,8 +137,8 @@ diffTextEdit fText f2Text withDeletions = J.List r
     isDeletion _              = False
 
 
-    diffOperationToTextEdit :: DiffOperation LineRange -> J.TextEdit
-    diffOperationToTextEdit (Change fm to) = J.TextEdit range nt
+    diffOperationToTextEdit :: DiffOperation LineRange -> TextEdit
+    diffOperationToTextEdit (Change fm to) = TextEdit range nt
       where
         range = calcRange fm
         nt = T.pack $ init $ unlines $ lrContents to
@@ -154,28 +150,28 @@ diffTextEdit fText f2Text withDeletions = J.List r
       the line ending character(s) then use an end position denoting
       the start of the next line"
     -}
-    diffOperationToTextEdit (Deletion (LineRange (sl, el) _) _) = J.TextEdit range ""
+    diffOperationToTextEdit (Deletion (LineRange (sl, el) _) _) = TextEdit range ""
       where
-        range = J.Range (J.Position (fromIntegral $ sl - 1) 0)
-                        (J.Position (fromIntegral el) 0)
+        range = Range (Position (fromIntegral $ sl - 1) 0)
+                        (Position (fromIntegral el) 0)
 
-    diffOperationToTextEdit (Addition fm l) = J.TextEdit range nt
+    diffOperationToTextEdit (Addition fm l) = TextEdit range nt
     -- fm has a range wrt to the changed file, which starts in the current file at l + 1
     -- So the range has to be shifted to start at l + 1
       where
-        range = J.Range (J.Position (fromIntegral l) 0)
-                        (J.Position (fromIntegral l) 0)
+        range = Range (Position (fromIntegral l) 0)
+                        (Position (fromIntegral l) 0)
         nt = T.pack $ unlines $ lrContents fm
 
 
-    calcRange fm = J.Range s e
+    calcRange fm = Range s e
       where
         sl = fst $ lrNumbers fm
         sc = 0
-        s = J.Position (fromIntegral $ sl - 1) sc -- Note: zero-based lines
+        s = Position (fromIntegral $ sl - 1) sc -- Note: zero-based lines
         el = snd $ lrNumbers fm
         ec = fromIntegral $ length $ last $ lrContents fm
-        e = J.Position (fromIntegral $ el - 1) ec  -- Note: zero-based lines
+        e = Position (fromIntegral $ el - 1) ec  -- Note: zero-based lines
 
 
 -- | A pure version of 'diffText' for testing
@@ -186,15 +182,15 @@ diffText' supports (verTxtDocId,fText) f2Text withDeletions =
     else WorkspaceEdit (Just h) Nothing Nothing
   where
     diff = diffTextEdit fText f2Text withDeletions
-    h = H.singleton (verTxtDocId ^. J.uri) diff
-    docChanges = J.List [InL docEdit]
-    docEdit = J.TextDocumentEdit verTxtDocId $ fmap InL diff
+    h = M.singleton (verTxtDocId ^. L.uri) diff
+    docChanges = [InL docEdit]
+    docEdit = TextDocumentEdit (verTxtDocId ^. re _versionedTextDocumentIdentifier) $ fmap InL diff
 
 -- ---------------------------------------------------------------------
 
 clientSupportsDocumentChanges :: ClientCapabilities -> Bool
 clientSupportsDocumentChanges caps =
-  let ClientCapabilities mwCaps _ _ _ _ = caps
+  let ClientCapabilities mwCaps _ _ _ _ _ = caps
       supports = do
         wCaps <- mwCaps
         WorkspaceEditClientCapabilities mDc _ _ _ _ <- _workspaceEdit wCaps
@@ -305,12 +301,12 @@ pluginResponseM handler act =
         Left err -> handler err
 
 handlePluginError :: PluginError -> ResponseError
-handlePluginError msg = ResponseError InternalError (prettyPluginError msg) Nothing
+handlePluginError msg = ResponseError (InR ErrorCodes_InternalError) (prettyPluginError msg) Nothing
 
 data PluginError
   = PluginInternalError
-  | PluginUriToFilePath J.Uri
-  | PluginUriToNormalizedFilePath J.Uri
+  | PluginUriToFilePath Uri
+  | PluginUriToNormalizedFilePath Uri
   | PluginErrorMessage T.Text
 
 prettyPluginError :: PluginError -> T.Text
@@ -324,7 +320,7 @@ mkPluginErrorMessage :: T.Text -> PluginError
 mkPluginErrorMessage = PluginErrorMessage
 
 mkSimpleResponseError :: T.Text -> ResponseError
-mkSimpleResponseError err = ResponseError InternalError err Nothing
+mkSimpleResponseError err = ResponseError (InR ErrorCodes_InternalError) err Nothing
 
 handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
 handleMaybe msg = maybe (throwE msg) return

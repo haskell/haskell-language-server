@@ -1,14 +1,16 @@
+{-# LANGUAGE OverloadedLabels    #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Completion(tests) where
 
+import           Control.Lens               hiding ((.=))
 import           Control.Monad
-import           Control.Lens            hiding ((.=))
-import           Data.Aeson              (object, (.=))
-import           Data.Foldable           (find)
-import qualified Data.Text               as T
-import           Ide.Plugin.Config       (maxCompletions)
-import           Language.LSP.Types.Lens hiding (applyEdit)
+import           Data.Aeson                 (object, (.=))
+import           Data.Foldable              (find)
+import           Data.Row.Records           (focus)
+import qualified Data.Text                  as T
+import           Ide.Plugin.Config          (maxCompletions)
+import           Language.LSP.Protocol.Lens hiding (applyEdit, length)
 import           Test.Hls
 import           Test.Hls.Command
 
@@ -16,7 +18,7 @@ getResolvedCompletions :: TextDocumentIdentifier -> Position -> Session [Complet
 getResolvedCompletions doc pos = do
   xs <- getCompletions doc pos
   forM xs $ \item -> do
-    rsp <- request SCompletionItemResolve item
+    rsp <- request SMethod_CompletionItemResolve item
     case rsp ^. result of
       Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
       Right x -> pure x
@@ -33,9 +35,9 @@ tests = testGroup "completions" [
          item <- getCompletionByLabel "putStrLn" compls
          liftIO $ do
              item ^. label @?= "putStrLn"
-             item ^. kind @?= Just CiFunction
+             item ^. kind @?= Just CompletionItemKind_Function
              item ^. detail @?= Just ":: String -> IO ()\nfrom Prelude"
-             item ^. insertTextFormat @?= Just Snippet
+             item ^. insertTextFormat @?= Just InsertTextFormat_Snippet
              item ^. insertText @?= Just "putStrLn"
 
      , testCase "itemCompletion/resolve works" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -48,9 +50,9 @@ tests = testGroup "completions" [
          item <- getCompletionByLabel "putStrLn" compls
          liftIO $ do
                  item ^. label @?= "putStrLn"
-                 item ^. kind @?= Just CiFunction
+                 item ^. kind @?= Just CompletionItemKind_Function
                  item ^. detail @?= Just ":: String -> IO ()\nfrom Prelude"
-                 item ^. insertTextFormat @?= Just Snippet
+                 item ^. insertTextFormat @?= Just InsertTextFormat_Snippet
                  item ^. insertText @?= Just "putStrLn"
 
      , testCase "completes imports" $ runSession (hlsCommand <> " --test") fullCaps "test/testdata/completion" $ do
@@ -66,7 +68,7 @@ tests = testGroup "completions" [
          liftIO $ do
              item ^. label @?= "Maybe"
              item ^. detail @?= Just "Data.Maybe"
-             item ^. kind @?= Just CiModule
+             item ^. kind @?= Just CompletionItemKind_Module
 
      , testCase "completes qualified imports" $ runSession (hlsCommand <> " --test") fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
@@ -81,7 +83,7 @@ tests = testGroup "completions" [
          liftIO $ do
              item ^. label @?= "List"
              item ^. detail @?= Just "Data.List"
-             item ^. kind @?= Just CiModule
+             item ^. kind @?= Just CompletionItemKind_Module
 
      , testCase "completes with no prefix" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
@@ -126,7 +128,7 @@ tests = testGroup "completions" [
          item <- getCompletionByLabel "accessor" compls
          liftIO $ do
              item ^. label @?= "accessor"
-             item ^. kind @?= Just CiFunction
+             item ^. kind @?= Just CompletionItemKind_Function
      , testCase "have implicit foralls on basic polymorphic types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
@@ -163,7 +165,7 @@ tests = testGroup "completions" [
          item <- getCompletionByLabel "Alternative" compls
          liftIO $ do
              item ^. label @?= "Alternative"
-             item ^. kind @?= Just CiFunction
+             item ^. kind @?= Just CompletionItemKind_Function
              item ^. detail @?= Just "Control.Applicative"
 
     , testCase "import second function completion" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -176,7 +178,7 @@ tests = testGroup "completions" [
          item <- getCompletionByLabel "liftA" compls
          liftIO $ do
              item ^. label @?= "liftA"
-             item ^. kind @?= Just CiFunction
+             item ^. kind @?= Just CompletionItemKind_Function
              item ^. detail @?= Just "Control.Applicative"
 
      , testCase "completes locally defined associated type family" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -186,7 +188,7 @@ tests = testGroup "completions" [
          item <- getCompletionByLabel "Fam" compls
          liftIO $ do
              item ^. label @?= "Fam"
-             item ^. kind @?= Just CiStruct
+             item ^. kind @?= Just CompletionItemKind_Struct
 
      , contextTests
      , snippetTests
@@ -203,7 +205,7 @@ snippetTests = testGroup "snippets" [
       compls <- getResolvedCompletions doc (Position 5 14)
       item <- getCompletionByLabel "Nothing" compls
       liftIO $ do
-          item ^. insertTextFormat @?= Just Snippet
+          item ^. insertTextFormat @?= Just InsertTextFormat_Snippet
           item ^. insertText @?= Just "Nothing"
 
     , testCase "work for polymorphic types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -216,8 +218,8 @@ snippetTests = testGroup "snippets" [
         item <- getCompletionByLabel "foldl" compls
         liftIO $ do
             item ^. label @?= "foldl"
-            item ^. kind @?= Just CiFunction
-            item ^. insertTextFormat @?= Just Snippet
+            item ^. kind @?= Just CompletionItemKind_Function
+            item ^. insertTextFormat @?= Just InsertTextFormat_Snippet
             item ^. insertText @?= Just "foldl"
 
     , testCase "work for complex types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -230,8 +232,8 @@ snippetTests = testGroup "snippets" [
         item <- getCompletionByLabel "mapM" compls
         liftIO $ do
             item ^. label @?= "mapM"
-            item ^. kind @?= Just CiFunction
-            item ^. insertTextFormat @?= Just Snippet
+            item ^. kind @?= Just CompletionItemKind_Function
+            item ^. insertTextFormat @?= Just InsertTextFormat_Snippet
             item ^. insertText @?= Just "mapM"
 
     , testCase "work for infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -244,8 +246,8 @@ snippetTests = testGroup "snippets" [
         item <- getCompletionByLabel "filter" compls
         liftIO $ do
             item ^. label @?= "filter"
-            item ^. kind @?= Just CiFunction
-            item ^. insertTextFormat @?= Just PlainText
+            item ^. kind @?= Just CompletionItemKind_Function
+            item ^. insertTextFormat @?= Just InsertTextFormat_PlainText
             item ^. insertText @?= Nothing
 
     , testCase "work for infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -258,8 +260,8 @@ snippetTests = testGroup "snippets" [
         item <- getCompletionByLabel "filter" compls
         liftIO $ do
             item ^. label @?= "filter"
-            item ^. kind @?= Just CiFunction
-            item ^. insertTextFormat @?= Just PlainText
+            item ^. kind @?= Just CompletionItemKind_Function
+            item ^. insertTextFormat @?= Just InsertTextFormat_PlainText
             item ^. insertText @?= Nothing
 
     , testCase "work for qualified infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -272,8 +274,8 @@ snippetTests = testGroup "snippets" [
         item <- getCompletionByLabel "intersperse" compls
         liftIO $ do
             item ^. label @?= "intersperse"
-            item ^. kind @?= Just CiFunction
-            item ^. insertTextFormat @?= Just PlainText
+            item ^. kind @?= Just CompletionItemKind_Function
+            item ^. insertTextFormat @?= Just InsertTextFormat_PlainText
             item ^. insertText @?= Nothing
 
     , testCase "work for qualified infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -286,8 +288,8 @@ snippetTests = testGroup "snippets" [
         item <- getCompletionByLabel "intersperse" compls
         liftIO $ do
             item ^. label @?= "intersperse"
-            item ^. kind @?= Just CiFunction
-            item ^. insertTextFormat @?= Just PlainText
+            item ^. kind @?= Just CompletionItemKind_Function
+            item ^. insertTextFormat @?= Just InsertTextFormat_PlainText
             item ^. insertText @?= Nothing
 
     , testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -314,7 +316,7 @@ snippetTests = testGroup "snippets" [
             Just c -> pure c
             Nothing -> liftIO . assertFailure $ "Completion with label 'MkFoo' and insertText starting with 'MkFoo {' not found among " <> show compls
          liftIO $ do
-            item ^. insertTextFormat @?= Just Snippet
+            item ^. insertTextFormat @?= Just InsertTextFormat_Snippet
             item ^. insertText @?= Just "MkFoo {arg1=${1:_arg1}, arg2=${2:_arg2}, arg3=${3:_arg3}, arg4=${4:_arg4}, arg5=${5:_arg5}}"
     ]
     where
@@ -326,8 +328,8 @@ snippetTests = testGroup "snippets" [
             item <- getCompletionByLabel "foldl" compls
             liftIO $ do
                 item ^. label @?= "foldl"
-                item ^. kind @?= Just CiFunction
-                item ^. insertTextFormat @?= Just PlainText
+                item ^. kind @?= Just CompletionItemKind_Function
+                item ^. insertTextFormat @?= Just InsertTextFormat_PlainText
                 item ^. insertText @?= Nothing
 
         noSnippetsCaps =
@@ -337,7 +339,7 @@ snippetTests = testGroup "snippets" [
             .  _Just
             .  completionItem
             .  _Just
-            .  snippetSupport
+            .  focus #snippetSupport
             ?~ False
             )
             fullCaps

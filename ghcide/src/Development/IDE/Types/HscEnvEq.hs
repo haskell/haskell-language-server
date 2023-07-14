@@ -4,6 +4,7 @@ module Development.IDE.Types.HscEnvEq
     hscEnvWithImportPaths,
     newHscEnvEqPreserveImportPaths,
     newHscEnvEqWithImportPaths,
+    updateHscEnvEq,
     envImportPaths,
     envPackageExports,
     envVisibleModuleNames,
@@ -32,7 +33,8 @@ import           System.Directory                (makeAbsolute)
 import           System.FilePath
 
 -- | An 'HscEnv' with equality. Two values are considered equal
---   if they are created with the same call to 'newHscEnvEq'.
+--   if they are created with the same call to 'newHscEnvEq' or
+--   'updateHscEnvEq'.
 data HscEnvEq = HscEnvEq
     { envUnique             :: !Unique
     , hscEnv                :: !HscEnv
@@ -50,6 +52,11 @@ data HscEnvEq = HscEnvEq
         -- So it's wrapped in IO here for error handling
         -- If Nothing, 'listVisibleModuleNames' panic
     }
+
+updateHscEnvEq :: HscEnvEq -> HscEnv -> IO HscEnvEq
+updateHscEnvEq oldHscEnvEq newHscEnv = do
+  let update newUnique = oldHscEnvEq { envUnique = newUnique, hscEnv = newHscEnv }
+  update <$> Unique.newUnique
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
 newHscEnvEq :: FilePath -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq

@@ -2,8 +2,8 @@
 
 module Diagnostic (tests) where
 
-import           Control.Lens            hiding (List)
-import qualified Language.LSP.Types.Lens as LSP
+import           Control.Lens               hiding (List)
+import qualified Language.LSP.Protocol.Lens as L
 import           Test.Hls
 import           Test.Hls.Command
 
@@ -19,6 +19,6 @@ warningTests = testGroup  "Warnings are warnings" [
         runSession hlsCommand fullCaps "test/testdata/wErrorTest" $ do
             doc <- openDoc "src/WError.hs" "haskell"
             [diag] <- waitForDiagnosticsFrom doc
-            liftIO $ diag ^. LSP.severity @?= Just DsWarning
+            liftIO $ diag ^. L.severity @?= Just DiagnosticSeverity_Warning
     ]
 

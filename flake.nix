@@ -41,6 +41,20 @@
       flake = false;
     };
 
+    # not sure if this is the correct way to get lsp* packages in
+    lsp = {
+      url = "https://hackage.haskell.org/package/lsp-2.0.0.0/lsp-2.0.0.0.tar.gz";
+      flake = false;
+    };
+    lsp-types = {
+      url = "https://hackage.haskell.org/package/lsp-types-2.0.0.1/lsp-types-2.0.0.1.tar.gz";
+      flake = false;
+    };
+    lsp-test = {
+      url = "https://hackage.haskell.org/package/lsp-test-0.15.0.0/lsp-test-0.15.0.0.tar.gz";
+      flake = false;
+    };
+
     haskell-unix-compat = {
       url = "github:jacobstanley/unix-compat/3f6bd688cb56224955e77245a2649ba99ea32fff";
       flake = false;

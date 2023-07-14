@@ -6,7 +6,7 @@
 module Ide.Plugin.Class.CodeLens where
 
 import           Control.Lens                         ((^.))
-import           Data.Aeson
+import           Data.Aeson                           hiding (Null)
 import           Data.Maybe                           (mapMaybe, maybeToList)
 import qualified Data.Text                            as T
 import           Development.IDE
@@ -18,12 +18,13 @@ import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
 import           Ide.PluginUtils
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens           as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                  (sendRequest)
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens              as J
 
-codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
-codeLens state plId CodeLensParams{..} = PluginUtils.pluginResponse $ do
+codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
+codeLens state plId CodeLensParams{..} = PluginUtils.pluginResponse' $ do
     nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
     (tmr, _) <- PluginUtils.runAction "classplugin.TypeCheck" state
         -- Using stale results means that we can almost always return a value. In practice
@@ -54,9 +55,9 @@ codeLens state plId CodeLensParams{..} = PluginUtils.pluginResponse $ do
                 $ makeEdit range title mp
         codeLens = makeLens <$> mapMaybe getRangeWithSig targetSigs
 
-    pure $ List codeLens
+    pure $ InL codeLens
     where
-        uri = _textDocument ^. J.uri
+        uri = _textDocument ^. L.uri
 
         -- Match Binds with their signatures
         -- We try to give every `InstanceBindTypeSig` a `SrcSpan`,
@@ -115,7 +116,7 @@ codeLens state plId CodeLensParams{..} = PluginUtils.pluginResponse $ do
 
         workspaceEdit pragmaInsertion edits =
             WorkspaceEdit
-                (pure [(uri, List $ edits ++ pragmaInsertion)])
+                (pure [(uri, edits ++ pragmaInsertion)])
                 Nothing
                 Nothing
 
@@ -126,8 +127,8 @@ codeLens state plId CodeLensParams{..} = PluginUtils.pluginResponse $ do
 
         makeEdit :: Range -> T.Text -> PositionMapping -> [TextEdit]
         makeEdit range bind mp =
-            let startPos = range ^. J.start
-                insertChar = startPos ^. J.character
+            let startPos = range ^. L.start
+                insertChar = startPos ^. L.character
                 insertRange = Range startPos startPos
             in case toCurrentRange mp insertRange of
                 Just rg -> [TextEdit rg (bind <> "\n" <> T.replicate (fromIntegral insertChar) " ")]
@@ -135,5 +136,5 @@ codeLens state plId CodeLensParams{..} = PluginUtils.pluginResponse $ do
 
 codeLensCommandHandler :: CommandFunction IdeState WorkspaceEdit
 codeLensCommandHandler _ wedit = do
-  _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right Null
+  _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  return $ Right $ InR Null

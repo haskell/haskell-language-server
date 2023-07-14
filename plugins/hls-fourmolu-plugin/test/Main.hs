@@ -6,9 +6,9 @@ module Main
 import           Data.Aeson
 import           Data.Functor
 import           Ide.Plugin.Config
-import qualified Ide.Plugin.Fourmolu as Fourmolu
+import qualified Ide.Plugin.Fourmolu         as Fourmolu
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Test
-import           Language.LSP.Types
 import           System.FilePath
 import           Test.Hls
 

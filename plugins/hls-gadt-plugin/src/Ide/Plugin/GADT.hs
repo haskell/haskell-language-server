@@ -13,10 +13,10 @@ import           Control.Lens                     ((^.))
 import           Control.Monad.Except
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
-import           Data.Aeson                       (FromJSON, ToJSON,
-                                                   Value (Null), toJSON)
+import           Data.Aeson                       (FromJSON, ToJSON, Value,
+                                                   toJSON)
 import           Data.Either.Extra                (maybeToEither)
-import qualified Data.HashMap.Lazy                as HashMap
+import qualified Data.Map                         as Map
 import qualified Data.Text                        as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
@@ -30,14 +30,15 @@ import           GHC.Generics                     (Generic)
 import           Ide.Plugin.GHC
 import           Ide.PluginUtils
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens       as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Server              (sendRequest)
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens          as L
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
     { Ide.Types.pluginHandlers =
-        mkPluginHandler STextDocumentCodeAction codeActionHandler
+        mkPluginHandler SMethod_TextDocumentCodeAction codeActionHandler
     , pluginCommands =
         [PluginCommand toGADTSyntaxCommandId "convert data decl to GADT syntax" (toGADTCommand plId)]
     }
@@ -71,37 +72,37 @@ toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = pluginResponseM handl
     let insertEdit = [insertNewPragma pragma GADTs | all (`notElem` exts) [GADTSyntax, GADTs]]
 
     _ <- lift $ sendRequest
-            SWorkspaceApplyEdit
+            SMethod_WorkspaceApplyEdit
             (ApplyWorkspaceEditParams Nothing (workSpaceEdit nfp (TextEdit range txt : insertEdit)))
             (\_ -> pure ())
 
-    pure Null
+    pure $ InR Null
     where
         workSpaceEdit nfp edits = WorkspaceEdit
-            (pure $ HashMap.fromList
+            (pure $ Map.fromList
                 [(filePathToUri $ fromNormalizedFilePath nfp,
-                 List edits)])
+                edits)])
                  Nothing Nothing
 
-codeActionHandler :: PluginMethodHandler IdeState TextDocumentCodeAction
+codeActionHandler :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionHandler state plId (CodeActionParams _ _ doc range _) = pluginResponseM handleGhcidePluginError $ do
     nfp <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath' (doc ^. L.uri)
     (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
     let actions = map (mkAction . printOutputable . tcdLName . unLoc) inRangeH98Decls
-    pure $ List actions
+    pure $ InL actions
     where
         mkAction :: T.Text -> Command |? CodeAction
         mkAction name = InR CodeAction{..}
             where
                 _title = "Convert \"" <> name <> "\" to GADT syntax"
-                _kind = Just CodeActionRefactorRewrite
+                _kind = Just CodeActionKind_RefactorRewrite
                 _diagnostics = Nothing
                 _isPreferred = Nothing
                 _disabled = Nothing
                 _edit = Nothing
                 _command = Just
                     $ mkLspCommand plId toGADTSyntaxCommandId _title (Just [toJSON mkParam])
-                _xdata = Nothing
+                _data_ = Nothing
 
         mkParam = ToGADTParams (doc ^. L.uri) range
 

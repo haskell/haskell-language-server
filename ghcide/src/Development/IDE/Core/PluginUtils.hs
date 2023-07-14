@@ -6,8 +6,10 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Reader                 (runReaderT)
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
+import           Data.Bifunctor                       (first)
 import           Data.Either.Extra                    (maybeToEither)
 import           Data.Functor.Identity
+import           Data.String                          (IsString (fromString))
 import qualified Data.Text                            as T
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake           (IdeAction, IdeRule,
@@ -21,10 +23,10 @@ import           Development.IDE.Types.Location       (NormalizedFilePath)
 import qualified Development.IDE.Types.Location       as Location
 import qualified Development.IDE.Types.Logger         as Logger
 import qualified Ide.PluginUtils                      as PluginUtils
-import qualified Language.LSP.Types                   as LSP
+import qualified Language.LSP.Protocol.Message        as LSP
+import qualified Language.LSP.Protocol.Types          as LSP
 import           Prettyprinter
 import           Prettyprinter.Render.Text            (renderStrict)
-
 -- ----------------------------------------------------------------------------
 -- Plugin Error wrapping
 -- ----------------------------------------------------------------------------
@@ -40,11 +42,16 @@ instance Pretty GhcidePluginError where
     RuleFailed rule       -> "RuleFailed:" <+> viaShow rule
     CoreError perror      -> pretty $ PluginUtils.prettyPluginError perror
 
-pluginResponse ::
+pluginResponse :: Monad m => ExceptT String m a -> m (Either LSP.ResponseError a)
+pluginResponse =
+  fmap (first (\msg -> LSP.ResponseError (LSP.InR LSP.ErrorCodes_InternalError) (fromString msg) Nothing))
+    . runExceptT
+
+pluginResponse' ::
     Monad m =>
     ExceptT GhcidePluginError m a ->
     m (Either LSP.ResponseError a)
-pluginResponse = PluginUtils.pluginResponse' handlePluginError
+pluginResponse' = PluginUtils.pluginResponse' handlePluginError
 
 withPluginError :: Functor m => ExceptT PluginUtils.PluginError m a -> ExceptT GhcidePluginError m a
 withPluginError = PluginUtils.withError CoreError

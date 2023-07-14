@@ -1,7 +1,7 @@
 module Definition (tests) where
 
 import           Control.Lens
-import           Language.LSP.Types.Lens
+import           Language.LSP.Protocol.Lens
 import           System.Directory
 import           Test.Hls
 import           Test.Hls.Command
@@ -14,7 +14,7 @@ tests = testGroup "definitions" [
         doc <- openDoc "References.hs" "haskell"
         defs <- getDefinitions doc (Position 7 8)
         let expRange = Range (Position 4 0) (Position 4 3)
-        liftIO $ defs @?= InL [Location (doc ^. uri) expRange]
+        liftIO $ defs @?= InL (Definition (InR [Location (doc ^. uri) expRange]))
 
   -- -----------------------------------
 
@@ -24,7 +24,7 @@ tests = testGroup "definitions" [
         defs <- getDefinitions doc (Position 2 8)
         liftIO $ do
             fp <- canonicalizePath "test/testdata/definition/Bar.hs"
-            defs @?= InL [Location (filePathToUri fp) zeroRange]
+            defs @?= InL (Definition (InR [Location (filePathToUri fp) zeroRange]))
 
   , ignoreTestBecause "Broken: file:///Users/jwindsor/src/haskell-language-server/test/testdata/Bar.hs" $
     testCase "goto's exported modules" $ runSession hlsCommand fullCaps "test/testdata/definition" $ do
@@ -32,7 +32,7 @@ tests = testGroup "definitions" [
         defs <- getDefinitions doc (Position 0 15)
         liftIO $ do
             fp <- canonicalizePath "test/testdata/definition/Bar.hs"
-            defs @?= InL [Location (filePathToUri fp) zeroRange]
+            defs @?= InL (Definition (InR [Location (filePathToUri fp) zeroRange]))
 
   , ignoreTestBecause "Broken: file:///Users/jwindsor/src/haskell-language-server/test/testdata/Bar.hs" $
     testCase "goto's imported modules that are loaded" $ runSession hlsCommand fullCaps "test/testdata/definition" $ do
@@ -41,7 +41,7 @@ tests = testGroup "definitions" [
         defs <- getDefinitions doc (Position 2 8)
         liftIO $ do
             fp <- canonicalizePath "test/testdata/definition/Bar.hs"
-            defs @?= InL [Location (filePathToUri fp) zeroRange]
+            defs @?= InL (Definition (InR [Location (filePathToUri fp) zeroRange]))
 
   , ignoreTestBecause "Broken: file:///Users/jwindsor/src/haskell-language-server/test/testdata/Bar.hs" $
     testCase "goto's imported modules that are loaded, and then closed" $
@@ -54,7 +54,7 @@ tests = testGroup "definitions" [
             liftIO $ putStrLn "D"
             liftIO $ do
                 fp <- canonicalizePath "test/testdata/definition/Bar.hs"
-                defs @?= InL [Location (filePathToUri fp) zeroRange]
+                defs @?= InL (Definition (InR [Location (filePathToUri fp) zeroRange]))
             liftIO $ putStrLn "E" -- AZ
 
             noDiagnostics

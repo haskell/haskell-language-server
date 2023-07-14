@@ -18,10 +18,10 @@ import           Control.DeepSeq                      (rwhnf)
 import           Control.Monad                        (mzero)
 import           Control.Monad.Extra                  (whenMaybe)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
-import           Data.Aeson.Types                     (Value (..), toJSON)
+import           Data.Aeson.Types                     (Value, toJSON)
 import qualified Data.Aeson.Types                     as A
-import qualified Data.HashMap.Strict                  as Map
 import           Data.List                            (find)
+import qualified Data.Map                             as Map
 import           Data.Maybe                           (catMaybes, mapMaybe)
 import qualified Data.Text                            as T
 import           Development.IDE                      (GhcSession (..),
@@ -64,17 +64,18 @@ import           Ide.Types                            (CommandFunction,
                                                        defaultPluginDescriptor,
                                                        mkCustomConfig,
                                                        mkPluginHandler)
-import qualified Language.LSP.Server                  as LSP
-import           Language.LSP.Types                   (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
+import           Language.LSP.Protocol.Message        (Method (Method_TextDocumentCodeLens),
+                                                       SMethod (..))
+import           Language.LSP.Protocol.Types          (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
                                                        CodeLens (CodeLens),
                                                        CodeLensParams (CodeLensParams, _textDocument),
                                                        Diagnostic (..),
-                                                       List (..),
-                                                       Method (TextDocumentCodeLens),
-                                                       SMethod (..),
+                                                       Null (Null),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
                                                        TextEdit (TextEdit),
-                                                       WorkspaceEdit (WorkspaceEdit))
+                                                       WorkspaceEdit (WorkspaceEdit),
+                                                       type (|?) (..))
+import qualified Language.LSP.Server                  as LSP
 import           Text.Regex.TDFA                      ((=~), (=~~))
 
 data Log = LogShake Shake.Log deriving Show
@@ -89,7 +90,7 @@ typeLensCommandId = "typesignature.add"
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
   (defaultPluginDescriptor plId)
-    { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider
+    { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeLens codeLensProvider
     , pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler]
     , pluginRules = rules recorder
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
@@ -103,8 +104,8 @@ properties = emptyProperties
     , (Diagnostics, "Follows error messages produced by GHC about missing signatures")
     ] Always
 
-codeLensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
-codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = PluginUtils.pluginResponse $ do
+codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
+codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = PluginUtils.pluginResponse' $ do
     mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
     nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
     env <- hscEnv . fst <$>
@@ -124,7 +125,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
     diag <- liftIO $ atomically $ getDiagnostics ideState
     hDiag <- liftIO $ atomically $ getHiddenDiagnostics ideState
 
-    let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
+    let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ tedit) Nothing Nothing
         generateLensForGlobal mp sig@GlobalBindingTypeSig{gbRendered} = do
             range <- toCurrentRange mp =<< srcSpanToRange (gbSrcSpan sig)
             tedit <- gblBindingTypeSigToEdit sig (Just gblSigsMp)
@@ -139,7 +140,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
               ]
     -- `suggestLocalSignature` relies on diagnostic, if diagnostics don't have the local signature warning,
     -- the `bindings` is useless, and if diagnostic has, that means we parsed success, and the `bindings` is fresh.
-    pure $ List $ case mode of
+    pure $ InL $ case mode of
         Always ->
           mapMaybe (generateLensForGlobal gblSigsMp) gblSigs'
             <> generateLensFromDiags
@@ -155,8 +156,8 @@ generateLens pId _range title edit =
 
 commandHandler :: CommandFunction IdeState WorkspaceEdit
 commandHandler _ideState wedit = do
-  _ <- LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right Null
+  _ <- LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  return $ Right $ InR Null
 
 --------------------------------------------------------------------------------
 

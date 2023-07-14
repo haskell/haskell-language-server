@@ -43,6 +43,7 @@ import           Data.IORef
 import           Data.List
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe
+import           Data.Proxy
 import qualified Data.Text                            as T
 import           Data.Time.Clock
 import           Data.Version
@@ -78,8 +79,8 @@ import           HIE.Bios.Environment                 hiding (getCacheDir)
 import           HIE.Bios.Types                       hiding (Log)
 import qualified HIE.Bios.Types                       as HieBios
 import           Hie.Implicit.Cradle                  (loadImplicitHieCradle)
+import           Language.LSP.Protocol.Message
 import           Language.LSP.Server
-import           Language.LSP.Types
 import           System.Directory
 import qualified System.Directory.Extra               as IO
 import           System.FilePath
@@ -632,7 +633,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
            lfp <- flip makeRelative cfp <$> getCurrentDirectory
 
            when optTesting $ mRunLspT lspEnv $
-            sendNotification (SCustomMethod "ghcide/cradle/loaded") (toJSON cfp)
+            sendNotification (SMethod_CustomMethod (Proxy @"ghcide/cradle/loaded")) (toJSON cfp)
 
            -- Display a user friendly progress message here: They probably don't know what a cradle is
            let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
@@ -906,7 +907,7 @@ setCacheDirs recorder CacheDirs{..} dflags = do
 
 renderCradleError :: NormalizedFilePath -> CradleError -> FileDiagnostic
 renderCradleError nfp (CradleError _ _ec t) =
-  ideErrorWithSource (Just "cradle") (Just DsError) nfp (T.unlines (map T.pack t))
+  ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp (T.unlines (map T.pack t))
 
 -- See Note [Multi Cradle Dependency Info]
 type DependencyInfo = Map.Map FilePath (Maybe UTCTime)
@@ -1120,4 +1121,4 @@ showPackageSetupException (PackageCheckFailed BasePackageAbiMismatch{..}) = unwo
 
 renderPackageSetupException :: FilePath -> PackageSetupException -> (NormalizedFilePath, ShowDiagnostic, Diagnostic)
 renderPackageSetupException fp e =
-    ideErrorWithSource (Just "cradle") (Just DsError) (toNormalizedFilePath' fp) (T.pack $ showPackageSetupException e)
+    ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (toNormalizedFilePath' fp) (T.pack $ showPackageSetupException e)

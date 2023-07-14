@@ -12,7 +12,7 @@ import qualified Data.Text                         as T
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
-import           Language.LSP.Types                (type (|?) (..))
+import           Language.LSP.Protocol.Types       (type (|?) (..))
 
 
 -- | Take a GHC monadic action (e.g. @typecheckModule pm@ for some

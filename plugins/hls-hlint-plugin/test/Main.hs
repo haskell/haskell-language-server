@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeOperators     #-}
@@ -6,20 +7,21 @@ module Main
   ( main
   ) where
 
-import           Control.Lens            ((^.))
-import           Control.Monad           (when)
-import           Data.Aeson              (Value (..), object, toJSON, (.=))
-import           Data.Functor            (void)
-import           Data.List               (find)
-import qualified Data.Map                as Map
-import           Data.Maybe              (fromJust, isJust)
-import qualified Data.Text               as T
-import           Ide.Plugin.Config       (Config (..), PluginConfig (..))
-import qualified Ide.Plugin.Config       as Plugin
-import qualified Ide.Plugin.Hlint        as HLint
-import           Ide.Types               (PluginId)
-import qualified Language.LSP.Types.Lens as L
-import           System.FilePath         ((</>))
+import           Control.Lens               ((^.))
+import           Control.Monad              (when)
+import           Data.Aeson                 (Value (..), object, toJSON, (.=))
+import           Data.Functor               (void)
+import           Data.List                  (find)
+import qualified Data.Map                   as Map
+import           Data.Maybe                 (fromJust, isJust)
+import           Data.Row                   ((.+), (.==))
+import qualified Data.Text                  as T
+import           Ide.Plugin.Config          (Config (..), PluginConfig (..))
+import qualified Ide.Plugin.Config          as Plugin
+import qualified Ide.Plugin.Hlint           as HLint
+import           Ide.Types                  (PluginId)
+import qualified Language.LSP.Protocol.Lens as L
+import           System.FilePath            ((</>))
 import           Test.Hls
 
 main :: IO ()
@@ -34,6 +36,7 @@ tests = testGroup "hlint" [
     , configTests
     , ignoreHintTests
     , applyHintTests
+    , resolveTests
     ]
 
 getIgnoreHintText :: T.Text -> T.Text
@@ -41,6 +44,22 @@ getIgnoreHintText name = "Ignore hint \"" <> name <> "\" in this module"
 
 getApplyHintText :: T.Text -> T.Text
 getApplyHintText name = "Apply hint \"" <> name <> "\""
+
+resolveTests :: TestTree
+resolveTests = testGroup "hlint resolve tests"
+  [
+    ignoreHintGoldenResolveTest
+      "Resolve version of: Ignore hint in this module inserts -Wno-unrecognised-pragmas and hlint ignore pragma if warn unrecognized pragmas is off"
+      "UnrecognizedPragmasOff"
+      (Point 3 8)
+      "Eta reduce"
+  , applyHintGoldenResolveTest
+      "Resolve version of: [#2612] Apply hint works when operator fixities go right-to-left"
+      "RightToLeftFixities"
+      (Point 6 13)
+      "Avoid reverse"
+  ]
+
 
 ignoreHintTests :: TestTree
 ignoreHintTests = testGroup "hlint ignore hint tests"
@@ -77,7 +96,7 @@ suggestionsTests =
         liftIO $ do
             length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
             reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
-            reduceDiag ^. L.severity @?= Just DsInfo
+            reduceDiag ^. L.severity @?= Just DiagnosticSeverity_Information
             reduceDiag ^. L.code @?= Just (InR "refact:Eta reduce")
             reduceDiag ^. L.source @?= Just "hlint"
 
@@ -123,15 +142,16 @@ suggestionsTests =
         doc <- openDoc "Base.hs" "haskell"
         testHlintDiagnostics doc
 
-        let change = TextDocumentContentChangeEvent
-                        (Just (Range (Position 1 8) (Position 1 12)))
-                         Nothing "x"
+        let change = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 1 8) (Position 1 12)
+                                                         .+ #rangeLength .== Nothing
+                                                         .+ #text .== "x"
         changeDoc doc [change]
         expectNoMoreDiagnostics 3 doc "hlint"
 
-        let change' = TextDocumentContentChangeEvent
-                        (Just (Range (Position 1 8) (Position 1 12)))
-                         Nothing "id x"
+        let change' = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 1 8) (Position 1 12)
+                                                          .+ #rangeLength .== Nothing
+                                                          .+ #text .== "id x"
+
         changeDoc doc [change']
         testHlintDiagnostics doc
 
@@ -182,11 +202,11 @@ suggestionsTests =
         doc <- openDoc "IgnoreAnnHlint.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
-    , knownBrokenForGhcVersions [GHC92, GHC94] "apply-refact has different behavior on v0.10" $
+    , knownBrokenForGhcVersions [GHC92, GHC94, GHC96] "apply-refact has different behavior on v0.10" $
       testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "Comments.hs" "Redundant bracket" expectedComments
 
-    , onlyRunForGhcVersions [GHC92, GHC94] "only run test for apply-refact-0.10" $
+    , onlyRunForGhcVersions [GHC92, GHC94, GHC96] "only run test for apply-refact-0.10" $
       testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "Comments.hs" "Redundant bracket" expectedComments'
 
@@ -323,7 +343,7 @@ configTests = testGroup "hlint plugin config" [
         liftIO $ do
             length diags' @?= 1
             d ^. L.range @?= Range (Position 1 10) (Position 1 21)
-            d ^. L.severity @?= Just DsInfo
+            d ^. L.severity @?= Just DiagnosticSeverity_Information
     ]
 
 testDir :: FilePath
@@ -331,7 +351,7 @@ testDir = "test/testdata"
 
 runHlintSession :: FilePath -> Session a -> IO a
 runHlintSession subdir  =
-    failIfSessionTimeout . runSessionWithServer hlintPlugin (testDir </> subdir)
+    failIfSessionTimeout . runSessionWithServerAndCaps hlintPlugin codeActionNoResolveCaps (testDir </> subdir)
 
 noHlintDiagnostics :: [Diagnostic] -> Assertion
 noHlintDiagnostics diags =
@@ -419,5 +439,29 @@ goldenTest testCaseName goldenFilename point hintText =
 
 setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintTest testName path =
-  goldenWithHaskellDoc hlintPlugin testName testDir path "expected" "hs"
+  goldenWithHaskellAndCaps codeActionNoResolveCaps hlintPlugin testName testDir path "expected" "hs"
 
+ignoreHintGoldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
+ignoreHintGoldenResolveTest testCaseName goldenFilename point hintName =
+  goldenResolveTest testCaseName goldenFilename point (getIgnoreHintText hintName)
+
+applyHintGoldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
+applyHintGoldenResolveTest testCaseName goldenFilename point hintName = do
+  goldenResolveTest testCaseName goldenFilename point (getApplyHintText hintName)
+
+goldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
+goldenResolveTest testCaseName goldenFilename point hintText =
+  setupGoldenHlintResolveTest testCaseName goldenFilename $ \document -> do
+    waitForDiagnosticsFromSource document "hlint"
+    actions <- getCodeActions document $ pointToRange point
+    case find ((== Just hintText) . getCodeActionTitle) actions of
+      Just (InR codeAction) -> do
+        rsp <- request SMethod_CodeActionResolve codeAction
+        case rsp ^. L.result of
+          Right ca -> executeCodeAction ca
+          Left re  -> liftIO $ assertFailure $ show re
+      _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
+
+setupGoldenHlintResolveTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
+setupGoldenHlintResolveTest testName path =
+  goldenWithHaskellAndCaps codeActionResolveCaps hlintPlugin testName testDir path "expected" "hs"

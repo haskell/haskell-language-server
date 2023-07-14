@@ -56,6 +56,7 @@ import qualified System.Directory                             as Dir
 
 import qualified Development.IDE.Types.Logger                 as L
 
+import           Data.Aeson                                   (ToJSON (toJSON))
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.List                                    (foldl')
@@ -69,14 +70,13 @@ import           Development.IDE.Types.Logger                 (Pretty (pretty),
                                                                cmapWithPrio,
                                                                logWith, viaShow,
                                                                (<+>))
-import qualified Language.LSP.Server                          as LSP
-import           Language.LSP.Types                           (DidChangeWatchedFilesRegistrationOptions (DidChangeWatchedFilesRegistrationOptions),
-                                                               FileChangeType (FcChanged),
+import           Language.LSP.Protocol.Message                (toUntypedRegistration)
+import qualified Language.LSP.Protocol.Message                as LSP
+import           Language.LSP.Protocol.Types                  (DidChangeWatchedFilesRegistrationOptions (DidChangeWatchedFilesRegistrationOptions),
                                                                FileSystemWatcher (..),
-                                                               WatchKind (..),
                                                                _watchers)
-import qualified Language.LSP.Types                           as LSP
-import qualified Language.LSP.Types.Capabilities              as LSP
+import qualified Language.LSP.Protocol.Types                  as LSP
+import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
 import           System.FilePath
 import           System.IO.Unsafe
@@ -162,14 +162,14 @@ resetInterfaceStore state f = do
 
 -- | Reset the GetModificationTime state of watched files
 --   Assumes the list does not include any FOIs
-resetFileStore :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO ()
+resetFileStore :: IdeState -> [(NormalizedFilePath, LSP.FileChangeType)] -> IO ()
 resetFileStore ideState changes = mask $ \_ -> do
     -- we record FOIs document versions in all the stored values
     -- so NEVER reset FOIs to avoid losing their versions
     -- FOI filtering is done by the caller (LSP Notification handler)
     forM_ changes $ \(nfp, c) -> do
         case c of
-            FcChanged
+            LSP.FileChangeType_Changed
             --  already checked elsewhere |  not $ HM.member nfp fois
               -> atomically $
                deleteValue (shakeExtras ideState) GetModificationTime nfp
@@ -268,26 +268,27 @@ registerFileWatches globs = do
       if watchSupported
       then do
         let
-          regParams    = LSP.RegistrationParams (List [LSP.SomeRegistration registration])
+          regParams    = LSP.RegistrationParams  [toUntypedRegistration registration]
           -- The registration ID is arbitrary and is only used in case we want to deregister (which we won't).
           -- We could also use something like a random UUID, as some other servers do, but this works for
           -- our purposes.
-          registration = LSP.Registration "globalFileWatches"
-                                           LSP.SWorkspaceDidChangeWatchedFiles
-                                           regOptions
+          registration = LSP.TRegistration { _id ="globalFileWatches"
+                                           , _method = LSP.SMethod_WorkspaceDidChangeWatchedFiles
+                                           , _registerOptions = Just $ regOptions}
           regOptions =
-            DidChangeWatchedFilesRegistrationOptions { _watchers = List watchers }
+            DidChangeWatchedFilesRegistrationOptions { _watchers = watchers }
           -- See Note [File existence cache and LSP file watchers] for why this exists, and the choice of watch kind
-          watchKind = WatchKind { _watchCreate = True, _watchChange = True, _watchDelete = True}
+          -- WatchKind_Custom 7 is for create, change, and delete
+          watchKind = LSP.WatchKind_Custom 7
           -- See Note [Which files should we watch?] for an explanation of why the pattern is the way that it is
           -- The patterns will be something like "**/.hs", i.e. "any number of directory segments,
           -- followed by a file with an extension 'hs'.
           watcher glob = FileSystemWatcher { _globPattern = glob, _kind = Just watchKind }
           -- We use multiple watchers instead of one using '{}' because lsp-test doesn't
           -- support that: https://github.com/bubba/lsp-test/issues/77
-          watchers = [ watcher (Text.pack glob) | glob <- globs ]
+          watchers = [ watcher (LSP.GlobPattern (LSP.InL (LSP.Pattern (Text.pack glob)))) | glob <- globs ]
 
-        void $ LSP.sendRequest LSP.SClientRegisterCapability regParams (const $ pure ()) -- TODO handle response
+        void $ LSP.sendRequest LSP.SMethod_ClientRegisterCapability regParams (const $ pure ()) -- TODO handle response
         return True
       else return False
 
@@ -311,7 +312,7 @@ shareFilePath k = unsafePerformIO $ do
   atomicModifyIORef' filePathMap $ \km ->
     let new_key = HashMap.lookup k km
     in case new_key of
-          Just v -> (km, v)
+          Just v  -> (km, v)
           Nothing -> (HashMap.insert k k km, k)
 {-# NOINLINE shareFilePath  #-}
- 
+

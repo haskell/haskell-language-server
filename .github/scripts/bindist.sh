@@ -26,7 +26,6 @@ case "${TARBALL_EXT}" in
 		emake --version
 		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}" GHCS="${GHCS}" bindist
 		emake GHCUP=ghcup ARTIFACT="${ARTIFACT}"                bindist-tar
-		emake GHCUP=ghcup                        GHCS="${GHCS}" clean-ghcs
         ;;
     *)
         fail "Unknown TARBALL_EXT: ${TARBALL_EXT}"

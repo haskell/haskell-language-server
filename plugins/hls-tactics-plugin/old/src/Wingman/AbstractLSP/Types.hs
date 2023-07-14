@@ -20,8 +20,8 @@ import           GHC.Generics (Generic)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Types hiding (Config)
 import           Language.LSP.Server (LspM)
-import           Language.LSP.Types hiding (CodeLens, CodeAction)
-import qualified Language.LSP.Types.Lens as LSP
+import           Language.LSP.Protocol.Types hiding (CodeLens, CodeAction)
+import qualified Language.LSP.Protocol.Lens as L
 import           Wingman.LanguageServer (judgementForHole)
 import           Wingman.Types
 
@@ -166,6 +166,6 @@ instance IsTarget HoleTarget where
   fetchTargetArgs LspEnv{..} = do
     let FileContext{..} = le_fileContext
     range <- MaybeT $ pure fc_range
-    nfp <- getNfp (fc_verTxtDocId ^. LSP.uri)
+    nfp <- getNfp (fc_verTxtDocId ^. L.uri)
     mapMaybeT liftIO $ judgementForHole le_ideState nfp range le_config
 

@@ -18,7 +18,7 @@ import qualified Data.Text                       as Text
 import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import qualified Language.LSP.Types              as LSP
+import qualified Language.LSP.Protocol.Types              as LSP
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Except (ExceptT)
 import Ide.Types (PluginId(..))

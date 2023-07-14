@@ -92,6 +92,7 @@ import qualified Data.IntMap.Strict                           as IntMap
 import           Data.List
 import qualified Data.Map                                     as M
 import           Data.Maybe
+import           Data.Proxy
 import qualified Data.Text.Utf16.Rope                         as Rope
 import qualified Data.Set                                     as Set
 import qualified Data.Text                                    as T
@@ -135,7 +136,8 @@ import qualified GHC.LanguageExtensions                       as LangExt
 import qualified HieDb
 import           Ide.Plugin.Config
 import qualified Language.LSP.Server                          as LSP
-import           Language.LSP.Types                           (SMethod (SCustomMethod, SWindowShowMessage), ShowMessageParams (ShowMessageParams), MessageType (MtInfo))
+import           Language.LSP.Protocol.Types                  (ShowMessageParams (ShowMessageParams), MessageType (MessageType_Info))
+import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
 import           Language.LSP.VFS
 import           System.Directory                             (makeAbsolute, doesFileExist)
 import           Data.Default                                 (def, Default)
@@ -314,7 +316,7 @@ withoutOption opt ms = ms{ms_hspp_opts= gopt_unset (ms_hspp_opts ms) opt}
 --   Ignore Haddock errors that are in both. Demote Haddock-only errors to warnings.
 mergeParseErrorsHaddock :: [FileDiagnostic] -> [FileDiagnostic] -> [FileDiagnostic]
 mergeParseErrorsHaddock normal haddock = normal ++
-    [ (a,b,c{_severity = Just DsWarning, _message = fixMessage $ _message c})
+    [ (a,b,c{_severity = Just DiagnosticSeverity_Warning, _message = fixMessage $ _message c})
     | (a,b,c) <- haddock, Diag._range c `Set.notMember` locations]
   where
     locations = Set.fromList $ map (Diag._range . thd3) normal
@@ -549,12 +551,14 @@ reportImportCyclesRule recorder =
           cycleErrorInFile _ _ = Nothing
           toDiag imp mods = (fp , ShowDiag , ) $ Diagnostic
             { _range = rng
-            , _severity = Just DsError
+            , _severity = Just DiagnosticSeverity_Error
             , _source = Just "Import cycle detection"
             , _message = "Cyclic module dependency between " <> showCycle mods
             , _code = Nothing
             , _relatedInformation = Nothing
             , _tags = Nothing
+            , _codeDescription = Nothing
+            , _data_ = Nothing
             }
             where rng = fromMaybe noRange $ srcSpanToRange (getLoc imp)
                   fp = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename (getLoc imp)
@@ -591,7 +595,7 @@ getHieAstRuleDefinition f hsc tmr = do
   diagsWrite <- case isFoi of
     IsFOI Modified{firstOpen = False} -> do
       when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
-        LSP.sendNotification (SCustomMethod "ghcide/reference/ready") $
+        LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
           toJSON $ fromNormalizedFilePath f
       pure []
     _ | Just asts <- masts -> do
@@ -795,7 +799,12 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
 #endif
             session' <- liftIO $ mergeEnvs hsc moduleNode inLoadOrder depSessions
 
-            Just <$> liftIO (newHscEnvEqWithImportPaths (envImportPaths env) session' [])
+            -- Here we avoid a call to to `newHscEnvEqWithImportPaths`, which creates a new
+            -- ExportsMap when it is called. We only need to create the ExportsMap once per
+            -- session, while `ghcSessionDepsDefinition` will be called for each file we need
+            -- to compile. `updateHscEnvEq` will refresh the HscEnv (session') and also
+            -- generate a new Unique.
+            Just <$> liftIO (updateHscEnvEq env session')
 
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
@@ -855,7 +864,7 @@ getModIfaceFromDiskAndIndexRule recorder =
       -> do
       -- All good, the db has indexed the file
       when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
-        LSP.sendNotification (SCustomMethod "ghcide/reference/ready") $
+        LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
           toJSON $ fromNormalizedFilePath f
     -- Not in db, must re-index
     _ -> do
@@ -1206,8 +1215,8 @@ instance Default RulesConfig where
         displayTHWarning :: LspT c IO ()
         displayTHWarning
             | not isWindows && not hostIsDynamic = do
-                LSP.sendNotification SWindowShowMessage $
-                    ShowMessageParams MtInfo thWarningMessage
+                LSP.sendNotification SMethod_WindowShowMessage $
+                    ShowMessageParams MessageType_Info thWarningMessage
             | otherwise = return ()
 
 thWarningMessage :: T.Text

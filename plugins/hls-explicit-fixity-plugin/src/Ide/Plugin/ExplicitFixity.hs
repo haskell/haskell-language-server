@@ -30,26 +30,27 @@ import           Development.IDE.Spans.AtPoint
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (getNormalizedFilePath')
 import           Ide.Types                            hiding (pluginId)
-import           Language.LSP.Types
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder pluginId = (defaultPluginDescriptor pluginId)
     { pluginRules = fixityRule recorder
-    , pluginHandlers = mkPluginHandler STextDocumentHover hover
+    , pluginHandlers = mkPluginHandler SMethod_TextDocumentHover hover
     -- Make this plugin has a lower priority than ghcide's plugin to ensure
     -- type info display first.
     , pluginPriority = ghcideNotificationsPluginPriority - 1
     }
 
-hover :: PluginMethodHandler IdeState TextDocumentHover
-hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = PluginUtils.pluginResponse $ do
+hover :: PluginMethodHandler IdeState Method_TextDocumentHover
+hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = PluginUtils.pluginResponse' $ do
     nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
     PluginUtils.runIdeAction "ExplicitFixity" (shakeExtras state) $ do
       (FixityMap fixmap, _) <-  PluginUtils.useWithStaleFast GetFixity nfp
       (HAR{hieAst}, mapping) <- PluginUtils.useWithStaleFast GetHieAst nfp
       let ns = getNamesAtPoint hieAst pos mapping
           fs = mapMaybe (\n -> (n,) <$> M.lookup n fixmap) ns
-      pure $ toHover fs
+      pure $ maybeToNull $ toHover fs
     where
         toHover :: [(Name, Fixity)] -> Maybe Hover
         toHover [] = Nothing
@@ -58,7 +59,7 @@ hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = PluginUtils.plu
                 contents = T.intercalate "\n\n" $ fixityText <$> fixities
                 -- Append to the previous hover content
                 contents' = "\n" <> sectionSeparator <> contents
-            in  Just $ Hover (HoverContents $ unmarkedUpContent contents') Nothing
+            in  Just $ Hover (InL (mkPlainText contents')) Nothing
 
         fixityText :: (Name, Fixity) -> T.Text
         fixityText (name, Fixity _ precedence direction) =

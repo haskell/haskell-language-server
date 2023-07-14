@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
-
+{-# LANGUAGE TypeOperators             #-}
 module Ide.Plugin.CodeRange (
     descriptor
     , Log
@@ -47,25 +47,24 @@ import           Ide.Types                            (PluginDescriptor (pluginH
                                                        PluginId,
                                                        defaultPluginDescriptor,
                                                        mkPluginHandler)
-import           Language.LSP.Server                  (LspM)
-import           Language.LSP.Types                   (FoldingRange (..),
+import           Language.LSP.Protocol.Message        (ResponseError,
+                                                       SMethod (SMethod_TextDocumentFoldingRange, SMethod_TextDocumentSelectionRange))
+import           Language.LSP.Protocol.Types          (FoldingRange (..),
                                                        FoldingRangeParams (..),
-                                                       List (List),
-                                                       NormalizedFilePath,
+                                                       NormalizedFilePath, Null,
                                                        Position (..),
                                                        Range (_start),
-                                                       ResponseError,
-                                                       SMethod (STextDocumentFoldingRange, STextDocumentSelectionRange),
                                                        SelectionRange (..),
                                                        SelectionRangeParams (..),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
-                                                       Uri)
+                                                       Uri, type (|?) (InL))
+import           Language.LSP.Server                  (LspM, LspT)
 import           Prelude                              hiding (log, span)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
-    { pluginHandlers = mkPluginHandler STextDocumentSelectionRange (selectionRangeHandler recorder)
-    <> mkPluginHandler STextDocumentFoldingRange (foldingRangeHandler recorder)
+    { pluginHandlers = mkPluginHandler SMethod_TextDocumentSelectionRange (selectionRangeHandler recorder)
+    <> mkPluginHandler SMethod_TextDocumentFoldingRange (foldingRangeHandler recorder)
     , pluginRules = codeRangeRule (cmapWithPrio LogRules recorder)
     }
 
@@ -77,12 +76,12 @@ instance Pretty Log where
         LogRules codeRangeLog -> pretty codeRangeLog
         LogBadDependency rule -> pretty $ "bad dependency: " <> show rule
 
-foldingRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError (List FoldingRange))
+foldingRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError ([FoldingRange] |? Null))
 foldingRangeHandler recorder ide _ FoldingRangeParams{..} =
     pluginResponseM handleErrors $ do
         filePath <- withError PluginUtils.CoreError $ getNormalizedFilePath' uri
         foldingRanges <- PluginUtils.runAction "FoldingRange" ide $ getFoldingRanges filePath
-        pure . List $ foldingRanges
+        pure . InL $ foldingRanges
   where
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument
@@ -90,7 +89,7 @@ foldingRangeHandler recorder ide _ FoldingRangeParams{..} =
     handleErrors = \case
         PluginUtils.RuleFailed rule -> do
             logWith recorder Warning $ LogBadDependency rule
-            pure $ Right $ List []
+            pure $ Right $ InL []
         errs -> pure $ Left $ PluginUtils.handlePluginError errs
 
 getFoldingRanges :: NormalizedFilePath -> ExceptT PluginUtils.GhcidePluginError Action [FoldingRange]
@@ -98,31 +97,31 @@ getFoldingRanges file = do
     codeRange <- PluginUtils.use GetCodeRange file
     pure $ findFoldingRanges codeRange
 
-selectionRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
+selectionRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError ([SelectionRange] |? Null))
 selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
     pluginResponseM handleErrors $ do
         filePath <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath' uri
-        fmap List . runIdeAction' $ getSelectionRanges filePath positions
+        fmap  id . runIdeAction' $ getSelectionRanges filePath positions
   where
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument
 
     positions :: [Position]
-    List positions = _positions
+    positions = _positions
 
-    runIdeAction' :: MonadIO m => ExceptT SelectionRangeError IdeAction [SelectionRange] -> ExceptT SelectionRangeError m [SelectionRange]
+    runIdeAction' :: MonadIO m => ExceptT SelectionRangeError IdeAction ([SelectionRange] |? Null) -> ExceptT SelectionRangeError m ([SelectionRange] |? Null)
     runIdeAction' action = PluginUtils.runIdeAction "SelectionRange" (shakeExtras ide) action
 
     handleErrors ::
         MonadIO m =>
         SelectionRangeError ->
-        m (Either ResponseError (List a))
+        m (Either ResponseError ([a] |? Null))
     handleErrors err = case err of
         SelectionRangeBadDependency rule -> do
             logWith recorder Warning $ LogBadDependency rule
             -- This might happen if the HieAst is not ready,
             -- so we give it a default value instead of throwing an error
-            pure $ Right $ List []
+            pure $ Right $ InL []
         SelectionRangeInputPositionMappingFailure ->
             pure $ Left $ mkSimpleResponseError "failed to apply position mapping to input positions"
         SelectionRangeOutputPositionMappingFailure ->
@@ -136,7 +135,7 @@ data SelectionRangeError = forall rule. Show rule => SelectionRangeBadDependency
                          | SelectionRangeOutputPositionMappingFailure
                          | GhcidePluginErrors PluginUtils.GhcidePluginError
 
-getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT SelectionRangeError IdeAction [SelectionRange]
+getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT SelectionRangeError IdeAction ([SelectionRange] |? Null)
 getSelectionRanges file positions = do
     (codeRange, positionMapping) <- withError (\_ -> SelectionRangeBadDependency GetCodeRange) $
         PluginUtils.useWithStaleFast GetCodeRange file
@@ -152,7 +151,7 @@ getSelectionRanges file positions = do
 
     -- 'positionMapping' should be applied to the output ranges before returning them
     maybeToExceptT SelectionRangeOutputPositionMappingFailure . MaybeT . pure $
-         traverse (toCurrentSelectionRange positionMapping) selectionRanges
+        InL <$> traverse (toCurrentSelectionRange positionMapping) selectionRanges
 
 -- | Find 'Position' in 'CodeRange'. This can fail, if the given position is not covered by the 'CodeRange'.
 findPosition :: Position -> CodeRange -> Maybe SelectionRange
@@ -217,7 +216,7 @@ createFoldingRange :: CodeRange -> Maybe FoldingRange
 createFoldingRange (CodeRange (Range (Position lineStart charStart) (Position lineEnd charEnd)) _ ck) = do
     -- Type conversion of codeRangeKind to FoldingRangeKind
     let frk = crkToFrk ck
-    Just (FoldingRange lineStart (Just charStart) lineEnd (Just charEnd) (Just frk))
+    Just (FoldingRange lineStart (Just charStart) lineEnd (Just charEnd) (Just frk) Nothing)
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange

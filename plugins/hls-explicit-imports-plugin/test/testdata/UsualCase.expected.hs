@@ -1,4 +1,4 @@
-module Main where
+module UsualCase where
 
 import A ( a1 )
 

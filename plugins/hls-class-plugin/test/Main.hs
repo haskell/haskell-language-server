@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators     #-}
@@ -9,12 +10,16 @@ module Main
   ( main
   ) where
 
-import           Control.Lens            (Prism', prism', (^.), (^..), (^?))
-import           Control.Monad           (void)
+import           Control.Lens                  (Prism', prism', (^.), (^..),
+                                                (^?))
+import           Control.Monad                 (void)
 import           Data.Maybe
-import qualified Data.Text               as T
-import qualified Ide.Plugin.Class        as Class
-import qualified Language.LSP.Types.Lens as J
+import           Data.Row                      ((.==))
+import qualified Data.Text                     as T
+import           Development.IDE.Core.Compile  (sourceTypecheck)
+import qualified Ide.Plugin.Class              as Class
+import qualified Language.LSP.Protocol.Lens    as L
+import           Language.LSP.Protocol.Message
 import           System.FilePath
 import           Test.Hls
 
@@ -78,19 +83,17 @@ codeActionTests = testGroup
       ]
   , testCase "Update text document version" $ runSessionWithServer classPlugin testDataDir $ do
     doc <- createDoc "Version.hs" "haskell" "module Version where"
-    ver1 <- (^.J.version) <$> getVersionedDoc doc
-    liftIO $ ver1 @?= Just 0
+    ver1 <- (^. L.version) <$> getVersionedDoc doc
+    liftIO $ ver1 @?= 0
 
     -- Change the doc to ensure the version is not 0
     changeDoc doc
-        [ TextDocumentContentChangeEvent
-            Nothing
-            Nothing
-            (T.unlines ["module Version where", "data A a = A a", "instance Functor A where"])
+        [ TextDocumentContentChangeEvent . InR . (.==) #text $
+            T.unlines ["module Version where", "data A a = A a", "instance Functor A where"]
         ]
-    ver2 <- (^.J.version) <$> getVersionedDoc doc
+    ver2 <- (^. L.version) <$> getVersionedDoc doc
     _ <- waitForDiagnostics
-    liftIO $ ver2 @?= Just 1
+    liftIO $ ver2 @?= 1
 
     -- Execute the action and see what the version is
     action <- head . concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
@@ -109,7 +112,7 @@ codeLensTests = testGroup
         runSessionWithServer classPlugin testDataDir $ do
             doc <- openDoc "CodeLensSimple.hs" "haskell"
             lens <- getCodeLenses doc
-            let titles = map (^. J.title) $ mapMaybe (^. J.command) lens
+            let titles = map (^. L.title) $ mapMaybe (^. L.command) lens
             liftIO $ titles @?=
                 [ "(==) :: B -> B -> Bool"
                 , "(==) :: A -> A -> Bool"
@@ -146,13 +149,13 @@ goldenCodeLens :: TestName -> FilePath -> Int -> TestTree
 goldenCodeLens title path idx =
     goldenWithHaskellDoc classPlugin title testDataDir path "expected" "hs" $ \doc -> do
         lens <- getCodeLenses doc
-        executeCommand $ fromJust $ (lens !! idx) ^. J.command
-        void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+        executeCommand $ fromJust $ (lens !! idx) ^. L.command
+        void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
 goldenWithClass ::TestName -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 goldenWithClass title path desc act =
   goldenWithHaskellDoc classPlugin title testDataDir path (desc <.> "expected") "hs" $ \doc -> do
-    _ <- waitForDiagnosticsFromSource doc "typecheck"
+    _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
     actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
     act actions
     void $ skipManyTill anyMessage (getDocumentEdit doc)
@@ -162,9 +165,9 @@ expectCodeActionsAvailable title path actionTitles =
   testCase title $ do
     runSessionWithServer classPlugin testDataDir $ do
       doc <- openDoc (path <.> "hs") "haskell"
-      _ <- waitForDiagnosticsFromSource doc "typecheck"
+      _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
       caResults <- getAllCodeActions doc
-      liftIO $ map (^? _CACodeAction . J.title) caResults
+      liftIO $ map (^? _CACodeAction . L.title) caResults
         @?= expectedActions
     where
       expectedActions = Just <$> actionTitles

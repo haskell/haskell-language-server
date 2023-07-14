@@ -16,7 +16,7 @@ module Development.IDE.Types.Logger
   , cmap
   , cmapIO
   , cfilter
-  , withDefaultRecorder
+  , withFileRecorder
   , makeDefaultStderrRecorder
   , makeDefaultHandleRecorder
   , LoggingColumn(..)
@@ -29,43 +29,44 @@ module Development.IDE.Types.Logger
   , toCologActionWithPrio
   ) where
 
-import           Colog.Core                 (LogAction (..), Severity,
-                                             WithSeverity (..))
-import qualified Colog.Core                 as Colog
-import           Control.Concurrent         (myThreadId)
-import           Control.Concurrent.Extra   (Lock, newLock, withLock)
-import           Control.Concurrent.STM     (atomically, flushTBQueue,
-                                             isFullTBQueue, newTBQueueIO,
-                                             newTVarIO, readTVarIO,
-                                             writeTBQueue, writeTVar)
-import           Control.Exception          (IOException)
-import           Control.Monad              (unless, when, (>=>))
-import           Control.Monad.IO.Class     (MonadIO (liftIO))
-import           Data.Foldable              (for_)
-import           Data.Functor.Contravariant (Contravariant (contramap))
-import           Data.Maybe                 (fromMaybe)
-import           Data.Text                  (Text)
-import qualified Data.Text                  as T
-import qualified Data.Text                  as Text
-import qualified Data.Text.IO               as Text
-import           Data.Time                  (defaultTimeLocale, formatTime,
-                                             getCurrentTime)
-import           GHC.Stack                  (CallStack, HasCallStack,
-                                             SrcLoc (SrcLoc, srcLocModule, srcLocStartCol, srcLocStartLine),
-                                             callStack, getCallStack,
-                                             withFrozenCallStack)
+import           Colog.Core                    (LogAction (..), Severity,
+                                                WithSeverity (..))
+import qualified Colog.Core                    as Colog
+import           Control.Concurrent            (myThreadId)
+import           Control.Concurrent.Extra      (Lock, newLock, withLock)
+import           Control.Concurrent.STM        (atomically, flushTBQueue,
+                                                isFullTBQueue, newTBQueueIO,
+                                                newTVarIO, readTVarIO,
+                                                writeTBQueue, writeTVar)
+import           Control.Exception             (IOException)
+import           Control.Monad                 (unless, when, (>=>))
+import           Control.Monad.IO.Class        (MonadIO (liftIO))
+import           Data.Foldable                 (for_)
+import           Data.Functor.Contravariant    (Contravariant (contramap))
+import           Data.Maybe                    (fromMaybe)
+import           Data.Text                     (Text)
+import qualified Data.Text                     as T
+import qualified Data.Text                     as Text
+import qualified Data.Text.IO                  as Text
+import           Data.Time                     (defaultTimeLocale, formatTime,
+                                                getCurrentTime)
+import           GHC.Stack                     (CallStack, HasCallStack,
+                                                SrcLoc (SrcLoc, srcLocModule, srcLocStartCol, srcLocStartLine),
+                                                callStack, getCallStack,
+                                                withFrozenCallStack)
+import           Language.LSP.Protocol.Message (SMethod (SMethod_WindowLogMessage, SMethod_WindowShowMessage))
+import           Language.LSP.Protocol.Types   (LogMessageParams (..),
+                                                MessageType (..),
+                                                ShowMessageParams (..))
 import           Language.LSP.Server
-import qualified Language.LSP.Server        as LSP
-import           Language.LSP.Types         (LogMessageParams (..),
-                                             MessageType (..),
-                                             SMethod (SWindowLogMessage, SWindowShowMessage),
-                                             ShowMessageParams (..))
-import           Prettyprinter              as PrettyPrinterModule
-import           Prettyprinter.Render.Text  (renderStrict)
-import           System.IO                  (Handle, IOMode (AppendMode),
-                                             hClose, hFlush, openFile, stderr)
-import           UnliftIO                   (MonadUnliftIO, displayException,
-                                             finally, try)
+import qualified Language.LSP.Server           as LSP
+import           Prettyprinter                 as PrettyPrinterModule
+import           Prettyprinter.Render.Text     (renderStrict)
+import           System.IO                     (Handle, IOMode (AppendMode),
+                                                hClose, hFlush, openFile,
+                                                stderr)
+import           UnliftIO                      (MonadUnliftIO, displayException,
+                                                finally, try)
 
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
@@ -156,35 +157,22 @@ makeDefaultStderrRecorder columns = do
   lock <- liftIO newLock
   makeDefaultHandleRecorder columns lock stderr
 
--- | If no path given then use stderr, otherwise use file.
-withDefaultRecorder
+withFileRecorder
   :: MonadUnliftIO m
-  => Maybe FilePath
-  -- ^ Log file path. `Nothing` uses stderr
+  => FilePath
+  -- ^ Log file path.
   -> Maybe [LoggingColumn]
   -- ^ logging columns to display. `Nothing` uses `defaultLoggingColumns`
-  -> (Recorder (WithPriority (Doc d)) -> m a)
-  -- ^ action given a recorder
+  -> (Either IOException (Recorder (WithPriority (Doc d))) -> m a)
+  -- ^ action given a recorder, or the exception if we failed to open the file
   -> m a
-withDefaultRecorder path columns action = do
+withFileRecorder path columns action = do
   lock <- liftIO newLock
   let makeHandleRecorder = makeDefaultHandleRecorder columns lock
-  case path of
-    Nothing -> do
-      recorder <- makeHandleRecorder stderr
-      let message = "No log file specified; using stderr."
-      logWith recorder Info message
-      action recorder
-    Just path -> do
-      fileHandle :: Either IOException Handle <- liftIO $ try (openFile path AppendMode)
-      case fileHandle of
-        Left e -> do
-          recorder <- makeHandleRecorder stderr
-          let exceptionMessage = pretty $ displayException e
-          let message = vcat [exceptionMessage, "Couldn't open log file" <+> pretty path <> "; falling back to stderr."]
-          logWith recorder Warning message
-          action recorder
-        Right fileHandle -> finally (makeHandleRecorder fileHandle >>= action) (liftIO $ hClose fileHandle)
+  fileHandle :: Either IOException Handle <- liftIO $ try (openFile path AppendMode)
+  case fileHandle of
+    Left e -> action $ Left e
+    Right fileHandle -> finally ((Right <$> makeHandleRecorder fileHandle) >>= action) (liftIO $ hClose fileHandle)
 
 makeDefaultHandleRecorder
   :: MonadIO m
@@ -287,28 +275,28 @@ withBacklog recFun = do
 -- | Creates a recorder that sends logs to the LSP client via @window/showMessage@ notifications.
 lspClientMessageRecorder :: LanguageContextEnv config -> Recorder (WithPriority Text)
 lspClientMessageRecorder env = Recorder $ \WithPriority {..} ->
-  liftIO $ LSP.runLspT env $ LSP.sendNotification SWindowShowMessage
+  liftIO $ LSP.runLspT env $ LSP.sendNotification SMethod_WindowShowMessage
       ShowMessageParams
-        { _xtype = priorityToLsp priority,
+        { _type_ = priorityToLsp priority,
           _message = payload
         }
 
 -- | Creates a recorder that sends logs to the LSP client via @window/logMessage@ notifications.
 lspClientLogRecorder :: LanguageContextEnv config -> Recorder (WithPriority Text)
 lspClientLogRecorder env = Recorder $ \WithPriority {..} ->
-  liftIO $ LSP.runLspT env $ LSP.sendNotification SWindowLogMessage
+  liftIO $ LSP.runLspT env $ LSP.sendNotification SMethod_WindowLogMessage
       LogMessageParams
-        { _xtype = priorityToLsp priority,
+        { _type_ = priorityToLsp priority,
           _message = payload
         }
 
 priorityToLsp :: Priority -> MessageType
 priorityToLsp =
   \case
-    Debug   -> MtLog
-    Info    -> MtInfo
-    Warning -> MtWarning
-    Error   -> MtError
+    Debug   -> MessageType_Log
+    Info    -> MessageType_Info
+    Warning -> MessageType_Warning
+    Error   -> MessageType_Error
 
 toCologActionWithPrio :: (MonadIO m, HasCallStack) => Recorder (WithPriority msg) -> LogAction m (WithSeverity msg)
 toCologActionWithPrio (Recorder _logger) = LogAction $ \WithSeverity{..} -> do

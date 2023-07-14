@@ -1,21 +1,26 @@
+{-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE GADTs                    #-}
 {-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE NamedFieldPuns           #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE PolyKinds                #-}
+{-# LANGUAGE RankNTypes               #-}
+{-# LANGUAGE TypeApplications         #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
     module Test.Tasty.ExpectedFailure,
     module Test.Hls.Util,
-    module Language.LSP.Types,
+    module Language.LSP.Protocol.Types,
+    module Language.LSP.Protocol.Message,
     module Language.LSP.Test,
     module Control.Monad.IO.Class,
     module Control.Applicative.Combinators,
     defaultTestRunner,
     goldenGitDiff,
     goldenWithHaskellDoc,
+    goldenWithHaskellAndCaps,
     goldenWithCabalDoc,
     goldenWithHaskellDocFormatter,
     goldenWithCabalDocFormatter,
@@ -53,62 +58,63 @@ module Test.Hls
 where
 
 import           Control.Applicative.Combinators
-import           Control.Concurrent.Async        (async, cancel, wait)
+import           Control.Concurrent.Async           (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Base
-import           Control.Monad                   (guard, unless, void)
-import           Control.Monad.Extra             (forM)
+import           Control.Lens.Extras                (is)
+import           Control.Monad                      (guard, unless, void)
+import           Control.Monad.Extra                (forM)
 import           Control.Monad.IO.Class
-import           Data.Aeson                      (Result (Success),
-                                                  Value (Null), fromJSON,
-                                                  toJSON)
-import qualified Data.Aeson                      as A
-import           Data.ByteString.Lazy            (ByteString)
-import           Data.Default                    (def)
-import qualified Data.Map                        as M
-import           Data.Maybe                      (fromMaybe)
-import qualified Data.Text                       as T
-import qualified Data.Text.Lazy                  as TL
-import qualified Data.Text.Lazy.Encoding         as TL
-import           Development.IDE                 (IdeState)
-import           Development.IDE.Main            hiding (Log)
-import qualified Development.IDE.Main            as Ghcide
-import qualified Development.IDE.Main            as IDEMain
-import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
-                                                  WaitForIdeRuleResult (ideResultSuccess))
-import qualified Development.IDE.Plugin.Test     as Test
-import           Development.IDE.Types.Logger    (Doc, Logger (Logger),
-                                                  Pretty (pretty),
-                                                  Priority (Debug),
-                                                  Recorder (Recorder, logger_),
-                                                  WithPriority (WithPriority, priority),
-                                                  cfilter, cmapWithPrio,
-                                                  makeDefaultStderrRecorder)
+import           Data.Aeson                         (Result (Success),
+                                                     Value (Null), fromJSON,
+                                                     toJSON)
+import qualified Data.Aeson                         as A
+import           Data.ByteString.Lazy               (ByteString)
+import           Data.Default                       (def)
+import qualified Data.Map                           as M
+import           Data.Maybe                         (fromMaybe)
+import           Data.Proxy                         (Proxy (Proxy))
+import qualified Data.Text                          as T
+import qualified Data.Text.Lazy                     as TL
+import qualified Data.Text.Lazy.Encoding            as TL
+import           Development.IDE                    (IdeState)
+import           Development.IDE.Main               hiding (Log)
+import qualified Development.IDE.Main               as Ghcide
+import qualified Development.IDE.Main               as IDEMain
+import           Development.IDE.Plugin.Test        (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
+                                                     WaitForIdeRuleResult (ideResultSuccess))
+import qualified Development.IDE.Plugin.Test        as Test
+import           Development.IDE.Types.Logger       (Doc, Logger (Logger),
+                                                     Pretty (pretty),
+                                                     Priority (Debug),
+                                                     Recorder (Recorder, logger_),
+                                                     WithPriority (WithPriority, priority),
+                                                     cfilter, cmapWithPrio,
+                                                     makeDefaultStderrRecorder)
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
-import           GHC.Stack                       (emptyCallStack)
+import           GHC.Stack                          (emptyCallStack)
+import           GHC.TypeLits
 import           Ide.Types
+import           Language.LSP.Protocol.Capabilities
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types        hiding (Null)
 import           Language.LSP.Test
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start))
-import           Language.LSP.Types.Capabilities (ClientCapabilities)
-import           Prelude                         hiding (log)
-import           System.Directory                (getCurrentDirectory,
-                                                  setCurrentDirectory)
-import           System.Environment              (lookupEnv)
+import           Prelude                            hiding (log)
+import           System.Directory                   (getCurrentDirectory,
+                                                     setCurrentDirectory)
+import           System.Environment                 (lookupEnv)
 import           System.FilePath
-import           System.IO.Unsafe                (unsafePerformIO)
-import           System.Process.Extra            (createPipe)
+import           System.IO.Unsafe                   (unsafePerformIO)
+import           System.Process.Extra               (createPipe)
 import           System.Time.Extra
 import           Test.Hls.Util
-import           Test.Tasty                      hiding (Timeout)
+import           Test.Tasty                         hiding (Timeout)
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
-import           Test.Tasty.Runners              (NumThreads (..))
+import           Test.Tasty.Runners                 (NumThreads (..))
 
 newtype Log = LogIDEMain IDEMain.Log
 
@@ -137,6 +143,27 @@ goldenWithHaskellDoc
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
 goldenWithHaskellDoc = goldenWithDoc "haskell"
+
+goldenWithHaskellAndCaps
+  :: Pretty b
+  => ClientCapabilities
+  -> PluginTestDescriptor b
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithHaskellAndCaps clientCaps plugin title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServerAndCaps plugin clientCaps testDataDir
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "haskell"
+    void waitForBuildQueue
+    act doc
+    documentContents doc
 
 goldenWithCabalDoc
   :: Pretty b
@@ -415,7 +442,7 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
 -- | Wait for the next progress end step
 waitForProgressDone :: Session ()
 waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+  FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | is _workDoneProgressEnd v-> Just ()
   _ -> Nothing
 
 -- | Wait for all progress to be done
@@ -425,7 +452,7 @@ waitForAllProgressDone = loop
   where
     loop = do
       ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        FromServerMess  SMethod_Progress  (TNotificationMessage _ _ (ProgressParams _ v)) | is _workDoneProgressEnd v -> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
@@ -433,23 +460,23 @@ waitForAllProgressDone = loop
 -- | Wait for the build queue to be empty
 waitForBuildQueue :: Session Seconds
 waitForBuildQueue = do
-    let m = SCustomMethod "test"
+    let m = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest m (toJSON WaitForShakeQueue)
     (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
     case resp of
-        ResponseMessage{_result=Right Null} -> return td
+        TResponseMessage{_result=Right Null} -> return td
         -- assume a ghcide binary lacking the WaitForShakeQueue method
-        _                                   -> return 0
+        _                                    -> return 0
 
 callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
 callTestPlugin cmd = do
-    let cm = SCustomMethod "test"
+    let cm = SMethod_CustomMethod (Proxy @"test")
     waitId <- sendRequest cm (A.toJSON cmd)
-    ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
+    TResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
     return $ do
       e <- _result
       case A.fromJSON e of
-        A.Error err -> Left $ ResponseError InternalError (T.pack err) Nothing
+        A.Error err -> Left $ ResponseError (InR ErrorCodes_InternalError) (T.pack err) Nothing
         A.Success a -> pure a
 
 waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
@@ -464,7 +491,7 @@ getLastBuildKeys = callTestPlugin GetBuildKeysBuilt
 
 sendConfigurationChanged :: Value -> Session ()
 sendConfigurationChanged config =
-  sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams config)
+  sendNotification SMethod_WorkspaceDidChangeConfiguration (DidChangeConfigurationParams config)
 
 waitForKickDone :: Session ()
 waitForKickDone = void $ skipManyTill anyMessage nonTrivialKickDone
@@ -473,14 +500,14 @@ waitForKickStart :: Session ()
 waitForKickStart = void $ skipManyTill anyMessage nonTrivialKickStart
 
 nonTrivialKickDone :: Session ()
-nonTrivialKickDone = kick "done" >>= guard . not . null
+nonTrivialKickDone = kick (Proxy @"kick/done") >>= guard . not . null
 
 nonTrivialKickStart :: Session ()
-nonTrivialKickStart = kick "start" >>= guard . not . null
+nonTrivialKickStart = kick (Proxy @"kick/start") >>= guard . not . null
 
-kick :: T.Text -> Session [FilePath]
-kick msg = do
-  NotMess NotificationMessage{_params} <- customNotification $ "kick/" <> msg
+kick :: KnownSymbol k => Proxy k -> Session [FilePath]
+kick proxyMsg = do
+  NotMess TNotificationMessage{_params} <- customNotification proxyMsg
   case fromJSON _params of
     Success x -> return x
     other     -> error $ "Failed to parse kick/done details: " <> show other

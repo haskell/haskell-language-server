@@ -6,14 +6,14 @@ module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 
 import           Control.Lens                     ((^.))
 import           Control.Monad.Except             (ExceptT)
-import           Control.Monad.IO.Class           (MonadIO)
-import qualified Data.HashMap.Strict              as HashMap
+import           Control.Monad.IO.Class           (MonadIO, liftIO)
+import qualified Data.Map                         as Map
 import           Data.Text                        (Text, unpack)
 import qualified Data.Text                        as T
 import           Development.IDE                  (GetParsedModule (GetParsedModule),
                                                    IdeState, RuleResult, Rules,
                                                    define, realSrcSpanToRange,
-                                                   use)
+                                                   runAction, use)
 import qualified Development.IDE.Core.PluginUtils as PluginUtils
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       hiding (getSrcSpan)
@@ -32,8 +32,10 @@ import           Ide.Plugin.RangeMap              (RangeMap)
 import qualified Ide.Plugin.RangeMap              as RangeMap
 import           Ide.PluginUtils                  (getNormalizedFilePath')
 import           Ide.Types
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens          as L
+import qualified Language.LSP.Protocol.Lens       as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types
+
 
 newtype Log = LogShake Shake.Log deriving Show
 
@@ -43,7 +45,7 @@ instance Pretty Log where
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder pId = (defaultPluginDescriptor pId)
-    { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler
+    { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction codeActionHandler
     , pluginRules = collectLiteralsRule recorder
     }
 
@@ -80,8 +82,8 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
         litMap = RangeMap.fromList (realSrcSpanToRange . getSrcSpan) <$> lits
     pure ([], CLR <$> litMap <*> exts)
 
-codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = PluginUtils.pluginResponse $ do
+codeActionHandler :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
+codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = PluginUtils.pluginResponse' $ do
     nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (docId ^. L.uri)
     CLR{..} <- requestLiterals pId state nfp
     pragma <- getFirstPragma pId state nfp
@@ -91,18 +93,18 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = PluginUti
         literalPairs = map (\lit -> (lit, alternateFormat lit)) litsInRange
         -- make a code action for every literal and its' alternates (then flatten the result)
         actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit enabledExtensions pragma) alts) literalPairs
-    pure $ List actions
+    pure $ InL $ actions
     where
         mkCodeAction :: NormalizedFilePath -> Literal -> [GhcExtension] -> NextPragmaInfo -> AlternateFormat -> Command |? CodeAction
         mkCodeAction nfp lit enabled npi af@(alt, ext) = InR CodeAction {
             _title = mkCodeActionTitle lit af enabled
-            , _kind = Just $ CodeActionUnknown "quickfix.literals.style"
+            , _kind = Just $ CodeActionKind_Custom "quickfix.literals.style"
             , _diagnostics = Nothing
             , _isPreferred = Nothing
             , _disabled = Nothing
             , _edit = Just $ mkWorkspaceEdit nfp edits
             , _command = Nothing
-            , _xdata = Nothing
+            , _data_ = Nothing
             }
             where
                 edits =  [TextEdit (realSrcSpanToRange $ getSrcSpan lit) alt] <> pragmaEdit
@@ -113,7 +115,7 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = PluginUti
         mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
         mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
             where
-                changes = Just $ HashMap.fromList [(filePathToUri $ fromNormalizedFilePath nfp, List edits)]
+                changes = Just $ Map.fromList [(filePathToUri $ fromNormalizedFilePath nfp, edits)]
 
 mkCodeActionTitle :: Literal -> AlternateFormat -> [GhcExtension] -> Text
 mkCodeActionTitle lit (alt, ext) ghcExts

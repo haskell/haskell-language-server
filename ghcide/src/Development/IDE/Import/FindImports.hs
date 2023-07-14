@@ -180,7 +180,7 @@ notFoundErr env modName reason =
   mkError' $ ppr' $ cannotFindModule env modName0 $ lookupToFindResult reason
   where
     dfs = hsc_dflags env
-    mkError' = diagFromString "not found" DsError (Compat.getLoc modName)
+    mkError' = diagFromString "not found" DiagnosticSeverity_Error (Compat.getLoc modName)
     modName0 = unLoc modName
     ppr' = showSDoc dfs
     -- We convert the lookup result to a find result to reuse GHC's cannotFindModule pretty printer.

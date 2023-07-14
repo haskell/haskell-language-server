@@ -40,14 +40,16 @@ data Arguments
   | PrintLibDir
 
 data GhcideArguments = GhcideArguments
-    {argsCommand            :: Command
-    ,argsCwd                :: Maybe FilePath
-    ,argsShakeProfiling     :: Maybe FilePath
-    ,argsTesting            :: Bool
-    ,argsExamplePlugin      :: Bool
+    { argsCommand           :: Command
+    , argsCwd               :: Maybe FilePath
+    , argsShakeProfiling    :: Maybe FilePath
+    , argsTesting           :: Bool
+    , argsExamplePlugin     :: Bool
     , argsLogLevel          :: Priority
     , argsLogFile           :: Maybe String
     -- ^ the minimum log level to show
+    , argsLogStderr         :: Bool
+    , argsLogClient         :: Bool
     , argsThreads           :: Int
     , argsProjectGhcVersion :: Bool
     } deriving Show
@@ -138,12 +140,41 @@ arguments plugins = GhcideArguments
           <> help "Sets the log level to Debug, alias for '--log-level Debug'"
           )
         )
-      <*> optional (strOption
-           (long "logfile"
+      -- This option is a little inconsistent with the other log options, since
+      -- it's not a boolean and there is no way to turn it off. That's okay
+      -- since the default is off.
+      <*> (optional (strOption
+           ( long "log-file"
+          <> metavar "LOGFILE"
+          <> help "Send logs to a file"
+           )) <|> (optional (strOption
+           ( long "logfile"
           <> short 'l'
           <> metavar "LOGFILE"
-          <> help "File to log to, defaults to stdout"
-           ))
+          <> help "Send logs to a file"
+          -- deprecated alias so users don't need to update their CLI calls
+          -- immediately
+          <> internal
+           )))
+          )
+      -- Boolean option so we can toggle the default in a consistent way
+      <*> option auto
+           ( long "log-stderr"
+          <> help "Send logs to stderr"
+          <> metavar "BOOL"
+          <> value True
+          <> showDefault
+           )
+      -- Boolean option so we can toggle the default in a consistent way
+      <*> option auto
+           ( long "log-client"
+          <> help "Send logs to the client using the window/logMessage LSP method"
+          <> metavar "BOOL"
+          -- This is off by default, since some clients will show duplicate logs
+          -- if we log both to stderr and the client
+          <> value False
+          <> showDefault
+           )
       <*> option auto
            (short 'j'
           <> help "Number of threads (0: automatic)"
