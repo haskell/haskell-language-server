@@ -408,6 +408,7 @@ instance PluginMethod Request Method_TextDocumentCodeAction where
       uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_CodeActionResolve where
+  -- See Note [Resolve in PluginHandlers]
   pluginEnabled _ msgParams pluginDesc config =
     pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
     && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
@@ -447,6 +448,7 @@ instance PluginMethod Request Method_TextDocumentCodeLens where
       uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_CodeLensResolve where
+  -- See Note [Resolve in PluginHandlers]
   pluginEnabled _ msgParams pluginDesc config =
     pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
     && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
@@ -469,6 +471,7 @@ instance PluginMethod Request Method_TextDocumentDocumentSymbol where
       uri = msgParams ^. L.textDocument . L.uri
 
 instance PluginMethod Request Method_CompletionItemResolve where
+  -- See Note [Resolve in PluginHandlers]
   pluginEnabled _ msgParams pluginDesc config = pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
     && pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
 
@@ -551,7 +554,8 @@ instance PluginRequestMethod Method_TextDocumentCodeAction where
         | otherwise = False
 
 instance PluginRequestMethod Method_CodeActionResolve where
-    -- Resolve methods should only have one response
+    -- A resolve request should only have one response.
+    -- See Note [Resolve in PluginHandlers].
     combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentDefinition where
@@ -572,7 +576,8 @@ instance PluginRequestMethod Method_WorkspaceSymbol where
 instance PluginRequestMethod Method_TextDocumentCodeLens where
 
 instance PluginRequestMethod Method_CodeLensResolve where
-    -- A resolve request should only ever get one response
+    -- A resolve request should only ever get one response.
+    -- See note Note [Resolve in PluginHandlers]
     combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentRename where
@@ -616,7 +621,8 @@ instance PluginRequestMethod Method_TextDocumentDocumentSymbol where
         in [si] <> children'
 
 instance PluginRequestMethod Method_CompletionItemResolve where
-  -- resolve methods should only have one response
+  -- A resolve request should only have one response.
+  -- See Note [Resolve in PluginHandlers]
   combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentCompletion where
@@ -774,7 +780,8 @@ type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config (
 
 type PluginNotificationMethodHandler a m = a -> VFS -> PluginId -> MessageParams m -> LspM Config ()
 
--- | Make a handler for plugins
+-- | Make a handler for plugins. For how resolve works with this see
+-- Note [Resolve in PluginHandlers]
 mkPluginHandler
   :: forall ideState m. PluginRequestMethod m
   => SClientMethod m
@@ -896,7 +903,7 @@ type ResolveFunction ideState a (m :: Method ClientToServer Request) =
   -> LspM Config (Either ResponseError (MessageResult m))
 
 -- | Make a handler for resolve methods. In here we take your provided ResolveFunction
--- and turn it into a PluginHandlers
+-- and turn it into a PluginHandlers. See Note [Resolve in PluginHandlers]
 mkResolveHandler
   :: forall ideState a m. (FromJSON a,  PluginRequestMethod m, L.HasData_ (MessageParams m) (Maybe Value))
   =>  SClientMethod m
@@ -1084,8 +1091,39 @@ getProcessID = fromIntegral <$> P.getProcessID
 installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 #endif
 
+-- |Determine whether this request should be routed to the plugin. Fails closed
+-- if we can't determine which plugin it should be routed to.
 pluginResolverResponsible :: Maybe Value -> PluginDescriptor c -> Bool
 pluginResolverResponsible (Just (fromJSON -> (Success (PluginResolveData o _ _)))) pluginDesc =
   pluginId pluginDesc == o
 -- We want to fail closed
 pluginResolverResponsible _ _ = False
+
+{- Note [Resolve in PluginHandlers]
+  Resolve methods have a few guarantees that need to be made by HLS,
+  specifically they need to only be called once, as neither their errors nor
+  their responses can be easily combined. Whereas commands, which similarly have
+  the same requirements have their own codepaths for execution, for resolve
+  methods we are relying on the standard PluginHandlers codepath.
+  That isn't a problem, but it does mean we need to do some things extra for
+  these methods.
+    - First of all, whenever a handler that can be resolved sets the data_ field
+    in their response, we need to intercept it, and wrap it in a data type
+    PluginResolveData that allows us to route the future resolve request to the
+    specific plugin which is responsible for it. (We also throw in the URI for
+    convenience, because everyone needs that). We do that in mkPluginHandler.
+    - When we get any resolve requests we check their data field for our
+    PluginResolveData that will allow us to route the request to the right
+    plugin. If we can't find out which plugin to route the request to, then we
+    just don't route it at all. This is done in pluginEnabled, and
+    pluginResolverResponsible.
+    - Finally we have mkResolveHandler, which takes the resolve request and
+    unwraps the plugins data from our PluginResolveData, parses it and passes it
+    it on to the registered handler.
+  It should be noted that there are some restrictions with this approach: First,
+  if a plugin does not set the data_ field, than the request will not be able
+  to be resolved. This is because we only wrap data_ fields that have been set
+  with our PluginResolvableData tag. Second, if a plugin were to register two
+  resolve handlers for the same method, than our assumptions that we never have
+  two responses break, and behavior is undefined.
+  -}
