@@ -53,9 +53,10 @@ descriptor plId = (defaultPluginDescriptor plId)
                   <> mkPluginHandler SMethod_TextDocumentDocumentHighlight (\ide _ DocumentHighlightParams{..} ->
                       documentHighlight ide TextDocumentPositionParams{..})
                   <> mkPluginHandler SMethod_TextDocumentReferences (\ide _ params -> references ide params)
-                  <> mkPluginHandler SMethod_WorkspaceSymbol (\ide _ params -> fmap InL <$> wsSymbols ide params),
+                  <> mkPluginHandler SMethod_WorkspaceSymbol (\ide _ params -> fmap InL <$> wsSymbols ide params)
 
-    pluginConfigDescriptor = defaultConfigDescriptor
+  , pluginConfigDescriptor = defaultConfigDescriptor
+  , pluginFileType = PluginFileType [FromProject, FromDependency] defaultPluginFileExtensions
   }
 
 -- ---------------------------------------------------------------------

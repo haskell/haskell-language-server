@@ -158,6 +158,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
     -- The ghcide descriptors should come last'ish so that the notification handlers
     -- (which restart the Shake build) run after everything else
         pluginPriority = ghcideNotificationsPluginPriority
+    ,   pluginFileType = PluginFileType [FromProject, FromDependency] defaultPluginFileExtensions
     }
 
 ghcideNotificationsPluginPriority :: Natural
