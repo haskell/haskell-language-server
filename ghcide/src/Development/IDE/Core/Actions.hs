@@ -75,8 +75,9 @@ lookupMod HieDbWriter{indexQueue} hieFile moduleName uid _boot = MaybeT $ do
           moduleSource <- hie_hs_src <$> loadHieFile (mkUpdater nc) hieFile
           BS.writeFile writeOutPath moduleSource
       liftIO $ atomically $
-        unGetTQueue indexQueue $ \withHieDb -> withHieDb $ \db -> do
-          HieDb.addSrcFile db hieFile writeOutPath False
+        unGetTQueue indexQueue $ \withHieDb -> do
+          withHieDb $ \db ->
+            HieDb.addSrcFile db hieFile writeOutPath False
           putMVar completionToken ()
       pure $ moduleUri
       where

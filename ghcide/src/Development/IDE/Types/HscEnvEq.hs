@@ -15,7 +15,7 @@ module Development.IDE.Types.HscEnvEq
 import           Control.Concurrent.Async        (Async, async, waitCatch)
 import           Control.Concurrent.MVar         (newEmptyMVar, putMVar, readMVar)
 import           Control.Concurrent.STM          (atomically)
-import           Control.Concurrent.STM.TQueue   (unGetTQueue)
+import           Control.Concurrent.STM.TQueue   (writeTQueue)
 import           Control.Concurrent.Strict       (modifyVar, newVar)
 import           Control.DeepSeq                 (force)
 import           Control.Exception               (evaluate, mask, throwIO)
@@ -133,9 +133,10 @@ newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
         deleteMissingDependencySources :: IO ()
         deleteMissingDependencySources = do
             completionToken <- newEmptyMVar
-            atomically $ unGetTQueue (indexQueue $ hiedbWriter se) $
-                \withHieDb -> withHieDb $ \db -> do
-                    removeDependencySrcFiles db
+            atomically $ writeTQueue (indexQueue $ hiedbWriter se) $
+                \withHieDb -> do
+                    withHieDb $ \db ->
+                        removeDependencySrcFiles db
                     putMVar completionToken ()
             readMVar completionToken
         indexPackageHieFiles :: Package -> [Module] -> IO ()
