@@ -15,6 +15,7 @@ module Development.IDE.Plugin.CodeAction
     ) where
 
 import           Control.Applicative                               ((<|>))
+import           Control.Applicative.Combinators.NonEmpty          (sepBy1)
 import           Control.Arrow                                     (second,
                                                                     (&&&),
                                                                     (>>>))
@@ -100,7 +101,6 @@ import           Language.LSP.VFS                                  (VirtualFile,
 import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 #if MIN_VERSION_ghc(9,2,0)
-import           Control.Applicative.Combinators.NonEmpty          (sepBy1)
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
