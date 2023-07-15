@@ -87,7 +87,7 @@ library
     , data-default
     , time
     -- FIXME: Only needed to workaround for qualified imports in GHC 9.4
-    , regex-applicative-text
+    , regex-applicative
     , parser-combinators
   ghc-options: -Wall -Wno-name-shadowing
   default-language: Haskell2010

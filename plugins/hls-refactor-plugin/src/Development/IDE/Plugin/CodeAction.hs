@@ -69,7 +69,7 @@ import           Development.IDE.Types.Logger                      hiding
 import           Development.IDE.Types.Options
 import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
-import qualified Text.Regex.Applicative.Text                       as RE
+import qualified Text.Regex.Applicative                            as RE
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Parser.Annotation                             (TokenLocation (..))
 #endif
@@ -1512,7 +1512,7 @@ suggestNewImport _ _ _ _ _ = []
 -- FIXME: We can delete this after dropping the support for GHC 9.4
 extractQualifiedModuleNameFromMissingName :: T.Text -> Maybe T.Text
 extractQualifiedModuleNameFromMissingName (T.strip -> missing)
-    = missing RE.=~ qualIdentP
+    = T.pack <$> (T.unpack missing RE.=~ qualIdentP)
     where
         {-
         NOTE: Haskell 2010 allows /unicode/ upper & lower letters
