@@ -56,6 +56,7 @@ extra-deps:
 - hw-fingertree-0.1.2.1
 - hw-prim-0.6.3.2
 - ansi-terminal-0.11.5
+- regex-applicative-text-0.1.0.1
 
 configure-options:
   ghcide:
