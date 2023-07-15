@@ -19,7 +19,7 @@ let
           doCheck = false;
         });
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
-      apply-refact = hsuper.apply-refact_0_13_0_0;
+      apply-refact = hself.callHackage "apply-refact" "0.13.0.0" { };
 
       # ptr-poker breaks on MacOS without SSE2 optimizations
       # https://github.com/nikita-volkov/ptr-poker/issues/11

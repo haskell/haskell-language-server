@@ -28,7 +28,8 @@ let
             broken = false;
             doCheck = false;
           });
-      apply-refact = hsuper.apply-refact_0_13_0_0;
+
+      apply-refact = hself.callHackage "apply-refact" "0.13.0.0" { };
       tagged = hself.callHackage "tagged" "0.8.7" { };
       primitive = hself.callHackage "primitive" "0.8.0.0" { };
       unix-compat = hself.callCabal2nix "unix-compat" inputs.haskell-unix-compat { };
@@ -42,7 +43,7 @@ let
       # https://github.com/nikita-volkov/ptr-poker/issues/11
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
-      ormolu = hself.ormolu_0_5_3_0;
+      ormolu = hself.callHackage "ormolu" "0.5.3.0" { };
 
       # TODO: smunix: nix fails to build fourmolu-0.13 from Hackage with these errors:
       #   tar: */fourmolu/0.13.0.0/fourmolu.json: Not found in archive
