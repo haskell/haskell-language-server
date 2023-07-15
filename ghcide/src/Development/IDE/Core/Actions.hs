@@ -43,7 +43,7 @@ import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
                                                        uriToNormalizedFilePath)
 import           Language.LSP.Server                  (resRootPath)
 import           System.Directory                     (createDirectoryIfMissing, doesFileExist)
-import           System.FilePath                      ((</>), takeDirectory)
+import           System.FilePath                      ((</>), (<.>), takeDirectory)
 
 
 -- | Generates URIs for files in dependencies, but not in the
@@ -83,7 +83,7 @@ lookupMod HieDbWriter{indexQueue} hieFile moduleName uid _boot = MaybeT $ do
         writeOutDir :: FilePath
         writeOutDir = projectRoot </> ".hls" </> "dependencies" </> show uid
         writeOutFile :: FilePath
-        writeOutFile = moduleNameSlashes moduleName ++ ".hs"
+        writeOutFile = moduleNameSlashes moduleName <.> "hs"
         writeOutPath :: FilePath
         writeOutPath = writeOutDir </> writeOutFile
         moduleUri :: Uri

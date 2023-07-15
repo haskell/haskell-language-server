@@ -1132,9 +1132,12 @@ data SourceFileOrigin = FromProject | FromDependency
 
 getSourceFileOrigin :: NormalizedFilePath -> SourceFileOrigin
 getSourceFileOrigin f =
-    case isInfixOf ".hls/dependencies" (show f) of
+    case [".hls", "dependencies"] `isInfixOf` (splitDirectories file) of
         True -> FromDependency
         False -> FromProject
+    where
+        file :: FilePath
+        file = fromNormalizedFilePath f
 
 defineEarlyCutoff'
     :: forall k v. IdeRule k v

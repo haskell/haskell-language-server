@@ -151,7 +151,7 @@ newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
         indexModuleHieFile hieDir m = do
             let hiePath :: NormalizedFilePath
                 hiePath = toNormalizedFilePath' $
-                  hieDir </> moduleNameSlashes (moduleName m) ++ ".hie"
+                  hieDir </> moduleNameSlashes (moduleName m) <.> "hie"
             hieCheck <- checkHieFile recorder se "newHscEnvEqWithImportPaths" hiePath
             case hieCheck of
                 HieFileMissing -> return ()
