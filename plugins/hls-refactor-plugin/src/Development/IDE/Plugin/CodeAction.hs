@@ -69,6 +69,7 @@ import           Development.IDE.Types.Logger                      hiding
 import           Development.IDE.Types.Options
 import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
+import qualified Text.Regex.Applicative.Text                       as RE
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Parser.Annotation                             (TokenLocation (..))
 #endif
@@ -99,6 +100,7 @@ import           Language.LSP.VFS                                  (VirtualFile,
 import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 #if MIN_VERSION_ghc(9,2,0)
+import           Control.Applicative.Combinators.NonEmpty          (sepBy1)
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
@@ -1510,17 +1512,33 @@ suggestNewImport _ _ _ _ _ = []
 -- FIXME: We can delete this after dropping the support for GHC 9.4
 extractQualifiedModuleNameFromMissingName :: T.Text -> Maybe T.Text
 extractQualifiedModuleNameFromMissingName (T.strip -> missing)
-    | -- Case 1: parenthesized operator
-        Just (nam : _) <-
-            matchRegexUnifySpaces missing
-                "\\`\\(([A-Z][A-Za-z0-9_]*(\\.[A-Z][A-Za-z0-9_]*)*)\\..+\\)\\'"
-        = Just nam
-    | -- Case 2: alphabetic name without parens
-        Just (nam : _) <-
-            matchRegexUnifySpaces missing
-                "\\`([A-Z][A-Za-z0-9_]*(\\.[A-Z][A-Za-z0-9_]*)*)\\..+\\'"
-        = Just nam
-    | otherwise = Nothing
+    = missing RE.=~ qualIdentP
+    where
+        {-
+        NOTE: Haskell 2010 allows /unicode/ upper & lower letters
+        as a module name component; otoh, regex-tdfa only allows
+        /ASCII/ letters to be matched with @[[:upper:]]@ and/or @[[:lower:]]@.
+        Hence we use regex-applicative(-text) for finer-grained predicates.
+
+        RULES (from [Section 10 of Haskell 2010 Report](https://www.haskell.org/onlinereport/haskell2010/haskellch10.html)):
+            modid	→	{conid .} conid
+            conid	→	large {small | large | digit | ' }
+            small	→	ascSmall | uniSmall | _
+            ascSmall	→	a | b | … | z
+            uniSmall	→	any Unicode lowercase letter
+            large	→	ascLarge | uniLarge
+            ascLarge	→	A | B | … | Z
+            uniLarge	→	any uppercase or titlecase Unicode letter
+        -}
+
+        qualIdentP = parensQualOpP <|> qualVarP
+        parensQualOpP = RE.sym '(' *> modNameP <* RE.sym '.' <* RE.anySym <* RE.few RE.anySym <* RE.sym ')'
+        qualVarP = modNameP <* RE.sym '.' <* RE.some RE.anySym
+        conIDP = RE.withMatched $
+            RE.psym isUpper
+            *> RE.many
+                (RE.psym $ \c -> c == '\'' || c == '_' || isUpper c || isLower c || isDigit c)
+        modNameP = fmap snd $ RE.withMatched $ conIDP `sepBy1` RE.sym '.'
 
 
 constructNewImportSuggestions
