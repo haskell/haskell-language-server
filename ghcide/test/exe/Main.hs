@@ -1571,7 +1571,7 @@ completionTest name src pos expected = testSessionWait name $ do
           [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
     forM_ (zip compls expected) $ \(item, (_,_,_,expectedSig, expectedDocs, _)) -> do
         CompletionItem{..} <-
-          if expectedSig || expectedDocs
+          if (expectedSig || expectedDocs) && isJust (item ^. L.data_)
           then do
             rsp <- request SMethod_CompletionItemResolve item
             case rsp ^. L.result of
@@ -2081,10 +2081,13 @@ completionDocTests =
       _ <- waitForDiagnostics
       compls <- getCompletions doc pos
       rcompls <- forM compls $ \item -> do
-        rsp <- request SMethod_CompletionItemResolve item
-        case rsp ^. L.result of
-          Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
-          Right x -> pure x
+            if isJust (item ^. L.data_)
+            then do
+                rsp <- request SMethod_CompletionItemResolve item
+                case rsp ^. L.result of
+                    Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
+                    Right x -> pure x
+            else pure item
       let compls' = [
             -- We ignore doc uris since it points to the local path which determined by specific machines
             case mn of

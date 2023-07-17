@@ -7,6 +7,7 @@ import           Control.Lens               hiding ((.=))
 import           Control.Monad
 import           Data.Aeson                 (object, (.=))
 import           Data.Foldable              (find)
+import           Data.Maybe                 (isJust)
 import           Data.Row.Records           (focus)
 import qualified Data.Text                  as T
 import           Ide.Plugin.Config          (maxCompletions)
@@ -18,10 +19,13 @@ getResolvedCompletions :: TextDocumentIdentifier -> Position -> Session [Complet
 getResolvedCompletions doc pos = do
   xs <- getCompletions doc pos
   forM xs $ \item -> do
-    rsp <- request SMethod_CompletionItemResolve item
-    case rsp ^. result of
-      Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
-      Right x -> pure x
+    if isJust (item ^. data_)
+      then do
+        rsp <- request SMethod_CompletionItemResolve item
+        case rsp ^. result of
+          Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
+          Right x -> pure x
+      else pure item
 
 tests :: TestTree
 tests = testGroup "completions" [

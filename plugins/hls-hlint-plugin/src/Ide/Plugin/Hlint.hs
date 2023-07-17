@@ -117,6 +117,7 @@ import qualified Refact.Fixity                                      as Refact
 import           Ide.Plugin.Config                                  hiding
                                                                     (Config)
 import           Ide.Plugin.Properties
+import           Ide.Plugin.Resolve
 import           Ide.PluginUtils
 import           Ide.Types                                          hiding
                                                                     (Config)
@@ -143,8 +144,6 @@ import           GHC.Generics                                       (Generic)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 #endif
-import           Data.Aeson                                         (Result (Error, Success),
-                                                                     fromJSON)
 import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
@@ -434,22 +433,16 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
 
     diags = context ^. LSP.diagnostics
 
-resolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_CodeActionResolve
-resolveProvider recorder ideState _
-  ca@CodeAction {_data_ = Just (fromJSON -> (Success (ApplyHint verTxtDocId oneHint)))} = pluginResponse $ do
-        file <-  getNormalizedFilePath (verTxtDocId ^. LSP.uri)
+resolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState HlintResolveCommands Method_CodeActionResolve
+resolveProvider recorder ideState _plId ca uri resolveValue = pluginResponse $ do
+  file <-  getNormalizedFilePath uri
+  case resolveValue of
+    (ApplyHint verTxtDocId oneHint) -> do
         edit <- ExceptT $ liftIO $ applyHint recorder ideState file oneHint verTxtDocId
         pure $ ca & LSP.edit ?~ edit
-resolveProvider recorder ideState _
-  ca@CodeAction {_data_ = Just (fromJSON -> (Success (IgnoreHint verTxtDocId hintTitle)))} = pluginResponse $ do
-        file <-  getNormalizedFilePath (verTxtDocId ^. LSP.uri)
+    (IgnoreHint verTxtDocId hintTitle ) -> do
         edit <- ExceptT $ liftIO $ ignoreHint recorder ideState file verTxtDocId hintTitle
         pure $ ca & LSP.edit ?~ edit
-resolveProvider _ _ _
-  CodeAction {_data_ = Just (fromJSON @HlintResolveCommands -> (Error (T.pack -> str)))} =
-    pure $ Left $ ResponseError (InR ErrorCodes_ParseError) str Nothing
-resolveProvider _ _ _ CodeAction {_data_ = _} =
-     pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexpected argument for code action resolve handler: (Probably Nothing)" Nothing
 
 -- | Convert a hlint diagnostic into an apply and an ignore code action
 -- if applicable
