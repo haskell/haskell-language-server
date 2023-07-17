@@ -31,7 +31,7 @@ import           Data.Unique                     (Unique)
 import qualified Data.Unique                     as Unique
 import           Development.IDE.Core.Compile    (indexHieFile)
 import           Development.IDE.Core.Rules      (HieFileCheck(..), Log, checkHieFile)
-import           Development.IDE.Core.Shake      (HieDbWriter(indexQueue), ShakeExtras(hiedbWriter, lspEnv))
+import           Development.IDE.Core.Shake      (HieDbWriter(indexQueue), ShakeExtras(hiedbWriter, lspEnv, withHieDb))
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util as Maybes
 import           Development.IDE.GHC.Error       (catchSrcErrors)
@@ -40,7 +40,7 @@ import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
 import           Development.IDE.Types.Location  (NormalizedFilePath, toNormalizedFilePath')
 import           Development.IDE.Types.Logger    (Recorder, WithPriority)
-import           HieDb                           (SourceFile(FakeFile), removeDependencySrcFiles)
+import           HieDb                           (SourceFile(FakeFile), lookupPackage, removeDependencySrcFiles)
 import           Language.LSP.Server             (resRootPath)
 import           OpenTelemetry.Eventlog          (withSpan)
 import           System.Directory                (doesDirectoryExist, makeAbsolute)
@@ -147,7 +147,13 @@ newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
                   (libraryDir : _) -> libraryDir
                 hieDir :: FilePath
                 hieDir = pkgLibDir </> "extra-compilation-artifacts"
-            traverse_ (indexModuleHieFile hieDir) modules
+                unit :: Unit
+                unit = RealUnit $ Definite $ unitId package
+            moduleRows <- withHieDb se $ \db ->
+                lookupPackage db unit
+            case moduleRows of
+                [] -> traverse_ (indexModuleHieFile hieDir) modules
+                _  -> return ()
         indexModuleHieFile :: FilePath -> Module -> IO ()
         indexModuleHieFile hieDir m = do
             let hiePath :: NormalizedFilePath
