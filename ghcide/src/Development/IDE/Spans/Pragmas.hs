@@ -21,10 +21,10 @@ import           Development.IDE.GHC.Compat.Util
 import qualified Language.LSP.Protocol.Types              as LSP
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Except (ExceptT)
+import Ide.Plugin.Error (PluginError)
 import Ide.Types (PluginId(..))
 import qualified Data.Text as T
 import qualified Development.IDE.Core.PluginUtils as PluginUtils
-import Development.IDE.Core.PluginUtils (GhcidePluginError)
 
 getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
 getNextPragmaInfo dynFlags sourceText =
@@ -52,7 +52,7 @@ insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit prag
         pragmaInsertPosition = LSP.Position (fromIntegral nextPragmaLine) 0
         pragmaInsertRange = LSP.Range pragmaInsertPosition pragmaInsertPosition
 
-getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT GhcidePluginError m NextPragmaInfo
+getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m NextPragmaInfo
 getFirstPragma (PluginId pId) state nfp = do
   ghcSession <- PluginUtils.runAction (T.unpack pId <> ".GhcSession") state $ PluginUtils.useWithStale GhcSession nfp
   (_, fileContents) <- PluginUtils.runAction (T.unpack pId <> ".GetFileContents") state $ PluginUtils.hoistAction $ getFileContents nfp

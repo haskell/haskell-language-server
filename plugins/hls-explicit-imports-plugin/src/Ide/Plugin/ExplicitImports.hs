@@ -40,18 +40,17 @@ import qualified Data.Unique                          as U (hashUnique,
                                                             newUnique)
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
-import qualified Development.IDE.Core.PluginUtils     as PluginUtils
 import           Development.IDE.Core.PositionMapping
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat           hiding ((<+>))
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
-import           Ide.Plugin.RangeMap                  (filterByRange)
-import qualified Ide.Plugin.RangeMap                  as RM (RangeMap, fromList)
-import           Ide.PluginUtils                      (getNormalizedFilePath,
-                                                       handleMaybe,
+import           Ide.Plugin.Error                     (handleMaybe,
                                                        handleMaybeM,
                                                        pluginResponse)
+import           Ide.Plugin.RangeMap                  (filterByRange)
+import qualified Ide.Plugin.RangeMap                  as RM (RangeMap, fromList)
+import           Ide.PluginUtils                      (getNormalizedFilePath)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
@@ -101,7 +100,7 @@ descriptorForModules recorder modFilter plId =
 
 -- | The actual command handler
 runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState EIResolveData
-runImportCommand recorder ideState eird@(ResolveOne _ _) = PluginUtils.pluginResponse $ do
+runImportCommand recorder ideState eird@(ResolveOne _ _) = pluginResponse $ do
   wedit <- resolveWTextEdit ideState eird
   _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) logErrors
   return $ InR  Null
@@ -124,7 +123,7 @@ runImportCommand _ _ (ResolveAll _) = do
 -- > import Data.List (intercalate, sortBy)
 lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
 lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}}
-  = PluginUtils.pluginResponse $ do
+  = pluginResponse $ do
     nfp <- getNormalizedFilePath _uri
     mbMinImports <- liftIO $ runAction "MinimalImports" state $ use MinimalImports nfp
     case mbMinImports of
@@ -142,7 +141,7 @@ lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {
 
 lensResolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_CodeLensResolve
 lensResolveProvider _ ideState plId cl@(CodeLens {_data_ = Just data_@(A.fromJSON -> A.Success (ResolveOne uri uid))})
-  = PluginUtils.pluginResponse $ do
+  = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
     (MinimalImportsResult{forResolve}) <-
       handleMaybeM "Unable to run Minimal Imports"
@@ -168,7 +167,7 @@ lensResolveProvider _  _ _ (CodeLens {_data_ = v}) = do
 --   into explicit imports.
 codeActionProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier {_uri} range _context)
-  = PluginUtils.pluginResponse $ do
+  = pluginResponse $ do
     nfp <- getNormalizedFilePath _uri
     (MinimalImportsResult{forCodeActions}) <-
       handleMaybeM "Unable to run Minimal Imports"
@@ -194,7 +193,7 @@ codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier 
 
 codeActionResolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_CodeActionResolve
 codeActionResolveProvider _ ideState _ ca@(CodeAction{_data_= Just (A.fromJSON -> A.Success rd)}) =
-  PluginUtils.pluginResponse $ do
+  pluginResponse $ do
     wedit <- resolveWTextEdit ideState rd
     pure $ ca & L.edit ?~ wedit
 codeActionResolveProvider _ _ _ (CodeAction{_data_= Just (A.fromJSON @EIResolveData -> A.Error (T.pack -> str))}) =

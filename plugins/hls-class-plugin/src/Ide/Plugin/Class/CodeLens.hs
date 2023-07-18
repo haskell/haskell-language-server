@@ -16,6 +16,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
+import           Ide.Plugin.Error
 import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
@@ -24,8 +25,8 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                  (sendRequest)
 
 codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
-codeLens state plId CodeLensParams{..} = PluginUtils.pluginResponse' $ do
-    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
+codeLens state plId CodeLensParams{..} = pluginResponse' $ do
+    nfp <-  getNormalizedFilePath' uri
     (tmr, _) <- PluginUtils.runAction "classplugin.TypeCheck" state
         -- Using stale results means that we can almost always return a value. In practice
         -- this means the lenses don't 'flicker'

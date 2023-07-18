@@ -38,11 +38,9 @@ import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
                                                        codeRangeRule, crkToFrk)
 import qualified Ide.Plugin.CodeRange.Rules           as Rules (Log)
+import           Ide.Plugin.Error
 import           Ide.PluginUtils                      (getNormalizedFilePath',
-                                                       mkSimpleResponseError,
-                                                       pluginResponseM,
-                                                       positionInRange,
-                                                       withError)
+                                                       positionInRange)
 import           Ide.Types                            (PluginDescriptor (pluginHandlers, pluginRules),
                                                        PluginId,
                                                        defaultPluginDescriptor,
@@ -79,7 +77,7 @@ instance Pretty Log where
 foldingRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError ([FoldingRange] |? Null))
 foldingRangeHandler recorder ide _ FoldingRangeParams{..} =
     pluginResponseM handleErrors $ do
-        filePath <- withError PluginUtils.CoreError $ getNormalizedFilePath' uri
+        filePath <- getNormalizedFilePath' uri
         foldingRanges <- PluginUtils.runAction "FoldingRange" ide $ getFoldingRanges filePath
         pure . InL $ foldingRanges
   where
@@ -87,12 +85,12 @@ foldingRangeHandler recorder ide _ FoldingRangeParams{..} =
     TextDocumentIdentifier uri = _textDocument
 
     handleErrors = \case
-        PluginUtils.RuleFailed rule -> do
+        RuleFailed rule -> do
             logWith recorder Warning $ LogBadDependency rule
             pure $ Right $ InL []
-        errs -> pure $ Left $ PluginUtils.handlePluginError errs
+        errs -> pure $ Left $ handlePluginError errs
 
-getFoldingRanges :: NormalizedFilePath -> ExceptT PluginUtils.GhcidePluginError Action [FoldingRange]
+getFoldingRanges :: NormalizedFilePath -> ExceptT PluginError Action [FoldingRange]
 getFoldingRanges file = do
     codeRange <- PluginUtils.use GetCodeRange file
     pure $ findFoldingRanges codeRange
@@ -100,7 +98,7 @@ getFoldingRanges file = do
 selectionRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError ([SelectionRange] |? Null))
 selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
     pluginResponseM handleErrors $ do
-        filePath <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath' uri
+        filePath <- withError GhcidePluginErrors $ getNormalizedFilePath' uri
         fmap  id . runIdeAction' $ getSelectionRanges filePath positions
   where
     uri :: Uri
@@ -127,13 +125,13 @@ selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
         SelectionRangeOutputPositionMappingFailure ->
             pure $ Left $ mkSimpleResponseError "failed to apply position mapping to output positions"
         GhcidePluginErrors ghcidePluginError ->
-            pure $ Left $ PluginUtils.handlePluginError ghcidePluginError
+            pure $ Left $ handlePluginError ghcidePluginError
 
 
 data SelectionRangeError = forall rule. Show rule => SelectionRangeBadDependency rule
                          | SelectionRangeInputPositionMappingFailure
                          | SelectionRangeOutputPositionMappingFailure
-                         | GhcidePluginErrors PluginUtils.GhcidePluginError
+                         | GhcidePluginErrors PluginError
 
 getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT SelectionRangeError IdeAction ([SelectionRange] |? Null)
 getSelectionRanges file positions = do

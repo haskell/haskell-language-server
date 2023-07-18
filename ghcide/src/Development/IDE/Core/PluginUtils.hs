@@ -10,7 +10,6 @@ import           Data.Bifunctor                       (first)
 import           Data.Either.Extra                    (maybeToEither)
 import           Data.Functor.Identity
 import           Data.String                          (IsString (fromString))
-import qualified Data.Text                            as T
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake           (IdeAction, IdeRule,
                                                        IdeState (shakeExtras),
@@ -22,47 +21,9 @@ import           Development.IDE.Graph                hiding (ShakeValue)
 import           Development.IDE.Types.Location       (NormalizedFilePath)
 import qualified Development.IDE.Types.Location       as Location
 import qualified Development.IDE.Types.Logger         as Logger
-import qualified Ide.PluginUtils                      as PluginUtils
+import           Ide.Plugin.Error
 import qualified Language.LSP.Protocol.Message        as LSP
 import qualified Language.LSP.Protocol.Types          as LSP
-import           Prettyprinter
-import           Prettyprinter.Render.Text            (renderStrict)
--- ----------------------------------------------------------------------------
--- Plugin Error wrapping
--- ----------------------------------------------------------------------------
-
-data GhcidePluginError
-    = forall a . Show a => FastRuleNotReady a
-    | forall a . Show a => RuleFailed a
-    | CoreError PluginUtils.PluginError
-
-instance Pretty GhcidePluginError where
-  pretty = \case
-    FastRuleNotReady rule -> "FastRuleNotReady:" <+> viaShow rule
-    RuleFailed rule       -> "RuleFailed:" <+> viaShow rule
-    CoreError perror      -> pretty $ PluginUtils.prettyPluginError perror
-
-pluginResponse :: Monad m => ExceptT String m a -> m (Either LSP.ResponseError a)
-pluginResponse =
-  fmap (first (\msg -> LSP.ResponseError (LSP.InR LSP.ErrorCodes_InternalError) (fromString msg) Nothing))
-    . runExceptT
-
-pluginResponse' ::
-    Monad m =>
-    ExceptT GhcidePluginError m a ->
-    m (Either LSP.ResponseError a)
-pluginResponse' = PluginUtils.pluginResponse' handlePluginError
-
-withPluginError :: Functor m => ExceptT PluginUtils.PluginError m a -> ExceptT GhcidePluginError m a
-withPluginError = PluginUtils.withError CoreError
-
-mkPluginErrorMessage :: T.Text -> GhcidePluginError
-mkPluginErrorMessage = CoreError . PluginUtils.mkPluginErrorMessage
-
-handlePluginError :: GhcidePluginError -> LSP.ResponseError
-handlePluginError msg = PluginUtils.mkSimpleResponseError $ renderStrict simpleDoc
-    where
-        simpleDoc = layoutPretty defaultLayoutOptions $ pretty msg
 
 -- ----------------------------------------------------------------------------
 -- Action wrappers
@@ -70,7 +31,7 @@ handlePluginError msg = PluginUtils.mkSimpleResponseError $ renderStrict simpleD
 
 runAction :: MonadIO m => String -> IdeState -> ExceptT e Action a -> ExceptT e m a
 runAction herald ide act =
-  PluginUtils.hoistExceptT . ExceptT $
+  hoistExceptT . ExceptT $
     join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runExceptT act)
 
 -- | Request a Rule result, it not available return the last computed result which may be stale.
@@ -80,12 +41,12 @@ useWithStale_ ::(IdeRule k v)
 useWithStale_ key file = ExceptT $ fmap Right $ Shake.useWithStale_ key file
 
 useWithStale :: IdeRule k v
-    => k -> NormalizedFilePath -> ExceptT GhcidePluginError Action (v, PositionMapping)
+    => k -> NormalizedFilePath -> ExceptT PluginError Action (v, PositionMapping)
 useWithStale key file = maybeToExceptT (FastRuleNotReady key) $ useWithStaleMaybeT key file
 
 -- | useE is useful to implement functions that aren’t rules but need shortcircuiting
 -- e.g. getDefinition.
-use :: IdeRule k v => k -> NormalizedFilePath -> ExceptT GhcidePluginError Action v
+use :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError Action v
 use k = maybeToExceptT (RuleFailed k) . MaybeT . Shake.use k
 
 useWithStaleMaybeT :: IdeRule k v
@@ -101,11 +62,11 @@ runIdeAction _herald s i = ExceptT $ liftIO $ runReaderT (Shake.runIdeActionT $ 
 
 -- | useE is useful to implement functions that aren’t rules but need shortcircuiting
 -- e.g. getDefinition.
-useWithStaleFast :: IdeRule k v => k -> NormalizedFilePath -> ExceptT GhcidePluginError IdeAction (v, PositionMapping)
+useWithStaleFast :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError IdeAction (v, PositionMapping)
 useWithStaleFast k = maybeToExceptT (RuleFailed k) . MaybeT . Shake.useWithStaleFast k
 
-uriToFilePath' :: Monad m => LSP.Uri -> ExceptT GhcidePluginError m FilePath
-uriToFilePath' uri = ExceptT . pure . maybeToEither (CoreError $ PluginUtils.PluginUriToFilePath uri) $ Location.uriToFilePath' uri
+uriToFilePath' :: Monad m => LSP.Uri -> ExceptT PluginError m FilePath
+uriToFilePath' uri = ExceptT . pure . maybeToEither (PluginUriToFilePath uri) $ Location.uriToFilePath' uri
 
 -- ----------------------------------------------------------------------------
 -- Internal Helper function, not exported

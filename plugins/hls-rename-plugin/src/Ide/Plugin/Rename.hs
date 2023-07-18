@@ -52,6 +52,7 @@ import           Development.IDE.Plugin.CodeAction
 import           Development.IDE.Spans.AtPoint
 import           Development.IDE.Types.Location
 import           HieDb.Query
+import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types
@@ -71,7 +72,7 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultP
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier uri) pos  newNameText) =
-    PluginUtils.pluginResponse' $ do
+    pluginResponse' $ do
         nfp <- handleUriToNfp uri
         directOldNames <- getNamesAtPos state nfp pos
         directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
@@ -91,7 +92,7 @@ renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier 
         -- Validate rename
         crossModuleEnabled <- liftIO $ runAction "rename: config" state $ usePropertyAction #crossModule pluginId properties
         unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
-        when (any isBuiltInSyntax oldNames) $ throwE $ PluginUtils.mkPluginErrorMessage "Invalid rename of built-in syntax"
+        when (any isBuiltInSyntax oldNames) $ throwE $ mkPluginErrorMessage "Invalid rename of built-in syntax"
 
         -- Perform rename
         let newName = mkTcOcc $ T.unpack newNameText
@@ -109,17 +110,17 @@ failWhenImportOrExport ::
     NormalizedFilePath ->
     HashSet Location ->
     [Name] ->
-    ExceptT PluginUtils.GhcidePluginError m ()
+    ExceptT PluginError m ()
 failWhenImportOrExport state nfp refLocs names = do
     pm <- PluginUtils.runAction "Rename.GetParsedModule" state
          (PluginUtils.use GetParsedModule nfp)
     let hsMod = unLoc $ pm_parsed_source pm
     case (unLoc <$> hsmodName hsMod, hsmodExports hsMod) of
         (mbModName, _) | not $ any (\n -> nameIsLocalOrFrom (replaceModName n mbModName) n) names
-            -> throwE $ PluginUtils.mkPluginErrorMessage "Renaming of an imported name is unsupported"
+            -> throwE $ mkPluginErrorMessage "Renaming of an imported name is unsupported"
         (_, Just (L _ exports)) | any ((`HS.member` refLocs) . unsafeSrcSpanToLoc . getLoc) exports
-            -> throwE $ PluginUtils.mkPluginErrorMessage "Renaming of an exported name is unsupported"
-        (Just _, Nothing) -> throwE $ PluginUtils.mkPluginErrorMessage "Explicit export list required for renaming"
+            -> throwE $ mkPluginErrorMessage "Renaming of an exported name is unsupported"
+        (Just _, Nothing) -> throwE $ mkPluginErrorMessage "Explicit export list required for renaming"
         _ -> pure ()
 
 ---------------------------------------------------------------------------------------------------
@@ -131,7 +132,7 @@ getSrcEdit ::
     IdeState ->
     VersionedTextDocumentIdentifier ->
     (ParsedSource -> ParsedSource) ->
-    ExceptT PluginUtils.GhcidePluginError m WorkspaceEdit
+    ExceptT PluginError m WorkspaceEdit
 getSrcEdit state verTxtDocId updatePs = do
     ccs <- lift getClientCapabilities
     nfp <- handleUriToNfp (verTxtDocId ^. L.uri)
@@ -192,7 +193,7 @@ refsAtName ::
     IdeState ->
     NormalizedFilePath ->
     Name ->
-    ExceptT PluginUtils.GhcidePluginError m [Location]
+    ExceptT PluginError m [Location]
 refsAtName state nfp name = do
     ShakeExtras{withHieDb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
     ast <- handleGetHieAst state nfp
@@ -217,7 +218,7 @@ nameLocs name (HAR _ _ rm _ _, pm) =
 ---------------------------------------------------------------------------------------------------
 -- Util
 
-getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT PluginUtils.GhcidePluginError m [Name]
+getNamesAtPos :: MonadIO m => IdeState -> NormalizedFilePath -> Position -> ExceptT PluginError m [Name]
 getNamesAtPos state nfp pos = do
     (HAR{hieAst}, pm) <- handleGetHieAst state nfp
     pure $ getNamesAtPoint hieAst pos pm
@@ -226,7 +227,7 @@ handleGetHieAst ::
     MonadIO m =>
     IdeState ->
     NormalizedFilePath ->
-    ExceptT PluginUtils.GhcidePluginError m (HieAstResult, PositionMapping)
+    ExceptT PluginError m (HieAstResult, PositionMapping)
 handleGetHieAst state nfp =
     fmap (first removeGenerated) $ PluginUtils.runAction "Rename.GetHieAst" state $ PluginUtils.useWithStale GetHieAst nfp
 
@@ -244,8 +245,8 @@ removeGenerated HAR{..} = HAR{hieAst = go hieAst,..}
       hf
 #endif
 
-handleUriToNfp :: (Monad m) => Uri -> ExceptT PluginUtils.GhcidePluginError m NormalizedFilePath
-handleUriToNfp uri = PluginUtils.withPluginError $ getNormalizedFilePath' uri
+handleUriToNfp :: (Monad m) => Uri -> ExceptT PluginError m NormalizedFilePath
+handleUriToNfp uri = getNormalizedFilePath' uri
 
 -- head is safe since groups are non-empty
 collectWith :: (Hashable a, Eq a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]

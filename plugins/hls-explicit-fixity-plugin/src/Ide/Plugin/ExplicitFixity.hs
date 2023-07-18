@@ -28,6 +28,7 @@ import qualified Development.IDE.GHC.Compat.Util      as Util
 import           Development.IDE.LSP.Notifications    (ghcideNotificationsPluginPriority)
 import           Development.IDE.Spans.AtPoint
 import           GHC.Generics                         (Generic)
+import           Ide.Plugin.Error
 import           Ide.PluginUtils                      (getNormalizedFilePath')
 import           Ide.Types                            hiding (pluginId)
 import           Language.LSP.Protocol.Message
@@ -43,8 +44,8 @@ descriptor recorder pluginId = (defaultPluginDescriptor pluginId)
     }
 
 hover :: PluginMethodHandler IdeState Method_TextDocumentHover
-hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = PluginUtils.pluginResponse' $ do
-    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
+hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = pluginResponse' $ do
+    nfp <- getNormalizedFilePath' uri
     PluginUtils.runIdeAction "ExplicitFixity" (shakeExtras state) $ do
       (FixityMap fixmap, _) <-  PluginUtils.useWithStaleFast GetFixity nfp
       (HAR{hieAst}, mapping) <- PluginUtils.useWithStaleFast GetHieAst nfp

@@ -14,6 +14,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.Pragmas    (getNextPragmaInfo,
                                                    insertNewPragma)
+import           Ide.Plugin.Error
 import           Ide.PluginUtils
 import           Language.LSP.Protocol.Types
 
@@ -55,7 +56,7 @@ insertPragmaIfNotPresent :: (MonadIO m)
     => IdeState
     -> NormalizedFilePath
     -> Extension
-    -> ExceptT PluginUtils.GhcidePluginError m [TextEdit]
+    -> ExceptT PluginError m [TextEdit]
 insertPragmaIfNotPresent state nfp pragma = do
     (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- PluginUtils.runAction "classplugin.insertPragmaIfNotPresent.GhcSession" state
         $ PluginUtils.useWithStale GhcSession nfp

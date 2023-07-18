@@ -21,8 +21,8 @@ import           Development.IDE.Core.Service     (IdeState)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util         (printOutputable)
 import           Generics.SYB                     (extQ, something)
-import           Ide.PluginUtils                  (getNormalizedFilePath',
-                                                   handleMaybeM, pluginResponse)
+import           Ide.Plugin.Error                 (PluginError, pluginResponse')
+import           Ide.PluginUtils                  (getNormalizedFilePath')
 import           Ide.Types                        (PluginDescriptor (..),
                                                    PluginId (PluginId),
                                                    PluginMethodHandler,
@@ -36,13 +36,13 @@ descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction (codeActionHandler plId) }
 
 codeActionHandler :: PluginId -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionHandler plId ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext diags _ _} = PluginUtils.pluginResponse' $ do
-      nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
+codeActionHandler plId ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext diags _ _} = pluginResponse' $ do
+      nfp <- getNormalizedFilePath' uri
       decls <- getDecls plId ideState nfp
       let actions = mapMaybe (generateAction plId uri decls) diags
       pure $ InL actions
 
-getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginUtils.GhcidePluginError m [LHsDecl GhcPs]
+getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m [LHsDecl GhcPs]
 getDecls (PluginId changeTypeSignatureId) state =
     PluginUtils.runAction (T.unpack changeTypeSignatureId <> ".GetParsedModule") state
     . (fmap (hsmodDecls . unLoc . pm_parsed_source))

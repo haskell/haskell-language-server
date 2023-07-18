@@ -32,6 +32,7 @@ import           Ide.Plugin.Class.ExactPrint
 import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
 import qualified Ide.Plugin.Config
+import           Ide.Plugin.Error
 import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
@@ -42,13 +43,13 @@ import           Language.LSP.Server
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
     caps <- getClientCapabilities
-    PluginUtils.pluginResponse' $ do
-        nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (verTxtDocId ^. L.uri)
+    pluginResponse' $ do
+        nfp <- getNormalizedFilePath' (verTxtDocId ^. L.uri)
         pm <- PluginUtils.runAction "classplugin.addMethodPlaceholders.GetParsedModule" state
             $ PluginUtils.use GetParsedModule nfp
         (hsc_dflags . hscEnv -> df) <- PluginUtils.runAction "classplugin.addMethodPlaceholders.GhcSessionDeps" state
             $ PluginUtils.use GhcSessionDeps nfp
-        (old, new) <- handleMaybeM (PluginUtils.mkPluginErrorMessage "Unable to makeEditText")
+        (old, new) <- handleMaybeM (mkPluginErrorMessage "Unable to makeEditText")
             $ liftIO $ runMaybeT
             $ makeEditText pm df param
         pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
@@ -79,9 +80,9 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
-codeAction recorder state plId (CodeActionParams _ _ docId _ context) = PluginUtils.pluginResponse' $ do
+codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginResponse' $ do
     verTxtDocId <- lift $ getVersionedTextDoc docId
-    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (verTxtDocId ^. L.uri)
+    nfp <- getNormalizedFilePath' (verTxtDocId ^. L.uri)
     actions <- join <$> mapM (mkActions nfp verTxtDocId) methodDiags
     pure $ InL actions
     where
@@ -94,11 +95,11 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = PluginUt
             :: NormalizedFilePath
             -> VersionedTextDocumentIdentifier
             -> Diagnostic
-            -> ExceptT PluginUtils.GhcidePluginError (LspT Ide.Plugin.Config.Config IO) [Command |? CodeAction]
+            -> ExceptT PluginError (LspT Ide.Plugin.Config.Config IO) [Command |? CodeAction]
         mkActions docPath verTxtDocId diag = do
             (HAR {hieAst = ast}, pmap) <- PluginUtils.runAction "classplugin.findClassIdentifier.GetHieAst" state
                 $ PluginUtils.useWithStale GetHieAst docPath
-            instancePosition <- handleMaybe (PluginUtils.mkPluginErrorMessage "No range") $
+            instancePosition <- handleMaybe (mkPluginErrorMessage "No range") $
                               fromCurrentRange pmap range ^? _Just . L.start
                               & fmap (L.character -~ 1)
             ident <- findClassIdentifier ast instancePosition
@@ -152,7 +153,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = PluginUt
                         Nothing
 
         findClassIdentifier hf instancePosition =
-            handleMaybe (PluginUtils.mkPluginErrorMessage "No Identifier found")
+            handleMaybe (mkPluginErrorMessage "No Identifier found")
                 $ listToMaybe
                 $ mapMaybe listToMaybe
                 $ pointCommand hf instancePosition
@@ -163,7 +164,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = PluginUt
         findImplementedMethods
             :: HieASTs a
             -> Position
-            -> ExceptT PluginUtils.GhcidePluginError (LspT Ide.Plugin.Config.Config IO) [T.Text]
+            -> ExceptT PluginError (LspT Ide.Plugin.Config.Config IO) [T.Text]
         findImplementedMethods asts instancePosition = do
             pure
                 $ concat
@@ -184,7 +185,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = PluginUt
                 $ PluginUtils.useWithStale GhcSessionDeps docPath
             (tmrTypechecked -> thisMod, _) <- PluginUtils.runAction "classplugin.findClassFromIdentifier.TypeCheck" state
                 $ PluginUtils.useWithStale TypeCheck docPath
-            handleMaybeM (PluginUtils.CoreError PluginInternalError)
+            handleMaybeM (PluginInternalError)
                 . liftIO
                 . fmap snd
                 . initTcWithGbl hscenv thisMod ghostSpan $ do
@@ -193,7 +194,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = PluginUt
                         AGlobal (AConLike (RealDataCon con))
                             | Just cls <- tyConClass_maybe (dataConOrigTyCon con) -> pure cls
                         _ -> fail "Ide.Plugin.Class.findClassFromIdentifier"
-        findClassFromIdentifier _ (Left _) = throwE (PluginUtils.mkPluginErrorMessage "Ide.Plugin.Class.findClassIdentifier")
+        findClassFromIdentifier _ (Left _) = throwE (mkPluginErrorMessage "Ide.Plugin.Class.findClassIdentifier")
 
 isClassNodeIdentifier :: IdentifierDetails a -> Bool
 isClassNodeIdentifier ident = (isNothing . identType) ident && Use `Set.member` identInfo ident

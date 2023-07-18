@@ -101,7 +101,11 @@ import           Development.IDE.Types.Shake                  (toKey)
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
 #endif
-import           Development.IDE.Core.PluginUtils             (GhcidePluginError)
+import           Ide.Plugin.Error                             (PluginError,
+                                                               handleMaybe,
+                                                               handleMaybeM,
+                                                               mkPluginErrorMessage,
+                                                               pluginResponse')
 import           Ide.Plugin.Eval.Code                         (Statement,
                                                                asStatements,
                                                                myExecStmt,
@@ -123,8 +127,6 @@ import           Ide.Plugin.Eval.Util                         (gStrictTry,
                                                                isLiterate,
                                                                logWith,
                                                                response', timed)
-import           Ide.PluginUtils                              (handleMaybe,
-                                                               handleMaybeM)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                   as L
 import           Language.LSP.Protocol.Message
@@ -140,7 +142,7 @@ codeLens st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
      in perf "codeLens" $
-            PluginUtils.pluginResponse' $ do
+            pluginResponse' $ do
                 let TextDocumentIdentifier uri = _textDocument
                 fp <- PluginUtils.uriToFilePath' uri
                 let nfp = toNormalizedFilePath' fp
@@ -206,7 +208,7 @@ runEvalCmd :: PluginId -> CommandFunction IdeState EvalParams
 runEvalCmd plId st EvalParams{..} =
     let dbg = logWith st
         perf = timed dbg
-        cmd :: ExceptT GhcidePluginError (LspM Config) WorkspaceEdit
+        cmd :: ExceptT PluginError (LspM Config) WorkspaceEdit
         cmd = do
             let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
@@ -298,9 +300,9 @@ finalReturn txt =
         p = Position l c
      in TextEdit (Range p p) "\n"
 
-moduleText :: MonadLsp c m => Uri -> ExceptT GhcidePluginError m Text
+moduleText :: MonadLsp c m => Uri -> ExceptT PluginError m Text
 moduleText uri =
-    handleMaybeM (PluginUtils.mkPluginErrorMessage "mdlText") $
+    handleMaybeM (mkPluginErrorMessage "mdlText") $
       (virtualFileText <$>)
           <$> getVirtualFile
               (toNormalizedUri uri)

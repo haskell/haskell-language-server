@@ -27,6 +27,7 @@ import qualified Development.IDE.Core.PluginUtils as PluginUtils
 import           Development.IDE.Spans.Pragmas    (getFirstPragma,
                                                    insertNewPragma)
 import           GHC.Generics                     (Generic)
+import           Ide.Plugin.Error
 import           Ide.Plugin.GHC
 import           Ide.PluginUtils
 import           Ide.Types
@@ -55,7 +56,7 @@ toGADTSyntaxCommandId = "GADT.toGADT"
 -- | A command replaces H98 data decl with GADT decl in place
 toGADTCommand :: PluginId -> CommandFunction IdeState ToGADTParams
 toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = pluginResponseM handleGhcidePluginError $ do
-    nfp <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath' uri
+    nfp <- withError (GhcidePluginErrors) $ getNormalizedFilePath' uri
     (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
     (L ann decl) <- case decls of
         [d] -> pure d
@@ -86,7 +87,7 @@ toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = pluginResponseM handl
 
 codeActionHandler :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionHandler state plId (CodeActionParams _ _ doc range _) = pluginResponseM handleGhcidePluginError $ do
-    nfp <- withError (GhcidePluginErrors . PluginUtils.CoreError) $ getNormalizedFilePath' (doc ^. L.uri)
+    nfp <- withError (GhcidePluginErrors) $ getNormalizedFilePath' (doc ^. L.uri)
     (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
     let actions = map (mkAction . printOutputable . tcdLName . unLoc) inRangeH98Decls
     pure $ InL actions
@@ -127,7 +128,7 @@ data GadtPluginError
     = UnexpectedNumberOfDeclarations Int
     | FailedToFindDataDeclRange
     | PrettyGadtError T.Text
-    | GhcidePluginErrors PluginUtils.GhcidePluginError
+    | GhcidePluginErrors PluginError
 
 handleGhcidePluginError ::
     Monad m =>
@@ -141,4 +142,4 @@ handleGhcidePluginError = \case
     PrettyGadtError errMsg ->
         pure $ Left $ mkSimpleResponseError $ errMsg
     GhcidePluginErrors errors ->
-        pure $ Left $ PluginUtils.handlePluginError errors
+        pure $ Left $ handlePluginError errors

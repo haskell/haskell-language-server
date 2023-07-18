@@ -50,6 +50,7 @@ import           Development.IDE.Types.Logger         (Pretty (pretty),
                                                        Recorder, WithPriority,
                                                        cmapWithPrio)
 import           GHC.Generics                         (Generic)
+import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                      (getNormalizedFilePath',
                                                        mkLspCommand)
@@ -105,9 +106,9 @@ properties = emptyProperties
     ] Always
 
 codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
-codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = PluginUtils.pluginResponse' $ do
+codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = pluginResponse' $ do
     mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
-    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
+    nfp <- getNormalizedFilePath' uri
     env <- hscEnv . fst <$>
       PluginUtils.runAction "codeLens.GhcSession" ideState
         (PluginUtils.useWithStale GhcSession nfp)

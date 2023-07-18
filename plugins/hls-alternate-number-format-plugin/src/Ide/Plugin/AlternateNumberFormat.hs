@@ -27,6 +27,7 @@ import           GHC.Generics                     (Generic)
 import           Ide.Plugin.Conversion            (AlternateFormat,
                                                    ExtensionNeeded (NeedsExtension, NoExtension),
                                                    alternateFormat)
+import           Ide.Plugin.Error
 import           Ide.Plugin.Literals
 import           Ide.Plugin.RangeMap              (RangeMap)
 import qualified Ide.Plugin.RangeMap              as RangeMap
@@ -83,8 +84,8 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
     pure ([], CLR <$> litMap <*> exts)
 
 codeActionHandler :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = PluginUtils.pluginResponse' $ do
-    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (docId ^. L.uri)
+codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = pluginResponse' $ do
+    nfp <- getNormalizedFilePath' (docId ^. L.uri)
     CLR{..} <- requestLiterals pId state nfp
     pragma <- getFirstPragma pId state nfp
         -- remove any invalid literals (see validTarget comment)
@@ -130,7 +131,7 @@ mkCodeActionTitle lit (alt, ext) ghcExts
 needsExtension :: Extension -> [GhcExtension] -> Bool
 needsExtension ext ghcExts = ext `notElem` map unExt ghcExts
 
-requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginUtils.GhcidePluginError m CollectLiteralsResult
+requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m CollectLiteralsResult
 requestLiterals (PluginId pId) state =
     PluginUtils.runAction (unpack pId <> ".CollectLiterals") state
     . PluginUtils.use CollectLiterals

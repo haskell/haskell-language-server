@@ -113,9 +113,9 @@ import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (.
 import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
 import qualified Refact.Fixity                                      as Refact
 #endif
-
 import           Ide.Plugin.Config                                  hiding
                                                                     (Config)
+import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types                                          hiding
@@ -437,12 +437,12 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
 
 resolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_CodeActionResolve
 resolveProvider recorder ideState _
-  ca@CodeAction {_data_ = Just (fromJSON -> (Success (ApplyHint verTxtDocId oneHint)))} = PluginUtils.pluginResponse $ do
+  ca@CodeAction {_data_ = Just (fromJSON -> (Success (ApplyHint verTxtDocId oneHint)))} = pluginResponse $ do
         file <-  getNormalizedFilePath (verTxtDocId ^. LSP.uri)
         edit <- ExceptT $ liftIO $ applyHint recorder ideState file oneHint verTxtDocId
         pure $ ca & LSP.edit ?~ edit
 resolveProvider recorder ideState _
-  ca@CodeAction {_data_ = Just (fromJSON -> (Success (IgnoreHint verTxtDocId hintTitle)))} = PluginUtils.pluginResponse $ do
+  ca@CodeAction {_data_ = Just (fromJSON -> (Success (IgnoreHint verTxtDocId hintTitle)))} = pluginResponse $ do
         file <-  getNormalizedFilePath (verTxtDocId ^. LSP.uri)
         edit <- ExceptT $ liftIO $ ignoreHint recorder ideState file verTxtDocId hintTitle
         pure $ ca & LSP.edit ?~ edit

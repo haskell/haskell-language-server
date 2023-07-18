@@ -75,20 +75,17 @@ import           Development.IDE.Types.Logger         (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))
 import           GHC.Generics                         (Generic)
+import           Ide.Plugin.Error                     (PluginError (..),
+                                                       pluginResponse')
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
-import           Ide.PluginUtils                      (PluginError,
-                                                       getNormalizedFilePath,
-                                                       getNormalizedFilePath',
-                                                       handleMaybeM,
-                                                       pluginResponse)
+import           Ide.PluginUtils                      (getNormalizedFilePath')
 import           Ide.Types                            (PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
                                                        defaultPluginDescriptor,
                                                        mkCodeActionHandlerWithResolve,
                                                        mkPluginHandler)
-import           Language.LSP.Protocol.Lens           (HasChanges (changes))
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message        (Method (..),
                                                        SMethod (..))
@@ -179,10 +176,10 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
 
 resolveProvider :: PluginMethodHandler IdeState 'Method_CodeActionResolve
 resolveProvider ideState pId ca@(CodeAction _ _ _ _ _ _ _ (Just resData)) =
-    PluginUtils.pluginResponse' $ do
+    pluginResponse' $ do
         case fromJSON resData of
             Success (ORDRD uri int) -> do
-                nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
+                nfp <- getNormalizedFilePath' uri
                 CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
                 pragma <- getFirstPragma pId ideState nfp
                 case IntMap.lookup int crsDetails of
@@ -191,13 +188,13 @@ resolveProvider ideState pId ca@(CodeAction _ _ _ _ _ _ _ (Just resData)) =
                     -- https://github.com/microsoft/language-server-protocol/issues/1738
                     -- but we need fendor's plugin error response pr to make it
                     -- convenient to use here, so we will wait to do that till that's merged
-                    _        -> throwE $ PluginUtils.mkPluginErrorMessage "Content Modified Error"
-            _ -> throwE $ PluginUtils.mkPluginErrorMessage "Unable to deserialize the data"
+                    _        -> throwE $ PluginErrorMessage "Content Modified Error"
+            _ -> throwE $ PluginErrorMessage "Unable to deserialize the data"
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
-    PluginUtils.pluginResponse' $ do
-        nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (caDocId ^. L.uri)
+    pluginResponse' $ do
+        nfp <- getNormalizedFilePath' (caDocId ^. L.uri)
         CRSR crsMap crsDetails exts <- collectRecSelResult ideState nfp
         let mkCodeAction (crsM, nse)  = InR CodeAction
                 { -- We pass the record selector to the title function, so that
@@ -329,7 +326,7 @@ getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecFld _ _)
 getRecSels _ = ([], False)
 
 collectRecSelResult :: MonadIO m => IdeState -> NormalizedFilePath
-                        -> ExceptT PluginUtils.GhcidePluginError m CollectRecordSelectorsResult
+                        -> ExceptT PluginError m CollectRecordSelectorsResult
 collectRecSelResult ideState =
     PluginUtils.runAction "overloadedRecordDot.collectRecordSelectors" ideState
         . PluginUtils.use CollectRecordSelectors

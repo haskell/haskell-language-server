@@ -23,7 +23,6 @@ import           Data.String                           (IsString (fromString))
 import qualified Data.Text                             as T
 import           Development.IDE                       (IdeState, Priority (..),
                                                         ideLogger, logPriority)
-import           Development.IDE.Core.PluginUtils      (GhcidePluginError)
 import qualified Development.IDE.Core.PluginUtils      as PluginUtils
 import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Compat.Util       (MonadCatch, bagToList,
@@ -33,7 +32,7 @@ import           GHC.Stack                             (HasCallStack, callStack,
                                                         srcLocFile,
                                                         srcLocStartCol,
                                                         srcLocStartLine)
-import           Ide.PluginUtils                       (prettyPluginError)
+import           Ide.Plugin.Error
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
@@ -69,15 +68,15 @@ logLevel = Debug -- Info
 isLiterate :: FilePath -> Bool
 isLiterate x = takeExtension x `elem` [".lhs", ".lhs-boot"]
 
-response' :: ExceptT GhcidePluginError (LspM c) WorkspaceEdit -> LspM c (Either ResponseError (Value |? Null))
+response' :: ExceptT PluginError (LspM c) WorkspaceEdit -> LspM c (Either ResponseError (Value |? Null))
 response' act = do
     res <- runExceptT act
              `catchAny` \e -> do
                 res <- showErr e
-                pure . Left . PluginUtils.mkPluginErrorMessage $ fromString res
+                pure . Left . mkPluginErrorMessage $ fromString res
     case res of
       Left e ->
-          return $ Left $ PluginUtils.handlePluginError e
+          return $ Left $ handlePluginError e
       Right a -> do
         _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing a) (\_ -> pure ())
         return $ Right $ InR Null

@@ -113,6 +113,7 @@ import qualified GHC                                  (Module, ParsedSource,
 import qualified GHC                                  as GHCGHC
 import           GHC.Generics                         (Generic)
 import           GHC.Hs.Dump
+import           Ide.Plugin.Error
 import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
@@ -212,8 +213,8 @@ runRetrieCmd ::
   LspM c (Either ResponseError (Value |? Null))
 runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
   withIndefiniteProgress description Cancellable $ do
-    PluginUtils.pluginResponse' $ do
-        nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
+    pluginResponse' $ do
+        nfp <- getNormalizedFilePath' uri
         (session, _) <-
             PluginUtils.runAction "Retrie.GhcSessionDeps" state $
                 PluginUtils.useWithStale GhcSessionDeps
@@ -246,11 +247,9 @@ data RunRetrieInlineThisParams = RunRetrieInlineThisParams
 
 runRetrieInlineThisCmd :: IdeState
     -> RunRetrieInlineThisParams -> LspM c (Either ResponseError (Value |? Null))
-runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = PluginUtils.pluginResponse' $ do
-    nfp <- PluginUtils.withPluginError $
-        getNormalizedFilePath' $ getLocationUri inlineIntoThisLocation
-    nfpSource <- PluginUtils.withPluginError $
-        getNormalizedFilePath' $ getLocationUri inlineFromThisLocation
+runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = pluginResponse' $ do
+    nfp <- getNormalizedFilePath' $ getLocationUri inlineIntoThisLocation
+    nfpSource <- getNormalizedFilePath' $ getLocationUri inlineFromThisLocation
     -- What we do here:
     --   Find the identifier in the given position
     --   Construct an inline rewrite for it
@@ -269,7 +268,7 @@ runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = PluginUtils.pluginR
         fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
     inlineRewrite <- liftIO $ constructInlineFromIdentifer astSrc fromRange
-    when (null inlineRewrite) $ throwE $ PluginUtils.mkPluginErrorMessage "Empty rewrite"
+    when (null inlineRewrite) $ throwE $ mkPluginErrorMessage "Empty rewrite"
     let ShakeExtras{..} = shakeExtras state
     (session, _) <- PluginUtils.runAction "retrie" state $
       PluginUtils.useWithStale GhcSessionDeps nfp
@@ -277,8 +276,8 @@ runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = PluginUtils.pluginR
     result <- liftIO $ try @_ @SomeException $
         runRetrie fixityEnv (applyWithUpdate myContextUpdater inlineRewrite) cpp
     case result of
-        Left err -> throwE $ PluginUtils.mkPluginErrorMessage $ "Retrie - crashed with: " <> T.pack (show err)
-        Right (_,_,NoChange) -> throwE $ PluginUtils.mkPluginErrorMessage "Retrie - inline produced no changes"
+        Left err -> throwE $ mkPluginErrorMessage $ "Retrie - crashed with: " <> T.pack (show err)
+        Right (_,_,NoChange) -> throwE $ mkPluginErrorMessage "Retrie - inline produced no changes"
         Right (_,_,Change replacements imports) -> do
             let edits = asEditMap $ asTextEdits $ Change ourReplacement imports
                 wedit = WorkspaceEdit (Just edits) Nothing Nothing
@@ -339,9 +338,9 @@ extractImports _ _ _ = []
 -------------------------------------------------------------------------------
 
 provider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
-provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = PluginUtils.pluginResponse' $ do
+provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = pluginResponse' $ do
   let (LSP.CodeActionContext _diags _monly _) = ca
-  nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' uri
+  nfp <- getNormalizedFilePath' uri
 
   (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
     <- PluginUtils.runAction "retrie" state $
@@ -349,7 +348,7 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
 
   extras@ShakeExtras{ withHieDb, hiedbWriter } <- liftIO $ runAction "" state getShakeExtras
 
-  range <- handleMaybe (PluginUtils.mkPluginErrorMessage "range") $ fromCurrentRange posMapping range
+  range <- handleMaybe (mkPluginErrorMessage "range") $ fromCurrentRange posMapping range
   let pos = range ^. L.start
   let rewrites =
         concatMap (suggestBindRewrites uri pos ms_mod) topLevelBinds
@@ -380,7 +379,7 @@ getLocationUri Location{_uri} = _uri
 
 getLocationRange Location{_range} = _range
 
-getBinds :: NormalizedFilePath -> ExceptT PluginUtils.GhcidePluginError Action (ModSummary, [HsBindLR GhcRn GhcRn], PositionMapping, [LRuleDecls GhcRn], [TyClGroup GhcRn])
+getBinds :: NormalizedFilePath -> ExceptT PluginError Action (ModSummary, [HsBindLR GhcRn GhcRn], PositionMapping, [LRuleDecls GhcRn], [TyClGroup GhcRn])
 getBinds nfp = do
   (tm, posMapping) <- PluginUtils.useWithStale TypeCheck nfp
   -- we use the typechecked source instead of the parsed source

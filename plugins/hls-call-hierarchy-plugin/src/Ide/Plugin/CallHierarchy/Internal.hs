@@ -30,8 +30,8 @@ import           Development.IDE.Spans.AtPoint
 import           HieDb                            (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query   as Q
 import           Ide.Plugin.CallHierarchy.Types
-import           Ide.PluginUtils                  (getNormalizedFilePath',
-                                                   handleMaybe)
+import           Ide.Plugin.Error
+import           Ide.PluginUtils                  (getNormalizedFilePath')
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
@@ -40,8 +40,8 @@ import           Text.Read                        (readMaybe)
 
 -- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState Method_TextDocumentPrepareCallHierarchy
-prepareCallHierarchy state _ param = PluginUtils.pluginResponse' $ do
-    nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (param ^. L.textDocument ^. L.uri)
+prepareCallHierarchy state _ param = pluginResponse' $ do
+    nfp <-  getNormalizedFilePath' (param ^. L.textDocument ^. L.uri)
     items <- liftIO
         $ runAction "CallHierarchy.prepareHierarchy" state
         $ prepareCallHierarchyItem nfp (param ^. L.position)
@@ -174,7 +174,7 @@ deriving instance Ord Value
 
 -- | Render incoming calls request.
 incomingCalls :: PluginMethodHandler IdeState Method_CallHierarchyIncomingCalls
-incomingCalls state pluginId param = PluginUtils.pluginResponse $ do
+incomingCalls state pluginId param = pluginResponse $ do
     calls <- liftIO
         $ runAction "CallHierarchy.incomingCalls" state
         $ queryCalls
@@ -189,7 +189,7 @@ incomingCalls state pluginId param = PluginUtils.pluginResponse $ do
 
 -- | Render outgoing calls request.
 outgoingCalls :: PluginMethodHandler IdeState Method_CallHierarchyOutgoingCalls
-outgoingCalls state pluginId param = PluginUtils.pluginResponse $ do
+outgoingCalls state pluginId param = pluginResponse $ do
     calls <- liftIO
         $ runAction "CallHierarchy.outgoingCalls" state
         $ queryCalls

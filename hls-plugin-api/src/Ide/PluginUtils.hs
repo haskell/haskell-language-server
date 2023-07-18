@@ -31,19 +31,6 @@ module Ide.PluginUtils
     subRange,
     positionInRange,
     usePropertyLsp,
-    -- * Plugin Error Handling API
-    PluginError(..),
-    pluginResponse,
-    pluginResponse',
-    pluginResponseM,
-    prettyPluginError,
-    handlePluginError,
-    mkPluginErrorMessage,
-    hoistExceptT,
-    handleMaybe,
-    handleMaybeM,
-    mkSimpleResponseError,
-    withError,
     -- * Batteries-included plugin error API
     getNormalizedFilePath,
     getNormalizedFilePath',
@@ -71,6 +58,7 @@ import           Data.String                   (IsString (fromString))
 import qualified Data.Text                     as T
 import           Data.Void                     (Void)
 import           Ide.Plugin.Config
+import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens    as L
@@ -279,60 +267,6 @@ getNormalizedFilePath' :: Monad m => Uri -> ExceptT PluginError m NormalizedFile
 getNormalizedFilePath' uri = handleMaybe (PluginUriToNormalizedFilePath uri)
         $ uriToNormalizedFilePath
         $ toNormalizedUri uri
-
--- ---------------------------------------------------------------------
-
-type PluginHandler e m a = ExceptT e m a
-
-pluginResponse :: Monad m => ExceptT PluginError m a -> m (Either ResponseError a)
-pluginResponse =
-  fmap (first handlePluginError)
-    . runExceptT
-
-pluginResponse' :: Monad m => (e -> ResponseError) -> ExceptT e m a -> m (Either ResponseError a)
-pluginResponse' handleError =
-  fmap (first handleError)
-    . runExceptT
-
-pluginResponseM :: Monad m => (t -> m (Either a b)) -> ExceptT t m b -> m (Either a b)
-pluginResponseM handler act =
-    runExceptT act >>= \case
-        Right r  -> pure $ Right r
-        Left err -> handler err
-
-handlePluginError :: PluginError -> ResponseError
-handlePluginError msg = ResponseError (InR ErrorCodes_InternalError) (prettyPluginError msg) Nothing
-
-data PluginError
-  = PluginInternalError
-  | PluginUriToFilePath Uri
-  | PluginUriToNormalizedFilePath Uri
-  | PluginErrorMessage T.Text
-
-prettyPluginError :: PluginError -> T.Text
-prettyPluginError = \case
-  PluginInternalError -> "Internal Plugin Error"
-  PluginUriToFilePath uri -> "Failed to translate URI " <> T.pack (show uri)
-  PluginUriToNormalizedFilePath uri -> "Failed converting " <> getUri uri <> " to NormalizedFilePath"
-  PluginErrorMessage msg -> "Plugin failed: " <> msg
-
-mkPluginErrorMessage :: T.Text -> PluginError
-mkPluginErrorMessage = PluginErrorMessage
-
-mkSimpleResponseError :: T.Text -> ResponseError
-mkSimpleResponseError err = ResponseError (InR ErrorCodes_InternalError) err Nothing
-
-handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
-handleMaybe msg = maybe (throwE msg) return
-
-handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
-handleMaybeM msg act = maybeM (throwE msg) return $ lift act
-
-withError :: Functor m => (e' -> e) -> ExceptT e' m a -> ExceptT e m a
-withError = withExceptT
-
-hoistExceptT :: MonadIO m => ExceptT e IO a -> ExceptT e m a
-hoistExceptT = mapExceptT liftIO
 
 -- ---------------------------------------------------------------------
 

@@ -62,11 +62,10 @@ import           Development.IDE.Spans.Pragmas    (NextPragmaInfo (..),
 import           Development.IDE.Types.Logger     (Priority (..), cmapWithPrio,
                                                    logWith, (<+>))
 import           GHC.Generics                     (Generic)
+import           Ide.Plugin.Error                 (PluginError, pluginResponse')
 import           Ide.Plugin.RangeMap              (RangeMap)
 import qualified Ide.Plugin.RangeMap              as RangeMap
-import           Ide.PluginUtils                  (getNormalizedFilePath,
-                                                   getNormalizedFilePath',
-                                                   handleMaybeM, pluginResponse)
+import           Ide.PluginUtils                  (getNormalizedFilePath')
 import           Ide.Types                        (PluginDescriptor (..),
                                                    PluginId (..),
                                                    PluginMethodHandler,
@@ -102,8 +101,8 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
   }
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = PluginUtils.pluginResponse' $ do
-  nfp <- PluginUtils.withPluginError $ getNormalizedFilePath' (docId ^. L.uri)
+codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginResponse' $ do
+  nfp <- getNormalizedFilePath' (docId ^. L.uri)
   pragma <- getFirstPragma pId ideState nfp
   CRR recMap exts <- collectRecords' ideState nfp
   let actions = map (mkCodeAction nfp exts pragma) (RangeMap.filterByRange range recMap)
@@ -360,7 +359,7 @@ getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))
       [ RecordInfoPat realSpan' (unLoc pat) | RealSrcSpan realSpan' _ <- [ getLoc pat ]]
 getRecPatterns _ = Nothing
 
-collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT PluginUtils.GhcidePluginError m CollectRecordsResult
+collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT PluginError m CollectRecordsResult
 collectRecords' ideState = PluginUtils.runAction "ExplicitFields" ideState
     . PluginUtils.use CollectRecords
 
