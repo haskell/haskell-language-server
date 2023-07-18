@@ -6,7 +6,6 @@
 {-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TypeApplications   #-}
 {-# LANGUAGE TypeFamilies       #-}
 {-# LANGUAGE ViewPatterns       #-}
 
@@ -25,9 +24,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except           (ExceptT)
 import           Control.Monad.Trans.Maybe
-import qualified Data.Aeson                           as A (Result (..),
-                                                            ToJSON (toJSON),
-                                                            fromJSON)
+import qualified Data.Aeson                           as A (ToJSON (toJSON))
 import           Data.Aeson.Types                     (FromJSON)
 import qualified Data.IntMap                          as IM (IntMap, elems,
                                                              fromList, (!?))
@@ -50,6 +47,7 @@ import           Ide.Plugin.Error                     (handleMaybe,
                                                        pluginResponse)
 import           Ide.Plugin.RangeMap                  (filterByRange)
 import qualified Ide.Plugin.RangeMap                  as RM (RangeMap, fromList)
+import           Ide.Plugin.Resolve
 import           Ide.PluginUtils                      (getNormalizedFilePath)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
@@ -92,7 +90,7 @@ descriptorForModules recorder modFilter plId =
       pluginHandlers =
          -- This plugin provides code lenses
            mkPluginHandler SMethod_TextDocumentCodeLens (lensProvider recorder)
-        <> mkPluginHandler SMethod_CodeLensResolve (lensResolveProvider recorder)
+        <> mkResolveHandler SMethod_CodeLensResolve (lensResolveProvider recorder)
           -- This plugin provides code actions
         <> mkCodeActionHandlerWithResolve (codeActionProvider recorder) (codeActionResolveProvider recorder)
 
@@ -139,8 +137,8 @@ lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {
                    , _range = range
                    , _command = Nothing }
 
-lensResolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_CodeLensResolve
-lensResolveProvider _ ideState plId cl@(CodeLens {_data_ = Just data_@(A.fromJSON -> A.Success (ResolveOne uri uid))})
+lensResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState EIResolveData 'Method_CodeLensResolve
+lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid)
   = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
     (MinimalImportsResult{forResolve}) <-
@@ -153,14 +151,9 @@ lensResolveProvider _ ideState plId cl@(CodeLens {_data_ = Just data_@(A.fromJSO
   where mkCommand ::  PluginId -> TextEdit -> Command
         mkCommand pId TextEdit{_newText} =
           let title = abbreviateImportTitle _newText
-              _arguments = Just [data_]
-          in mkLspCommand pId importCommandId title _arguments
-lensResolveProvider _  _ _ (CodeLens {_data_ = Just (A.fromJSON -> A.Success (ResolveAll _))}) = do
+          in mkLspCommand pId importCommandId title (Just $ [A.toJSON rd])
+lensResolveProvider _ _ _ _ _ (ResolveAll _) = do
    pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unexpected argument for lens resolve handler: ResolveAll" Nothing
-lensResolveProvider _  _ _ (CodeLens {_data_ = Just (A.fromJSON @EIResolveData -> (A.Error (T.pack -> str)))}) =
-  pure $ Left $ ResponseError (InR ErrorCodes_ParseError) str Nothing
-lensResolveProvider _  _ _ (CodeLens {_data_ = v}) = do
-   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) ("Unexpected argument for lens resolve handler: " <> (T.pack $ show v)) Nothing
 
 -- | If there are any implicit imports, provide both one code action per import
 --   to make that specific import explicit, and one code action to turn them all
@@ -191,15 +184,11 @@ codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier 
             , _disabled = Nothing
             , _data_ = data_}
 
-codeActionResolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_CodeActionResolve
-codeActionResolveProvider _ ideState _ ca@(CodeAction{_data_= Just (A.fromJSON -> A.Success rd)}) =
+codeActionResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState EIResolveData 'Method_CodeActionResolve
+codeActionResolveProvider _ ideState _ ca _ rd =
   pluginResponse $ do
     wedit <- resolveWTextEdit ideState rd
     pure $ ca & L.edit ?~ wedit
-codeActionResolveProvider _ _ _ (CodeAction{_data_= Just (A.fromJSON @EIResolveData -> A.Error (T.pack -> str))}) =
-    pure $ Left $ ResponseError (InR ErrorCodes_ParseError) str Nothing
-codeActionResolveProvider _  _ _ (CodeAction {_data_ = v}) = do
-   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) ("Unexpected argument for code action resolve handler: " <> (T.pack $ show v)) Nothing
 --------------------------------------------------------------------------------
 
 resolveWTextEdit :: IdeState -> EIResolveData -> ExceptT String (LspT Config IO) WorkspaceEdit
