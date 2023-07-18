@@ -1,23 +1,24 @@
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE OverloadedLabels      #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PackageImports        #-}
-{-# LANGUAGE PatternSynonyms       #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE StrictData            #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE DeriveAnyClass            #-}
+{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DuplicateRecordFields     #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE MultiWayIf                #-}
+{-# LANGUAGE NamedFieldPuns            #-}
+{-# LANGUAGE OverloadedLabels          #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE PackageImports            #-}
+{-# LANGUAGE PatternSynonyms           #-}
+{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE StrictData                #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeApplications          #-}
+{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE ViewPatterns              #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
 -- On 9.4 we get a new redundant constraint warning, but deleting the
@@ -153,7 +154,7 @@ data Log
   | LogGeneratedIdeas NormalizedFilePath [[Refact.Refactoring Refact.SrcSpan]]
   | LogGetIdeas NormalizedFilePath
   | LogUsingExtensions NormalizedFilePath [String] -- Extension is only imported conditionally, so we just stringify them
-  deriving Show
+  | forall a. (Pretty a) => LogResolve a
 
 instance Pretty Log where
   pretty = \case
@@ -162,6 +163,7 @@ instance Pretty Log where
     LogGeneratedIdeas fp ideas -> "Generated hlint ideas for for" <+> viaShow fp <> ":" <+> viaShow ideas
     LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <+> pretty exts
     LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp
+    LogResolve msg -> "ResolveHelpers:" <+> pretty msg
 
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
@@ -187,7 +189,8 @@ fromStrictMaybe  Strict.Nothing  = Nothing
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-  let (pluginCommands, pluginHandlers) = mkCodeActionWithResolveAndCommand plId codeActionProvider (resolveProvider recorder)
+  let resolveRecorder = cmapWithPrio LogResolve recorder
+      (pluginCommands, pluginHandlers) = mkCodeActionWithResolveAndCommand resolveRecorder plId codeActionProvider (resolveProvider recorder)
   in (defaultPluginDescriptor plId)
   { pluginRules = rules recorder plId
   , pluginCommands = pluginCommands

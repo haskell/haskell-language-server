@@ -1,14 +1,14 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE NamedFieldPuns     #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE TypeFamilies       #-}
-{-# LANGUAGE ViewPatterns       #-}
-
+{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE DeriveAnyClass            #-}
+{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DerivingStrategies        #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE NamedFieldPuns            #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE ViewPatterns              #-}
 module Ide.Plugin.ExplicitImports
   ( descriptor
   , descriptorForModules
@@ -61,12 +61,14 @@ importCommandId = "ImportLensCommand"
 data Log
   = LogShake Shake.Log
   | LogWAEResponseError ResponseError
-  deriving Show
+  | forall a. (Pretty a) => LogResolve a
+
 
 instance Pretty Log where
   pretty = \case
     LogShake logMsg -> pretty logMsg
     LogWAEResponseError rspErr -> "RequestWorkspaceApplyEdit Failed with " <+> viaShow rspErr
+    LogResolve msg -> "ResolveHelpers:" <+> pretty msg
 
 -- | The "main" function of a plugin
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
@@ -81,7 +83,9 @@ descriptorForModules
     -> PluginId
     -> PluginDescriptor IdeState
 descriptorForModules recorder modFilter plId =
-  (defaultPluginDescriptor plId)
+  let resolveRecorder = cmapWithPrio LogResolve recorder
+      codeActionHandlers = mkCodeActionHandlerWithResolve resolveRecorder (codeActionProvider recorder) (codeActionResolveProvider recorder)
+  in (defaultPluginDescriptor plId)
     {
       -- This plugin provides a command handler
       pluginCommands = [PluginCommand importCommandId "Explicit import command" (runImportCommand recorder)],
@@ -92,7 +96,7 @@ descriptorForModules recorder modFilter plId =
            mkPluginHandler SMethod_TextDocumentCodeLens (lensProvider recorder)
         <> mkResolveHandler SMethod_CodeLensResolve (lensResolveProvider recorder)
           -- This plugin provides code actions
-        <> mkCodeActionHandlerWithResolve (codeActionProvider recorder) (codeActionResolveProvider recorder)
+        <> codeActionHandlers
 
     }
 

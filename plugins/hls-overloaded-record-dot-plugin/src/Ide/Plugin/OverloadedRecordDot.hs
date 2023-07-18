@@ -100,16 +100,19 @@ import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        normalizedFilePathToUri,
                                                        type (|?) (..))
 import           Language.LSP.Server                  (getClientCapabilities)
+
 data Log
     = LogShake Shake.Log
     | LogCollectedRecordSelectors [RecordSelectorExpr]
     | LogTextEdits [TextEdit]
+    | forall a. (Pretty a) => LogResolve a
 
 instance Pretty Log where
     pretty = \case
         LogShake shakeLog -> pretty shakeLog
         LogCollectedRecordSelectors recs -> "Collected record selectors:"
                                                 <+> pretty recs
+        LogResolve msg -> "ResolveHelpers:" <+> pretty msg
 
 data CollectRecordSelectors = CollectRecordSelectors
                     deriving (Eq, Show, Generic)
@@ -168,7 +171,9 @@ instance FromJSON ORDResolveData
 
 descriptor :: Recorder (WithPriority Log) -> PluginId
                 -> PluginDescriptor IdeState
-descriptor recorder plId = let pluginHandler = mkCodeActionHandlerWithResolve codeActionProvider resolveProvider
+descriptor recorder plId =
+  let resolveRecorder = cmapWithPrio LogResolve recorder
+      pluginHandler = mkCodeActionHandlerWithResolve resolveRecorder codeActionProvider resolveProvider
   in (defaultPluginDescriptor plId)
     { pluginHandlers = pluginHandler
     , pluginRules = collectRecSelsRule recorder
