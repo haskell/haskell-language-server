@@ -15,9 +15,9 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE StrictData            #-}
 {-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
-
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
 -- On 9.4 we get a new redundant constraint warning, but deleting the
@@ -422,7 +422,7 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
 
   where
     applyAllAction verTxtDocId =
-      let args = Just $ toJSON (AA verTxtDocId)
+      let args = Just $ toJSON (ApplyHint verTxtDocId Nothing)
         in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionKind_QuickFix) Nothing Nothing Nothing Nothing Nothing args
 
     -- |Some hints do not have an associated refactoring
@@ -437,14 +437,10 @@ resolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState Hlint
 resolveProvider recorder ideState _plId ca uri resolveValue = pluginResponse $ do
   file <-  getNormalizedFilePath uri
   case resolveValue of
-    (AA verTxtDocId) -> do
-        edit <- ExceptT $ liftIO $ applyHint recorder ideState file Nothing verTxtDocId
+    (ApplyHint verTxtDocId oneHint) -> do
+        edit <- ExceptT $ liftIO $ applyHint recorder ideState file oneHint verTxtDocId
         pure $ ca & LSP.edit ?~ edit
-    (AO verTxtDocId pos hintTitle) -> do
-        let oneHint = OneHint pos hintTitle
-        edit <- ExceptT $ liftIO $ applyHint recorder ideState file (Just oneHint) verTxtDocId
-        pure $ ca & LSP.edit ?~ edit
-    (IH verTxtDocId hintTitle ) -> do
+    (IgnoreHint verTxtDocId hintTitle ) -> do
         edit <- ExceptT $ liftIO $ ignoreHint recorder ideState file verTxtDocId hintTitle
         pure $ ca & LSP.edit ?~ edit
 
@@ -456,13 +452,13 @@ diagnosticToCodeActions verTxtDocId diagnostic
   , let isHintApplicable = "refact:" `T.isPrefixOf` code
   , let hint = T.replace "refact:" "" code
   , let suppressHintTitle = "Ignore hint \"" <> hint <> "\" in this module"
-  , let suppressHintArguments = IH verTxtDocId hint
+  , let suppressHintArguments = IgnoreHint verTxtDocId hint
   = catMaybes
       -- Applying the hint is marked preferred because it addresses the underlying error.
       -- Disabling the rule isn't, because less often used and configuration can be adapted.
       [ if | isHintApplicable
            , let applyHintTitle = "Apply hint \"" <> hint <> "\""
-                 applyHintArguments = AO verTxtDocId start hint ->
+                 applyHintArguments = ApplyHint verTxtDocId (Just $ OneHint start hint) ->
                Just (mkCodeAction applyHintTitle diagnostic (Just (toJSON applyHintArguments)) True)
            | otherwise -> Nothing
       , Just (mkCodeAction suppressHintTitle diagnostic (Just (toJSON suppressHintArguments)) False)
@@ -520,22 +516,25 @@ ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = do
     Nothing -> pure $ Left  "Unable to get fileContents"
 
 -- ---------------------------------------------------------------------
-data HlintResolveCommands = AA { verTxtDocId :: VersionedTextDocumentIdentifier}
-                          | AO { verTxtDocId :: VersionedTextDocumentIdentifier
-                               , start_pos   :: Position
-                               -- | There can be more than one hint suggested at the same position, so HintTitle is used to distinguish between them.
-                               , hintTitle   :: HintTitle
-                               }
-                          | IH { verTxtDocId     :: VersionedTextDocumentIdentifier
-                               , ignoreHintTitle :: HintTitle
-                               } deriving (Generic, ToJSON, FromJSON)
+data HlintResolveCommands =
+    ApplyHint
+      { verTxtDocId :: VersionedTextDocumentIdentifier
+      -- |If Nothing, apply all hints, otherise only apply
+      -- the given hint
+      , oneHint     :: Maybe OneHint
+      }
+  | IgnoreHint
+      { verTxtDocId     :: VersionedTextDocumentIdentifier
+      , ignoreHintTitle :: HintTitle
+      } deriving (Generic, ToJSON, FromJSON)
 
 type HintTitle = T.Text
 
-data OneHint = OneHint
-  { oneHintPos   :: Position
-  , oneHintTitle :: HintTitle
-  } deriving (Eq, Show)
+data OneHint =
+  OneHint
+    { oneHintPos   :: Position
+    , oneHintTitle :: HintTitle
+    } deriving (Generic, Eq, Show, ToJSON, FromJSON)
 
 applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either String WorkspaceEdit)
 applyHint recorder ide nfp mhint verTxtDocId =
