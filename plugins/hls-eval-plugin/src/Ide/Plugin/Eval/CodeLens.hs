@@ -96,16 +96,15 @@ import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv)
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
 import           Development.IDE.Core.FileStore               (setSomethingModified)
-import qualified Development.IDE.Core.PluginUtils             as PluginUtils
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Types.Shake                  (toKey)
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
 #endif
-import           Ide.Plugin.Error                             (PluginError,
+import           Ide.Plugin.Error                             (PluginError (PluginInternalError),
                                                                handleMaybe,
                                                                handleMaybeM,
-                                                               mkPluginErrorMessage,
-                                                               pluginResponse')
+                                                               runExceptT)
 import           Ide.Plugin.Eval.Code                         (Statement,
                                                                asStatements,
                                                                myExecStmt,
@@ -142,14 +141,14 @@ codeLens st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
      in perf "codeLens" $
-            pluginResponse' $ do
+            runExceptT $ do
                 let TextDocumentIdentifier uri = _textDocument
-                fp <- PluginUtils.uriToFilePath' uri
+                fp <- uriToFilePathE uri
                 let nfp = toNormalizedFilePath' fp
                     isLHS = isLiterate fp
                 dbg "fp" fp
                 (comments, _) <-
-                    PluginUtils.runAction "eval.GetParsedModuleWithComments" st $ PluginUtils.useWithStale_ GetEvalComments nfp
+                    runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments nfp
                 -- dbg "excluded comments" $ show $  DL.toList $
                 --     foldMap (\(L a b) ->
                 --         case b of
@@ -213,7 +212,7 @@ runEvalCmd plId st EvalParams{..} =
             let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
             let TextDocumentIdentifier{_uri} = module_
-            fp <- PluginUtils.uriToFilePath' _uri
+            fp <- uriToFilePathE _uri
             let nfp = toNormalizedFilePath' fp
             mdlText <- moduleText _uri
 
@@ -302,7 +301,7 @@ finalReturn txt =
 
 moduleText :: MonadLsp c m => Uri -> ExceptT PluginError m Text
 moduleText uri =
-    handleMaybeM (mkPluginErrorMessage "mdlText") $
+    handleMaybeM (PluginInternalError "mdlText") $
       (virtualFileText <$>)
           <$> getVirtualFile
               (toNormalizedUri uri)

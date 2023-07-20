@@ -24,7 +24,7 @@ import Control.Monad.Trans.Except (ExceptT)
 import Ide.Plugin.Error (PluginError)
 import Ide.Types (PluginId(..))
 import qualified Data.Text as T
-import qualified Development.IDE.Core.PluginUtils as PluginUtils
+import  Development.IDE.Core.PluginUtils
 
 getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
 getNextPragmaInfo dynFlags sourceText =
@@ -54,8 +54,8 @@ insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit prag
 
 getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m NextPragmaInfo
 getFirstPragma (PluginId pId) state nfp = do
-  ghcSession <- PluginUtils.runAction (T.unpack pId <> ".GhcSession") state $ PluginUtils.useWithStale GhcSession nfp
-  (_, fileContents) <- PluginUtils.runAction (T.unpack pId <> ".GetFileContents") state $ PluginUtils.hoistAction $ getFileContents nfp
+  ghcSession <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession nfp
+  (_, fileContents) <- runActionE (T.unpack pId <> ".GetFileContents") state $ hoistAction $ getFileContents nfp
   case ghcSession of
     (hscEnv -> hsc_dflags -> sessionDynFlags, _) ->
       pure $ getNextPragmaInfo sessionDynFlags fileContents

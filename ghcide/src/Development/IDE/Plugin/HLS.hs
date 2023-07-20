@@ -34,6 +34,7 @@ import           Development.IDE.Plugin
 import qualified Development.IDE.Plugin        as P
 import           Development.IDE.Types.Logger  hiding (Error)
 import           Ide.Plugin.Config
+import           Ide.Plugin.Error
 import           Ide.PluginUtils               (getClientConfig)
 import           Ide.Types                     as HLS
 import qualified Language.LSP.Protocol.Lens    as L
@@ -51,14 +52,16 @@ import           UnliftIO.Exception            (catchAny)
 --
 
 data Log
-    =  LogPluginError PluginId ResponseError
+    =  LogPluginError PluginId PluginError
+    | LogResponseError PluginId ResponseError
     | LogNoPluginForMethod (Some SMethod)
     | LogInvalidCommandIdentifier
     | ExceptionInPlugin PluginId (Some SMethod) SomeException
 
 instance Pretty Log where
   pretty = \case
-    LogPluginError (PluginId pId) err -> pretty pId <> ":" <+> prettyResponseError err
+    LogPluginError (PluginId pId) err -> pretty pId <> ":" <+> pretty err
+    LogResponseError (PluginId pId) err -> pretty pId <> ":" <+> prettyResponseError err
     LogNoPluginForMethod (Some method) ->
         "No plugin enabled for " <> pretty (show method)
     LogInvalidCommandIdentifier-> "Invalid command identifier"
@@ -104,7 +107,7 @@ exceptionInPlugin plId method exception =
 logAndReturnError :: Recorder (WithPriority Log) -> PluginId -> (LSPErrorCodes |? ErrorCodes) -> Text -> LSP.LspT Config IO (Either ResponseError a)
 logAndReturnError recorder p errCode msg = do
     let err = ResponseError errCode msg Nothing
-    logWith recorder Warning $ LogPluginError p err
+    logWith recorder Warning $ LogResponseError p err
     pure $ Left err
 
 -- | Logs the provider error before returning it to the caller
@@ -213,7 +216,7 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
           Just (PluginCommand _ _ f) -> case A.fromJSON arg of
             A.Error err -> logAndReturnError recorder p (InR ErrorCodes_InvalidParams) (failedToParseArgs com p err arg)
             A.Success a ->
-                f ide a `catchAny` -- See Note [Exception handling in plugins]
+                (first toResponseError <$> f ide a) `catchAny` -- See Note [Exception handling in plugins]
                 (\e -> logAndReturnError' recorder (InR ErrorCodes_InternalError) (ExceptionInPlugin p (Some SMethod_WorkspaceApplyEdit) e))
 
 -- ---------------------------------------------------------------------
@@ -246,10 +249,9 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
             es <- runConcurrently exceptionInPlugin m handlers ide params
 
             let (errs,succs) = partitionEithers $ toList $ join $ NE.zipWith (\(pId,_) -> fmap (first (pId,))) handlers es
-            unless (null errs) $ forM_ errs $ \(pId, err) ->
-                logWith recorder Warning $ LogPluginError pId err
+            unless (null errs) $ logErrors recorder errs
             case nonEmpty succs of
-              Nothing -> pure $ Left $ combineErrors $ map snd errs
+              Nothing -> pure $ Left $ combineErrors errs
               Just xs -> do
                 caps <- LSP.getClientCapabilities
                 pure $ Right $ combineResponses m config caps params xs
@@ -288,22 +290,35 @@ runConcurrently
   :: MonadUnliftIO m
   => (PluginId -> SMethod method -> SomeException -> T.Text)
   -> SMethod method -- ^ Method (used for errors and tracing)
-  -> NonEmpty (PluginId, a -> b -> m (NonEmpty (Either ResponseError d)))
+  -> NonEmpty (PluginId, a -> b -> m (NonEmpty (Either PluginError d)))
   -- ^ Enabled plugin actions that we are allowed to run
   -> a
   -> b
-  -> m (NonEmpty(NonEmpty (Either ResponseError d)))
+  -> m (NonEmpty(NonEmpty (Either PluginError d)))
 runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString (show method)) $ do
   f a b  -- See Note [Exception handling in plugins]
-     `catchAny` (\e -> pure $ pure $ Left $ ResponseError (InR ErrorCodes_InternalError) (msg pid method e) Nothing)
+     `catchAny` (\e -> pure $ pure $ Left $ PluginInternalError (msg pid method e))
 
-combineErrors :: [ResponseError] -> ResponseError
-combineErrors [x] = x
-combineErrors xs  = ResponseError (InR ErrorCodes_InternalError) (T.pack (show xs)) Nothing
+combineErrors :: [(PluginId, PluginError)] -> ResponseError
+combineErrors [x] = toResponseError (snd x)
+combineErrors xs  = ResponseError (InR ErrorCodes_InternalError) (T.pack (show (pretty (snd <$> xs)))) Nothing
+
+toResponseError :: PluginError -> ResponseError
+toResponseError (PluginInternalError msg) = ResponseError (InR ErrorCodes_InternalError) msg Nothing
+toResponseError PluginStaleResolve = ResponseError (InL LSPErrorCodes_ContentModified) "" Nothing
+toResponseError (PluginInvalidParams msg) = ResponseError (InR ErrorCodes_InvalidParams) msg Nothing
+toResponseError (PluginParseError msg) = ResponseError (InR ErrorCodes_ParseError) msg Nothing
+toResponseError (FastRuleNotReady a) = ResponseError (InL LSPErrorCodes_ServerCancelled) (T.pack $ "FastRuleNotReady: " <> show a) Nothing
+toResponseError (RuleFailed a) = ResponseError (InL LSPErrorCodes_ServerCancelled) (T.pack $ "RuleFailed: " <> show a) Nothing
+
+logErrors :: Recorder (WithPriority Log) -> [(PluginId, PluginError)] -> LSP.LspT Config IO ()
+logErrors recorder errs = forM_ errs $ \(pId, err) ->
+                logWith recorder Warning $ LogPluginError pId err
+
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeHandler (m :: Method ClientToServer Request)
-  = IdeHandler [(PluginId, PluginDescriptor IdeState, IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (MessageResult m))))]
+  = IdeHandler [(PluginId, PluginDescriptor IdeState, IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either PluginError (MessageResult m))))]
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeNotificationHandler (m :: Method ClientToServer Notification)

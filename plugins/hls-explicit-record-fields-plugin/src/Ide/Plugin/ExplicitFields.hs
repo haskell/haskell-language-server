@@ -29,7 +29,7 @@ import           Development.IDE                  (IdeState, NormalizedFilePath,
                                                    Pretty (..), Recorder (..),
                                                    Rules, WithPriority (..),
                                                    realSrcSpanToRange)
-import qualified Development.IDE.Core.PluginUtils as PluginUtils
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.Rules       (runAction)
 import           Development.IDE.Core.RuleTypes   (TcModuleResult (..),
                                                    TypeCheck (..))
@@ -62,10 +62,11 @@ import           Development.IDE.Spans.Pragmas    (NextPragmaInfo (..),
 import           Development.IDE.Types.Logger     (Priority (..), cmapWithPrio,
                                                    logWith, (<+>))
 import           GHC.Generics                     (Generic)
-import           Ide.Plugin.Error                 (PluginError, pluginResponse')
+import           Ide.Plugin.Error                 (PluginError,
+                                                   getNormalizedFilePathE,
+                                                   runExceptT)
 import           Ide.Plugin.RangeMap              (RangeMap)
 import qualified Ide.Plugin.RangeMap              as RangeMap
-import           Ide.PluginUtils                  (getNormalizedFilePath')
 import           Ide.Types                        (PluginDescriptor (..),
                                                    PluginId (..),
                                                    PluginMethodHandler,
@@ -101,8 +102,8 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
   }
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = pluginResponse' $ do
-  nfp <- getNormalizedFilePath' (docId ^. L.uri)
+codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = runExceptT $ do
+  nfp <- getNormalizedFilePathE (docId ^. L.uri)
   pragma <- getFirstPragma pId ideState nfp
   CRR recMap exts <- collectRecords' ideState nfp
   let actions = map (mkCodeAction nfp exts pragma) (RangeMap.filterByRange range recMap)
@@ -360,6 +361,6 @@ getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))
 getRecPatterns _ = Nothing
 
 collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT PluginError m CollectRecordsResult
-collectRecords' ideState = PluginUtils.runAction "ExplicitFields" ideState
-    . PluginUtils.use CollectRecords
+collectRecords' ideState = runActionE "ExplicitFields" ideState
+    . useE CollectRecords
 

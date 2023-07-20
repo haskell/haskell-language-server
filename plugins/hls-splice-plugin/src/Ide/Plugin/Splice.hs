@@ -67,6 +67,7 @@ import           Language.LSP.Server
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Protocol.Message
 import qualified Language.LSP.Protocol.Lens         as J
+import Ide.Plugin.Error (PluginError(PluginInternalError))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -188,7 +189,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                     reportEditor
                         MessageType_Error
                         ["Error during expanding splice: " <> T.pack err]
-                    pure (Left $ responseError $ T.pack err)
+                    pure (Left $ PluginInternalError $ T.pack err)
                 Right edits ->
                     pure (Right edits)
     case res of

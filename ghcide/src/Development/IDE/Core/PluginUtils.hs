@@ -6,10 +6,9 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Reader                 (runReaderT)
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
-import           Data.Bifunctor                       (first)
 import           Data.Either.Extra                    (maybeToEither)
 import           Data.Functor.Identity
-import           Data.String                          (IsString (fromString))
+import qualified Data.Text                            as T
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake           (IdeAction, IdeRule,
                                                        IdeState (shakeExtras),
@@ -29,48 +28,52 @@ import qualified Language.LSP.Protocol.Types          as LSP
 -- Action wrappers
 -- ----------------------------------------------------------------------------
 
-runAction :: MonadIO m => String -> IdeState -> ExceptT e Action a -> ExceptT e m a
-runAction herald ide act =
+runActionE :: MonadIO m => String -> IdeState -> ExceptT e Action a -> ExceptT e m a
+runActionE herald ide act =
   hoistExceptT . ExceptT $
     join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runExceptT act)
 
--- | Request a Rule result, it not available return the last computed result which may be stale.
---   Errors out if none available.
-useWithStale_ ::(IdeRule k v)
-    => k -> NormalizedFilePath -> ExceptT e Action (v, PositionMapping)
-useWithStale_ key file = ExceptT $ fmap Right $ Shake.useWithStale_ key file
-
-useWithStale :: IdeRule k v
-    => k -> NormalizedFilePath -> ExceptT PluginError Action (v, PositionMapping)
-useWithStale key file = maybeToExceptT (FastRuleNotReady key) $ useWithStaleMaybeT key file
+runActionMaybeT :: MonadIO m => String -> IdeState -> MaybeT Action a -> MaybeT m a
+runActionMaybeT herald ide act =
+  hoistMaybeT . MaybeT $
+    join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runMaybeT act)
 
 -- | useE is useful to implement functions that aren’t rules but need shortcircuiting
 -- e.g. getDefinition.
-use :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError Action v
-use k = maybeToExceptT (RuleFailed k) . MaybeT . Shake.use k
+useE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError Action v
+useE k = maybeToExceptT (RuleFailed k) . useMaybeT k
+
+useMaybeT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT Action v
+useMaybeT k = MaybeT . Shake.use k
+
+useWithStaleE :: IdeRule k v
+    => k -> NormalizedFilePath -> ExceptT PluginError Action (v, PositionMapping)
+useWithStaleE key = maybeToExceptT (FastRuleNotReady key) . useWithStaleMaybeT key
 
 useWithStaleMaybeT :: IdeRule k v
     => k -> NormalizedFilePath -> MaybeT Action (v, PositionMapping)
 useWithStaleMaybeT key file = MaybeT $ runIdentity <$> Shake.usesWithStale key (Identity file)
 
+hoistAction :: Action a -> ExceptT e Action a
+hoistAction = ExceptT . fmap Right
+
 -- ----------------------------------------------------------------------------
 -- IdeAction wrappers
 -- ----------------------------------------------------------------------------
 
-runIdeAction :: MonadIO m => String -> Shake.ShakeExtras -> ExceptT e IdeAction a -> ExceptT e m a
-runIdeAction _herald s i = ExceptT $ liftIO $ runReaderT (Shake.runIdeActionT $ runExceptT i) s
+runIdeActionE :: MonadIO m => String -> Shake.ShakeExtras -> ExceptT e IdeAction a -> ExceptT e m a
+runIdeActionE _herald s i = ExceptT $ liftIO $ runReaderT (Shake.runIdeActionT $ runExceptT i) s
 
 -- | useE is useful to implement functions that aren’t rules but need shortcircuiting
 -- e.g. getDefinition.
-useWithStaleFast :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError IdeAction (v, PositionMapping)
-useWithStaleFast k = maybeToExceptT (RuleFailed k) . MaybeT . Shake.useWithStaleFast k
+useWithStaleFastE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError IdeAction (v, PositionMapping)
+useWithStaleFastE k = maybeToExceptT (RuleFailed k) . useWithStaleFastMaybeT k
 
-uriToFilePath' :: Monad m => LSP.Uri -> ExceptT PluginError m FilePath
-uriToFilePath' uri = ExceptT . pure . maybeToEither (PluginUriToFilePath uri) $ Location.uriToFilePath' uri
+useWithStaleFastMaybeT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT IdeAction (v, PositionMapping)
+useWithStaleFastMaybeT k = MaybeT . Shake.useWithStaleFast k
 
--- ----------------------------------------------------------------------------
--- Internal Helper function, not exported
--- ----------------------------------------------------------------------------
+uriToFilePathE :: Monad m => LSP.Uri -> ExceptT PluginError m FilePath
+uriToFilePathE uri = maybeToExceptT (PluginInvalidParams (T.pack $ "uriToFilePath' failed. Uri:" <>  show uri)) $ uriToFilePathMaybeT uri
 
-hoistAction :: Action a -> ExceptT e Action a
-hoistAction = ExceptT . fmap Right
+uriToFilePathMaybeT :: Monad m => LSP.Uri -> MaybeT m FilePath
+uriToFilePathMaybeT = MaybeT . pure . Location.uriToFilePath'

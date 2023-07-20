@@ -13,6 +13,7 @@ import           Development.IDE.GHC.Compat      (ModSummary (ms_hspp_opts),
                                                   extensionFlags)
 import qualified Development.IDE.GHC.Compat.Util as Util
 import           GHC.LanguageExtensions.Type
+import           Ide.Plugin.Error                (PluginError (PluginInternalError))
 import           Ide.PluginUtils
 import           Ide.Types                       hiding (Config)
 import           Language.Haskell.Stylish
@@ -39,7 +40,7 @@ provider ide typ contents fp _opts = do
         FormatRange r -> (normalize r, extractRange r contents)
       result = runStylishHaskell file mergedConfig selectedContents
   case result of
-    Left  err -> return $ Left $ responseError $ T.pack $ "stylishHaskellCmd: " ++ err
+    Left  err -> return $ Left $ PluginInternalError $ T.pack $ "stylishHaskellCmd: " ++ err
     Right new -> return $ Right $ LSP.InL [TextEdit range new]
   where
     getMergedConfig dyn config

@@ -22,33 +22,31 @@ import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
+import           Ide.Plugin.Error
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server            as LSP
 
 import qualified Data.Text                      as T
 
-gotoDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (MessageResult Method_TextDocumentDefinition))
-hover          :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (Hover |? Null))
-gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (MessageResult Method_TextDocumentTypeDefinition))
-documentHighlight :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError ([DocumentHighlight] |? Null))
+gotoDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either PluginError (MessageResult Method_TextDocumentDefinition))
+hover          :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either PluginError (Hover |? Null))
+gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either PluginError (MessageResult Method_TextDocumentTypeDefinition))
+documentHighlight :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either PluginError ([DocumentHighlight] |? Null))
 gotoDefinition = request "Definition" getDefinition (InR $ InR Null) (InL . Definition. InR)
 gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InR Null) (InL . Definition. InR)
 hover          = request "Hover"      getAtPoint     (InR Null)     foundHover
 documentHighlight = request "DocumentHighlight" highlightAtPoint (InR Null) InL
 
-references :: IdeState -> ReferenceParams -> LSP.LspM c (Either ResponseError ([Location] |? Null))
-references ide (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = liftIO $
-  case uriToFilePath' uri of
-    Just path -> do
-      let filePath = toNormalizedFilePath' path
-      logDebug (ideLogger ide) $
+references :: IdeState -> ReferenceParams -> LSP.LspM c (Either PluginError ([Location] |? Null))
+references ide (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = runExceptT $ do
+  nfp <- getNormalizedFilePathE uri
+  liftIO $ logDebug (ideLogger ide) $
         "References request at position " <> T.pack (showPosition pos) <>
-        " in file: " <> T.pack path
-      Right . InL <$> (runAction "references" ide $ refsAtPoint filePath pos)
-    Nothing -> pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) ("Invalid URI " <> T.pack (show uri)) Nothing
+        " in file: " <> T.pack (show nfp)
+  InL <$> (liftIO $ runAction "references" ide $ refsAtPoint nfp pos)
 
-wsSymbols :: IdeState -> WorkspaceSymbolParams -> LSP.LspM c (Either ResponseError [SymbolInformation])
+wsSymbols :: IdeState -> WorkspaceSymbolParams -> LSP.LspM c (Either PluginError [SymbolInformation])
 wsSymbols ide (WorkspaceSymbolParams _ _ query) = liftIO $ do
   logDebug (ideLogger ide) $ "Workspace symbols request: " <> query
   runIdeAction "WorkspaceSymbols" (shakeExtras ide) $ Right . fromMaybe [] <$> workspaceSymbols query
@@ -65,7 +63,7 @@ request
   -> (a -> b)
   -> IdeState
   -> TextDocumentPositionParams
-  -> LSP.LspM c (Either ResponseError b)
+  -> LSP.LspM c (Either PluginError b)
 request label getResults notFound found ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = liftIO $ do
     mbResult <- case uriToFilePath' uri of
         Just path -> logAndRunRequest label getResults ide pos path

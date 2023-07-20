@@ -9,7 +9,7 @@ import           Data.List                        (isPrefixOf)
 import           Data.String                      (IsString)
 import qualified Data.Text                        as T
 import           Development.IDE
-import qualified Development.IDE.Core.PluginUtils as PluginUtils
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.Pragmas    (getNextPragmaInfo,
@@ -58,13 +58,13 @@ insertPragmaIfNotPresent :: (MonadIO m)
     -> Extension
     -> ExceptT PluginError m [TextEdit]
 insertPragmaIfNotPresent state nfp pragma = do
-    (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- PluginUtils.runAction "classplugin.insertPragmaIfNotPresent.GhcSession" state
-        $ PluginUtils.useWithStale GhcSession nfp
-    (_, fileContents) <- PluginUtils.runAction "classplugin.insertPragmaIfNotPresent.GetFileContents" state
-        $ PluginUtils.hoistAction
+    (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE "classplugin.insertPragmaIfNotPresent.GhcSession" state
+        $ useWithStaleE GhcSession nfp
+    (_, fileContents) <- runActionE "classplugin.insertPragmaIfNotPresent.GetFileContents" state
+        $ hoistAction
         $ getFileContents nfp
-    (pm, _) <- PluginUtils.runAction "classplugin.insertPragmaIfNotPresent.GetParsedModuleWithComments" state
-        $ PluginUtils.useWithStale GetParsedModuleWithComments nfp
+    (pm, _) <- runActionE "classplugin.insertPragmaIfNotPresent.GetParsedModuleWithComments" state
+        $ useWithStaleE GetParsedModuleWithComments nfp
     let exts = getExtensions pm
         info = getNextPragmaInfo sessionDynFlags fileContents
     pure [insertNewPragma info pragma | pragma `notElem` exts]

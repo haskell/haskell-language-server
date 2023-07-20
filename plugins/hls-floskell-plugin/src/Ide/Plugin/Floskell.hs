@@ -11,6 +11,7 @@ import qualified Data.Text.Lazy              as TL
 import qualified Data.Text.Lazy.Encoding     as TL
 import           Development.IDE             hiding (pluginHandlers)
 import           Floskell
+import           Ide.Plugin.Error
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Protocol.Types
@@ -36,7 +37,7 @@ provider _ideState typ contents fp _ = liftIO $ do
           FormatRange r -> (normalize r, extractRange r contents)
         result = reformat config (Just file) . TL.encodeUtf8 $ TL.fromStrict selectedContents
     case result of
-      Left  err -> pure $ Left $ responseError $ T.pack $ "floskellCmd: " ++ err
+      Left  err -> pure $ Left $ PluginInternalError $ T.pack $ "floskellCmd: " ++ err
       Right new -> pure $ Right $ InL [TextEdit range . TL.toStrict $ TL.decodeUtf8 new]
 
 -- | Find Floskell Config, user and system wide or provides a default style.

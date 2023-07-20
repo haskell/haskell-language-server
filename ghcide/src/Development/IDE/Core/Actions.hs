@@ -6,7 +6,7 @@ module Development.IDE.Core.Actions
 , getTypeDefinition
 , highlightAtPoint
 , refsAtPoint
-, useE
+--, useE
 , useNoFileE
 , usesE
 , workspaceSymbols

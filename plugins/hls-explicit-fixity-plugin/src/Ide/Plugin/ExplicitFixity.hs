@@ -19,7 +19,7 @@ import qualified Data.Set                             as S
 import qualified Data.Text                            as T
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
-import qualified Development.IDE.Core.PluginUtils     as PluginUtils
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (idDelta)
 import           Development.IDE.Core.Shake           (addPersistentRule)
 import qualified Development.IDE.Core.Shake           as Shake
@@ -29,7 +29,6 @@ import           Development.IDE.LSP.Notifications    (ghcideNotificationsPlugin
 import           Development.IDE.Spans.AtPoint
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error
-import           Ide.PluginUtils                      (getNormalizedFilePath')
 import           Ide.Types                            hiding (pluginId)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -44,11 +43,11 @@ descriptor recorder pluginId = (defaultPluginDescriptor pluginId)
     }
 
 hover :: PluginMethodHandler IdeState Method_TextDocumentHover
-hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = pluginResponse' $ do
-    nfp <- getNormalizedFilePath' uri
-    PluginUtils.runIdeAction "ExplicitFixity" (shakeExtras state) $ do
-      (FixityMap fixmap, _) <-  PluginUtils.useWithStaleFast GetFixity nfp
-      (HAR{hieAst}, mapping) <- PluginUtils.useWithStaleFast GetHieAst nfp
+hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = runExceptT $ do
+    nfp <- getNormalizedFilePathE uri
+    runIdeActionE "ExplicitFixity" (shakeExtras state) $ do
+      (FixityMap fixmap, _) <-  useWithStaleFastE GetFixity nfp
+      (HAR{hieAst}, mapping) <- useWithStaleFastE GetHieAst nfp
       let ns = getNamesAtPoint hieAst pos mapping
           fs = mapMaybe (\n -> (n,) <$> M.lookup n fixmap) ns
       pure $ maybeToNull $ toHover fs

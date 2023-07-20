@@ -22,6 +22,7 @@ import           Development.IDE.GHC.Error      (rangeToRealSrcSpan,
                                                  realSrcSpanToRange)
 import           Development.IDE.Types.Location
 import           Development.IDE.GHC.Util       (printOutputable)
+import           Ide.Plugin.Error
 import           Language.LSP.Server            (LspM)
 import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
                                                  DocumentSymbolParams (DocumentSymbolParams, _textDocument),
@@ -29,13 +30,12 @@ import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
                                                  SymbolKind (..),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
                                                  type (|?) (InL, InR), uriToFilePath, Null)
-import           Language.LSP.Protocol.Message   (ResponseError)
 #if MIN_VERSION_ghc(9,2,0)
 import Data.List.NonEmpty (nonEmpty)
 #endif
 
 moduleOutline
-  :: IdeState -> DocumentSymbolParams -> LspM c (Either ResponseError ([SymbolInformation] |? ([DocumentSymbol] |? Null)))
+  :: IdeState -> DocumentSymbolParams -> LspM c (Either PluginError ([SymbolInformation] |? ([DocumentSymbol] |? Null)))
 moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
   = liftIO $ case uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do

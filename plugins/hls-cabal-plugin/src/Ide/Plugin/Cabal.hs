@@ -178,11 +178,7 @@ kick = do
 -- Code Actions
 -- ----------------------------------------------------------------
 
-licenseSuggestCodeAction
-  :: IdeState
-  -> PluginId
-  -> CodeActionParams
-  -> LspM Config (Either LSP.ResponseError (LSP.MessageResult 'LSP.Method_TextDocumentCodeAction))
+licenseSuggestCodeAction :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=diags}) =
   pure $ Right $ InL $ diags >>= (fmap InR . LicenseSuggest.licenseErrorAction uri)
 

@@ -74,7 +74,7 @@ import           GHC.Parser.Annotation                             (TokenLocatio
 #endif
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
-import           Language.LSP.Protocol.Message                     (ResponseError,
+import           Language.LSP.Protocol.Message                     (Method (..),
                                                                     SMethod (..))
 import           Language.LSP.Protocol.Types                       (ApplyWorkspaceEditParams (..),
                                                                     CodeAction (..),
@@ -118,11 +118,7 @@ import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (
 -------------------------------------------------------------------------------------------------
 
 -- | Generate code actions.
-codeAction
-    :: IdeState
-    -> PluginId
-    -> CodeActionParams
-    -> LSP.LspM c (Either ResponseError ([(Command |? CodeAction)] |? Null))
+codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics= xs}) = do
   contents <- LSP.getVirtualFile $ toNormalizedUri uri
   liftIO $ do

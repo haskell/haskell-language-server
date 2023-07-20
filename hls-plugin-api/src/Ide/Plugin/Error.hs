@@ -4,18 +4,17 @@
 module Ide.Plugin.Error (
       -- * Plugin Error Handling API
     PluginError(..),
-    pluginResponse,
-    pluginResponse',
+    runExceptT,
+    runExceptT,
     pluginResponseM,
     handlePluginError,
-    mkPluginErrorMessage,
     hoistExceptT,
+    hoistMaybeT,
     handleMaybe,
     handleMaybeM,
-    mkSimpleResponseError,
     withError,
+    getNormalizedFilePathE,
 ) where
-
 
 import           Control.Monad.Extra           (maybeM)
 import           Control.Monad.IO.Class        (MonadIO, liftIO)
@@ -23,29 +22,18 @@ import           Control.Monad.Trans.Class     (lift)
 import           Control.Monad.Trans.Except    (ExceptT (..), mapExceptT,
                                                 runExceptT, throwE, withExceptT)
 import           Data.Bifunctor                (Bifunctor (first))
+import           Data.String
 
+import           Control.Monad.Trans.Maybe     (MaybeT, mapMaybeT)
 import qualified Data.Text                     as T
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Prettyprinter
 import           Prettyprinter.Render.Text     (renderStrict)
 
-type PluginHandler e m a = ExceptT e m a
-
 -- ----------------------------------------------------------------------------
 -- Plugin Error wrapping
 -- ----------------------------------------------------------------------------
-
-
-pluginResponse :: Monad m => ExceptT String m a -> m (Either ResponseError a)
-pluginResponse =
-  fmap (first (\msg -> ResponseError (InR ErrorCodes_InternalError) (T.pack msg) Nothing))
-    . runExceptT
-
-pluginResponse' :: Monad m => ExceptT PluginError m a -> m (Either ResponseError a)
-pluginResponse' =
-  fmap (first handlePluginError)
-    . runExceptT
 
 pluginResponseM :: Monad m => (t -> m (Either a b)) -> ExceptT t m b -> m (Either a b)
 pluginResponseM handler act =
@@ -58,27 +46,26 @@ handlePluginError msg = ResponseError (InR ErrorCodes_InternalError) (renderStri
   where simpleDoc = layoutPretty defaultLayoutOptions $ pretty msg
 
 data PluginError
-  = PluginInternalError
-  | PluginUriToFilePath Uri
-  | PluginUriToNormalizedFilePath Uri
-  | PluginErrorMessage T.Text
+  = PluginInternalError T.Text
+  | PluginInvalidParams T.Text
+  | PluginParseError T.Text
+  | PluginInvalidRequest T.Text
+  | PluginStaleResolve
+  | PluginBadDependency T.Text
   | forall a . Show a => FastRuleNotReady a
   | forall a . Show a => RuleFailed a
 
 instance Pretty PluginError where
     pretty = \case
-      PluginInternalError -> "Internal Plugin Error"
-      PluginUriToFilePath uri -> "Failed to translate URI " <+> viaShow uri
-      PluginUriToNormalizedFilePath uri -> "Failed converting " <+> viaShow uri <+> " to NormalizedFilePath"
-      PluginErrorMessage msg -> "Plugin failed: " <+> viaShow msg
+      PluginInternalError msg -> "Internal Plugin Error: " <+> viaShow msg
+      PluginStaleResolve -> "Stale Resolve"
       FastRuleNotReady rule -> "FastRuleNotReady:" <+> viaShow rule
       RuleFailed rule       -> "RuleFailed:" <+> viaShow rule
+      PluginInvalidParams text -> "Invalid Params:" <+> viaShow text
+      PluginParseError text -> "Parse Error:" <+> viaShow text
+      PluginInvalidRequest text -> "Invalid Request:" <+> viaShow text
+      PluginBadDependency text -> "Bad dependency" <+> viaShow text
 
-mkPluginErrorMessage :: T.Text -> PluginError
-mkPluginErrorMessage = PluginErrorMessage
-
-mkSimpleResponseError :: T.Text -> ResponseError
-mkSimpleResponseError err = ResponseError (InR ErrorCodes_InternalError) err Nothing
 
 handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
 handleMaybe msg = maybe (throwE msg) return
@@ -91,3 +78,13 @@ withError = withExceptT
 
 hoistExceptT :: MonadIO m => ExceptT e IO a -> ExceptT e m a
 hoistExceptT = mapExceptT liftIO
+
+hoistMaybeT :: MonadIO m => MaybeT IO a -> MaybeT m a
+hoistMaybeT = mapMaybeT liftIO
+
+getNormalizedFilePathE :: Monad m => Uri -> ExceptT PluginError m NormalizedFilePath
+getNormalizedFilePathE uri = handleMaybe (PluginInvalidParams (T.pack $ "uriToNormalizedFile failed. Uri:" <>  show uri))
+        $ uriToNormalizedFilePath
+        $ toNormalizedUri uri
+
+-- ---------------------------------------------------------------------

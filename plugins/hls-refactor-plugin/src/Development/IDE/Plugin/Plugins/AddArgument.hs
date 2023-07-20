@@ -32,8 +32,8 @@ import           GHC                                       (EpAnn (..),
                                                             noAnn)
 import           GHC.Hs                                    (IsUnicodeSyntax (..))
 import           GHC.Types.SrcLoc                          (generatedSrcSpan)
-import           Ide.PluginUtils                           (makeDiffTextEdit,
-                                                            responseError)
+import           Ide.Plugin.Error                          (PluginError (PluginInternalError))
+import           Ide.PluginUtils                           (makeDiffTextEdit)
 import           Language.Haskell.GHC.ExactPrint           (TransformT (..),
                                                             noAnnSrcSpanDP1,
                                                             runTransformT)
@@ -58,7 +58,7 @@ plugin = []
 --         foo :: a -> b -> c -> d
 --         foo a b = \c -> ...
 --      In this case a new argument would have to add its type between b and c in the signature.
-plugin :: ParsedModule -> Diagnostic -> Either ResponseError [(T.Text, [TextEdit])]
+plugin :: ParsedModule -> Diagnostic -> Either PluginError [(T.Text, [TextEdit])]
 plugin parsedModule Diagnostic {_message, _range}
   | Just (name, typ) <- matchVariableNotInScope message = addArgumentAction parsedModule _range name typ
   | Just (name, typ) <- matchFoundHoleIncludeUnderscore message = addArgumentAction parsedModule _range name (Just typ)
@@ -84,11 +84,11 @@ addArgToMatch name (L locMatch (Match xMatch ctxMatch pats rhs)) =
 -- For example:
 --    insertArg "new_pat" `foo bar baz = 1`
 -- => (`foo bar baz new_pat = 1`, Just ("foo", 2))
-appendFinalPatToMatches :: T.Text -> LHsDecl GhcPs -> TransformT (Either ResponseError) (LHsDecl GhcPs, Maybe (GenLocated SrcSpanAnnN RdrName, Int))
+appendFinalPatToMatches :: T.Text -> LHsDecl GhcPs -> TransformT (Either PluginError) (LHsDecl GhcPs, Maybe (GenLocated SrcSpanAnnN RdrName, Int))
 appendFinalPatToMatches name = \case
   (L locDecl (ValD xVal fun@FunBind{fun_matches=mg,fun_id = idFunBind})) -> do
     (mg', numPatsMay) <- modifyMgMatchesT' mg (pure . second Just . addArgToMatch name) Nothing combineMatchNumPats
-    numPats <- TransformT $ lift $ maybeToEither (responseError "Unexpected empty match group in HsDecl") numPatsMay
+    numPats <- TransformT $ lift $ maybeToEither (PluginInternalError "Unexpected empty match group in HsDecl") numPatsMay
     let decl' = L locDecl (ValD xVal fun{fun_matches=mg'})
     pure (decl', Just (idFunBind, numPats))
   decl -> pure (decl, Nothing)
@@ -97,7 +97,7 @@ appendFinalPatToMatches name = \case
     combineMatchNumPats  other Nothing = pure other
     combineMatchNumPats  (Just l) (Just r)
       | l == r = pure (Just l)
-      | otherwise = Left $ responseError "Unexpected different numbers of patterns in HsDecl MatchGroup"
+      | otherwise = Left $ PluginInternalError "Unexpected different numbers of patterns in HsDecl MatchGroup"
 
 -- The add argument works as follows:
 --  1. Attempt to add the given name as the last pattern of the declaration that contains `range`.
@@ -110,7 +110,7 @@ appendFinalPatToMatches name = \case
 --   foo () = new_def
 --
 -- TODO instead of inserting a typed hole; use GHC's suggested type from the error
-addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> Either ResponseError [(T.Text, [TextEdit])]
+addArgumentAction :: ParsedModule -> Range -> T.Text -> Maybe T.Text -> Either PluginError [(T.Text, [TextEdit])]
 addArgumentAction (ParsedModule _ moduleSrc _ _) range name _typ = do
     (newSource, _, _) <- runTransformT $ do
       (moduleSrc', join -> matchedDeclNameMay) <- addNameAsLastArgOfMatchingDecl (makeDeltaAst moduleSrc)
@@ -123,7 +123,7 @@ addArgumentAction (ParsedModule _ moduleSrc _ _) range name _typ = do
     addNameAsLastArgOfMatchingDecl = modifySmallestDeclWithM spanContainsRangeOrErr addNameAsLastArg
     addNameAsLastArg = fmap (first (:[])) . appendFinalPatToMatches name
 
-    spanContainsRangeOrErr = maybeToEither (responseError "SrcSpan was not valid range") . (`spanContainsRange` range)
+    spanContainsRangeOrErr = maybeToEither (PluginInternalError "SrcSpan was not valid range") . (`spanContainsRange` range)
 
 -- Transform an LHsType into a list of arguments and return type, to make transformations easier.
 hsTypeToFunTypeAsList :: LHsType GhcPs -> ([(SrcSpanAnnA, XFunTy GhcPs, HsArrow GhcPs, LHsType GhcPs)], LHsType GhcPs)

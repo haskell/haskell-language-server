@@ -60,13 +60,13 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 -- ---------------------------------------------------------------------
 
-hover' :: IdeState -> PluginId -> HoverParams  -> LspM c (Either ResponseError (Hover |? Null))
+hover' :: PluginMethodHandler IdeState 'Method_TextDocumentHover
 hover' ideState _ HoverParams{..} = do
     liftIO $ logDebug (ideLogger ideState) "GhcIde.hover entered (ideLogger)" -- AZ
     hover ideState TextDocumentPositionParams{..}
 
 -- ---------------------------------------------------------------------
-symbolsProvider :: IdeState -> PluginId -> DocumentSymbolParams -> LspM c (Either ResponseError ([SymbolInformation] |? ([DocumentSymbol] |? Null)))
+symbolsProvider :: PluginMethodHandler IdeState 'Method_TextDocumentDocumentSymbol
 symbolsProvider ide _ params = moduleOutline ide params
 
 -- ---------------------------------------------------------------------

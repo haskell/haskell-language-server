@@ -10,7 +10,7 @@ import           Data.Aeson                           hiding (Null)
 import           Data.Maybe                           (mapMaybe, maybeToList)
 import qualified Data.Text                            as T
 import           Development.IDE
-import qualified Development.IDE.Core.PluginUtils     as PluginUtils
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
@@ -25,18 +25,18 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                  (sendRequest)
 
 codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
-codeLens state plId CodeLensParams{..} = pluginResponse' $ do
-    nfp <-  getNormalizedFilePath' uri
-    (tmr, _) <- PluginUtils.runAction "classplugin.TypeCheck" state
+codeLens state plId CodeLensParams{..} = runExceptT $ do
+    nfp <-  getNormalizedFilePathE uri
+    (tmr, _) <- runActionE "classplugin.TypeCheck" state
         -- Using stale results means that we can almost always return a value. In practice
         -- this means the lenses don't 'flicker'
-        $ PluginUtils.useWithStale TypeCheck nfp
+        $ useWithStaleE TypeCheck nfp
 
     -- All instance binds
-    (InstanceBindTypeSigsResult allBinds, mp) <- PluginUtils.runAction "classplugin.GetInstanceBindTypeSigs" state
+    (InstanceBindTypeSigsResult allBinds, mp) <- runActionE "classplugin.GetInstanceBindTypeSigs" state
         -- Using stale results means that we can almost always return a value. In practice
         -- this means the lenses don't 'flicker'
-        $ PluginUtils.useWithStale GetInstanceBindTypeSigs nfp
+        $ useWithStaleE GetInstanceBindTypeSigs nfp
 
     pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
 

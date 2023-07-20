@@ -15,7 +15,6 @@ module Ide.PluginUtils
     diffText',
     pluginDescToIdePlugins,
     idePluginsToPluginDesc,
-    responseError,
     getClientConfig,
     getPluginConfig,
     configForPlugin,
@@ -31,10 +30,6 @@ module Ide.PluginUtils
     subRange,
     positionInRange,
     usePropertyLsp,
-    -- * Batteries-included plugin error API
-    getNormalizedFilePath,
-    getNormalizedFilePath',
-    throwPluginError,
     -- * Escape
     unescape,
     )
@@ -263,12 +258,6 @@ allLspCmdIds pid commands = concatMap go commands
 
 -- ---------------------------------------------------------------------
 
-getNormalizedFilePath' :: Monad m => Uri -> ExceptT PluginError m NormalizedFilePath
-getNormalizedFilePath' uri = handleMaybe (PluginUriToNormalizedFilePath uri)
-        $ uriToNormalizedFilePath
-        $ toNormalizedUri uri
-
--- ---------------------------------------------------------------------
 
 type TextParser = P.Parsec Void T.Text
 
@@ -298,14 +287,3 @@ escapedTextParser = concat <$> P.many (outsideStringLiteral P.<|> stringLiteral)
             inside' = concatMap f inside
 
         pure $ "\"" <> inside' <> "\""
-
-getNormalizedFilePath :: Monad m => Uri -> ExceptT String m NormalizedFilePath
-getNormalizedFilePath uri = handleMaybe errMsg
-        $ uriToNormalizedFilePath
-        $ toNormalizedUri uri
-    where
-        errMsg = T.unpack $ "Failed converting " <> getUri uri <> " to NormalizedFilePath"
-
--- ---------------------------------------------------------------------
-throwPluginError :: Monad m => String -> ExceptT String m b
-throwPluginError = throwE

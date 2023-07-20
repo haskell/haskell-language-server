@@ -45,6 +45,8 @@ import           Development.IDE.Types.HscEnvEq       (HscEnvEq (hscEnv))
 import           Development.IDE.Types.Location       (fromUri)
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Config                    (CheckParents)
+import           Ide.Plugin.Error
+import           Ide.Plugin.Error                     (PluginError (PluginInvalidRequest))
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -85,12 +87,12 @@ plugin = (defaultPluginDescriptor "test") {
         = testRequestHandler ide customReq
         | otherwise
         = return $ Left
-        $ ResponseError (InR ErrorCodes_InvalidRequest) "Cannot parse request" Nothing
+        $ PluginInvalidRequest "Cannot parse request"
 
 
 testRequestHandler ::  IdeState
                 -> TestRequest
-                -> LSP.LspM c (Either ResponseError Value)
+                -> LSP.LspM c (Either PluginError Value)
 testRequestHandler _ (BlockSeconds secs) = do
     LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/request")) $
       toJSON secs
@@ -113,7 +115,7 @@ testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
     let nfp = fromUri $ toNormalizedUri file
     success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) nfp
     let res = WaitForIdeRuleResult <$> success
-    return $ bimap mkResponseError toJSON res
+    return $ bimap PluginInvalidRequest toJSON res
 testRequestHandler s GetBuildKeysBuilt = liftIO $ do
     keys <- getDatabaseKeys resultBuilt $ shakeDb s
     return $ Right $ toJSON $ map show keys
@@ -146,9 +148,6 @@ getDatabaseKeys field db = do
     keys <- shakeGetCleanKeys db
     step <- shakeGetBuildStep db
     return [ k | (k, res) <- keys, field res == Step step]
-
-mkResponseError :: Text -> ResponseError
-mkResponseError msg = ResponseError (InR ErrorCodes_InvalidRequest) msg Nothing
 
 parseAction :: CI String -> NormalizedFilePath -> Action (Either Text Bool)
 parseAction "typecheck" fp = Right . isJust <$> use TypeCheck fp

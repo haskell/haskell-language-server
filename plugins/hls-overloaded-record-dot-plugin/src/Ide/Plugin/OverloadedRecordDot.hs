@@ -49,7 +49,7 @@ import           Development.IDE.GHC.Compat           (HsExpr (HsRecFld))
 #endif
 
 import           Control.DeepSeq                      (rwhnf)
-import qualified Development.IDE.Core.PluginUtils     as PluginUtils
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping (PositionMapping),
                                                        toCurrentRange)
 import           Development.IDE.GHC.Compat           (Extension (OverloadedRecordDot),
@@ -76,11 +76,11 @@ import           Development.IDE.Types.Logger         (Priority (..),
                                                        (<+>))
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error                     (PluginError (..),
-                                                       pluginResponse')
+                                                       getNormalizedFilePathE,
+                                                       handleMaybe, runExceptT)
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.Plugin.Resolve                   (mkCodeActionHandlerWithResolve)
-import           Ide.PluginUtils                      (getNormalizedFilePath')
 import           Ide.Types                            (PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
@@ -177,22 +177,17 @@ descriptor recorder plId = let pluginHandler = mkCodeActionHandlerWithResolve co
 
 resolveProvider :: ResolveFunction IdeState ORDResolveData 'Method_CodeActionResolve
 resolveProvider ideState plId ca uri (ORDRD _ int) =
-  pluginResponse' $ do
-    nfp <- getNormalizedFilePath' uri
+  runExceptT $ do
+    nfp <- getNormalizedFilePathE uri
     CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
     pragma <- getFirstPragma plId ideState nfp
-    case IntMap.lookup int crsDetails of
-        Just rse -> pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
-        -- We need to throw a content modified error here, see
-        -- https://github.com/microsoft/language-server-protocol/issues/1738
-        -- but we need fendor's plugin error response pr to make it
-        -- convenient to use here, so we will wait to do that till that's merged
-        _        -> throwE $ PluginErrorMessage "Content Modified Error"
+    rse <- handleMaybe PluginStaleResolve $ IntMap.lookup int crsDetails
+    pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
-    pluginResponse' $ do
-        nfp <- getNormalizedFilePath' (caDocId ^. L.uri)
+    runExceptT $ do
+        nfp <- getNormalizedFilePathE (caDocId ^. L.uri)
         CRSR crsMap crsDetails exts <- collectRecSelResult ideState nfp
         let mkCodeAction (crsM, nse)  = InR CodeAction
                 { -- We pass the record selector to the title function, so that
@@ -326,6 +321,6 @@ getRecSels _ = ([], False)
 collectRecSelResult :: MonadIO m => IdeState -> NormalizedFilePath
                         -> ExceptT PluginError m CollectRecordSelectorsResult
 collectRecSelResult ideState =
-    PluginUtils.runAction "overloadedRecordDot.collectRecordSelectors" ideState
-        . PluginUtils.use CollectRecordSelectors
+    runActionE "overloadedRecordDot.collectRecordSelectors" ideState
+        . useE CollectRecordSelectors
 

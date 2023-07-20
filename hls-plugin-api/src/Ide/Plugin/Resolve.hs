@@ -19,6 +19,7 @@ import           Data.Maybe                    (catMaybes)
 import           Data.Row                      ((.!))
 import qualified Data.Text                     as T
 import           GHC.Generics                  (Generic)
+import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
@@ -36,8 +37,8 @@ import           Language.LSP.Server           (LspM, LspT,
 -- the client supports resolve and act accordingly in your own providers.
 mkCodeActionHandlerWithResolve
   :: forall ideState a. (A.FromJSON a) =>
-   (ideState -> PluginId -> CodeActionParams -> LspM Config (Either ResponseError ([Command |? CodeAction] |? Null)))
-  -> (ideState -> PluginId -> CodeAction -> Uri -> a -> LspM Config (Either ResponseError CodeAction))
+   (ideState -> PluginId -> CodeActionParams -> LspM Config (Either PluginError ([Command |? CodeAction] |? Null)))
+  -> (ideState -> PluginId -> CodeAction -> Uri -> a -> LspM Config (Either PluginError CodeAction))
   -> PluginHandlers ideState
 mkCodeActionHandlerWithResolve codeActionMethod codeResolveMethod =
     let newCodeActionMethod ideState pid params = runExceptT $
@@ -55,7 +56,7 @@ mkCodeActionHandlerWithResolve codeActionMethod codeResolveMethod =
     where
         dropData :: CodeAction -> CodeAction
         dropData ca = ca & L.data_ .~ Nothing
-        resolveCodeAction :: Uri -> ideState -> PluginId -> (Command |? CodeAction) -> ExceptT ResponseError (LspT Config IO) (Command |? CodeAction)
+        resolveCodeAction :: Uri -> ideState -> PluginId -> (Command |? CodeAction) -> ExceptT PluginError (LspT Config IO) (Command |? CodeAction)
         resolveCodeAction _uri _ideState _plId c@(InL _) = pure c
         resolveCodeAction uri ideState pid (InR codeAction@CodeAction{_data_=Just value}) = do
             case A.fromJSON value of
@@ -78,8 +79,8 @@ mkCodeActionHandlerWithResolve codeActionMethod codeResolveMethod =
 mkCodeActionWithResolveAndCommand
   :: forall ideState a. (A.FromJSON a) =>
   PluginId
-  -> (ideState -> PluginId -> CodeActionParams -> LspM Config (Either ResponseError ([Command |? CodeAction] |? Null)))
-  -> (ideState -> PluginId -> CodeAction -> Uri -> a -> LspM Config (Either ResponseError CodeAction))
+  -> (ideState -> PluginId -> CodeActionParams -> LspM Config (Either PluginError ([Command |? CodeAction] |? Null)))
+  -> (ideState -> PluginId -> CodeAction -> Uri -> a -> LspM Config (Either PluginError CodeAction))
   -> ([PluginCommand ideState], PluginHandlers ideState)
 mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
     let newCodeActionMethod ideState pid params = runExceptT $
@@ -112,7 +113,7 @@ mkCodeActionWithResolveAndCommand plId codeActionMethod codeResolveMethod =
         wrapWithURI  uri codeAction =
           codeAction & L.data_ .~  (A.toJSON .WithURI uri <$> data_)
           where data_ = codeAction ^? L.data_ . _Just
-        executeResolveCmd :: (ideState -> PluginId -> CodeAction -> Uri -> a -> LspM Config (Either ResponseError CodeAction))-> CommandFunction ideState CodeAction
+        executeResolveCmd :: (ideState -> PluginId -> CodeAction -> Uri -> a -> LspM Config (Either PluginError CodeAction))-> CommandFunction ideState CodeAction
         executeResolveCmd resolveProvider ideState ca@CodeAction{_data_=Just value} =  do
           withIndefiniteProgress "Applying edits for code action..." Cancellable $ do
             case A.fromJSON value of
@@ -169,14 +170,14 @@ supportsCodeActionResolve caps =
         Just row -> "edit" `elem` row .! #properties
         _        -> False
 
-internalError :: T.Text -> ResponseError
-internalError msg = ResponseError (InR ErrorCodes_InternalError) ("Ide.Plugin.Resolve: Internal Error : " <> msg) Nothing
+internalError :: T.Text -> PluginError
+internalError msg = PluginInternalError ("Ide.Plugin.Resolve: Internal Error : " <> msg)
 
-invalidParamsError :: T.Text -> ResponseError
-invalidParamsError msg = ResponseError (InR ErrorCodes_InvalidParams) ("Ide.Plugin.Resolve: : " <> msg) Nothing
+invalidParamsError :: T.Text -> PluginError
+invalidParamsError msg = PluginInvalidParams ("Ide.Plugin.Resolve: : " <> msg)
 
-parseError :: Maybe A.Value -> T.Text -> ResponseError
-parseError value errMsg = ResponseError (InR ErrorCodes_ParseError) ("Ide.Plugin.Resolve: Error parsing value:"<> (T.pack $ show value) <> " Error: "<> errMsg) Nothing
+parseError :: Maybe A.Value -> T.Text -> PluginError
+parseError value errMsg = PluginParseError ("Ide.Plugin.Resolve: Error parsing value:"<> (T.pack $ show value) <> " Error: "<> errMsg)
 
 {- Note [Code action resolve fallback to commands]
   To make supporting code action resolve easy for plugins, we want to let them

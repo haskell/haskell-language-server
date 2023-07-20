@@ -19,6 +19,7 @@ import           Development.IDE.GHC.Compat      (hsc_dflags, moduleNameString)
 import qualified Development.IDE.GHC.Compat      as D
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type
+import           Ide.Plugin.Error                (PluginError (PluginInternalError))
 import           Ide.PluginUtils
 import           Ide.Types                       hiding (Config)
 import           Language.LSP.Protocol.Message
@@ -81,8 +82,8 @@ provider ideState typ contents fp _ = withIndefiniteProgress title Cancellable $
  where
    title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
 
-   ret :: Either SomeException T.Text -> Either ResponseError ([TextEdit] |? Null)
-   ret (Left err)  = Left . responseError . T.pack $ "ormoluCmd: " ++ show err
+   ret :: Either SomeException T.Text -> Either PluginError ([TextEdit] |? Null)
+   ret (Left err)  = Left . PluginInternalError . T.pack $ "ormoluCmd: " ++ show err
    ret (Right new) = Right $ InL $ makeDiffTextEdit contents new
 
    fromDyn :: D.DynFlags -> [DynOption]

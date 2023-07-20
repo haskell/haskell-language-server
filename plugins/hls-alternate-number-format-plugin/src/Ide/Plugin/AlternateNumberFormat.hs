@@ -14,7 +14,7 @@ import           Development.IDE                  (GetParsedModule (GetParsedMod
                                                    IdeState, RuleResult, Rules,
                                                    define, realSrcSpanToRange,
                                                    runAction, use)
-import qualified Development.IDE.Core.PluginUtils as PluginUtils
+import           Development.IDE.Core.PluginUtils
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       hiding (getSrcSpan)
 import           Development.IDE.GHC.Util         (getExtensions)
@@ -31,7 +31,6 @@ import           Ide.Plugin.Error
 import           Ide.Plugin.Literals
 import           Ide.Plugin.RangeMap              (RangeMap)
 import qualified Ide.Plugin.RangeMap              as RangeMap
-import           Ide.PluginUtils                  (getNormalizedFilePath')
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
@@ -84,8 +83,8 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
     pure ([], CLR <$> litMap <*> exts)
 
 codeActionHandler :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = pluginResponse' $ do
-    nfp <- getNormalizedFilePath' (docId ^. L.uri)
+codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = runExceptT $ do
+    nfp <- getNormalizedFilePathE (docId ^. L.uri)
     CLR{..} <- requestLiterals pId state nfp
     pragma <- getFirstPragma pId state nfp
         -- remove any invalid literals (see validTarget comment)
@@ -133,5 +132,5 @@ needsExtension ext ghcExts = ext `notElem` map unExt ghcExts
 
 requestLiterals :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m CollectLiteralsResult
 requestLiterals (PluginId pId) state =
-    PluginUtils.runAction (unpack pId <> ".CollectLiterals") state
-    . PluginUtils.use CollectLiterals
+    runActionE (unpack pId <> ".CollectLiterals") state
+    . useE CollectLiterals

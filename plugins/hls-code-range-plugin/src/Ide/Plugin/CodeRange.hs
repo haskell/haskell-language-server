@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE OverloadedStrings         #-}
@@ -27,7 +28,7 @@ import           Development.IDE                      (Action, IdeAction,
                                                        Range (Range), Recorder,
                                                        WithPriority,
                                                        cmapWithPrio)
-import qualified Development.IDE.Core.PluginUtils     as PluginUtils
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentPosition,
                                                        toCurrentRange)
@@ -39,13 +40,14 @@ import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        codeRangeRule, crkToFrk)
 import qualified Ide.Plugin.CodeRange.Rules           as Rules (Log)
 import           Ide.Plugin.Error
-import           Ide.PluginUtils                      (getNormalizedFilePath',
-                                                       positionInRange)
+import           Ide.PluginUtils                      (positionInRange)
 import           Ide.Types                            (PluginDescriptor (pluginHandlers, pluginRules),
                                                        PluginId,
+                                                       PluginMethodHandler,
                                                        defaultPluginDescriptor,
                                                        mkPluginHandler)
-import           Language.LSP.Protocol.Message        (ResponseError,
+import           Language.LSP.Protocol.Message        (Method (Method_TextDocumentFoldingRange, Method_TextDocumentSelectionRange),
+                                                       ResponseError,
                                                        SMethod (SMethod_TextDocumentFoldingRange, SMethod_TextDocumentSelectionRange))
 import           Language.LSP.Protocol.Types          (FoldingRange (..),
                                                        FoldingRangeParams (..),
@@ -74,11 +76,11 @@ instance Pretty Log where
         LogRules codeRangeLog -> pretty codeRangeLog
         LogBadDependency rule -> pretty $ "bad dependency: " <> show rule
 
-foldingRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> FoldingRangeParams -> LspM c (Either ResponseError ([FoldingRange] |? Null))
+foldingRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentFoldingRange
 foldingRangeHandler recorder ide _ FoldingRangeParams{..} =
     pluginResponseM handleErrors $ do
-        filePath <- getNormalizedFilePath' uri
-        foldingRanges <- PluginUtils.runAction "FoldingRange" ide $ getFoldingRanges filePath
+        filePath <- getNormalizedFilePathE uri
+        foldingRanges <- runActionE "FoldingRange" ide $ getFoldingRanges filePath
         pure . InL $ foldingRanges
   where
     uri :: Uri
@@ -88,17 +90,17 @@ foldingRangeHandler recorder ide _ FoldingRangeParams{..} =
         RuleFailed rule -> do
             logWith recorder Warning $ LogBadDependency rule
             pure $ Right $ InL []
-        errs -> pure $ Left $ handlePluginError errs
+        errs -> pure $ Left errs
 
 getFoldingRanges :: NormalizedFilePath -> ExceptT PluginError Action [FoldingRange]
 getFoldingRanges file = do
-    codeRange <- PluginUtils.use GetCodeRange file
+    codeRange <- useE GetCodeRange file
     pure $ findFoldingRanges codeRange
 
-selectionRangeHandler :: Recorder (WithPriority Log) -> IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError ([SelectionRange] |? Null))
+selectionRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentSelectionRange
 selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
     pluginResponseM handleErrors $ do
-        filePath <- withError GhcidePluginErrors $ getNormalizedFilePath' uri
+        filePath <- withError GhcidePluginErrors $ getNormalizedFilePathE uri
         fmap  id . runIdeAction' $ getSelectionRanges filePath positions
   where
     uri :: Uri
@@ -108,12 +110,12 @@ selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
     positions = _positions
 
     runIdeAction' :: MonadIO m => ExceptT SelectionRangeError IdeAction ([SelectionRange] |? Null) -> ExceptT SelectionRangeError m ([SelectionRange] |? Null)
-    runIdeAction' action = PluginUtils.runIdeAction "SelectionRange" (shakeExtras ide) action
+    runIdeAction' action = runIdeActionE "SelectionRange" (shakeExtras ide) action
 
     handleErrors ::
         MonadIO m =>
         SelectionRangeError ->
-        m (Either ResponseError ([a] |? Null))
+        m (Either PluginError ([a] |? Null))
     handleErrors err = case err of
         SelectionRangeBadDependency rule -> do
             logWith recorder Warning $ LogBadDependency rule
@@ -121,11 +123,11 @@ selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
             -- so we give it a default value instead of throwing an error
             pure $ Right $ InL []
         SelectionRangeInputPositionMappingFailure ->
-            pure $ Left $ mkSimpleResponseError "failed to apply position mapping to input positions"
+            pure $ Left $ PluginInternalError "failed to apply position mapping to input positions"
         SelectionRangeOutputPositionMappingFailure ->
-            pure $ Left $ mkSimpleResponseError "failed to apply position mapping to output positions"
+            pure $ Left $ PluginInternalError "failed to apply position mapping to output positions"
         GhcidePluginErrors ghcidePluginError ->
-            pure $ Left $ handlePluginError ghcidePluginError
+            pure $ Left $ ghcidePluginError
 
 
 data SelectionRangeError = forall rule. Show rule => SelectionRangeBadDependency rule
@@ -136,7 +138,7 @@ data SelectionRangeError = forall rule. Show rule => SelectionRangeBadDependency
 getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT SelectionRangeError IdeAction ([SelectionRange] |? Null)
 getSelectionRanges file positions = do
     (codeRange, positionMapping) <- withError (\_ -> SelectionRangeBadDependency GetCodeRange) $
-        PluginUtils.useWithStaleFast GetCodeRange file
+        useWithStaleFastE GetCodeRange file
     -- 'positionMapping' should be applied to the input before using them
     positions' <- maybeToExceptT SelectionRangeInputPositionMappingFailure . MaybeT . pure $
         traverse (fromCurrentPosition positionMapping) positions

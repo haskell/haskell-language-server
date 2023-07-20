@@ -40,6 +40,7 @@ import           Development.IDE.Types.Logger             (Pretty (pretty),
                                                            Recorder,
                                                            WithPriority,
                                                            cmapWithPrio)
+import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message
@@ -158,14 +159,10 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
   where
     stripForall ty = case splitForAllTyCoVars ty of
       (_,res) -> res
-resolveCompletion _ _ _ _ _ = pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unable to get normalized file path for url" Nothing
+resolveCompletion _ _ _ _ _ = pure $ Left $ PluginInvalidParams "Unable to get normalized file path for url"
 
 -- | Generate code actions.
-getCompletionsLSP
-    :: IdeState
-    -> PluginId
-    -> CompletionParams
-    -> LSP.LspM Config (Either ResponseError (MessageResult Method_TextDocumentCompletion))
+getCompletionsLSP :: PluginMethodHandler IdeState 'Method_TextDocumentCompletion
 getCompletionsLSP ide plId
   CompletionParams{_textDocument=TextDocumentIdentifier uri
                   ,_position=position

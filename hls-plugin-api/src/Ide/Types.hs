@@ -47,7 +47,6 @@ module Ide.Types
 , PluginRequestMethod(..)
 , getProcessID, getPid
 , installSigUsr1Handler
-, responseError
 , lookupCommandProvider
 , ResolveFunction
 , mkResolveHandler
@@ -85,6 +84,7 @@ import           Data.Text.Encoding            (encodeUtf8)
 import           Development.IDE.Graph
 import           GHC                           (DynFlags)
 import           GHC.Generics
+import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
@@ -751,7 +751,7 @@ instance GCompare IdeNotification where
 
 -- | Combine handlers for the
 newtype PluginHandler a (m :: Method ClientToServer Request)
-  = PluginHandler (PluginId -> a -> MessageParams m -> LspM Config (NonEmpty (Either ResponseError (MessageResult m))))
+  = PluginHandler (PluginId -> a -> MessageParams m -> LspM Config (NonEmpty (Either PluginError (MessageResult m))))
 
 newtype PluginNotificationHandler a (m :: Method ClientToServer Notification)
   = PluginNotificationHandler (PluginId -> a -> VFS -> MessageParams m -> LspM Config ())
@@ -776,7 +776,7 @@ instance Semigroup (PluginNotificationHandlers a) where
 instance Monoid (PluginNotificationHandlers a) where
   mempty = PluginNotificationHandlers mempty
 
-type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config (Either ResponseError (MessageResult m))
+type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config (Either PluginError (MessageResult m))
 
 type PluginNotificationMethodHandler a m = a -> VFS -> PluginId -> MessageParams m -> LspM Config ()
 
@@ -789,7 +789,7 @@ mkPluginHandler
   -> PluginHandlers ideState
 mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandler (f' m))
   where
-    f' :: SMethod m -> PluginId -> ideState -> MessageParams m -> LspT Config IO (NonEmpty (Either ResponseError (MessageResult m)))
+    f' :: SMethod m -> PluginId -> ideState -> MessageParams m -> LspT Config IO (NonEmpty (Either PluginError (MessageResult m)))
     -- We need to have separate functions for each method that supports resolve, so far we only support CodeActions
     -- CodeLens, and Completion methods.
     f' SMethod_TextDocumentCodeAction pid ide params@CodeActionParams{_textDocument=TextDocumentIdentifier {_uri}} =
@@ -890,7 +890,7 @@ data PluginCommand ideState = forall a. (FromJSON a) =>
 type CommandFunction ideState a
   = ideState
   -> a
-  -> LspM Config (Either ResponseError (Value |? Null))
+  -> LspM Config (Either PluginError (Value |? Null))
 
 -- ---------------------------------------------------------------------
 
@@ -900,7 +900,7 @@ type ResolveFunction ideState a (m :: Method ClientToServer Request) =
   -> MessageParams m
   -> Uri
   -> a
-  -> LspM Config (Either ResponseError (MessageResult m))
+  -> LspM Config (Either PluginError (MessageResult m))
 
 -- | Make a handler for resolve methods. In here we take your provided ResolveFunction
 -- and turn it into a PluginHandlers. See Note [Resolve in PluginHandlers]
@@ -912,7 +912,7 @@ mkResolveHandler
   -> MessageParams m
   -> Uri
   -> a
-  -> LspM Config (Either ResponseError (MessageResult m)))
+  -> LspM Config (Either PluginError (MessageResult m)))
   -> PluginHandlers ideState
 mkResolveHandler m f = mkPluginHandler m $ \ideState plId params -> do
   case fromJSON <$> (params ^. L.data_) of
@@ -924,10 +924,10 @@ mkResolveHandler m f = mkPluginHandler m $ \ideState plId params -> do
             let newParams = params & L.data_ ?~ value
             in f ideState plId newParams uri decodedValue
           Error err ->
-            pure $ Left $ ResponseError (InR ErrorCodes_ParseError) (parseError value err) Nothing
-      else pure $ Left $ ResponseError (InR ErrorCodes_InternalError) invalidRequest Nothing
-    (Just (Error err)) -> pure $ Left $ ResponseError (InR ErrorCodes_ParseError) (parseError (params ^. L.data_) err) Nothing
-    _ -> pure $ Left $ ResponseError (InR ErrorCodes_InternalError) invalidRequest Nothing
+            pure $ Left $ PluginParseError (parseError value err)
+      else pure $ Left $ PluginInternalError invalidRequest
+    (Just (Error err)) -> pure $ Left $ PluginParseError (parseError (params ^. L.data_) err)
+    _ -> pure $ Left $ PluginInternalError invalidRequest
   where invalidRequest = "The resolve request incorrectly got routed to the wrong resolve handler!"
         parseError value err = "Unable to decode: " <> (T.pack $ show value) <> ". Error: " <> (T.pack $ show err)
 
@@ -986,7 +986,7 @@ type FormattingHandler a
   -> T.Text
   -> NormalizedFilePath
   -> FormattingOptions
-  -> LspM Config (Either ResponseError ([TextEdit] |? Null))
+  -> LspM Config (Either PluginError ([TextEdit] |? Null))
 
 mkFormattingHandlers :: forall a. FormattingHandler a -> PluginHandlers a
 mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provider SMethod_TextDocumentFormatting)
@@ -1003,19 +1003,15 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
                   SMethod_TextDocumentRangeFormatting -> FormatRange (params ^. L.range)
                   _ -> Prelude.error "mkFormattingHandlers: impossible"
             f ide typ (virtualFileText vf) nfp opts
-          Nothing -> pure $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
+          Nothing -> pure $ Left $ PluginInvalidParams $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
 
-      | otherwise = pure $ Left $ responseError $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
+      | otherwise = pure $ Left $ PluginInvalidParams $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
       where
         uri = params ^. L.textDocument . L.uri
         opts = params ^. L.options
 
 -- ---------------------------------------------------------------------
 
-responseError :: T.Text -> ResponseError
-responseError txt = ResponseError (InR ErrorCodes_InvalidParams) txt Nothing
-
--- ---------------------------------------------------------------------
 
 data FallbackCodeActionParams =
   FallbackCodeActionParams

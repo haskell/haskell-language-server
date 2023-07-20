@@ -68,15 +68,15 @@ logLevel = Debug -- Info
 isLiterate :: FilePath -> Bool
 isLiterate x = takeExtension x `elem` [".lhs", ".lhs-boot"]
 
-response' :: ExceptT PluginError (LspM c) WorkspaceEdit -> LspM c (Either ResponseError (Value |? Null))
+response' :: ExceptT PluginError (LspM c) WorkspaceEdit -> LspM c (Either PluginError (Value |? Null))
 response' act = do
     res <- runExceptT act
              `catchAny` \e -> do
                 res <- showErr e
-                pure . Left . mkPluginErrorMessage $ fromString res
+                pure . Left . PluginInternalError $ fromString res
     case res of
       Left e ->
-          return $ Left $ handlePluginError e
+          return $ Left e
       Right a -> do
         _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing a) (\_ -> pure ())
         return $ Right $ InR Null

@@ -26,6 +26,7 @@ import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
                                                             hang, vcat)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
+import           Ide.Plugin.Error
 import           Ide.Plugin.Fourmolu.Shim
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                 (makeDiffTextEdit)
@@ -64,7 +65,7 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
     useCLI <- liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #external plId properties
     if useCLI
         then liftIO
-            . fmap (join . first (mkError . show))
+            . fmap (join . first (PluginInternalError . T.pack . show))
             . try @IOException
             $ do
                 CLIVersionInfo{noCabal} <- do -- check Fourmolu version so that we know which flags to use
@@ -99,10 +100,10 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                         pure . Right $ InL $ makeDiffTextEdit contents out
                     ExitFailure n -> do
                         logWith recorder Info $ StdErr err
-                        pure . Left . responseError $ "Fourmolu failed with exit code " <> T.pack (show n)
+                        pure . Left . PluginInternalError $ "Fourmolu failed with exit code " <> T.pack (show n)
         else do
             let format fourmoluConfig =
-                    bimap (mkError . show) (InL . makeDiffTextEdit contents)
+                    bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
 #if MIN_VERSION_fourmolu(0,11,0)
                         <$> try @OrmoluException (ormolu config fp' contents)
 #else
@@ -134,13 +135,12 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                                 { _type_ = MessageType_Error
                                 , _message = errorMessage
                                 }
-                        return . Left $ responseError errorMessage
+                        return . Left $ PluginInternalError errorMessage
                       where
                         errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (showParseError err)
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
-    mkError = responseError . ("Fourmolu: " <>) . T.pack
     lspPrinterOpts = mempty{poIndentation = Just $ fromIntegral $ fo ^. tabSize}
     region = case typ of
         FormatText ->

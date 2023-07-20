@@ -7,6 +7,7 @@ import           Control.Lens
 import           Control.Monad.IO.Class
 import qualified Data.Text                     as T
 import           Development.IDE               hiding (pluginHandlers)
+import           Ide.Plugin.Error              (PluginError (PluginInternalError, PluginInvalidRequest))
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Protocol.Lens    as L
@@ -47,7 +48,7 @@ descriptor recorder plId =
 provider :: Recorder (WithPriority Log) -> FormattingHandler IdeState
 provider recorder _ (FormatRange _) _ _ _ = do
   logWith recorder Info LogInvalidInvocationInfo
-  pure $ Left (ResponseError (InR ErrorCodes_InvalidRequest) "You cannot format a text-range using cabal-fmt." Nothing)
+  pure $ Left (PluginInvalidRequest "You cannot format a text-range using cabal-fmt.")
 provider recorder _ide FormatText contents nfp opts = liftIO $ do
   let cabalFmtArgs = [fp, "--indent", show tabularSize]
   x <- findExecutable "cabal-fmt"
@@ -64,13 +65,13 @@ provider recorder _ide FormatText contents nfp opts = liftIO $ do
       case exitCode of
         ExitFailure code -> do
           log Error $ LogProcessInvocationFailure code
-          pure $ Left (ResponseError (InR ErrorCodes_UnknownErrorCode) "Failed to invoke cabal-fmt" Nothing)
+          pure $ Left (PluginInternalError "Failed to invoke cabal-fmt")
         ExitSuccess -> do
           let fmtDiff = makeDiffTextEdit contents (T.pack out)
           pure $ Right $ InL fmtDiff
     Nothing -> do
       log Error LogCabalFmtNotFound
-      pure $ Left (ResponseError (InR ErrorCodes_InvalidRequest) "No installation of cabal-fmt could be found. Please install it into your global environment." Nothing)
+      pure $ Left (PluginInternalError "No installation of cabal-fmt could be found. Please install it into your global environment.")
   where
     fp = fromNormalizedFilePath nfp
     tabularSize = opts ^. L.tabSize
