@@ -15,11 +15,13 @@ let
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
       apply-refact = hsuper.apply-refact_0_13_0_0;
 
+      fourmolu = dontCheck (hself.callCabal2nix "fourmolu" inputs.fourmolu-011 {});
+
       stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
 
       lsp = hself.callCabal2nix "lsp" inputs.lsp {};
       lsp-types = hself.callCabal2nix "lsp-types" inputs.lsp-types {};
-      lsp-test = hself.callCabal2nix "lsp-test" inputs.lsp-test {};
+      lsp-test = dontCheck (hself.callCabal2nix "lsp-test" inputs.lsp-test {});
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
