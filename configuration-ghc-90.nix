@@ -14,15 +14,11 @@ let
           doCheck = false;
         });
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
-      # ptr-poker breaks on MacOS without SSE2 optimizations
-      # https://github.com/nikita-volkov/ptr-poker/issues/11
-      ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
-
       Cabal = hself.Cabal_3_6_3_0;
 
       Cabal-syntax = hself.Cabal-syntax_3_8_1_0;
 
-      ghc-lib-parser = hself.callCabal2nix "ghc-lib-parser" inputs.ghc-lib-parser-94 {};
+      ghc-lib-parser = hsuper.ghc-lib-parser_9_4_5_20230430;
 
       lsp = hself.callCabal2nix "lsp" inputs.lsp {};
       lsp-types = hself.callCabal2nix "lsp-types" inputs.lsp-types {};
@@ -42,7 +38,7 @@ let
 
       ormolu = hself.callCabal2nix "ormolu" inputs.ormolu-052 {};
 
-      fourmolu = hself.callHackage "fourmolu" "0.10.1.0" {};
+      fourmolu = hsuper.fourmolu_0_10_1_0;
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
