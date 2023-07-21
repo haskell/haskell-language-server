@@ -88,6 +88,8 @@ import           Development.IDE.GHC.Warnings
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.Import.DependencyInformation
+import           Development.IDE.Import.FindImports
 import           GHC                               (ForeignHValue,
                                                     GetDocsFailure (..),
                                                     parsedSource)
@@ -132,6 +134,7 @@ import           GHC.Unit.Module.Warnings
 #else
 import           Development.IDE.Core.FileStore    (shareFilePath)
 #endif
+import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
 
 --Simple constants to make sure the source is consistently named
 sourceTypecheck :: T.Text
@@ -164,9 +167,10 @@ computePackageDeps env pkg = do
             T.pack $ "unknown package: " ++ show pkg]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
-newtype TypecheckHelpers
+data TypecheckHelpers
   = TypecheckHelpers
   { getLinkables       :: [NormalizedFilePath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
+  , getModuleGraph     :: IO DependencyInformation
   }
 
 typecheckModule :: IdeDefer
@@ -307,18 +311,28 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                                          map (Compat.installedModule (homeUnitId_ dflags)) $ nonDetEltsUniqSet mods_transitive
 #endif
 
-#if MIN_VERSION_ghc(9,3,0)
+#if MIN_VERSION_ghc(9,11,0)
+           ; moduleLocs <- getModuleGraph
+#elif MIN_VERSION_ghc(9,3,0)
            ; moduleLocs <- readIORef (fcModuleCache $ hsc_FC hsc_env)
 #else
            ; moduleLocs <- readIORef (hsc_FC hsc_env)
 #endif
-           ; lbs <- getLinkables [toNormalizedFilePath' file
+           ; lbs <- getLinkables [
+#if !MIN_VERSION_ghc(9,11,0)
+                                   toNormalizedFilePath'
+#endif
+                                    file
                                  | installedMod <- mods_transitive_list
+#if MIN_VERSION_ghc(9,11,0)
+                                 , let file = fromJust $ lookupModuleFile (installedMod { moduleUnit = RealUnit (Definite $ moduleUnit installedMod) }) moduleLocs
+#else
                                  , let ifr = fromJust $ lookupInstalledModuleEnv moduleLocs installedMod
                                        file = case ifr of
                                          InstalledFound loc _ ->
                                            fromJust $ ml_hs_file loc
                                          _ -> panic "hscCompileCoreExprHook: module not found"
+#endif
                                  ]
            ; let hsc_env' = loadModulesHome (map linkableHomeMod lbs) hsc_env
 
@@ -473,7 +487,13 @@ mkHiFileResultNoCompile session tcm = do
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
   iface' <- mkIfaceTc hsc_env_tmp sf details ms Nothing tcGblEnv
-  let iface = iface' { mi_globals = Nothing, mi_usages = filterUsages (mi_usages iface') } -- See Note [Clearing mi_globals after generating an iface]
+  let iface = iface' { mi_usages = filterUsages (mi_usages iface')
+#if MIN_VERSION_ghc(9,11,0)
+                     , mi_top_env = Nothing
+#else
+                     , mi_globals = Nothing
+#endif
+                     } -- See Note [Clearing mi_globals after generating an iface]
   pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 
 mkHiFileResultCompile
@@ -501,13 +521,22 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
 #if MIN_VERSION_ghc(9,3,0)
                                               ms
 #endif
+#if MIN_VERSION_ghc(9,11,0)
+                                              (tcg_import_decls (tmrTypechecked tcm))
+#endif
                                               simplified_guts
 
   final_iface' <- mkFullIface session partial_iface Nothing
 #if MIN_VERSION_ghc(9,4,2)
                     Nothing
 #endif
-  let final_iface = final_iface' {mi_globals = Nothing, mi_usages = filterUsages (mi_usages final_iface')} -- See Note [Clearing mi_globals after generating an iface]
+  let final_iface = final_iface' { mi_usages = filterUsages (mi_usages final_iface')
+#if MIN_VERSION_ghc(9,11,0)
+                                 , mi_top_env = Nothing
+#else
+                                 , mi_globals = Nothing
+#endif
+                                 } -- See Note [Clearing mi_globals after generating an iface]
 
   -- Write the core file now
   core_file <- do
@@ -515,7 +544,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
             core_file = codeGutsToCoreFile iface_hash guts
             iface_hash = getModuleHash final_iface
         core_hash1 <- atomicFileWrite se core_fp $ \fp ->
-          writeBinCoreFile fp core_file
+          writeBinCoreFile (hsc_dflags session) fp core_file
         -- We want to drop references to guts and read in a serialized, compact version
         -- of the core file from disk (as it is deserialised lazily)
         -- This is because we don't want to keep the guts in memory for every file in
@@ -1046,9 +1075,40 @@ handleGenerationErrors' dflags source action =
 -- Add the current ModSummary to the graph, along with the
 -- HomeModInfo's of all direct dependencies (by induction hypothesis all
 -- transitive dependencies will be contained in envs)
-mergeEnvs :: HscEnv -> ModuleGraph -> ModSummary -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
-mergeEnvs env mg ms extraMods envs = do
-#if MIN_VERSION_ghc(9,3,0)
+mergeEnvs :: HscEnv -> ModuleGraph -> DependencyInformation -> ModSummary -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
+mergeEnvs env mg dep_info ms extraMods envs = do
+#if MIN_VERSION_ghc(9,11,0)
+    return $! loadModulesHome extraMods $
+      let newHug = foldl' mergeHUG (hsc_HUG env) (map hsc_HUG envs) in
+      (hscUpdateHUG (const newHug) env){
+          hsc_mod_graph = mg,
+          hsc_FC = (hsc_FC env)
+            { addToFinderCache = \im val ->
+                  if moduleUnit im `elem` hsc_all_home_unit_ids env
+                  then pure ()
+                  else addToFinderCache (hsc_FC env) im val
+            , lookupFinderCache = \im ->
+                  if moduleUnit im `elem` hsc_all_home_unit_ids env
+                  then case lookupModuleFile (im { moduleUnit = RealUnit (Definite $ moduleUnit im) }) dep_info of
+                         Nothing -> pure Nothing
+                         Just fs -> let ml = fromJust $ do
+                                          id <- lookupPathToId (depPathIdMap dep_info) fs
+                                          artifactModLocation (idToModLocation (depPathIdMap dep_info) id)
+                                    in pure $ Just $ InstalledFound ml im
+                  else lookupFinderCache (hsc_FC env) im
+            }
+      }
+
+    where
+        mergeHUG (UnitEnvGraph a) (UnitEnvGraph b) = UnitEnvGraph $ Map.unionWith mergeHUE a b
+        mergeHUE a b = a { homeUnitEnv_hpt = mergeUDFM (homeUnitEnv_hpt a) (homeUnitEnv_hpt b) }
+        mergeUDFM = plusUDFM_C combineModules
+
+        combineModules a b
+          | HsSrcFile <- mi_hsc_src (hm_iface a) = a
+          | otherwise = b
+
+#elif MIN_VERSION_ghc(9,3,0)
     let im  = Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms) (moduleName (ms_mod ms))
         ifr = InstalledFound (ms_location ms) im
         curFinderCache = Compat.extendInstalledModuleEnv Compat.emptyInstalledModuleEnv im ifr
@@ -1421,6 +1481,7 @@ data RecompilationInfo m
   , get_file_version :: NormalizedFilePath -> m (Maybe FileVersion)
   , get_linkable_hashes :: [NormalizedFilePath] -> m [BS.ByteString]
   , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
+  , get_module_graph :: m DependencyInformation
   }
 
 -- | Either a regular GHC linkable or a core file that
@@ -1511,7 +1572,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
                    | not (mi_used_th iface) = emptyModuleEnv
                    | otherwise = parseRuntimeDeps (md_anns details)
              -- Peform the fine grained recompilation check for TH
-             maybe_recomp <- checkLinkableDependencies session get_linkable_hashes runtime_deps
+             maybe_recomp <- checkLinkableDependencies session get_linkable_hashes get_module_graph runtime_deps
              case maybe_recomp of
                Just msg -> do_regenerate msg
                Nothing
@@ -1548,8 +1609,12 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
 -- See Note [Recompilation avoidance in the presence of TH]
-checkLinkableDependencies :: MonadIO m => HscEnv -> ([NormalizedFilePath] -> m [BS.ByteString]) -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
-checkLinkableDependencies hsc_env get_linkable_hashes runtime_deps = do
+checkLinkableDependencies :: MonadIO m => HscEnv -> ([NormalizedFilePath] -> m [BS.ByteString]) -> (m DependencyInformation) -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
+checkLinkableDependencies hsc_env get_linkable_hashes get_module_graph runtime_deps = do
+#if MIN_VERSION_ghc(9,11,0)
+  graph <- get_module_graph
+  let go (mod, hash) = (,hash) <$> lookupModuleFile mod graph
+#else
 #if MIN_VERSION_ghc(9,3,0)
   moduleLocs <- liftIO $ readIORef (fcModuleCache $ hsc_FC hsc_env)
 #else
@@ -1562,6 +1627,7 @@ checkLinkableDependencies hsc_env get_linkable_hashes runtime_deps = do
             hs <- ml_hs_file loc
             pure (toNormalizedFilePath' hs,hash)
           _ -> Nothing
+#endif
       hs_files = mapM go (moduleEnvToList runtime_deps)
   case hs_files of
     Nothing -> error "invalid module graph"

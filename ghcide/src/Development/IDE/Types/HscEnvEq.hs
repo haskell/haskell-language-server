@@ -31,6 +31,9 @@ import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
 import           Ide.PluginUtils                 (toAbsolute)
 import           OpenTelemetry.Eventlog          (withSpan)
 import           System.FilePath
+import qualified Data.Map as M
+import Data.IORef
+import           GHC.Driver.Env                      (hsc_all_home_unit_ids)
 
 -- | An 'HscEnv' with equality. Two values are considered equal
 --   if they are created with the same call to 'newHscEnvEq' or
@@ -70,10 +73,34 @@ newHscEnvEq root cradlePath hscEnv0 deps = do
     newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) hscEnv deps
 
 newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
+newHscEnvEqWithImportPaths envImportPaths hscEnv' deps = do
+
+    mod_cache <- newIORef emptyInstalledModuleEnv
+    file_cache <- newIORef M.empty
+    let hscEnv = hscEnv'
+               { hsc_FC = FinderCache -- For non-home modules
+                        { flushFinderCaches = \_ -> error "GHC should never call flushFinderCaches outside the driver"
+                        , addToFinderCache  = \im val -> do
+                            if moduleUnit im `elem` hsc_all_home_unit_ids hscEnv'
+                            then error "tried to add home module to FC"
+                            else atomicModifyIORef' mod_cache $ \c -> (extendInstalledModuleEnv c im val, ())
+                        , lookupFinderCache = \im -> do
+                            if moduleUnit im `elem` hsc_all_home_unit_ids hscEnv'
+                            then error "tried to lookup home module from FC"
+                            else lookupInstalledModuleEnv <$> readIORef mod_cache <*> pure im
+                        , lookupFileCache = \key -> do
+                            c <- readIORef file_cache
+                            case M.lookup key c of
+                              Nothing -> do
+                                -- todo, this is probably wrong, but its only called for objects file from other packages, so it might be fine
+                                hash <- Maybes.getFileHash key
+                                atomicModifyIORef' file_cache $ \c -> (M.insert key hash c, ())
+                                return hash
+                              Just fp -> return fp
+                        }
+                }
 
     let dflags = hsc_dflags hscEnv
-
     envUnique <- Unique.newUnique
 
     -- it's very important to delay the package exports computation

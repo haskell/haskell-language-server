@@ -675,6 +675,7 @@ typeCheckRuleDefinition hsc pm = do
   unlift <- askUnliftIO
   let dets = TypecheckHelpers
            { getLinkables = unliftIO unlift . uses_ GetLinkable
+           , getModuleGraph = unliftIO unlift (useNoFile_ GetModuleGraph)
            }
   addUsageDependencies $ liftIO $
     typecheckModule defer hsc dets pm
@@ -795,7 +796,8 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
 #endif
                 liftIO $ evaluate $ liftRnf rwhnf module_graph_nodes
                 return $ mkModuleGraph module_graph_nodes
-            session' <- liftIO $ mergeEnvs hsc mg ms inLoadOrder depSessions
+            de <- useNoFile_ GetModuleGraph
+            session' <- liftIO $ mergeEnvs hsc mg de ms inLoadOrder depSessions
 
             -- Here we avoid a call to to `newHscEnvEqWithImportPaths`, which creates a new
             -- ExportsMap when it is called. We only need to create the ExportsMap once per
@@ -824,6 +826,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             , old_value = m_old
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
             , get_linkable_hashes = \fs -> map (snd . fromJust . hirCoreFp) <$> uses_ GetModIface fs
+            , get_module_graph = useNoFile_ GetModuleGraph
             , regenerate = regenerateHiFile session f ms
             }
       r <- loadInterface (hscEnv session) ms linkableType recompInfo

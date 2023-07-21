@@ -564,8 +564,14 @@ import           GHC.Utils.TmpFs
 import           GHC.Types.Avail             (greNamePrintableName)
 #endif
 
+#if MIN_VERSION_ghc(9,11,0)
+import System.OsString
+#endif
+
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
-#if MIN_VERSION_ghc(9,3,0)
+#if MIN_VERSION_ghc(9,11,0)
+mkHomeModLocation df mn f = pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn (unsafeEncodeUtf f)
+#elif MIN_VERSION_ghc(9,3,0)
 mkHomeModLocation df mn f = pure $ GHC.mkHomeModLocation (GHC.initFinderOpts df) mn f
 #else
 mkHomeModLocation = GHC.mkHomeModLocation
