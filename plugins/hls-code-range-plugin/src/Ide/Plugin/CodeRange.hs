@@ -69,28 +69,20 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
     }
 
 data Log = LogRules Rules.Log
-         | forall rule. Show rule => LogBadDependency rule
 
 instance Pretty Log where
     pretty log = case log of
         LogRules codeRangeLog -> pretty codeRangeLog
-        LogBadDependency rule -> pretty $ "bad dependency: " <> show rule
 
 foldingRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentFoldingRange
 foldingRangeHandler recorder ide _ FoldingRangeParams{..} =
-    pluginResponseM handleErrors $ do
+    runExceptT $ do
         filePath <- getNormalizedFilePathE uri
         foldingRanges <- runActionE "FoldingRange" ide $ getFoldingRanges filePath
         pure . InL $ foldingRanges
   where
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument
-
-    handleErrors = \case
-        RuleFailed rule -> do
-            logWith recorder Warning $ LogBadDependency rule
-            pure $ Right $ InL []
-        errs -> pure $ Left errs
 
 getFoldingRanges :: NormalizedFilePath -> ExceptT PluginError Action [FoldingRange]
 getFoldingRanges file = do
@@ -99,8 +91,8 @@ getFoldingRanges file = do
 
 selectionRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentSelectionRange
 selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
-    pluginResponseM handleErrors $ do
-        filePath <- withError GhcidePluginErrors $ getNormalizedFilePathE uri
+   runExceptT $ do
+        filePath <- getNormalizedFilePathE uri
         fmap  id . runIdeAction' $ getSelectionRanges filePath positions
   where
     uri :: Uri
@@ -109,39 +101,17 @@ selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
     positions :: [Position]
     positions = _positions
 
-    runIdeAction' :: MonadIO m => ExceptT SelectionRangeError IdeAction ([SelectionRange] |? Null) -> ExceptT SelectionRangeError m ([SelectionRange] |? Null)
+    runIdeAction' :: MonadIO m => ExceptT PluginError IdeAction ([SelectionRange] |? Null) -> ExceptT PluginError m ([SelectionRange] |? Null)
     runIdeAction' action = runIdeActionE "SelectionRange" (shakeExtras ide) action
 
-    handleErrors ::
-        MonadIO m =>
-        SelectionRangeError ->
-        m (Either PluginError ([a] |? Null))
-    handleErrors err = case err of
-        SelectionRangeBadDependency rule -> do
-            logWith recorder Warning $ LogBadDependency rule
-            -- This might happen if the HieAst is not ready,
-            -- so we give it a default value instead of throwing an error
-            pure $ Right $ InL []
-        SelectionRangeInputPositionMappingFailure ->
-            pure $ Left $ PluginInternalError "failed to apply position mapping to input positions"
-        SelectionRangeOutputPositionMappingFailure ->
-            pure $ Left $ PluginInternalError "failed to apply position mapping to output positions"
-        GhcidePluginErrors ghcidePluginError ->
-            pure $ Left $ ghcidePluginError
 
 
-data SelectionRangeError = forall rule. Show rule => SelectionRangeBadDependency rule
-                         | SelectionRangeInputPositionMappingFailure
-                         | SelectionRangeOutputPositionMappingFailure
-                         | GhcidePluginErrors PluginError
-
-getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT SelectionRangeError IdeAction ([SelectionRange] |? Null)
+getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT PluginError IdeAction ([SelectionRange] |? Null)
 getSelectionRanges file positions = do
-    (codeRange, positionMapping) <- withError (\_ -> SelectionRangeBadDependency GetCodeRange) $
-        useWithStaleFastE GetCodeRange file
+    (codeRange, positionMapping) <- useWithStaleFastE GetCodeRange file
     -- 'positionMapping' should be applied to the input before using them
-    positions' <- maybeToExceptT SelectionRangeInputPositionMappingFailure . MaybeT . pure $
-        traverse (fromCurrentPosition positionMapping) positions
+    positions' <-
+        traverse (fromCurrentPositionE positionMapping) positions
 
     let selectionRanges = flip fmap positions' $ \pos ->
             -- We need a default selection range if the lookup fails,
@@ -150,7 +120,7 @@ getSelectionRanges file positions = do
              in fromMaybe defaultSelectionRange . findPosition pos $ codeRange
 
     -- 'positionMapping' should be applied to the output ranges before returning them
-    maybeToExceptT SelectionRangeOutputPositionMappingFailure . MaybeT . pure $
+    maybeToExceptT PluginPositionMappingFailed . MaybeT . pure $
         InL <$> traverse (toCurrentSelectionRange positionMapping) selectionRanges
 
 -- | Find 'Position' in 'CodeRange'. This can fail, if the given position is not covered by the 'CodeRange'.

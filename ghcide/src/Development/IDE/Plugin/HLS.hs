@@ -32,7 +32,7 @@ import           Development.IDE.Graph         (Rules)
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
 import qualified Development.IDE.Plugin        as P
-import           Development.IDE.Types.Logger  hiding (Error)
+import           Development.IDE.Types.Logger
 import           Ide.Plugin.Config
 import           Ide.Plugin.Error
 import           Ide.PluginUtils               (getClientConfig)
@@ -44,7 +44,7 @@ import qualified Language.LSP.Server           as LSP
 import           Language.LSP.VFS
 import           Prettyprinter.Render.String   (renderString)
 import           Text.Regex.TDFA.Text          ()
-import           UnliftIO                      (MonadUnliftIO)
+import           UnliftIO                      (MonadUnliftIO, liftIO)
 import           UnliftIO.Async                (forConcurrently)
 import           UnliftIO.Exception            (catchAny)
 
@@ -54,20 +54,36 @@ import           UnliftIO.Exception            (catchAny)
 data Log
     =  LogPluginError PluginId PluginError
     | LogResponseError PluginId ResponseError
+    | LogPositionMappingFailed (NE.NonEmpty PluginId)
+    | LogRequestRefused (NE.NonEmpty PluginId)
+    | LogRuleFailed (NE.NonEmpty (T.Text, NE.NonEmpty PluginId))
     | LogNoPluginForMethod (Some SMethod)
     | LogInvalidCommandIdentifier
     | ExceptionInPlugin PluginId (Some SMethod) SomeException
 
 instance Pretty Log where
   pretty = \case
-    LogPluginError (PluginId pId) err -> pretty pId <> ":" <+> pretty err
-    LogResponseError (PluginId pId) err -> pretty pId <> ":" <+> prettyResponseError err
+    LogPluginError (PluginId pId) err ->
+      pretty pId <> ":" <+> pretty err
+    LogResponseError (PluginId pId) err ->
+      pretty pId <> ":" <+> prettyResponseError err
     LogNoPluginForMethod (Some method) ->
         "No plugin enabled for " <> pretty (show method)
     LogInvalidCommandIdentifier-> "Invalid command identifier"
     ExceptionInPlugin plId (Some method) exception ->
-        "Exception in plugin " <> viaShow plId <> " while processing "<> viaShow method <> ": " <> viaShow exception
-
+        "Exception in plugin " <> viaShow plId <> " while processing "
+          <> viaShow method <> ": " <> viaShow exception
+    LogPositionMappingFailed (toList -> xs) ->
+      "Position Mapping failed for the following plugins:"
+        <+> hsep (punctuate comma (pretty . unwrapPlId <$> xs))
+    LogRequestRefused (toList -> xs) ->
+      "Handlers from the following plugins refused requests:"
+        <+> hsep (punctuate comma (pretty . unwrapPlId <$> xs))
+    LogRuleFailed (toList -> xs) ->
+      let prettyRule (plId, (toList -> xs)) = pretty plId <> ":" <+> hsep (punctuate comma (pretty . unwrapPlId <$> xs))
+      in "The following rules and dependent plugins failed:"
+           <+> hsep (punctuate semi (prettyRule <$> xs))
+    where unwrapPlId (PluginId plId) = plId
 instance Show Log where show = renderString . layoutCompact . pretty
 
 -- various error message specific builders
@@ -79,7 +95,7 @@ prettyResponseError err = errorCode <> ":" <+> errorBody
 
 pluginNotEnabled :: SMethod m -> [(PluginId, b, a)] -> Text
 pluginNotEnabled method availPlugins =
-    "No plugin enabled for " <> T.pack (show method) <> ", available: "
+    "No plugin enabled for " <> T.pack (show method) <> ", Potentially available: "
         <> (T.intercalate ", " $ map (\(PluginId plid, _, _) -> plid) availPlugins)
 
 pluginDoesntExist :: PluginId -> Text
@@ -215,8 +231,9 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
           Nothing -> logAndReturnError recorder p (InR ErrorCodes_InvalidRequest) (commandDoesntExist com p xs)
           Just (PluginCommand _ _ f) -> case A.fromJSON arg of
             A.Error err -> logAndReturnError recorder p (InR ErrorCodes_InvalidParams) (failedToParseArgs com p err arg)
-            A.Success a ->
-                (first toResponseError <$> f ide a) `catchAny` -- See Note [Exception handling in plugins]
+            A.Success a -> do
+              caps <- LSP.getClientCapabilities
+              (first (toResponseError caps . (p,)) <$> f ide a) `catchAny` -- See Note [Exception handling in plugins]
                 (\e -> logAndReturnError' recorder (InR ErrorCodes_InternalError) (ExceptionInPlugin p (Some SMethod_WorkspaceApplyEdit) e))
 
 -- ---------------------------------------------------------------------
@@ -239,22 +256,29 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
         let fs = filter (\(_, desc, _) -> pluginEnabled m params desc config) fs'
         -- Clients generally don't display ResponseErrors so instead we log any that we come across
         case nonEmpty fs of
-          Nothing -> do
-            logWith recorder Warning (LogNoPluginForMethod $ Some m)
-            let err = ResponseError (InR ErrorCodes_InvalidRequest) msg Nothing
-                msg = pluginNotEnabled m fs'
-            return $ Left err
+          Nothing -> liftIO $ noPluginEnabled m fs'
           Just fs -> do
             let  handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
             es <- runConcurrently exceptionInPlugin m handlers ide params
-
+            caps <- LSP.getClientCapabilities
             let (errs,succs) = partitionEithers $ toList $ join $ NE.zipWith (\(pId,_) -> fmap (first (pId,))) handlers es
-            unless (null errs) $ logErrors recorder errs
+            liftIO $ unless (null errs) $ logErrors recorder errs
             case nonEmpty succs of
-              Nothing -> pure $ Left $ combineErrors errs
+              Nothing -> do
+                let noRefused (_, PluginRequestRefused) = False
+                    noRefused (_, _)                    = True
+                    filteredErrs = filter noRefused errs
+                case nonEmpty filteredErrs of
+                  Nothing -> liftIO $ noPluginEnabled m fs'
+                  Just xs -> pure $ Left $ combineErrors caps xs
               Just xs -> do
-                caps <- LSP.getClientCapabilities
                 pure $ Right $ combineResponses m config caps params xs
+    noPluginEnabled :: SMethod m -> [(PluginId, b, a)] -> IO (Either ResponseError c)
+    noPluginEnabled m fs' = do
+      logWith recorder Warning (LogNoPluginForMethod $ Some m)
+      let err = ResponseError (InR ErrorCodes_InvalidRequest) msg Nothing
+          msg = pluginNotEnabled m fs'
+      return $ Left err
 
 -- ---------------------------------------------------------------------
 
@@ -299,21 +323,80 @@ runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedPro
   f a b  -- See Note [Exception handling in plugins]
      `catchAny` (\e -> pure $ pure $ Left $ PluginInternalError (msg pid method e))
 
-combineErrors :: [(PluginId, PluginError)] -> ResponseError
-combineErrors [x] = toResponseError (snd x)
-combineErrors xs  = ResponseError (InR ErrorCodes_InternalError) (T.pack (show (pretty (snd <$> xs)))) Nothing
+combineErrors :: ClientCapabilities -> NonEmpty (PluginId, PluginError) -> ResponseError
+combineErrors caps (x NE.:| []) = toResponseError caps x
+combineErrors caps (toList -> xs)  =
+  case filter (isPrecedence1 . snd) xs of
+    (x: _) -> toResponseError caps x
+    _ -> case filter (isPrecedence2 . snd) xs of
+          (x: _) -> toResponseError caps x
+          _ -> case filter (isPrecedence3 . snd) xs of
+                (x: _) -> toResponseError caps x
+                _ -> ResponseError (InR ErrorCodes_InternalError) "Something impossible happened: No error left to return" Nothing
+  where isPrecedence1 :: PluginError -> Bool
+        isPrecedence1 (PluginInternalError _) = True
+        isPrecedence1 _                       = False
+        isPrecedence2 :: PluginError -> Bool
+        isPrecedence2 (PluginInvalidRequest _) = True
+        isPrecedence2 (PluginInvalidParams _)  = True
+        isPrecedence2 (PluginParseError _)     = True
+        isPrecedence2 _                        = False
+        isPrecedence3 :: PluginError -> Bool
+        isPrecedence3 PluginPositionMappingFailed = True
+        isPrecedence3 (PluginRuleFailed _)        = True
+        isPrecedence3 PluginStaleResolve          = True
+        isPrecedence3 _                           = False
 
-toResponseError :: PluginError -> ResponseError
-toResponseError (PluginInternalError msg) = ResponseError (InR ErrorCodes_InternalError) msg Nothing
-toResponseError PluginStaleResolve = ResponseError (InL LSPErrorCodes_ContentModified) "" Nothing
-toResponseError (PluginInvalidParams msg) = ResponseError (InR ErrorCodes_InvalidParams) msg Nothing
-toResponseError (PluginParseError msg) = ResponseError (InR ErrorCodes_ParseError) msg Nothing
-toResponseError (FastRuleNotReady a) = ResponseError (InL LSPErrorCodes_ServerCancelled) (T.pack $ "FastRuleNotReady: " <> show a) Nothing
-toResponseError (RuleFailed a) = ResponseError (InL LSPErrorCodes_ServerCancelled) (T.pack $ "RuleFailed: " <> show a) Nothing
 
-logErrors :: Recorder (WithPriority Log) -> [(PluginId, PluginError)] -> LSP.LspT Config IO ()
-logErrors recorder errs = forM_ errs $ \(pId, err) ->
-                logWith recorder Warning $ LogPluginError pId err
+toResponseError :: ClientCapabilities -> (PluginId, PluginError) -> ResponseError
+toResponseError _ (plId, PluginInternalError msg) = ResponseError (InR ErrorCodes_InternalError) msg Nothing
+toResponseError _ (plId, PluginInvalidParams msg) = ResponseError (InR ErrorCodes_InvalidParams) msg Nothing
+toResponseError _ (plId, PluginInvalidRequest msg) = ResponseError (InR ErrorCodes_InvalidRequest) msg Nothing
+toResponseError _ (plId, PluginParseError msg) = ResponseError (InR ErrorCodes_ParseError) msg Nothing
+toResponseError caps (plId, PluginPositionMappingFailed) = ResponseError (InL LSPErrorCodes_ContentModified) "" Nothing
+toResponseError _ (plId, PluginRequestRefused) = ResponseError (InR ErrorCodes_InvalidRequest) "No plugins enabled for this request" Nothing
+toResponseError caps (plId, PluginRuleFailed a) = ResponseError (InL LSPErrorCodes_ServerCancelled) (T.pack $ "RuleFailed: " <> show a) Nothing
+toResponseError _ (plId, PluginStaleResolve) = ResponseError (InL LSPErrorCodes_ContentModified) "" Nothing
+
+logErrors :: Recorder (WithPriority Log) -> [(PluginId, PluginError)] -> IO ()
+logErrors recorder errs = do
+  forM_ errs $ \(pId, err) ->
+                logIndividualErrors pId err
+  logPositionMappingFailed errs
+  logRequestRefused errs
+  logRuleFailed errs
+  where logIndividualErrors plId err@(PluginInternalError _) =
+          logWith recorder Error $ LogPluginError plId err
+        logIndividualErrors plId err@(PluginInvalidParams _) =
+          logWith recorder Warning $ LogPluginError plId err
+        logIndividualErrors plId err@(PluginInvalidRequest _) =
+          logWith recorder Warning $ LogPluginError plId err
+        logIndividualErrors plId err@(PluginParseError _) =
+          logWith recorder Warning $ LogPluginError plId err
+        logIndividualErrors plId err@PluginStaleResolve =
+          logWith recorder Info $ LogPluginError plId err
+        logIndividualErrors _ _ = pure ()
+        logPositionMappingFailed errs = do
+          let pmfErrs = [plId
+                        | (plId, PluginPositionMappingFailed) <- errs]
+          case nonEmpty pmfErrs of
+            Nothing -> pure ()
+            Just xs -> logWith recorder Info $ LogPositionMappingFailed xs
+        logRequestRefused errs = do
+          let rrErrs = [plId
+                        | (plId, PluginRequestRefused) <- errs]
+          case nonEmpty rrErrs of
+            Nothing -> pure ()
+            Just xs -> logWith recorder Info $ LogRequestRefused xs
+        logRuleFailed errs = do
+          let rfErrs = [(plId, rule)
+                        | (plId, PluginRuleFailed rule) <- errs]
+          case nonEmpty $ NE.groupAllWith fst rfErrs of
+            Nothing -> pure ()
+            Just xs -> do
+              let setify xs@(x NE.:| _) = (snd x, fst <$> xs)
+                  sxs = setify <$> xs
+              logWith recorder Info $ LogRuleFailed sxs
 
 
 -- | Combine the 'PluginHandler' for all plugins

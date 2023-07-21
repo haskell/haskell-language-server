@@ -56,20 +56,20 @@ toGADTSyntaxCommandId = "GADT.toGADT"
 -- | A command replaces H98 data decl with GADT decl in place
 toGADTCommand :: PluginId -> CommandFunction IdeState ToGADTParams
 toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = pluginResponseM handleGhcidePluginError $ do
-    nfp <- withError (GhcidePluginErrors) $ getNormalizedFilePathE uri
+    nfp <- withExceptT (GhcidePluginErrors) $ getNormalizedFilePathE uri
     (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
     (L ann decl) <- case decls of
         [d] -> pure d
         _   -> throwE $ UnexpectedNumberOfDeclarations (Prelude.length decls)
-    deps <- withError GhcidePluginErrors
+    deps <- withExceptT GhcidePluginErrors
         $ runActionE (T.unpack pId' <> ".GhcSessionDeps") state
         $ useE GhcSessionDeps nfp
     (hsc_dflags . hscEnv -> df) <- pure deps
-    txt <- withError (PrettyGadtError . T.pack) $ liftEither $ T.pack <$> (prettyGADTDecl df . h98ToGADTDecl) decl
+    txt <- withExceptT (PrettyGadtError . T.pack) $ liftEither $ T.pack <$> (prettyGADTDecl df . h98ToGADTDecl) decl
     range <- liftEither
         $ maybeToEither FailedToFindDataDeclRange
         $ srcSpanToRange $ locA ann
-    pragma <- withError GhcidePluginErrors $ getFirstPragma pId state nfp
+    pragma <- withExceptT GhcidePluginErrors $ getFirstPragma pId state nfp
     let insertEdit = [insertNewPragma pragma GADTs | all (`notElem` exts) [GADTSyntax, GADTs]]
 
     _ <- lift $ sendRequest
@@ -87,7 +87,7 @@ toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = pluginResponseM handl
 
 codeActionHandler :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionHandler state plId (CodeActionParams _ _ doc range _) = pluginResponseM handleGhcidePluginError $ do
-    nfp <- withError (GhcidePluginErrors) $ getNormalizedFilePathE (doc ^. L.uri)
+    nfp <- withExceptT (GhcidePluginErrors) $ getNormalizedFilePathE (doc ^. L.uri)
     (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
     let actions = map (mkAction . printOutputable . tcdLName . unLoc) inRangeH98Decls
     pure $ InL actions
@@ -114,7 +114,7 @@ getInRangeH98DeclsAndExts :: (MonadIO m) =>
     -> NormalizedFilePath
     -> ExceptT GadtPluginError m ([LTyClDecl GP], [Extension])
 getInRangeH98DeclsAndExts state range nfp = do
-    pm <- withError GhcidePluginErrors
+    pm <- withExceptT GhcidePluginErrors
         $ runActionE "GADT.GetParsedModuleWithComments" state
         $ useE GetParsedModuleWithComments nfp
     let (L _ hsDecls) = hsmodDecls <$> pm_parsed_source pm

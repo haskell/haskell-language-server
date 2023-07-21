@@ -348,7 +348,7 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
 
   extras@ShakeExtras{ withHieDb, hiedbWriter } <- liftIO $ runAction "" state getShakeExtras
 
-  range <- handleMaybe (PluginBadDependency "retire:fromCurrentRange") $ fromCurrentRange posMapping range
+  range <- fromCurrentRangeE posMapping range
   let pos = range ^. L.start
   let rewrites =
         concatMap (suggestBindRewrites uri pos ms_mod) topLevelBinds

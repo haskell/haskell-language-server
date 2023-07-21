@@ -19,6 +19,7 @@ import qualified Data.HashSet                             as Set
 import           Data.Maybe
 import qualified Data.Text                                as T
 import           Development.IDE.Core.Compile
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service             hiding (Log, LogShake)
@@ -121,45 +122,42 @@ dropListFromImportDecl iDecl = let
     in f <$> iDecl
 
 resolveCompletion :: ResolveFunction IdeState CompletionResolveData 'Method_CompletionItemResolve
-resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} uri (CompletionResolveData _ needType (NameDetails mod occ))
-  |  Just file <- uriToNormalizedFilePath $ toNormalizedUri uri
-  = liftIO $ runIdeAction "Completion resolve" (shakeExtras ide) $ do
-    msess <- useWithStaleFast GhcSessionDeps file
-    case msess of
-      Nothing -> pure (Right comp) -- File doesn't compile, return original completion item
-      Just (sess,_) -> do
-        let nc = ideNc $ shakeExtras ide
+resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} uri (CompletionResolveData _ needType (NameDetails mod occ)) =
+  runExceptT $ do
+    file <- getNormalizedFilePathE uri
+    (sess,_) <- withExceptT (const PluginStaleResolve)
+                  $ runIdeActionE "CompletionResolve.GhcSessionDeps" (shakeExtras ide)
+                  $ useWithStaleFastE GhcSessionDeps file
+    let nc = ideNc $ shakeExtras ide
 #if MIN_VERSION_ghc(9,3,0)
-        name <- liftIO $ lookupNameCache nc mod occ
+    name <- liftIO $ lookupNameCache nc mod occ
 #else
-        name <- liftIO $ upNameCache nc (lookupNameCache mod occ)
+    name <- liftIO $ upNameCache nc (lookupNameCache mod occ)
 #endif
-        mdkm <- useWithStaleFast GetDocMap file
-        let (dm,km) = case mdkm of
-              Just (DKMap dm km, _) -> (dm,km)
-              Nothing               -> (mempty, mempty)
-        doc <- case lookupNameEnv dm name of
-          Just doc -> pure $ spanDocToMarkdown doc
-          Nothing -> liftIO $ spanDocToMarkdown <$> getDocumentationTryGhc (hscEnv sess) name
-        typ <- case lookupNameEnv km name of
-          _ | not needType -> pure Nothing
-          Just ty -> pure (safeTyThingType ty)
-          Nothing -> do
-            (safeTyThingType =<<) <$> liftIO (lookupName (hscEnv sess) name)
-        let det1 = case typ of
-              Just ty -> Just (":: " <> printOutputable (stripForall ty) <> "\n")
-              Nothing -> Nothing
-            doc1 = case _documentation of
-              Just (InR (MarkupContent MarkupKind_Markdown old)) ->
-                InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator (old:doc)
-              _ -> InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator doc
-        pure (Right $ comp & L.detail .~ (det1 <> _detail)
-                           & L.documentation .~ Just doc1
-                           )
+    mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap file
+    let (dm,km) = case mdkm of
+          Just (DKMap dm km, _) -> (dm,km)
+          Nothing               -> (mempty, mempty)
+    doc <- case lookupNameEnv dm name of
+      Just doc -> pure $ spanDocToMarkdown doc
+      Nothing -> liftIO $ spanDocToMarkdown <$> getDocumentationTryGhc (hscEnv sess) name
+    typ <- case lookupNameEnv km name of
+      _ | not needType -> pure Nothing
+      Just ty -> pure (safeTyThingType ty)
+      Nothing -> do
+        (safeTyThingType =<<) <$> liftIO (lookupName (hscEnv sess) name)
+    let det1 = case typ of
+          Just ty -> Just (":: " <> printOutputable (stripForall ty) <> "\n")
+          Nothing -> Nothing
+        doc1 = case _documentation of
+          Just (InR (MarkupContent MarkupKind_Markdown old)) ->
+            InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator (old:doc)
+          _ -> InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator doc
+    pure  (comp & L.detail .~ (det1 <> _detail)
+                & L.documentation .~ Just doc1)
   where
     stripForall ty = case splitForAllTyCoVars ty of
       (_,res) -> res
-resolveCompletion _ _ _ _ _ = pure $ Left $ PluginInvalidParams "Unable to get normalized file path for url"
 
 -- | Generate code actions.
 getCompletionsLSP :: PluginMethodHandler IdeState 'Method_TextDocumentCompletion

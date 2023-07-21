@@ -33,26 +33,26 @@ runActionE herald ide act =
   hoistExceptT . ExceptT $
     join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runExceptT act)
 
-runActionMaybeT :: MonadIO m => String -> IdeState -> MaybeT Action a -> MaybeT m a
-runActionMaybeT herald ide act =
+runActionMT :: MonadIO m => String -> IdeState -> MaybeT Action a -> MaybeT m a
+runActionMT herald ide act =
   hoistMaybeT . MaybeT $
     join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runMaybeT act)
 
 -- | useE is useful to implement functions that aren’t rules but need shortcircuiting
 -- e.g. getDefinition.
 useE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError Action v
-useE k = maybeToExceptT (RuleFailed k) . useMaybeT k
+useE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . useMaybeT k
 
 useMaybeT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT Action v
 useMaybeT k = MaybeT . Shake.use k
 
 useWithStaleE :: IdeRule k v
     => k -> NormalizedFilePath -> ExceptT PluginError Action (v, PositionMapping)
-useWithStaleE key = maybeToExceptT (FastRuleNotReady key) . useWithStaleMaybeT key
+useWithStaleE key = maybeToExceptT (PluginRuleFailed (T.pack $ show key)) . useWithStaleMT key
 
-useWithStaleMaybeT :: IdeRule k v
+useWithStaleMT :: IdeRule k v
     => k -> NormalizedFilePath -> MaybeT Action (v, PositionMapping)
-useWithStaleMaybeT key file = MaybeT $ runIdentity <$> Shake.usesWithStale key (Identity file)
+useWithStaleMT key file = MaybeT $ runIdentity <$> Shake.usesWithStale key (Identity file)
 
 hoistAction :: Action a -> ExceptT e Action a
 hoistAction = ExceptT . fmap Right
@@ -67,13 +67,45 @@ runIdeActionE _herald s i = ExceptT $ liftIO $ runReaderT (Shake.runIdeActionT $
 -- | useE is useful to implement functions that aren’t rules but need shortcircuiting
 -- e.g. getDefinition.
 useWithStaleFastE :: IdeRule k v => k -> NormalizedFilePath -> ExceptT PluginError IdeAction (v, PositionMapping)
-useWithStaleFastE k = maybeToExceptT (RuleFailed k) . useWithStaleFastMaybeT k
+useWithStaleFastE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . useWithStaleFastMT k
 
-useWithStaleFastMaybeT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT IdeAction (v, PositionMapping)
-useWithStaleFastMaybeT k = MaybeT . Shake.useWithStaleFast k
+useWithStaleFastMT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT IdeAction (v, PositionMapping)
+useWithStaleFastMT k = MaybeT . Shake.useWithStaleFast k
+
+-- ----------------------------------------------------------------------------
+-- Location wrappers
+-- ----------------------------------------------------------------------------
 
 uriToFilePathE :: Monad m => LSP.Uri -> ExceptT PluginError m FilePath
-uriToFilePathE uri = maybeToExceptT (PluginInvalidParams (T.pack $ "uriToFilePath' failed. Uri:" <>  show uri)) $ uriToFilePathMaybeT uri
+uriToFilePathE uri = maybeToExceptT (PluginInvalidParams (T.pack $ "uriToFilePath' failed. Uri:" <>  show uri)) $ uriToFilePathMT uri
 
-uriToFilePathMaybeT :: Monad m => LSP.Uri -> MaybeT m FilePath
-uriToFilePathMaybeT = MaybeT . pure . Location.uriToFilePath'
+uriToFilePathMT :: Monad m => LSP.Uri -> MaybeT m FilePath
+uriToFilePathMT = MaybeT . pure . Location.uriToFilePath'
+
+-- ----------------------------------------------------------------------------
+-- PositionMapping wrappers
+-- ----------------------------------------------------------------------------
+
+toCurrentPositionE :: Monad m => PositionMapping -> LSP.Position -> ExceptT PluginError m LSP.Position
+toCurrentPositionE mapping = maybeToExceptT PluginPositionMappingFailed . toCurrentPositionMT mapping
+
+toCurrentPositionMT :: Monad m => PositionMapping -> LSP.Position -> MaybeT m LSP.Position
+toCurrentPositionMT mapping = MaybeT . pure . toCurrentPosition mapping
+
+fromCurrentPositionE :: Monad m => PositionMapping -> LSP.Position -> ExceptT PluginError m LSP.Position
+fromCurrentPositionE mapping = maybeToExceptT PluginPositionMappingFailed . fromCurrentPositionMT mapping
+
+fromCurrentPositionMT :: Monad m => PositionMapping -> LSP.Position -> MaybeT m LSP.Position
+fromCurrentPositionMT mapping = MaybeT . pure . fromCurrentPosition mapping
+
+toCurrentRangeE :: Monad m => PositionMapping -> LSP.Range -> ExceptT PluginError m LSP.Range
+toCurrentRangeE mapping = maybeToExceptT PluginPositionMappingFailed . toCurrentRangeMT mapping
+
+toCurrentRangeMT :: Monad m => PositionMapping -> LSP.Range -> MaybeT m LSP.Range
+toCurrentRangeMT mapping = MaybeT . pure . toCurrentRange mapping
+
+fromCurrentRangeE :: Monad m => PositionMapping -> LSP.Range -> ExceptT PluginError m LSP.Range
+fromCurrentRangeE mapping = maybeToExceptT PluginPositionMappingFailed . fromCurrentRangeMT mapping
+
+fromCurrentRangeMT :: Monad m => PositionMapping -> LSP.Range -> MaybeT m LSP.Range
+fromCurrentRangeMT mapping = MaybeT . pure . fromCurrentRange mapping
