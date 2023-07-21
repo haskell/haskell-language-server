@@ -21,6 +21,7 @@ import           Control.Monad.Extra                  (mapMaybeM)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
 import qualified Data.ByteString                      as BS
+import           Data.Function                        ((&))
 import qualified Data.HashMap.Strict                  as HM
 import           Data.Maybe
 import qualified Data.Text                            as T
@@ -42,7 +43,12 @@ import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
                                                        normalizedFilePathToUri,
                                                        uriToNormalizedFilePath)
 import           Language.LSP.Server                  (resRootPath)
-import           System.Directory                     (createDirectoryIfMissing, doesFileExist)
+import           System.Directory                     (createDirectoryIfMissing,
+                                                       doesFileExist,
+                                                       getPermissions,
+                                                       setOwnerExecutable,
+                                                       setOwnerWritable,
+                                                       setPermissions)
 import           System.FilePath                      ((</>), (<.>), takeDirectory)
 
 
@@ -74,6 +80,11 @@ lookupMod HieDbWriter{indexQueue} hieFile moduleName uid _boot = MaybeT $ do
           createDirectoryIfMissing True $ takeDirectory writeOutPath
           moduleSource <- hie_hs_src <$> loadHieFile (mkUpdater nc) hieFile
           BS.writeFile writeOutPath moduleSource
+          fileDefaultPermissions <- getPermissions writeOutPath
+          let filePermissions = fileDefaultPermissions
+                              & setOwnerWritable False
+                              & setOwnerExecutable False
+          setPermissions writeOutPath filePermissions
       liftIO $ atomically $
         unGetTQueue indexQueue $ \withHieDb -> do
           withHieDb $ \db ->
