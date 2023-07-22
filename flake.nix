@@ -20,24 +20,32 @@
     };
 
     # List of hackage dependencies
-    ghc-lib-parser-94 = {
-      url = "https://hackage.haskell.org/package/ghc-lib-parser-9.4.4.20221225/ghc-lib-parser-9.4.4.20221225.tar.gz";
-      flake = false;
-    };
     hlint-35 = {
       url = "https://hackage.haskell.org/package/hlint-3.5/hlint-3.5.tar.gz";
       flake = false;
     };
-    ptr-poker = {
-      url = "https://hackage.haskell.org/package/ptr-poker-0.1.2.8/ptr-poker-0.1.2.8.tar.gz";
+    hlint-36 = {
+      url = "https://hackage.haskell.org/package/hlint-3.6.1/hlint-3.6.1.tar.gz";
+      flake = false;
+    };
+    fourmolu-011 = {
+      url = "https://hackage.haskell.org/package/fourmolu-0.11.0.0/fourmolu-0.11.0.0.tar.gz";
+      flake = false;
+    };
+    fourmolu-012 = {
+      url = "https://hackage.haskell.org/package/fourmolu-0.12.0.0/fourmolu-0.12.0.0.tar.gz";
       flake = false;
     };
     ormolu-052 = {
       url = "https://hackage.haskell.org/package/ormolu-0.5.2.0/ormolu-0.5.2.0.tar.gz";
       flake = false;
     };
-    stylish-haskell = {
-      url = "https://hackage.haskell.org/package/stylish-haskell-0.14.4.0/stylish-haskell-0.14.4.0.tar.gz";
+    ormolu-07 = {
+      url = "https://hackage.haskell.org/package/ormolu-0.7.1.0/ormolu-0.7.1.0.tar.gz";
+      flake = false;
+    };
+    stylish-haskell-0145 = {
+      url = "https://hackage.haskell.org/package/stylish-haskell-0.14.5.0/stylish-haskell-0.14.5.0.tar.gz";
       flake = false;
     };
 
@@ -55,25 +63,10 @@
       flake = false;
     };
 
-    haskell-unix-compat = {
-      url = "github:jacobstanley/unix-compat/3f6bd688cb56224955e77245a2649ba99ea32fff";
-      flake = false;
-    };
-    haskell-hiedb = {
-      url = "github:wz1000/HieDb";
-      flake = false;
-    };
-
     haskell-hie-bios = {
       url = "github:haskell/hie-bios";
       flake = false;
     };
-
-    haskell-ghc-exactprint = {
-      url = "github:alanz/ghc-exactprint/ghc-9.6";
-      flake = false;
-    };
-
     # smunix: github:haskell/hie-bios defines
     #   'CabalType :: Maybe String -> Maybe FilePath -> CabalType'
     # while the original githcom:Avi-D-coder/hie-bios still has this:
@@ -149,8 +142,6 @@
                 if final.system == "aarch64-darwin"
                 then overrideCabal hsuper.ormolu (_: { enableSeparateBinOutput = false; })
                 else hsuper.ormolu;
-
-              stylish-haskell = hself.callCabal2nix "stylish-haskell" inputs.stylish-haskell {};
             };
 
           hlsSources =
@@ -400,10 +391,8 @@
           # distributed using nix.
           all-haskell-language-server = linkFarmFromDrvs "all-haskell-language-server" (lib.unique (builtins.attrValues allPackages));
 
-          # Same for all shells
-          # We try to build as much as possible, but not much shells are
-          # working (especially on darwing), so this list is limited.
-          all-nix-dev-shells = linkFarmFromDrvs "all-dev-shells" (builtins.map (shell: shell.inputDerivation) (lib.unique [nixDevShells.haskell-language-server-dev-nix]));
+          all-nix-dev-shells = linkFarmFromDrvs "all-dev-shells"
+            (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues nixDevShells)));
 
           all-simple-dev-shells = linkFarmFromDrvs "all-simple-dev-shells"
             (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues simpleDevShells)));

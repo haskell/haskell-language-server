@@ -10,6 +10,7 @@ module Development.IDE.Core.Actions
 , lookupMod
 ) where
 
+import           Control.Monad.Extra                  (mapMaybeM)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
 import qualified Data.HashMap.Strict                  as HM
@@ -29,7 +30,9 @@ import           Development.IDE.Types.HscEnvEq       (hscEnv)
 import           Development.IDE.Types.Location
 import qualified HieDb
 import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
-                                                       SymbolInformation (..))
+                                                       SymbolInformation (..),
+                                                       normalizedFilePathToUri,
+                                                       uriToNormalizedFilePath)
 
 
 -- | Eventually this will lookup/generate URIs for files in dependencies, but not in the
@@ -64,10 +67,36 @@ getAtPoint file pos = runMaybeT $ do
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
   MaybeT $ pure $ first (toCurrentRange mapping =<<) <$> AtPoint.atPoint opts hf dkMap env pos'
 
-toCurrentLocations :: PositionMapping -> [Location] -> [Location]
-toCurrentLocations mapping = mapMaybe go
+-- | For each Loacation, determine if we have the PositionMapping
+-- for the correct file. If not, get the correct position mapping
+-- and then apply the position mapping to the location.
+toCurrentLocations
+  :: PositionMapping
+  -> NormalizedFilePath
+  -> [Location]
+  -> IdeAction [Location]
+toCurrentLocations mapping file = mapMaybeM go
   where
-    go (Location uri range) = Location uri <$> toCurrentRange mapping range
+    go :: Location -> IdeAction (Maybe Location)
+    go (Location uri range) =
+      -- The Location we are going to might be in a different
+      -- file than the one we are calling gotoDefinition from.
+      -- So we check that the location file matches the file
+      -- we are in.
+      if nUri == normalizedFilePathToUri file
+      -- The Location matches the file, so use the PositionMapping
+      -- we have.
+      then pure $ Location uri <$> toCurrentRange mapping range
+      -- The Location does not match the file, so get the correct
+      -- PositionMapping and use that instead.
+      else do
+        otherLocationMapping <- fmap (fmap snd) $ runMaybeT $ do
+          otherLocationFile <- MaybeT $ pure $ uriToNormalizedFilePath nUri
+          useE GetHieAst otherLocationFile
+        pure $ Location uri <$> (flip toCurrentRange range =<< otherLocationMapping)
+      where
+        nUri :: NormalizedUri
+        nUri = toNormalizedUri uri
 
 -- | Goto Definition.
 getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
@@ -77,7 +106,8 @@ getDefinition file pos = runMaybeT $ do
     (HAR _ hf _ _ _, mapping) <- useWithStaleFastMT GetHieAst file
     (ImportMap imports, _) <- useWithStaleFastMT GetImportMap file
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
-    toCurrentLocations mapping <$> AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
+    locations <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
+    MaybeT $ Just <$> toCurrentLocations mapping file locations
 
 getTypeDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
 getTypeDefinition file pos = runMaybeT $ do
@@ -85,7 +115,8 @@ getTypeDefinition file pos = runMaybeT $ do
     opts <- liftIO $ getIdeOptionsIO ide
     (hf, mapping) <- useWithStaleFastMT GetHieAst file
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-    toCurrentLocations mapping <$> AtPoint.gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts hf pos'
+    locations <- AtPoint.gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts hf pos'
+    MaybeT $ Just <$> toCurrentLocations mapping file locations
 
 highlightAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
 highlightAtPoint file pos = runMaybeT $ do
