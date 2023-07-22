@@ -163,7 +163,7 @@ instance Pretty Log where
     LogGeneratedIdeas fp ideas -> "Generated hlint ideas for for" <+> viaShow fp <> ":" <+> viaShow ideas
     LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <+> pretty exts
     LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp
-    LogResolve msg -> "ResolveHelpers:" <+> pretty msg
+    LogResolve msg -> pretty msg
 
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib

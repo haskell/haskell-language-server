@@ -32,20 +32,14 @@ import           Language.LSP.Server           (LspM, LspT,
                                                 withIndefiniteProgress)
 
 data Log
-    = LogParseError ResponseError
-    | LogInvalidParamsError ResponseError
-    | LogInternalError ResponseError
-
+    = DoesNotSupportResolve T.Text
+    | ApplyWorkspaceEditFailed ResponseError
 instance Pretty Log where
     pretty = \case
-        LogParseError re -> pretty $ re ^. L.message
-        LogInvalidParamsError re -> pretty $ re ^. L.message
-        LogInternalError re -> pretty $ re ^. L.message
-
-logAndThrow :: Recorder (WithPriority Log) -> (ResponseError -> Log) -> ResponseError -> ExceptT ResponseError (LspT Config IO) a
-logAndThrow recorder logType err = do
-  logWith recorder Error (logType err)
-  throwE err
+        DoesNotSupportResolve fallback->
+            "Client does not support resolve," <+> pretty fallback
+        ApplyWorkspaceEditFailed err ->
+            "ApplyWorkspaceEditFailed:" <+> viaShow err
 
 -- |When provided with both a codeAction provider and an affiliated codeAction
 -- resolve provider, this function creates a handler that automatically uses
@@ -64,11 +58,13 @@ mkCodeActionHandlerWithResolve recorder codeActionMethod codeResolveMethod =
            caps <- lift getClientCapabilities
            case codeActionReturn of
              r@(InR Null) -> pure r
-             (InL ls) | -- If the client supports resolve, we will wrap the resolve data in a owned
-                        -- resolve data type to allow the server to know who to send the resolve request to
+             (InL ls) | -- We don't need to do anything if the client supports
+                        -- resolve
                         supportsCodeActionResolve caps -> pure $ InL ls
                         --This is the actual part where we call resolveCodeAction which fills in the edit data for the client
-                      | otherwise -> InL <$> traverse (resolveCodeAction (params ^. L.textDocument . L.uri) ideState pid) ls
+                      | otherwise -> do
+                        logWith recorder Debug (DoesNotSupportResolve "filling in the code action")
+                        InL <$> traverse (resolveCodeAction (params ^. L.textDocument . L.uri) ideState pid) ls
   in (mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod
   <> mkResolveHandler SMethod_CodeActionResolve codeResolveMethod)
   where dropData :: CodeAction -> CodeAction
@@ -77,14 +73,14 @@ mkCodeActionHandlerWithResolve recorder codeActionMethod codeResolveMethod =
         resolveCodeAction _uri _ideState _plId c@(InL _) = pure c
         resolveCodeAction uri ideState pid (InR codeAction@CodeAction{_data_=Just value}) = do
           case A.fromJSON value of
-            A.Error err -> logAndThrow recorder LogParseError $ parseError (Just value) (T.pack err)
+            A.Error err -> throwE $ parseError (Just value) (T.pack err)
             A.Success innerValueDecoded -> do
               resolveResult <- ExceptT $ codeResolveMethod ideState pid codeAction uri innerValueDecoded
               case resolveResult of
                 CodeAction {_edit = Just _ } -> do
                   pure $ InR $ dropData resolveResult
-                _ -> logAndThrow recorder LogInvalidParamsError $ invalidParamsError "Returned CodeAction has no data field"
-        resolveCodeAction _ _ _ (InR CodeAction{_data_=Nothing}) = logAndThrow recorder LogInvalidParamsError $ invalidParamsError "CodeAction has no data field"
+                _ -> throwE $ invalidParamsError "Returned CodeAction has no data field"
+        resolveCodeAction _ _ _ (InR CodeAction{_data_=Nothing}) = throwE $ invalidParamsError "CodeAction has no data field"
 
 
 -- |When provided with both a codeAction provider with a data field and a resolve
@@ -107,13 +103,14 @@ mkCodeActionWithResolveAndCommand recorder plId codeActionMethod codeResolveMeth
            caps <- lift getClientCapabilities
            case codeActionReturn of
              r@(InR Null) -> pure r
-             (InL ls) | -- If the client supports resolve, we will wrap the resolve data in a owned
-                        -- resolve data type to allow the server to know who to send the resolve request to
-                        supportsCodeActionResolve caps ->
-                        pure $ InL ls
+             (InL ls) | -- We don't need to do anything if the client supports
+                        -- resolve
+                        supportsCodeActionResolve caps -> pure $ InL ls
                         -- If they do not we will drop the data field, in addition we will populate the command
                         -- field with our command to execute the resolve, with the whole code action as it's argument.
-                      | otherwise -> pure $ InL $ moveDataToCommand (params ^. L.textDocument . L.uri) <$> ls
+                      | otherwise -> do
+                        logWith recorder Debug (DoesNotSupportResolve "rewriting the code action to use commands")
+                        pure $ InL $ moveDataToCommand (params ^. L.textDocument . L.uri) <$> ls
   in ([PluginCommand "codeActionResolve" "Executes resolve for code action" (executeResolveCmd codeResolveMethod)],
   mkPluginHandler SMethod_TextDocumentCodeAction newCodeActionMethod
   <> mkResolveHandler SMethod_CodeActionResolve codeResolveMethod)
@@ -136,24 +133,26 @@ mkCodeActionWithResolveAndCommand recorder plId codeActionMethod codeResolveMeth
         executeResolveCmd resolveProvider ideState ca@CodeAction{_data_=Just value} = do
           withIndefiniteProgress "Applying edits for code action..." Cancellable $ runExceptT $ do
             case A.fromJSON value of
-              A.Error err -> logAndThrow recorder LogParseError $ parseError (Just value) (T.pack err)
+              A.Error err -> throwE $ parseError (Just value) (T.pack err)
               A.Success (WithURI uri innerValue) -> do
                 case A.fromJSON innerValue of
-                  A.Error err -> logAndThrow recorder LogParseError $ parseError (Just value) (T.pack err)
+                  A.Error err -> throwE $ parseError (Just value) (T.pack err)
                   A.Success innerValueDecoded -> do
                     resolveResult <- ExceptT $ resolveProvider ideState plId ca uri innerValueDecoded
                     case resolveResult of
                       ca2@CodeAction {_edit = Just wedits } | diffCodeActions ca ca2 == ["edit"] -> do
-                          _ <- ExceptT $ Right <$> sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) (\_ -> pure ())
+                          _ <- ExceptT $ Right <$> sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedits) handleWEditCallback
                           pure $ InR Null
                       ca2@CodeAction {_edit = Just _ }  ->
-                        logAndThrow recorder LogInternalError $
-                          internalError $
+                        throwE $ internalError $
                             "The resolve provider unexpectedly returned a code action with the following differing fields: "
                             <> (T.pack $ show $  diffCodeActions ca ca2)
-                      _ -> logAndThrow recorder LogInternalError $ internalError "The resolve provider unexpectedly returned a result with no data field"
-        executeResolveCmd _ _ CodeAction{_data_= value} = runExceptT $ logAndThrow recorder LogInvalidParamsError $ invalidParamsError ("The code action to resolve has an illegal data field: " <> (T.pack $ show value))
-
+                      _ -> throwE $ internalError "The resolve provider unexpectedly returned a result with no data field"
+        executeResolveCmd _ _ CodeAction{_data_= value} = runExceptT $ throwE $ invalidParamsError ("The code action to resolve has an illegal data field: " <> (T.pack $ show value))
+        handleWEditCallback (Left err ) = do
+            logWith recorder Warning (ApplyWorkspaceEditFailed err)
+            pure ()
+        handleWEditCallback _ = pure ()
 
 -- TODO: Remove once provided by lsp-types
 -- |Compares two CodeActions and returns a list of fields that are not equal

@@ -68,7 +68,7 @@ instance Pretty Log where
   pretty = \case
     LogShake logMsg -> pretty logMsg
     LogWAEResponseError rspErr -> "RequestWorkspaceApplyEdit Failed with " <+> viaShow rspErr
-    LogResolve msg -> "ResolveHelpers:" <+> pretty msg
+    LogResolve msg -> pretty msg
 
 -- | The "main" function of a plugin
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState

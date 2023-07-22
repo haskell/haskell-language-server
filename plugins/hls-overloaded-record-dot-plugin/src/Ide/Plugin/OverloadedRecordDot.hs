@@ -112,7 +112,7 @@ instance Pretty Log where
         LogShake shakeLog -> pretty shakeLog
         LogCollectedRecordSelectors recs -> "Collected record selectors:"
                                                 <+> pretty recs
-        LogResolve msg -> "ResolveHelpers:" <+> pretty msg
+        LogResolve msg -> pretty msg
 
 data CollectRecordSelectors = CollectRecordSelectors
                     deriving (Eq, Show, Generic)
