@@ -21,7 +21,6 @@ module Ide.PluginUtils
     getPluginConfig,
     configForPlugin,
     pluginEnabled,
-    extractOverlappingLinesWithRange,
     extractTextInRange,
     fullRange,
     mkLspCommand,
@@ -243,9 +242,7 @@ usePropertyLsp kn pId p = do
 
 -- ---------------------------------------------------------------------
 
--- | Extracts exactly matching text in the range.
---
--- See also: 'extractOverlappingLinesWithRange'
+-- | Extracts exact matching text in the range.
 extractTextInRange :: Range -> T.Text -> T.Text
 extractTextInRange (Range (Position sl sc) (Position el ec)) s = newS
   where
