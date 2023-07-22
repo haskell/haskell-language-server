@@ -1476,7 +1476,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
         where moduleText = moduleNameText identInfo
 
 suggestNewImport :: DynFlags -> ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
-suggestNewImport df packageExportsMap ps fileContents Diagnostic{_message, ..}
+suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
   , qual <- extractQualifiedModuleName msg
