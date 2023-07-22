@@ -92,7 +92,7 @@ toCurrentLocations mapping file = mapMaybeM go
       else do
         otherLocationMapping <- fmap (fmap snd) $ runMaybeT $ do
           otherLocationFile <- MaybeT $ pure $ uriToNormalizedFilePath nUri
-          useE GetHieAst otherLocationFile
+          useWithStaleFastMT GetHieAst otherLocationFile
         pure $ Location uri <$> (flip toCurrentRange range =<< otherLocationMapping)
       where
         nUri :: NormalizedUri
