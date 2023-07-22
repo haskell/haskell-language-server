@@ -1503,12 +1503,16 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
             | GHC94 <- ghcVersion
             , isNothing (qual <|> qual')
             , Just q <- qualGHC94 =
-                mapNotInScope ((q <> ".") <>) thingMissing
+                qualify q thingMissing
             | otherwise = thingMissing
         suggestions = nubSortBy simpleCompareImportSuggestion
           (constructNewImportSuggestions packageExportsMap (qual <|> qual' <|> qualGHC94, missing) extendImportSuggestions qis) in
     map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
+    qualify q (NotInScopeDataConstructor d) = NotInScopeDataConstructor (q <> "." <> d)
+    qualify q (NotInScopeTypeConstructorOrClass d) = NotInScopeTypeConstructorOrClass (q <> "." <> d)
+    qualify q (NotInScopeThing d) = NotInScopeThing (q <> "." <> d)
+
     L _ HsModule {..} = astA ps
 suggestNewImport _ _ _ _ _ = []
 
@@ -1814,11 +1818,6 @@ data NotInScope
     | NotInScopeTypeConstructorOrClass T.Text
     | NotInScopeThing T.Text
     deriving Show
-
-mapNotInScope :: (T.Text -> T.Text) -> NotInScope -> NotInScope
-mapNotInScope f (NotInScopeDataConstructor d) = NotInScopeDataConstructor (f d)
-mapNotInScope f (NotInScopeTypeConstructorOrClass d) = NotInScopeTypeConstructorOrClass (f d)
-mapNotInScope f (NotInScopeThing d) = NotInScopeThing (f d)
 
 notInScope :: NotInScope -> T.Text
 notInScope (NotInScopeDataConstructor t)        = t
