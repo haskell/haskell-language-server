@@ -43,7 +43,7 @@ let
       # https://github.com/nikita-volkov/ptr-poker/issues/11
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
-      ormolu = hself.callHackage "ormolu" "0.5.3.0" { };
+      ormolu = hself.callHackage "ormolu" "0.7.0.1" { };
 
       # TODO: smunix: nix fails to build fourmolu-0.13 from Hackage with these errors:
       #   tar: */fourmolu/0.13.0.0/fourmolu.json: Not found in archive
