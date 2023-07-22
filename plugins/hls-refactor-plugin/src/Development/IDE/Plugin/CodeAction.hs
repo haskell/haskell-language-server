@@ -1512,8 +1512,31 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{_message, ..}
     L _ HsModule {..} = astA ps
 suggestNewImport _ _ _ _ _ = []
 
--- tentative workaround for detecting qualification in GHC 9.4
--- FIXME: We can delete this after dropping the support for GHC 9.4
+{- |
+Extracts qualifier of the symbol from the migssing symbol.
+Input must be either a plain qualified variable or possibly-parenthesized qualified binary operator (though no strict checking is done for symbol part).
+This is only needed to alleviate the issue #3473.
+
+FIXME: We can delete this after dropping the support for GHC 9.4
+
+>>> extractQualifiedModuleNameFromMissingName "P.lookup"
+Just "P"
+
+>>> extractQualifiedModuleNameFromMissingName "ΣP3_'.σlookup"
+Just "\931P3_'"
+
+>>> extractQualifiedModuleNameFromMissingName "ModuleA.Gre_ekσ.goodδ"
+Just "ModuleA.Gre_ek\963"
+
+>>> extractQualifiedModuleNameFromMissingName "(ModuleA.Gre_ekσ.+)"
+Just "ModuleA.Gre_ek\963"
+
+>>> extractQualifiedModuleNameFromMissingName "(ModuleA.Gre_ekσ..|.)"
+Just "ModuleA.Gre_ek\963"
+
+>>> extractQualifiedModuleNameFromMissingName "A.B.|."
+Just "A.B"
+-}
 extractQualifiedModuleNameFromMissingName :: T.Text -> Maybe T.Text
 extractQualifiedModuleNameFromMissingName (T.strip -> missing)
     = T.pack <$> (T.unpack missing RE.=~ qualIdentP)
