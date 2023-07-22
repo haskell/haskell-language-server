@@ -29,34 +29,24 @@ let
             doCheck = false;
           });
       apply-refact = hsuper.apply-refact_0_13_0_0;
-      tagged = hself.callHackage "tagged" "0.8.7" { };
-      primitive = hself.callHackage "primitive" "0.8.0.0" { };
-      unix-compat = hself.callCabal2nix "unix-compat" inputs.haskell-unix-compat { };
-      MonadRandom = hself.callHackage "MonadRandom" "0.6" { };
-      hiedb = hself.callCabal2nix "hiedb" inputs.haskell-hiedb { };
+      tagged = hsuper.tagged_0_8_7;
+      primitive = hsuper.primitive_0_8_0_0;
+      MonadRandom = hsuper.MonadRandom_0_6;
       hie-bios = hself.callCabal2nix "hie-bios" inputs.haskell-hie-bios { };
+      hlint = hself.callCabal2nix "hlint" inputs.hlint-36 {};
       implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.haskell-implicit-hie-cradle { };
-      ghc-exactprint = hself.callCabal2nix "ghc-exactprint" inputs.haskell-ghc-exactprint { };
 
-      # ptr-poker breaks on MacOS without SSE2 optimizations
-      # https://github.com/nikita-volkov/ptr-poker/issues/11
-      ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
+      fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu-012 {};
 
-      ormolu = hself.ormolu_0_5_3_0;
+      ghc-lib-parser-ex = hsuper.ghc-lib-parser-ex_9_6_0_0;
 
-      # TODO: smunix: nix fails to build fourmolu-0.13 from Hackage with these errors:
-      #   tar: */fourmolu/0.13.0.0/fourmolu.json: Not found in archive
-      #   tar: */fourmolu/0.13.0.0/fourmolu.cabal: Not found in archive
-      #   tar: Exiting with failure status due to previous errors
-      # As an alternative, we could build directly from github:fourmolu. How do people
-      # feel about this?
-      fourmolu = hself.callHackage "fourmolu" "0.12.0.0" {};
+      ormolu = hself.callCabal2nix "ormolu" inputs.ormolu-07 {};
 
-      stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
+      stylish-haskell = hself.callCabal2nix "stylish-haskell" inputs.stylish-haskell-0145 {};
 
       lsp = hself.callCabal2nix "lsp" inputs.lsp {};
       lsp-types = hself.callCabal2nix "lsp-types" inputs.lsp-types {};
-      lsp-test = hself.callCabal2nix "lsp-test" inputs.lsp-test {};
+      lsp-test = dontCheck (hself.callCabal2nix "lsp-test" inputs.lsp-test {});
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
