@@ -1495,6 +1495,10 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{_message, ..}
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
   = let qis = qualifiedImportStyle df
         -- FIXME: we can use thingMissing once the support for GHC 9.4 is dropped.
+        -- In what fllows, @missing@ is assumed to be qualified name.
+        -- @thingMissing@ is already as desired with GHC != 9.4.
+        -- In GHC 9.4, however, GHC drops a module qualifier from a qualified symbol.
+        -- Thus we need to explicitly concatenate qualifier explicity in GHC 9.4.
         missing
             | GHC94 <- ghcVersion
             , isNothing (qual <|> qual')
