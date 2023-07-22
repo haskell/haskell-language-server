@@ -1513,7 +1513,7 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
 suggestNewImport _ _ _ _ _ = []
 
 {- |
-Extracts qualifier of the symbol from the migssing symbol.
+Extracts qualifier of the symbol from the missing symbol.
 Input must be either a plain qualified variable or possibly-parenthesized qualified binary operator (though no strict checking is done for symbol part).
 This is only needed to alleviate the issue #3473.
 
