@@ -15,7 +15,7 @@ import qualified Data.List                       as List
 import qualified Data.Maybe                      as Maybe
 import           Data.Text                       (Text, pack)
 import qualified Data.Text                       as Text
-import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv)
+import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import qualified Language.LSP.Protocol.Types              as LSP
@@ -54,11 +54,9 @@ insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit prag
 
 getFirstPragma :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m NextPragmaInfo
 getFirstPragma (PluginId pId) state nfp = do
-  ghcSession <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession nfp
-  (_, fileContents) <- runActionE (T.unpack pId <> ".GetFileContents") state $ hoistAction $ getFileContents nfp
-  case ghcSession of
-    (hscEnv -> hsc_dflags -> sessionDynFlags, _) ->
-      pure $ getNextPragmaInfo sessionDynFlags fileContents
+  (hscEnv -> hsc_dflags -> sessionDynFlags, _) <- runActionE (T.unpack pId <> ".GhcSession") state $ useWithStaleE GhcSession nfp
+  (_, fileContents) <- liftIO $ runAction (T.unpack pId <> ".GetFileContents") state $ getFileContents nfp
+  pure $ getNextPragmaInfo sessionDynFlags fileContents
 
 -- Pre-declaration comments parser -----------------------------------------------------
 

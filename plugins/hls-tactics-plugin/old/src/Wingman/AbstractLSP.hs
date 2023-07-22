@@ -1,6 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE RecordWildCards     #-}
-
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE NoMonoLocalBinds    #-}
 
 {-# OPTIONS_GHC -Wno-orphans     #-}
@@ -21,6 +21,7 @@ import           Data.Tuple.Extra (uncurry3)
 import           Development.IDE (IdeState)
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource(GetAnnotatedParsedSource))
+import           Ide.Plugin.Error
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Types
 import           Language.LSP.Server (LspM, sendRequest, getClientCapabilities, getVersionedTextDoc)
@@ -91,11 +92,7 @@ runContinuation
     -> CommandFunction IdeState (FileContext, b)
 runContinuation plId cont state (fc, b) = do
   fromMaybeT
-    (Left $ ResponseError
-              { _code = InR $ ErrorCodes_InternalError
-              , _message = T.pack "TODO(sandy)"
-              , _xdata =  Nothing
-              } ) $ do
+    (Left $ PluginInternalError "TODO(sandy)") $ do
       env@LspEnv{..} <- buildEnv state plId fc
       nfp <- getNfp $ fc_verTxtDocId le_fileContext ^. L.uri
       let stale a = runStaleIde "runContinuation" state nfp a
@@ -116,11 +113,7 @@ runContinuation plId cont state (fc, b) = do
             TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
             case mkWorkspaceEdits (enableQuasiQuotes le_dflags) ccs (fc_verTxtDocId le_fileContext) (unTrack pm) gr of
               Left errs ->
-                pure $ Just $ ResponseError
-                  { _code    = InR ErrorCodes_InternalError
-                  , _message = T.pack $ show errs
-                  , _xdata   = Nothing
-                  }
+                pure $ Just $ PluginInternalError (T.pack $ show errs)
               Right edits -> do
                 sendEdits edits
                 pure Nothing

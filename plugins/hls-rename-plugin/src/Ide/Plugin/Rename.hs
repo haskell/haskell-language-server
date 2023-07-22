@@ -73,7 +73,7 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultP
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier uri) pos  newNameText) =
     runExceptT $ do
-        nfp <- handleUriToNfp uri
+        nfp <- getNormalizedFilePathE uri
         directOldNames <- getNamesAtPos state nfp pos
         directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
 
@@ -135,7 +135,7 @@ getSrcEdit ::
     ExceptT PluginError m WorkspaceEdit
 getSrcEdit state verTxtDocId updatePs = do
     ccs <- lift getClientCapabilities
-    nfp <- handleUriToNfp (verTxtDocId ^. L.uri)
+    nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     annAst <- runActionE "Rename.GetAnnotatedParsedSource" state
         (useE GetAnnotatedParsedSource nfp)
     let (ps, anns) = (astA annAst, annsA annAst)
@@ -244,9 +244,6 @@ removeGenerated HAR{..} = HAR{hieAst = go hieAst,..}
 #else
       hf
 #endif
-
-handleUriToNfp :: (Monad m) => Uri -> ExceptT PluginError m NormalizedFilePath
-handleUriToNfp uri = getNormalizedFilePathE uri
 
 -- head is safe since groups are non-empty
 collectWith :: (Hashable a, Eq a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]

@@ -15,7 +15,7 @@ module Ide.Plugin.CodeRange (
     , createFoldingRange
     ) where
 
-import           Control.Monad.IO.Class               (MonadIO)
+import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Control.Monad.Trans.Except           (ExceptT)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        maybeToExceptT)
@@ -93,7 +93,7 @@ selectionRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeS
 selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
    runExceptT $ do
         filePath <- getNormalizedFilePathE uri
-        fmap  id . runIdeAction' $ getSelectionRanges filePath positions
+        fmap  id . hoistExceptT $ getSelectionRanges ide filePath positions
   where
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument
@@ -101,14 +101,10 @@ selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
     positions :: [Position]
     positions = _positions
 
-    runIdeAction' :: MonadIO m => ExceptT PluginError IdeAction ([SelectionRange] |? Null) -> ExceptT PluginError m ([SelectionRange] |? Null)
-    runIdeAction' action = runIdeActionE "SelectionRange" (shakeExtras ide) action
 
-
-
-getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT PluginError IdeAction ([SelectionRange] |? Null)
-getSelectionRanges file positions = do
-    (codeRange, positionMapping) <- useWithStaleFastE GetCodeRange file
+getSelectionRanges :: IdeState -> NormalizedFilePath -> [Position] -> ExceptT PluginError IO ([SelectionRange] |? Null)
+getSelectionRanges ide file positions = do
+    (codeRange, positionMapping) <- runIdeActionE "SelectionRange" (shakeExtras ide) $ useWithStaleFastE GetCodeRange file
     -- 'positionMapping' should be applied to the input before using them
     positions' <-
         traverse (fromCurrentPositionE positionMapping) positions
@@ -120,7 +116,7 @@ getSelectionRanges file positions = do
              in fromMaybe defaultSelectionRange . findPosition pos $ codeRange
 
     -- 'positionMapping' should be applied to the output ranges before returning them
-    maybeToExceptT PluginPositionMappingFailed . MaybeT . pure $
+    maybeToExceptT (PluginDependencyFailed "toCurrentSelectionRange") . MaybeT . pure $
         InL <$> traverse (toCurrentSelectionRange positionMapping) selectionRanges
 
 -- | Find 'Position' in 'CodeRange'. This can fail, if the given position is not covered by the 'CodeRange'.

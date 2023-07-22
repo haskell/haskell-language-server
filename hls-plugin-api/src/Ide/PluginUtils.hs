@@ -36,33 +36,24 @@ module Ide.PluginUtils
 where
 
 
-import           Control.Arrow                 ((&&&))
-import           Control.Lens                  (re, (^.))
-import           Control.Monad.Extra           (maybeM)
-import           Control.Monad.IO.Class        (MonadIO, liftIO)
-import           Control.Monad.Trans.Class     (lift)
-import           Control.Monad.Trans.Except    (ExceptT (..), mapExceptT,
-                                                runExceptT, throwE, withExceptT)
+import           Control.Arrow               ((&&&))
+import           Control.Lens                (re, (^.))
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
-import           Data.Bifunctor                (Bifunctor (first))
-import           Data.Char                     (isPrint, showLitChar)
-import           Data.Functor                  (void)
-import qualified Data.Map                      as M
-import           Data.String                   (IsString (fromString))
-import qualified Data.Text                     as T
-import           Data.Void                     (Void)
+import           Data.Char                   (isPrint, showLitChar)
+import           Data.Functor                (void)
+import qualified Data.Map                    as M
+import qualified Data.Text                   as T
+import           Data.Void                   (Void)
 import           Ide.Plugin.Config
-import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens    as L
-import           Language.LSP.Protocol.Message
+import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import qualified Text.Megaparsec               as P
-import qualified Text.Megaparsec.Char          as P
-import qualified Text.Megaparsec.Char.Lexer    as P
+import qualified Text.Megaparsec             as P
+import qualified Text.Megaparsec.Char        as P
+import qualified Text.Megaparsec.Char.Lexer  as P
 
 -- ---------------------------------------------------------------------
 

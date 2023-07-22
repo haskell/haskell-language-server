@@ -56,7 +56,7 @@ data PluginError
     -- invalid. This error means that there is a bug in the client's code
     -- (otherwise they wouldn't be sending you requests with invalid
     -- parameters).
-
+    --
     -- This error will be logged individually with Warning, and will be
     -- converted into a InvalidParams response code. It takes medium precedence
     --  (2)in being returned as a response to the client.
@@ -78,14 +78,17 @@ data PluginError
     -- converted into a ParseError response code. It takes a medium precedence
     --  (2) in being returned as a response to the client.
   | PluginParseError T.Text
-    -- |PluginPositionMappingFailed should be thrown when a PositionMapping your
-    -- response depends on fails.
+    -- |PluginDependencyFailed should be thrown when a function that your plugin
+    -- depends on fails. This should only be used when the function fails
+    -- because the files the user is working on is in an invalid state.
+    --
+    -- This error takes the name of the function that failed. Prefer to catch
+    -- this error as close to the source as possible.
     --
     -- This error will be logged together with other errors of the same type
-    -- with Info, and will be converted into a ServerCancelled or
-    -- ContentModified response. It takes a low precedence (3) in being returned
-    -- as a response to the client.
-  | PluginPositionMappingFailed
+    -- with Info, and will be converted into a ContentModified response. It
+    -- takes a low precedence (3) in being returned as a response to the client.
+  | PluginDependencyFailed T.Text
     -- |PluginRequestRefused allows your handler to inspect a request before
     -- rejecting it. In effect it allows your plugin to act make a secondary
     -- `pluginEnabled` decision after receiving the request. This should only be
@@ -99,10 +102,11 @@ data PluginError
     -- |PluginRuleFailed should be thrown when a Rule your response depends on
     -- fails.
     --
+    -- This error takes the name of the Rule that failed.
+    --
     -- This error will be logged together with other errors of the same type
-    -- with Info, and will be converted into a ServerCancelled or
-    -- ContentModified response code. It takes a low precedence (3) in being returned
-    -- as a response to the client.
+    -- with Info, and will be converted into a ContentModified response code. It
+    -- takes a low precedence (3) in being returned as a response to the client.
   | PluginRuleFailed T.Text
     -- |PluginStaleResolve should be thrown when your resolve request is
     -- provided with data it can no longer resolve.
@@ -114,13 +118,13 @@ data PluginError
 
 instance Pretty PluginError where
     pretty = \case
-      PluginInternalError msg -> "Internal Plugin Error:" <+> pretty msg
+      PluginInternalError msg -> "Internal Error:" <+> pretty msg
       PluginStaleResolve -> "Stale Resolve"
-      PluginRuleFailed rule       -> "RuleFailed:" <+> pretty rule
+      PluginRuleFailed rule       -> "Rule Failed:" <+> pretty rule
       PluginInvalidParams text -> "Invalid Params:" <+> pretty text
       PluginParseError text -> "Parse Error:" <+> pretty text
       PluginInvalidRequest text -> "Invalid Request:" <+> pretty text
-      PluginPositionMappingFailed -> "PositionMapping failed"
+      PluginDependencyFailed text -> "Dependency Failed:" <+> pretty text
       PluginRequestRefused -> "Request Refused"
 
 handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b

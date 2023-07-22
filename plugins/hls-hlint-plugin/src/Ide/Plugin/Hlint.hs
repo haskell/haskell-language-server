@@ -145,7 +145,6 @@ import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 #endif
 import           Development.IDE.Core.PluginUtils                   as PluginUtils
-import           Ide.Plugin.Error                                   (getNormalizedFilePathE)
 import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 

@@ -35,8 +35,6 @@ import qualified Language.LSP.Protocol.Types      as LSP
 import qualified Language.LSP.Server              as LSP
 
 import           Control.Monad
-import           Control.Monad.Trans.Except
-import           Control.Monad.Trans.Maybe        (MaybeT (runMaybeT))
 import qualified Development.IDE.Core.FileExists  as FileExists
 import qualified Development.IDE.Core.OfInterest  as OfInterest
 import           Development.IDE.Core.Shake       hiding (Log)
