@@ -38,7 +38,7 @@ import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat           as SrcLoc
 import qualified Development.IDE.GHC.Compat.Util      as FastString
 import           Development.IDE.Graph                (alwaysRerun)
-import           Development.IDE.Types.Logger         (Pretty (pretty),
+import           Ide.Logger         (Pretty (pretty),
                                                        Recorder, WithPriority,
                                                        cmapWithPrio)
 #if MIN_VERSION_ghc(9,2,0)

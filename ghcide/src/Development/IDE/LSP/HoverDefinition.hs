@@ -21,7 +21,7 @@ import           Development.IDE.Core.Actions
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger
+import           Ide.Logger
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server            as LSP

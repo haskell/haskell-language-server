@@ -43,7 +43,7 @@ import           Development.IDE.GHC.Compat
                                                        tcg_exports, unLoc) -}
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.Graph.Classes
-import qualified Development.IDE.Types.Logger         as Logger
+import qualified Ide.Logger         as Logger
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.ExplicitImports           (extractMinimalImports,
                                                        within)

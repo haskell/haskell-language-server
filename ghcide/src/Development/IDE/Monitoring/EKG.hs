@@ -1,14 +1,14 @@
 {-# LANGUAGE CPP #-}
 module Development.IDE.Monitoring.EKG(monitoring) where
 
-import           Development.IDE.Types.Logger     (Logger)
 import           Development.IDE.Types.Monitoring (Monitoring (..))
+import           Ide.Logger                       (Logger)
 #ifdef MONITORING_EKG
 import           Control.Concurrent               (killThread)
 import           Control.Concurrent.Async         (async, waitCatch)
 import           Control.Monad                    (forM_)
 import           Data.Text                        (pack)
-import           Development.IDE.Types.Logger     (logInfo)
+import           Ide.Logger                       (logInfo)
 import qualified System.Metrics                   as Monitoring
 import qualified System.Remote.Monitoring.Wai     as Monitoring
 

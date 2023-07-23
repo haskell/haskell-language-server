@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings         #-}
 module HlsPlugins where
 
-import           Development.IDE.Types.Logger      (Pretty (pretty), Recorder,
+import           Ide.Logger                        (Pretty (pretty), Recorder,
                                                     WithPriority, cmapWithPrio)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Ide.Types                         (IdePlugins,

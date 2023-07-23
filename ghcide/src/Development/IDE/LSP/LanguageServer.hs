@@ -41,9 +41,9 @@ import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log, Priority)
 import           Development.IDE.Core.Tracing
 import qualified Development.IDE.Session               as Session
-import           Development.IDE.Types.Logger
-import qualified Development.IDE.Types.Logger          as Logger
 import           Development.IDE.Types.Shake           (WithHieDb)
+import           Ide.Logger
+import qualified Ide.Logger                            as Logger
 import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
                                                         type (<~>))
