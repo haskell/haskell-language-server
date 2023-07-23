@@ -54,7 +54,7 @@ import qualified System.Directory                             as Dir
 #else
 #endif
 
-import qualified Development.IDE.Types.Logger                 as L
+import qualified Ide.Logger                                   as L
 
 import           Data.Aeson                                   (ToJSON (toJSON))
 import qualified Data.Binary                                  as B
@@ -63,7 +63,7 @@ import           Data.List                                    (foldl')
 import qualified Data.Text                                    as Text
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import qualified Development.IDE.Core.Shake                   as Shake
-import           Development.IDE.Types.Logger                 (Pretty (pretty),
+import           Ide.Logger                                   (Pretty (pretty),
                                                                Priority (Info),
                                                                Recorder,
                                                                WithPriority,
