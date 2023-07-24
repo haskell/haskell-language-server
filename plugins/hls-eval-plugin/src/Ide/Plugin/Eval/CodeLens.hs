@@ -25,7 +25,7 @@ module Ide.Plugin.Eval.CodeLens (
 
 import           Control.Applicative                          (Alternative ((<|>)))
 import           Control.Arrow                                (second, (>>>))
-import           Control.Exception                            (try)
+import           Control.Exception                            (try, bracket_)
 import qualified Control.Exception                            as E
 import           Control.Lens                                 (_1, _3, ix, (%~),
                                                                (<&>), (^.))
@@ -120,7 +120,7 @@ import           Ide.Plugin.Eval.GHC                          (addImport,
                                                                showDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments               (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option                 (parseSetFlags)
-import           Ide.Plugin.Eval.Rules                        (queueForEvaluation)
+import           Ide.Plugin.Eval.Rules                        (queueForEvaluation, unqueueForEvaluation)
 import           Ide.Plugin.Eval.Types
 import           Ide.Plugin.Eval.Util                         (gStrictTry,
                                                                isLiterate,
@@ -217,12 +217,12 @@ runEvalCmd plId st EvalParams{..} =
             mdlText <- moduleText _uri
 
             -- enable codegen for the module which we need to evaluate.
-            liftIO $ queueForEvaluation st nfp
-            liftIO $ setSomethingModified VFSUnmodified st [toKey NeedsCompilation nfp] "Eval"
-            -- Setup a session with linkables for all dependencies and GHCi specific options
-            final_hscEnv <- initialiseSessionForEval
-                                      (needsQuickCheck tests)
-                                      st nfp
+            final_hscEnv <- liftIO $ bracket_
+              (do queueForEvaluation st nfp
+                  setSomethingModified VFSUnmodified st [toKey IsEvaluating nfp] "Eval")
+              (do unqueueForEvaluation st nfp
+                  setSomethingModified VFSUnmodified st [toKey IsEvaluating nfp] "Eval")
+              (initialiseSessionForEval (needsQuickCheck tests) st nfp)
 
             evalCfg <- liftIO $ runAction "eval: config" st $ getEvalConfig plId
 
@@ -253,16 +253,8 @@ initialiseSessionForEval needs_quickcheck st nfp = do
     ms <- msrModSummary <$> useE GetModSummary nfp
     deps_hsc <- hscEnv <$> useE GhcSessionDeps nfp
 
-<<<<<<< HEAD
-    linkables_needed <- reachableModules <$> useE GetDependencyInformation nfp
-    linkables <- usesE GetLinkable linkables_needed
-||||||| parent of 075c8d398 (Remove GetDependencyInformation in favour of GetModuleGraph.)
-    linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
-    linkables <- uses_ GetLinkable linkables_needed
-=======
     linkables_needed <- transitiveDeps <$> useNoFile_ GetModuleGraph <*> pure nfp
-    linkables <- uses_ GetLinkable (nfp : maybe [] transitiveModuleDeps linkables_needed)
->>>>>>> 075c8d398 (Remove GetDependencyInformation in favour of GetModuleGraph.)
+    linkables <- usesE GetLinkable (nfp : maybe [] transitiveModuleDeps linkables_needed)
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
     -- However, the eval plugin (setContext specifically) requires the rdr_env

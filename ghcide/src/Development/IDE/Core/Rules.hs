@@ -169,6 +169,7 @@ import GHC.Unit.Env
 import GHC.Unit.Home.ModInfo
 #endif
 import GHC (mgModSummaries)
+import GHC.Fingerprint
 
 data Log
   = LogShake Shake.Log
@@ -523,7 +524,7 @@ rawDependencyInformation fs = do
 
 reportImportCyclesRule :: Recorder (WithPriority Log) -> Rules ()
 reportImportCyclesRule recorder =
-    define (cmapWithPrio LogShake recorder) $ \ReportImportCycles file -> fmap (\errs -> if null errs then ([], Just ()) else (errs, Nothing)) $ do
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \ReportImportCycles file -> fmap (\errs -> if null errs then (Just "1",([], Just ())) else (Nothing, (errs, Nothing))) $ do
         DependencyInformation{..} <- useNoFile_ GetModuleGraph
         let fileId = pathToId depPathIdMap file
         case IntMap.lookup (getFilePathId fileId) depErrorNodes of
@@ -671,15 +672,16 @@ knownFilesRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorde
   pure (LBS.toStrict $ B.encode $ hash fs, unhashed fs)
 
 getModuleGraphRule :: Recorder (WithPriority Log) -> Rules ()
-getModuleGraphRule recorder = defineNoFile (cmapWithPrio LogShake recorder) $ \GetModuleGraph -> do
+getModuleGraphRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GetModuleGraph -> do
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
   dependencyInfoForFiles (HashSet.toList fs)
 
-dependencyInfoForFiles :: [NormalizedFilePath] -> Action DependencyInformation
+dependencyInfoForFiles :: [NormalizedFilePath] -> Action (BS.ByteString, DependencyInformation)
 dependencyInfoForFiles fs = do
   (rawDepInfo, bm) <- rawDependencyInformation fs
   let (all_fs, _all_ids) = unzip $ HM.toList $ pathToIdMap $ rawPathIdMap rawDepInfo
-  mss <- map (fmap msrModSummary) <$> uses GetModSummaryWithoutTimestamps all_fs
+  msrs <- uses GetModSummaryWithoutTimestamps all_fs
+  let mss = map (fmap msrModSummary) msrs
 #if MIN_VERSION_ghc(9,3,0)
   let deps = map (\i -> IM.lookup (getFilePathId i) (rawImports rawDepInfo)) _all_ids
       nodeKeys = IM.fromList $ catMaybes $ zipWith (\fi mms -> (getFilePathId fi,) . NodeKey_Module . msKey <$> mms) _all_ids mss
@@ -700,7 +702,7 @@ dependencyInfoForFiles fs = do
 #endif
           (catMaybes mss)
 #endif
-  pure $ processDependencyInformation rawDepInfo bm mg
+  pure (fingerprintToBS $ Util.fingerprintFingerprints $ map (maybe fingerprint0 msrFingerprint) msrs, processDependencyInformation rawDepInfo bm mg)
 
 -- This is factored out so it can be directly called from the GetModIface
 -- rule. Directly calling this rule means that on the initial load we can
@@ -793,7 +795,7 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
     case mbdeps of
         Nothing -> return Nothing
         Just deps -> do
-            when fullModuleGraph $ void $ uses_ ReportImportCycles deps
+            when fullModuleGraph $ void $ use_ ReportImportCycles file
             ms <- msrModSummary <$> if fullModSummary
                 then use_ GetModSummary file
                 else use_ GetModSummaryWithoutTimestamps file
