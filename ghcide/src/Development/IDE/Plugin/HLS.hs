@@ -361,6 +361,9 @@ toResponseError = \case
         ResponseError (InR ErrorCodes_ParseError) (plId <> ": " <> tPretty err) Nothing
     (PluginId plId, err@(PluginDependencyFailed _)) ->
         ResponseError (InL LSPErrorCodes_ContentModified) (plId <> ": " <> tPretty err) Nothing
+    -- PluginRequestRefused should never be a argument to `toResponseError`, as
+    -- it should be dealt with in `extensiblePlugins`, but this is here to make
+    -- this function complete
     (PluginId plId, err@PluginRequestRefused) ->
         ResponseError (InR ErrorCodes_InvalidRequest) (plId <> ": " <> tPretty err) Nothing
     (PluginId plId, err@(PluginRuleFailed _)) ->

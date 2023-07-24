@@ -7,7 +7,6 @@ module Ide.Plugin.Error (
     runExceptT,
     withExceptT,
     pluginResponseM,
-    handlePluginError,
     hoistExceptT,
     hoistMaybeT,
     handleMaybe,
@@ -15,20 +14,15 @@ module Ide.Plugin.Error (
     getNormalizedFilePathE,
 ) where
 
-import           Control.Monad.Extra           (maybeM)
-import           Control.Monad.IO.Class        (MonadIO, liftIO)
-import           Control.Monad.Trans.Class     (lift)
-import           Control.Monad.Trans.Except    (ExceptT (..), mapExceptT,
-                                                runExceptT, throwE, withExceptT)
-import           Data.Bifunctor                (Bifunctor (first))
-import           Data.String
-
-import           Control.Monad.Trans.Maybe     (MaybeT, mapMaybeT)
-import qualified Data.Text                     as T
-import           Language.LSP.Protocol.Message
+import           Control.Monad.Extra         (maybeM)
+import           Control.Monad.IO.Class      (MonadIO, liftIO)
+import           Control.Monad.Trans.Class   (lift)
+import           Control.Monad.Trans.Except  (ExceptT (..), mapExceptT,
+                                              runExceptT, throwE, withExceptT)
+import           Control.Monad.Trans.Maybe   (MaybeT, mapMaybeT)
+import qualified Data.Text                   as T
 import           Language.LSP.Protocol.Types
 import           Prettyprinter
-import           Prettyprinter.Render.Text     (renderStrict)
 
 -- ----------------------------------------------------------------------------
 -- Plugin Error wrapping
@@ -40,10 +34,7 @@ pluginResponseM handler act =
         Right r  -> pure $ Right r
         Left err -> handler err
 
-handlePluginError :: PluginError -> ResponseError
-handlePluginError msg = ResponseError (InR ErrorCodes_InternalError) (renderStrict simpleDoc) Nothing
-  where simpleDoc = layoutPretty defaultLayoutOptions $ pretty msg
-
+-- See Note [PluginError]
 data PluginError
   = -- |PluginInternalError should be used if something has gone horribly wrong.
     -- All uncaught exceptions will be caught and converted to this error.
@@ -145,3 +136,28 @@ getNormalizedFilePathE uri = handleMaybe (PluginInvalidParams (T.pack $ "uriToNo
         $ toNormalizedUri uri
 
 -- ---------------------------------------------------------------------
+{- Note [PluginError]
+-- Each PluginError corresponds to either a specific ResponseError we want to
+-- return or a specific way we want to log the error. If the currently present
+-- ones are insufficient for the needs of your plugin, please feel free to add
+-- a new one.
+-- Currently the PluginErrors we provide can be broken up into several groups.
+-- First is PluginInternalError, which is the most serious of the errors, and
+-- also the "default" error that is used for things such as uncaught exceptions.
+-- Then we have PluginInvalidRequest, PluginInvalidParams, and PluginParseError.
+-- All three of these along with PluginInternalError are treated individually
+-- and map to a corresponding ResponseError.
+-- Next we have PluginRuleFailed and PluginDependencyFailed, with the only
+-- difference being PluginRuleFailed is specific to Shake rules and
+-- PluginDependencyFailed can be used for everything else. Both of these are
+-- "non-errors", and happen whenever the user's code is in a state where the
+-- plugin is unable to provide a answer to the users request. PluginStaleResolve
+-- is similar to the above two Error types, but is specific to resolve plugins,
+-- and is used only when the data provided by the resolve request is stale,
+-- preventing the proper resolution of it.
+-- Finally we have the outlier, PluginRequestRefused, where we allow a handler
+-- to preform "pluginEnabled" checks inside the handler, and reject the request
+-- after viewing it. The behavior of only one handler passing `pluginEnabled`
+-- and then returning PluginRequestRefused should be the same as if no plugins
+-- passed the `pluginEnabled` stage.
+-}
