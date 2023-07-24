@@ -22,11 +22,11 @@ common warnings
     ghc-options: -Wall
 
 library
-    import:           warnings
     if impl(ghc < 9.2)
       buildable: False
     else
       buildable: True
+    import:           warnings
     exposed-modules:  Ide.Plugin.OverloadedRecordDot
     build-depends:
       , base                  >=4.16 && <5

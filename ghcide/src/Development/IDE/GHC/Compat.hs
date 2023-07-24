@@ -41,6 +41,8 @@ module Development.IDE.GHC.Compat(
 
     Usage(..),
 
+    liftZonkM,
+
     FastStringCompat,
     bytesFS,
     mkFastStringByteString,
@@ -55,6 +57,7 @@ module Development.IDE.GHC.Compat(
     combineRealSrcSpans,
 
     nonDetOccEnvElts,
+    nonDetFoldOccEnv,
 
     isQualifiedImport,
     GhcVersion(..),
@@ -93,6 +96,7 @@ module Development.IDE.GHC.Compat(
     simplifyExpr,
     tidyExpr,
     emptyTidyEnv,
+    tcInitTidyEnv,
     corePrepExpr,
     corePrepPgm,
     lintInteractiveExpr,
@@ -165,6 +169,9 @@ import qualified Data.Set                              as S
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
+#if MIN_VERSION_ghc(9,7,0)
+import           GHC.Tc.Zonk.TcType                    (tcInitTidyEnv)
+#endif
 import qualified GHC.Core.Opt.Pipeline                 as GHC
 import           GHC.Core.Tidy                         (tidyExpr)
 import           GHC.CoreToStg.Prep                    (corePrepPgm)
@@ -247,6 +254,15 @@ import           GHC.Driver.Config.CoreToStg                         (initCoreTo
 import           GHC.Driver.Config.CoreToStg.Prep                    (initCorePrepConfig)
 #endif
 
+#if !MIN_VERSION_ghc(9,7,0)
+liftZonkM :: a -> a
+liftZonkM = id
+#endif
+
+#if !MIN_VERSION_ghc(9,7,0)
+nonDetFoldOccEnv :: (a -> b -> b) -> b -> OccEnv a -> b
+nonDetFoldOccEnv = foldOccEnv
+#endif
 
 #if !MIN_VERSION_ghc(9,3,0)
 nonDetOccEnvElts :: OccEnv a -> [a]
@@ -328,7 +344,9 @@ myCoreToStg logger dflags ictxt
 #endif
              this_mod ml prepd_binds
 
-#if MIN_VERSION_ghc(9,4,2)
+#if MIN_VERSION_ghc(9,8,0)
+    (unzip -> (stg_binds2,_),_)
+#elif MIN_VERSION_ghc(9,4,2)
     (stg_binds2,_)
 #else
     stg_binds2
@@ -537,13 +555,16 @@ data GhcVersion
   | GHC92
   | GHC94
   | GHC96
+  | GHC98
   deriving (Eq, Ord, Show)
 
 ghcVersionStr :: String
 ghcVersionStr = VERSION_ghc
 
 ghcVersion :: GhcVersion
-#if MIN_VERSION_GLASGOW_HASKELL(9,6,0,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,8,0,0)
+ghcVersion = GHC98
+#elif MIN_VERSION_GLASGOW_HASKELL(9,6,0,0)
 ghcVersion = GHC96
 #elif MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
 ghcVersion = GHC94

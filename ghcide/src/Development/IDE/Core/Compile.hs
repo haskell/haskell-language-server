@@ -147,6 +147,11 @@ import           GHC.Driver.Config.CoreToStg.Prep
 import           GHC.Core.Lint.Interactive
 #endif
 
+#if MIN_VERSION_ghc(9,7,0)
+import           Data.Foldable                     (toList)
+import           GHC.Unit.Module.Warnings
+#endif
+
 --Simple constants to make sure the source is consistently named
 sourceTypecheck :: T.Text
 sourceTypecheck = "typecheck"
@@ -479,11 +484,16 @@ filterUsages = id
 -- Important to do this immediately after reading the unit before
 -- anything else has a chance to read `mi_usages`
 shareUsages :: ModIface -> ModIface
-shareUsages iface = iface {mi_usages = usages}
+shareUsages iface
+  = iface
+-- Fixed upstream in GHC 9.8
+#if !MIN_VERSION_ghc(9,7,0)
+      {mi_usages = usages}
   where usages = map go (mi_usages iface)
         go usg@UsageFile{} = usg {usg_file_path = fp}
           where !fp = shareFilePath (usg_file_path usg)
         go usg = usg
+#endif
 
 
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
@@ -646,11 +656,24 @@ compileModule (RunSimplifier simplify) session ms tcg =
     fmap (either (, Nothing) (second Just)) $
         catchSrcErrors (hsc_dflags session) "compile" $ do
             (warnings,desugared_guts) <- withWarnings "compile" $ \tweak -> do
-               let session' = tweak (hscSetFlags (ms_hspp_opts ms) session)
+                 -- Breakpoints don't survive roundtripping from disk
+                 -- and this trips up the verify-core-files check
+                 -- They may also lead to other problems.
+                 -- We have to setBackend ghciBackend in 9.8 as otherwise
+                 -- non-exported definitions are stripped out.
+                 -- However, setting this means breakpoints are generated.
+                 -- Solution: prevent breakpoing generation by unsetting
+                 -- Opt_InsertBreakpoints
+               let session' = tweak $ flip hscSetFlags session
+#if MIN_VERSION_ghc(9,7,0)
+                                    $ flip gopt_unset Opt_InsertBreakpoints
+                                    $ setBackend ghciBackend
+#endif
+                                    $ ms_hspp_opts ms
                -- TODO: maybe settings ms_hspp_opts is unnecessary?
                -- MP: the flags in ModSummary should be right, if they are wrong then
                -- the correct place to fix this is when the ModSummary is created.
-               desugar <- hscDesugar session' (ms { ms_hspp_opts = hsc_dflags session' })  tcg
+               desugar <- hscDesugar session' (ms { ms_hspp_opts = hsc_dflags session' }) tcg
                if simplify
                then do
                  plugins <- readIORef (tcg_th_coreplugins tcg)
@@ -779,23 +802,41 @@ unnecessaryDeprecationWarningFlags
     , Opt_WarnUnusedForalls
     , Opt_WarnUnusedRecordWildcards
     , Opt_WarnInaccessibleCode
+#if !MIN_VERSION_ghc(9,7,0)
     , Opt_WarnWarningsDeprecations
+#endif
     ]
 
 -- | Add a unnecessary/deprecated tag to the required diagnostics.
 #if MIN_VERSION_ghc(9,3,0)
 tagDiag :: (Maybe DiagnosticReason, FileDiagnostic) -> (Maybe DiagnosticReason, FileDiagnostic)
-tagDiag (w@(Just (WarningWithFlag warning)), (nfp, sh, fd))
 #else
 tagDiag :: (WarnReason, FileDiagnostic) -> (WarnReason, FileDiagnostic)
-tagDiag (w@(Reason warning), (nfp, sh, fd))
 #endif
+
+#if MIN_VERSION_ghc(9,7,0)
+tagDiag (w@(Just (WarningWithCategory cat)), (nfp, sh, fd))
+  | cat == defaultWarningCategory -- default warning category is for deprecations
+  = (w, (nfp, sh, fd { _tags = Just $ DiagnosticTag_Deprecated : concat (_tags fd) }))
+tagDiag (w@(Just (WarningWithFlags warnings)), (nfp, sh, fd))
+  | tags <- mapMaybe requiresTag (toList warnings)
+  = (w, (nfp, sh, fd { _tags = Just $ tags ++ concat (_tags fd) }))
+#elif MIN_VERSION_ghc(9,3,0)
+tagDiag (w@(Just (WarningWithFlag warning)), (nfp, sh, fd))
   | Just tag <- requiresTag warning
   = (w, (nfp, sh, fd { _tags = Just $ tag : concat (_tags fd) }))
+#else
+tagDiag (w@(Reason warning), (nfp, sh, fd))
+  | Just tag <- requiresTag warning
+  = (w, (nfp, sh, fd { _tags = Just $ tag : concat (_tags fd) }))
+#endif
   where
     requiresTag :: WarningFlag -> Maybe DiagnosticTag
+#if !MIN_VERSION_ghc(9,7,0)
+    -- doesn't exist on 9.8, we use WarningWithCategory instead
     requiresTag Opt_WarnWarningsDeprecations
       = Just DiagnosticTag_Deprecated
+#endif
     requiresTag wflag  -- deprecation was already considered above
       | wflag `elem` unnecessaryDeprecationWarningFlags
       = Just DiagnosticTag_Unnecessary
