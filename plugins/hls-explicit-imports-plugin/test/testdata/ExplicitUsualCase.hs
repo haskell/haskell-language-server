@@ -1,6 +1,6 @@
-module UsualCase where
+module ExplicitUsualCase where
 
-import A
+import ExplicitA
 
 main :: IO ()
 main = putStrLn $ "hello " ++ a1

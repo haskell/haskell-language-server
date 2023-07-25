@@ -1,4 +1,4 @@
-module E where
+module RefineE where
 
 e1 :: String
 e1 = "e1"

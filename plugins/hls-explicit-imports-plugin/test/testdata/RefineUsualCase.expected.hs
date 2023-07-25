@@ -1,7 +1,7 @@
 module Main where
 
-import A
-import E ( e2 )
+import RefineA
+import RefineE ( e2 )
 import Data.List (intercalate)
 
 main :: IO ()

@@ -1,9 +1,9 @@
 module Main where
 
-import B ( b1 )
-import C ( c1 )
-import D
-import F
+import RefineB ( b1 )
+import RefineC ( c1 )
+import RefineD
+import RefineF
 import Data.List (intercalate)
 
 main :: IO ()

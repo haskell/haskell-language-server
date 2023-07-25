@@ -140,7 +140,6 @@ configurations:
   - ormolu
   - pragmas
   - qualifyImportedNames
-  - refineImports
   - rename
   - stylish-haskell
 # - alternateNumberFormat
@@ -168,7 +167,6 @@ configurations:
 # # - ormolu
 # - pragmas
 # - qualifyImportedNames
-# - refineImports
 # - rename
 # - retrie
 # - splice

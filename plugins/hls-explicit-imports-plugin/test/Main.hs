@@ -15,6 +15,7 @@ import           Data.Foldable                 (find)
 import           Data.Row                      ((.+), (.==))
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
+import           Data.Traversable              (for)
 import qualified Ide.Plugin.ExplicitImports    as ExplicitImports
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
@@ -25,24 +26,29 @@ explicitImportsPlugin :: PluginTestDescriptor ExplicitImports.Log
 explicitImportsPlugin = mkPluginTestDescriptor ExplicitImports.descriptor "explicitImports"
 
 main :: IO ()
-main = defaultTestRunner $
+main = defaultTestRunner $ testGroup "import-actions"
+  [testGroup
+    "Refine Imports"
+    [ codeActionGoldenTest "RefineWithOverride" 3 1
+    , codeLensGoldenTest isRefineImports "RefineUsualCase" 1
+    ],
   testGroup
     "Make imports explicit"
-    [ codeActionAllGoldenTest "UsualCase" 3 0
-    , codeActionAllResolveGoldenTest "UsualCase" 3 0
-    , codeActionOnlyGoldenTest "OnlyThis" 3 0
-    , codeActionOnlyResolveGoldenTest "OnlyThis" 3 0
-    , codeLensGoldenTest "UsualCase" 0
-    , codeActionBreakFile "BreakFile" 4 0
-    , codeActionStaleAction "StaleAction" 4 0
+    [ codeActionAllGoldenTest "ExplicitUsualCase" 3 0
+    , codeActionAllResolveGoldenTest "ExplicitUsualCase" 3 0
+    , codeActionOnlyGoldenTest "ExplicitOnlyThis" 3 0
+    , codeActionOnlyResolveGoldenTest "ExplicitOnlyThis" 3 0
+    , codeLensGoldenTest notRefineImports "ExplicitUsualCase" 0
+    , codeActionBreakFile "ExplicitBreakFile" 4 0
+    , codeActionStaleAction "ExplicitStaleAction" 4 0
     , testCase "No CodeAction when exported" $
       runSessionWithServer explicitImportsPlugin testDataDir $ do
-        doc <- openDoc "Exported.hs" "haskell"
+        doc <- openDoc "ExplicitExported.hs" "haskell"
         action <- getCodeActions doc (pointRange 3 0)
         liftIO $ action @?= []
     , testCase "No CodeLens when exported" $
       runSessionWithServer explicitImportsPlugin testDataDir $ do
-        doc <- openDoc "Exported.hs" "haskell"
+        doc <- openDoc "ExplicitExported.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ lenses @?= []
     , testGroup "Title abbreviation"
@@ -68,7 +74,7 @@ main = defaultTestRunner $
               o = "import " <> T.replicate 80 "F" <> " (Athing, Bthing, ... (3 items))"
           in ExplicitImports.abbreviateImportTitle i @?= o
       ]
-    ]
+    ]]
 
 -- code action tests
 
@@ -87,7 +93,7 @@ codeActionBreakFile fp l c = goldenWithExplicitImports " code action" fp codeAct
   case find ((== Just "Make all imports explicit") . caTitle) actions of
     Just (InR x) -> executeCodeAction x
     _            -> liftIO $ assertFailure "Unable to find CodeAction"
-  where edit = TextDocumentContentChangeEvent $ InL $ #range .== pointRange 2 21
+  where edit = TextDocumentContentChangeEvent $ InL $ #range .== pointRange 2 29
                                                    .+ #rangeLength .== Nothing
                                                    .+ #text .== "x"
 
@@ -147,11 +153,17 @@ caTitle _                         = Nothing
 
 -- code lens tests
 
-codeLensGoldenTest :: FilePath -> Int -> TestTree
-codeLensGoldenTest fp _ = goldenWithExplicitImports " code lens" fp codeActionNoResolveCaps $ \doc -> do
-  (codeLens: _) <- getCodeLenses doc
-  CodeLens {_command = Just c} <- resolveCodeLens codeLens
+codeLensGoldenTest :: (CodeLens -> Bool) -> FilePath -> Int -> TestTree
+codeLensGoldenTest pred fp i = goldenWithExplicitImports " code lens" fp codeActionNoResolveCaps $ \doc -> do
+  codeLenses <- getCodeLenses doc
+  resolvedCodeLenses <- for codeLenses resolveCodeLens
+  (CodeLens {_command = Just c}) <- pure (filter pred resolvedCodeLenses !! i)
   executeCmd c
+
+notRefineImports :: CodeLens -> Bool
+notRefineImports (CodeLens _ (Just (Command text _ _)) _)
+  | "Refine imports to" `T.isPrefixOf` text = False
+notRefineImports _ = True
 
 -- TODO: use the one from lsp-test once that's released
 resolveCodeLens :: CodeLens -> Session CodeLens
@@ -181,3 +193,18 @@ pointRange
   (subtract 1 -> fromIntegral -> line)
   (subtract 1 -> fromIntegral -> col) =
     Range (Position line col) (Position line $ col + 1)
+
+-------------------------------------------------------------------------------
+-- code action tests
+
+codeActionGoldenTest :: FilePath -> Int -> Int -> TestTree
+codeActionGoldenTest fp l c = goldenWithExplicitImports "" fp codeActionNoResolveCaps $ \doc -> do
+  actions <- getCodeActions doc (pointRange l c)
+  case find ((== Just "Refine all imports") . caTitle) actions of
+    Just (InR x) -> executeCodeAction x
+    _            -> liftIO $ assertFailure "Unable to find CodeAction"
+
+isRefineImports :: CodeLens -> Bool
+isRefineImports (CodeLens _ (Just (Command txt _ _)) _)
+  | "Refine imports to" `T.isInfixOf` txt = True
+isRefineImports _ = False
