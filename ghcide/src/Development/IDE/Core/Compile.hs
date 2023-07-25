@@ -361,6 +361,10 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
 #if MIN_VERSION_ghc(9,3,0)
     -- TODO: support backpack
     nodeKeyToInstalledModule :: NodeKey -> Maybe InstalledModule
+    -- We shouldn't get boot files here, but to be safe, never map them to an installed module
+    -- because boot files don't have linkables we can load, and we will fail if we try to look
+    -- for them
+    nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB mod IsBoot) uid)) = Nothing
     nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB mod _) uid)) = Just $ mkModule uid mod
     nodeKeyToInstalledModule _ = Nothing
     moduleToNodeKey :: Module -> NodeKey
@@ -1073,11 +1077,18 @@ mergeEnvs env (ms, deps) extraMods envs = do
         combineModules a b
           | HsSrcFile <- mi_hsc_src (hm_iface a) = a
           | otherwise = b
+
+        -- Prefer non-boot files over non-boot files
+        -- otherwise we can get errors like https://gitlab.haskell.org/ghc/ghc/-/issues/19816
+        -- if a boot file shadows over a non-boot file
+        combineModuleLocations a@(InstalledFound ml m) b | Just fp <- ml_hs_file ml, not ("boot" `isSuffixOf` fp) = a
+        combineModuleLocations _ b = b
+
         concatFC :: FinderCacheState -> [FinderCache] -> IO FinderCache
         concatFC cur xs = do
           fcModules <- mapM (readIORef . fcModuleCache) xs
           fcFiles <- mapM (readIORef . fcFileCache) xs
-          fcModules' <- newIORef $! foldl' (plusInstalledModuleEnv const) cur fcModules
+          fcModules' <- newIORef $! foldl' (plusInstalledModuleEnv combineModuleLocations) cur fcModules
           fcFiles' <- newIORef $! Map.unions fcFiles
           pure $ FinderCache fcModules' fcFiles'
 
