@@ -24,13 +24,13 @@ import           Development.IDE.Core.Tracing  (withTelemetryLogger)
 import           Development.IDE.Main          (isLSP)
 import qualified Development.IDE.Main          as IDEMain
 import qualified Development.IDE.Session       as Session
-import           Development.IDE.Types.Logger  as G
 import qualified Development.IDE.Types.Options as Ghcide
 import           GHC.Stack                     (emptyCallStack)
 import qualified HIE.Bios.Environment          as HieBios
-import qualified HIE.Bios.Types                as HieBios
 import           HIE.Bios.Types                hiding (Log)
+import qualified HIE.Bios.Types                as HieBios
 import           Ide.Arguments
+import           Ide.Logger                    as G
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
                                                 pluginsToVSCodeExtensionSchema)
 import           Ide.Types                     (IdePlugins, PluginId (PluginId),

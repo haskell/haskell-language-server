@@ -1,23 +1,24 @@
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE OverloadedLabels      #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PackageImports        #-}
-{-# LANGUAGE PatternSynonyms       #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE StrictData            #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE ViewPatterns          #-}
-
+{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE DeriveAnyClass            #-}
+{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DuplicateRecordFields     #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE MultiWayIf                #-}
+{-# LANGUAGE NamedFieldPuns            #-}
+{-# LANGUAGE OverloadedLabels          #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE PackageImports            #-}
+{-# LANGUAGE PatternSynonyms           #-}
+{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE StrictData                #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeApplications          #-}
+{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE ViewPatterns              #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
 -- On 9.4 we get a new redundant constraint warning, but deleting the
@@ -117,6 +118,7 @@ import qualified Refact.Fixity                                      as Refact
 import           Ide.Plugin.Config                                  hiding
                                                                     (Config)
 import           Ide.Plugin.Properties
+import           Ide.Plugin.Resolve
 import           Ide.PluginUtils
 import           Ide.Types                                          hiding
                                                                     (Config)
@@ -143,8 +145,6 @@ import           GHC.Generics                                       (Generic)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 #endif
-import           Data.Aeson                                         (Result (Error, Success),
-                                                                     fromJSON)
 import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
@@ -154,7 +154,7 @@ data Log
   | LogGeneratedIdeas NormalizedFilePath [[Refact.Refactoring Refact.SrcSpan]]
   | LogGetIdeas NormalizedFilePath
   | LogUsingExtensions NormalizedFilePath [String] -- Extension is only imported conditionally, so we just stringify them
-  deriving Show
+  | forall a. (Pretty a) => LogResolve a
 
 instance Pretty Log where
   pretty = \case
@@ -163,6 +163,7 @@ instance Pretty Log where
     LogGeneratedIdeas fp ideas -> "Generated hlint ideas for for" <+> viaShow fp <> ":" <+> viaShow ideas
     LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <+> pretty exts
     LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp
+    LogResolve msg -> pretty msg
 
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
@@ -188,7 +189,8 @@ fromStrictMaybe  Strict.Nothing  = Nothing
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-  let (pluginCommands, pluginHandlers) = mkCodeActionWithResolveAndCommand plId codeActionProvider (resolveProvider recorder)
+  let resolveRecorder = cmapWithPrio LogResolve recorder
+      (pluginCommands, pluginHandlers) = mkCodeActionWithResolveAndCommand resolveRecorder plId codeActionProvider (resolveProvider recorder)
   in (defaultPluginDescriptor plId)
   { pluginRules = rules recorder plId
   , pluginCommands = pluginCommands
@@ -423,7 +425,7 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
 
   where
     applyAllAction verTxtDocId =
-      let args = Just $ toJSON (AA verTxtDocId)
+      let args = Just $ toJSON (ApplyHint verTxtDocId Nothing)
         in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionKind_QuickFix) Nothing Nothing Nothing Nothing Nothing args
 
     -- |Some hints do not have an associated refactoring
@@ -434,24 +436,16 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
 
     diags = context ^. LSP.diagnostics
 
-resolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_CodeActionResolve
-resolveProvider recorder ideState _pluginId ca@CodeAction {_data_ = Just data_} = pluginResponse $ do
-  case fromJSON data_ of
-    (Success (AA verTxtDocId@(VersionedTextDocumentIdentifier uri _))) -> do
-        file <-  getNormalizedFilePath uri
-        edit <- ExceptT $ liftIO $ applyHint recorder ideState file Nothing verTxtDocId
+resolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState HlintResolveCommands Method_CodeActionResolve
+resolveProvider recorder ideState _plId ca uri resolveValue = pluginResponse $ do
+  file <-  getNormalizedFilePath uri
+  case resolveValue of
+    (ApplyHint verTxtDocId oneHint) -> do
+        edit <- ExceptT $ liftIO $ applyHint recorder ideState file oneHint verTxtDocId
         pure $ ca & LSP.edit ?~ edit
-    (Success (AO verTxtDocId@(VersionedTextDocumentIdentifier uri _) pos hintTitle)) -> do
-        let oneHint = OneHint pos hintTitle
-        file <-  getNormalizedFilePath uri
-        edit <- ExceptT $ liftIO $ applyHint recorder ideState file (Just oneHint) verTxtDocId
-        pure $ ca & LSP.edit ?~ edit
-    (Success (IH verTxtDocId@(VersionedTextDocumentIdentifier uri _) hintTitle )) -> do
-        file <-  getNormalizedFilePath uri
+    (IgnoreHint verTxtDocId hintTitle ) -> do
         edit <- ExceptT $ liftIO $ ignoreHint recorder ideState file verTxtDocId hintTitle
         pure $ ca & LSP.edit ?~ edit
-    Error s-> throwE ("JSON decoding error: " <> s)
-resolveProvider _ _ _ _ = pluginResponse $ throwE "CodeAction with no data field"
 
 -- | Convert a hlint diagnostic into an apply and an ignore code action
 -- if applicable
@@ -461,13 +455,13 @@ diagnosticToCodeActions verTxtDocId diagnostic
   , let isHintApplicable = "refact:" `T.isPrefixOf` code
   , let hint = T.replace "refact:" "" code
   , let suppressHintTitle = "Ignore hint \"" <> hint <> "\" in this module"
-  , let suppressHintArguments = IH verTxtDocId hint
+  , let suppressHintArguments = IgnoreHint verTxtDocId hint
   = catMaybes
       -- Applying the hint is marked preferred because it addresses the underlying error.
       -- Disabling the rule isn't, because less often used and configuration can be adapted.
       [ if | isHintApplicable
            , let applyHintTitle = "Apply hint \"" <> hint <> "\""
-                 applyHintArguments = AO verTxtDocId start hint ->
+                 applyHintArguments = ApplyHint verTxtDocId (Just $ OneHint start hint) ->
                Just (mkCodeAction applyHintTitle diagnostic (Just (toJSON applyHintArguments)) True)
            | otherwise -> Nothing
       , Just (mkCodeAction suppressHintTitle diagnostic (Just (toJSON suppressHintArguments)) False)
@@ -525,22 +519,25 @@ ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = do
     Nothing -> pure $ Left  "Unable to get fileContents"
 
 -- ---------------------------------------------------------------------
-data HlintResolveCommands = AA { verTxtDocId :: VersionedTextDocumentIdentifier}
-                          | AO { verTxtDocId :: VersionedTextDocumentIdentifier
-                               , start_pos   :: Position
-                               -- | There can be more than one hint suggested at the same position, so HintTitle is used to distinguish between them.
-                               , hintTitle   :: HintTitle
-                               }
-                          | IH { verTxtDocId     :: VersionedTextDocumentIdentifier
-                               , ignoreHintTitle :: HintTitle
-                               } deriving (Generic, ToJSON, FromJSON)
+data HlintResolveCommands =
+    ApplyHint
+      { verTxtDocId :: VersionedTextDocumentIdentifier
+      -- |If Nothing, apply all hints, otherise only apply
+      -- the given hint
+      , oneHint     :: Maybe OneHint
+      }
+  | IgnoreHint
+      { verTxtDocId     :: VersionedTextDocumentIdentifier
+      , ignoreHintTitle :: HintTitle
+      } deriving (Generic, ToJSON, FromJSON)
 
 type HintTitle = T.Text
 
-data OneHint = OneHint
-  { oneHintPos   :: Position
-  , oneHintTitle :: HintTitle
-  } deriving (Eq, Show)
+data OneHint =
+  OneHint
+    { oneHintPos   :: Position
+    , oneHintTitle :: HintTitle
+    } deriving (Generic, Eq, Show, ToJSON, FromJSON)
 
 applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either String WorkspaceEdit)
 applyHint recorder ide nfp mhint verTxtDocId =

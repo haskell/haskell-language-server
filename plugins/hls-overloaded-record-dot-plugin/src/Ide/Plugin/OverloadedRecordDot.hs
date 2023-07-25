@@ -70,20 +70,21 @@ import           Development.IDE.Graph.Classes        (Hashable, NFData (rnf))
 import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
                                                        getFirstPragma,
                                                        insertNewPragma)
-import           Development.IDE.Types.Logger         (Priority (..),
+import           GHC.Generics                         (Generic)
+import           Ide.Logger                           (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))
-import           GHC.Generics                         (Generic)
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
+import           Ide.Plugin.Resolve                   (mkCodeActionHandlerWithResolve)
 import           Ide.PluginUtils                      (getNormalizedFilePath,
                                                        handleMaybeM,
                                                        pluginResponse)
 import           Ide.Types                            (PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
+                                                       ResolveFunction,
                                                        defaultPluginDescriptor,
-                                                       mkCodeActionHandlerWithResolve,
                                                        mkPluginHandler)
 import           Language.LSP.Protocol.Lens           (HasChanges (changes))
 import qualified Language.LSP.Protocol.Lens           as L
@@ -99,16 +100,19 @@ import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        normalizedFilePathToUri,
                                                        type (|?) (..))
 import           Language.LSP.Server                  (getClientCapabilities)
+
 data Log
     = LogShake Shake.Log
     | LogCollectedRecordSelectors [RecordSelectorExpr]
     | LogTextEdits [TextEdit]
+    | forall a. (Pretty a) => LogResolve a
 
 instance Pretty Log where
     pretty = \case
         LogShake shakeLog -> pretty shakeLog
         LogCollectedRecordSelectors recs -> "Collected record selectors:"
                                                 <+> pretty recs
+        LogResolve msg -> pretty msg
 
 data CollectRecordSelectors = CollectRecordSelectors
                     deriving (Eq, Show, Generic)
@@ -167,28 +171,27 @@ instance FromJSON ORDResolveData
 
 descriptor :: Recorder (WithPriority Log) -> PluginId
                 -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId)
-    { pluginHandlers =
-      mkCodeActionHandlerWithResolve codeActionProvider resolveProvider
+descriptor recorder plId =
+  let resolveRecorder = cmapWithPrio LogResolve recorder
+      pluginHandler = mkCodeActionHandlerWithResolve resolveRecorder codeActionProvider resolveProvider
+  in (defaultPluginDescriptor plId)
+    { pluginHandlers = pluginHandler
     , pluginRules = collectRecSelsRule recorder
     }
 
-resolveProvider :: PluginMethodHandler IdeState 'Method_CodeActionResolve
-resolveProvider ideState pId ca@(CodeAction _ _ _ _ _ _ _ (Just resData)) =
-    pluginResponse $ do
-        case fromJSON resData of
-            Success (ORDRD uri int) -> do
-                nfp <- getNormalizedFilePath uri
-                CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
-                pragma <- getFirstPragma pId ideState nfp
-                case IntMap.lookup int crsDetails of
-                    Just rse -> pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
-                    -- We need to throw a content modified error here, see
-                    -- https://github.com/microsoft/language-server-protocol/issues/1738
-                    -- but we need fendor's plugin error response pr to make it
-                    -- convenient to use here, so we will wait to do that till that's merged
-                    _        -> throwE "Content Modified Error"
-            _ -> throwE "Unable to deserialize the data"
+resolveProvider :: ResolveFunction IdeState ORDResolveData 'Method_CodeActionResolve
+resolveProvider ideState plId ca uri (ORDRD _ int) =
+  pluginResponse $ do
+    nfp <- getNormalizedFilePath uri
+    CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
+    pragma <- getFirstPragma plId ideState nfp
+    case IntMap.lookup int crsDetails of
+        Just rse -> pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
+        -- We need to throw a content modified error here, see
+        -- https://github.com/microsoft/language-server-protocol/issues/1738
+        -- but we need fendor's plugin error response pr to make it
+        -- convenient to use here, so we will wait to do that till that's merged
+        _        -> throwE "Content Modified Error"
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =

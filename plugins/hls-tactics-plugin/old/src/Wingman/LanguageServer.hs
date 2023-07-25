@@ -60,7 +60,7 @@ import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
 import           Wingman.Types
-import Development.IDE.Types.Logger (Recorder, cmapWithPrio, WithPriority, Pretty (pretty))
+import Ide.Logger (Recorder, cmapWithPrio, WithPriority, Pretty (pretty))
 import qualified Development.IDE.Core.Shake as Shake
 
 

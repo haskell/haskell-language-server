@@ -22,7 +22,9 @@ import qualified Development.IDE.Main                     as IDEMain
 import qualified Development.IDE.Monitoring.EKG           as EKG
 import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
-import           Development.IDE.Types.Logger             (Logger (Logger),
+import           Development.IDE.Types.Options
+import           GHC.Stack                                (emptyCallStack)
+import           Ide.Logger                               (Logger (Logger),
                                                            LoggingColumn (DataColumn, PriorityColumn),
                                                            Pretty (pretty),
                                                            Priority (Debug, Error, Info),
@@ -33,9 +35,7 @@ import           Development.IDE.Types.Logger             (Logger (Logger),
                                                            layoutPretty,
                                                            makeDefaultStderrRecorder,
                                                            renderStrict)
-import qualified Development.IDE.Types.Logger             as Logger
-import           Development.IDE.Types.Options
-import           GHC.Stack                                (emptyCallStack)
+import qualified Ide.Logger                               as Logger
 import           Ide.Plugin.Config                        (Config (checkParents, checkProject))
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
 import           Ide.Types                                (PluginDescriptor (pluginNotificationHandlers),

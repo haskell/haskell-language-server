@@ -197,7 +197,6 @@ library
         Development.IDE.Types.HscEnvEq
         Development.IDE.Types.KnownTargets
         Development.IDE.Types.Location
-        Development.IDE.Types.Logger
         Development.IDE.Types.Monitoring
         Development.IDE.Monitoring.OpenTelemetry
         Development.IDE.Types.Options

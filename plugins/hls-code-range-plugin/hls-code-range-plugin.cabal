@@ -64,6 +64,7 @@ test-suite tests
     , filepath
     , ghcide                     == 2.1.0.0
     , hls-code-range-plugin
+    , hls-plugin-api
     , hls-test-utils             == 2.1.0.0
     , lens
     , lsp

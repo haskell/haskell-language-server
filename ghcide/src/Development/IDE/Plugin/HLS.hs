@@ -32,7 +32,7 @@ import           Development.IDE.Graph         (Rules)
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
 import qualified Development.IDE.Plugin        as P
-import           Development.IDE.Types.Logger  hiding (Error)
+import           Ide.Logger                    hiding (Error)
 import           Ide.Plugin.Config
 import           Ide.PluginUtils               (getClientConfig)
 import           Ide.Types                     as HLS

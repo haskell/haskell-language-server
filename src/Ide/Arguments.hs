@@ -20,8 +20,8 @@ module Ide.Arguments
 import           Data.Version
 import           Development.IDE               (IdeState)
 import           Development.IDE.Main          (Command (..), commandP)
-import           Development.IDE.Types.Logger  (Priority (..))
 import           GitHash                       (giHash, tGitInfoCwdTry)
+import           Ide.Logger                    (Priority (..))
 import           Ide.Types                     (IdePlugins)
 import           Options.Applicative
 import           Paths_haskell_language_server

@@ -36,7 +36,7 @@ import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageE
                                                            hscEnv)
 import qualified Development.IDE.Types.KnownTargets       as KT
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger             (Pretty (pretty),
+import           Ide.Logger                               (Pretty (pretty),
                                                            Recorder,
                                                            WithPriority,
                                                            cmapWithPrio)
@@ -66,7 +66,7 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions recorder
   , pluginHandlers = mkPluginHandler SMethod_TextDocumentCompletion getCompletionsLSP
-                  <> mkPluginHandler SMethod_CompletionItemResolve resolveCompletion
+                     <> mkResolveHandler SMethod_CompletionItemResolve resolveCompletion
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   , pluginPriority = ghcideCompletionsPluginPriority
   }
@@ -119,11 +119,9 @@ dropListFromImportDecl iDecl = let
     f x = x
     in f <$> iDecl
 
-resolveCompletion :: IdeState -> PluginId -> CompletionItem -> LSP.LspM Config (Either ResponseError CompletionItem)
-resolveCompletion ide _ comp@CompletionItem{_detail,_documentation,_data_}
-  | Just resolveData <- _data_
-  , Success (CompletionResolveData uri needType (NameDetails mod occ)) <- fromJSON resolveData
-  , Just file <- uriToNormalizedFilePath $ toNormalizedUri uri
+resolveCompletion :: ResolveFunction IdeState CompletionResolveData 'Method_CompletionItemResolve
+resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} uri (CompletionResolveData _ needType (NameDetails mod occ))
+  |  Just file <- uriToNormalizedFilePath $ toNormalizedUri uri
   = liftIO $ runIdeAction "Completion resolve" (shakeExtras ide) $ do
     msess <- useWithStaleFast GhcSessionDeps file
     case msess of
@@ -160,7 +158,7 @@ resolveCompletion ide _ comp@CompletionItem{_detail,_documentation,_data_}
   where
     stripForall ty = case splitForAllTyCoVars ty of
       (_,res) -> res
-resolveCompletion _ _ comp = pure (Right comp)
+resolveCompletion _ _ _ _ _ = pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) "Unable to get normalized file path for url" Nothing
 
 -- | Generate code actions.
 getCompletionsLSP
