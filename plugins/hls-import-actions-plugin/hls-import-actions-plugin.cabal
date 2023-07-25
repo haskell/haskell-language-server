@@ -1,7 +1,7 @@
 cabal-version:      2.2
-name:               hls-explicit-imports-plugin
+name:               hls-import-actions-plugin
 version:            2.1.0.0
-synopsis:           Explicit imports plugin for Haskell Language Server
+synopsis:           Import actions plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 license:            Apache-2.0
@@ -30,7 +30,7 @@ common warnings
 library
   import:           warnings
   buildable: True
-  exposed-modules:    Ide.Plugin.ExplicitImports
+  exposed-modules:    Ide.Plugin.ImportActions
   hs-source-dirs:     src
   build-depends:
     , aeson

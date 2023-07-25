@@ -89,8 +89,8 @@ flag eval
   default:     True
   manual:      True
 
-flag importLens
-  description: Enable importLens plugin
+flag importActions
+  description: Enable importActions plugin
   default:     True
   manual:      True
 
@@ -241,10 +241,10 @@ common eval
     build-depends: hls-eval-plugin == 2.1.0.0
     cpp-options: -Dhls_eval
 
-common importLens
-  if flag(importLens)
-    build-depends: hls-explicit-imports-plugin == 2.1.0.0
-    cpp-options: -Dhls_importLens
+common importActions
+  if flag(importActions)
+    build-depends: hls-import-actions-plugin == 2.1.0.0
+    cpp-options: -Dhls_importActions
 
 common rename
   if flag(rename)
@@ -366,7 +366,7 @@ library
                   , class
                   , haddockComments
                   , eval
-                  , importLens
+                  , importActions
                   , rename
                   , retrie
                   , tactic

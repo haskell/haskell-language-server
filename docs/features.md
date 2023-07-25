@@ -174,15 +174,20 @@ Known limitations:
 
 ### Make import lists fully explicit
 
-Provided by: `hls-explicit-imports-plugin`
+Provided by: `hls-import-actions-plugin`
 
 Code action kind: `quickfix.literals.style`
 
 Make import lists fully explicit (same as the code lens).
 
+### Refine import
+
+Provided by: `hls-import-actions-plugin`
+
 Code action kind: `quickfix.import.refine`
 
 Refines imports to more specific modules when names are re-exported (same as the code lens).
+
 ### Qualify imported names
 
 Provided by: `hls-qualify-imported-names-plugin`
@@ -341,12 +346,17 @@ Known limitations:
 
 ### Make import lists fully explicit code lens
 
-Provided by: `hls-explicit-imports-plugin`
+Provided by: `hls-import-actions-plugin`
 
 Shows fully explicit import lists and rewrites them with a click (same as the code action).
-Shows refined imports and applies them with a click (same as the code action).
 
 ![Imports code lens Demo](https://imgur.com/pX9kvY4.gif)
+
+### Refine import code lens
+
+Provided by: `hls-import-actions-plugin`
+
+Shows refined imports and applies them with a click (same as the code action).
 
 ### Fix module names
 

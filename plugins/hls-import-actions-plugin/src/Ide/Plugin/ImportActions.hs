@@ -9,11 +9,9 @@
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE ViewPatterns              #-}
-module Ide.Plugin.ExplicitImports
+module Ide.Plugin.ImportActions
   ( descriptor
   , descriptorForModules
-  , extractMinimalImports
-  , within
   , abbreviateImportTitle
   , Log(..)
   ) where
@@ -30,6 +28,7 @@ import qualified Data.IntMap                          as IM (IntMap, elems,
                                                              fromList, (!?))
 import           Data.IORef                           (readIORef)
 import qualified Data.Map.Strict                      as Map
+import           Data.Maybe                           (mapMaybe)
 import qualified Data.Set                             as S
 import           Data.String                          (fromString)
 import qualified Data.Text                            as T
@@ -89,7 +88,7 @@ descriptorForModules recorder modFilter plId =
   in (defaultPluginDescriptor plId)
     {
       -- This plugin provides a command handler
-      pluginCommands = [PluginCommand importCommandId "Explicit import command" (runImportCommand recorder)],
+      pluginCommands = [PluginCommand importCommandId "Import actions command" (runImportCommand recorder)],
       -- This plugin defines a new rule
       pluginRules = minimalImportsRule recorder modFilter,
       pluginHandlers =
@@ -102,7 +101,7 @@ descriptorForModules recorder modFilter plId =
     }
 
 -- | The actual command handler
-runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState EIResolveData
+runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState IAResolveData
 runImportCommand recorder ideState eird@(ResolveOne _ _) = pluginResponse $ do
   wedit <- resolveWTextEdit ideState eird
   _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) logErrors
@@ -114,25 +113,28 @@ runImportCommand recorder ideState eird@(ResolveOne _ _) = pluginResponse $ do
 runImportCommand _ _ rd = do
   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) (T.pack $ "Unexpected argument for command handler:" <> show rd) Nothing
 
--- | For every implicit import statement, return a code lens of the corresponding explicit import
--- Example - for the module below:
---
+-- | We provide two code lenses for imports. The first lens makes imports
+-- explicit. For example, for the module below:
 -- > import Data.List
--- >
 -- > f = intercalate " " . sortBy length
---
 -- the provider should produce one code lens associated to the import statement:
---
 -- > import Data.List (intercalate, sortBy)
+--
+-- | The second one allows us to import functions directly from the original
+-- module. For example, for the following import
+-- > import Random.ReExporting.Module (liftIO)
+-- the provider should produce one code lens associated to the import statement:
+-- > Refine imports to import Control.Monad.IO.Class (liftIO)
 lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
 lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}}
   = pluginResponse $ do
     nfp <- getNormalizedFilePath _uri
-    mbMinImports <- liftIO $ runAction "MinimalImports" state $ use MinimalImports nfp
+    mbMinImports <- liftIO $ runAction "ImportActions" state $ useWithStale ImportActions nfp
     case mbMinImports of
-      Just (MinimalImportsResult{forLens}) -> do
-        let lens = [ generateLens _uri range int
-                    | (range, int) <- forLens]
+      Just (ImportActionsResult{forLens}, pm) -> do
+        let lens = [ generateLens _uri newRange int
+                    | (range, int) <- forLens
+                    , Just newRange <- [toCurrentRange pm range]]
         pure $ InL lens
       _ ->
         pure $ InL []
@@ -142,14 +144,14 @@ lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {
                    , _range = range
                    , _command = Nothing }
 
-lensResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState EIResolveData 'Method_CodeLensResolve
+lensResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState IAResolveData 'Method_CodeLensResolve
 lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid)
   = pluginResponse $ do
     nfp <- getNormalizedFilePath uri
-    (MinimalImportsResult{forResolve}) <-
-      handleMaybeM "Unable to run Minimal Imports"
+    (ImportActionsResult{forResolve}, _) <-
+      handleMaybeM "Unable to run Import Actions"
       $ liftIO
-      $ runAction "MinimalImports" ideState $ use MinimalImports nfp
+      $ runAction "ImportActions" ideState $ useWithStale ImportActions nfp
     target <- handleMaybe "Unable to resolve lens" $ forResolve IM.!? uid
     let updatedCodeLens = cl & L.command ?~  mkCommand plId target
     pure updatedCodeLens
@@ -161,18 +163,22 @@ lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid)
 lensResolveProvider _ _ _ _ _ rd = do
    pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) (T.pack $ "Unexpected argument for lens resolve handler: " <> show rd) Nothing
 
--- | If there are any implicit imports, provide both one code action per import
---   to make that specific import explicit, and one code action to turn them all
---   into explicit imports.
+-- |For explicit imports: If there are any implicit imports, provide both one
+-- code action per import to make that specific import explicit, and one code
+-- action to turn them all into explicit imports. For refine imports: If there
+-- are any reexported imports, provide both one code action per import to refine
+-- that specific import, and one code action to refine all imports.
 codeActionProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier {_uri} range _context)
   = pluginResponse $ do
     nfp <- getNormalizedFilePath _uri
-    (MinimalImportsResult{forCodeActions}) <-
-      handleMaybeM "Unable to run Minimal Imports"
+    (ImportActionsResult{forCodeActions}, pm) <-
+      handleMaybeM "Unable to run Import Actions"
         $ liftIO
-        $ runAction "MinimalImports" ideState $ use MinimalImports nfp
-    let relevantCodeActions = filterByRange range forCodeActions
+        $ runAction "ImportActions" ideState $ useWithStale ImportActions nfp
+    newRange <- handleMaybe "Unable to get new range"
+        $ toCurrentRange pm range
+    let relevantCodeActions = filterByRange newRange forCodeActions
         allExplicit =
           [InR $ mkCodeAction "Make all imports explicit" (Just $ A.toJSON $ ExplicitAll _uri)
           | not $ null relevantCodeActions ]
@@ -195,56 +201,58 @@ codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier 
             , _disabled = Nothing
             , _data_ = data_}
 
-codeActionResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState EIResolveData 'Method_CodeActionResolve
+codeActionResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState IAResolveData 'Method_CodeActionResolve
 codeActionResolveProvider _ ideState _ ca _ rd =
   pluginResponse $ do
     wedit <- resolveWTextEdit ideState rd
     pure $ ca & L.edit ?~ wedit
 --------------------------------------------------------------------------------
 
-resolveWTextEdit :: IdeState -> EIResolveData -> ExceptT String (LspT Config IO) WorkspaceEdit
+resolveWTextEdit :: IdeState -> IAResolveData -> ExceptT String (LspT Config IO) WorkspaceEdit
 resolveWTextEdit ideState (ResolveOne uri int) = do
   nfp <- getNormalizedFilePath uri
-  (MinimalImportsResult{forResolve}) <-
-    handleMaybeM "Unable to run Minimal Imports"
+  (ImportActionsResult{forResolve}, pm) <-
+    handleMaybeM "Unable to run Import Actions"
     $ liftIO
-    $ runAction "MinimalImports" ideState $ use MinimalImports nfp
+    $ runAction "ImportActions" ideState $ useWithStale ImportActions nfp
   iEdit <- handleMaybe "Unable to resolve text edit" $ forResolve IM.!? int
-  pure $ mkWorkspaceEdit uri [iEdit]
+  pure $ mkWorkspaceEdit uri [iEdit] pm
 resolveWTextEdit ideState (ExplicitAll uri) = do
   nfp <- getNormalizedFilePath uri
-  (MinimalImportsResult{forResolve}) <-
-    handleMaybeM "Unable to run Minimal Imports"
+  (ImportActionsResult{forResolve}, pm) <-
+    handleMaybeM "Unable to run Import Actions"
     $ liftIO
-    $ runAction "MinimalImports" ideState $ use MinimalImports nfp
+    $ runAction "ImportActions" ideState $ useWithStale ImportActions nfp
   let edits = [ ie | ie@ImportEdit{ieResType = ExplicitImport} <- IM.elems forResolve]
-  pure $ mkWorkspaceEdit uri edits
+  pure $ mkWorkspaceEdit uri edits pm
 resolveWTextEdit ideState (RefineAll uri) = do
   nfp <- getNormalizedFilePath uri
-  (MinimalImportsResult{forResolve}) <-
-    handleMaybeM "Unable to run Minimal Imports"
+  (ImportActionsResult{forResolve}, pm) <-
+    handleMaybeM "Unable to run Import Actions"
     $ liftIO
-    $ runAction "MinimalImports" ideState $ use MinimalImports nfp
+    $ runAction "ImportActions" ideState $ useWithStale ImportActions nfp
   let edits = [ re | re@ImportEdit{ieResType = RefineImport} <- IM.elems forResolve]
-  pure $ mkWorkspaceEdit uri edits
-mkWorkspaceEdit :: Uri -> [ImportEdit] -> WorkspaceEdit
-mkWorkspaceEdit uri edits =
-      WorkspaceEdit {_changes = Just $ Map.fromList [(uri, toWEdit <$> edits)]
+  pure $ mkWorkspaceEdit uri edits pm
+mkWorkspaceEdit :: Uri -> [ImportEdit] -> PositionMapping -> WorkspaceEdit
+mkWorkspaceEdit uri edits pm =
+      WorkspaceEdit {_changes = Just $ Map.fromList [(uri, mapMaybe toWEdit edits)]
                     , _documentChanges = Nothing
                     , _changeAnnotations = Nothing}
-  where toWEdit ImportEdit{ieRange, ieText} = TextEdit ieRange ieText
+  where toWEdit ImportEdit{ieRange, ieText} =
+          let newRange = toCurrentRange pm ieRange
+          in (\r -> TextEdit r ieText) <$> newRange
 
-data MinimalImports = MinimalImports
+data ImportActions = ImportActions
   deriving (Show, Generic, Eq, Ord)
 
-instance Hashable MinimalImports
+instance Hashable ImportActions
 
-instance NFData MinimalImports
+instance NFData ImportActions
 
-type instance RuleResult MinimalImports = MinimalImportsResult
+type instance RuleResult ImportActions = ImportActionsResult
 
 data ResultType = ExplicitImport | RefineImport
-data MinimalImportsResult = MinimalImportsResult
+data ImportActionsResult = ImportActionsResult
   { -- |For providing the code lenses we need to have a range, and a unique id
     -- that is later resolved to the new text for each import. It is stored in
     -- a list, because we always need to provide all the code lens in a file.
@@ -261,11 +269,11 @@ data MinimalImportsResult = MinimalImportsResult
 data ImportEdit = ImportEdit { ieRange :: Range, ieText :: T.Text, ieResType :: ResultType}
 data ImportAction = ImportAction { iaRange :: Range, iaUniqueId :: Int, iaResType :: ResultType}
 
-instance Show MinimalImportsResult where show _ = "<minimalImportsResult>"
+instance Show ImportActionsResult where show _ = "<ImportActionsResult>"
 
-instance NFData MinimalImportsResult where rnf = rwhnf
+instance NFData ImportActionsResult where rnf = rwhnf
 
-data EIResolveData = ResolveOne
+data IAResolveData = ResolveOne
                       { uri      :: Uri
                       , importId :: Int }
                     | ExplicitAll
@@ -282,7 +290,7 @@ exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
 exportedModuleStrings _ = []
 
 minimalImportsRule :: Recorder (WithPriority Log) -> (ModuleName -> Bool) -> Rules ()
-minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \MinimalImports nfp -> runMaybeT $ do
+minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \ImportActions nfp -> runMaybeT $ do
   -- Get the typechecking artifacts from the module
   tmr <- MaybeT $ use TypeCheck nfp
   -- We also need a GHC session with all the dependencies
@@ -343,7 +351,7 @@ minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogSha
                                 u <- U.hashUnique <$> U.newUnique
                                 pure (u,  rt)
   let rangeAndUnique =  [ ImportAction r u rt | (u, (r, (_, rt))) <- uniqueAndRangeAndText ]
-  pure MinimalImportsResult
+  pure ImportActionsResult
                       { forLens = (\ImportAction{..} -> (iaRange, iaUniqueId)) <$> rangeAndUnique
                       , forCodeActions = RM.fromList iaRange rangeAndUnique
                       , forResolve =  IM.fromList ((\(u, (r, (te, ty))) -> (u, ImportEdit r te ty)) <$> uniqueAndRangeAndText) }
@@ -437,12 +445,6 @@ abbreviateImportTitle input =
 
 --------------------------------------------------------------------------------
 
-within :: Range -> SrcSpan -> Bool
-within (Range start end) srcSpan =
-  isInsideSrcSpan start srcSpan || isInsideSrcSpan end srcSpan
-
---------------------------------------------------------------------------------
-
 
 filterByImport :: LImportDecl GhcRn -> Map.Map ModuleName [AvailInfo] -> Maybe (Map.Map ModuleName [AvailInfo])
 #if MIN_VERSION_ghc(9,5,0)
@@ -469,11 +471,11 @@ filterByImport _ _ = Nothing
 
 constructImport :: LImportDecl GhcRn -> (ModuleName, [AvailInfo]) -> LImportDecl GhcRn
 #if MIN_VERSION_ghc(9,5,0)
-constructImport i@(L lim id@ImportDecl {ideclName = L _ mn, ideclImportList = Just (hiding, L _ names)})
+constructImport (L lim imd@ImportDecl {ideclName = L _ _, ideclImportList = Just (hiding, L _ names)})
 #else
-constructImport i@(L lim id@ImportDecl{ideclName = L _ mn, ideclHiding = Just (hiding, L _ names)})
+constructImport (L lim imd@ImportDecl{ideclName = L _ _, ideclHiding = Just (hiding, L _ names)})
 #endif
-  (newModuleName, avails) = L lim id
+  (newModuleName, avails) = L lim imd
     { ideclName = noLocA newModuleName
 #if MIN_VERSION_ghc(9,5,0)
     , ideclImportList = Just (hiding, noLocA newNames)
