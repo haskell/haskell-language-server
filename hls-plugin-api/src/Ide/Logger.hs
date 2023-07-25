@@ -1,11 +1,18 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- | This is a compatibility module that abstracts over the
 -- concrete choice of logging framework so users can plug in whatever
 -- framework they want to.
-module Development.IDE.Types.Logger
+module Ide.Logger
   ( Priority(..)
   , Logger(..)
   , Recorder(..)
@@ -65,8 +72,7 @@ import           Prettyprinter.Render.Text     (renderStrict)
 import           System.IO                     (Handle, IOMode (AppendMode),
                                                 hClose, hFlush, openFile,
                                                 stderr)
-import           UnliftIO                      (MonadUnliftIO, displayException,
-                                                finally, try)
+import           UnliftIO                      (MonadUnliftIO, finally, try)
 
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord

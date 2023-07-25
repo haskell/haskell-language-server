@@ -152,8 +152,8 @@ import           Development.IDE.Types.Exports
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import           Development.IDE.Types.KnownTargets
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger           hiding (Priority)
-import qualified Development.IDE.Types.Logger           as Logger
+import           Ide.Logger           hiding (Priority)
+import qualified Ide.Logger           as Logger
 import           Development.IDE.Types.Monitoring       (Monitoring (..))
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake

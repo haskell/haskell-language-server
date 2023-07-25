@@ -18,7 +18,7 @@ import           Control.DeepSeq                      (rwhnf)
 import           Control.Monad                        (mzero)
 import           Control.Monad.Extra                  (whenMaybe)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
-import           Data.Aeson.Types                     (Value (..), toJSON)
+import           Data.Aeson.Types                     (Value, toJSON)
 import qualified Data.Aeson.Types                     as A
 import           Data.List                            (find)
 import qualified Data.Map                             as Map
@@ -46,10 +46,10 @@ import           Development.IDE.Graph.Classes
 import           Development.IDE.Spans.LocalBindings  (Bindings, getFuzzyScope)
 import           Development.IDE.Types.Location       (Position (Position, _character, _line),
                                                        Range (Range, _end, _start))
-import           Development.IDE.Types.Logger         (Pretty (pretty),
+import           GHC.Generics                         (Generic)
+import           Ide.Logger                           (Pretty (pretty),
                                                        Recorder, WithPriority,
                                                        cmapWithPrio)
-import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types                            (CommandFunction,
@@ -69,10 +69,11 @@ import           Language.LSP.Protocol.Types          (ApplyWorkspaceEditParams 
                                                        CodeLens (CodeLens),
                                                        CodeLensParams (CodeLensParams, _textDocument),
                                                        Diagnostic (..),
+                                                       Null (Null),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
                                                        TextEdit (TextEdit),
                                                        WorkspaceEdit (WorkspaceEdit),
-                                                       type (|?) (InL))
+                                                       type (|?) (..))
 import qualified Language.LSP.Server                  as LSP
 import           Text.Regex.TDFA                      ((=~), (=~~))
 
@@ -161,7 +162,7 @@ generateLens pId _range title edit =
 commandHandler :: CommandFunction IdeState WorkspaceEdit
 commandHandler _ideState wedit = do
   _ <- LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right Null
+  return $ Right $ InR Null
 
 --------------------------------------------------------------------------------
 

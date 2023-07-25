@@ -15,6 +15,7 @@ module Development.IDE.Plugin.CodeAction
     ) where
 
 import           Control.Applicative                               ((<|>))
+import           Control.Applicative.Combinators.NonEmpty          (sepBy1)
 import           Control.Arrow                                     (second,
                                                                     (&&&),
                                                                     (>>>))
@@ -22,7 +23,6 @@ import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                                        as A
 import           Data.Char
 import qualified Data.DList                                        as DL
 import           Data.Function
@@ -65,15 +65,17 @@ import           Development.IDE.Plugin.Plugins.ImportUtils
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger                      hiding
-                                                                   (group)
 import           Development.IDE.Types.Options
 import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
+import           Ide.Logger                                        hiding
+                                                                   (group)
+import qualified Text.Regex.Applicative                            as RE
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Parser.Annotation                             (TokenLocation (..))
 #endif
-import           Ide.PluginUtils                                   (subRange)
+import           Ide.PluginUtils                                   (extractTextInRange,
+                                                                    subRange)
 import           Ide.Types
 import           Language.LSP.Protocol.Message                     (ResponseError,
                                                                     SMethod (..))
@@ -85,7 +87,7 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     Command,
                                                                     Diagnostic (..),
                                                                     MessageType (..),
-                                                                    Null,
+                                                                    Null (Null),
                                                                     ShowMessageParams (..),
                                                                     TextDocumentIdentifier (TextDocumentIdentifier),
                                                                     TextEdit (TextEdit, _range),
@@ -212,7 +214,7 @@ extendImportHandler ideState edit@ExtendImport {..} = do
           <> printOutputable srcSpan
           <> ")"
     void $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right A.Null
+  return $ Right $ InR Null
 
 extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
 extendImportHandler' ideState ExtendImport {..}
@@ -1474,7 +1476,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
         where moduleText = moduleNameText identInfo
 
 suggestNewImport :: DynFlags -> ExportsMap -> Annotated ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
-suggestNewImport df packageExportsMap ps fileContents Diagnostic{_message}
+suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
   , qual <- extractQualifiedModuleName msg
@@ -1483,16 +1485,92 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{_message}
         >>= (findImportDeclByModuleName hsmodImports . T.unpack)
         >>= ideclAs . unLoc
         <&> T.pack . moduleNameString . unLoc
+  , -- tentative workaround for detecting qualification in GHC 9.4
+    -- FIXME: We can delete this after dropping the support for GHC 9.4
+    qualGHC94 <-
+        guard (ghcVersion == GHC94)
+            *> extractQualifiedModuleNameFromMissingName (extractTextInRange _range fileContents)
   , Just (range, indent) <- newImportInsertRange ps fileContents
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
   = let qis = qualifiedImportStyle df
+        -- FIXME: we can use thingMissing once the support for GHC 9.4 is dropped.
+        -- In what fllows, @missing@ is assumed to be qualified name.
+        -- @thingMissing@ is already as desired with GHC != 9.4.
+        -- In GHC 9.4, however, GHC drops a module qualifier from a qualified symbol.
+        -- Thus we need to explicitly concatenate qualifier explicity in GHC 9.4.
+        missing
+            | GHC94 <- ghcVersion
+            , isNothing (qual <|> qual')
+            , Just q <- qualGHC94 =
+                qualify q thingMissing
+            | otherwise = thingMissing
         suggestions = nubSortBy simpleCompareImportSuggestion
-          (constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions qis) in
+          (constructNewImportSuggestions packageExportsMap (qual <|> qual' <|> qualGHC94, missing) extendImportSuggestions qis) in
     map (\(ImportSuggestion _ kind (unNewImport -> imp)) -> (imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))) suggestions
   where
+    qualify q (NotInScopeDataConstructor d) = NotInScopeDataConstructor (q <> "." <> d)
+    qualify q (NotInScopeTypeConstructorOrClass d) = NotInScopeTypeConstructorOrClass (q <> "." <> d)
+    qualify q (NotInScopeThing d) = NotInScopeThing (q <> "." <> d)
+
     L _ HsModule {..} = astA ps
 suggestNewImport _ _ _ _ _ = []
+
+{- |
+Extracts qualifier of the symbol from the missing symbol.
+Input must be either a plain qualified variable or possibly-parenthesized qualified binary operator (though no strict checking is done for symbol part).
+This is only needed to alleviate the issue #3473.
+
+FIXME: We can delete this after dropping the support for GHC 9.4
+
+>>> extractQualifiedModuleNameFromMissingName "P.lookup"
+Just "P"
+
+>>> extractQualifiedModuleNameFromMissingName "ΣP3_'.σlookup"
+Just "\931P3_'"
+
+>>> extractQualifiedModuleNameFromMissingName "ModuleA.Gre_ekσ.goodδ"
+Just "ModuleA.Gre_ek\963"
+
+>>> extractQualifiedModuleNameFromMissingName "(ModuleA.Gre_ekσ.+)"
+Just "ModuleA.Gre_ek\963"
+
+>>> extractQualifiedModuleNameFromMissingName "(ModuleA.Gre_ekσ..|.)"
+Just "ModuleA.Gre_ek\963"
+
+>>> extractQualifiedModuleNameFromMissingName "A.B.|."
+Just "A.B"
+-}
+extractQualifiedModuleNameFromMissingName :: T.Text -> Maybe T.Text
+extractQualifiedModuleNameFromMissingName (T.strip -> missing)
+    = T.pack <$> (T.unpack missing RE.=~ qualIdentP)
+    where
+        {-
+        NOTE: Haskell 2010 allows /unicode/ upper & lower letters
+        as a module name component; otoh, regex-tdfa only allows
+        /ASCII/ letters to be matched with @[[:upper:]]@ and/or @[[:lower:]]@.
+        Hence we use regex-applicative(-text) for finer-grained predicates.
+
+        RULES (from [Section 10 of Haskell 2010 Report](https://www.haskell.org/onlinereport/haskell2010/haskellch10.html)):
+            modid	→	{conid .} conid
+            conid	→	large {small | large | digit | ' }
+            small	→	ascSmall | uniSmall | _
+            ascSmall	→	a | b | … | z
+            uniSmall	→	any Unicode lowercase letter
+            large	→	ascLarge | uniLarge
+            ascLarge	→	A | B | … | Z
+            uniLarge	→	any uppercase or titlecase Unicode letter
+        -}
+
+        qualIdentP = parensQualOpP <|> qualVarP
+        parensQualOpP = RE.sym '(' *> modNameP <* RE.sym '.' <* RE.anySym <* RE.few RE.anySym <* RE.sym ')'
+        qualVarP = modNameP <* RE.sym '.' <* RE.some RE.anySym
+        conIDP = RE.withMatched $
+            RE.psym isUpper
+            *> RE.many
+                (RE.psym $ \c -> c == '\'' || c == '_' || isUpper c || isLower c || isDigit c)
+        modNameP = fmap snd $ RE.withMatched $ conIDP `sepBy1` RE.sym '.'
+
 
 constructNewImportSuggestions
   :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> QualifiedImportStyle -> [ImportSuggestion]

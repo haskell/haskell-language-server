@@ -1,6 +1,10 @@
+
 cradle:
   direct:
     arguments:
+    - OnlyThis.hs
+    - StaleAction.hs
     - UsualCase.hs
     - Exported.hs
     - A.hs
+    - B.hs

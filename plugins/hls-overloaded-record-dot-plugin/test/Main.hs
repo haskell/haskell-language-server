@@ -13,7 +13,7 @@ import           Data.Row
 import qualified Data.Text                      as T
 import qualified Data.Text.Lazy                 as TL
 import qualified Data.Text.Lazy.Encoding        as TL
-import           Development.IDE.Types.Logger   (Doc, Logger (Logger),
+import           Ide.Logger                     (Doc, Logger (Logger),
                                                  Pretty (pretty),
                                                  Priority (Debug),
                                                  Recorder (Recorder, logger_),
