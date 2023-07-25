@@ -36,6 +36,7 @@ module Development.IDE.Core.Compile
   , TypecheckHelpers(..)
   , sourceTypecheck
   , sourceParser
+  , shareUsages
   ) where
 
 import           Control.Monad.IO.Class
@@ -472,6 +473,8 @@ filterUsages = id
 #endif
 
 -- | Mitigation for https://gitlab.haskell.org/ghc/ghc/-/issues/22744
+-- Important to do this immediately after reading the unit before
+-- anything else has a chance to read `mi_usages`
 shareUsages :: ModIface -> ModIface
 shareUsages iface = iface {mi_usages = usages}
   where usages = map go (mi_usages iface)
@@ -1490,11 +1493,28 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
             | source_version <= dest_version -> SourceUnmodified
             | otherwise -> SourceModified
 
+    old_iface <- case mb_old_iface of
+      Just iface -> pure (Just iface)
+      Nothing -> do
+        let ncu = hsc_NC sessionWithMsDynFlags
+            read_dflags = hsc_dflags sessionWithMsDynFlags
+#if MIN_VERSION_ghc(9,3,0)
+        read_result <- liftIO $ readIface read_dflags ncu mod iface_file
+#else
+        read_result <- liftIO $ initIfaceCheck (text "readIface") sessionWithMsDynFlags
+                              $ readIface mod iface_file
+#endif
+        case read_result of
+          Util.Failed{} -> return Nothing
+          -- important to call `shareUsages` here before checkOldIface
+          -- consults `mi_usages`
+          Util.Succeeded iface -> return $ Just (shareUsages iface)
+
     -- If mb_old_iface is nothing then checkOldIface will load it for us
     -- given that the source is unmodified
     (recomp_iface_reqd, mb_checked_iface)
 #if MIN_VERSION_ghc(9,3,0)
-      <- liftIO $ checkOldIface sessionWithMsDynFlags ms mb_old_iface >>= \case
+      <- liftIO $ checkOldIface sessionWithMsDynFlags ms old_iface >>= \case
         UpToDateItem x -> pure (UpToDate, Just x)
         OutOfDateItem reason x -> pure (NeedsRecompile reason, x)
 #else
@@ -1508,8 +1528,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
           regenerate linkableNeeded
 
     case (mb_checked_iface, recomp_iface_reqd) of
-      (Just iface', UpToDate) -> do
-             let iface = shareUsages iface'
+      (Just iface, UpToDate) -> do
              details <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface
              -- parse the runtime dependencies from the annotations
              let runtime_deps
