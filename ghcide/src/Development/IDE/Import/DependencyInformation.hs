@@ -105,8 +105,8 @@ getPathId path m@PathIdMap{..} =
 insertImport :: FilePathId -> Either ModuleParseError ModuleImports -> RawDependencyInformation -> RawDependencyInformation
 insertImport (FilePathId k) v rawDepInfo = rawDepInfo { rawImports = IntMap.insert k v (rawImports rawDepInfo) }
 
-pathToId :: PathIdMap -> NormalizedFilePath -> FilePathId
-pathToId PathIdMap{pathToIdMap} path = pathToIdMap HMS.! path
+pathToId :: PathIdMap -> NormalizedFilePath -> Maybe FilePathId
+pathToId PathIdMap{pathToIdMap} path = pathToIdMap HMS.!? path
 
 lookupPathToId :: PathIdMap -> NormalizedFilePath -> Maybe FilePathId
 lookupPathToId PathIdMap{pathToIdMap} path = HMS.lookup path pathToIdMap
@@ -343,7 +343,7 @@ immediateReverseDependencies file DependencyInformation{..} = do
 -- | returns all transitive dependencies in topological order.
 transitiveDeps :: DependencyInformation -> NormalizedFilePath -> Maybe TransitiveDependencies
 transitiveDeps DependencyInformation{..} file = do
-  let !fileId = pathToId depPathIdMap file
+  !fileId <- pathToId depPathIdMap file
   reachableVs <-
       -- Delete the starting node
       IntSet.delete (getFilePathId fileId) .

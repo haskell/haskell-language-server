@@ -526,17 +526,20 @@ reportImportCyclesRule :: Recorder (WithPriority Log) -> Rules ()
 reportImportCyclesRule recorder =
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \ReportImportCycles file -> fmap (\errs -> if null errs then (Just "1",([], Just ())) else (Nothing, (errs, Nothing))) $ do
         DependencyInformation{..} <- useNoFile_ GetModuleGraph
-        let fileId = pathToId depPathIdMap file
-        case IntMap.lookup (getFilePathId fileId) depErrorNodes of
-            Nothing -> pure []
-            Just errs -> do
-                let cycles = mapMaybe (cycleErrorInFile fileId) (toList errs)
-                -- Convert cycles of files into cycles of module names
-                forM cycles $ \(imp, files) -> do
-                    modNames <- forM files $ \fileId -> do
-                        let file = idToPath depPathIdMap fileId
-                        getModuleName file
-                    pure $ toDiag imp $ sort modNames
+        case pathToId depPathIdMap file of
+          -- The header of the file does not parse, so it can't be part of any import cycles.
+          Nothing -> pure []
+          Just fileId ->
+            case IntMap.lookup (getFilePathId fileId) depErrorNodes of
+              Nothing -> pure []
+              Just errs -> do
+                  let cycles = mapMaybe (cycleErrorInFile fileId) (toList errs)
+                  -- Convert cycles of files into cycles of module names
+                  forM cycles $ \(imp, files) -> do
+                      modNames <- forM files $ \fileId -> do
+                          let file = idToPath depPathIdMap fileId
+                          getModuleName file
+                      pure $ toDiag imp $ sort modNames
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
           cycleErrorInFile _ _ = Nothing
