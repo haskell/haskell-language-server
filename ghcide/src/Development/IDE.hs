@@ -53,4 +53,4 @@ import           Development.IDE.Types.HscEnvEq        as X (HscEnvEq (..),
                                                              hscEnv,
                                                              hscEnvWithImportPaths)
 import           Development.IDE.Types.Location        as X
-import           Development.IDE.Types.Logger          as X
+import           Ide.Logger                            as X

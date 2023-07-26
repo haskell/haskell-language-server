@@ -22,8 +22,8 @@ import           Development.IDE.Graph.Classes    (Hashable, NFData, rnf)
 import           Development.IDE.Spans.Pragmas    (NextPragmaInfo,
                                                    getFirstPragma,
                                                    insertNewPragma)
-import           Development.IDE.Types.Logger     as Logger
 import           GHC.Generics                     (Generic)
+import           Ide.Logger                       as Logger
 import           Ide.Plugin.Conversion            (AlternateFormat,
                                                    ExtensionNeeded (NeedsExtension, NoExtension),
                                                    alternateFormat)

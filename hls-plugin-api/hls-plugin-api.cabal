@@ -42,11 +42,13 @@ library
     Ide.Plugin.Resolve
     Ide.PluginUtils
     Ide.Types
+    Ide.Logger
 
   hs-source-dirs:     src
   build-depends:
     , aeson
     , base                  >=4.12    && <5
+    , co-log-core
     , containers
     , data-default
     , dependent-map
@@ -66,8 +68,11 @@ library
     , prettyprinter
     , regex-tdfa            >=1.3.1.0
     , row-types
+    , stm
     , text
+    , time
     , transformers
+    , unliftio
     , unordered-containers
     , megaparsec > 9
 

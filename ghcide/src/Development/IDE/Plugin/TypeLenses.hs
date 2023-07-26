@@ -46,10 +46,10 @@ import           Development.IDE.Graph.Classes
 import           Development.IDE.Spans.LocalBindings  (Bindings, getFuzzyScope)
 import           Development.IDE.Types.Location       (Position (Position, _character, _line),
                                                        Range (Range, _end, _start))
-import           Development.IDE.Types.Logger         (Pretty (pretty),
+import           GHC.Generics                         (Generic)
+import           Ide.Logger                           (Pretty (pretty),
                                                        Recorder, WithPriority,
                                                        cmapWithPrio)
-import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                      (mkLspCommand)

@@ -39,6 +39,7 @@ module Development.IDE.GHC.Compat.Core (
     lookupType,
     needWiredInHomeIface,
     loadWiredInHomeIface,
+    readIface,
     loadSysInterface,
     importDecl,
 #if MIN_VERSION_ghc(8,8,0)

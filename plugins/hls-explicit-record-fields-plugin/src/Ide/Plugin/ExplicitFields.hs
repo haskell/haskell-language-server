@@ -59,9 +59,9 @@ import           Development.IDE.Graph.Classes    (Hashable, NFData (rnf))
 import           Development.IDE.Spans.Pragmas    (NextPragmaInfo (..),
                                                    getFirstPragma,
                                                    insertNewPragma)
-import           Development.IDE.Types.Logger     (Priority (..), cmapWithPrio,
-                                                   logWith, (<+>))
 import           GHC.Generics                     (Generic)
+import           Ide.Logger                       (Priority (..), cmapWithPrio,
+                                                   logWith, (<+>))
 import           Ide.Plugin.Error                 (PluginError,
                                                    getNormalizedFilePathE,
                                                    runExceptT)

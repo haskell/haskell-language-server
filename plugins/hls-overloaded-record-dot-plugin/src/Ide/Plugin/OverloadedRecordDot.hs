@@ -71,10 +71,10 @@ import           Development.IDE.Graph.Classes        (Hashable, NFData (rnf))
 import           Development.IDE.Spans.Pragmas        (NextPragmaInfo (..),
                                                        getFirstPragma,
                                                        insertNewPragma)
-import           Development.IDE.Types.Logger         (Priority (..),
+import           GHC.Generics                         (Generic)
+import           Ide.Logger                           (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))
-import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error                     (PluginError (..),
                                                        getNormalizedFilePathE,
                                                        handleMaybe, runExceptT)
@@ -105,12 +105,14 @@ data Log
     = LogShake Shake.Log
     | LogCollectedRecordSelectors [RecordSelectorExpr]
     | LogTextEdits [TextEdit]
+    | forall a. (Pretty a) => LogResolve a
 
 instance Pretty Log where
     pretty = \case
         LogShake shakeLog -> pretty shakeLog
         LogCollectedRecordSelectors recs -> "Collected record selectors:"
                                                 <+> pretty recs
+        LogResolve msg -> pretty msg
 
 data CollectRecordSelectors = CollectRecordSelectors
                     deriving (Eq, Show, Generic)
@@ -169,7 +171,9 @@ instance FromJSON ORDResolveData
 
 descriptor :: Recorder (WithPriority Log) -> PluginId
                 -> PluginDescriptor IdeState
-descriptor recorder plId = let pluginHandler = mkCodeActionHandlerWithResolve codeActionProvider resolveProvider
+descriptor recorder plId =
+  let resolveRecorder = cmapWithPrio LogResolve recorder
+      pluginHandler = mkCodeActionHandlerWithResolve resolveRecorder codeActionProvider resolveProvider
   in (defaultPluginDescriptor plId)
     { pluginHandlers = pluginHandler
     , pluginRules = collectRecSelsRule recorder

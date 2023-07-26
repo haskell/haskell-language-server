@@ -32,7 +32,7 @@ import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        fromCurrentPosition,
                                                        toCurrentRange)
-import           Development.IDE.Types.Logger         (Pretty (..),
+import           Ide.Logger                           (Pretty (..),
                                                        Priority (Warning),
                                                        logWith)
 import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),

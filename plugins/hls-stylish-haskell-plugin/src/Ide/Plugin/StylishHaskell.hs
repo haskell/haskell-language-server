@@ -37,7 +37,7 @@ provider ide typ contents fp _opts = do
   mergedConfig <- liftIO $ getMergedConfig dyn config
   let (range, selectedContents) = case typ of
         FormatText    -> (fullRange contents, contents)
-        FormatRange r -> (normalize r, extractRange r contents)
+        FormatRange r -> (normalize r, extractTextInRange (extendToFullLines r) contents)
       result = runStylishHaskell file mergedConfig selectedContents
   case result of
     Left  err -> return $ Left $ PluginInternalError $ T.pack $ "stylishHaskellCmd: " ++ err

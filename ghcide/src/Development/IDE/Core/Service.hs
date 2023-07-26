@@ -23,13 +23,13 @@ import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists  (fileExistsRules)
 import           Development.IDE.Core.OfInterest  hiding (Log, LogShake)
 import           Development.IDE.Graph
-import           Development.IDE.Types.Logger     as Logger (Logger,
+import           Development.IDE.Types.Options    (IdeOptions (..))
+import           Ide.Logger                       as Logger (Logger,
                                                              Pretty (pretty),
                                                              Priority (Debug),
                                                              Recorder,
                                                              WithPriority,
                                                              cmapWithPrio)
-import           Development.IDE.Types.Options    (IdeOptions (..))
 import           Ide.Plugin.Config
 import qualified Language.LSP.Protocol.Types      as LSP
 import qualified Language.LSP.Server              as LSP

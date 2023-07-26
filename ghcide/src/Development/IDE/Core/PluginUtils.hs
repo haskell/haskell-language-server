@@ -18,7 +18,7 @@ import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Graph                hiding (ShakeValue)
 import           Development.IDE.Types.Location       (NormalizedFilePath)
 import qualified Development.IDE.Types.Location       as Location
-import qualified Development.IDE.Types.Logger         as Logger
+import qualified Ide.Logger                           as Logger
 import           Ide.Plugin.Error
 import qualified Language.LSP.Protocol.Types          as LSP
 

@@ -6,7 +6,7 @@ import           Control.Lens                   hiding (List, (<.>))
 import           Data.ByteString.Lazy           (ByteString)
 import qualified Data.ByteString.Lazy.Char8     as LBSChar8
 import           Data.String                    (fromString)
-import           Development.IDE.Types.Logger   (Priority (Debug),
+import           Ide.Logger                     (Priority (Debug),
                                                  Recorder (Recorder),
                                                  WithPriority (WithPriority),
                                                  makeDefaultStderrRecorder,

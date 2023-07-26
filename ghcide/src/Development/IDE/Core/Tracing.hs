@@ -30,7 +30,7 @@ import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Diagnostics (FileDiagnostic,
                                                     showDiagnostics)
 import           Development.IDE.Types.Location    (Uri (..))
-import           Development.IDE.Types.Logger      (Logger (Logger))
+import           Ide.Logger                        (Logger (Logger))
 import           Ide.Types                         (PluginId (..))
 import           Language.LSP.Protocol.Types       (NormalizedFilePath,
                                                     fromNormalizedFilePath)
