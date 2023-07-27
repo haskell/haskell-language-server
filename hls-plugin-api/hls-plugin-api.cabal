@@ -63,6 +63,7 @@ library
     , lens
     , lens-aeson
     , lsp                   ^>=2.0.0.0
+    , mtl
     , opentelemetry         >=0.4
     , optparse-applicative
     , prettyprinter

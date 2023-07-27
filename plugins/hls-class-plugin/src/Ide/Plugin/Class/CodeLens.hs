@@ -25,7 +25,7 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                  (sendRequest)
 
 codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
-codeLens state plId CodeLensParams{..} = runExceptT $ do
+codeLens state plId CodeLensParams{..} = do
     nfp <-  getNormalizedFilePathE uri
     (tmr, _) <- runActionE "classplugin.TypeCheck" state
         -- Using stale results means that we can almost always return a value. In practice

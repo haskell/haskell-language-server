@@ -31,12 +31,10 @@ import           GHC.Generics
 import qualified Ide.Plugin.Cabal.Diagnostics    as Diagnostics
 import qualified Ide.Plugin.Cabal.LicenseSuggest as LicenseSuggest
 import qualified Ide.Plugin.Cabal.Parse          as Parse
-import           Ide.Plugin.Config               (Config)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Message   as LSP
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types     as LSP
-import           Language.LSP.Server             (LspM)
 import qualified Language.LSP.VFS                as VFS
 
 data Log
@@ -180,7 +178,7 @@ kick = do
 
 licenseSuggestCodeAction :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
 licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=diags}) =
-  pure $ Right $ InL $ diags >>= (fmap InR . LicenseSuggest.licenseErrorAction uri)
+  pure $ InL $ diags >>= (fmap InR . LicenseSuggest.licenseErrorAction uri)
 
 -- ----------------------------------------------------------------
 -- Cabal file of Interest rules and global variable

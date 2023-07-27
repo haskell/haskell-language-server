@@ -43,8 +43,7 @@ import           Control.DeepSeq
 import           Control.Exception
 import           Control.Lens                                       ((?~), (^.))
 import           Control.Monad
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Except
+import           Control.Monad.Except
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
                                                                      Value (..))
@@ -403,8 +402,8 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
   | let TextDocumentIdentifier uri = documentId
   , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
   = do
-    verTxtDocId <- getVersionedTextDoc documentId
-    liftIO $ fmap (Right . InL . map LSP.InR) $ do
+    verTxtDocId <- lift $ getVersionedTextDoc documentId
+    liftIO $ fmap (InL . map LSP.InR) $ do
       allDiagnostics <- atomically $ getDiagnostics ideState
 
       let numHintsInDoc = length
@@ -422,7 +421,7 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
       else
         pure singleHintCodeActions
   | otherwise
-  = pure $ Right $ InL []
+  = pure $ InL []
 
   where
     applyAllAction verTxtDocId =
@@ -438,7 +437,7 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
     diags = context ^. LSP.diagnostics
 
 resolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState HlintResolveCommands Method_CodeActionResolve
-resolveProvider recorder ideState _plId ca uri resolveValue = runExceptT $ do
+resolveProvider recorder ideState _plId ca uri resolveValue = do
   file <-  getNormalizedFilePathE uri
   case resolveValue of
     (ApplyHint verTxtDocId oneHint) -> do
@@ -517,7 +516,7 @@ ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = runExceptT $ do
                   Nothing
                   Nothing
         pure workspaceEdit
-    Nothing -> throwE $ PluginInternalError "Unable to get fileContents"
+    Nothing -> throwError $ PluginInternalError "Unable to get fileContents"
 
 -- ---------------------------------------------------------------------
 data HlintResolveCommands =
@@ -584,7 +583,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
     mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
     res <-
         case mbParsedModule of
-            Nothing -> throwE "Apply hint: error parsing the module"
+            Nothing -> throwError "Apply hint: error parsing the module"
             Just pm -> do
                 let anns = pm_annotations pm
                 let modu = pm_parsed_source pm
@@ -601,7 +600,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
         let wsEdit = diffText' True (verTxtDocId, oldContent) (T.pack appliedFile) IncludeDeletions
         ExceptT $ return (Right wsEdit)
       Left err ->
-        throwE $ PluginInternalError $ T.pack err
+        throwError $ PluginInternalError $ T.pack err
     where
           -- | If we are only interested in applying a particular hint then
           -- let's filter out all the irrelevant ideas

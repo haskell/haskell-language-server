@@ -31,10 +31,10 @@ import qualified Control.Foldl                   as L
 import           Control.Lens                    (Identity (..), ix, view, (%~),
                                                   (<&>), (^.))
 import           Control.Monad
+import           Control.Monad.Except
 import           Control.Monad.Extra             (eitherM)
 import qualified Control.Monad.Fail              as Fail
 import           Control.Monad.IO.Unlift
-import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                      hiding (Null)
@@ -104,7 +104,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                 liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck fp
             (TcModuleResult {..}, _) <-
                 maybe
-                (throwE "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (erroneous) macro and expand splice again."
+                (throwError "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (erroneous) macro and expand splice again."
                 )
                 pure mresl
             reportEditor
@@ -154,7 +154,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                             verTxtDocId
                             (graft (RealSrcSpan spliceSpan Nothing) expanded)
                             ps
-            maybe (throwE "No splice information found") (either throwE pure) $
+            maybe (throwError "No splice information found") (either throwError pure) $
                 case spliceContext of
                     Expr -> graftSpliceWith exprSuperSpans
                     Pat ->
@@ -486,8 +486,8 @@ fromSearchResult _        = Nothing
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
 codeAction :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeAction state plId (CodeActionParams _ _ docId ran _) = do
-    verTxtDocId <- getVersionedTextDoc docId
-    liftIO $ fmap (maybe (Right $ InL []) Right) $
+    verTxtDocId <- lift $ getVersionedTextDoc docId
+    liftIO $ fmap (fromMaybe ( InL [])) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
             ParsedModule {..} <-

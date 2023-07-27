@@ -31,6 +31,7 @@ library
     , ghcide           == 2.1.0.0
     , hls-plugin-api   == 2.1.0.0
     , lsp-types
+    , mtl
     , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14.2
     , text
 

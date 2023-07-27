@@ -10,7 +10,7 @@ module Wingman.AbstractLSP (installInteractions) where
 import           Control.Monad (void)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans (lift)
-import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
+import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT, runMaybeT)
 import qualified Data.Aeson as A
 import           Data.Coerce
 import           Data.Foldable (traverse_)
@@ -173,8 +173,8 @@ codeActionProvider
     -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider sort k state plId
                    (CodeActionParams _ _ docId range _) = do
-  verTxtDocId <- getVersionedTextDoc docId
-  fromMaybeT (Right $ InL []) $ do
+  verTxtDocId <- lift $ getVersionedTextDoc docId
+  handleMaybeM (PluginDependencyFailed "codeActionProvider") $ runMaybeT $ do
     let fc = FileContext
                 { fc_verTxtDocId = verTxtDocId
                 , fc_range = Just $ unsafeMkCurrent range
@@ -183,7 +183,6 @@ codeActionProvider sort k state plId
     args <- fetchTargetArgs @target env
     actions <- k env args
     pure
-      $ Right
       $ InL
       $ fmap (InR . uncurry (makeCodeAction plId fc sort)) actions
 
@@ -201,8 +200,8 @@ codeLensProvider
     -> PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLensProvider sort k state plId
                  (CodeLensParams _ _ docId) = do
-      verTxtDocId <- getVersionedTextDoc docId
-      fromMaybeT (Right $ InL []) $ do
+      verTxtDocId <- lift $ getVersionedTextDoc docId
+      handleMaybeM (PluginDependencyFailed "codeLensProvider") $ runMaybeT $ do
         let fc = FileContext
                    { fc_verTxtDocId = verTxtDocId
                    , fc_range = Nothing
@@ -211,7 +210,6 @@ codeLensProvider sort k state plId
         args <- fetchTargetArgs @target env
         actions <- k env args
         pure
-          $ Right
           $ InL
           $ fmap (uncurry3 $ makeCodeLens plId sort fc) actions
 

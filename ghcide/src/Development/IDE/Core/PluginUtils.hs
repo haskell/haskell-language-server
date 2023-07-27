@@ -29,13 +29,13 @@ import qualified Language.LSP.Protocol.Types          as LSP
 -- |ExceptT version of `runAction`, takes a ExceptT Action
 runActionE :: MonadIO m => String -> IdeState -> ExceptT e Action a -> ExceptT e m a
 runActionE herald ide act =
-  hoistExceptT . ExceptT $
+  mapExceptT liftIO . ExceptT $
     join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runExceptT act)
 
 -- |MaybeT version of `runAction`, takes a MaybeT Action
 runActionMT :: MonadIO m => String -> IdeState -> MaybeT Action a -> MaybeT m a
 runActionMT herald ide act =
-  hoistMaybeT . MaybeT $
+  mapMaybeT liftIO . MaybeT $
     join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug $ runMaybeT act)
 
 -- |ExceptT version of `use` that throws a PluginRuleFailed upon failure

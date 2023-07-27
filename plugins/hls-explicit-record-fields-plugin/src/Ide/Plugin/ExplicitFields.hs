@@ -30,7 +30,6 @@ import           Development.IDE                  (IdeState, NormalizedFilePath,
                                                    Rules, WithPriority (..),
                                                    realSrcSpanToRange)
 import           Development.IDE.Core.PluginUtils
-import           Development.IDE.Core.Rules       (runAction)
 import           Development.IDE.Core.RuleTypes   (TcModuleResult (..),
                                                    TypeCheck (..))
 import           Development.IDE.Core.Shake       (define, use)
@@ -102,7 +101,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
   }
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = runExceptT $ do
+codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = do
   nfp <- getNormalizedFilePathE (docId ^. L.uri)
   pragma <- getFirstPragma pId ideState nfp
   CRR recMap exts <- collectRecords' ideState nfp

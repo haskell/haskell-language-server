@@ -20,6 +20,7 @@ module Ide.Plugin.ExplicitImports
 
 import           Control.DeepSeq
 import           Control.Lens                         ((&), (?~))
+import           Control.Monad.Except                 (throwError)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except           (ExceptT)
@@ -125,8 +126,7 @@ runImportCommand _ _ (ResolveAll _) = do
 --
 -- > import Data.List (intercalate, sortBy)
 lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
-lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}}
-  = runExceptT $ do
+lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}} = do
     nfp <- getNormalizedFilePathE _uri
     mbMinImports <- liftIO $ runAction "MinimalImports" state $ use MinimalImports nfp
     case mbMinImports of
@@ -143,8 +143,7 @@ lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {
                    , _command = Nothing }
 
 lensResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState EIResolveData 'Method_CodeLensResolve
-lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid)
-  = runExceptT $ do
+lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid) = do
     nfp <- getNormalizedFilePathE uri
     (MinimalImportsResult{forResolve}) <- runActionE "MinimalImports" ideState $ useE MinimalImports nfp
     target <- handleMaybe PluginStaleResolve $ forResolve IM.!? uid
@@ -155,14 +154,13 @@ lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid)
           let title = abbreviateImportTitle _newText
           in mkLspCommand pId importCommandId title (Just $ [A.toJSON rd])
 lensResolveProvider _ _ _ _ _ (ResolveAll _) = do
-   pure $ Left $ PluginInvalidParams "Unexpected argument for lens resolve handler: ResolveAll"
+   throwError $ PluginInvalidParams "Unexpected argument for lens resolve handler: ResolveAll"
 
 -- | If there are any implicit imports, provide both one code action per import
 --   to make that specific import explicit, and one code action to turn them all
 --   into explicit imports.
 codeActionProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier {_uri} range _context)
-  = runExceptT $ do
+codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier {_uri} range _context) = do
     nfp <- getNormalizedFilePathE _uri
     (MinimalImportsResult{forCodeActions}) <-
       runActionE "MinimalImports" ideState $ useE MinimalImports nfp
@@ -185,8 +183,7 @@ codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier 
             , _data_ = data_}
 
 codeActionResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState EIResolveData 'Method_CodeActionResolve
-codeActionResolveProvider _ ideState _ ca _ rd =
-  runExceptT $ do
+codeActionResolveProvider _ ideState _ ca _ rd = do
     wedit <- resolveWTextEdit ideState rd
     pure $ ca & L.edit ?~ wedit
 --------------------------------------------------------------------------------

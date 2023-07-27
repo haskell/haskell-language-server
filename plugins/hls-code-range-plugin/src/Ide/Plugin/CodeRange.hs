@@ -15,26 +15,23 @@ module Ide.Plugin.CodeRange (
     , createFoldingRange
     ) where
 
-import           Control.Monad.IO.Class               (MonadIO, liftIO)
-import           Control.Monad.Trans.Except           (ExceptT)
+import           Control.Monad.IO.Class               (MonadIO (liftIO))
+import           Control.Monad.Trans.Except           (ExceptT, mapExceptT)
 import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
                                                        maybeToExceptT)
 import           Data.List.Extra                      (drop1)
 import           Data.Maybe                           (fromMaybe)
 import           Data.Vector                          (Vector)
 import qualified Data.Vector                          as V
-import           Development.IDE                      (Action, IdeAction,
+import           Development.IDE                      (Action,
                                                        IdeState (shakeExtras),
                                                        Range (Range), Recorder,
                                                        WithPriority,
                                                        cmapWithPrio)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
-                                                       fromCurrentPosition,
                                                        toCurrentRange)
-import           Ide.Logger                           (Pretty (..),
-                                                       Priority (Warning),
-                                                       logWith)
+import           Ide.Logger                           (Pretty (..))
 import           Ide.Plugin.CodeRange.Rules           (CodeRange (..),
                                                        GetCodeRange (..),
                                                        codeRangeRule, crkToFrk)
@@ -47,7 +44,6 @@ import           Ide.Types                            (PluginDescriptor (pluginH
                                                        defaultPluginDescriptor,
                                                        mkPluginHandler)
 import           Language.LSP.Protocol.Message        (Method (Method_TextDocumentFoldingRange, Method_TextDocumentSelectionRange),
-                                                       ResponseError,
                                                        SMethod (SMethod_TextDocumentFoldingRange, SMethod_TextDocumentSelectionRange))
 import           Language.LSP.Protocol.Types          (FoldingRange (..),
                                                        FoldingRangeParams (..),
@@ -58,7 +54,6 @@ import           Language.LSP.Protocol.Types          (FoldingRange (..),
                                                        SelectionRangeParams (..),
                                                        TextDocumentIdentifier (TextDocumentIdentifier),
                                                        Uri, type (|?) (InL))
-import           Language.LSP.Server                  (LspM, LspT)
 import           Prelude                              hiding (log, span)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
@@ -75,8 +70,8 @@ instance Pretty Log where
         LogRules codeRangeLog -> pretty codeRangeLog
 
 foldingRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentFoldingRange
-foldingRangeHandler recorder ide _ FoldingRangeParams{..} =
-    runExceptT $ do
+foldingRangeHandler _ ide _ FoldingRangeParams{..} =
+    do
         filePath <- getNormalizedFilePathE uri
         foldingRanges <- runActionE "FoldingRange" ide $ getFoldingRanges filePath
         pure . InL $ foldingRanges
@@ -90,10 +85,10 @@ getFoldingRanges file = do
     pure $ findFoldingRanges codeRange
 
 selectionRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentSelectionRange
-selectionRangeHandler recorder ide _ SelectionRangeParams{..} = do
-   runExceptT $ do
+selectionRangeHandler _ ide _ SelectionRangeParams{..} = do
+   do
         filePath <- getNormalizedFilePathE uri
-        fmap  id . hoistExceptT $ getSelectionRanges ide filePath positions
+        mapExceptT liftIO $ getSelectionRanges ide filePath positions
   where
     uri :: Uri
     TextDocumentIdentifier uri = _textDocument

@@ -57,12 +57,14 @@ module Ide.Types
 import qualified System.Win32.Process          as P (getCurrentProcessId)
 #else
 import           Control.Monad                 (void)
+import           Control.Monad.Except          (lift, throwError)
 import qualified System.Posix.Process          as P (getProcessID)
 import           System.Posix.Signals
 #endif
 import           Control.Applicative           ((<|>))
 import           Control.Arrow                 ((&&&))
 import           Control.Lens                  (_Just, (.~), (?~), (^.), (^?))
+import           Control.Monad.Trans.Except    (ExceptT)
 import           Data.Aeson                    hiding (Null, defaultOptions)
 import           Data.Default
 import           Data.Dependent.Map            (DMap)
@@ -776,7 +778,7 @@ instance Semigroup (PluginNotificationHandlers a) where
 instance Monoid (PluginNotificationHandlers a) where
   mempty = PluginNotificationHandlers mempty
 
-type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config (Either PluginError (MessageResult m))
+type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> ExceptT PluginError (LspM Config) (MessageResult m)
 
 type PluginNotificationMethodHandler a m = a -> VFS -> PluginId -> MessageParams m -> LspM Config ()
 
@@ -793,14 +795,14 @@ mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandl
     -- We need to have separate functions for each method that supports resolve, so far we only support CodeActions
     -- CodeLens, and Completion methods.
     f' SMethod_TextDocumentCodeAction pid ide params@CodeActionParams{_textDocument=TextDocumentIdentifier {_uri}} =
-      pure . fmap (wrapCodeActions pid _uri) <$> f ide pid params
+      pure . fmap (wrapCodeActions pid _uri) <$> runExceptT (f ide pid params)
     f' SMethod_TextDocumentCodeLens pid ide params@CodeLensParams{_textDocument=TextDocumentIdentifier {_uri}} =
-      pure . fmap (wrapCodeLenses pid _uri) <$> f ide pid params
+      pure . fmap (wrapCodeLenses pid _uri) <$> runExceptT (f ide pid params)
     f' SMethod_TextDocumentCompletion pid ide params@CompletionParams{_textDocument=TextDocumentIdentifier {_uri}} =
-      pure . fmap (wrapCompletions pid _uri) <$> f ide pid params
+      pure . fmap (wrapCompletions pid _uri) <$> runExceptT (f ide pid params)
 
     -- This is the default case for all other methods
-    f' _ pid ide params = pure <$> f ide pid params
+    f' _ pid ide params = pure <$> runExceptT (f ide pid params)
 
     -- Todo: use fancy pancy lenses to make this a few lines
     wrapCodeActions pid uri (InL ls) =
@@ -900,19 +902,14 @@ type ResolveFunction ideState a (m :: Method ClientToServer Request) =
   -> MessageParams m
   -> Uri
   -> a
-  -> LspM Config (Either PluginError (MessageResult m))
+  -> ExceptT PluginError (LspM Config) (MessageResult m)
 
 -- | Make a handler for resolve methods. In here we take your provided ResolveFunction
 -- and turn it into a PluginHandlers. See Note [Resolve in PluginHandlers]
 mkResolveHandler
   :: forall ideState a m. (FromJSON a,  PluginRequestMethod m, L.HasData_ (MessageParams m) (Maybe Value))
   =>  SClientMethod m
-  -> (ideState
-  ->PluginId
-  -> MessageParams m
-  -> Uri
-  -> a
-  -> LspM Config (Either PluginError (MessageResult m)))
+  -> ResolveFunction ideState a m
   -> PluginHandlers ideState
 mkResolveHandler m f = mkPluginHandler m $ \ideState plId params -> do
   case fromJSON <$> (params ^. L.data_) of
@@ -923,11 +920,19 @@ mkResolveHandler m f = mkPluginHandler m $ \ideState plId params -> do
           Success decodedValue ->
             let newParams = params & L.data_ ?~ value
             in f ideState plId newParams uri decodedValue
-          Error err ->
-            pure $ Left $ PluginParseError (parseError value err)
-      else pure $ Left $ PluginInternalError invalidRequest
-    (Just (Error err)) -> pure $ Left $ PluginParseError (parseError (params ^. L.data_) err)
-    _ -> pure $ Left $ PluginInternalError invalidRequest
+          Error msg ->
+            -- We are assuming that if we can't decode the data, that this
+            -- request belongs to another resolve handler for this plugin.
+            throwError (PluginRequestRefused (T.pack ("Unable to decode payload for handler, assuming that it's for a different handler" <> msg)))
+      -- If we are getting an owner that isn't us, this means that there is an
+      -- error, as we filter these our in `pluginEnabled`
+      else throwError $ PluginInternalError invalidRequest
+    -- If we are getting params without a decodable data field, this means that
+    -- there is an error, as we filter these our in `pluginEnabled`
+    (Just (Error err)) -> throwError $ PluginInternalError (parseError (params ^. L.data_) err)
+    -- If there are no params at all, this also means that there is an error,
+    -- as this is filtered out in `pluginEnabled`
+    _ -> throwError $ PluginInternalError invalidRequest
   where invalidRequest = "The resolve request incorrectly got routed to the wrong resolve handler!"
         parseError value err = "Unable to decode: " <> (T.pack $ show value) <> ". Error: " <> (T.pack $ show err)
 
@@ -986,7 +991,7 @@ type FormattingHandler a
   -> T.Text
   -> NormalizedFilePath
   -> FormattingOptions
-  -> LspM Config (Either PluginError ([TextEdit] |? Null))
+  -> ExceptT PluginError (LspM Config) ([TextEdit] |? Null)
 
 mkFormattingHandlers :: forall a. FormattingHandler a -> PluginHandlers a
 mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provider SMethod_TextDocumentFormatting)
@@ -995,7 +1000,7 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
     provider :: forall m. FormattingMethod m => SMethod m -> PluginMethodHandler a m
     provider m ide _pid params
       | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-        mf <- getVirtualFile $ toNormalizedUri uri
+        mf <- lift $ getVirtualFile $ toNormalizedUri uri
         case mf of
           Just vf -> do
             let typ = case m of
@@ -1003,9 +1008,9 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
                   SMethod_TextDocumentRangeFormatting -> FormatRange (params ^. L.range)
                   _ -> Prelude.error "mkFormattingHandlers: impossible"
             f ide typ (virtualFileText vf) nfp opts
-          Nothing -> pure $ Left $ PluginInvalidParams $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
+          Nothing -> throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
 
-      | otherwise = pure $ Left $ PluginInvalidParams $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
+      | otherwise = throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
       where
         uri = params ^. L.textDocument . L.uri
         opts = params ^. L.options

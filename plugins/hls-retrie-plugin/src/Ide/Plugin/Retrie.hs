@@ -26,10 +26,12 @@ import           Control.Exception.Safe               (Exception (..),
                                                        catch, throwIO, try)
 import           Control.Lens.Operators
 import           Control.Monad                        (forM, unless, when)
-import           Control.Monad.IO.Class               (MonadIO (liftIO))
-import           Control.Monad.Trans.Class            (MonadTrans (lift))
-import           Control.Monad.Trans.Except           (ExceptT (ExceptT),
-                                                       runExceptT, throwE)
+import           Control.Monad.Except                 (ExceptT (..),
+                                                       MonadIO (liftIO),
+                                                       MonadTrans (lift), forM,
+                                                       runExceptT, throwError,
+                                                       unless, when)
+
 import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Writer.Strict
 import           Data.Aeson                           (FromJSON (..),
@@ -268,7 +270,7 @@ runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = runExceptT $ do
         fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
     inlineRewrite <- liftIO $ constructInlineFromIdentifer astSrc fromRange
-    when (null inlineRewrite) $ throwE $ PluginInternalError "Empty rewrite"
+    when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
     let ShakeExtras{..} = shakeExtras state
     (session, _) <- runActionE "retrie" state $
       useWithStaleE GhcSessionDeps nfp
@@ -276,8 +278,8 @@ runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = runExceptT $ do
     result <- liftIO $ try @_ @SomeException $
         runRetrie fixityEnv (applyWithUpdate myContextUpdater inlineRewrite) cpp
     case result of
-        Left err -> throwE $ PluginInternalError $ "Retrie - crashed with: " <> T.pack (show err)
-        Right (_,_,NoChange) -> throwE $ PluginInternalError "Retrie - inline produced no changes"
+        Left err -> throwError $ PluginInternalError $ "Retrie - crashed with: " <> T.pack (show err)
+        Right (_,_,NoChange) -> throwError $ PluginInternalError "Retrie - inline produced no changes"
         Right (_,_,Change replacements imports) -> do
             let edits = asEditMap $ asTextEdits $ Change ourReplacement imports
                 wedit = WorkspaceEdit (Just edits) Nothing Nothing
@@ -338,7 +340,7 @@ extractImports _ _ _ = []
 -------------------------------------------------------------------------------
 
 provider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
-provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = runExceptT $ do
+provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = do
   let (LSP.CodeActionContext _diags _monly _) = ca
   nfp <- getNormalizedFilePathE uri
 

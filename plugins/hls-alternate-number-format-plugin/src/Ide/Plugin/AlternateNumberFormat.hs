@@ -83,7 +83,7 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
     pure ([], CLR <$> litMap <*> exts)
 
 codeActionHandler :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = runExceptT $ do
+codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
     nfp <- getNormalizedFilePathE (docId ^. L.uri)
     CLR{..} <- requestLiterals pId state nfp
     pragma <- getFirstPragma pId state nfp

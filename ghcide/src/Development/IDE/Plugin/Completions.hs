@@ -12,6 +12,7 @@ module Development.IDE.Plugin.Completions
 import           Control.Concurrent.Async                 (concurrently)
 import           Control.Concurrent.STM.Stats             (readTVarIO)
 import           Control.Lens                             ((&), (.~))
+import           Control.Monad.Except                     (ExceptT (ExceptT))
 import           Control.Monad.IO.Class
 import           Data.Aeson
 import qualified Data.HashMap.Strict                      as Map
@@ -123,7 +124,7 @@ dropListFromImportDecl iDecl = let
 
 resolveCompletion :: ResolveFunction IdeState CompletionResolveData 'Method_CompletionItemResolve
 resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} uri (CompletionResolveData _ needType (NameDetails mod occ)) =
-  runExceptT $ do
+  do
     file <- getNormalizedFilePathE uri
     (sess,_) <- withExceptT (const PluginStaleResolve)
                   $ runIdeActionE "CompletionResolve.GhcSessionDeps" (shakeExtras ide)
@@ -164,7 +165,7 @@ getCompletionsLSP :: PluginMethodHandler IdeState 'Method_TextDocumentCompletion
 getCompletionsLSP ide plId
   CompletionParams{_textDocument=TextDocumentIdentifier uri
                   ,_position=position
-                  ,_context=completionContext} = do
+                  ,_context=completionContext} = ExceptT $ do
     contents <- LSP.getVirtualFile $ toNormalizedUri uri
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do

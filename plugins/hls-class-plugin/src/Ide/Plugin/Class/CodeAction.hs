@@ -6,10 +6,10 @@
 module Ide.Plugin.Class.CodeAction where
 
 import           Control.Lens                         hiding (List, use)
+import           Control.Monad.Except                 (ExceptT, throwError)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Class            (lift)
-import           Control.Monad.Trans.Except           (ExceptT, throwE)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           hiding (Null)
 import           Data.Bifunctor                       (second)
@@ -80,7 +80,7 @@ addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
 codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
-codeAction recorder state plId (CodeActionParams _ _ docId _ context) = runExceptT $ do
+codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
     verTxtDocId <- lift $ getVersionedTextDoc docId
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     actions <- join <$> mapM (mkActions nfp verTxtDocId) methodDiags
@@ -194,7 +194,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = runExcep
                         AGlobal (AConLike (RealDataCon con))
                             | Just cls <- tyConClass_maybe (dataConOrigTyCon con) -> pure cls
                         _ -> fail "Ide.Plugin.Class.findClassFromIdentifier"
-        findClassFromIdentifier _ (Left _) = throwE (PluginInternalError "Ide.Plugin.Class.findClassIdentifier")
+        findClassFromIdentifier _ (Left _) = throwError (PluginInternalError "Ide.Plugin.Class.findClassIdentifier")
 
 isClassNodeIdentifier :: IdentifierDetails a -> Bool
 isClassNodeIdentifier ident = (isNothing . identType) ident && Use `Set.member` identInfo ident

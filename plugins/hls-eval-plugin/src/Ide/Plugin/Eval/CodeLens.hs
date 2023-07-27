@@ -141,7 +141,7 @@ codeLens st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
      in perf "codeLens" $
-            runExceptT $ do
+            do
                 let TextDocumentIdentifier uri = _textDocument
                 fp <- uriToFilePathE uri
                 let nfp = toNormalizedFilePath' fp

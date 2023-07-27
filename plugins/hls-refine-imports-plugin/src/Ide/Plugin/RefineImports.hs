@@ -114,7 +114,7 @@ lensProvider
     -- haskell-lsp provides conversion functions
     | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $
       do
-        mbRefinedImports <-
+        mbRefinedImports <- 
           runIde state $ useWithStale RefineImports nfp
         case mbRefinedImports of
           -- Implement the provider logic:
@@ -126,10 +126,10 @@ lensProvider
                 | (imp, Just refinedImports) <- result
                 , Just edit <- [mkExplicitEdit posMapping imp refinedImports]
                 ]
-            return $ Right (InL $ catMaybes commands)
-          _ -> return $ Right (InL [])
+            return $  (InL $ catMaybes commands)
+          _ -> return $  (InL [])
     | otherwise =
-      return $ Right (InL [])
+      return $  (InL [])
 
 -- | Provide one code action to refine all imports
 codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
@@ -145,7 +145,7 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
                 any (within range) rangesImports
             _ -> False
       if not insideImport
-        then return (Right (InL []))
+        then return (InL [])
         else do
           mbRefinedImports <- runIde ideState $ use RefineImports nfp
           let edits =
@@ -167,9 +167,9 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
               _disabled = Nothing
               _data_ = Nothing
               _changeAnnotations = Nothing
-          return $ Right $ InL [caExplicitImports | not (null edits)]
+          return $ InL [caExplicitImports | not (null edits)]
   | otherwise =
-    return $ Right $ InL []
+    return  $ InL []
 
 --------------------------------------------------------------------------------
 

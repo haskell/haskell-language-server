@@ -19,6 +19,7 @@ import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Control.Monad.Trans.Except            (ExceptT (..),
                                                         runExceptT)
 import           Data.Aeson                            (Value)
+import           Data.Bifunctor                        (second)
 import           Data.String                           (IsString (fromString))
 import qualified Data.Text                             as T
 import           Development.IDE                       (IdeState, Priority (..),
@@ -74,12 +75,9 @@ response' act = do
              `catchAny` \e -> do
                 res <- showErr e
                 pure . Left . PluginInternalError $ fromString res
-    case res of
-      Left e ->
-          return $ Left e
-      Right a -> do
+    sequence $ flip second res $ \a -> do
         _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing a) (\_ -> pure ())
-        return $ Right $ InR Null
+        pure $ InR Null
 
 gStrictTry :: (MonadIO m, MonadCatch m) => m b -> m (Either String b)
 gStrictTry op =

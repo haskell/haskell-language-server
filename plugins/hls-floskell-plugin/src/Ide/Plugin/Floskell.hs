@@ -5,6 +5,7 @@ module Ide.Plugin.Floskell
   , provider
   ) where
 
+import           Control.Monad.Except        (throwError)
 import           Control.Monad.IO.Class
 import qualified Data.Text                   as T
 import qualified Data.Text.Lazy              as TL
@@ -29,16 +30,16 @@ descriptor plId = (defaultPluginDescriptor plId)
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: FormattingHandler IdeState
-provider _ideState typ contents fp _ = liftIO $ do
+provider _ideState typ contents fp _ = do
     let file = fromNormalizedFilePath fp
-    config <- findConfigOrDefault file
+    config <- liftIO $ findConfigOrDefault file
     let (range, selectedContents) = case typ of
           FormatText    -> (fullRange contents, contents)
           FormatRange r -> (normalize r, extractTextInRange (extendToFullLines r) contents)
         result = reformat config (Just file) . TL.encodeUtf8 $ TL.fromStrict selectedContents
     case result of
-      Left  err -> pure $ Left $ PluginInternalError $ T.pack $ "floskellCmd: " ++ err
-      Right new -> pure $ Right $ InL [TextEdit range . TL.toStrict $ TL.decodeUtf8 new]
+      Left  err -> throwError $ PluginInternalError $ T.pack $ "floskellCmd: " ++ err
+      Right new -> pure $ InL [TextEdit range . TL.toStrict $ TL.decodeUtf8 new]
 
 -- | Find Floskell Config, user and system wide or provides a default style.
 -- Every directory of the filepath will be searched to find a user configuration.

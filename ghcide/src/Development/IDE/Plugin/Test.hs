@@ -14,6 +14,7 @@ module Development.IDE.Plugin.Test
 
 import           Control.Concurrent                   (threadDelay)
 import           Control.Monad
+import           Control.Monad.Except                 (ExceptT (..), throwError)
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
 import           Data.Aeson                           (FromJSON (parseJSON),
@@ -46,7 +47,6 @@ import           Development.IDE.Types.Location       (fromUri)
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Config                    (CheckParents)
 import           Ide.Plugin.Error
-import           Ide.Plugin.Error                     (PluginError (PluginInvalidRequest))
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -84,10 +84,10 @@ plugin = (defaultPluginDescriptor "test") {
   where
       testRequestHandler' ide req
         | Just customReq <- A.parseMaybe parseJSON req
-        = testRequestHandler ide customReq
+        = ExceptT $ testRequestHandler ide customReq
         | otherwise
-        = return $ Left
-        $ PluginInvalidRequest "Cannot parse request"
+        = throwError
+        $ PluginInvalidParams "Cannot parse request"
 
 
 testRequestHandler ::  IdeState
@@ -115,7 +115,7 @@ testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
     let nfp = fromUri $ toNormalizedUri file
     success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) nfp
     let res = WaitForIdeRuleResult <$> success
-    return $ bimap PluginInvalidRequest toJSON res
+    return $ bimap PluginInvalidParams toJSON res
 testRequestHandler s GetBuildKeysBuilt = liftIO $ do
     keys <- getDatabaseKeys resultBuilt $ shakeDb s
     return $ Right $ toJSON $ map show keys

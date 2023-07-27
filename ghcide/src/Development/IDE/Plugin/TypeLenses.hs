@@ -105,7 +105,7 @@ properties = emptyProperties
     ] Always
 
 codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
-codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = runExceptT $ do
+codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
     mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
     nfp <- getNormalizedFilePathE uri
     env <- hscEnv . fst <$>

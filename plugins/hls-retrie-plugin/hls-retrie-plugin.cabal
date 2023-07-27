@@ -35,6 +35,7 @@ library
     , lens
     , lsp
     , lsp-types
+    , mtl
     , retrie                >=0.1.1.0
     , safe-exceptions
     , stm

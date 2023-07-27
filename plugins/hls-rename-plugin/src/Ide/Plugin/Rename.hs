@@ -20,6 +20,7 @@ import           GHC.Parser.Annotation                 (AnnContext, AnnList,
 import           Compat.HieTypes
 import           Control.Lens                          ((^.))
 import           Control.Monad
+import           Control.Monad.Except
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
@@ -71,8 +72,7 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultP
     }
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
-renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier uri) pos  newNameText) =
-    runExceptT $ do
+renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier uri) pos  newNameText) = do
         nfp <- getNormalizedFilePathE uri
         directOldNames <- getNamesAtPos state nfp pos
         directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
@@ -92,7 +92,7 @@ renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier 
         -- Validate rename
         crossModuleEnabled <- liftIO $ runAction "rename: config" state $ usePropertyAction #crossModule pluginId properties
         unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
-        when (any isBuiltInSyntax oldNames) $ throwE $ PluginInternalError "Invalid rename of built-in syntax"
+        when (any isBuiltInSyntax oldNames) $ throwError $ PluginInternalError "Invalid rename of built-in syntax"
 
         -- Perform rename
         let newName = mkTcOcc $ T.unpack newNameText
@@ -117,10 +117,10 @@ failWhenImportOrExport state nfp refLocs names = do
     let hsMod = unLoc $ pm_parsed_source pm
     case (unLoc <$> hsmodName hsMod, hsmodExports hsMod) of
         (mbModName, _) | not $ any (\n -> nameIsLocalOrFrom (replaceModName n mbModName) n) names
-            -> throwE $ PluginInternalError "Renaming of an imported name is unsupported"
+            -> throwError $ PluginInternalError "Renaming of an imported name is unsupported"
         (_, Just (L _ exports)) | any ((`HS.member` refLocs) . unsafeSrcSpanToLoc . getLoc) exports
-            -> throwE $ PluginInternalError "Renaming of an exported name is unsupported"
-        (Just _, Nothing) -> throwE $ PluginInternalError "Explicit export list required for renaming"
+            -> throwError $ PluginInternalError "Renaming of an exported name is unsupported"
+        (Just _, Nothing) -> throwError $ PluginInternalError "Explicit export list required for renaming"
         _ -> pure ()
 
 ---------------------------------------------------------------------------------------------------

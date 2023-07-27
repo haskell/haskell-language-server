@@ -2,7 +2,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeOperators     #-}
 {-# LANGUAGE ViewPatterns      #-}
+
 {-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
@@ -20,14 +22,14 @@ module Ide.Plugin.ModuleName (
 import           Control.Monad                        (forM_, void)
 import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Class            (lift)
+import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                           (Value, toJSON)
+import           Data.Aeson                           (toJSON)
 import           Data.Char                            (isLower)
 import           Data.List                            (intercalate, isPrefixOf,
                                                        minimumBy)
 import qualified Data.List.NonEmpty                   as NE
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (fromMaybe, maybeToList)
 import           Data.Ord                             (comparing)
 import           Data.String                          (IsString)
 import qualified Data.Text                            as T
@@ -40,10 +42,9 @@ import           Development.IDE                      (GetParsedModule (GetParse
                                                        hscEnvWithImportPaths,
                                                        logWith,
                                                        realSrcSpanToRange,
-                                                       runAction,
-                                                       uriToFilePath',
-                                                       useWithStale,
-                                                       useWithStale_, (<+>))
+                                                       runAction, useWithStale,
+                                                       (<+>))
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.GHC.Compat           (GenLocated (L),
                                                        getSessionDynFlags,
@@ -52,6 +53,7 @@ import           Development.IDE.GHC.Compat           (GenLocated (L),
                                                        pattern RealSrcSpan,
                                                        pm_parsed_source, unLoc)
 import           Ide.Logger                           (Pretty (..))
+import           Ide.Plugin.Error
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -76,8 +78,9 @@ updateModuleNameCommand = "updateModuleName"
 
 -- | Generate code lenses
 codeLens :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
-codeLens recorder state pluginId CodeLensParams{_textDocument=TextDocumentIdentifier uri} =
-  Right . InL . maybeToList . (asCodeLens <$>) <$> action recorder state uri
+codeLens recorder state pluginId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
+  res <- action recorder state uri
+  pure $ InL (asCodeLens  <$> res)
   where
     asCodeLens :: Action -> CodeLens
     asCodeLens Replace{..} = CodeLens aRange (Just cmd) Nothing
@@ -86,15 +89,15 @@ codeLens recorder state pluginId CodeLensParams{_textDocument=TextDocumentIdenti
 
 -- | (Quasi) Idempotent command execution: recalculate action to execute on command request
 command :: Recorder (WithPriority Log) -> CommandFunction IdeState Uri
-command recorder state uri = do
+command recorder state uri = runExceptT $ do
   actMaybe <- action recorder state uri
   forM_ actMaybe $ \Replace{..} ->
     let
       -- | Convert an Action to the corresponding edit operation
       edit = WorkspaceEdit (Just $ Map.singleton aUri [TextEdit aRange aCode]) Nothing Nothing
     in
-      void $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (const (pure ()))
-  pure $ Right $ InR Null
+      void $ lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (const (pure ()))
+  pure $ InR Null
 
 -- | A source code change
 data Action = Replace
@@ -106,41 +109,40 @@ data Action = Replace
   deriving (Show)
 
 -- | Required action (that can be converted to either CodeLenses or CodeActions)
-action :: Recorder (WithPriority Log) -> IdeState -> Uri -> LspM c (Maybe Action)
-action recorder state uri =
-  runMaybeT $ do
-    nfp <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri
-    fp <- MaybeT . pure $ uriToFilePath' uri
+action :: Recorder (WithPriority Log) -> IdeState -> Uri -> ExceptT PluginError (LspM c) [Action]
+action recorder state uri = do
+    nfp <- getNormalizedFilePathE  uri
+    fp <- uriToFilePathE uri
 
     contents <- lift . getVirtualFile $ toNormalizedUri uri
     let emptyModule = maybe True (T.null . T.strip . virtualFileText) contents
 
-    correctNames <- liftIO $ pathModuleNames recorder state nfp fp
+    correctNames <- mapExceptT liftIO $ pathModuleNames recorder state nfp fp
     logWith recorder Debug (CorrectNames correctNames)
-    bestName <- minimumBy (comparing T.length) <$> (MaybeT . pure $ NE.nonEmpty correctNames)
+    let bestName = minimumBy (comparing T.length) <$> NE.nonEmpty correctNames
     logWith recorder Debug (BestName bestName)
 
     statedNameMaybe <- liftIO $ codeModuleName state nfp
     logWith recorder Debug (ModuleName $ snd <$> statedNameMaybe)
-    case statedNameMaybe of
-      Just (nameRange, statedName)
+    case (bestName, statedNameMaybe) of
+      (Just bestName, Just (nameRange, statedName))
         | statedName `notElem` correctNames ->
-            pure $ Replace uri nameRange ("Set module name to " <> bestName) bestName
-      Nothing
+            pure [Replace uri nameRange ("Set module name to " <> bestName) bestName]
+      (Just bestName, Nothing)
         | emptyModule ->
             let code = "module " <> bestName <> " where\n"
-            in pure $ Replace uri (Range (Position 0 0) (Position 0 0)) code code
-      _ -> MaybeT $ pure Nothing
+            in pure [Replace uri (Range (Position 0 0) (Position 0 0)) code code]
+      _ -> pure $ []
 
 -- | Possible module names, as derived by the position of the module in the
 -- source directories.  There may be more than one possible name, if the source
 -- directories are nested inside each other.
-pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FilePath -> IO [T.Text]
+pathModuleNames :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> FilePath -> ExceptT PluginError IO [T.Text]
 pathModuleNames recorder state normFilePath filePath
   | isLower . head $ takeFileName filePath = return ["Main"]
   | otherwise = do
-      session <- fst <$> (runAction "ModuleName.ghcSession" state $ useWithStale_ GhcSession normFilePath)
-      srcPaths <- evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
+      (session, _) <- runActionE "ModuleName.ghcSession" state $ useWithStaleE GhcSession normFilePath
+      srcPaths <- liftIO $ evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
       logWith recorder Debug (SrcPaths srcPaths)
 
       -- Append a `pathSeparator` to make the path looks like a directory,
@@ -149,7 +151,7 @@ pathModuleNames recorder state normFilePath filePath
       let paths = map (normalise . (<> pure pathSeparator)) srcPaths
       logWith recorder Debug (NormalisedPaths paths)
 
-      mdlPath <- makeAbsolute filePath
+      mdlPath <- liftIO $ makeAbsolute filePath
       logWith recorder Debug (AbsoluteFilePath mdlPath)
 
       let prefixes = filter (`isPrefixOf` mdlPath) paths
@@ -172,7 +174,7 @@ codeModuleName state nfp = runMaybeT $ do
 
 data Log =
     CorrectNames [T.Text]
-  | BestName T.Text
+  | BestName (Maybe T.Text)
   | ModuleName (Maybe T.Text)
   | SrcPaths [FilePath]
   | NormalisedPaths [FilePath]

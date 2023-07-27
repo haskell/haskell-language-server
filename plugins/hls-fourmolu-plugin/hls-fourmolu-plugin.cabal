@@ -39,6 +39,7 @@ library
     , hls-plugin-api  == 2.1.0.0
     , lens
     , lsp
+    , mtl
     , process-extras  >= 0.7.1
     , text
 

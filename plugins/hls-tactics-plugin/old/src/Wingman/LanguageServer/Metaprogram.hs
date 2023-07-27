@@ -37,24 +37,23 @@ hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) (unsafeMkCurr
           stale = unsafeRunStaleIdeFast "hoverProvider" state nfp
 
       cfg <- liftIO $ runIde "plugin" "config" state (getTacticConfigAction plId)
-      (fmap . fmap) maybeToNull <$> liftIO $ fromMaybeT (Right Nothing) $ do
+      liftIO $ fromMaybeT (InR Null) $ do
         holes <- stale GetMetaprograms
 
-        fmap (Right . Just) $
-          case find (flip containsSpan (unTrack loc) . unTrack . fst) holes of
-            Just (trss, program) -> do
-              let tr_range = fmap realSrcSpanToRange trss
-                  rsl = realSrcSpanStart $ unTrack trss
-              HoleJudgment{hj_jdg=jdg, hj_ctx=ctx} <- judgementForHole state nfp tr_range cfg
-              z <- liftIO $ attempt_it rsl ctx jdg $ T.unpack program
-              pure $ Hover
-                { _contents = InL
-                            $ MarkupContent MarkupKind_Markdown
-                            $ either T.pack T.pack z
-                , _range = Just $ unTrack tr_range
-                }
-            Nothing -> empty
-hoverProvider _ _ _ = pure $ Right $ InR Null
+        case find (flip containsSpan (unTrack loc) . unTrack . fst) holes of
+          Just (trss, program) -> do
+            let tr_range = fmap realSrcSpanToRange trss
+                rsl = realSrcSpanStart $ unTrack trss
+            HoleJudgment{hj_jdg=jdg, hj_ctx=ctx} <- judgementForHole state nfp tr_range cfg
+            z <- liftIO $ attempt_it rsl ctx jdg $ T.unpack program
+            pure $ InL $ Hover
+              { _contents = InL
+                          $ MarkupContent MarkupKind_Markdown
+                          $ either T.pack T.pack z
+              , _range = Just $ unTrack tr_range
+              }
+          Nothing -> empty
+hoverProvider _ _ _ = pure $ InR Null
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a
 fromMaybeT def = fmap (fromMaybe def) . runMaybeT

@@ -39,7 +39,7 @@ import           Text.Read                        (readMaybe)
 
 -- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState Method_TextDocumentPrepareCallHierarchy
-prepareCallHierarchy state _ param = runExceptT $ do
+prepareCallHierarchy state _ param = do
     nfp <-  getNormalizedFilePathE (param ^. L.textDocument ^. L.uri)
     items <- liftIO
         $ runAction "CallHierarchy.prepareHierarchy" state
@@ -173,7 +173,7 @@ deriving instance Ord Value
 
 -- | Render incoming calls request.
 incomingCalls :: PluginMethodHandler IdeState Method_CallHierarchyIncomingCalls
-incomingCalls state pluginId param = runExceptT $ do
+incomingCalls state pluginId param = do
     calls <- liftIO
         $ runAction "CallHierarchy.incomingCalls" state
         $ queryCalls
@@ -188,7 +188,7 @@ incomingCalls state pluginId param = runExceptT $ do
 
 -- | Render outgoing calls request.
 outgoingCalls :: PluginMethodHandler IdeState Method_CallHierarchyOutgoingCalls
-outgoingCalls state pluginId param = runExceptT $ do
+outgoingCalls state pluginId param = do
     calls <- liftIO
         $ runAction "CallHierarchy.outgoingCalls" state
         $ queryCalls

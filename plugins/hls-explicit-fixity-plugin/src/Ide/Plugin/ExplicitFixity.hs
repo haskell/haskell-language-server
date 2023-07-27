@@ -43,7 +43,7 @@ descriptor recorder pluginId = (defaultPluginDescriptor pluginId)
     }
 
 hover :: PluginMethodHandler IdeState Method_TextDocumentHover
-hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = runExceptT $ do
+hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = do
     nfp <- getNormalizedFilePathE uri
     runIdeActionE "ExplicitFixity" (shakeExtras state) $ do
       (FixityMap fixmap, _) <-  useWithStaleFastE GetFixity nfp
