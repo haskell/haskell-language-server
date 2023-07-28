@@ -43,7 +43,10 @@ import           Control.DeepSeq
 import           Control.Exception
 import           Control.Lens                                       ((?~), (^.))
 import           Control.Monad
-import           Control.Monad.Except
+import           Control.Monad.Error.Class                          (MonadError (throwError))
+import           Control.Monad.IO.Class                             (MonadIO (liftIO))
+import           Control.Monad.Trans.Class                          (MonadTrans (lift))
+import           Control.Monad.Trans.Except                         (ExceptT (..))
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
                                                                      Value (..))

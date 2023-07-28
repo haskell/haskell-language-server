@@ -261,7 +261,7 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
     noPluginEnabled :: SMethod m -> [(PluginId, b, a)] -> IO (Either ResponseError c)
     noPluginEnabled m fs' = do
       logWith recorder Warning (LogNoPluginForMethod $ Some m)
-      let err = ResponseError (InR ErrorCodes_InvalidParams) msg Nothing
+      let err = ResponseError (InR ErrorCodes_MethodNotFound) msg Nothing
           msg = pluginNotEnabled m fs'
       return $ Left err
 

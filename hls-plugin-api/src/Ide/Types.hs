@@ -57,8 +57,8 @@ module Ide.Types
 import qualified System.Win32.Process          as P (getCurrentProcessId)
 #else
 import           Control.Monad                 (void)
-import           Control.Monad.Except          (throwError)
-import           Control.Monad.Trans.Class     (lift)
+import           Control.Monad.Error.Class     (MonadError (throwError))
+import           Control.Monad.Trans.Class     (MonadTrans (lift))
 import qualified System.Posix.Process          as P (getProcessID)
 import           System.Posix.Signals
 #endif
