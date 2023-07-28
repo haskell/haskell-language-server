@@ -95,37 +95,37 @@ uriToFilePathMT = MaybeT . pure . Location.uriToFilePath'
 -- PositionMapping wrappers
 -- ----------------------------------------------------------------------------
 
--- |ExceptT version of `toCurrentPosition` that throws a PluginDependencyFailed
+-- |ExceptT version of `toCurrentPosition` that throws a PluginInvalidUserState
 -- upon failure
 toCurrentPositionE :: Monad m => PositionMapping -> LSP.Position -> ExceptT PluginError m LSP.Position
-toCurrentPositionE mapping = maybeToExceptT (PluginDependencyFailed "toCurrentPosition"). toCurrentPositionMT mapping
+toCurrentPositionE mapping = maybeToExceptT (PluginInvalidUserState "toCurrentPosition"). toCurrentPositionMT mapping
 
 -- |MaybeT version of `toCurrentPosition`
 toCurrentPositionMT :: Monad m => PositionMapping -> LSP.Position -> MaybeT m LSP.Position
 toCurrentPositionMT mapping = MaybeT . pure . toCurrentPosition mapping
 
--- |ExceptT version of `fromCurrentPosition` that throws a PluginDependencyFailed
--- upon failure
+-- |ExceptT version of `fromCurrentPosition` that throws a
+-- PluginInvalidUserState upon failure
 fromCurrentPositionE :: Monad m => PositionMapping -> LSP.Position -> ExceptT PluginError m LSP.Position
-fromCurrentPositionE mapping = maybeToExceptT (PluginDependencyFailed "fromCurrentPosition") . fromCurrentPositionMT mapping
+fromCurrentPositionE mapping = maybeToExceptT (PluginInvalidUserState "fromCurrentPosition") . fromCurrentPositionMT mapping
 
 -- |MaybeT version of `fromCurrentPosition`
 fromCurrentPositionMT :: Monad m => PositionMapping -> LSP.Position -> MaybeT m LSP.Position
 fromCurrentPositionMT mapping = MaybeT . pure . fromCurrentPosition mapping
 
--- |ExceptT version of `toCurrentRange` that throws a PluginDependencyFailed
+-- |ExceptT version of `toCurrentRange` that throws a PluginInvalidUserState
 -- upon failure
 toCurrentRangeE :: Monad m => PositionMapping -> LSP.Range -> ExceptT PluginError m LSP.Range
-toCurrentRangeE mapping = maybeToExceptT (PluginDependencyFailed "toCurrentRange") . toCurrentRangeMT mapping
+toCurrentRangeE mapping = maybeToExceptT (PluginInvalidUserState "toCurrentRange") . toCurrentRangeMT mapping
 
 -- |MaybeT version of `toCurrentRange`
 toCurrentRangeMT :: Monad m => PositionMapping -> LSP.Range -> MaybeT m LSP.Range
 toCurrentRangeMT mapping = MaybeT . pure . toCurrentRange mapping
 
--- |ExceptT version of `fromCurrentRange` that throws a PluginDependencyFailed
+-- |ExceptT version of `fromCurrentRange` that throws a PluginInvalidUserState
 -- upon failure
 fromCurrentRangeE :: Monad m => PositionMapping -> LSP.Range -> ExceptT PluginError m LSP.Range
-fromCurrentRangeE mapping = maybeToExceptT (PluginDependencyFailed "fromCurrentRange") . fromCurrentRangeMT mapping
+fromCurrentRangeE mapping = maybeToExceptT (PluginInvalidUserState "fromCurrentRange") . fromCurrentRangeMT mapping
 
 -- |MaybeT version of `fromCurrentRange`
 fromCurrentRangeMT :: Monad m => PositionMapping -> LSP.Range -> MaybeT m LSP.Range

@@ -99,7 +99,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
         mkActions docPath verTxtDocId diag = do
             (HAR {hieAst = ast}, pmap) <- runActionE "classplugin.findClassIdentifier.GetHieAst" state
                 $ useWithStaleE GetHieAst docPath
-            instancePosition <- handleMaybe (PluginDependencyFailed "fromCurrentRange") $
+            instancePosition <- handleMaybe (PluginInvalidUserState "fromCurrentRange") $
                               fromCurrentRange pmap range ^? _Just . L.start
                               & fmap (L.character -~ 1)
             ident <- findClassIdentifier ast instancePosition

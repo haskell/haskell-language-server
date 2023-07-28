@@ -174,7 +174,7 @@ codeActionProvider
 codeActionProvider sort k state plId
                    (CodeActionParams _ _ docId range _) = do
   verTxtDocId <- lift $ getVersionedTextDoc docId
-  handleMaybeM (PluginDependencyFailed "codeActionProvider") $ runMaybeT $ do
+  handleMaybeM (PluginInvalidUserState "codeActionProvider") $ runMaybeT $ do
     let fc = FileContext
                 { fc_verTxtDocId = verTxtDocId
                 , fc_range = Just $ unsafeMkCurrent range
@@ -201,7 +201,7 @@ codeLensProvider
 codeLensProvider sort k state plId
                  (CodeLensParams _ _ docId) = do
       verTxtDocId <- lift $ getVersionedTextDoc docId
-      handleMaybeM (PluginDependencyFailed "codeLensProvider") $ runMaybeT $ do
+      handleMaybeM (PluginInvalidUserState "codeLensProvider") $ runMaybeT $ do
         let fc = FileContext
                    { fc_verTxtDocId = verTxtDocId
                    , fc_range = Nothing

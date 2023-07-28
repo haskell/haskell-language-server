@@ -57,7 +57,8 @@ module Ide.Types
 import qualified System.Win32.Process          as P (getCurrentProcessId)
 #else
 import           Control.Monad                 (void)
-import           Control.Monad.Except          (lift, throwError)
+import           Control.Monad.Except          (throwError)
+import           Control.Monad.Trans.Class     (lift)
 import qualified System.Posix.Process          as P (getProcessID)
 import           System.Posix.Signals
 #endif
@@ -74,6 +75,7 @@ import           Data.GADT.Compare
 import           Data.Hashable                 (Hashable)
 import           Data.HashMap.Strict           (HashMap)
 import qualified Data.HashMap.Strict           as HashMap
+import           Data.Kind                     (Type)
 import           Data.List.Extra               (find, sortOn)
 import           Data.List.NonEmpty            (NonEmpty (..), toList)
 import qualified Data.Map                      as Map
@@ -258,7 +260,7 @@ instance ToJSON PluginConfig where
 
 -- ---------------------------------------------------------------------
 
-data PluginDescriptor (ideState :: *) =
+data PluginDescriptor (ideState :: Type) =
   PluginDescriptor { pluginId           :: !PluginId
                    -- ^ Unique identifier of the plugin.
                    , pluginPriority     :: Natural

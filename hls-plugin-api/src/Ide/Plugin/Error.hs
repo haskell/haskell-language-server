@@ -36,9 +36,9 @@ import           Language.LSP.Protocol.Types
 -- Then we have PluginInvalidParams, which along with PluginInternalError map
 -- to a corresponding ResponseError.
 --
--- Next we have PluginRuleFailed and PluginDependencyFailed, with the only
+-- Next we have PluginRuleFailed and PluginInvalidUserState, with the only
 -- difference being PluginRuleFailed is specific to Shake rules and
--- PluginDependencyFailed can be used for everything else. Both of these are
+-- PluginInvalidUserState can be used for everything else. Both of these are
 -- "non-errors", and happen whenever the user's code is in a state where the
 -- plugin is unable to provide a answer to the users request. PluginStaleResolve
 -- is similar to the above two Error types, but is specific to resolve plugins,
@@ -55,8 +55,8 @@ data PluginError
     -- All uncaught exceptions will be caught and converted to this error.
     --
     -- This error will be be converted into an InternalError response code. It
-    -- takes the highest precedence (1) in being returned as a response to the
-    -- client.
+    -- will be logged with Error and takes the highest precedence (1) in being
+    -- returned as a response to the client.
     PluginInternalError T.Text
     -- |PluginInvalidParams should be used if the parameters of the request are
     -- invalid. This error means that there is a bug in the client's code
@@ -64,20 +64,20 @@ data PluginError
     -- parameters).
     --
     -- This error will be will be converted into a InvalidParams response code.
-    -- It takes medium precedence (2) in being returned as a response to the
-    -- client.
+    -- It will be logged with Warning and takes medium precedence (2) in being
+    -- returned as a response to the client.
   | PluginInvalidParams T.Text
-    -- |PluginDependencyFailed should be thrown when a function that your plugin
+    -- |PluginInvalidUserState should be thrown when a function that your plugin
     -- depends on fails. This should only be used when the function fails
-    -- because the files the user is working on is in an invalid state.
+    -- because the user's code is in an invalid state.
     --
     -- This error takes the name of the function that failed. Prefer to catch
     -- this error as close to the source as possible.
     --
     -- This error will be logged with Debug, and will be converted into a
-    -- ContentModified response. It takes a low precedence (3) in being returned
+    -- RequestFailed response. It takes a low precedence (3) in being returned
     -- as a response to the client.
-  | PluginDependencyFailed T.Text
+  | PluginInvalidUserState T.Text
     -- |PluginRequestRefused allows your handler to inspect a request before
     -- rejecting it. In effect it allows your plugin to act make a secondary
     -- `pluginEnabled` decision after receiving the request. This should only be
@@ -93,7 +93,7 @@ data PluginError
     -- This error takes the name of the Rule that failed.
     --
     -- This error will be logged with Debug, and will be converted into a
-    -- ContentModified response code. It takes a low precedence (3) in being
+    -- RequestFailed response code. It takes a low precedence (3) in being
     -- returned as a response to the client.
   | PluginRuleFailed T.Text
     -- |PluginStaleResolve should be thrown when your resolve request is
@@ -106,28 +106,28 @@ data PluginError
 
 instance Pretty PluginError where
     pretty = \case
-      PluginInternalError msg -> "Internal Error:" <+> pretty msg
-      PluginStaleResolve -> "Stale Resolve"
-      PluginRuleFailed rule       -> "Rule Failed:" <+> pretty rule
-      PluginInvalidParams text -> "Invalid Params:" <+> pretty text
-      PluginDependencyFailed text -> "Dependency Failed:" <+> pretty text
-      PluginRequestRefused msg -> "Request Refused: " <+> pretty msg
+      PluginInternalError msg     -> "Internal Error:"    <+> pretty msg
+      PluginStaleResolve          -> "Stale Resolve"
+      PluginRuleFailed rule       -> "Rule Failed:"       <+> pretty rule
+      PluginInvalidParams text    -> "Invalid Params:"    <+> pretty text
+      PluginInvalidUserState text -> "Dependency Failed:" <+> pretty text
+      PluginRequestRefused msg    -> "Request Refused: "  <+> pretty msg
 
 toErrorCode :: PluginError -> (LSPErrorCodes |? ErrorCodes)
 toErrorCode (PluginInternalError _)    = InR ErrorCodes_InternalError
 toErrorCode (PluginInvalidParams _)    = InR ErrorCodes_InvalidParams
-toErrorCode (PluginDependencyFailed _) = InL LSPErrorCodes_ContentModified
+toErrorCode (PluginInvalidUserState _) = InL LSPErrorCodes_RequestFailed
 -- PluginRequestRefused should never be a argument to `toResponseError`, as
 -- it should be dealt with in `extensiblePlugins`, but this is here to make
 -- this function complete
 toErrorCode (PluginRequestRefused _)   = InR ErrorCodes_MethodNotFound
-toErrorCode (PluginRuleFailed _)       = InL LSPErrorCodes_ContentModified
+toErrorCode (PluginRuleFailed _)       = InL LSPErrorCodes_RequestFailed
 toErrorCode PluginStaleResolve         = InL LSPErrorCodes_ContentModified
 
 toPriority :: PluginError -> Priority
 toPriority (PluginInternalError _)    = Error
 toPriority (PluginInvalidParams _)    = Warning
-toPriority (PluginDependencyFailed _) = Debug
+toPriority (PluginInvalidUserState _) = Debug
 toPriority (PluginRequestRefused _)   = Debug
 toPriority (PluginRuleFailed _)       = Debug
 toPriority PluginStaleResolve         = Debug

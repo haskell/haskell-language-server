@@ -12,7 +12,9 @@ mkCodeActionWithResolveAndCommand) where
 
 import           Control.Lens                  (_Just, (&), (.~), (?~), (^.),
                                                 (^?))
-import           Control.Monad.Except
+import           Control.Monad.Except          (ExceptT (..),
+                                                MonadError (throwError))
+import           Control.Monad.Trans.Class     (lift)
 
 import qualified Data.Aeson                    as A
 import           Data.Maybe                    (catMaybes)

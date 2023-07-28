@@ -111,7 +111,7 @@ getSelectionRanges ide file positions = do
              in fromMaybe defaultSelectionRange . findPosition pos $ codeRange
 
     -- 'positionMapping' should be applied to the output ranges before returning them
-    maybeToExceptT (PluginDependencyFailed "toCurrentSelectionRange") . MaybeT . pure $
+    maybeToExceptT (PluginInvalidUserState "toCurrentSelectionRange") . MaybeT . pure $
         InL <$> traverse (toCurrentSelectionRange positionMapping) selectionRanges
 
 -- | Find 'Position' in 'CodeRange'. This can fail, if the given position is not covered by the 'CodeRange'.
