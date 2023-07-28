@@ -6,10 +6,11 @@
 module Ide.Plugin.Class.CodeAction where
 
 import           Control.Lens                         hiding (List, use)
-import           Control.Monad.Except                 (ExceptT, throwError)
+import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Class            (lift)
+import           Control.Monad.Trans.Except           (ExceptT, runExceptT)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           hiding (Null)
 import           Data.Bifunctor                       (second)

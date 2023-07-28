@@ -32,7 +32,8 @@ import           Control.Lens                                 (_1, _3, ix, (%~),
 import           Control.Monad                                (guard, void,
                                                                when)
 import           Control.Monad.IO.Class                       (MonadIO (liftIO))
-import           Control.Monad.Trans.Except                   (ExceptT (..))
+import           Control.Monad.Trans.Except                   (ExceptT (..),
+                                                               runExceptT)
 import           Data.Aeson                                   (toJSON)
 import           Data.Char                                    (isSpace)
 import           Data.Foldable                                (toList)
@@ -103,8 +104,7 @@ import           GHC.Types.SrcLoc                             (UnhelpfulSpanReas
 #endif
 import           Ide.Plugin.Error                             (PluginError (PluginInternalError),
                                                                handleMaybe,
-                                                               handleMaybeM,
-                                                               runExceptT)
+                                                               handleMaybeM)
 import           Ide.Plugin.Eval.Code                         (Statement,
                                                                asStatements,
                                                                myExecStmt,

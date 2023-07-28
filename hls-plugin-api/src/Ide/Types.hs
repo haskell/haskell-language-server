@@ -54,18 +54,23 @@ module Ide.Types
     where
 
 #ifdef mingw32_HOST_OS
+
 import qualified System.Win32.Process          as P (getCurrentProcessId)
+
 #else
-import           Control.Monad                 (void)
-import           Control.Monad.Error.Class     (MonadError (throwError))
-import           Control.Monad.Trans.Class     (MonadTrans (lift))
+
 import qualified System.Posix.Process          as P (getProcessID)
 import           System.Posix.Signals
+
 #endif
+
 import           Control.Applicative           ((<|>))
 import           Control.Arrow                 ((&&&))
 import           Control.Lens                  (_Just, (.~), (?~), (^.), (^?))
-import           Control.Monad.Trans.Except    (ExceptT)
+import           Control.Monad                 (void)
+import           Control.Monad.Error.Class     (MonadError (throwError))
+import           Control.Monad.Trans.Class     (MonadTrans (lift))
+import           Control.Monad.Trans.Except    (ExceptT, runExceptT)
 import           Data.Aeson                    hiding (Null, defaultOptions)
 import           Data.Default
 import           Data.Dependent.Map            (DMap)

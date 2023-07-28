@@ -12,8 +12,9 @@ module Development.IDE.Plugin.Completions
 import           Control.Concurrent.Async                 (concurrently)
 import           Control.Concurrent.STM.Stats             (readTVarIO)
 import           Control.Lens                             ((&), (.~))
-import           Control.Monad.Except                     (ExceptT (ExceptT))
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Except               (ExceptT (ExceptT),
+                                                           withExceptT)
 import           Data.Aeson
 import qualified Data.HashMap.Strict                      as Map
 import qualified Data.HashSet                             as Set

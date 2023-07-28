@@ -16,13 +16,15 @@ module Ide.Plugin.Fourmolu (
 
 import           Control.Exception               (IOException, handle, try)
 import           Control.Lens                    ((^.))
-import           Control.Monad
-import           Control.Monad.Except            (ExceptT (..), mapExceptT,
-                                                  throwError)
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans
+import           Control.Monad                   (guard)
+import           Control.Monad.Error.Class       (MonadError (throwError))
+import           Control.Monad.Trans.Except      (ExceptT (..), mapExceptT,
+                                                  runExceptT)
+
+import           Control.Monad.IO.Class          (MonadIO (liftIO))
+import           Control.Monad.Trans.Class       (MonadTrans (lift))
 import           Data.Bifunctor                  (bimap)
-import           Data.Maybe
+import           Data.Maybe                      (catMaybes)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE                 hiding (pluginHandlers)

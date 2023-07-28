@@ -6,8 +6,6 @@ module Ide.Plugin.Error (
     PluginError(..),
     toErrorCode,
     toPriority,
-    runExceptT,
-    withExceptT,
     handleMaybe,
     handleMaybeM,
     getNormalizedFilePathE,
@@ -15,8 +13,7 @@ module Ide.Plugin.Error (
 
 import           Control.Monad.Extra         (maybeM)
 import           Control.Monad.Trans.Class   (lift)
-import           Control.Monad.Trans.Except  (ExceptT (..), runExceptT, throwE,
-                                              withExceptT)
+import           Control.Monad.Trans.Except  (ExceptT (..), throwE)
 import qualified Data.Text                   as T
 import           Ide.Logger
 import           Language.LSP.Protocol.Types

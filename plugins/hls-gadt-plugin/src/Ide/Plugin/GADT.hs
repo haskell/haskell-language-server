@@ -10,7 +10,13 @@
 module Ide.Plugin.GADT (descriptor) where
 
 import           Control.Lens                     ((^.))
-import           Control.Monad.Except
+
+import           Control.Monad.Error.Class        (MonadError (throwError),
+                                                   liftEither)
+import           Control.Monad.IO.Class           (MonadIO)
+import           Control.Monad.Trans.Class        (MonadTrans (lift))
+import           Control.Monad.Trans.Except       (ExceptT, runExceptT,
+                                                   withExceptT)
 import           Data.Aeson                       (FromJSON, ToJSON, toJSON)
 import           Data.Either.Extra                (maybeToEither)
 import qualified Data.Map                         as Map

@@ -26,11 +26,10 @@ import           Control.Exception.Safe               (Exception (..),
                                                        catch, throwIO, try)
 import           Control.Lens.Operators
 import           Control.Monad                        (forM, unless, when)
-import           Control.Monad.Except                 (ExceptT (..),
-                                                       MonadIO (liftIO),
-                                                       MonadTrans (lift), forM,
-                                                       runExceptT, throwError,
-                                                       unless, when)
+import           Control.Monad.Error.Class            (MonadError (throwError))
+import           Control.Monad.IO.Class               (MonadIO (liftIO))
+import           Control.Monad.Trans.Class            (MonadTrans (lift))
+import           Control.Monad.Trans.Except           (ExceptT (..), runExceptT)
 
 import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Writer.Strict

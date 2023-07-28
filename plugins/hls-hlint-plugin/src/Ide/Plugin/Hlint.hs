@@ -46,7 +46,8 @@ import           Control.Monad
 import           Control.Monad.Error.Class                          (MonadError (throwError))
 import           Control.Monad.IO.Class                             (MonadIO (liftIO))
 import           Control.Monad.Trans.Class                          (MonadTrans (lift))
-import           Control.Monad.Trans.Except                         (ExceptT (..))
+import           Control.Monad.Trans.Except                         (ExceptT (..),
+                                                                     runExceptT)
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
                                                                      Value (..))

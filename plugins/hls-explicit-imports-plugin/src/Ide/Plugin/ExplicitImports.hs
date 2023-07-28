@@ -20,10 +20,10 @@ module Ide.Plugin.ExplicitImports
 
 import           Control.DeepSeq
 import           Control.Lens                         ((&), (?~))
-import           Control.Monad.Except                 (throwError)
+import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class            (lift)
-import           Control.Monad.Trans.Except           (ExceptT)
+import           Control.Monad.Trans.Except           (ExceptT, runExceptT)
 import           Control.Monad.Trans.Maybe
 import qualified Data.Aeson                           as A (ToJSON (toJSON))
 import           Data.Aeson.Types                     (FromJSON)
@@ -46,7 +46,7 @@ import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Error                     (PluginError (..),
                                                        getNormalizedFilePathE,
-                                                       handleMaybe, runExceptT)
+                                                       handleMaybe)
 import           Ide.Plugin.RangeMap                  (filterByRange)
 import qualified Ide.Plugin.RangeMap                  as RM (RangeMap, fromList)
 import           Ide.Plugin.Resolve

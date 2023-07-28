@@ -25,17 +25,18 @@ module Ide.Plugin.Splice
 where
 
 import           Control.Applicative             (Alternative ((<|>)))
-import           Control.Arrow
-import           Control.Exception
+import Control.Arrow ( Arrow(first) )
+import Control.Exception ( SomeException )
 import qualified Control.Foldl                   as L
 import           Control.Lens                    (Identity (..), ix, view, (%~),
                                                   (<&>), (^.))
-import           Control.Monad
-import           Control.Monad.Except
+import Control.Monad ( guard, unless, forM )
+import Control.Monad.Error.Class ( MonadError(throwError) )
 import           Control.Monad.Extra             (eitherM)
 import qualified Control.Monad.Fail              as Fail
-import           Control.Monad.IO.Unlift
-import           Control.Monad.Trans.Except
+import Control.Monad.IO.Unlift ( MonadIO(..), askRunInIO )
+import Control.Monad.Trans.Class ( MonadTrans(lift) )
+import Control.Monad.Trans.Except ( ExceptT(..), runExceptT )
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                      hiding (Null)
 import           Data.Foldable                   (Foldable (foldl'))
@@ -52,14 +53,22 @@ import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util as Util
 import           Development.IDE.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Transform (TransformT(TransformT))
+
 #if MIN_VERSION_ghc(9,4,1)
+
 import           GHC.Data.Bag (Bag)
+
 #endif
+
 import           GHC.Exts
+
 #if MIN_VERSION_ghc(9,2,0)
+
 import           GHC.Parser.Annotation (SrcSpanAnn'(..))
 import qualified GHC.Types.Error as Error
+
 #endif
+
 import           Ide.Plugin.Splice.Types
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint (uniqueSrcSpanT)

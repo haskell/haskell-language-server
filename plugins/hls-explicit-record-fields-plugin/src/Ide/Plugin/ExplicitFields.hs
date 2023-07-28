@@ -17,7 +17,7 @@ module Ide.Plugin.ExplicitFields
 
 import           Control.Lens                     ((^.))
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
-import           Control.Monad.Trans.Except       (ExceptT)
+import           Control.Monad.Trans.Except       (ExceptT, runExceptT)
 import           Data.Functor                     ((<&>))
 import           Data.Generics                    (GenericQ, everything, extQ,
                                                    mkQ)
@@ -62,8 +62,7 @@ import           GHC.Generics                     (Generic)
 import           Ide.Logger                       (Priority (..), cmapWithPrio,
                                                    logWith, (<+>))
 import           Ide.Plugin.Error                 (PluginError,
-                                                   getNormalizedFilePathE,
-                                                   runExceptT)
+                                                   getNormalizedFilePathE)
 import           Ide.Plugin.RangeMap              (RangeMap)
 import qualified Ide.Plugin.RangeMap              as RangeMap
 import           Ide.Types                        (PluginDescriptor (..),
