@@ -103,12 +103,12 @@ data PluginError
 
 instance Pretty PluginError where
     pretty = \case
-      PluginInternalError msg     -> "Internal Error:"    <+> pretty msg
+      PluginInternalError msg     -> "Internal Error:"     <+> pretty msg
       PluginStaleResolve          -> "Stale Resolve"
-      PluginRuleFailed rule       -> "Rule Failed:"       <+> pretty rule
-      PluginInvalidParams text    -> "Invalid Params:"    <+> pretty text
-      PluginInvalidUserState text -> "Dependency Failed:" <+> pretty text
-      PluginRequestRefused msg    -> "Request Refused: "  <+> pretty msg
+      PluginRuleFailed rule       -> "Rule Failed:"        <+> pretty rule
+      PluginInvalidParams text    -> "Invalid Params:"     <+> pretty text
+      PluginInvalidUserState text -> "Invalid User State:" <+> pretty text
+      PluginRequestRefused msg    -> "Request Refused: "   <+> pretty msg
 
 toErrorCode :: PluginError -> (LSPErrorCodes |? ErrorCodes)
 toErrorCode (PluginInternalError _)    = InR ErrorCodes_InternalError

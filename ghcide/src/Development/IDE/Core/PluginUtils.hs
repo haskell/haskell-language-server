@@ -46,6 +46,14 @@ useE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . useMT k
 useMT :: IdeRule k v => k -> NormalizedFilePath -> MaybeT Action v
 useMT k = MaybeT . Shake.use k
 
+-- |ExceptT version of `uses` that throws a PluginRuleFailed upon failure
+usesE :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> ExceptT PluginError Action (f v)
+usesE k = maybeToExceptT (PluginRuleFailed (T.pack $ show k)) . usesMT k
+
+-- |MaybeT version of `uses`
+usesMT :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> MaybeT Action (f v)
+usesMT k xs = MaybeT $ sequence <$> Shake.uses k xs
+
 -- |ExceptT version of `useWithStale` that throws a PluginRuleFailed upon
 -- failure
 useWithStaleE :: IdeRule k v

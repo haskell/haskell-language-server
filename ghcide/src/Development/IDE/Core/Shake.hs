@@ -961,17 +961,23 @@ useWithStale :: IdeRule k v
     => k -> NormalizedFilePath -> Action (Maybe (v, PositionMapping))
 useWithStale key file = runIdentity <$> usesWithStale key (Identity file)
 
--- | Request a Rule result, it not available return the last computed result which may be stale.
---   Errors out if none available.
+-- |Request a Rule result, it not available return the last computed result
+--  which may be stale.
 --
--- The thrown error is a 'BadDependency' error which is caught by the rule system.
+-- Throws an `BadDependency` IO exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers. Use `useWithStaleE` instead.
 useWithStale_ :: IdeRule k v
     => k -> NormalizedFilePath -> Action (v, PositionMapping)
 useWithStale_ key file = runIdentity <$> usesWithStale_ key (Identity file)
 
--- | Plural version of 'useWithStale_'
+-- |Plural version of 'useWithStale_'
 --
--- The thrown error is a 'BadDependency' error which is caught by the rule system.
+-- Throws an `BadDependency` IO exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers.
 usesWithStale_ :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> Action (f (v, PositionMapping))
 usesWithStale_ key files = do
     res <- usesWithStale key files
@@ -1045,12 +1051,24 @@ useWithStaleFast' key file = do
 useNoFile :: IdeRule k v => k -> Action (Maybe v)
 useNoFile key = use key emptyFilePath
 
+-- Requests a rule if available.
+--
+-- Throws an `BadDependency` IO exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers. Use `useE` instead.
 use_ :: IdeRule k v => k -> NormalizedFilePath -> Action v
 use_ key file = runIdentity <$> uses_ key (Identity file)
 
 useNoFile_ :: IdeRule k v => k -> Action v
 useNoFile_ key = use_ key emptyFilePath
 
+-- |Plural version of `use_`
+--
+-- Throws an `BadDependency` IO exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers. Use `usesE` instead.
 uses_ :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> Action (f v)
 uses_ key files = do
     res <- uses key files

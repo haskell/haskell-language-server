@@ -25,20 +25,21 @@ module Ide.Plugin.Splice
 where
 
 import           Control.Applicative             (Alternative ((<|>)))
-import Control.Arrow ( Arrow(first) )
-import Control.Exception ( SomeException )
+import           Control.Arrow                   ( Arrow(first) )
+import           Control.Exception              ( SomeException )
 import qualified Control.Foldl                   as L
 import           Control.Lens                    (Identity (..), ix, view, (%~),
                                                   (<&>), (^.))
-import Control.Monad ( guard, unless, forM )
-import Control.Monad.Error.Class ( MonadError(throwError) )
+import           Control.Monad                   ( guard, unless, forM )
+import           Control.Monad.Error.Class       ( MonadError(throwError) )
 import           Control.Monad.Extra             (eitherM)
 import qualified Control.Monad.Fail              as Fail
-import Control.Monad.IO.Unlift ( MonadIO(..), askRunInIO )
-import Control.Monad.Trans.Class ( MonadTrans(lift) )
-import Control.Monad.Trans.Except ( ExceptT(..), runExceptT )
+import           Control.Monad.IO.Unlift         ( MonadIO(..), askRunInIO )
+import           Control.Monad.Trans.Class       ( MonadTrans(lift) )
+import           Control.Monad.Trans.Except      ( ExceptT(..), runExceptT )
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                      hiding (Null)
+import qualified Data.Bifunctor                  as B (first)
 import           Data.Foldable                   (Foldable (foldl'))
 import           Data.Function
 import           Data.Generics
@@ -48,6 +49,7 @@ import           Data.Maybe                      (fromMaybe, listToMaybe,
                                                   mapMaybe)
 import qualified Data.Text                       as T
 import           Development.IDE
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat      as Compat hiding (getLoc)
 import           Development.IDE.GHC.Compat.ExactPrint
 import qualified Development.IDE.GHC.Compat.Util as Util
@@ -108,12 +110,13 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
     rio <- askRunInIO
     let reportEditor :: ReportEditor
         reportEditor msgTy msgs = liftIO $ rio $ sendNotification SMethod_WindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
+        expandManually :: NormalizedFilePath -> ExceptT PluginError IO WorkspaceEdit
         expandManually fp = do
             mresl <-
                 liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck fp
             (TcModuleResult {..}, _) <-
                 maybe
-                (throwError "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (erroneous) macro and expand splice again."
+                (throwError $ PluginInternalError "Splice expansion: Type-checking information not found in cache.\nYou can once delete or replace the macro with placeholder, convince the type checker and then revert to original (erroneous) macro and expand splice again."
                 )
                 pure mresl
             reportEditor
@@ -121,10 +124,8 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                 [ "Expansion in type-checking phase failed;"
                 , "trying to expand manually, but note that it is less rigorous."
                 ]
-            pm <-
-                liftIO $
-                    runAction "expandTHSplice.fallback.GetParsedModule" ideState $
-                        use_ GetParsedModule fp
+            pm <- runActionE "expandTHSplice.fallback.GetParsedModule" ideState $
+                        useE GetParsedModule fp
             (ps, hscEnv, _dflags) <- setupHscEnv ideState fp pm
 
             manualCalcEdit
@@ -163,7 +164,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                             verTxtDocId
                             (graft (RealSrcSpan spliceSpan Nothing) expanded)
                             ps
-            maybe (throwError "No splice information found") (either throwError pure) $
+            maybe (throwError $ PluginInternalError "No splice information found") (either (throwError . PluginInternalError . T.pack) pure) $
                 case spliceContext of
                     Expr -> graftSpliceWith exprSuperSpans
                     Pat ->
@@ -197,13 +198,13 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                 Left err -> do
                     reportEditor
                         MessageType_Error
-                        ["Error during expanding splice: " <> T.pack err]
-                    pure (Left $ PluginInternalError $ T.pack err)
+                        [T.pack $ "Error during expanding splice: " <> show (pretty err)]
+                    pure (Left err)
                 Right edits ->
                     pure (Right edits)
     case res of
       Nothing -> pure $ Right $ InR Null
-      Just (Left err) -> pure $ Left err
+      Just (Left err) -> pure $ Left $ err
       Just (Right edit) -> do
         _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
         pure $ Right $ InR Null
@@ -217,12 +218,10 @@ setupHscEnv
     :: IdeState
     -> NormalizedFilePath
     -> ParsedModule
-    -> ExceptT String IO (Annotated ParsedSource, HscEnv, DynFlags)
+    -> ExceptT PluginError IO (Annotated ParsedSource, HscEnv, DynFlags)
 setupHscEnv ideState fp pm = do
-    hscEnvEq <-
-        liftIO $
-            runAction "expandTHSplice.fallback.ghcSessionDeps" ideState $
-                use_ GhcSessionDeps fp
+    hscEnvEq <- runActionE "expandTHSplice.fallback.ghcSessionDeps" ideState $
+                    useE GhcSessionDeps fp
     let ps = annotateParsedSource pm
         hscEnv0 = hscEnvWithImportPaths hscEnvEq
         modSum = pm_mod_summary pm
@@ -379,7 +378,7 @@ manualCalcEdit ::
     RealSrcSpan ->
     ExpandStyle ->
     ExpandSpliceParams ->
-    ExceptT String IO WorkspaceEdit
+    ExceptT PluginError IO WorkspaceEdit
 manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _eStyle ExpandSpliceParams {..} = do
     (warns, resl) <-
         ExceptT $ do
@@ -420,7 +419,8 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
 #else
                                 msgs
 #endif
-            pure $ (warns,) <$> fromMaybe (Left $ showErrors errs) eresl
+            pure $ (warns,) <$> maybe (throwError $ PluginInternalError $ T.pack $ showErrors errs)
+                                    (B.first (PluginInternalError . T.pack)) eresl
 
     unless
         (null warns)

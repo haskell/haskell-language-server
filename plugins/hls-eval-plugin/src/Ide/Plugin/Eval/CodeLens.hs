@@ -53,8 +53,6 @@ import           Development.IDE.Core.RuleTypes               (LinkableResult (l
                                                                NeedsCompilation (NeedsCompilation),
                                                                TypeCheck (..),
                                                                tmrTypechecked)
-import           Development.IDE.Core.Shake                   (useWithStale_,
-                                                               use_, uses_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import           Development.IDE.GHC.Compat.Util              (GhcException,
@@ -220,7 +218,7 @@ runEvalCmd plId st EvalParams{..} =
             liftIO $ queueForEvaluation st nfp
             liftIO $ setSomethingModified VFSUnmodified st [toKey NeedsCompilation nfp] "Eval"
             -- Setup a session with linkables for all dependencies and GHCi specific options
-            final_hscEnv <- liftIO $ initialiseSessionForEval
+            final_hscEnv <- initialiseSessionForEval
                                       (needsQuickCheck tests)
                                       st nfp
 
@@ -246,21 +244,21 @@ runEvalCmd plId st EvalParams{..} =
 -- also be loaded into the environment.
 --
 -- The interactive context and interactive dynamic flags are also set appropiately.
-initialiseSessionForEval :: Bool -> IdeState -> NormalizedFilePath -> IO HscEnv
+initialiseSessionForEval :: Bool -> IdeState -> NormalizedFilePath -> ExceptT PluginError (LspM Config) HscEnv
 initialiseSessionForEval needs_quickcheck st nfp = do
-  (ms, env1) <- runAction "runEvalCmd" st $ do
+  (ms, env1) <- runActionE "runEvalCmd" st $ do
 
-    ms <- msrModSummary <$> use_ GetModSummary nfp
-    deps_hsc <- hscEnv <$> use_ GhcSessionDeps nfp
+    ms <- msrModSummary <$> useE GetModSummary nfp
+    deps_hsc <- hscEnv <$> useE GhcSessionDeps nfp
 
-    linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
-    linkables <- uses_ GetLinkable linkables_needed
+    linkables_needed <- reachableModules <$> useE GetDependencyInformation nfp
+    linkables <- usesE GetLinkable linkables_needed
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
     -- However, the eval plugin (setContext specifically) requires the rdr_env
     -- for the current module - so get it from the Typechecked Module and add
     -- it back to the iface for the current module.
-    rdr_env <- tcg_rdr_env . tmrTypechecked <$> use_ TypeCheck nfp
+    rdr_env <- tcg_rdr_env . tmrTypechecked <$> useE TypeCheck nfp
     let linkable_hsc = loadModulesHome (map (addRdrEnv . linkableHomeMod) linkables) deps_hsc
         addRdrEnv hmi
           | iface <- hm_iface hmi
@@ -271,7 +269,7 @@ initialiseSessionForEval needs_quickcheck st nfp = do
     return (ms, linkable_hsc)
   -- Bit awkward we need to use evalGhcEnv here but setContext requires to run
   -- in the Ghc monad
-  env2 <- evalGhcEnv env1 $ do
+  env2 <- liftIO $ evalGhcEnv env1 $ do
             setContext [Compat.IIModule (moduleName (ms_mod ms))]
             let df = flip xopt_set    LangExt.ExtendedDefaultRules
                    . flip xopt_unset  LangExt.MonomorphismRestriction
