@@ -1,5 +1,5 @@
 packages: .
 source-repository-package
   type:git
-  location: https://github.com/haskell/containers.git
-  tag: cde5e58b12e744ca4742db71443bee6584dfd1e9
+  location: https://github.com/haskell/aeson.git
+  tag: fc5f5bb067613a273de358f09760b635d6f78c82
