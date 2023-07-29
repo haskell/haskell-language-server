@@ -10,7 +10,7 @@ module Wingman.AbstractLSP (installInteractions) where
 import           Control.Monad (void)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans (lift)
-import.          Control.Monad.Trans.Except (ExceptT(ExceptT))
+import           Control.Monad.Trans.Except (ExceptT(ExceptT))
 import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT, runMaybeT)
 import qualified Data.Aeson as A
 import           Data.Coerce
@@ -93,7 +93,7 @@ runContinuation
     -> CommandFunction IdeState (FileContext, b)
 runContinuation plId cont state (fc, b) = ExceptT $ do
   fromMaybeT
-    (PluginInternalError "TODO(sandy)") $ do
+    (Left $ PluginInternalError "TODO(sandy)") $ do
       env@LspEnv{..} <- buildEnv state plId fc
       nfp <- getNfp $ fc_verTxtDocId le_fileContext ^. L.uri
       let stale a = runStaleIde "runContinuation" state nfp a
