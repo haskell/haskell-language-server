@@ -383,6 +383,38 @@ test-suite ghcide-tests
         HieDbRetry
         Development.IDE.Test
         Development.IDE.Test.Diagnostic
+        -- Tests that have been pulled out of the main file
+        BootTests
+        CodeLensTests
+        CompletionTests
+        CPPTests
+        CradleTests
+        DependentFileTest
+        DiagnosticTests
+        FindDefinitionAndHoverTests
+        HaddockTests
+        HighlightTests
+        IfaceTests
+        InitializeResponseTests
+        LogType
+        NonLspCommandLine
+        OutlineTests
+        PluginParsedResultTests
+        PluginSimpleTests
+        PositionMappingTests
+        PreprocessorTests
+        RootUriTests
+        SafeTests
+        SymlinkTests
+        TestUtils
+        THTests
+        UnitTests
+        WatchedFileTests
+        AsyncTests
+        ClientSettingsTests
+        ReferenceTests
+        GarbageCollectionTests
+        OpenCloseTest
     default-extensions:
         BangPatterns
         DeriveFunctor
