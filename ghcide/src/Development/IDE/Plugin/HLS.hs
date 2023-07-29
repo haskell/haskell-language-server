@@ -311,9 +311,8 @@ runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedPro
 
 combineErrors :: NonEmpty (PluginId, PluginError) -> ResponseError
 combineErrors (x NE.:| []) = toResponseError x
-combineErrors xs  =
-  case NE.sortWith (toPriority . snd) xs of
-    (x NE.:| _) -> toResponseError x
+combineErrors xs = toResponseError $ NE.last $ NE.sortWith (toPriority . snd) xs
+
 
 toResponseError :: (PluginId, PluginError) -> ResponseError
 toResponseError (PluginId plId, err) =
