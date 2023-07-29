@@ -235,9 +235,9 @@ runEvalCmd plId st EvalParams{..} =
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
 
             return workspaceEdits
-     in perf "evalCmd" $
+     in perf "evalCmd" $ ExceptT $
             withIndefiniteProgress "Evaluating" Cancellable $
-                response' cmd
+                runExceptT $ response' cmd
 
 -- | Create an HscEnv which is suitable for performing interactive evaluation.
 -- All necessary home modules will have linkables and the current module will

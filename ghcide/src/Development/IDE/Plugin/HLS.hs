@@ -12,6 +12,7 @@ module Development.IDE.Plugin.HLS
 import           Control.Exception             (SomeException)
 import           Control.Lens                  ((^.))
 import           Control.Monad
+import           Control.Monad.Trans.Except    (runExceptT)
 import qualified Data.Aeson                    as A
 import           Data.Bifunctor                (first)
 import           Data.Dependent.Map            (DMap)
@@ -218,7 +219,7 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
           Just (PluginCommand _ _ f) -> case A.fromJSON arg of
             A.Error err -> logAndReturnError recorder p (InR ErrorCodes_InvalidParams) (failedToParseArgs com p err arg)
             A.Success a -> do
-              (first (toResponseError . (p,)) <$> f ide a) `catchAny` -- See Note [Exception handling in plugins]
+              (first (toResponseError . (p,)) <$> runExceptT (f ide a)) `catchAny` -- See Note [Exception handling in plugins]
                 (\e -> logAndReturnError' recorder (InR ErrorCodes_InternalError) (ExceptionInPlugin p (Some SMethod_WorkspaceApplyEdit) e))
 
 -- ---------------------------------------------------------------------

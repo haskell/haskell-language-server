@@ -15,7 +15,9 @@ module Ide.Plugin.Eval.Util (
 
 import           Control.Exception                     (SomeException, evaluate,
                                                         fromException)
+import           Control.Monad.Error.Class             (MonadError (throwError))
 import           Control.Monad.IO.Class                (MonadIO (liftIO))
+import           Control.Monad.Trans.Class             (MonadTrans (lift))
 import           Control.Monad.Trans.Except            (ExceptT (..),
                                                         runExceptT)
 import           Data.Aeson                            (Value)
@@ -69,15 +71,14 @@ logLevel = Debug -- Info
 isLiterate :: FilePath -> Bool
 isLiterate x = takeExtension x `elem` [".lhs", ".lhs-boot"]
 
-response' :: ExceptT PluginError (LspM c) WorkspaceEdit -> LspM c (Either PluginError (Value |? Null))
+response' :: ExceptT PluginError (LspM c) WorkspaceEdit -> ExceptT PluginError (LspM c) (Value |? Null)
 response' act = do
-    res <- runExceptT act
+    res <-  ExceptT (runExceptT act
              `catchAny` \e -> do
                 res <- showErr e
-                pure . Left . PluginInternalError $ fromString res
-    sequence $ flip second res $ \a -> do
-        _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing a) (\_ -> pure ())
-        pure $ InR Null
+                pure . Left  . PluginInternalError $ fromString res)
+    _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing res) (\_ -> pure ())
+    pure $ InR Null
 
 gStrictTry :: (MonadIO m, MonadCatch m) => m b -> m (Either String b)
 gStrictTry op =

@@ -57,7 +57,7 @@ toGADTSyntaxCommandId = "GADT.toGADT"
 
 -- | A command replaces H98 data decl with GADT decl in place
 toGADTCommand :: PluginId -> CommandFunction IdeState ToGADTParams
-toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = runExceptT $ withExceptT handleGhcidePluginError $ do
+toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = withExceptT handleGhcidePluginError $ do
     nfp <- withExceptT (GhcidePluginErrors) $ getNormalizedFilePathE uri
     (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
     (L ann decl) <- case decls of

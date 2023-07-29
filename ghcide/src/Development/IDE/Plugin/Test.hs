@@ -17,6 +17,7 @@ import           Control.Monad
 import           Control.Monad.Except                 (ExceptT (..), throwError)
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
+import           Control.Monad.Trans.Class            (MonadTrans (lift))
 import           Data.Aeson                           (FromJSON (parseJSON),
                                                        ToJSON (toJSON), Value)
 import qualified Data.Aeson.Types                     as A
@@ -172,6 +173,6 @@ blockCommandDescriptor plId = (defaultPluginDescriptor plId) {
 
 blockCommandHandler :: CommandFunction state ExecuteCommandParams
 blockCommandHandler _ideState _params = do
-  LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/command")) A.Null
+  lift $ LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/command")) A.Null
   liftIO $ threadDelay maxBound
-  return (Right $ InR Null)
+  pure $ InR Null

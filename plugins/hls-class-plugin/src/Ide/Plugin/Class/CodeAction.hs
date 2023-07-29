@@ -10,7 +10,7 @@ import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Class            (lift)
-import           Control.Monad.Trans.Except           (ExceptT, runExceptT)
+import           Control.Monad.Trans.Except           (ExceptT)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           hiding (Null)
 import           Data.Bifunctor                       (second)
@@ -43,25 +43,24 @@ import           Language.LSP.Server
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
-    caps <- getClientCapabilities
-    runExceptT $ do
-        nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
-        pm <- runActionE "classplugin.addMethodPlaceholders.GetParsedModule" state
-            $ useE GetParsedModule nfp
-        (hsc_dflags . hscEnv -> df) <- runActionE "classplugin.addMethodPlaceholders.GhcSessionDeps" state
-            $ useE GhcSessionDeps nfp
-        (old, new) <- handleMaybeM (PluginInternalError "Unable to makeEditText")
-            $ liftIO $ runMaybeT
-            $ makeEditText pm df param
-        pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
-        let edit =
-                if withSig
-                then mergeEdit (workspaceEdit caps old new) pragmaInsertion
-                else workspaceEdit caps old new
+    caps <- lift $ getClientCapabilities
+    nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
+    pm <- runActionE "classplugin.addMethodPlaceholders.GetParsedModule" state
+        $ useE GetParsedModule nfp
+    (hsc_dflags . hscEnv -> df) <- runActionE "classplugin.addMethodPlaceholders.GhcSessionDeps" state
+        $ useE GhcSessionDeps nfp
+    (old, new) <- handleMaybeM (PluginInternalError "Unable to makeEditText")
+        $ liftIO $ runMaybeT
+        $ makeEditText pm df param
+    pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
+    let edit =
+            if withSig
+            then mergeEdit (workspaceEdit caps old new) pragmaInsertion
+            else workspaceEdit caps old new
 
-        void $ lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+    void $ lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
 
-        pure $ InR Null
+    pure $ InR Null
     where
         toTextDocumentEdit edit =
             TextDocumentEdit (verTxtDocId ^.re _versionedTextDocumentIdentifier) [InL edit]

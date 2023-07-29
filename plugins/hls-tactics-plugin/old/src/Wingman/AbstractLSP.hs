@@ -91,8 +91,8 @@ runContinuation
     -> Continuation sort a b
     -> CommandFunction IdeState (FileContext, b)
 runContinuation plId cont state (fc, b) = do
-  fromMaybeT
-    (Left $ PluginInternalError "TODO(sandy)") $ do
+  maybeToExceptT
+    (PluginInternalError "TODO(sandy)") $ do
       env@LspEnv{..} <- buildEnv state plId fc
       nfp <- getNfp $ fc_verTxtDocId le_fileContext ^. L.uri
       let stale a = runStaleIde "runContinuation" state nfp a

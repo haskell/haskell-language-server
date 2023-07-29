@@ -89,7 +89,7 @@ codeLens recorder state pluginId CodeLensParams{_textDocument=TextDocumentIdenti
 
 -- | (Quasi) Idempotent command execution: recalculate action to execute on command request
 command :: Recorder (WithPriority Log) -> CommandFunction IdeState Uri
-command recorder state uri = runExceptT $ do
+command recorder state uri = do
   actMaybe <- action recorder state uri
   forM_ actMaybe $ \Replace{..} ->
     let

@@ -133,7 +133,7 @@ mkCodeActionWithResolveAndCommand recorder plId codeActionMethod codeResolveMeth
           where data_ = codeAction ^? L.data_ . _Just
         executeResolveCmd :: ResolveFunction ideState a 'Method_CodeActionResolve -> CommandFunction ideState CodeAction
         executeResolveCmd resolveProvider ideState ca@CodeAction{_data_=Just value} = do
-          withIndefiniteProgress "Applying edits for code action..." Cancellable $ runExceptT $ do
+          ExceptT $ withIndefiniteProgress "Applying edits for code action..." Cancellable $ runExceptT $ do
             case A.fromJSON value of
               A.Error err -> throwError $ parseError (Just value) (T.pack err)
               A.Success (WithURI uri innerValue) -> do
@@ -150,7 +150,7 @@ mkCodeActionWithResolveAndCommand recorder plId codeActionMethod codeResolveMeth
                             "The resolve provider unexpectedly returned a code action with the following differing fields: "
                             <> (T.pack $ show $  diffCodeActions ca ca2)
                       _ -> throwError $ internalError "The resolve provider unexpectedly returned a result with no data field"
-        executeResolveCmd _ _ CodeAction{_data_= value} = runExceptT $ throwError $ invalidParamsError ("The code action to resolve has an illegal data field: " <> (T.pack $ show value))
+        executeResolveCmd _ _ CodeAction{_data_= value} = throwError $ invalidParamsError ("The code action to resolve has an illegal data field: " <> (T.pack $ show value))
         handleWEditCallback (Left err ) = do
             logWith recorder Warning (ApplyWorkspaceEditFailed err)
             pure ()

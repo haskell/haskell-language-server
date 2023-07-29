@@ -6,6 +6,7 @@
 module Ide.Plugin.Class.CodeLens where
 
 import           Control.Lens                         ((^.))
+import           Control.Monad.Trans.Class            (MonadTrans (lift))
 import           Data.Aeson                           hiding (Null)
 import           Data.Maybe                           (mapMaybe, maybeToList)
 import qualified Data.Text                            as T
@@ -137,5 +138,5 @@ codeLens state plId CodeLensParams{..} = do
 
 codeLensCommandHandler :: CommandFunction IdeState WorkspaceEdit
 codeLensCommandHandler _ wedit = do
-  _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right $ InR Null
+  _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  pure $ InR Null

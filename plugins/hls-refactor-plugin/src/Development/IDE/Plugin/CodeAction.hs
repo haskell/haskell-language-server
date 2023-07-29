@@ -23,6 +23,7 @@ import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans
+import           Control.Monad.Trans.Except                        (ExceptT (ExceptT))
 import           Control.Monad.Trans.Maybe
 import           Data.Char
 import qualified Data.DList                                        as DL
@@ -196,7 +197,7 @@ extendImportCommand =
   PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
 
 extendImportHandler :: CommandFunction IdeState ExtendImport
-extendImportHandler ideState edit@ExtendImport {..} = do
+extendImportHandler ideState edit@ExtendImport {..} = ExceptT $ do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
     let (_, (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . M.toList

@@ -102,8 +102,8 @@ refineImportCommand =
 runRefineImportCommand :: CommandFunction IdeState RefineImportCommandParams
 runRefineImportCommand _state (RefineImportCommandParams edit) = do
   -- This command simply triggers a workspace edit!
-  _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
-  return (Right $ InR Null)
+  _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+  pure $ InR Null
 
 lensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 lensProvider

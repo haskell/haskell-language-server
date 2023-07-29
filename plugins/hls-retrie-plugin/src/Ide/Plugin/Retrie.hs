@@ -208,11 +208,8 @@ data RunRetrieParams = RunRetrieParams
     restrictToOriginatingFile :: Bool
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
-runRetrieCmd ::
-  IdeState ->
-  RunRetrieParams ->
-  LspM c (Either PluginError (Value |? Null))
-runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
+runRetrieCmd :: CommandFunction IdeState RunRetrieParams
+runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} = ExceptT $
   withIndefiniteProgress description Cancellable $ do
     runExceptT $ do
         nfp <- getNormalizedFilePathE uri
@@ -246,9 +243,8 @@ data RunRetrieInlineThisParams = RunRetrieInlineThisParams
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
-runRetrieInlineThisCmd :: IdeState
-    -> RunRetrieInlineThisParams -> LspM c (Either PluginError (Value |? Null))
-runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = runExceptT $ do
+runRetrieInlineThisCmd :: CommandFunction IdeState RunRetrieInlineThisParams
+runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = do
     nfp <- getNormalizedFilePathE $ getLocationUri inlineIntoThisLocation
     nfpSource <- getNormalizedFilePathE $ getLocationUri inlineFromThisLocation
     -- What we do here:

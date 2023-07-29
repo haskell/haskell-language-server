@@ -18,6 +18,7 @@ import           Control.DeepSeq                      (rwhnf)
 import           Control.Monad                        (mzero)
 import           Control.Monad.Extra                  (whenMaybe)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
+import           Control.Monad.Trans.Class            (MonadTrans (lift))
 import           Data.Aeson.Types                     (Value, toJSON)
 import qualified Data.Aeson.Types                     as A
 import           Data.List                            (find)
@@ -156,8 +157,8 @@ generateLens pId _range title edit =
 
 commandHandler :: CommandFunction IdeState WorkspaceEdit
 commandHandler _ideState wedit = do
-  _ <- LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right $ InR Null
+  _ <- lift $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  pure $ InR Null
 
 --------------------------------------------------------------------------------
 

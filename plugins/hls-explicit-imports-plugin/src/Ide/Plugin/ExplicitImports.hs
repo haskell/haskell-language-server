@@ -23,7 +23,7 @@ import           Control.Lens                         ((&), (?~))
 import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class            (lift)
-import           Control.Monad.Trans.Except           (ExceptT, runExceptT)
+import           Control.Monad.Trans.Except           (ExceptT)
 import           Control.Monad.Trans.Maybe
 import qualified Data.Aeson                           as A (ToJSON (toJSON))
 import           Data.Aeson.Types                     (FromJSON)
@@ -104,7 +104,7 @@ descriptorForModules recorder modFilter plId =
 
 -- | The actual command handler
 runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState EIResolveData
-runImportCommand recorder ideState eird@(ResolveOne _ _) = runExceptT $ do
+runImportCommand recorder ideState eird@(ResolveOne _ _) = do
   wedit <- resolveWTextEdit ideState eird
   _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) logErrors
   return $ InR  Null
@@ -113,7 +113,7 @@ runImportCommand recorder ideState eird@(ResolveOne _ _) = runExceptT $ do
           pure ()
         logErrors (Right _) = pure ()
 runImportCommand _ _ (ResolveAll _) = do
-  pure $ Left $ PluginInvalidParams "Unexpected argument for command handler: ResolveAll"
+ throwError $ PluginInvalidParams "Unexpected argument for command handler: ResolveAll"
 
 -- | For every implicit import statement, return a code lens of the corresponding explicit import
 -- Example - for the module below:
