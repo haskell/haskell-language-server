@@ -26,10 +26,11 @@ import           Control.Exception.Safe               (Exception (..),
                                                        catch, throwIO, try)
 import           Control.Lens.Operators
 import           Control.Monad                        (forM, unless, when)
+import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
-import           Control.Monad.Trans.Except           (ExceptT (ExceptT),
-                                                       runExceptT, throwE)
+import           Control.Monad.Trans.Except           (ExceptT (..), runExceptT)
+
 import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Writer.Strict
 import           Data.Aeson                           (FromJSON (..),
@@ -113,6 +114,7 @@ import qualified GHC                                  (Module, ParsedSource,
 import qualified GHC                                  as GHCGHC
 import           GHC.Generics                         (Generic)
 import           GHC.Hs.Dump
+import           Ide.Plugin.Error
 import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
@@ -170,6 +172,7 @@ import           Retrie.ExactPrint                    (relativiseApiAnns)
 #endif
 import           Control.Arrow                        ((&&&))
 import           Development.IDE.Core.Actions         (lookupMod)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Spans.AtPoint        (LookupModule,
                                                        getNamesAtPoint,
                                                        nameToLocation)
@@ -205,20 +208,16 @@ data RunRetrieParams = RunRetrieParams
     restrictToOriginatingFile :: Bool
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
-runRetrieCmd ::
-  IdeState ->
-  RunRetrieParams ->
-  LspM c (Either ResponseError (Value |? Null))
-runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
+runRetrieCmd :: CommandFunction IdeState RunRetrieParams
+runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} = ExceptT $
   withIndefiniteProgress description Cancellable $ do
-    runMaybeT $ do
-        nfp <- MaybeT $ return $ uriToNormalizedFilePath $ toNormalizedUri uri
-        (session, _) <- MaybeT $ liftIO $
-            runAction "Retrie.GhcSessionDeps" state $
-                useWithStale GhcSessionDeps
+    runExceptT $ do
+        nfp <- getNormalizedFilePathE uri
+        (session, _) <-
+            runActionE "Retrie.GhcSessionDeps" state $
+                useWithStaleE GhcSessionDeps
                 nfp
-        (ms, binds, _, _, _) <- MaybeT $ liftIO $
-            runAction "Retrie.getBinds" state $ getBinds nfp
+        (ms, binds, _, _, _) <- runActionE "Retrie.getBinds" state $ getBinds nfp
         let importRewrites = concatMap (extractImports ms binds) rewrites
         (errors, edits) <- liftIO $
             callRetrie
@@ -244,40 +243,38 @@ data RunRetrieInlineThisParams = RunRetrieInlineThisParams
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
-runRetrieInlineThisCmd :: IdeState
-    -> RunRetrieInlineThisParams -> LspM c (Either ResponseError (Value |? Null))
-runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = pluginResponse $ do
-    nfp <- handleMaybe "uri" $ uriToNormalizedFilePath $ toNormalizedUri $ getLocationUri inlineIntoThisLocation
-    nfpSource <- handleMaybe "sourceUri" $
-        uriToNormalizedFilePath $ toNormalizedUri $ getLocationUri inlineFromThisLocation
+runRetrieInlineThisCmd :: CommandFunction IdeState RunRetrieInlineThisParams
+runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = do
+    nfp <- getNormalizedFilePathE $ getLocationUri inlineIntoThisLocation
+    nfpSource <- getNormalizedFilePathE $ getLocationUri inlineFromThisLocation
     -- What we do here:
     --   Find the identifier in the given position
     --   Construct an inline rewrite for it
     --   Run retrie to get a list of changes
     --   Select the change that inlines the identifier in the given position
     --   Apply the edit
-    ast <- handleMaybeM "ast" $ liftIO $ runAction "retrie" state $
-        use GetAnnotatedParsedSource nfp
-    astSrc <- handleMaybeM "ast" $ liftIO $ runAction "retrie" state $
-        use GetAnnotatedParsedSource nfpSource
-    msr <- handleMaybeM "modSummary" $ liftIO $ runAction "retrie" state $
-        use GetModSummaryWithoutTimestamps nfp
-    hiFileRes <- handleMaybeM "modIface" $ liftIO $ runAction "retrie" state $
-        use GetModIface nfpSource
+    ast <- runActionE "retrie" state $
+        useE GetAnnotatedParsedSource nfp
+    astSrc <- runActionE "retrie" state $
+        useE GetAnnotatedParsedSource nfpSource
+    msr <- runActionE "retrie" state $
+        useE GetModSummaryWithoutTimestamps nfp
+    hiFileRes <- runActionE "retrie" state $
+        useE GetModIface nfpSource
     let fixityEnv = fixityEnvFromModIface (hirModIface hiFileRes)
         fromRange = rangeToRealSrcSpan nfpSource $ getLocationRange inlineFromThisLocation
         intoRange = rangeToRealSrcSpan nfp $ getLocationRange inlineIntoThisLocation
     inlineRewrite <- liftIO $ constructInlineFromIdentifer astSrc fromRange
-    when (null inlineRewrite) $ throwE "Empty rewrite"
-    let ShakeExtras{..}= shakeExtras state
-    (session, _) <- handleMaybeM "GHCSession" $ liftIO $ runAction "retrie" state $
-      useWithStale GhcSessionDeps nfp
+    when (null inlineRewrite) $ throwError $ PluginInternalError "Empty rewrite"
+    let ShakeExtras{..} = shakeExtras state
+    (session, _) <- runActionE "retrie" state $
+      useWithStaleE GhcSessionDeps nfp
     (fixityEnv, cpp) <- liftIO $ getCPPmodule state (hscEnv session) $ fromNormalizedFilePath nfp
     result <- liftIO $ try @_ @SomeException $
         runRetrie fixityEnv (applyWithUpdate myContextUpdater inlineRewrite) cpp
     case result of
-        Left err -> throwE $ "Retrie - crashed with: " <> show err
-        Right (_,_,NoChange) -> throwE "Retrie - inline produced no changes"
+        Left err -> throwError $ PluginInternalError $ "Retrie - crashed with: " <> T.pack (show err)
+        Right (_,_,NoChange) -> throwError $ PluginInternalError "Retrie - inline produced no changes"
         Right (_,_,Change replacements imports) -> do
             let edits = asEditMap $ asTextEdits $ Change ourReplacement imports
                 wedit = WorkspaceEdit (Just edits) Nothing Nothing
@@ -338,18 +335,17 @@ extractImports _ _ _ = []
 -------------------------------------------------------------------------------
 
 provider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
-provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = pluginResponse $ do
+provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = do
   let (LSP.CodeActionContext _diags _monly _) = ca
-      nuri = toNormalizedUri uri
-  nfp <- handleMaybe "uri" $ uriToNormalizedFilePath nuri
+  nfp <- getNormalizedFilePathE uri
 
   (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
-    <- handleMaybeM "typecheck" $ liftIO $ runAction "retrie" state $
+    <- runActionE "retrie" state $
         getBinds nfp
 
   extras@ShakeExtras{ withHieDb, hiedbWriter } <- liftIO $ runAction "" state getShakeExtras
 
-  range <- handleMaybe "range" $ fromCurrentRange posMapping range
+  range <- fromCurrentRangeE posMapping range
   let pos = range ^. L.start
   let rewrites =
         concatMap (suggestBindRewrites uri pos ms_mod) topLevelBinds
@@ -380,9 +376,9 @@ getLocationUri Location{_uri} = _uri
 
 getLocationRange Location{_range} = _range
 
-getBinds :: NormalizedFilePath -> Action (Maybe (ModSummary, [HsBindLR GhcRn GhcRn], PositionMapping, [LRuleDecls GhcRn], [TyClGroup GhcRn]))
-getBinds nfp = runMaybeT $ do
-  (tm, posMapping) <- MaybeT $ useWithStale TypeCheck nfp
+getBinds :: NormalizedFilePath -> ExceptT PluginError Action (ModSummary, [HsBindLR GhcRn GhcRn], PositionMapping, [LRuleDecls GhcRn], [TyClGroup GhcRn])
+getBinds nfp = do
+  (tm, posMapping) <- useWithStaleE TypeCheck nfp
   -- we use the typechecked source instead of the parsed source
   -- to be able to extract module names from the Ids,
   -- so that we can include adding the required imports in the retrie command

@@ -36,7 +36,7 @@ import           Development.IDE.Plugin.TypeLenses            (GetGlobalBindingT
 import           Development.IDE.Spans.LocalBindings          (Bindings)
 import           Development.IDE.Types.Exports                (ExportsMap)
 import           Development.IDE.Types.Options                (IdeOptions)
-import           Ide.Plugin.Config                            (Config)
+import           Ide.Plugin.Error                             (PluginError)
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -48,7 +48,7 @@ type CodeActionPreferred = Bool
 
 type GhcideCodeActionResult = [(CodeActionTitle, Maybe CodeActionKind, Maybe CodeActionPreferred, [TextEdit])]
 
-type GhcideCodeAction = ExceptT ResponseError (ReaderT CodeActionArgs IO) GhcideCodeActionResult
+type GhcideCodeAction = ExceptT PluginError (ReaderT CodeActionArgs IO) GhcideCodeActionResult
 
 -------------------------------------------------------------------------------------------------
 
@@ -98,9 +98,8 @@ mkGhcideCAPlugin codeAction plId =
   (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction $
         \state _ params@(CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext {_diagnostics = diags}) -> do
-          results <- runGhcideCodeAction state params codeAction
+          results <- lift $ runGhcideCodeAction state params codeAction
           pure $
-            Right $
               InL
                 [ mkCA title kind isPreferred diags edit
                   | (title, kind, isPreferred, tedit) <- results,
@@ -190,7 +189,7 @@ instance ToCodeAction a => ToCodeAction [a] where
 instance ToCodeAction a => ToCodeAction (Maybe a) where
   toCodeAction = maybe (pure []) toCodeAction
 
-instance ToCodeAction a => ToCodeAction (Either ResponseError a) where
+instance ToCodeAction a => ToCodeAction (Either PluginError a) where
   toCodeAction = either (\err -> ExceptT $ ReaderT $ \_ -> pure $ Left err) toCodeAction
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, a) where

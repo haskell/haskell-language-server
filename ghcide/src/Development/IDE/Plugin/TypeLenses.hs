@@ -18,6 +18,7 @@ import           Control.DeepSeq                      (rwhnf)
 import           Control.Monad                        (mzero)
 import           Control.Monad.Extra                  (whenMaybe)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
+import           Control.Monad.Trans.Class            (MonadTrans (lift))
 import           Data.Aeson.Types                     (Value, toJSON)
 import qualified Data.Aeson.Types                     as A
 import           Data.List                            (find)
@@ -28,9 +29,9 @@ import           Development.IDE                      (GhcSession (..),
                                                        HscEnvEq (hscEnv),
                                                        RuleResult, Rules,
                                                        define, srcSpanToRange,
-                                                       usePropertyAction,
-                                                       useWithStale)
+                                                       usePropertyAction)
 import           Development.IDE.Core.Compile         (TcModuleResult (..))
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
 import           Development.IDE.Core.Rules           (IdeState, runAction)
@@ -50,8 +51,9 @@ import           GHC.Generics                         (Generic)
 import           Ide.Logger                           (Pretty (pretty),
                                                        Recorder, WithPriority,
                                                        cmapWithPrio)
+import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils
+import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types                            (CommandFunction,
                                                        CommandId (CommandId),
                                                        PluginCommand (PluginCommand),
@@ -104,28 +106,22 @@ properties = emptyProperties
     ] Always
 
 codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
-codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = pluginResponse $ do
+codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
     mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
-    nfp <- getNormalizedFilePath uri
-    env <- hscEnv . fst
-            <$> (handleMaybeM "Unable to get GhcSession"
-                $ liftIO
-                $ runAction "codeLens.GhcSession" ideState (useWithStale GhcSession nfp)
-                )
-    tmr <- fst <$> (
-                handleMaybeM "Unable to TypeCheck"
-              $ liftIO
-              $ runAction "codeLens.TypeCheck" ideState (useWithStale TypeCheck nfp)
-              )
-    bindings <- fst <$> (
-                handleMaybeM "Unable to GetBindings"
-                $ liftIO
-                $ runAction "codeLens.GetBindings" ideState (useWithStale GetBindings nfp)
-                )
+    nfp <- getNormalizedFilePathE uri
+    env <- hscEnv . fst <$>
+      runActionE "codeLens.GhcSession" ideState
+        (useWithStaleE GhcSession nfp)
+
+    (tmr, _) <- runActionE "codeLens.TypeCheck" ideState
+      (useWithStaleE TypeCheck nfp)
+
+    (bindings, _) <- runActionE "codeLens.GetBindings" ideState
+      (useWithStaleE GetBindings nfp)
+
     (gblSigs@(GlobalBindingTypeSigsResult gblSigs'), gblSigsMp) <-
-      handleMaybeM "Unable to GetGlobalBindingTypeSigs"
-      $ liftIO
-      $ runAction "codeLens.GetGlobalBindingTypeSigs" ideState (useWithStale GetGlobalBindingTypeSigs nfp)
+      runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
+        (useWithStaleE GetGlobalBindingTypeSigs nfp)
 
     diag <- liftIO $ atomically $ getDiagnostics ideState
     hDiag <- liftIO $ atomically $ getHiddenDiagnostics ideState
@@ -161,8 +157,8 @@ generateLens pId _range title edit =
 
 commandHandler :: CommandFunction IdeState WorkspaceEdit
 commandHandler _ideState wedit = do
-  _ <- LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right $ InR Null
+  _ <- lift $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  pure $ InR Null
 
 --------------------------------------------------------------------------------
 

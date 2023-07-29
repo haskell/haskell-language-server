@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE GADTs             #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -8,28 +9,34 @@
 {-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.GADT (descriptor) where
 
-import           Control.Lens                  ((^.))
-import           Control.Monad.Except
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class
-import           Data.Aeson                    (FromJSON, ToJSON, Value, toJSON)
-import           Data.Either.Extra             (maybeToEither)
-import qualified Data.Map                      as Map
-import qualified Data.Text                     as T
+import           Control.Lens                     ((^.))
+
+import           Control.Monad.Error.Class        (MonadError (throwError),
+                                                   liftEither)
+import           Control.Monad.IO.Class           (MonadIO)
+import           Control.Monad.Trans.Class        (MonadTrans (lift))
+import           Control.Monad.Trans.Except       (ExceptT, runExceptT,
+                                                   withExceptT)
+import           Data.Aeson                       (FromJSON, ToJSON, toJSON)
+import           Data.Either.Extra                (maybeToEither)
+import qualified Data.Map                         as Map
+import qualified Data.Text                        as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
 
-import           Control.Monad.Trans.Except    (throwE)
-import           Data.Maybe                    (mapMaybe)
-import           Development.IDE.Spans.Pragmas (getFirstPragma, insertNewPragma)
-import           GHC.Generics                  (Generic)
+import           Data.Maybe                       (mapMaybe)
+import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Spans.Pragmas    (getFirstPragma,
+                                                   insertNewPragma)
+import           GHC.Generics                     (Generic)
+import           Ide.Plugin.Error
 import           Ide.Plugin.GHC
 import           Ide.PluginUtils
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens    as L
+import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server           (sendRequest)
+import           Language.LSP.Server              (sendRequest)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -50,20 +57,21 @@ toGADTSyntaxCommandId = "GADT.toGADT"
 
 -- | A command replaces H98 data decl with GADT decl in place
 toGADTCommand :: PluginId -> CommandFunction IdeState ToGADTParams
-toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = pluginResponse $ do
-    nfp <- getNormalizedFilePath uri
+toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = withExceptT handleGhcidePluginError $ do
+    nfp <- withExceptT (GhcidePluginErrors) $ getNormalizedFilePathE uri
     (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
     (L ann decl) <- case decls of
         [d] -> pure d
-        _   -> throwE $ "Expected 1 declaration, but got " <> show (Prelude.length decls)
-    deps <- liftIO $ runAction (T.unpack pId' <> ".GhcSessionDeps") state $ use GhcSessionDeps nfp
-    (hsc_dflags . hscEnv -> df) <- liftEither
-        $ maybeToEither "Get GhcSessionDeps failed" deps
-    txt <- liftEither $ T.pack <$> (prettyGADTDecl df . h98ToGADTDecl) decl
+        _   -> throwError $ UnexpectedNumberOfDeclarations (Prelude.length decls)
+    deps <- withExceptT GhcidePluginErrors
+        $ runActionE (T.unpack pId' <> ".GhcSessionDeps") state
+        $ useE GhcSessionDeps nfp
+    (hsc_dflags . hscEnv -> df) <- pure deps
+    txt <- withExceptT (PrettyGadtError . T.pack) $ liftEither $ T.pack <$> (prettyGADTDecl df . h98ToGADTDecl) decl
     range <- liftEither
-        $ maybeToEither "Unable to get data decl range"
+        $ maybeToEither FailedToFindDataDeclRange
         $ srcSpanToRange $ locA ann
-    pragma <- getFirstPragma pId state nfp
+    pragma <- withExceptT GhcidePluginErrors $ getFirstPragma pId state nfp
     let insertEdit = [insertNewPragma pragma GADTs | all (`notElem` exts) [GADTSyntax, GADTs]]
 
     _ <- lift $ sendRequest
@@ -80,8 +88,8 @@ toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = pluginResponse $ do
                  Nothing Nothing
 
 codeActionHandler :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
-codeActionHandler state plId (CodeActionParams _ _ doc range _) = pluginResponse $ do
-    nfp <- getNormalizedFilePath (doc ^. L.uri)
+codeActionHandler state plId (CodeActionParams _ _ doc range _) = withExceptT handleGhcidePluginError $ do
+    nfp <- withExceptT (GhcidePluginErrors) $ getNormalizedFilePathE (doc ^. L.uri)
     (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
     let actions = map (mkAction . printOutputable . tcdLName . unLoc) inRangeH98Decls
     pure $ InL actions
@@ -106,15 +114,33 @@ getInRangeH98DeclsAndExts :: (MonadIO m) =>
     IdeState
     -> Range
     -> NormalizedFilePath
-    -> ExceptT String m ([LTyClDecl GP], [Extension])
+    -> ExceptT GadtPluginError m ([LTyClDecl GP], [Extension])
 getInRangeH98DeclsAndExts state range nfp = do
-    pm <- handleMaybeM "Unable to get ParsedModuleWithComments"
-        $ liftIO
-        $ runAction "GADT.GetParsedModuleWithComments" state
-        $ use GetParsedModuleWithComments nfp
+    pm <- withExceptT GhcidePluginErrors
+        $ runActionE "GADT.GetParsedModuleWithComments" state
+        $ useE GetParsedModuleWithComments nfp
     let (L _ hsDecls) = hsmodDecls <$> pm_parsed_source pm
         decls = filter isH98DataDecl
             $ mapMaybe getDataDecl
             $ filter (inRange range) hsDecls
         exts = getExtensions pm
     pure (decls, exts)
+
+data GadtPluginError
+    = UnexpectedNumberOfDeclarations Int
+    | FailedToFindDataDeclRange
+    | PrettyGadtError T.Text
+    | GhcidePluginErrors PluginError
+
+handleGhcidePluginError ::
+    GadtPluginError ->
+    PluginError
+handleGhcidePluginError = \case
+    UnexpectedNumberOfDeclarations nums -> do
+        PluginInternalError $ "Expected one declaration but found: " <> T.pack (show nums)
+    FailedToFindDataDeclRange ->
+        PluginInternalError $ "Unable to get data decl range"
+    PrettyGadtError errMsg ->
+        PluginInternalError $ errMsg
+    GhcidePluginErrors errors ->
+        errors

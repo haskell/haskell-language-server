@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 
@@ -16,7 +17,6 @@ module Ide.PluginUtils
     diffText',
     pluginDescToIdePlugins,
     idePluginsToPluginDesc,
-    responseError,
     getClientConfig,
     getPluginConfig,
     configForPlugin,
@@ -32,39 +32,29 @@ module Ide.PluginUtils
     subRange,
     positionInRange,
     usePropertyLsp,
-    getNormalizedFilePath,
-    pluginResponse,
-    handleMaybe,
-    handleMaybeM,
-    throwPluginError,
+    -- * Escape
     unescape,
   )
 where
 
-import           Control.Arrow                 ((&&&))
-import           Control.Lens                  (_head, _last, re, (%~), (^.))
-import           Control.Monad.Extra           (maybeM)
-import           Control.Monad.Trans.Class     (lift)
-import           Control.Monad.Trans.Except    (ExceptT, runExceptT, throwE)
+import           Control.Arrow               ((&&&))
+import           Control.Lens                (_head, _last, re, (%~), (^.))
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
-import           Data.Bifunctor                (Bifunctor (first))
-import           Data.Char                     (isPrint, showLitChar)
-import           Data.Functor                  (void)
-import qualified Data.Map                      as M
-import           Data.String                   (IsString (fromString))
-import qualified Data.Text                     as T
-import           Data.Void                     (Void)
+import           Data.Char                   (isPrint, showLitChar)
+import           Data.Functor                (void)
+import qualified Data.Map                    as M
+import qualified Data.Text                   as T
+import           Data.Void                   (Void)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens    as L
-import           Language.LSP.Protocol.Message
+import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import qualified Text.Megaparsec               as P
-import qualified Text.Megaparsec.Char          as P
-import qualified Text.Megaparsec.Char.Lexer    as P
+import qualified Text.Megaparsec             as P
+import qualified Text.Megaparsec.Char        as P
+import qualified Text.Megaparsec.Char.Lexer  as P
 
 -- ---------------------------------------------------------------------
 
@@ -286,30 +276,6 @@ allLspCmdIds pid commands = concatMap go commands
 
 -- ---------------------------------------------------------------------
 
-getNormalizedFilePath :: (Monad m) => Uri -> ExceptT String m NormalizedFilePath
-getNormalizedFilePath uri =
-  handleMaybe errMsg $
-    uriToNormalizedFilePath $
-      toNormalizedUri uri
-  where
-    errMsg = T.unpack $ "Failed converting " <> getUri uri <> " to NormalizedFilePath"
-
--- ---------------------------------------------------------------------
-throwPluginError :: (Monad m) => String -> ExceptT String m b
-throwPluginError = throwE
-
-handleMaybe :: (Monad m) => e -> Maybe b -> ExceptT e m b
-handleMaybe msg = maybe (throwE msg) return
-
-handleMaybeM :: (Monad m) => e -> m (Maybe b) -> ExceptT e m b
-handleMaybeM msg act = maybeM (throwE msg) return $ lift act
-
-pluginResponse :: (Monad m) => ExceptT String m a -> m (Either ResponseError a)
-pluginResponse =
-  fmap (first (\msg -> ResponseError (InR ErrorCodes_InternalError) (fromString msg) Nothing))
-    . runExceptT
-
--- ---------------------------------------------------------------------
 
 type TextParser = P.Parsec Void T.Text
 

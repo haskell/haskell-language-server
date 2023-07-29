@@ -8,9 +8,7 @@ module Development.IDE
 
 import           Development.IDE.Core.Actions          as X (getAtPoint,
                                                              getDefinition,
-                                                             getTypeDefinition,
-                                                             useE, useNoFileE,
-                                                             usesE)
+                                                             getTypeDefinition)
 import           Development.IDE.Core.FileExists       as X (getFileExists)
 import           Development.IDE.Core.FileStore        as X (getFileContents)
 import           Development.IDE.Core.IdeConfiguration as X (IdeConfiguration (..),
@@ -55,4 +53,4 @@ import           Development.IDE.Types.HscEnvEq        as X (HscEnvEq (..),
                                                              hscEnv,
                                                              hscEnvWithImportPaths)
 import           Development.IDE.Types.Location        as X
-import           Ide.Logger          as X
+import           Ide.Logger                            as X

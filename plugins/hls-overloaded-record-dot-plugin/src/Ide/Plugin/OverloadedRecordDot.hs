@@ -3,9 +3,9 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms   #-}
+{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE ViewPatterns      #-}
-
 module Ide.Plugin.OverloadedRecordDot
   ( descriptor
   , Log
@@ -13,33 +13,27 @@ module Ide.Plugin.OverloadedRecordDot
 
 -- based off of Berk Okzuturk's hls-explicit-records-fields-plugin
 
-import           Control.Lens                         (_Just, (^.), (^?))
+import           Control.Lens                         ((^.))
 import           Control.Monad                        (replicateM)
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
-import           Control.Monad.Trans.Class            (lift)
-import           Control.Monad.Trans.Except           (ExceptT, throwE)
-import           Data.Aeson                           (FromJSON, Result (..),
-                                                       ToJSON, fromJSON, toJSON)
-import           Data.Generics                        (GenericQ, everything,
-                                                       everythingBut, mkQ)
+import           Control.Monad.Trans.Except           (ExceptT)
+import           Data.Aeson                           (FromJSON, ToJSON, toJSON)
+import           Data.Generics                        (GenericQ, everythingBut,
+                                                       mkQ)
 import qualified Data.IntMap.Strict                   as IntMap
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (fromJust, mapMaybe,
-                                                       maybeToList)
+import           Data.Maybe                           (mapMaybe, maybeToList)
 import           Data.Text                            (Text)
 import           Data.Unique                          (hashUnique, newUnique)
 import           Development.IDE                      (IdeState,
                                                        NormalizedFilePath,
-                                                       NormalizedUri,
                                                        Pretty (..), Range,
                                                        Recorder (..), Rules,
                                                        WithPriority (..),
                                                        realSrcSpanToRange)
-import           Development.IDE.Core.Rules           (runAction)
 import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
                                                        TypeCheck (..))
-import           Development.IDE.Core.Shake           (define, use,
-                                                       useWithStale)
+import           Development.IDE.Core.Shake           (define, useWithStale)
 import qualified Development.IDE.Core.Shake           as Shake
 
 #if __GLASGOW_HASKELL__ >= 903
@@ -49,17 +43,17 @@ import           Development.IDE.GHC.Compat           (HsExpr (HsRecFld))
 #endif
 
 import           Control.DeepSeq                      (rwhnf)
-import           Development.IDE.Core.PositionMapping (PositionMapping (PositionMapping),
+import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
 import           Development.IDE.GHC.Compat           (Extension (OverloadedRecordDot),
                                                        GhcPass,
                                                        HsExpansion (HsExpanded),
-                                                       HsExpr (HsApp, HsPar, HsVar, OpApp, XExpr),
+                                                       HsExpr (HsApp, HsVar, OpApp, XExpr),
                                                        LHsExpr, Outputable,
-                                                       Pass (..), RealSrcSpan,
-                                                       appPrec, dollarName,
-                                                       getLoc, hs_valds,
-                                                       parenthesizeHsContext,
+                                                       Pass (..), appPrec,
+                                                       dollarName, getLoc,
+                                                       hs_valds,
                                                        parenthesizeHsExpr,
                                                        pattern RealSrcSpan,
                                                        unLoc)
@@ -74,37 +68,29 @@ import           GHC.Generics                         (Generic)
 import           Ide.Logger                           (Priority (..),
                                                        cmapWithPrio, logWith,
                                                        (<+>))
+import           Ide.Plugin.Error                     (PluginError (..),
+                                                       getNormalizedFilePathE,
+                                                       handleMaybe)
 import           Ide.Plugin.RangeMap                  (RangeMap)
 import qualified Ide.Plugin.RangeMap                  as RangeMap
 import           Ide.Plugin.Resolve                   (mkCodeActionHandlerWithResolve)
-import           Ide.PluginUtils                      (getNormalizedFilePath,
-                                                       handleMaybeM,
-                                                       pluginResponse)
 import           Ide.Types                            (PluginDescriptor (..),
                                                        PluginId (..),
                                                        PluginMethodHandler,
                                                        ResolveFunction,
-                                                       defaultPluginDescriptor,
-                                                       mkPluginHandler)
-import           Language.LSP.Protocol.Lens           (HasChanges (changes))
+                                                       defaultPluginDescriptor)
 import qualified Language.LSP.Protocol.Lens           as L
-import           Language.LSP.Protocol.Message        (Method (..),
-                                                       SMethod (..))
+import           Language.LSP.Protocol.Message        (Method (..))
 import           Language.LSP.Protocol.Types          (CodeAction (..),
                                                        CodeActionKind (CodeActionKind_RefactorRewrite),
                                                        CodeActionParams (..),
-                                                       Command, TextEdit (..),
-                                                       Uri (..),
+                                                       TextEdit (..), Uri (..),
                                                        WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
-                                                       fromNormalizedUri,
-                                                       normalizedFilePathToUri,
                                                        type (|?) (..))
-import           Language.LSP.Server                  (getClientCapabilities)
 
 data Log
     = LogShake Shake.Log
     | LogCollectedRecordSelectors [RecordSelectorExpr]
-    | LogTextEdits [TextEdit]
     | forall a. (Pretty a) => LogResolve a
 
 instance Pretty Log where
@@ -152,7 +138,7 @@ data RecordSelectorExpr = RecordSelectorExpr
     recordExpr   :: LHsExpr (GhcPass 'Renamed) }
 
 instance Pretty RecordSelectorExpr where
-    pretty (RecordSelectorExpr l rs se) = pretty (printOutputable rs) <> ":"
+    pretty (RecordSelectorExpr _ rs se) = pretty (printOutputable rs) <> ":"
                                             <+> pretty (printOutputable se)
 
 instance NFData RecordSelectorExpr where
@@ -181,23 +167,18 @@ descriptor recorder plId =
 
 resolveProvider :: ResolveFunction IdeState ORDResolveData 'Method_CodeActionResolve
 resolveProvider ideState plId ca uri (ORDRD _ int) =
-  pluginResponse $ do
-    nfp <- getNormalizedFilePath uri
+  do
+    nfp <- getNormalizedFilePathE uri
     CRSR _ crsDetails exts <- collectRecSelResult ideState nfp
     pragma <- getFirstPragma plId ideState nfp
-    case IntMap.lookup int crsDetails of
-        Just rse -> pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
-        -- We need to throw a content modified error here, see
-        -- https://github.com/microsoft/language-server-protocol/issues/1738
-        -- but we need fendor's plugin error response pr to make it
-        -- convenient to use here, so we will wait to do that till that's merged
-        _        -> throwE "Content Modified Error"
+    rse <- handleMaybe PluginStaleResolve $ IntMap.lookup int crsDetails
+    pure $ ca {_edit = mkWorkspaceEdit uri rse exts pragma}
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
-    pluginResponse $ do
-        nfp <- getNormalizedFilePath (caDocId ^. L.uri)
-        CRSR crsMap crsDetails exts <- collectRecSelResult ideState nfp
+codeActionProvider ideState _ (CodeActionParams _ _ caDocId caRange _) =
+    do
+        nfp <- getNormalizedFilePathE (caDocId ^. L.uri)
+        CRSR crsMap _ exts <- collectRecSelResult ideState nfp
         let mkCodeAction (crsM, nse)  = InR CodeAction
                 { -- We pass the record selector to the title function, so that
                   -- we can have the name of the record selector in the title of
@@ -205,7 +186,7 @@ codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
                   -- between the different codeActions when using nested record
                   -- selectors, the disadvantage is we need to print out the
                   -- name of the record selector which will decrease performance
-                  _title = mkCodeActionTitle exts crsM nse
+                  _title = mkCodeActionTitle exts nse
                 , _kind = Just CodeActionKind_RefactorRewrite
                 , _diagnostics = Nothing
                 , _isPreferred = Nothing
@@ -217,8 +198,8 @@ codeActionProvider ideState pId (CodeActionParams _ _ caDocId caRange _) =
             actions = map mkCodeAction (RangeMap.filterByRange caRange crsMap)
         pure $ InL actions
     where
-    mkCodeActionTitle :: [Extension] -> Int -> HsExpr (GhcPass 'Renamed) -> Text
-    mkCodeActionTitle exts crsM se =
+    mkCodeActionTitle :: [Extension] -> HsExpr (GhcPass 'Renamed) -> Text
+    mkCodeActionTitle exts se =
         if OverloadedRecordDot `elem` exts
             then title
             else title <> " (needs extension: OverloadedRecordDot)"
@@ -274,11 +255,11 @@ collectRecSelsRule recorder = define (cmapWithPrio LogShake recorder) $
             case toCurrentRange pm (location recSel) of
                 Just newLoc -> Just $ recSel{location = newLoc}
                 Nothing     -> Nothing
-          toRangeAndUnique (id, RecordSelectorExpr l (unLoc -> se) _) = (l, (id, se))
+          toRangeAndUnique (uid, RecordSelectorExpr l (unLoc -> se) _) = (l, (uid, se))
 
 convertRecordSelectors :: RecordSelectorExpr ->  TextEdit
-convertRecordSelectors (RecordSelectorExpr l se re) =
-    TextEdit l $ convertRecSel se re
+convertRecordSelectors RecordSelectorExpr{..} =
+    TextEdit location $ convertRecSel selectorExpr recordExpr
 
 -- |Converts a record selector expression into record dot syntax, currently we
 -- are using printOutputable to do it. We are also letting GHC decide when to
@@ -328,10 +309,8 @@ getRecSels e@(unLoc -> OpApp _ se@(unLoc -> HsRecFld _ _)
 getRecSels _ = ([], False)
 
 collectRecSelResult :: MonadIO m => IdeState -> NormalizedFilePath
-                        -> ExceptT String m CollectRecordSelectorsResult
+                        -> ExceptT PluginError m CollectRecordSelectorsResult
 collectRecSelResult ideState =
-    handleMaybeM "Unable to TypeCheck"
-        . liftIO
-        . runAction "overloadedRecordDot.collectRecordSelectors" ideState
-        . use CollectRecordSelectors
+    runActionE "overloadedRecordDot.collectRecordSelectors" ideState
+        . useE CollectRecordSelectors
 

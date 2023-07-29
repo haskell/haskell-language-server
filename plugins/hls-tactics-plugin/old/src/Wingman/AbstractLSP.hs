@@ -1,6 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE RecordWildCards     #-}
-
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE NoMonoLocalBinds    #-}
 
 {-# OPTIONS_GHC -Wno-orphans     #-}
@@ -10,7 +10,8 @@ module Wingman.AbstractLSP (installInteractions) where
 import           Control.Monad (void)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans (lift)
-import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
+import           Control.Monad.Trans.Except (ExceptT(ExceptT))
+import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT, runMaybeT)
 import qualified Data.Aeson as A
 import           Data.Coerce
 import           Data.Foldable (traverse_)
@@ -21,6 +22,7 @@ import           Data.Tuple.Extra (uncurry3)
 import           Development.IDE (IdeState)
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource(GetAnnotatedParsedSource))
+import           Ide.Plugin.Error
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Types
 import           Language.LSP.Server (LspM, sendRequest, getClientCapabilities, getVersionedTextDoc)
@@ -89,13 +91,9 @@ runContinuation
     => PluginId
     -> Continuation sort a b
     -> CommandFunction IdeState (FileContext, b)
-runContinuation plId cont state (fc, b) = do
+runContinuation plId cont state (fc, b) = ExceptT $ do
   fromMaybeT
-    (Left $ ResponseError
-              { _code = InR $ ErrorCodes_InternalError
-              , _message = T.pack "TODO(sandy)"
-              , _xdata =  Nothing
-              } ) $ do
+    (Left $ PluginInternalError "TODO(sandy)") $ do
       env@LspEnv{..} <- buildEnv state plId fc
       nfp <- getNfp $ fc_verTxtDocId le_fileContext ^. L.uri
       let stale a = runStaleIde "runContinuation" state nfp a
@@ -116,11 +114,7 @@ runContinuation plId cont state (fc, b) = do
             TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
             case mkWorkspaceEdits (enableQuasiQuotes le_dflags) ccs (fc_verTxtDocId le_fileContext) (unTrack pm) gr of
               Left errs ->
-                pure $ Just $ ResponseError
-                  { _code    = InR ErrorCodes_InternalError
-                  , _message = T.pack $ show errs
-                  , _xdata   = Nothing
-                  }
+                pure $ Just $ PluginInternalError (T.pack $ show errs)
               Right edits -> do
                 sendEdits edits
                 pure Nothing
@@ -180,8 +174,8 @@ codeActionProvider
     -> PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionProvider sort k state plId
                    (CodeActionParams _ _ docId range _) = do
-  verTxtDocId <- getVersionedTextDoc docId
-  fromMaybeT (Right $ InL []) $ do
+  verTxtDocId <- lift $ getVersionedTextDoc docId
+  handleMaybeM (PluginInvalidUserState "codeActionProvider") $ runMaybeT $ do
     let fc = FileContext
                 { fc_verTxtDocId = verTxtDocId
                 , fc_range = Just $ unsafeMkCurrent range
@@ -190,7 +184,6 @@ codeActionProvider sort k state plId
     args <- fetchTargetArgs @target env
     actions <- k env args
     pure
-      $ Right
       $ InL
       $ fmap (InR . uncurry (makeCodeAction plId fc sort)) actions
 
@@ -208,8 +201,8 @@ codeLensProvider
     -> PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLensProvider sort k state plId
                  (CodeLensParams _ _ docId) = do
-      verTxtDocId <- getVersionedTextDoc docId
-      fromMaybeT (Right $ InL []) $ do
+      verTxtDocId <- lift $ getVersionedTextDoc docId
+      handleMaybeM (PluginInvalidUserState "codeLensProvider") $ runMaybeT $ do
         let fc = FileContext
                    { fc_verTxtDocId = verTxtDocId
                    , fc_range = Nothing
@@ -218,7 +211,6 @@ codeLensProvider sort k state plId
         args <- fetchTargetArgs @target env
         actions <- k env args
         pure
-          $ Right
           $ InL
           $ fmap (uncurry3 $ makeCodeLens plId sort fc) actions
 

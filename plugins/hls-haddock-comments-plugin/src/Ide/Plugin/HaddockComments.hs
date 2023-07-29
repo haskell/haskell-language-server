@@ -45,7 +45,7 @@ codeActionProvider ideState _pId (CodeActionParams _ _ (TextDocumentIdentifier u
     let locDecls = hsmodDecls . unLoc . astA <$> pm
         anns = annsA <$> pm
         edits = [gen locDecls anns range | noErr, gen <- genList]
-    return $ Right $ InL [InR $ toAction title uri edit | (Just (title, edit)) <- edits]
+    pure $ InL [InR $ toAction title uri edit | (Just (title, edit)) <- edits]
 
 genList :: [Maybe [LHsDecl GhcPs] -> Maybe Anns -> Range -> Maybe (T.Text, TextEdit)]
 genList =

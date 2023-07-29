@@ -51,6 +51,7 @@ library
     , hls-plugin-api        == 2.1.0.0
     , lens
     , lsp
+    , mtl
     , refact
     , regex-tdfa
     , stm

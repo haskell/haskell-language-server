@@ -33,6 +33,7 @@ library
     , ghcide                == 2.1.0.0
     , hls-graph
     , hls-plugin-api        == 2.1.0.0
+    , lens
     , lsp
     , text
     , unordered-containers

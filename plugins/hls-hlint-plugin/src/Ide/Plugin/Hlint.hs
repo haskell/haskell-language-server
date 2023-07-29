@@ -43,8 +43,11 @@ import           Control.DeepSeq
 import           Control.Exception
 import           Control.Lens                                       ((?~), (^.))
 import           Control.Monad
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Except
+import           Control.Monad.Error.Class                          (MonadError (throwError))
+import           Control.Monad.IO.Class                             (MonadIO (liftIO))
+import           Control.Monad.Trans.Class                          (MonadTrans (lift))
+import           Control.Monad.Trans.Except                         (ExceptT (..),
+                                                                     runExceptT)
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
                                                                      Value (..))
@@ -114,9 +117,9 @@ import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (.
 import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
 import qualified Refact.Fixity                                      as Refact
 #endif
-
 import           Ide.Plugin.Config                                  hiding
                                                                     (Config)
+import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
 import           Ide.Plugin.Resolve
 import           Ide.PluginUtils
@@ -145,6 +148,7 @@ import           GHC.Generics                                       (Generic)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 #endif
+import           Development.IDE.Core.PluginUtils                   as PluginUtils
 import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
@@ -402,8 +406,8 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
   | let TextDocumentIdentifier uri = documentId
   , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
   = do
-    verTxtDocId <- getVersionedTextDoc documentId
-    liftIO $ fmap (Right . InL . map LSP.InR) $ do
+    verTxtDocId <- lift $ getVersionedTextDoc documentId
+    liftIO $ fmap (InL . map LSP.InR) $ do
       allDiagnostics <- atomically $ getDiagnostics ideState
 
       let numHintsInDoc = length
@@ -421,7 +425,7 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
       else
         pure singleHintCodeActions
   | otherwise
-  = pure $ Right $ InL []
+  = pure $ InL []
 
   where
     applyAllAction verTxtDocId =
@@ -437,8 +441,8 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
     diags = context ^. LSP.diagnostics
 
 resolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState HlintResolveCommands Method_CodeActionResolve
-resolveProvider recorder ideState _plId ca uri resolveValue = pluginResponse $ do
-  file <-  getNormalizedFilePath uri
+resolveProvider recorder ideState _plId ca uri resolveValue = do
+  file <-  getNormalizedFilePathE uri
   case resolveValue of
     (ApplyHint verTxtDocId oneHint) -> do
         edit <- ExceptT $ liftIO $ applyHint recorder ideState file oneHint verTxtDocId
@@ -502,10 +506,10 @@ mkSuppressHintTextEdits dynFlags fileContents hint =
     combinedTextEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
-ignoreHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either String WorkspaceEdit)
-ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = do
-  (_, fileContents) <- runAction "Hlint.GetFileContents" ideState $ getFileContents nfp
-  (msr, _) <- runAction "Hlint.GetModSummaryWithoutTimestamps" ideState $ useWithStale_ GetModSummaryWithoutTimestamps nfp
+ignoreHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either PluginError WorkspaceEdit)
+ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = runExceptT $ do
+  (_, fileContents) <- runActionE "Hlint.GetFileContents" ideState $ useE GetFileContents nfp
+  (msr, _) <- runActionE "Hlint.GetModSummaryWithoutTimestamps" ideState $ useWithStaleE GetModSummaryWithoutTimestamps nfp
   case fileContents of
     Just contents -> do
         let dynFlags = ms_hspp_opts $ msrModSummary msr
@@ -515,8 +519,8 @@ ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = do
                   (Just (M.singleton (verTxtDocId ^. LSP.uri) textEdits))
                   Nothing
                   Nothing
-        pure $ Right workspaceEdit
-    Nothing -> pure $ Left  "Unable to get fileContents"
+        pure workspaceEdit
+    Nothing -> throwError $ PluginInternalError "Unable to get fileContents"
 
 -- ---------------------------------------------------------------------
 data HlintResolveCommands =
@@ -539,7 +543,7 @@ data OneHint =
     , oneHintTitle :: HintTitle
     } deriving (Generic, Eq, Show, ToJSON, FromJSON)
 
-applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either String WorkspaceEdit)
+applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either PluginError WorkspaceEdit)
 applyHint recorder ide nfp mhint verTxtDocId =
   runExceptT $ do
     let runAction' :: Action a -> IO a
@@ -547,7 +551,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
     let errorHandlers = [ Handler $ \e -> return (Left (show (e :: IOException)))
                         , Handler $ \e -> return (Left (show (e :: ErrorCall)))
                         ]
-    ideas <- bimapExceptT showParseError id $ ExceptT $ runAction' $ getIdeas recorder nfp
+    ideas <- bimapExceptT (PluginInternalError . T.pack . showParseError) id $ ExceptT $ runAction' $ getIdeas recorder nfp
     let ideas' = maybe ideas (`filterIdeas` ideas) mhint
     let commands = map ideaRefactoring ideas'
     logWith recorder Debug $ LogGeneratedIdeas nfp commands
@@ -583,7 +587,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
     mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
     res <-
         case mbParsedModule of
-            Nothing -> throwE "Apply hint: error parsing the module"
+            Nothing -> throwError "Apply hint: error parsing the module"
             Just pm -> do
                 let anns = pm_annotations pm
                 let modu = pm_parsed_source pm
@@ -600,7 +604,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
         let wsEdit = diffText' True (verTxtDocId, oldContent) (T.pack appliedFile) IncludeDeletions
         ExceptT $ return (Right wsEdit)
       Left err ->
-        throwE err
+        throwError $ PluginInternalError $ T.pack err
     where
           -- | If we are only interested in applying a particular hint then
           -- let's filter out all the irrelevant ideas

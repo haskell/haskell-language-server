@@ -34,6 +34,7 @@ source-repository head
 
 library
   exposed-modules:
+    Ide.Plugin.Error
     Ide.Plugin.Config
     Ide.Plugin.ConfigUtils
     Ide.Plugin.Properties
@@ -62,6 +63,7 @@ library
     , lens
     , lens-aeson
     , lsp                   ^>=2.0.0.0
+    , mtl
     , opentelemetry         >=0.4
     , optparse-applicative
     , prettyprinter

@@ -6,48 +6,47 @@ module Ide.Plugin.ChangeTypeSignature (descriptor
                                       , errorMessageRegexes
                                       ) where
 
-import           Control.Monad                  (guard)
-import           Control.Monad.IO.Class         (MonadIO (liftIO))
-import           Control.Monad.Trans.Except     (ExceptT)
-import           Data.Foldable                  (asum)
-import qualified Data.Map                       as Map
-import           Data.Maybe                     (mapMaybe)
-import           Data.Text                      (Text)
-import qualified Data.Text                      as T
-import           Development.IDE                (realSrcSpanToRange)
-import           Development.IDE.Core.RuleTypes (GetParsedModule (GetParsedModule))
-import           Development.IDE.Core.Service   (IdeState, runAction)
-import           Development.IDE.Core.Shake     (use)
+import           Control.Monad                    (guard)
+import           Control.Monad.IO.Class           (MonadIO)
+import           Control.Monad.Trans.Except       (ExceptT)
+import           Data.Foldable                    (asum)
+import qualified Data.Map                         as Map
+import           Data.Maybe                       (mapMaybe)
+import           Data.Text                        (Text)
+import qualified Data.Text                        as T
+import           Development.IDE                  (realSrcSpanToRange)
+import           Development.IDE.Core.PluginUtils
+import           Development.IDE.Core.RuleTypes   (GetParsedModule (GetParsedModule))
+import           Development.IDE.Core.Service     (IdeState)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Util       (printOutputable)
-import           Generics.SYB                   (extQ, something)
-import           Ide.PluginUtils                (getNormalizedFilePath,
-                                                 handleMaybeM, pluginResponse)
-import           Ide.Types                      (PluginDescriptor (..),
-                                                 PluginId (PluginId),
-                                                 PluginMethodHandler,
-                                                 defaultPluginDescriptor,
-                                                 mkPluginHandler)
+import           Development.IDE.GHC.Util         (printOutputable)
+import           Generics.SYB                     (extQ, something)
+import           Ide.Plugin.Error                 (PluginError,
+                                                   getNormalizedFilePathE)
+import           Ide.Types                        (PluginDescriptor (..),
+                                                   PluginId (PluginId),
+                                                   PluginMethodHandler,
+                                                   defaultPluginDescriptor,
+                                                   mkPluginHandler)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Text.Regex.TDFA                ((=~))
+import           Text.Regex.TDFA                  ((=~))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction (codeActionHandler plId) }
 
 codeActionHandler :: PluginId -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionHandler plId ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext diags _ _} = pluginResponse $ do
-      nfp <- getNormalizedFilePath uri
+codeActionHandler plId ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext diags _ _} = do
+      nfp <- getNormalizedFilePathE uri
       decls <- getDecls plId ideState nfp
       let actions = mapMaybe (generateAction plId uri decls) diags
       pure $ InL actions
 
-getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT String m [LHsDecl GhcPs]
-getDecls (PluginId changeTypeSignatureId) state = handleMaybeM "Could not get Parsed Module"
-    . liftIO
-    . fmap (fmap (hsmodDecls . unLoc . pm_parsed_source))
-    . runAction (T.unpack changeTypeSignatureId <> ".GetParsedModule") state
-    . use GetParsedModule
+getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m [LHsDecl GhcPs]
+getDecls (PluginId changeTypeSignatureId) state =
+    runActionE (T.unpack changeTypeSignatureId <> ".GetParsedModule") state
+    . (fmap (hsmodDecls . unLoc . pm_parsed_source))
+    . useE GetParsedModule
 
 -- | Text representing a Declaration's Name
 type DeclName = Text
