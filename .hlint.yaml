@@ -121,6 +121,7 @@
     - DiagnosticTests #Previously part of GHCIDE Main tests
     - FindDefinitionAndHoverTests #Previously part of GHCIDE Main tests
     - TestUtils #Previously part of GHCIDE Main tests
+    - CodeLensTests #Previously part of GHCIDE Main tests
 
   - name: [Prelude.tail, Data.List.tail]
     within:
@@ -205,6 +206,7 @@
     - Development.IDE.Graph.Internal.Profile
     - Development.IDE.Graph.Internal.Rules
     - Ide.Plugin.Class
+    - CodeLensTests #Previously part of GHCIDE Main tests
 
   - name: "Data.Map.!"
     within:
