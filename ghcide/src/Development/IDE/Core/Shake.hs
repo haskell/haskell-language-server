@@ -964,7 +964,7 @@ useWithStale key file = runIdentity <$> usesWithStale key (Identity file)
 -- |Request a Rule result, it not available return the last computed result
 --  which may be stale.
 --
--- Throws an `BadDependency` IO exception which is caught by the rule system if
+-- Throws an `BadDependency` exception which is caught by the rule system if
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers. Use `useWithStaleE` instead.
@@ -974,7 +974,7 @@ useWithStale_ key file = runIdentity <$> usesWithStale_ key (Identity file)
 
 -- |Plural version of 'useWithStale_'
 --
--- Throws an `BadDependency` IO exception which is caught by the rule system if
+-- Throws an `BadDependency` exception which is caught by the rule system if
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers.
@@ -1053,7 +1053,7 @@ useNoFile key = use key emptyFilePath
 
 -- Requests a rule if available.
 --
--- Throws an `BadDependency` IO exception which is caught by the rule system if
+-- Throws an `BadDependency` exception which is caught by the rule system if
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers. Use `useE` instead.
@@ -1065,7 +1065,7 @@ useNoFile_ key = use_ key emptyFilePath
 
 -- |Plural version of `use_`
 --
--- Throws an `BadDependency` IO exception which is caught by the rule system if
+-- Throws an `BadDependency` exception which is caught by the rule system if
 -- none available.
 --
 -- WARNING: Not suitable for PluginHandlers. Use `usesE` instead.
