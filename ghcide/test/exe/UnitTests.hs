@@ -2,8 +2,6 @@
 module UnitTests (tests) where
 
 import           Control.Concurrent
-import           Control.Concurrent.Async
-import           Control.Exception                 (finally)
 import           Control.Monad.IO.Class            (liftIO)
 import           Data.IORef
 import           Data.IORef.Extra                  (atomicModifyIORef_)
@@ -30,10 +28,8 @@ import           Language.LSP.Test
 import           LogType                           (Log (..))
 import           Network.URI
 import qualified Progress
-import           System.Directory
 import           System.IO.Extra                   hiding (withTempDir)
 import           System.Mem                        (performGC)
-import           System.Process.Extra              (createPipe)
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
@@ -112,19 +108,3 @@ findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
     t <- getModTime f
     t' <- getModTime f'
     if t /= t' then return delay_us else findResolution_us (delay_us * 10)
-
-
-testIde :: Recorder (WithPriority Log) -> IDE.Arguments -> Session () -> IO ()
-testIde recorder arguments session = do
-    config <- getConfigFromEnv
-    cwd <- getCurrentDirectory
-    (hInRead, hInWrite) <- createPipe
-    (hOutRead, hOutWrite) <- createPipe
-    let projDir = "."
-    let server = IDE.defaultMain (cmapWithPrio LogIDEMain recorder) arguments
-            { IDE.argsHandleIn = pure hInRead
-            , IDE.argsHandleOut = pure hOutWrite
-            }
-
-    flip finally (setCurrentDirectory cwd) $ withAsync server $ \_ ->
-        runSessionWithHandles hInWrite hOutRead config lspTestCaps projDir session

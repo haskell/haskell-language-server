@@ -48,8 +48,10 @@ import           Language.LSP.Protocol.Types
 -- and then returning PluginRequestRefused should be the same as if no plugins
 -- passed the `pluginEnabled` stage.
 data PluginError
-  = -- |PluginInternalError should be used if something has gone horribly wrong.
-    -- All uncaught exceptions will be caught and converted to this error.
+  = -- |PluginInternalError should be used if an error has occurred. This
+    -- should only rarely be returned. As it's logged with Error, it will be
+    -- shown by the client to the user via `showWindow`. All uncaught exceptions
+    -- will be caught and converted to this error.
     --
     -- This error will be be converted into an InternalError response code. It
     -- will be logged with Error and takes the highest precedence (1) in being
