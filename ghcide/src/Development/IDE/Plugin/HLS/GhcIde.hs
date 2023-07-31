@@ -17,7 +17,6 @@ import qualified Development.IDE.Plugin.TypeLenses   as TypeLenses
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Server                 (LspM)
 import           Text.Regex.TDFA.Text                ()
 
 data Log
@@ -45,28 +44,22 @@ descriptors recorder =
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginHandlers = mkPluginHandler SMethod_TextDocumentHover hover'
-                  <> mkPluginHandler SMethod_TextDocumentDocumentSymbol symbolsProvider
+                  <> mkPluginHandler SMethod_TextDocumentDocumentSymbol moduleOutline
                   <> mkPluginHandler SMethod_TextDocumentDefinition (\ide _ DefinitionParams{..} ->
                       gotoDefinition ide TextDocumentPositionParams{..})
                   <> mkPluginHandler SMethod_TextDocumentTypeDefinition (\ide _ TypeDefinitionParams{..} ->
                       gotoTypeDefinition ide TextDocumentPositionParams{..})
                   <> mkPluginHandler SMethod_TextDocumentDocumentHighlight (\ide _ DocumentHighlightParams{..} ->
                       documentHighlight ide TextDocumentPositionParams{..})
-                  <> mkPluginHandler SMethod_TextDocumentReferences (\ide _ params -> references ide params)
-                  <> mkPluginHandler SMethod_WorkspaceSymbol (\ide _ params -> fmap InL <$> wsSymbols ide params),
+                  <> mkPluginHandler SMethod_TextDocumentReferences references
+                  <> mkPluginHandler SMethod_WorkspaceSymbol wsSymbols,
 
     pluginConfigDescriptor = defaultConfigDescriptor
   }
 
 -- ---------------------------------------------------------------------
 
-hover' :: IdeState -> PluginId -> HoverParams  -> LspM c (Either ResponseError (Hover |? Null))
+hover' :: PluginMethodHandler IdeState 'Method_TextDocumentHover
 hover' ideState _ HoverParams{..} = do
     liftIO $ logDebug (ideLogger ideState) "GhcIde.hover entered (ideLogger)" -- AZ
     hover ideState TextDocumentPositionParams{..}
-
--- ---------------------------------------------------------------------
-symbolsProvider :: IdeState -> PluginId -> DocumentSymbolParams -> LspM c (Either ResponseError ([SymbolInformation] |? ([DocumentSymbol] |? Null)))
-symbolsProvider ide _ params = moduleOutline ide params
-
--- ---------------------------------------------------------------------

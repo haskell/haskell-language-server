@@ -4,15 +4,16 @@
 module Ide.Plugin.CabalFmt where
 
 import           Control.Lens
+import           Control.Monad.Except        (throwError)
 import           Control.Monad.IO.Class
-import qualified Data.Text                     as T
-import           Development.IDE               hiding (pluginHandlers)
+import qualified Data.Text                   as T
+import           Development.IDE             hiding (pluginHandlers)
+import           Ide.Plugin.Error            (PluginError (PluginInternalError, PluginInvalidParams))
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Protocol.Lens    as L
-import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
-import           Prelude                       hiding (log)
+import           Prelude                     hiding (log)
 import           System.Directory
 import           System.Exit
 import           System.FilePath
@@ -47,14 +48,14 @@ descriptor recorder plId =
 provider :: Recorder (WithPriority Log) -> FormattingHandler IdeState
 provider recorder _ (FormatRange _) _ _ _ = do
   logWith recorder Info LogInvalidInvocationInfo
-  pure $ Left (ResponseError (InR ErrorCodes_InvalidRequest) "You cannot format a text-range using cabal-fmt." Nothing)
-provider recorder _ide FormatText contents nfp opts = liftIO $ do
+  throwError $ PluginInvalidParams "You cannot format a text-range using cabal-fmt."
+provider recorder _ide FormatText contents nfp opts = do
   let cabalFmtArgs = [fp, "--indent", show tabularSize]
-  x <- findExecutable "cabal-fmt"
+  x <- liftIO $ findExecutable "cabal-fmt"
   case x of
     Just _ -> do
       (exitCode, out, err) <-
-        readCreateProcessWithExitCode
+        liftIO $ readCreateProcessWithExitCode
           ( proc "cabal-fmt" cabalFmtArgs
           )
             { cwd = Just $ takeDirectory fp
@@ -64,13 +65,13 @@ provider recorder _ide FormatText contents nfp opts = liftIO $ do
       case exitCode of
         ExitFailure code -> do
           log Error $ LogProcessInvocationFailure code
-          pure $ Left (ResponseError (InR ErrorCodes_UnknownErrorCode) "Failed to invoke cabal-fmt" Nothing)
+          throwError (PluginInternalError "Failed to invoke cabal-fmt")
         ExitSuccess -> do
           let fmtDiff = makeDiffTextEdit contents (T.pack out)
-          pure $ Right $ InL fmtDiff
+          pure $ InL fmtDiff
     Nothing -> do
       log Error LogCabalFmtNotFound
-      pure $ Left (ResponseError (InR ErrorCodes_InvalidRequest) "No installation of cabal-fmt could be found. Please install it into your global environment." Nothing)
+      throwError (PluginInternalError "No installation of cabal-fmt could be found. Please install it into your global environment.")
   where
     fp = fromNormalizedFilePath nfp
     tabularSize = opts ^. L.tabSize

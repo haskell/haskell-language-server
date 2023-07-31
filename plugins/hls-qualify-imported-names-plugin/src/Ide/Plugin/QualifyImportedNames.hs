@@ -7,6 +7,7 @@
 
 module Ide.Plugin.QualifyImportedNames (descriptor) where
 
+import           Control.Lens                     ((^.))
 import           Control.Monad                    (foldM)
 import           Control.Monad.IO.Class           (MonadIO (liftIO))
 import           Control.Monad.Trans.State.Strict (State)
@@ -18,10 +19,11 @@ import qualified Data.HashMap.Strict              as HashMap
 import           Data.List                        (sortOn)
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
-import           Data.Maybe                       (fromMaybe, mapMaybe)
+import           Data.Maybe                       (fromMaybe, isJust, mapMaybe)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as Text
 import           Development.IDE                  (spanContainsRange)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.RuleTypes   (GetFileContents (GetFileContents),
                                                    GetHieAst (GetHieAst),
                                                    HieAstResult (HAR, refMap),
@@ -59,11 +61,15 @@ import           Development.IDE.Types.Location   (NormalizedFilePath,
                                                    Position (Position),
                                                    Range (Range), Uri,
                                                    toNormalizedUri)
+import           Ide.Plugin.Error                 (PluginError (PluginRuleFailed),
+                                                   getNormalizedFilePathE,
+                                                   handleMaybe, handleMaybeM)
 import           Ide.Types                        (PluginDescriptor (pluginHandlers),
                                                    PluginId,
                                                    PluginMethodHandler,
                                                    defaultPluginDescriptor,
                                                    mkPluginHandler)
+import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentCodeAction),
                                                    SMethod (SMethod_TextDocumentCodeAction))
 import           Language.LSP.Protocol.Types      (CodeAction (CodeAction, _command, _data_, _diagnostics, _disabled, _edit, _isPreferred, _kind, _title),
@@ -107,20 +113,6 @@ makeCodeActions uri textEdits = [InR CodeAction {..} | not (null textEdits)]
         _disabled = Nothing
         _data_ = Nothing
         _changeAnnotations = Nothing
-
-getTypeCheckedModule :: IdeState -> NormalizedFilePath -> IO (Maybe TcModuleResult)
-getTypeCheckedModule ideState normalizedFilePath =
-  runAction "QualifyImportedNames.TypeCheck" ideState (use TypeCheck normalizedFilePath)
-
-getHieAst :: IdeState -> NormalizedFilePath -> IO (Maybe HieAstResult)
-getHieAst ideState normalizedFilePath =
-  runAction "QualifyImportedNames.GetHieAst" ideState (use GetHieAst normalizedFilePath)
-
-getSourceText :: IdeState -> NormalizedFilePath -> IO (Maybe Text)
-getSourceText ideState normalizedFilePath = do
-  fileContents <- runAction "QualifyImportedNames.GetFileContents" ideState (use GetFileContents normalizedFilePath)
-  if | Just (_, sourceText) <- fileContents -> pure sourceText
-     | otherwise                            -> pure Nothing
 
 data ImportedBy = ImportedBy {
   importedByAlias   :: !ModuleName,
@@ -236,22 +228,18 @@ usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
 -- 3. For each used name in refMap check whether the name comes from an import
 --    at the origin of the code action.
 codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
-codeActionProvider ideState pluginId (CodeActionParams _ _ documentId range context)
-  | TextDocumentIdentifier uri <- documentId
-  , Just normalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri) = liftIO $ do
-      tcModuleResult <- getTypeCheckedModule ideState normalizedFilePath
-      if | Just TcModuleResult { tmrParsed, tmrTypechecked } <- tcModuleResult
-         , Just _ <- findLImportDeclAt range tmrParsed -> do
-             hieAstResult <- getHieAst ideState normalizedFilePath
-             sourceText <- getSourceText ideState normalizedFilePath
-             if | Just HAR {..} <- hieAstResult
-                , Just sourceText <- sourceText
-                , let globalRdrEnv = tcg_rdr_env tmrTypechecked
-                , let nameToImportedByMap = globalRdrEnvToNameToImportedByMap globalRdrEnv
-                , let usedIdentifiers = refMapToUsedIdentifiers refMap
-                , let textEdits = usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers ->
-                    pure $ Right $ InL (makeCodeActions uri textEdits)
-                | otherwise -> pure $ Right $ InL []
-         | otherwise -> pure $ Right $ InL []
-  | otherwise = pure $ Right $ InL []
+codeActionProvider ideState pluginId (CodeActionParams _ _ documentId range context) = do
+  normalizedFilePath <- getNormalizedFilePathE (documentId ^. L.uri)
+  TcModuleResult { tmrParsed, tmrTypechecked } <- runActionE "QualifyImportedNames.TypeCheck" ideState $ useE TypeCheck normalizedFilePath
+  if isJust (findLImportDeclAt range tmrParsed)
+    then do
+          HAR {..} <- runActionE "QualifyImportedNames.GetHieAst" ideState (useE GetHieAst normalizedFilePath)
+          (_, sourceTextM) <-  runActionE "QualifyImportedNames.GetFileContents" ideState (useE GetFileContents normalizedFilePath)
+          sourceText <- handleMaybe (PluginRuleFailed "GetFileContents") sourceTextM
+          let globalRdrEnv = tcg_rdr_env tmrTypechecked
+              nameToImportedByMap = globalRdrEnvToNameToImportedByMap globalRdrEnv
+              usedIdentifiers = refMapToUsedIdentifiers refMap
+              textEdits = usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
+          pure  $ InL (makeCodeActions (documentId ^. L.uri) textEdits)
+    else pure  $ InL []
 

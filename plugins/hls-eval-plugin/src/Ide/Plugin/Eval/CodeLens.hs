@@ -32,7 +32,8 @@ import           Control.Lens                                 (_1, _3, ix, (%~),
 import           Control.Monad                                (guard, void,
                                                                when)
 import           Control.Monad.IO.Class                       (MonadIO (liftIO))
-import           Control.Monad.Trans.Except                   (ExceptT (..))
+import           Control.Monad.Trans.Except                   (ExceptT (..),
+                                                               runExceptT)
 import           Data.Aeson                                   (toJSON)
 import           Data.Char                                    (isSpace)
 import           Data.Foldable                                (toList)
@@ -52,8 +53,6 @@ import           Development.IDE.Core.RuleTypes               (LinkableResult (l
                                                                NeedsCompilation (NeedsCompilation),
                                                                TypeCheck (..),
                                                                tmrTypechecked)
-import           Development.IDE.Core.Shake                   (useWithStale_,
-                                                               use_, uses_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import           Development.IDE.GHC.Compat.Util              (GhcException,
@@ -96,10 +95,14 @@ import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv)
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
 import           Development.IDE.Core.FileStore               (setSomethingModified)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Types.Shake                  (toKey)
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
 #endif
+import           Ide.Plugin.Error                             (PluginError (PluginInternalError),
+                                                               handleMaybe,
+                                                               handleMaybeM)
 import           Ide.Plugin.Eval.Code                         (Statement,
                                                                asStatements,
                                                                myExecStmt,
@@ -121,9 +124,6 @@ import           Ide.Plugin.Eval.Util                         (gStrictTry,
                                                                isLiterate,
                                                                logWith,
                                                                response', timed)
-import           Ide.PluginUtils                              (handleMaybe,
-                                                               handleMaybeM,
-                                                               pluginResponse)
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                   as L
 import           Language.LSP.Protocol.Message
@@ -139,14 +139,14 @@ codeLens st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
      in perf "codeLens" $
-            pluginResponse $ do
+            do
                 let TextDocumentIdentifier uri = _textDocument
-                fp <- handleMaybe "uri" $ uriToFilePath' uri
+                fp <- uriToFilePathE uri
                 let nfp = toNormalizedFilePath' fp
                     isLHS = isLiterate fp
                 dbg "fp" fp
-                (comments, _) <- liftIO $
-                    runAction "eval.GetParsedModuleWithComments" st $ useWithStale_ GetEvalComments nfp
+                (comments, _) <-
+                    runActionE "eval.GetParsedModuleWithComments" st $ useWithStaleE GetEvalComments nfp
                 -- dbg "excluded comments" $ show $  DL.toList $
                 --     foldMap (\(L a b) ->
                 --         case b of
@@ -205,12 +205,12 @@ runEvalCmd :: PluginId -> CommandFunction IdeState EvalParams
 runEvalCmd plId st EvalParams{..} =
     let dbg = logWith st
         perf = timed dbg
-        cmd :: ExceptT String (LspM Config) WorkspaceEdit
+        cmd :: ExceptT PluginError (LspM Config) WorkspaceEdit
         cmd = do
             let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
             let TextDocumentIdentifier{_uri} = module_
-            fp <- handleMaybe "uri" $ uriToFilePath' _uri
+            fp <- uriToFilePathE _uri
             let nfp = toNormalizedFilePath' fp
             mdlText <- moduleText _uri
 
@@ -218,7 +218,7 @@ runEvalCmd plId st EvalParams{..} =
             liftIO $ queueForEvaluation st nfp
             liftIO $ setSomethingModified VFSUnmodified st [toKey NeedsCompilation nfp] "Eval"
             -- Setup a session with linkables for all dependencies and GHCi specific options
-            final_hscEnv <- liftIO $ initialiseSessionForEval
+            final_hscEnv <- initialiseSessionForEval
                                       (needsQuickCheck tests)
                                       st nfp
 
@@ -235,30 +235,30 @@ runEvalCmd plId st EvalParams{..} =
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
 
             return workspaceEdits
-     in perf "evalCmd" $
+     in perf "evalCmd" $ ExceptT $
             withIndefiniteProgress "Evaluating" Cancellable $
-                response' cmd
+                runExceptT $ response' cmd
 
 -- | Create an HscEnv which is suitable for performing interactive evaluation.
 -- All necessary home modules will have linkables and the current module will
 -- also be loaded into the environment.
 --
 -- The interactive context and interactive dynamic flags are also set appropiately.
-initialiseSessionForEval :: Bool -> IdeState -> NormalizedFilePath -> IO HscEnv
+initialiseSessionForEval :: Bool -> IdeState -> NormalizedFilePath -> ExceptT PluginError (LspM Config) HscEnv
 initialiseSessionForEval needs_quickcheck st nfp = do
-  (ms, env1) <- runAction "runEvalCmd" st $ do
+  (ms, env1) <- runActionE "runEvalCmd" st $ do
 
-    ms <- msrModSummary <$> use_ GetModSummary nfp
-    deps_hsc <- hscEnv <$> use_ GhcSessionDeps nfp
+    ms <- msrModSummary <$> useE GetModSummary nfp
+    deps_hsc <- hscEnv <$> useE GhcSessionDeps nfp
 
-    linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
-    linkables <- uses_ GetLinkable linkables_needed
+    linkables_needed <- reachableModules <$> useE GetDependencyInformation nfp
+    linkables <- usesE GetLinkable linkables_needed
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
     -- However, the eval plugin (setContext specifically) requires the rdr_env
     -- for the current module - so get it from the Typechecked Module and add
     -- it back to the iface for the current module.
-    rdr_env <- tcg_rdr_env . tmrTypechecked <$> use_ TypeCheck nfp
+    rdr_env <- tcg_rdr_env . tmrTypechecked <$> useE TypeCheck nfp
     let linkable_hsc = loadModulesHome (map (addRdrEnv . linkableHomeMod) linkables) deps_hsc
         addRdrEnv hmi
           | iface <- hm_iface hmi
@@ -269,7 +269,7 @@ initialiseSessionForEval needs_quickcheck st nfp = do
     return (ms, linkable_hsc)
   -- Bit awkward we need to use evalGhcEnv here but setContext requires to run
   -- in the Ghc monad
-  env2 <- evalGhcEnv env1 $ do
+  env2 <- liftIO $ evalGhcEnv env1 $ do
             setContext [Compat.IIModule (moduleName (ms_mod ms))]
             let df = flip xopt_set    LangExt.ExtendedDefaultRules
                    . flip xopt_unset  LangExt.MonomorphismRestriction
@@ -297,9 +297,9 @@ finalReturn txt =
         p = Position l c
      in TextEdit (Range p p) "\n"
 
-moduleText :: (IsString e, MonadLsp c m) => Uri -> ExceptT e m Text
+moduleText :: MonadLsp c m => Uri -> ExceptT PluginError m Text
 moduleText uri =
-    handleMaybeM "mdlText" $
+    handleMaybeM (PluginInternalError "mdlText") $
       (virtualFileText <$>)
           <$> getVirtualFile
               (toNormalizedUri uri)
@@ -363,7 +363,7 @@ asEdit (MultiLine commRange) test resultLines
 asEdit _ test resultLines =
     TextEdit (resultRange test) (T.unlines resultLines)
 
-{-
+{- |
 The result of evaluating a test line can be:
 * a value
 * nothing

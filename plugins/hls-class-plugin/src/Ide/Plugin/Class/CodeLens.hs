@@ -6,17 +6,18 @@
 module Ide.Plugin.Class.CodeLens where
 
 import           Control.Lens                         ((^.))
-import           Control.Monad.IO.Class               (liftIO)
+import           Control.Monad.Trans.Class            (MonadTrans (lift))
 import           Data.Aeson                           hiding (Null)
 import           Data.Maybe                           (mapMaybe, maybeToList)
 import qualified Data.Text                            as T
 import           Development.IDE
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import           GHC.LanguageExtensions.Type
 import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
+import           Ide.Plugin.Error
 import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
@@ -25,23 +26,18 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                  (sendRequest)
 
 codeLens :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
-codeLens state plId CodeLensParams{..} = pluginResponse $ do
-    nfp <- getNormalizedFilePath uri
-    (tmr, _) <- handleMaybeM "Unable to typecheck"
-        $ liftIO
-        $ runAction "classplugin.TypeCheck" state
+codeLens state plId CodeLensParams{..} = do
+    nfp <-  getNormalizedFilePathE uri
+    (tmr, _) <- runActionE "classplugin.TypeCheck" state
         -- Using stale results means that we can almost always return a value. In practice
         -- this means the lenses don't 'flicker'
-        $ useWithStale TypeCheck nfp
+        $ useWithStaleE TypeCheck nfp
 
     -- All instance binds
-    (InstanceBindTypeSigsResult allBinds, mp) <-
-        handleMaybeM "Unable to get InstanceBindTypeSigsResult"
-        $ liftIO
-        $ runAction "classplugin.GetInstanceBindTypeSigs" state
+    (InstanceBindTypeSigsResult allBinds, mp) <- runActionE "classplugin.GetInstanceBindTypeSigs" state
         -- Using stale results means that we can almost always return a value. In practice
         -- this means the lenses don't 'flicker'
-        $ useWithStale GetInstanceBindTypeSigs nfp
+        $ useWithStaleE GetInstanceBindTypeSigs nfp
 
     pragmaInsertion <- insertPragmaIfNotPresent state nfp InstanceSigs
 
@@ -142,5 +138,5 @@ codeLens state plId CodeLensParams{..} = pluginResponse $ do
 
 codeLensCommandHandler :: CommandFunction IdeState WorkspaceEdit
 codeLensCommandHandler _ wedit = do
-  _ <- sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right $ InR Null
+  _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  pure $ InR Null

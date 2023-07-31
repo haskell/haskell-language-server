@@ -39,8 +39,10 @@ library
     , hls-plugin-api  == 2.1.0.0
     , lens
     , lsp
+    , mtl
     , process-extras  >= 0.7.1
     , text
+    , transformers
 
   -- fourmolu 0.9.0 fails to build on Windows CI for reasons unknown
   if impl(ghc >= 9.2) && os(windows) && impl(ghc < 9.4)

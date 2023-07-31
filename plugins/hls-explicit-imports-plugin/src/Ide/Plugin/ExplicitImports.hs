@@ -18,6 +18,7 @@ module Ide.Plugin.ExplicitImports
 
 import           Control.DeepSeq
 import           Control.Lens                         ((&), (?~))
+import           Control.Monad.Error.Class            (MonadError (throwError))
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except           (ExceptT)
@@ -37,18 +38,19 @@ import qualified Data.Unique                          as U (hashUnique,
                                                             newUnique)
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat           hiding ((<+>))
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
+import           Ide.Plugin.Error                     (PluginError (..),
+                                                       getNormalizedFilePathE,
+                                                       handleMaybe)
 import           Ide.Plugin.RangeMap                  (filterByRange)
 import qualified Ide.Plugin.RangeMap                  as RM (RangeMap, fromList)
 import           Ide.Plugin.Resolve
-import           Ide.PluginUtils                      (getNormalizedFilePath,
-                                                       handleMaybe,
-                                                       handleMaybeM,
-                                                       pluginResponse)
+import           Ide.PluginUtils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
@@ -106,7 +108,7 @@ descriptorForModules recorder modFilter plId =
 
 -- | The actual command handler
 runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState IAResolveData
-runImportCommand recorder ideState eird@(ResolveOne _ _) = pluginResponse $ do
+runImportCommand recorder ideState eird@(ResolveOne _ _) = do
   wedit <- resolveWTextEdit ideState eird
   _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) logErrors
   return $ InR  Null
@@ -115,7 +117,8 @@ runImportCommand recorder ideState eird@(ResolveOne _ _) = pluginResponse $ do
           pure ()
         logErrors (Right _) = pure ()
 runImportCommand _ _ rd = do
-  pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) (T.pack $ "Unexpected argument for command handler:" <> show rd) Nothing
+  throwError $ PluginInvalidParams (T.pack $ "Unexpected argument for command handler:" <> show rd)
+
 
 -- | We provide two code lenses for imports. The first lens makes imports
 -- explicit. For example, for the module below:
@@ -130,18 +133,13 @@ runImportCommand _ _ rd = do
 -- the provider should produce one code lens associated to the import statement:
 -- > Refine imports to import Control.Monad.IO.Class (liftIO)
 lensProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
-lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}}
-  = pluginResponse $ do
-    nfp <- getNormalizedFilePath _uri
-    mbMinImports <- liftIO $ runAction "ImportActions" state $ useWithStale ImportActions nfp
-    case mbMinImports of
-      Just (ImportActionsResult{forLens}, pm) -> do
-        let lens = [ generateLens _uri newRange int
-                    | (range, int) <- forLens
-                    , Just newRange <- [toCurrentRange pm range]]
-        pure $ InL lens
-      _ ->
-        pure $ InL []
+lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}} = do
+    nfp <- getNormalizedFilePathE _uri
+    (ImportActionsResult{forLens}, pm) <- runActionE "ImportActions" state $ useWithStaleE ImportActions nfp
+    let lens = [ generateLens _uri newRange int
+                | (range, int) <- forLens
+                , Just newRange <- [toCurrentRange pm range]]
+    pure $ InL lens
   where -- because these are non resolved lenses we only need the range and a
         -- unique id to later resolve them with. These are for both refine
         -- import lenses and for explicit import lenses.
@@ -152,14 +150,10 @@ lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {
                    , _command = Nothing }
 
 lensResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState IAResolveData 'Method_CodeLensResolve
-lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid)
-  = pluginResponse $ do
-    nfp <- getNormalizedFilePath uri
-    (ImportActionsResult{forResolve}, _) <-
-      handleMaybeM "Unable to run Import Actions"
-      $ liftIO
-      $ runAction "ImportActions" ideState $ useWithStale ImportActions nfp
-    target <- handleMaybe "Unable to resolve lens" $ forResolve IM.!? uid
+lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid) = do
+    nfp <- getNormalizedFilePathE uri
+    (ImportActionsResult{forResolve}, _) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
+    target <- handleMaybe PluginStaleResolve $ forResolve IM.!? uid
     let updatedCodeLens = cl & L.command ?~  mkCommand plId target
     pure updatedCodeLens
   where mkCommand ::  PluginId -> ImportEdit -> Command
@@ -173,7 +167,7 @@ lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid)
               title RefineImport = "Refine imports to " <> T.intercalate ", " (T.lines ieText)
           in mkLspCommand pId importCommandId (title ieResType) (Just [A.toJSON rd])
 lensResolveProvider _ _ _ _ _ rd = do
-   pure $ Left $ ResponseError (InR ErrorCodes_InvalidParams) (T.pack $ "Unexpected argument for lens resolve handler: " <> show rd) Nothing
+   throwError $ PluginInvalidParams (T.pack $ "Unexpected argument for lens resolve handler: " <> show rd)
 
 -- |For explicit imports: If there are any implicit imports, provide both one
 -- code action per import to make that specific import explicit, and one code
@@ -181,15 +175,10 @@ lensResolveProvider _ _ _ _ _ rd = do
 -- are any reexported imports, provide both one code action per import to refine
 -- that specific import, and one code action to refine all imports.
 codeActionProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier {_uri} range _context)
-  = pluginResponse $ do
-    nfp <- getNormalizedFilePath _uri
-    (ImportActionsResult{forCodeActions}, pm) <-
-      handleMaybeM "Unable to run Import Actions"
-        $ liftIO
-        $ runAction "ImportActions" ideState $ useWithStale ImportActions nfp
-    newRange <- handleMaybe "Unable to get new range"
-        $ toCurrentRange pm range
+codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier {_uri} range _context) = do
+    nfp <- getNormalizedFilePathE _uri
+    (ImportActionsResult{forCodeActions}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
+    newRange <- toCurrentRangeE pm range
     let relevantCodeActions = filterByRange newRange forCodeActions
         allExplicit =
           [InR $ mkCodeAction "Make all imports explicit" (Just $ A.toJSON $ ExplicitAll _uri)
@@ -221,37 +210,27 @@ codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier 
             , _data_ = data_}
 
 codeActionResolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState IAResolveData 'Method_CodeActionResolve
-codeActionResolveProvider _ ideState _ ca _ rd =
-  pluginResponse $ do
+codeActionResolveProvider _ ideState _ ca _ rd = do
     wedit <- resolveWTextEdit ideState rd
     pure $ ca & L.edit ?~ wedit
 --------------------------------------------------------------------------------
 
-resolveWTextEdit :: IdeState -> IAResolveData -> ExceptT String (LspT Config IO) WorkspaceEdit
+resolveWTextEdit :: IdeState -> IAResolveData -> ExceptT PluginError (LspT Config IO) WorkspaceEdit
 -- Providing the edit for the command, or the resolve for the code action is
 -- completely generic, as all we need is the unique id and the text edit.
 resolveWTextEdit ideState (ResolveOne uri int) = do
-  nfp <- getNormalizedFilePath uri
-  (ImportActionsResult{forResolve}, pm) <-
-    handleMaybeM "Unable to run Import Actions"
-    $ liftIO
-    $ runAction "ImportActions" ideState $ useWithStale ImportActions nfp
-  iEdit <- handleMaybe "Unable to resolve text edit" $ forResolve IM.!? int
+  nfp <- getNormalizedFilePathE uri
+  (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
+  iEdit <- handleMaybe PluginStaleResolve $ forResolve IM.!? int
   pure $ mkWorkspaceEdit uri [iEdit] pm
 resolveWTextEdit ideState (ExplicitAll uri) = do
-  nfp <- getNormalizedFilePath uri
-  (ImportActionsResult{forResolve}, pm) <-
-    handleMaybeM "Unable to run Import Actions"
-    $ liftIO
-    $ runAction "ImportActions" ideState $ useWithStale ImportActions nfp
+  nfp <- getNormalizedFilePathE uri
+  (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
   let edits = [ ie | ie@ImportEdit{ieResType = ExplicitImport} <- IM.elems forResolve]
   pure $ mkWorkspaceEdit uri edits pm
 resolveWTextEdit ideState (RefineAll uri) = do
-  nfp <- getNormalizedFilePath uri
-  (ImportActionsResult{forResolve}, pm) <-
-    handleMaybeM "Unable to run Import Actions"
-    $ liftIO
-    $ runAction "ImportActions" ideState $ useWithStale ImportActions nfp
+  nfp <- getNormalizedFilePathE uri
+  (ImportActionsResult{forResolve}, pm) <- runActionE "ImportActions" ideState $ useWithStaleE ImportActions nfp
   let edits = [ re | re@ImportEdit{ieResType = RefineImport} <- IM.elems forResolve]
   pure $ mkWorkspaceEdit uri edits pm
 mkWorkspaceEdit :: Uri -> [ImportEdit] -> PositionMapping -> WorkspaceEdit

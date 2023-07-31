@@ -11,7 +11,11 @@ where
 
 import           Control.Exception               (Handler (..), IOException,
                                                   SomeException (..), catches)
+import           Control.Monad.Except            (ExceptT (ExceptT), runExceptT,
+                                                  throwError)
+import           Control.Monad.Extra
 import           Control.Monad.IO.Class          (liftIO)
+import           Control.Monad.Trans
 import           Data.Functor                    ((<&>))
 import qualified Data.Text                       as T
 import           Development.IDE                 hiding (pluginHandlers)
@@ -19,8 +23,10 @@ import           Development.IDE.GHC.Compat      (hsc_dflags, moduleNameString)
 import qualified Development.IDE.GHC.Compat      as D
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type
+import           Ide.Plugin.Error                (PluginError (PluginInternalError))
 import           Ide.PluginUtils
 import           Ide.Types                       hiding (Config)
+import qualified Ide.Types                       as Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server             hiding (defaultConfig)
@@ -37,8 +43,8 @@ descriptor plId = (defaultPluginDescriptor plId)
 -- ---------------------------------------------------------------------
 
 provider :: FormattingHandler IdeState
-provider ideState typ contents fp _ = withIndefiniteProgress title Cancellable $ liftIO $ do
-  ghc <- runAction "Ormolu" ideState $ use GhcSession fp
+provider ideState typ contents fp _ = ExceptT $ withIndefiniteProgress title Cancellable $ runExceptT $ do
+  ghc <- liftIO $ runAction "Ormolu" ideState $ use GhcSession fp
   let df = hsc_dflags . hscEnv <$> ghc
   fileOpts <- case df of
     Nothing -> pure []
@@ -75,15 +81,18 @@ provider ideState typ contents fp _ = withIndefiniteProgress title Cancellable $
       ]
 
   case typ of
-    FormatText -> ret <$> fmt contents (mkConf fileOpts fullRegion)
-    FormatRange (Range (Position sl _) (Position el _)) ->
-      ret <$> fmt contents (mkConf fileOpts (rangeRegion (fromIntegral sl) (fromIntegral el)))
+    FormatText -> do
+      res <- liftIO $ fmt contents (mkConf fileOpts fullRegion)
+      ret res
+    FormatRange (Range (Position sl _) (Position el _)) -> do
+      res <- liftIO $ fmt contents (mkConf fileOpts (rangeRegion (fromIntegral sl) (fromIntegral el)))
+      ret res
  where
    title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
 
-   ret :: Either SomeException T.Text -> Either ResponseError ([TextEdit] |? Null)
-   ret (Left err)  = Left . responseError . T.pack $ "ormoluCmd: " ++ show err
-   ret (Right new) = Right $ InL $ makeDiffTextEdit contents new
+   ret :: Either SomeException T.Text -> ExceptT PluginError (LspM Types.Config) ([TextEdit] |? Null)
+   ret (Left err)  = throwError $ PluginInternalError . T.pack $ "ormoluCmd: " ++ show err
+   ret (Right new) = pure $ InL $ makeDiffTextEdit contents new
 
    fromDyn :: D.DynFlags -> [DynOption]
    fromDyn df =

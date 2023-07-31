@@ -22,6 +22,8 @@ import           Control.Arrow                                     (second,
 import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans
+import           Control.Monad.Trans.Except                        (ExceptT (ExceptT))
 import           Control.Monad.Trans.Maybe
 import           Data.Char
 import qualified Data.DList                                        as DL
@@ -77,7 +79,7 @@ import           GHC.Parser.Annotation                             (TokenLocatio
 import           Ide.PluginUtils                                   (extractTextInRange,
                                                                     subRange)
 import           Ide.Types
-import           Language.LSP.Protocol.Message                     (ResponseError,
+import           Language.LSP.Protocol.Message                     (Method (..),
                                                                     SMethod (..))
 import           Language.LSP.Protocol.Types                       (ApplyWorkspaceEditParams (..),
                                                                     CodeAction (..),
@@ -121,13 +123,9 @@ import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (
 -------------------------------------------------------------------------------------------------
 
 -- | Generate code actions.
-codeAction
-    :: IdeState
-    -> PluginId
-    -> CodeActionParams
-    -> LSP.LspM c (Either ResponseError ([(Command |? CodeAction)] |? Null))
+codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics= xs}) = do
-  contents <- LSP.getVirtualFile $ toNormalizedUri uri
+  contents <- lift $ LSP.getVirtualFile $ toNormalizedUri uri
   liftIO $ do
     let text = Rope.toText . (_file_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
@@ -136,7 +134,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
     let
       actions = caRemoveRedundantImports parsedModule text diag xs uri
                <> caRemoveInvalidExports parsedModule text diag xs uri
-    pure $ Right $ InL $ actions
+    pure $ InL $ actions
 
 -------------------------------------------------------------------------------------------------
 
@@ -199,7 +197,7 @@ extendImportCommand =
   PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
 
 extendImportHandler :: CommandFunction IdeState ExtendImport
-extendImportHandler ideState edit@ExtendImport {..} = do
+extendImportHandler ideState edit@ExtendImport {..} = ExceptT $ do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
     let (_, (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . M.toList
