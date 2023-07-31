@@ -174,7 +174,7 @@ Known limitations:
 
 ### Make import lists fully explicit
 
-Provided by: `hls-import-actions-plugin`
+Provided by: `hls-explicit-imports-plugin`
 
 Code action kind: `quickfix.literals.style`
 
@@ -182,7 +182,7 @@ Make import lists fully explicit (same as the code lens).
 
 ### Refine import
 
-Provided by: `hls-import-actions-plugin`
+Provided by: `hls-explicit-imports-plugin`
 
 Code action kind: `quickfix.import.refine`
 
@@ -346,7 +346,7 @@ Known limitations:
 
 ### Make import lists fully explicit code lens
 
-Provided by: `hls-import-actions-plugin`
+Provided by: `hls-explicit-imports-plugin`
 
 Shows fully explicit import lists and rewrites them with a click (same as the code action).
 
@@ -354,7 +354,7 @@ Shows fully explicit import lists and rewrites them with a click (same as the co
 
 ### Refine import code lens
 
-Provided by: `hls-import-actions-plugin`
+Provided by: `hls-explicit-imports-plugin`
 
 Shows refined imports and applies them with a click (same as the code action).
 

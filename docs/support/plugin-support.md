@@ -42,7 +42,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | ghcide core plugins                 | 1    |                          |
 | `hls-call-hierarchy-plugin`         | 1    |                          |
 | `hls-code-range-plugin`             | 1    |                          |
-| `hls-import-actions-plugin`   | 1    |                          |
+| `hls-explicit-imports-plugin`       | 1    |                          |
 | `hls-pragmas-plugin`                | 1    |                          |
 | `hls-refactor-plugin`               | 1    |                          |
 | `hls-alternate-number-plugin`       | 2    |                          |

@@ -9,7 +9,7 @@
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE ViewPatterns              #-}
-module Ide.Plugin.ImportActions
+module Ide.Plugin.ExplicitImports
   ( descriptor
   , descriptorForModules
   , abbreviateImportTitle
@@ -55,6 +55,10 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
 
+-- This plugin is named explicit-imports for historical reasons. Besides
+-- providing code actions and lenses to make imports explicit it also provides
+-- code actions and lens to refine imports.
+
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
 
@@ -88,7 +92,7 @@ descriptorForModules recorder modFilter plId =
   in (defaultPluginDescriptor plId)
     {
       -- This plugin provides a command handler
-      pluginCommands = [PluginCommand importCommandId "Import actions command" (runImportCommand recorder)],
+      pluginCommands = [PluginCommand importCommandId "Explicit import command" (runImportCommand recorder)],
       -- This plugin defines a new rule
       pluginRules = minimalImportsRule recorder modFilter,
       pluginHandlers =
@@ -120,7 +124,7 @@ runImportCommand _ _ rd = do
 -- the provider should produce one code lens associated to the import statement:
 -- > import Data.List (intercalate, sortBy)
 --
--- | The second one allows us to import functions directly from the original
+-- The second one allows us to import functions directly from the original
 -- module. For example, for the following import
 -- > import Random.ReExporting.Module (liftIO)
 -- the provider should produce one code lens associated to the import statement:
@@ -138,7 +142,10 @@ lensProvider _  state _ CodeLensParams {_textDocument = TextDocumentIdentifier {
         pure $ InL lens
       _ ->
         pure $ InL []
-  where generateLens :: Uri  -> Range -> Int -> CodeLens
+  where -- because these are non resolved lenses we only need the range and a
+        -- unique id to later resolve them with. These are for both refine
+        -- import lenses and for explicit import lenses.
+        generateLens :: Uri  -> Range -> Int -> CodeLens
         generateLens uri range int =
           CodeLens { _data_ = Just $ A.toJSON $ ResolveOne uri int
                    , _range = range
@@ -157,7 +164,12 @@ lensResolveProvider _ ideState plId cl uri rd@(ResolveOne _ uid)
     pure updatedCodeLens
   where mkCommand ::  PluginId -> ImportEdit -> Command
         mkCommand pId (ImportEdit{ieResType, ieText}) =
-          let title ExplicitImport = abbreviateImportTitle ieText
+          let -- The only new thing we need to provide to resolve a lens is the
+              -- title, as the unique Id is the same to resolve the lens title
+              -- as it is to apply the lens through a command.
+              -- The title is written differently depending on what type of lens
+              -- it is.
+              title ExplicitImport = abbreviateImportTitle ieText
               title RefineImport = "Refine imports to " <> T.intercalate ", " (T.lines ieText)
           in mkLspCommand pId importCommandId (title ieResType) (Just [A.toJSON rd])
 lensResolveProvider _ _ _ _ _ rd = do
@@ -181,10 +193,17 @@ codeActionProvider _ ideState _pId (CodeActionParams _ _ TextDocumentIdentifier 
     let relevantCodeActions = filterByRange newRange forCodeActions
         allExplicit =
           [InR $ mkCodeAction "Make all imports explicit" (Just $ A.toJSON $ ExplicitAll _uri)
-          | not $ null relevantCodeActions ]
+          -- We should only provide this code action if there are any code
+          -- of this type
+          | any (\x -> iaResType x == ExplicitImport) relevantCodeActions]
         allRefine =
           [InR $ mkCodeAction "Refine all imports" (Just $ A.toJSON $ RefineAll _uri)
-          | not $ null relevantCodeActions ]
+          -- We should only provide this code action if there are any code
+          -- of this type
+          | any (\x -> iaResType x == RefineImport) relevantCodeActions]
+        -- The only thing different in making the two types of code actions, is
+        -- the title. The actual resolve data type, ResolveOne is used by both
+        -- of them
         toCodeAction uri (ImportAction _ int ExplicitImport) =
           mkCodeAction "Make this import explicit" (Just $ A.toJSON $ ResolveOne uri int)
         toCodeAction uri (ImportAction _  int RefineImport) =
@@ -209,6 +228,8 @@ codeActionResolveProvider _ ideState _ ca _ rd =
 --------------------------------------------------------------------------------
 
 resolveWTextEdit :: IdeState -> IAResolveData -> ExceptT String (LspT Config IO) WorkspaceEdit
+-- Providing the edit for the command, or the resolve for the code action is
+-- completely generic, as all we need is the unique id and the text edit.
 resolveWTextEdit ideState (ResolveOne uri int) = do
   nfp <- getNormalizedFilePath uri
   (ImportActionsResult{forResolve}, pm) <-
@@ -252,6 +273,8 @@ instance NFData ImportActions
 type instance RuleResult ImportActions = ImportActionsResult
 
 data ResultType = ExplicitImport | RefineImport
+  deriving Eq
+
 data ImportActionsResult = ImportActionsResult
   { -- |For providing the code lenses we need to have a range, and a unique id
     -- that is later resolved to the new text for each import. It is stored in
@@ -266,7 +289,13 @@ data ImportActionsResult = ImportActionsResult
     -- we provide a textEdit to allow our code actions or code lens to be resolved
   , forResolve     :: IM.IntMap ImportEdit }
 
+-- |For resolving code lenses and code actions we need standard text edit stuff,
+-- such as range and text, and then we need the result type, because we use this
+-- for code lenses which need to create a appropriate title
 data ImportEdit = ImportEdit { ieRange :: Range, ieText :: T.Text, ieResType :: ResultType}
+
+-- |The necessary data for providing code actions: the range, a unique ID for
+-- later resolving the action, and the type of action for giving a proper name.
 data ImportAction = ImportAction { iaRange :: Range, iaUniqueId :: Int, iaResType :: ResultType}
 
 instance Show ImportActionsResult where show _ = "<ImportActionsResult>"

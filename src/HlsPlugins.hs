@@ -36,8 +36,8 @@ import qualified Ide.Plugin.HaddockComments        as HaddockComments
 import qualified Ide.Plugin.Eval                   as Eval
 #endif
 
-#if hls_importActions
-import qualified Ide.Plugin.ImportActions          as ImportActions
+#if hls_importLens
+import qualified Ide.Plugin.ExplicitImports        as ExplicitImports
 #endif
 
 
@@ -192,8 +192,8 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #if hls_eval
       let pId = "eval" in Eval.descriptor (pluginRecorder pId) pId:
 #endif
-#if hls_importActions
-      let pId = "importActions" in ImportActions.descriptor (pluginRecorder pId) pId:
+#if hls_importLens
+      let pId = "importLens" in ExplicitImports.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_qualifyImportedNames
       QualifyImportedNames.descriptor "qualifyImportedNames" :

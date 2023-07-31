@@ -180,8 +180,8 @@ jobs:
         run: cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || cabal test hls-tactics-plugin --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-import-actions-plugin test suite
-        run: cabal test hls-import-actions-plugin --test-options="$TEST_OPTS" || cabal test hls-import-actions-plugin --test-options="$TEST_OPTS"
+        name: Test hls-explicit-imports-plugin test suite
+        run: cabal test hls-explicit-imports-plugin --test-options="$TEST_OPTS" || cabal test hls-explicit-imports-plugin --test-options="$TEST_OPTS"
 
       - if: matrix.test
         name: Test hls-call-hierarchy-plugin test suite

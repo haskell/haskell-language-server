@@ -135,7 +135,7 @@ configurations:
   - ghcide-completions
   - ghcide-type-lenses
   - hlint
-  - importActions
+  - importLens
   - moduleName
   - ormolu
   - pragmas
@@ -162,7 +162,7 @@ configurations:
 # - ghcide-type-lenses
 # - haddockComments
 # - hlint
-# - importActions
+# - importLens
 # - moduleName
 # # - ormolu
 # - pragmas
