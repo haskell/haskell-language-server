@@ -6,6 +6,7 @@
 module Development.IDE.Plugin.HLS
     (
       asGhcIdePlugin
+    , toResponseError
     , Log(..)
     ) where
 
@@ -80,11 +81,17 @@ prettyResponseError err = errorCode <> ":" <+> errorBody
         errorCode = pretty $ show $ err ^. L.code
         errorBody = pretty $ err ^. L.message
 
-pluginNotEnabled :: SMethod m -> [(PluginId, b, a)] -> Text
-pluginNotEnabled method availPlugins =
-    "No plugin enabled for " <> T.pack (show method) <> ", potentially available: "
-        <> (T.intercalate ", " $ map (\(PluginId plid, _, _) -> plid) availPlugins)
-
+noPluginEnabled :: Recorder (WithPriority Log) -> SMethod m -> [PluginId] -> IO (Either ResponseError c)
+noPluginEnabled recorder m fs' = do
+  logWith recorder Warning (LogNoPluginForMethod $ Some m)
+  let err = ResponseError (InR ErrorCodes_MethodNotFound) msg Nothing
+      msg = pluginNotEnabled m fs'
+  return $ Left err
+  where pluginNotEnabled :: SMethod m -> [PluginId] -> Text
+        pluginNotEnabled method availPlugins =
+            "No plugin enabled for " <> T.pack (show method) <> ", potentially available: "
+                <> (T.intercalate ", " $ map (\(PluginId plid) -> plid) availPlugins)
+  
 pluginDoesntExist :: PluginId -> Text
 pluginDoesntExist (PluginId pid) = "Plugin " <> pid <> " doesn't exist"
 
@@ -111,13 +118,6 @@ logAndReturnError :: Recorder (WithPriority Log) -> PluginId -> (LSPErrorCodes |
 logAndReturnError recorder p errCode msg = do
     let err = ResponseError errCode msg Nothing
     logWith recorder Warning $ LogResponseError p err
-    pure $ Left err
-
--- | Logs the provider error before returning it to the caller
-logAndReturnError' :: Recorder (WithPriority Log) -> (LSPErrorCodes |? ErrorCodes) -> Log -> LSP.LspT Config IO (Either ResponseError a)
-logAndReturnError' recorder errCode msg = do
-    let err = ResponseError errCode (fromString $ show msg) Nothing
-    logWith recorder Warning $ msg
     pure $ Left err
 
 -- | Map a set of plugins to the underlying ghcide engine.
@@ -219,8 +219,15 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
           Just (PluginCommand _ _ f) -> case A.fromJSON arg of
             A.Error err -> logAndReturnError recorder p (InR ErrorCodes_InvalidParams) (failedToParseArgs com p err arg)
             A.Success a -> do
-              (first (toResponseError . (p,)) <$> runExceptT (f ide a)) `catchAny` -- See Note [Exception handling in plugins]
-                (\e -> logAndReturnError' recorder (InR ErrorCodes_InternalError) (ExceptionInPlugin p (Some SMethod_WorkspaceApplyEdit) e))
+              res <- runExceptT (f ide a) `catchAny` -- See Note [Exception handling in plugins]
+                (\e -> pure $ Left $ PluginInternalError (exceptionInPlugin p SMethod_WorkspaceExecuteCommand e))
+              case res of
+                (Left (PluginRequestRefused _)) ->
+                  liftIO $ noPluginEnabled recorder SMethod_WorkspaceExecuteCommand (fst <$> ecs)
+                (Left pluginErr) -> do
+                  liftIO $ logErrors recorder [(p, pluginErr)]
+                  pure $ Left $ toResponseError (p, pluginErr)
+                (Right result) -> pure $ Right result
 
 -- ---------------------------------------------------------------------
 
@@ -242,7 +249,7 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
         let fs = filter (\(_, desc, _) -> pluginEnabled m params desc config) fs'
         -- Clients generally don't display ResponseErrors so instead we log any that we come across
         case nonEmpty fs of
-          Nothing -> liftIO $ noPluginEnabled m fs'
+          Nothing -> liftIO $ noPluginEnabled recorder m ((\(x, _, _) -> x) <$> fs')
           Just fs -> do
             let  handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
             es <- runConcurrently exceptionInPlugin m handlers ide params
@@ -255,16 +262,11 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
                     noRefused (_, _)                      = True
                     filteredErrs = filter noRefused errs
                 case nonEmpty filteredErrs of
-                  Nothing -> liftIO $ noPluginEnabled m fs'
+                  Nothing -> liftIO $ noPluginEnabled recorder m ((\(x, _, _) -> x) <$> fs')
                   Just xs -> pure $ Left $ combineErrors xs
               Just xs -> do
                 pure $ Right $ combineResponses m config caps params xs
-    noPluginEnabled :: SMethod m -> [(PluginId, b, a)] -> IO (Either ResponseError c)
-    noPluginEnabled m fs' = do
-      logWith recorder Warning (LogNoPluginForMethod $ Some m)
-      let err = ResponseError (InR ErrorCodes_MethodNotFound) msg Nothing
-          msg = pluginNotEnabled m fs'
-      return $ Left err
+
 
 -- ---------------------------------------------------------------------
 
@@ -312,7 +314,6 @@ runConcurrently msg method fs a b = forConcurrently fs $ \(pid,f) -> otTracedPro
 combineErrors :: NonEmpty (PluginId, PluginError) -> ResponseError
 combineErrors (x NE.:| []) = toResponseError x
 combineErrors xs = toResponseError $ NE.last $ NE.sortWith (toPriority . snd) xs
-
 
 toResponseError :: (PluginId, PluginError) -> ResponseError
 toResponseError (PluginId plId, err) =
