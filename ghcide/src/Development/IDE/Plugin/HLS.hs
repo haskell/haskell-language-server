@@ -81,18 +81,17 @@ prettyResponseError err = errorCode <> ":" <+> errorBody
         errorCode = pretty $ show $ err ^. L.code
         errorBody = pretty $ err ^. L.message
 
-pluginNotEnabled :: SMethod m -> [PluginId] -> Text
-pluginNotEnabled method availPlugins =
-    "No plugin enabled for " <> T.pack (show method) <> ", potentially available: "
-        <> (T.intercalate ", " $ map (\(PluginId plid) -> plid) availPlugins)
-
 noPluginEnabled :: Recorder (WithPriority Log) -> SMethod m -> [PluginId] -> IO (Either ResponseError c)
 noPluginEnabled recorder m fs' = do
   logWith recorder Warning (LogNoPluginForMethod $ Some m)
   let err = ResponseError (InR ErrorCodes_MethodNotFound) msg Nothing
       msg = pluginNotEnabled m fs'
   return $ Left err
-
+  where pluginNotEnabled :: SMethod m -> [PluginId] -> Text
+        pluginNotEnabled method availPlugins =
+            "No plugin enabled for " <> T.pack (show method) <> ", potentially available: "
+                <> (T.intercalate ", " $ map (\(PluginId plid) -> plid) availPlugins)
+  
 pluginDoesntExist :: PluginId -> Text
 pluginDoesntExist (PluginId pid) = "Plugin " <> pid <> " doesn't exist"
 
