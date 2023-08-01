@@ -1018,12 +1018,12 @@ gotoDependencyDefinitionTests =
         ]
     where
         dependencyTest :: TestTree
-        dependencyTest = testSessionWithExtraFiles "dependency" "gotoDefinition in lucid" $
+        dependencyTest = testSessionWithExtraFiles "dependency" "gotoDefinition in async" $
             \dir -> do
                 doc <- openTestDataDoc (dir </> "Dependency" <.> "hs")
-                _mHieFile <- fileDoneIndexing ["Lucid", "Html5.hie"]
-                defs <- getDefinitions doc (Position 6 12)
-                let expRange = Range (Position 1125 0) (Position 1125 6)
+                _hieFile <- fileDoneIndexing ["Control", "Concurrent", "Async.hie"]
+                defs <- getDefinitions doc (Position 5 20)
+                let expRange = Range (Position 430 22) (Position 430 36)
                 case defs of
                     InL (Definition (InR [Location fp actualRange])) ->
                         liftIO $ do
@@ -1031,19 +1031,19 @@ gotoDependencyDefinitionTests =
                                 locationDirectories =
                                     maybe [] splitDirectories $
                                         uriToFilePath fp
-                            assertBool "width_ found in a module that is not Lucid.Html5"
-                                $ ["Lucid", "Html5.hs"]
+                            assertBool "AsyncCancelled found in a module that is not Control.Concurrent.Async"
+                                $ ["Control", "Concurrent", "Async.hs"]
                                     `isSuffixOf` locationDirectories
                             actualRange @?= expRange
                     wrongLocation ->
                         liftIO $
-                            assertFailure $ "Wrong location for width_: "
+                            assertFailure $ "Wrong location for AsyncCancelled: "
                                 ++ show wrongLocation
-        fileDoneIndexing :: [String] -> Session (Maybe FilePath)
+        fileDoneIndexing :: [String] -> Session FilePath
         fileDoneIndexing fpSuffix =
-            skipManyTill anyMessage (indexedFile <|> doneIndexing)
+            skipManyTill anyMessage indexedFile
             where
-                indexedFile :: Session (Maybe FilePath)
+                indexedFile :: Session FilePath
                 indexedFile = do
                     NotMess TNotificationMessage{_params} <-
                         customNotification (Proxy @"ghcide/reference/ready")
@@ -1051,21 +1051,9 @@ gotoDependencyDefinitionTests =
                         A.Success fp -> do
                             let fpDirs :: [String]
                                 fpDirs = splitDirectories fp
-                            bool Applicative.empty (pure (Just fp)) $
+                            bool Applicative.empty (pure fp) $
                                 fpSuffix `isSuffixOf` fpDirs
                         other -> error $ "Failed to parse ghcide/reference/ready file: " <> show other
-                doneIndexing :: Session (Maybe FilePath)
-                doneIndexing = satisfyMaybe $ \case
-                    FromServerMess SMethod_Progress (TNotificationMessage _ _ (ProgressParams t (Lens.preview _workDoneProgressEnd -> Just params))) ->
-                        case params of
-                            (WorkDoneProgressEnd _ m) ->
-                                case m of
-                                    Just message -> bool Nothing (Just Nothing) $
-                                        "Finished indexing" `T.isPrefixOf` message
-                                    _ -> Nothing
-                            _ -> Nothing
-                    _ -> Nothing
-
 
 findDefinitionAndHoverTests :: TestTree
 findDefinitionAndHoverTests = let

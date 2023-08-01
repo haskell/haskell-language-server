@@ -1,5 +1,0 @@
-packages: .
-source-repository-package
-  type:git
-  location: https://github.com/chrisdone/lucid.git
-  tag: 3dd3fbf79d58e377e38df27cc67f78ad9fe8e031

@@ -1,7 +1,6 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Dependency where
 
-import Lucid (Attributes, width_)
+import Control.Concurrent.Async (AsyncCancelled(..))
 
-width4em :: Attributes
-width4em = width_ "4em"
+asyncCancelled :: AsyncCancelled
+asyncCancelled = AsyncCancelled
