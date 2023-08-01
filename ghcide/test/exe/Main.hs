@@ -41,8 +41,10 @@
 
 module Main (main) where
 
+import           Data.Bool                                (bool)
 import Data.Row
 import           Control.Applicative.Combinators
+import           Control.Applicative.Combinators          as Applicative
 import           Control.Concurrent
 import           Control.Exception                        (bracket_, catch,
                                                            finally)
@@ -224,6 +226,7 @@ main = do
     , codeLensesTests
     , outlineTests
     , highlightTests
+    , gotoDependencyDefinitionTests
     , findDefinitionAndHoverTests
     , pluginSimpleTests
     , pluginParsedResultTests
@@ -1007,6 +1010,62 @@ checkDefs (defToLocation -> defs) mkExpectations = traverse_ check =<< mkExpecta
 
 canonicalizeLocation :: Location -> IO Location
 canonicalizeLocation (Location uri range) = Location <$> canonicalizeUri uri <*> pure range
+
+gotoDependencyDefinitionTests :: TestTree
+gotoDependencyDefinitionTests =
+    testGroup "gotoDefinition for dependencies"
+        [ dependencyTest
+        ]
+    where
+        dependencyTest :: TestTree
+        dependencyTest = testSessionWithExtraFiles "dependency" "gotoDefinition in lucid" $
+            \dir -> do
+                doc <- openTestDataDoc (dir </> "Dependency" <.> "hs")
+                _mHieFile <- fileDoneIndexing ["Lucid", "Html5.hie"]
+                defs <- getDefinitions doc (Position 6 12)
+                let expRange = Range (Position 1125 0) (Position 1125 6)
+                case defs of
+                    InL (Definition (InR [Location fp actualRange])) ->
+                        liftIO $ do
+                            let locationDirectories :: [String]
+                                locationDirectories =
+                                    maybe [] splitDirectories $
+                                        uriToFilePath fp
+                            assertBool "width_ found in a module that is not Lucid.Html5"
+                                $ ["Lucid", "Html5.hs"]
+                                    `isSuffixOf` locationDirectories
+                            actualRange @?= expRange
+                    wrongLocation ->
+                        liftIO $
+                            assertFailure $ "Wrong location for width_: "
+                                ++ show wrongLocation
+        fileDoneIndexing :: [String] -> Session (Maybe FilePath)
+        fileDoneIndexing fpSuffix =
+            skipManyTill anyMessage (indexedFile <|> doneIndexing)
+            where
+                indexedFile :: Session (Maybe FilePath)
+                indexedFile = do
+                    NotMess TNotificationMessage{_params} <-
+                        customNotification (Proxy @"ghcide/reference/ready")
+                    case A.fromJSON _params of
+                        A.Success fp -> do
+                            let fpDirs :: [String]
+                                fpDirs = splitDirectories fp
+                            bool Applicative.empty (pure (Just fp)) $
+                                fpSuffix `isSuffixOf` fpDirs
+                        other -> error $ "Failed to parse ghcide/reference/ready file: " <> show other
+                doneIndexing :: Session (Maybe FilePath)
+                doneIndexing = satisfyMaybe $ \case
+                    FromServerMess SMethod_Progress (TNotificationMessage _ _ (ProgressParams t (Lens.preview _workDoneProgressEnd -> Just params))) ->
+                        case params of
+                            (WorkDoneProgressEnd _ m) ->
+                                case m of
+                                    Just message -> bool Nothing (Just Nothing) $
+                                        "Finished indexing" `T.isPrefixOf` message
+                                    _ -> Nothing
+                            _ -> Nothing
+                    _ -> Nothing
+
 
 findDefinitionAndHoverTests :: TestTree
 findDefinitionAndHoverTests = let
