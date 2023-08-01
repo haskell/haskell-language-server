@@ -1,6 +1,6 @@
 module Bar where
 
-import Data.Aeson (Value(Null))
+import Data.Set (Set, empty)
 
 a = 42
 
@@ -10,5 +10,5 @@ a = 42
 -- the number of lines in Foo.hs.
 b = 43
 
-nullValue :: Value
-nullValue = Null
+emptySet :: Set Integer
+emptySet = empty
