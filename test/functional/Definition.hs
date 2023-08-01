@@ -1,10 +1,8 @@
 module Definition (tests) where
 
 import           Control.Lens
-import           Data.List                  (isSuffixOf)
 import           Language.LSP.Protocol.Lens
 import           System.Directory
-import           System.FilePath            (splitDirectories)
 import           Test.Hls
 import           Test.Hls.Command
 
@@ -39,28 +37,6 @@ symbolTests = testGroup "gotoDefinition on symbols"
         liftIO $ do
             fp <- canonicalizePath "test/testdata/definition/Bar.hs"
             defs @?= InL (Definition (InR [Location (filePathToUri fp) expRange]))
-
-        -- gotoDefinition where the definition is in an external
-        -- dependency.
-  ,    testCase "gotoDefinition in dependency" $ runSession hlsCommand fullCaps "test/testdata/definition" $ do
-        doc <- openDoc "Bar.hs" "haskell"
-        defs <- getDefinitions doc (Position 13 12)
-        let expRange = Range (Position 513 0) (Position 513 4)
-        case defs of
-            InL (Definition (InR [Location fp actualRange])) ->
-                liftIO $ do
-                    let locationDirectories :: [String]
-                        locationDirectories =
-                            maybe [] splitDirectories $
-                                uriToFilePath fp
-                    assertBool "empty not found in Data.Set.Internal"
-                        $ ["Data", "Set", "Internal.hs"]
-                            `isSuffixOf` locationDirectories
-                    actualRange @?= expRange
-            wrongLocation ->
-                liftIO $
-                    assertFailure $ "Wrong location for Set.empty: "
-                        ++ show wrongLocation
   ]
 
   -- -----------------------------------

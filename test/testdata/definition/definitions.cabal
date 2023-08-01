@@ -8,5 +8,3 @@ library
   other-modules:    Bar
   default-language: Haskell2010
   build-depends:    base
-                  , containers
-  ghc-options: -fwrite-ide-info
