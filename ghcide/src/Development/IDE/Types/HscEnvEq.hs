@@ -179,7 +179,28 @@ newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
         packages = Set.fromList
             $ map Package
             $ Map.elems
-            $ getUnitInfoMap hscEnv
+            $ Map.filterWithKey (\uid _ -> uid `Set.member` dependencyIds) unitInfoMap
+            where
+                unitInfoMap :: UnitInfoMap
+                unitInfoMap = getUnitInfoMap hscEnv
+                dependencyIds :: Set UnitId
+                dependencyIds =
+                    calculateTransitiveDependencies unitInfoMap directDependencyIds directDependencyIds
+                directDependencyIds :: Set UnitId
+                directDependencyIds = Set.fromList $ map toUnitId $ explicitUnits $ unitState hscEnv
+        calculateTransitiveDependencies :: UnitInfoMap -> Set UnitId -> Set UnitId -> Set UnitId
+        calculateTransitiveDependencies unitInfoMap allDependencies newDepencencies
+            | Set.null newDepencencies = allDependencies
+            | otherwise = calculateTransitiveDependencies unitInfoMap nextAll nextNew
+            where
+                nextAll :: Set UnitId
+                nextAll = Set.union allDependencies nextNew
+                nextNew :: Set UnitId
+                nextNew = flip Set.difference allDependencies
+                    $ Set.unions
+                    $ map (Set.fromList . unitDepends)
+                    $ Map.elems
+                    $ Map.filterWithKey (\uid _ -> uid `Set.member` newDepencencies) unitInfoMap
         getModulesForPackage :: Package -> [Module]
         getModulesForPackage (Package package) =
             map makeModule allModules
