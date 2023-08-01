@@ -31,7 +31,6 @@ packages:
   - ./plugins/hls-pragmas-plugin
   - ./plugins/hls-qualify-imported-names-plugin
   - ./plugins/hls-refactor-plugin
-  - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin

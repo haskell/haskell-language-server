@@ -1,4 +1,4 @@
-module A where
+module ExplicitA where
 
 a1 :: String
 a1 = "a1"

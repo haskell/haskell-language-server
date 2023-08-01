@@ -1,4 +1,4 @@
-module B where 
+module RefineB where 
 
 b1 :: String
 b1 = "b1"

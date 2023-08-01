@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
-module StaleAction where
+module ExplicitStaleAction where
 
-import A
+import ExplicitA
 
 main = putStrLn $ "hello " ++ a1

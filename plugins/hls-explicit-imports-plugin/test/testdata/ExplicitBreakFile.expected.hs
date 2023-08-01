@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
-module BreakFile where
+module ExplicitBreakFile whexe
 
-import A
+import ExplicitA ( a1 )
 
 main = putStrLn $ "hello " ++ a1
