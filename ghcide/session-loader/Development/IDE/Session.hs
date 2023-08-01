@@ -34,8 +34,8 @@ import           Data.Aeson                           hiding (Error)
 import           Data.Bifunctor
 import qualified Data.ByteString.Base16               as B16
 import qualified Data.ByteString.Char8                as B
-import           Data.Default
 import           Data.Char                            (isLower)
+import           Data.Default
 import           Data.Either.Extra
 import           Data.Function
 import           Data.Hashable
@@ -943,7 +943,7 @@ renderCradleError cradle nfp (CradleError _ _ec ms) =
 
 -- | Information included in Multi Cradle error messages
 data MultiCradleErr = MultiCradleErr
-  { mcPwd :: FilePath
+  { mcPwd      :: FilePath
   , mcFilePath :: FilePath
   , mcPrefixes :: [(FilePath, String)]
   } deriving (Show)
@@ -978,15 +978,10 @@ parseMultiCradleErr ms = do
       guard (listToMaybe (reverse s) == Just end)
       pure $ drop 1 $ take (length s - 1) s
 
-    
-
-
-
-
 multiCradleErrMessage :: MultiCradleErr -> [String]
 multiCradleErrMessage e =
-    [ "Loading the module '" <> moduleFileName <> "' failed. It seems that it is not listed in your .cabal file!"
-    , "Perhaps you need to add `"<> moduleName <> "` to other-modules or exposed-modules" --  named 'example' in example.cabal."
+    [ "Loading the module '" <> moduleFileName <> "' failed. It may not be listed in your .cabal file!"
+    , "Perhaps you need to add `"<> moduleName <> "` to other-modules or exposed-modules."
     , "For more information, visit: https://cabal.readthedocs.io/en/3.4/developing-packages.html#modules-included-in-the-package"
     , ""
     ] <> map prefix (mcPrefixes e)
@@ -996,11 +991,6 @@ multiCradleErrMessage e =
     moduleName = intercalate "." $ map dropExtension $ dropWhile isSourceFolder $ splitDirectories moduleFileName
     isSourceFolder p = all isLower $ take 1 p
     prefix (f, r) = f <> " - " <> r
-
-
-
-
-
 
 -- See Note [Multi Cradle Dependency Info]
 type DependencyInfo = Map.Map FilePath (Maybe UTCTime)
