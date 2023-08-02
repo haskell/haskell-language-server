@@ -246,21 +246,21 @@ runEvalCmd plId st EvalParams{..} =
 -- also be loaded into the environment.
 --
 -- The interactive context and interactive dynamic flags are also set appropiately.
-initialiseSessionForEval :: Bool -> IdeState -> NormalizedFilePath -> ExceptT PluginError (LspM Config) HscEnv
+initialiseSessionForEval :: Bool -> IdeState -> NormalizedFilePath -> IO HscEnv
 initialiseSessionForEval needs_quickcheck st nfp = do
-  (ms, env1) <- runActionE "runEvalCmd" st $ do
+  (ms, env1) <- runAction "runEvalCmd" st $ do
 
-    ms <- msrModSummary <$> useE GetModSummary nfp
-    deps_hsc <- hscEnv <$> useE GhcSessionDeps nfp
+    ms <- msrModSummary <$> use_ GetModSummary nfp
+    deps_hsc <- hscEnv <$> use_ GhcSessionDeps nfp
 
     linkables_needed <- transitiveDeps <$> useNoFile_ GetModuleGraph <*> pure nfp
-    linkables <- usesE GetLinkable (nfp : maybe [] transitiveModuleDeps linkables_needed)
+    linkables <- uses_ GetLinkable (nfp : maybe [] transitiveModuleDeps linkables_needed)
     -- We unset the global rdr env in mi_globals when we generate interfaces
     -- See Note [Clearing mi_globals after generating an iface]
     -- However, the eval plugin (setContext specifically) requires the rdr_env
     -- for the current module - so get it from the Typechecked Module and add
     -- it back to the iface for the current module.
-    rdr_env <- tcg_rdr_env . tmrTypechecked <$> useE TypeCheck nfp
+    rdr_env <- tcg_rdr_env . tmrTypechecked <$> use_ TypeCheck nfp
     let linkable_hsc = loadModulesHome (map (addRdrEnv . linkableHomeMod) linkables) deps_hsc
         addRdrEnv hmi
           | iface <- hm_iface hmi
