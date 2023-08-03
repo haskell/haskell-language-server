@@ -984,7 +984,9 @@ indexHieFile se hiePath sourceFile !hash hf = do
       whenJust (lspEnv se) $ \env -> LSP.runLspT env $
         when (coerce $ ideTesting se) $
           LSP.sendNotification (LSP.SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
-            toJSON $ fromNormalizedFilePath hiePath
+            toJSON $ case sourceFile of
+              HieDb.RealFile sourceFilePath -> sourceFilePath
+              HieDb.FakeFile _ -> fromNormalizedFilePath hiePath
       whenJust mdone $ \done ->
         modifyVar_ indexProgressToken $ \tok -> do
           whenJust (lspEnv se) $ \env -> LSP.runLspT env $
