@@ -8,8 +8,8 @@ import           Data.Function                                ((&))
 import           Data.Map                                     (Map)
 import qualified Data.Map                                     as Map
 import qualified Data.Text                                    as T
-import           Ide.Logger                                  (Priority (..),
-                                                              logWith)
+import           Ide.Logger                                   (Priority (..),
+                                                               logWith)
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Types
 import           Ide.Plugin.Cabal.Completion.Types
