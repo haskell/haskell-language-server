@@ -72,7 +72,7 @@ library
         hls-plugin-api == 2.3.0.0,
         lens,
         list-t,
-        hiedb == 0.4.3.*,
+        hiedb ^>= 0.4.3.0,
         lsp-types ^>= 2.0.2.0,
         lsp ^>= 2.2.0.0 ,
         mtl,
@@ -154,6 +154,7 @@ library
         Development.IDE.Core.Actions
         Development.IDE.Main.HeapStats
         Development.IDE.Core.Debouncer
+        Development.IDE.Core.Dependencies
         Development.IDE.Core.FileStore
         Development.IDE.Core.FileUtils
         Development.IDE.Core.IdeConfiguration
@@ -238,7 +239,7 @@ library
         -- We eventually want to build with Werror fully, but we haven't
         -- finished purging the warnings, so some are set to not be errors
         -- for now
-        ghc-options: -Werror 
+        ghc-options: -Werror
                      -Wwarn=unused-packages
                      -Wwarn=unrecognised-pragmas
                      -Wwarn=dodgy-imports
@@ -248,7 +249,7 @@ library
                      -Wwarn=incomplete-patterns
                      -Wwarn=overlapping-patterns
                      -Wwarn=incomplete-record-updates
-    
+
     -- ambiguous-fields is only understood by GHC >= 9.2, so we only disable it
     -- then. The above comment goes for here too -- this should be understood to
     -- be temporary until we can remove these warnings.

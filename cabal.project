@@ -34,6 +34,11 @@ packages:
          ./plugins/hls-refactor-plugin
          ./plugins/hls-overloaded-record-dot-plugin
 
+source-repository-package
+  type:git
+  location: https://github.com/nlander/HieDb.git
+  tag: f10051a6dc1b809d5f40a45beab92205d1829736
+
 -- Standard location for temporary packages needed for particular environments
 -- For example it is used in the project gitlab mirror to help in the MAcOS M1 build script
 -- See https://github.com/haskell/haskell-language-server/blob/master/.gitlab-ci.yml

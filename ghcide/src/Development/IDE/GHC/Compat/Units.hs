@@ -24,6 +24,9 @@ module Development.IDE.GHC.Compat.Units (
     -- * UnitInfo
     UnitInfo,
     unitExposedModules,
+    unitHiddenModules,
+    unitLibraryDirs,
+    UnitInfo.unitId,
     unitDepends,
     unitHaddockInterfaces,
     mkUnit,
@@ -215,6 +218,17 @@ lookupUnit env pid = State.lookupUnit (unitState env) pid
 
 preloadClosureUs :: HscEnv -> PreloadUnitClosure
 preloadClosureUs = State.preloadClosure . unitState
+
+unitHiddenModules :: UnitInfo -> [ModuleName]
+unitHiddenModules = UnitInfo.unitHiddenModules
+
+unitLibraryDirs :: UnitInfo -> [FilePath]
+unitLibraryDirs =
+#if MIN_VERSION_ghc(9,2,0)
+  fmap ST.unpack . UnitInfo.unitLibraryDirs
+#else
+  UnitInfo.unitLibraryDirs
+#endif
 
 unitHaddockInterfaces :: UnitInfo -> [FilePath]
 unitHaddockInterfaces =

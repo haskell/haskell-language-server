@@ -16,34 +16,34 @@ module Development.IDE.Core.RuleTypes(
     module Development.IDE.Core.RuleTypes
     ) where
 
-import           Control.DeepSeq
-import           Control.Exception                            (assert)
-import           Control.Lens
-import           Data.Aeson.Types                             (Value)
-import           Data.Hashable
-import qualified Data.Map                                     as M
-import           Data.Time.Clock.POSIX
-import           Data.Typeable
-import           Development.IDE.GHC.Compat                   hiding
-                                                              (HieFileResult)
-import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.CoreFile
-import           Development.IDE.GHC.Util
-import           Development.IDE.Graph
-import           Development.IDE.Import.DependencyInformation
-import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
-import           Development.IDE.Types.KnownTargets
-import           GHC.Generics                                 (Generic)
+import                          Control.DeepSeq
+import                          Control.Exception                            (assert)
+import                          Control.Lens
+import                          Data.Aeson.Types                             (Value)
+import                          Data.Hashable
+import                qualified Data.Map                                     as M
+import                          Data.Time.Clock.POSIX
+import                          Data.Typeable
+import                          Development.IDE.GHC.Compat                   hiding
+                                                                             (HieFileResult)
+import                          Development.IDE.GHC.Compat.Util
+import                          Development.IDE.GHC.CoreFile
+import                          Development.IDE.GHC.Util
+import                          Development.IDE.Graph
+import                          Development.IDE.Import.DependencyInformation
+import {-# SOURCE #-}           Development.IDE.Types.HscEnvEq               (HscEnvEq)
+import                          Development.IDE.Types.KnownTargets
+import                          GHC.Generics                                 (Generic)
 
-import           Data.ByteString                              (ByteString)
-import           Data.Text                                    (Text)
-import           Development.IDE.Import.FindImports           (ArtifactsLocation)
-import           Development.IDE.Spans.Common
-import           Development.IDE.Spans.LocalBindings
-import           Development.IDE.Types.Diagnostics
-import           GHC.Serialized                               (Serialized)
-import           Language.LSP.Protocol.Types                  (Int32,
-                                                               NormalizedFilePath)
+import                          Data.ByteString                              (ByteString)
+import                          Data.Text                                    (Text)
+import                          Development.IDE.Import.FindImports           (ArtifactsLocation)
+import                          Development.IDE.Spans.Common
+import                          Development.IDE.Spans.LocalBindings
+import                          Development.IDE.Types.Diagnostics
+import                          GHC.Serialized                               (Serialized)
+import                          Language.LSP.Protocol.Types                  (Int32,
+                                                                              NormalizedFilePath)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)

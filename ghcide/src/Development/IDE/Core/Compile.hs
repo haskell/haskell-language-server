@@ -925,23 +925,23 @@ spliceExpressions Splices{..} =
 -- TVar to 0 in order to set it up for a fresh indexing session. Otherwise, we
 -- can just increment the 'indexCompleted' TVar and exit.
 --
-indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Util.Fingerprint -> Compat.HieFile -> IO ()
-indexHieFile se mod_summary srcPath !hash hf = do
+indexHieFile :: ShakeExtras -> NormalizedFilePath -> HieDb.SourceFile -> Util.Fingerprint -> Compat.HieFile -> IO ()
+indexHieFile se hiePath sourceFile !hash hf = do
  IdeOptions{optProgressStyle} <- getIdeOptionsIO se
  atomically $ do
   pending <- readTVar indexPending
-  case HashMap.lookup srcPath pending of
+  case HashMap.lookup hiePath pending of
     Just pendingHash | pendingHash == hash -> pure () -- An index is already scheduled
     _ -> do
       -- hiedb doesn't use the Haskell src, so we clear it to avoid unnecessarily keeping it around
       let !hf' = hf{hie_hs_src = mempty}
-      modifyTVar' indexPending $ HashMap.insert srcPath hash
+      modifyTVar' indexPending $ HashMap.insert hiePath hash
       writeTQueue indexQueue $ \withHieDb -> do
         -- We are now in the worker thread
         -- Check if a newer index of this file has been scheduled, and if so skip this one
         newerScheduled <- atomically $ do
           pendingOps <- readTVar indexPending
-          pure $ case HashMap.lookup srcPath pendingOps of
+          pure $ case HashMap.lookup hiePath pendingOps of
             Nothing          -> False
             -- If the hash in the pending list doesn't match the current hash, then skip
             Just pendingHash -> pendingHash /= hash
@@ -949,10 +949,8 @@ indexHieFile se mod_summary srcPath !hash hf = do
           -- Using bracket, so even if an exception happen during withHieDb call,
           -- the `post` (which clean the progress indicator) will still be called.
           bracket_ (pre optProgressStyle) post $
-            withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
+            withHieDb (\db -> HieDb.addRefsFromLoaded db (fromNormalizedFilePath hiePath) sourceFile hash hf')
   where
-    mod_location    = ms_location mod_summary
-    targetPath      = Compat.ml_hie_file mod_location
     HieDbWriter{..} = hiedbWriter se
 
     -- Get a progress token to report progress and update it for the current file
@@ -1016,7 +1014,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
       mdone <- atomically $ do
         -- Remove current element from pending
         pending <- stateTVar indexPending $
-          dupe . HashMap.update (\pendingHash -> guard (pendingHash /= hash) $> pendingHash) srcPath
+          dupe . HashMap.update (\pendingHash -> guard (pendingHash /= hash) $> pendingHash) hiePath
         modifyTVar' indexCompleted (+1)
         -- If we are done, report and reset completed
         whenMaybe (HashMap.null pending) $
@@ -1024,7 +1022,9 @@ indexHieFile se mod_summary srcPath !hash hf = do
       whenJust (lspEnv se) $ \env -> LSP.runLspT env $
         when (coerce $ ideTesting se) $
           LSP.sendNotification (LSP.SMethod_CustomMethod (Proxy @"ghcide/reference/ready")) $
-            toJSON $ fromNormalizedFilePath srcPath
+            toJSON $ case sourceFile of
+              HieDb.RealFile sourceFilePath -> sourceFilePath
+              HieDb.FakeFile _ -> fromNormalizedFilePath hiePath
       whenJust mdone $ \done ->
         modifyVar_ indexProgressToken $ \tok -> do
           whenJust (lspEnv se) $ \env -> LSP.runLspT env $
@@ -1045,7 +1045,7 @@ writeAndIndexHieFile hscEnv se mod_summary srcPath exports ast source =
       GHC.mkHieFile' mod_summary exports ast source
     atomicFileWrite se targetPath $ flip GHC.writeHieFile hf
     hash <- Util.getFileHash targetPath
-    indexHieFile se mod_summary srcPath hash hf
+    indexHieFile se (toNormalizedFilePath' targetPath) (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf
   where
     dflags       = hsc_dflags hscEnv
     mod_location = ms_location mod_summary
@@ -1779,19 +1779,19 @@ pathToModuleName = mkModuleName . map rep
 
   - CPP clauses should be placed at the end of the imports section. The clauses
   should be ordered by the GHC version they target from earlier to later versions,
-  with negative if clauses coming before positive if clauses of the same 
-  version. (If you think about which GHC version a clause activates for this 
+  with negative if clauses coming before positive if clauses of the same
+  version. (If you think about which GHC version a clause activates for this
   should make sense `!MIN_VERSION_GHC(9,0,0)` refers to 8.10 and lower which is
-  a earlier version than `MIN_VERSION_GHC(9,0,0)` which refers to versions 9.0 
+  a earlier version than `MIN_VERSION_GHC(9,0,0)` which refers to versions 9.0
   and later). In addition there should be a space before and after each CPP
   clause.
 
-  - In if clauses that use `&&` and depend on more than one statement, the 
+  - In if clauses that use `&&` and depend on more than one statement, the
   positive statement should come before the negative statement. In addition the
   clause should come after the single positive clause for that GHC version.
 
-  - There shouldn't be multiple identical CPP statements. The use of odd or even 
+  - There shouldn't be multiple identical CPP statements. The use of odd or even
   GHC numbers is identical, with the only preference being to use what is
-  already there. (i.e. (`MIN_VERSION_GHC(9,2,0)` and `MIN_VERSION_GHC(9,1,0)` 
+  already there. (i.e. (`MIN_VERSION_GHC(9,2,0)` and `MIN_VERSION_GHC(9,1,0)`
   are functionally equivalent)
 -}
