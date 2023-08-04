@@ -150,6 +150,7 @@ library
         Development.IDE.Core.Actions
         Development.IDE.Main.HeapStats
         Development.IDE.Core.Debouncer
+        Development.IDE.Core.Dependencies
         Development.IDE.Core.FileStore
         Development.IDE.Core.FileUtils
         Development.IDE.Core.IdeConfiguration

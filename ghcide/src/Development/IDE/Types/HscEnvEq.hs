@@ -13,36 +13,27 @@ module Development.IDE.Types.HscEnvEq
 
 
 import           Control.Concurrent.Async        (Async, async, waitCatch)
-import           Control.Concurrent.STM          (atomically)
-import           Control.Concurrent.STM.TQueue   (writeTQueue)
 import           Control.Concurrent.Strict       (modifyVar, newVar)
 import           Control.DeepSeq                 (force)
 import           Control.Exception               (evaluate, mask, throwIO)
-import           Control.Monad                   (unless)
-import           Control.Monad.Extra             (eitherM, join, mapMaybeM, void)
+import           Control.Monad.Extra             (eitherM, join, mapMaybeM)
 import           Data.Either                     (fromRight)
-import           Data.Foldable                   (traverse_)
-import qualified Data.Map                        as Map
-import           Data.Maybe                      (isNothing)
 import           Data.Set                        (Set)
 import qualified Data.Set                        as Set
 import           Data.Unique                     (Unique)
 import qualified Data.Unique                     as Unique
-import           Development.IDE.Core.Compile    (indexHieFile)
-import           Development.IDE.Core.Rules      (HieFileCheck(..), Log, checkHieFile)
-import           Development.IDE.Core.Shake      (HieDbWriter(indexQueue), ShakeExtras(hiedbWriter, lspEnv, withHieDb))
+import           Development.IDE.Core.Dependencies (indexDependencyHieFiles)
+import           Development.IDE.Core.Rules      (Log)
+import           Development.IDE.Core.Shake      (ShakeExtras)
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util as Maybes
 import           Development.IDE.GHC.Error       (catchSrcErrors)
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
-import           Development.IDE.Types.Location  (NormalizedFilePath, toNormalizedFilePath')
 import           Development.IDE.Types.Logger    (Recorder, WithPriority)
-import           HieDb                           (SourceFile(FakeFile), lookupPackage, removeDependencySrcFiles)
-import           Language.LSP.Server             (resRootPath)
 import           OpenTelemetry.Eventlog          (withSpan)
-import           System.Directory                (doesDirectoryExist, makeAbsolute)
+import           System.Directory                (makeAbsolute)
 import           System.FilePath
 
 -- | An 'HscEnv' with equality. Two values are considered equal
@@ -86,7 +77,7 @@ newHscEnvEq cradlePath recorder se hscEnv0 deps = do
 newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> Recorder (WithPriority Log) -> ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
 
-    _ <- async indexDependencyHieFiles
+    _ <- async $ indexDependencyHieFiles recorder se hscEnv
 
     envUnique <- Unique.newUnique
 
@@ -120,48 +111,6 @@ newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
 
     return HscEnvEq{..}
     where
-        indexDependencyHieFiles :: IO ()
-        indexDependencyHieFiles = do
-            dotHlsDirExists <- maybe (pure False) doesDirectoryExist mHlsDir
-            unless dotHlsDirExists deleteMissingDependencySources
-            void $ Map.traverseWithKey indexPackageHieFiles packagesWithModules
-        mHlsDir :: Maybe FilePath
-        mHlsDir = do
-            projectDir <- resRootPath =<< lspEnv se
-            pure $ projectDir </> ".hls"
-        deleteMissingDependencySources :: IO ()
-        deleteMissingDependencySources =
-            atomically $ writeTQueue (indexQueue $ hiedbWriter se) $
-                \withHieDb ->
-                    withHieDb $ \db ->
-                        removeDependencySrcFiles db
-        indexPackageHieFiles :: Package -> [Module] -> IO ()
-        indexPackageHieFiles (Package package) modules = do
-            let pkgLibDir :: FilePath
-                pkgLibDir = case unitLibraryDirs package of
-                  [] -> ""
-                  (libraryDir : _) -> libraryDir
-                hieDir :: FilePath
-                hieDir = pkgLibDir </> "extra-compilation-artifacts"
-                unit :: Unit
-                unit = RealUnit $ Definite $ unitId package
-            moduleRows <- withHieDb se $ \db ->
-                lookupPackage db unit
-            case moduleRows of
-                [] -> traverse_ (indexModuleHieFile hieDir) modules
-                _  -> return ()
-        indexModuleHieFile :: FilePath -> Module -> IO ()
-        indexModuleHieFile hieDir m = do
-            let hiePath :: NormalizedFilePath
-                hiePath = toNormalizedFilePath' $
-                  hieDir </> moduleNameSlashes (moduleName m) <.> "hie"
-            hieCheck <- checkHieFile recorder se "newHscEnvEqWithImportPaths" hiePath
-            case hieCheck of
-                HieFileMissing -> return ()
-                HieAlreadyIndexed -> return ()
-                CouldNotLoadHie _e -> return ()
-                DoIndexing hash hie ->
-                    indexHieFile se hiePath (FakeFile Nothing) hash hie
         loadModIface :: Module -> IO (Maybe ModIface)
         loadModIface m = do
             modIface <- initIfaceLoad hscEnv $
@@ -169,51 +118,6 @@ newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
             return $ case modIface of
                 Maybes.Failed    _r -> Nothing
                 Maybes.Succeeded mi -> Just mi
-        packagesWithModules :: Map.Map Package [Module]
-        packagesWithModules = Map.fromSet getModulesForPackage packages
-        packages :: Set Package
-        packages = Set.fromList
-            $ map Package
-            $ Map.elems
-            $ Map.filterWithKey (\uid _ -> uid `Set.member` dependencyIds) unitInfoMap
-            where
-                unitInfoMap :: UnitInfoMap
-                unitInfoMap = getUnitInfoMap hscEnv
-                dependencyIds :: Set UnitId
-                dependencyIds =
-                    calculateTransitiveDependencies unitInfoMap directDependencyIds directDependencyIds
-                directDependencyIds :: Set UnitId
-                directDependencyIds = Set.fromList $ map toUnitId $ explicitUnits $ unitState hscEnv
-        calculateTransitiveDependencies :: UnitInfoMap -> Set UnitId -> Set UnitId -> Set UnitId
-        calculateTransitiveDependencies unitInfoMap allDependencies newDepencencies
-            | Set.null newDepencencies = allDependencies
-            | otherwise = calculateTransitiveDependencies unitInfoMap nextAll nextNew
-            where
-                nextAll :: Set UnitId
-                nextAll = Set.union allDependencies nextNew
-                nextNew :: Set UnitId
-                nextNew = flip Set.difference allDependencies
-                    $ Set.unions
-                    $ map (Set.fromList . unitDepends)
-                    $ Map.elems
-                    $ Map.filterWithKey (\uid _ -> uid `Set.member` newDepencencies) unitInfoMap
-        getModulesForPackage :: Package -> [Module]
-        getModulesForPackage (Package package) =
-            map makeModule allModules
-            where
-                allModules :: [ModuleName]
-                allModules = map fst
-                    ( filter (isNothing . snd)
-                    $ unitExposedModules package
-                    )
-                    ++ unitHiddenModules package
-                makeModule :: ModuleName
-                           -> Module
-                makeModule = mkModule (unitInfoId package)
-
-newtype Package = Package UnitInfo deriving Eq
-instance Ord Package where
-  compare (Package u1) (Package u2) = compare (unitId u1) (unitId u2)
 
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
