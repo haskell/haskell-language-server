@@ -14,7 +14,8 @@ module TestUtils where
 
 import           Control.Applicative.Combinators
 import           Control.Concurrent
-import           Control.Exception                    (bracket_, catch, finally)
+import           Control.Exception                    (bracket_, catch, finally,
+                                                       throw)
 import qualified Control.Lens                         as Lens
 import qualified Control.Lens.Extras                  as Lens
 import           Control.Monad
@@ -124,6 +125,8 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                          (printf)
 import           Text.Regex.TDFA                      ((=~))
+
+import           Data.Traversable                     (for)
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -389,3 +392,17 @@ defToLocation (InR (InR Null)) = []
 thDollarIdx :: UInt
 thDollarIdx | ghcVersion >= GHC90 = 1
             | otherwise = 0
+
+-- TODO Replace with lsp-test function when updated to the latest release
+getAndResolveCodeLenses :: TextDocumentIdentifier -> Session [CodeLens]
+getAndResolveCodeLenses tId = do
+    codeLenses <- getCodeLenses tId
+    for codeLenses $ \codeLens -> if isJust (codeLens ^. L.data_) then resolveCodeLens codeLens else pure codeLens
+
+-- |Resolves the provided code lens.
+resolveCodeLens :: CodeLens -> Session CodeLens
+resolveCodeLens cl = do
+  rsp <- request SMethod_CodeLensResolve cl
+  case rsp ^. L.result of
+    Right cl -> return cl
+    Left error -> throw (UnexpectedResponseError (SomeLspId $ fromJust $ rsp ^. L.id) error)
