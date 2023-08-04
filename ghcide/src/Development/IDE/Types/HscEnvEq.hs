@@ -13,7 +13,6 @@ module Development.IDE.Types.HscEnvEq
 
 
 import           Control.Concurrent.Async        (Async, async, waitCatch)
-import           Control.Concurrent.MVar         (newEmptyMVar, putMVar, readMVar)
 import           Control.Concurrent.STM          (atomically)
 import           Control.Concurrent.STM.TQueue   (writeTQueue)
 import           Control.Concurrent.Strict       (modifyVar, newVar)
@@ -131,14 +130,11 @@ newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
             projectDir <- resRootPath =<< lspEnv se
             pure $ projectDir </> ".hls"
         deleteMissingDependencySources :: IO ()
-        deleteMissingDependencySources = do
-            completionToken <- newEmptyMVar
+        deleteMissingDependencySources =
             atomically $ writeTQueue (indexQueue $ hiedbWriter se) $
-                \withHieDb -> do
+                \withHieDb ->
                     withHieDb $ \db ->
                         removeDependencySrcFiles db
-                    putMVar completionToken ()
-            readMVar completionToken
         indexPackageHieFiles :: Package -> [Module] -> IO ()
         indexPackageHieFiles (Package package) modules = do
             let pkgLibDir :: FilePath
