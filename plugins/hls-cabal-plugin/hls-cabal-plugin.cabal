@@ -27,36 +27,39 @@ library
   exposed-modules:
     Ide.Plugin.Cabal
     Ide.Plugin.Cabal.Diagnostics
+    Ide.Plugin.Cabal.Completion.Completer.FilePath
+    Ide.Plugin.Cabal.Completion.Completer.Module
+    Ide.Plugin.Cabal.Completion.Completer.Simple
+    Ide.Plugin.Cabal.Completion.Completer.Snippet
+    Ide.Plugin.Cabal.Completion.Completer.Types
+    Ide.Plugin.Cabal.Completion.Completions
+    Ide.Plugin.Cabal.Completion.Data
+    Ide.Plugin.Cabal.Completion.Types
     Ide.Plugin.Cabal.LicenseSuggest
     Ide.Plugin.Cabal.Parse
+
 
   build-depends:
     , base                  >=4.12     && <5
     , bytestring
-    -- Ideally, we only want to support a single Cabal version, supporting
-    -- older versions is completely pointless since Cabal is backwards compatible,
-    -- the latest Cabal version can parse all versions of the Cabal file format.
-    --
-    -- However, stack is making this difficult, if we change the version of Cabal,
-    -- we essentially need to make sure all other packages in the snapshot have their
-    -- Cabal dependency version relaxed.
-    -- Most packages have a Hackage revision, but stack won't pick these up (for sensible reasons)
-    -- automatically, forcing us to manually update the packages revision id.
-    -- This is a lot of work for almost zero benefit, so we just allow more versions here
-    -- and we eventually completely drop support for building HLS with stack.
-    , Cabal                 ^>=3.2 || ^>=3.4 || ^>=3.6 || ^>= 3.8 || ^>= 3.10
+    , Cabal-syntax          >= 3.7
+    , containers
     , deepseq
     , directory
+    , filepath
     , extra                 >=1.7.4
     , ghcide                == 2.1.0.0
     , hashable
     , hls-plugin-api        == 2.1.0.0
     , hls-graph             == 2.1.0.0
+    , lens
     , lsp                   ^>=2.0.0.0
     , lsp-types             ^>=2.0.0.1
     , regex-tdfa            ^>=1.3.1
     , stm
     , text
+    , text-rope
+    , transformers
     , unordered-containers  >=0.2.10.0
     , containers
   hs-source-dirs:   src
@@ -68,15 +71,24 @@ test-suite tests
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
   main-is:          Main.hs
+  other-modules:
+    Completer
+    Context
+    Utils
   build-depends:
     , base
     , bytestring
+    , Cabal-syntax          >= 3.7
+    , directory
     , filepath
     , ghcide
     , hls-cabal-plugin
     , hls-test-utils    == 2.1.0.0
     , lens
+    , lsp
     , lsp-types
     , tasty-hunit
     , text
+    , text-rope
+    , transformers
     , row-types
