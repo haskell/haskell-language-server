@@ -79,6 +79,12 @@ charEdit p =
                                         .+ #rangeLength .== Nothing
                                         .+ #text .== "a"
 
+headerEdit :: TextDocumentContentChangeEvent
+headerEdit =
+    TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 0 0) (Position 0 0)
+                                        .+ #rangeLength .== Nothing
+                                        .+ #text .== "-- header comment \n"
+
 data DocumentPositions = DocumentPositions {
     -- | A position that can be used to generate non null goto-def and completion responses
     identifierP    :: Maybe Position,
@@ -105,6 +111,16 @@ experiments =
       bench "edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} -> do
           changeDoc doc [charEdit stringLiteralP]
+          -- wait for a fresh build start
+          waitForProgressStart
+        -- wait for the build to be finished
+        output "edit: waitForProgressDone"
+        waitForProgressDone
+        return True,
+      ---------------------------------------------------------------------------------------
+      bench "edit-header" $ \docs -> do
+        forM_ docs $ \DocumentPositions{..} -> do
+          changeDoc doc [headerEdit]
           -- wait for a fresh build start
           waitForProgressStart
         -- wait for the build to be finished
@@ -276,23 +292,26 @@ configP =
     <*> optional (option auto (long "samples" <> metavar "NAT" <> help "override sampling count"))
     <*> strOption (long "ghcide" <> metavar "PATH" <> help "path to ghcide" <> value "ghcide")
     <*> option auto (long "timeout" <> value 60 <> help "timeout for waiting for a ghcide response")
-    <*> ( Example "name"
-               <$> (Right <$> packageP)
+    <*> ( Example
+               <$> exampleName
+               <*> (ExampleHackage <$> packageP)
                <*> (some moduleOption <|> pure ["src/Distribution/Simple.hs"])
                <*> pure []
-         <|>
-          Example "name"
-                <$> (Left <$> pathP)
-                <*> some moduleOption
-                <*> pure [])
+      <|> Example
+               <$> exampleName
+               <*> pathOrScriptP
+               <*> some moduleOption
+               <*> pure [])
     <*> switch (long "lsp-config" <> help "Read an LSP config payload from standard input")
   where
       moduleOption = strOption (long "example-module" <> metavar "PATH")
+      exampleName = strOption (long "example-name" <> metavar "NAME")
 
       packageP = ExamplePackage
             <$> strOption (long "example-package-name" <> value "Cabal")
             <*> option versionP (long "example-package-version" <> value (makeVersion [3,6,0,0]))
-      pathP = strOption (long "example-path")
+      pathOrScriptP = ExamplePath   <$> strOption (long "example-path")
+                  <|> ExampleScript <$> strOption (long "example-script") <*> many (strOption (long "example-script-args" <> help "arguments for the example generation script"))
 
 versionP :: ReadM Version
 versionP = maybeReader $ extract . readP_to_S parseVersion
@@ -581,13 +600,25 @@ setup :: HasConfig => IO SetupResult
 setup = do
 --   when alreadyExists $ removeDirectoryRecursive examplesPath
   benchDir <- case exampleDetails(example ?config) of
-      Left examplePath -> do
+      ExamplePath examplePath -> do
           let hieYamlPath = examplePath </> "hie.yaml"
           alreadyExists <- doesFileExist hieYamlPath
           unless alreadyExists $
                 cmd_ (Cwd examplePath) (FileStdout hieYamlPath) ("gen-hie"::String)
           return examplePath
-      Right ExamplePackage{..} -> do
+      ExampleScript examplePath' scriptArgs -> do
+          let exampleDir = examplesPath </> exampleName (example ?config)
+          alreadySetup <- doesDirectoryExist exampleDir
+          unless alreadySetup $ do
+            createDirectoryIfMissing True exampleDir
+            examplePath <- makeAbsolute examplePath'
+            cmd_ (Cwd exampleDir) examplePath scriptArgs
+            let hieYamlPath = exampleDir </> "hie.yaml"
+            alreadyExists <- doesFileExist hieYamlPath
+            unless alreadyExists $
+                  cmd_ (Cwd exampleDir) (FileStdout hieYamlPath) ("gen-hie"::String)
+          return exampleDir
+      ExampleHackage ExamplePackage{..} -> do
         let path = examplesPath </> package
             package = packageName <> "-" <> showVersion packageVersion
             hieYamlPath = path </> "hie.yaml"
@@ -633,8 +664,9 @@ setup = do
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
   let cleanUp = case exampleDetails(example ?config) of
-        Right _ -> removeDirectoryRecursive examplesPath
-        Left _  -> return ()
+        ExampleHackage _  -> removeDirectoryRecursive examplesPath
+        ExampleScript _ _ -> removeDirectoryRecursive examplesPath
+        ExamplePath _     -> return ()
 
       runBenchmarks = runBenchmarksFun benchDir
 
