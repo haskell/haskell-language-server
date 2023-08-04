@@ -20,6 +20,7 @@ module Development.IDE.Spans.AtPoint (
   , defRowToSymbolInfo
   , getNamesAtPoint
   , toCurrentLocation
+  , toUri
   , rowToLoc
   , nameToLocation
   , LookupModule
