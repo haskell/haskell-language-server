@@ -87,7 +87,7 @@ newHscEnvEq cradlePath recorder se hscEnv0 deps = do
 newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> Recorder (WithPriority Log) -> ShakeExtras -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEqWithImportPaths envImportPaths recorder se hscEnv deps = do
 
-    indexDependencyHieFiles
+    _ <- async indexDependencyHieFiles
 
     envUnique <- Unique.newUnique
 
