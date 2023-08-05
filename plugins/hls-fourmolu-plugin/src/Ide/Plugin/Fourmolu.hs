@@ -28,7 +28,6 @@ import           Data.List                       (intercalate)
 import           Data.Maybe                      (catMaybes)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
-import           Data.Version                    (Version, showVersion)
 import           Development.IDE                 hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
                                                             hang, vcat)
@@ -49,10 +48,6 @@ import           System.FilePath
 import           System.Process.Run              (cwd, proc)
 import           System.Process.Text             (readCreateProcessWithExitCode)
 import           Text.Read                       (readMaybe)
-
-#if MIN_VERSION_fourmolu(0,12,0)
-import qualified Paths_fourmolu                  as Fourmolu
-#endif
 
 descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
@@ -81,11 +76,7 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
             (pure . Left . PluginInternalError . T.pack . show)
              $ runExceptT $ cliHandler fileOpts
         else do
-#if MIN_VERSION_fourmolu(0,12,0)
-            logWith recorder Info $ LogBuiltinVersion $ Just Fourmolu.version
-#else
-            logWith recorder Info $ LogBuiltinVersion Nothing
-#endif
+            logWith recorder Debug $ LogCompiledInVersion VERSION_fourmolu
             let format fourmoluConfig = ExceptT $
                     bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
 #if MIN_VERSION_fourmolu(0,11,0)
@@ -141,12 +132,12 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                     traverse (readMaybe @Int . T.unpack) $ T.splitOn "." v
             case version of
                 Just v -> do
-                    logWith recorder Info $ LogExternalVersion v
+                    logWith recorder Debug $ LogExternalVersion v
                     pure CLIVersionInfo
                         { noCabal = v >= [0, 7]
                         }
                 Nothing -> do
-                    logWith recorder Info $ LogExternalVersion []
+                    logWith recorder Debug $ LogExternalVersion []
                     logWith recorder Warning $ NoVersion out
                     pure CLIVersionInfo
                         { noCabal = True
@@ -175,7 +166,7 @@ data LogEvent
     | ConfigPath FilePath
     | NoConfigPath [FilePath]
     | StdErr Text
-    | LogBuiltinVersion (Maybe Version)
+    | LogCompiledInVersion String
     | LogExternalVersion [Int]
     deriving (Show)
 
@@ -186,8 +177,11 @@ instance Pretty LogEvent where
         NoConfigPath ps -> "No " <> pretty configFileName <> " found in any of:"
             <> line <> indent 2 (vsep (map (pretty . show) ps))
         StdErr t -> "Fourmolu stderr:" <> line <> indent 2 (pretty t)
-        LogBuiltinVersion v -> "Using builtin fourmolu" <> pretty (maybe "" showVersion v)
-        LogExternalVersion v -> "Using external fourmolu" <> pretty (intercalate "." $ map show v)
+        LogCompiledInVersion v -> "Using compiled in fourmolu-" <> pretty v
+        LogExternalVersion v ->
+            "Using external fourmolu"
+            <> if null v then "" else "-"
+            <> pretty (intercalate "." $ map show v)
 
 convertDynFlags :: DynFlags -> [String]
 convertDynFlags df =
