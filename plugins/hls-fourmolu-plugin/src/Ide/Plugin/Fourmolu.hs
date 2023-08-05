@@ -44,12 +44,15 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Ormolu
-import qualified Paths_fourmolu                  as Fourmolu
 import           System.Exit
 import           System.FilePath
 import           System.Process.Run              (cwd, proc)
 import           System.Process.Text             (readCreateProcessWithExitCode)
 import           Text.Read                       (readMaybe)
+
+#if MIN_VERSION_fourmolu(0,12,0)
+import qualified Paths_fourmolu                  as Fourmolu
+#endif
 
 descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
@@ -78,7 +81,11 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
             (pure . Left . PluginInternalError . T.pack . show)
              $ runExceptT $ cliHandler fileOpts
         else do
-            logWith recorder Info $ LogBuiltinVersion Fourmolu.version
+#if MIN_VERSION_fourmolu(0,12,0)
+            logWith recorder Info $ LogBuiltinVersion $ Just Fourmolu.version
+#else
+            logWith recorder Info $ LogBuiltinVersion Nothing
+#endif
             let format fourmoluConfig = ExceptT $
                     bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
 #if MIN_VERSION_fourmolu(0,11,0)
@@ -139,6 +146,7 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                         { noCabal = v >= [0, 7]
                         }
                 Nothing -> do
+                    logWith recorder Info $ LogExternalVersion []
                     logWith recorder Warning $ NoVersion out
                     pure CLIVersionInfo
                         { noCabal = True
@@ -167,7 +175,7 @@ data LogEvent
     | ConfigPath FilePath
     | NoConfigPath [FilePath]
     | StdErr Text
-    | LogBuiltinVersion Version
+    | LogBuiltinVersion (Maybe Version)
     | LogExternalVersion [Int]
     deriving (Show)
 
@@ -178,8 +186,8 @@ instance Pretty LogEvent where
         NoConfigPath ps -> "No " <> pretty configFileName <> " found in any of:"
             <> line <> indent 2 (vsep (map (pretty . show) ps))
         StdErr t -> "Fourmolu stderr:" <> line <> indent 2 (pretty t)
-        LogBuiltinVersion v -> "Using builtin fourmolu-" <> pretty (showVersion v)
-        LogExternalVersion v -> "Using external fourmolu-" <> pretty (intercalate "." $ map show v)
+        LogBuiltinVersion v -> "Using builtin fourmolu" <> pretty (maybe "" showVersion v)
+        LogExternalVersion v -> "Using external fourmolu" <> pretty (intercalate "." $ map show v)
 
 convertDynFlags :: DynFlags -> [String]
 convertDynFlags df =
