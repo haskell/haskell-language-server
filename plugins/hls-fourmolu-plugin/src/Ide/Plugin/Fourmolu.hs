@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE TypeApplications         #-}
+{-# LANGUAGE TypeOperators            #-}
 
 module Ide.Plugin.Fourmolu (
     descriptor,
@@ -13,12 +14,17 @@ module Ide.Plugin.Fourmolu (
     LogEvent,
 ) where
 
-import           Control.Exception               (IOException, try)
+import           Control.Exception               (IOException, handle, try)
 import           Control.Lens                    ((^.))
-import           Control.Monad
-import           Control.Monad.IO.Class
-import           Data.Bifunctor                  (bimap, first)
-import           Data.Maybe
+import           Control.Monad                   (guard)
+import           Control.Monad.Error.Class       (MonadError (throwError))
+import           Control.Monad.Trans.Except      (ExceptT (..), mapExceptT,
+                                                  runExceptT)
+
+import           Control.Monad.IO.Class          (MonadIO (liftIO))
+import           Control.Monad.Trans.Class       (MonadTrans (lift))
+import           Data.Bifunctor                  (bimap)
+import           Data.Maybe                      (catMaybes)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE                 hiding (pluginHandlers)
@@ -26,6 +32,7 @@ import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
                                                             hang, vcat)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
+import           Ide.Plugin.Error
 import           Ide.Plugin.Fourmolu.Shim
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                 (makeDiffTextEdit)
@@ -57,52 +64,19 @@ properties =
             False
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
-provider recorder plId ideState typ contents fp fo = withIndefiniteProgress title Cancellable $ do
+provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefiniteProgress title Cancellable $ runExceptT $ do
     fileOpts <-
         maybe [] (convertDynFlags . hsc_dflags . hscEnv)
             <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
     useCLI <- liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #external plId properties
     if useCLI
-        then liftIO
-            . fmap (join . first (mkError . show))
-            . try @IOException
-            $ do
-                CLIVersionInfo{noCabal} <- do -- check Fourmolu version so that we know which flags to use
-                    (exitCode, out, _err) <- readCreateProcessWithExitCode ( proc "fourmolu" ["-v"] ) ""
-                    let version = do
-                            guard $ exitCode == ExitSuccess
-                            "fourmolu" : v : _ <- pure $ T.words out
-                            traverse (readMaybe @Int . T.unpack) $ T.splitOn "." v
-                    case version of
-                        Just v -> pure CLIVersionInfo
-                            { noCabal = v >= [0, 7]
-                            }
-                        Nothing -> do
-                            logWith recorder Warning $ NoVersion out
-                            pure CLIVersionInfo
-                                { noCabal = True
-                                }
-                (exitCode, out, err) <- -- run Fourmolu
-                    readCreateProcessWithExitCode
-                        ( proc "fourmolu" $
-                            map ("-o" <>) fileOpts
-                                <> mwhen noCabal ["--no-cabal"]
-                                <> catMaybes
-                                    [ ("--start-line=" <>) . show <$> regionStartLine region
-                                    , ("--end-line=" <>) . show <$> regionEndLine region
-                                    ]
-                        ){cwd = Just $ takeDirectory fp'}
-                        contents
-                case exitCode of
-                    ExitSuccess -> do
-                        logWith recorder Debug $ StdErr err
-                        pure . Right $ InL $ makeDiffTextEdit contents out
-                    ExitFailure n -> do
-                        logWith recorder Info $ StdErr err
-                        pure . Left . responseError $ "Fourmolu failed with exit code " <> T.pack (show n)
+        then mapExceptT liftIO $ ExceptT
+             $ handle @IOException
+            (pure . Left . PluginInternalError . T.pack . show)
+             $ runExceptT $ cliHandler fileOpts
         else do
-            let format fourmoluConfig =
-                    bimap (mkError . show) (InL . makeDiffTextEdit contents)
+            let format fourmoluConfig = ExceptT $
+                    bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
 #if MIN_VERSION_fourmolu(0,11,0)
                         <$> try @OrmoluException (ormolu config fp' contents)
 #else
@@ -122,31 +96,65 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                                     defaultPrinterOpts
                             }
              in liftIO (loadConfigFile fp') >>= \case
-                    ConfigLoaded file opts -> liftIO $ do
+                    ConfigLoaded file opts -> do
                         logWith recorder Info $ ConfigPath file
-                        format opts
-                    ConfigNotFound searchDirs -> liftIO $ do
+                        mapExceptT liftIO $ format opts
+                    ConfigNotFound searchDirs -> do
                         logWith recorder Info $ NoConfigPath searchDirs
-                        format emptyConfig
+                        mapExceptT liftIO $ format emptyConfig
                     ConfigParseError f err -> do
-                        sendNotification SMethod_WindowShowMessage $
+                        lift $ sendNotification SMethod_WindowShowMessage $
                             ShowMessageParams
                                 { _type_ = MessageType_Error
                                 , _message = errorMessage
                                 }
-                        return . Left $ responseError errorMessage
+                        throwError $ PluginInternalError errorMessage
                       where
                         errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (showParseError err)
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
-    mkError = responseError . ("Fourmolu: " <>) . T.pack
     lspPrinterOpts = mempty{poIndentation = Just $ fromIntegral $ fo ^. tabSize}
     region = case typ of
         FormatText ->
             RegionIndices Nothing Nothing
         FormatRange (Range (Position sl _) (Position el _)) ->
             RegionIndices (Just $ fromIntegral $ sl + 1) (Just $ fromIntegral $ el + 1)
+    cliHandler :: [String] -> ExceptT PluginError IO ([TextEdit] |? Null)
+    cliHandler fileOpts = do
+        CLIVersionInfo{noCabal} <- do -- check Fourmolu version so that we know which flags to use
+            (exitCode, out, _err) <- liftIO $ readCreateProcessWithExitCode ( proc "fourmolu" ["-v"] ) ""
+            let version = do
+                    guard $ exitCode == ExitSuccess
+                    "fourmolu" : v : _ <- pure $ T.words out
+                    traverse (readMaybe @Int . T.unpack) $ T.splitOn "." v
+            case version of
+                Just v -> pure CLIVersionInfo
+                    { noCabal = v >= [0, 7]
+                    }
+                Nothing -> do
+                    logWith recorder Warning $ NoVersion out
+                    pure CLIVersionInfo
+                        { noCabal = True
+                        }
+        (exitCode, out, err) <- -- run Fourmolu
+            liftIO $ readCreateProcessWithExitCode
+                ( proc "fourmolu" $
+                    map ("-o" <>) fileOpts
+                        <> mwhen noCabal ["--no-cabal"]
+                        <> catMaybes
+                            [ ("--start-line=" <>) . show <$> regionStartLine region
+                            , ("--end-line=" <>) . show <$> regionEndLine region
+                            ]
+                ){cwd = Just $ takeDirectory fp'}
+                contents
+        case exitCode of
+            ExitSuccess -> do
+                logWith recorder Debug $ StdErr err
+                pure $ InL $ makeDiffTextEdit contents out
+            ExitFailure n -> do
+                logWith recorder Info $ StdErr err
+                throwError $ PluginInternalError $ "Fourmolu failed with exit code " <> T.pack (show n)
 
 data LogEvent
     = NoVersion Text

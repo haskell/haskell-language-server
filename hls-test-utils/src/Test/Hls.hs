@@ -84,17 +84,17 @@ import qualified Development.IDE.Main               as IDEMain
 import           Development.IDE.Plugin.Test        (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                      WaitForIdeRuleResult (ideResultSuccess))
 import qualified Development.IDE.Plugin.Test        as Test
-import           Development.IDE.Types.Logger       (Doc, Logger (Logger),
+import           Development.IDE.Types.Options
+import           GHC.IO.Handle
+import           GHC.Stack                          (emptyCallStack)
+import           GHC.TypeLits
+import           Ide.Logger                         (Doc, Logger (Logger),
                                                      Pretty (pretty),
                                                      Priority (Debug),
                                                      Recorder (Recorder, logger_),
                                                      WithPriority (WithPriority, priority),
                                                      cfilter, cmapWithPrio,
                                                      makeDefaultStderrRecorder)
-import           Development.IDE.Types.Options
-import           GHC.IO.Handle
-import           GHC.Stack                          (emptyCallStack)
-import           GHC.TypeLits
 import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
 import           Language.LSP.Protocol.Message

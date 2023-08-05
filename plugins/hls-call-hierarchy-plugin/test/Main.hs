@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections      #-}
@@ -504,25 +505,40 @@ outgoingCallMultiFileTestCase filepath queryX queryY mp =
         _      -> liftIO $ assertFailure "Not one element"
     closeDoc doc
 
-oneCaseWithCreate :: T.Text -> Int -> Int -> (Uri -> CallHierarchyItem) -> Assertion
+oneCaseWithCreate :: T.Text -> Int -> Int -> (Uri -> CallHierarchyItem -> Assertion) -> Assertion
 oneCaseWithCreate contents queryX queryY expected = withCanonicalTempDir $ \dir ->
   runSessionWithServer plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
     waitForIndex (dir </> "A.hs")
     Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
       \case
-        [item] -> liftIO $ item @?= expected (doc ^. L.uri)
+        [item] -> liftIO $ expected (doc ^. L.uri) item
         res    -> liftIO $ assertFailure "Not one element"
     closeDoc doc
 
-mkCallHierarchyItem' :: String -> T.Text -> SymbolKind -> Range -> Range -> Uri -> CallHierarchyItem
-mkCallHierarchyItem' prefix name kind range selRange uri =
-  CallHierarchyItem name kind Nothing (Just "Main") uri range selRange (Just v)
+mkCallHierarchyItem' :: String -> T.Text -> SymbolKind -> Range -> Range -> Uri -> CallHierarchyItem -> Assertion
+mkCallHierarchyItem' prefix name kind range selRange uri c@(CallHierarchyItem name' kind' tags' detail' uri' range' selRange' xdata') = do
+    assertHierarchyItem name name'
+    assertHierarchyItem kind kind'
+    assertHierarchyItem tags tags'
+    assertHierarchyItem detail detail'
+    assertHierarchyItem uri uri'
+    assertHierarchyItem range range'
+    assertHierarchyItem selRange selRange'
+    case xdata' of
+      Nothing -> assertFailure ("In " ++ show c ++ ", got Nothing for data but wanted " ++ show xdata)
+      Just v -> case fromJSON v of
+        Success v -> assertBool ("In " ++ show c ++ " wanted data prefix: " ++ show xdata) (xdata `T.isPrefixOf` v)
+        Error err -> assertFailure ("In " ++ show c ++ " wanted data prefix: " ++ show xdata ++ " but json parsing failed with " ++ show err)
   where
-    v = toJSON $ prefix <> ":" <> T.unpack name <> ":Main:main"
+    tags = Nothing
+    detail = Just "Main"
+    assertHierarchyItem :: forall a. (Eq a, Show a) => a -> a -> Assertion
+    assertHierarchyItem = assertEqual ("In " ++ show c ++ ", got unexpected value for field")
+    xdata = T.pack prefix <> ":" <> name <> ":Main:main"
 
 mkCallHierarchyItemC, mkCallHierarchyItemT, mkCallHierarchyItemV ::
-  T.Text -> SymbolKind -> Range -> Range -> Uri -> CallHierarchyItem
+  T.Text -> SymbolKind -> Range -> Range -> Uri -> CallHierarchyItem -> Assertion
 mkCallHierarchyItemC = mkCallHierarchyItem' "c"
 mkCallHierarchyItemT = mkCallHierarchyItem' "t"
 mkCallHierarchyItemV = mkCallHierarchyItem' "v"

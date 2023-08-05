@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings         #-}
 module HlsPlugins where
 
-import           Development.IDE.Types.Logger      (Pretty (pretty), Recorder,
+import           Ide.Logger                        (Pretty (pretty), Recorder,
                                                     WithPriority, cmapWithPrio)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Ide.Types                         (IdePlugins,
@@ -40,9 +40,7 @@ import qualified Ide.Plugin.Eval                   as Eval
 import qualified Ide.Plugin.ExplicitImports        as ExplicitImports
 #endif
 
-#if hls_refineImports
-import qualified Ide.Plugin.RefineImports          as RefineImports
-#endif
+
 
 #if hls_rename
 import qualified Ide.Plugin.Rename                 as Rename
@@ -199,9 +197,6 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_qualifyImportedNames
       QualifyImportedNames.descriptor "qualifyImportedNames" :
-#endif
-#if hls_refineImports
-      let pId = "refineImports" in RefineImports.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_moduleName
       let pId = "moduleName" in ModuleName.descriptor (pluginRecorder pId) pId:

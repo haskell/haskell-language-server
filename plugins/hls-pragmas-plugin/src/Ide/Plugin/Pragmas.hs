@@ -19,6 +19,7 @@ module Ide.Plugin.Pragmas
 
 import           Control.Lens                       hiding (List)
 import           Control.Monad.IO.Class             (MonadIO (liftIO))
+import           Control.Monad.Trans.Class          (lift)
 import           Data.List.Extra                    (nubOrdOn)
 import qualified Data.Map                           as M
 import           Data.Maybe                         (catMaybes)
@@ -26,9 +27,11 @@ import qualified Data.Text                          as T
 import           Development.IDE
 import           Development.IDE.Core.Compile       (sourceParser,
                                                      sourceTypecheck)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Plugin.Completions (ghcideCompletionsPluginPriority)
 import qualified Development.IDE.Spans.Pragmas      as Pragmas
+import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens         as L
 import qualified Language.LSP.Protocol.Message      as LSP
@@ -72,23 +75,19 @@ suggestDisableWarningProvider :: PluginMethodHandler IdeState 'LSP.Method_TextDo
 suggestDisableWarningProvider = mkCodeActionProvider $ const suggestDisableWarning
 
 mkCodeActionProvider :: (Maybe DynFlags -> Diagnostic -> [PragmaEdit]) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
-mkCodeActionProvider mkSuggest state _plId (LSP.CodeActionParams _ _ docId _ (LSP.CodeActionContext diags _monly _))
-  | let LSP.TextDocumentIdentifier{ _uri = uri } = docId
-  , Just normalizedFilePath <- LSP.uriToNormalizedFilePath $ toNormalizedUri uri = do
-      -- ghc session to get some dynflags even if module isn't parsed
-      ghcSession <- liftIO $ runAction "Pragmas.GhcSession" state $ useWithStale GhcSession normalizedFilePath
-      (_, fileContents) <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
-      parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
-      let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
+mkCodeActionProvider mkSuggest state _plId
+  (LSP.CodeActionParams _ _ LSP.TextDocumentIdentifier{ _uri = uri } _ (LSP.CodeActionContext diags _monly _)) = do
+    normalizedFilePath <- getNormalizedFilePathE uri
+    -- ghc session to get some dynflags even if module isn't parsed
+    (hscEnv -> hsc_dflags -> sessionDynFlags, _) <-
+      runActionE "Pragmas.GhcSession" state $ useWithStaleE GhcSession normalizedFilePath
+    (_, fileContents) <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
+    parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
+    let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
+        nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
+        pedits = (nubOrdOn snd . concat $ mkSuggest parsedModuleDynFlags <$> diags)
+    pure  $ LSP.InL $ pragmaEditToAction uri nextPragmaInfo <$> pedits
 
-      case ghcSession of
-        Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) ->
-          let nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
-              pedits = (nubOrdOn snd . concat $ mkSuggest parsedModuleDynFlags <$> diags)
-          in
-            pure $ Right $ LSP.InL $ pragmaEditToAction uri nextPragmaInfo <$> pedits
-        Nothing -> pure $ Right $ LSP.InL []
-  | otherwise = pure $ Right $ LSP.InL []
 
 
 -- | Add a Pragma to the given URI at the top of the file.
@@ -203,8 +202,8 @@ completion :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCompletion
 completion _ide _ complParams = do
     let (LSP.TextDocumentIdentifier uri) = complParams ^. L.textDocument
         position = complParams ^. L.position
-    contents <- LSP.getVirtualFile $ toNormalizedUri uri
-    fmap (Right . LSP.InL) $ case (contents, uriToFilePath' uri) of
+    contents <- lift $ LSP.getVirtualFile $ toNormalizedUri uri
+    fmap (LSP.InL) $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
             result <$> VFS.getCompletionPrefix position cnts
             where

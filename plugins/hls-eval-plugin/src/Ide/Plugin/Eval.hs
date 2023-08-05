@@ -12,7 +12,7 @@ module Ide.Plugin.Eval (
     ) where
 
 import           Development.IDE               (IdeState)
-import           Development.IDE.Types.Logger  (Pretty (pretty), Recorder,
+import           Ide.Logger                    (Pretty (pretty), Recorder,
                                                 WithPriority, cmapWithPrio)
 import qualified Ide.Plugin.Eval.CodeLens      as CL
 import           Ide.Plugin.Eval.Config

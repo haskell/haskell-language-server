@@ -6,11 +6,11 @@ import           Control.Concurrent
 import           Control.Concurrent.Async
 import           Control.Monad
 import           Data.Word
-import           Development.IDE.Types.Logger (Pretty (pretty), Priority (Info),
-                                               Recorder, WithPriority, hsep,
-                                               logWith, (<+>))
 import           GHC.Stats
-import           Text.Printf                  (printf)
+import           Ide.Logger               (Pretty (pretty), Priority (Info),
+                                           Recorder, WithPriority, hsep,
+                                           logWith, (<+>))
+import           Text.Printf              (printf)
 
 data Log
   = LogHeapStatsPeriod !Int

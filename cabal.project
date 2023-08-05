@@ -16,7 +16,6 @@ packages:
          ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
-         ./plugins/hls-refine-imports-plugin
          ./plugins/hls-hlint-plugin
          ./plugins/hls-rename-plugin
          ./plugins/hls-retrie-plugin

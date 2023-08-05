@@ -33,6 +33,50 @@ examples:
     modules:
         - src/Language/LSP/Types/WatchedFiles.hs
         - src/Language/LSP/Types/CallHierarchy.hs
+
+  - name: MultiLayerModules
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: ["--th"]
+    modules:
+        - MultiLayerModules.hs
+        - DummyLevel0M01.hs
+        - DummyLevel1M01.hs
+  - name: MultiLayerModulesNoTH
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: []
+    modules:
+        - MultiLayerModules.hs
+        - DummyLevel0M01.hs
+        - DummyLevel1M01.hs
+
+  - name: DummyLevel0M01
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: ["--th"]
+    modules:
+        - DummyLevel0M01.hs
+  - name: DummyLevel0M01NoTH
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: []
+    modules:
+        - DummyLevel0M01.hs
+
+  - name: DummyLevel1M01
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: ["--th"]
+    modules:
+        - DummyLevel1M01.hs
+  - name: DummyLevel1M01NoTH
+    path: bench/MultiLayerModules.sh
+    script: True
+    script-args: []
+    modules:
+        - DummyLevel1M01.hs
+
   # Small but heavily multi-component example
   # Disabled as it is far to slow. hie-bios >0.7.2 should help
   # - name: HLS
@@ -47,6 +91,7 @@ examples:
 
 # The set of experiments to execute
 experiments:
+    - "edit-header"
     - "edit"
     - "hover"
     - "hover after edit"
@@ -140,7 +185,6 @@ configurations:
   - ormolu
   - pragmas
   - qualifyImportedNames
-  - refineImports
   - rename
   - stylish-haskell
 # - alternateNumberFormat
@@ -168,7 +212,6 @@ configurations:
 # # - ormolu
 # - pragmas
 # - qualifyImportedNames
-# - refineImports
 # - rename
 # - retrie
 # - splice

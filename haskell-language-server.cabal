@@ -94,11 +94,6 @@ flag importLens
   default:     True
   manual:      True
 
-flag refineImports
-  description: Enable refineImports plugin
-  default:     True
-  manual:      True
-
 flag rename
   description: Enable rename plugin
   default:     True
@@ -251,11 +246,6 @@ common importLens
     build-depends: hls-explicit-imports-plugin == 2.1.0.0
     cpp-options: -Dhls_importLens
 
-common refineImports
-  if flag(refineImports)
-    build-depends: hls-refine-imports-plugin == 2.1.0.0
-    cpp-options: -Dhls_refineImports
-
 common rename
   if flag(rename)
     build-depends: hls-rename-plugin == 2.1.0.0
@@ -377,7 +367,6 @@ library
                   , haddockComments
                   , eval
                   , importLens
-                  , refineImports
                   , rename
                   , retrie
                   , tactic

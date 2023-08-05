@@ -77,7 +77,7 @@ module Development.IDE.Core.Shake(
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
     Log(..),
-    VFSModified(..), getClientConfigAction
+    VFSModified(..), getClientConfigAction,
     ) where
 
 import           Control.Concurrent.Async
@@ -152,8 +152,6 @@ import           Development.IDE.Types.Exports
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import           Development.IDE.Types.KnownTargets
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger           hiding (Priority)
-import qualified Development.IDE.Types.Logger           as Logger
 import           Development.IDE.Types.Monitoring       (Monitoring (..))
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
@@ -161,6 +159,8 @@ import qualified Focus
 import           GHC.Fingerprint
 import           GHC.Stack                              (HasCallStack)
 import           HieDb.Types
+import           Ide.Logger                             hiding (Priority)
+import qualified Ide.Logger                             as Logger
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (IdePlugins (IdePlugins),
@@ -961,13 +961,23 @@ useWithStale :: IdeRule k v
     => k -> NormalizedFilePath -> Action (Maybe (v, PositionMapping))
 useWithStale key file = runIdentity <$> usesWithStale key (Identity file)
 
--- | Request a Rule result, it not available return the last computed result which may be stale.
---   Errors out if none available.
+-- |Request a Rule result, it not available return the last computed result
+--  which may be stale.
+--
+-- Throws an `BadDependency` exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers. Use `useWithStaleE` instead.
 useWithStale_ :: IdeRule k v
     => k -> NormalizedFilePath -> Action (v, PositionMapping)
 useWithStale_ key file = runIdentity <$> usesWithStale_ key (Identity file)
 
--- | Plural version of 'useWithStale_'
+-- |Plural version of 'useWithStale_'
+--
+-- Throws an `BadDependency` exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers.
 usesWithStale_ :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> Action (f (v, PositionMapping))
 usesWithStale_ key files = do
     res <- usesWithStale key files
@@ -1041,12 +1051,24 @@ useWithStaleFast' key file = do
 useNoFile :: IdeRule k v => k -> Action (Maybe v)
 useNoFile key = use key emptyFilePath
 
+-- Requests a rule if available.
+--
+-- Throws an `BadDependency` exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers. Use `useE` instead.
 use_ :: IdeRule k v => k -> NormalizedFilePath -> Action v
 use_ key file = runIdentity <$> uses_ key (Identity file)
 
 useNoFile_ :: IdeRule k v => k -> Action v
 useNoFile_ key = use_ key emptyFilePath
 
+-- |Plural version of `use_`
+--
+-- Throws an `BadDependency` exception which is caught by the rule system if
+-- none available.
+--
+-- WARNING: Not suitable for PluginHandlers. Use `usesE` instead.
 uses_ :: (Traversable f, IdeRule k v) => k -> f NormalizedFilePath -> Action (f v)
 uses_ key files = do
     res <- uses key files

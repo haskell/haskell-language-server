@@ -45,14 +45,14 @@ import qualified Data.Text                          as T
 import qualified Data.Text.IO                       as T
 import           Development.IDE.LSP.LanguageServer (runLanguageServer)
 import qualified Development.IDE.Main               as Main
-import           Development.IDE.Types.Logger       (Doc, Logger (Logger),
+import           GHC.Stack.Types                    (emptyCallStack)
+import           Ide.Logger                         (Doc, Logger (Logger),
                                                      Pretty (pretty),
                                                      Recorder (logger_),
                                                      WithPriority (WithPriority),
                                                      cmapWithPrio,
                                                      makeDefaultStderrRecorder,
                                                      toCologActionWithPrio)
-import           GHC.Stack.Types                    (emptyCallStack)
 import           Ide.Plugin.Config                  (Config)
 import           Ide.Types                          (IdePlugins (IdePlugins))
 import           Language.LSP.Protocol.Message      (Method (Method_Initialize),

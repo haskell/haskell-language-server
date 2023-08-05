@@ -38,6 +38,7 @@ library
     , lens
     , lsp
     , lsp-types
+    , mtl
     , mod
     , syb
     , text

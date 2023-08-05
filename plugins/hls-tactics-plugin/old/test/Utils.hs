@@ -87,19 +87,20 @@ mkTest
     -> SpecWith (Arg Bool)
 mkTest name fp line col ts = it name $ do
   resetGlobalHoleRef
-  runSessionForTactics $ do
+  actions <- E.handle (\(UnexpectedResponseError _ _) -> pure []) 
+              $ runSessionForTactics $ do
     doc <- openDoc (fp <.> "hs") "haskell"
     -- wait for diagnostics to start coming
     void waitForDiagnostics
     -- wait for the entire build to finish, so that Tactics code actions that
     -- use stale data will get uptodate stuff
     void $ waitForTypecheck doc
-    actions <- getCodeActions doc $ pointRange line col
-    let titles = mapMaybe codeActionTitle actions
-    for_ ts $ \(f, tc, var) -> do
-      let title = tacticTitle tc var
-      liftIO $
-        (title `elem` titles) `shouldSatisfy` f
+    getCodeActions doc $ pointRange line col
+  let titles = mapMaybe codeActionTitle actions
+  for_ ts $ \(f, tc, var) -> do
+    let title = tacticTitle tc var
+    liftIO $
+      (title `elem` titles) `shouldSatisfy` f
 
 data InvokeTactic = InvokeTactic
   { it_command :: TacticCommand

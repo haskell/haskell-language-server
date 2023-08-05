@@ -28,8 +28,9 @@ module Ide.Plugin.Eval.Types
       unLoc,
       Txt,
       EvalParams(..),
-      GetEvalComments(..)
-    ,nullComments)
+      GetEvalComments(..),
+      IsEvaluating(..),
+      nullComments)
 where
 
 import           Control.DeepSeq               (deepseq)
@@ -95,6 +96,13 @@ data Test
     = Example {testLines :: NonEmpty Txt, testOutput :: [Txt], testRange :: Range}
     | Property {testline :: Txt, testOutput :: [Txt], testRange :: Range}
     deriving (Eq, Show, Generic, FromJSON, ToJSON, NFData)
+
+data IsEvaluating = IsEvaluating
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable IsEvaluating
+instance NFData   IsEvaluating
+
+type instance RuleResult IsEvaluating = Bool
 
 data GetEvalComments = GetEvalComments
     deriving (Eq, Show, Typeable, Generic)

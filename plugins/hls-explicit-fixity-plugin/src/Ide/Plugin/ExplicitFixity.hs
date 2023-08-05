@@ -11,7 +11,6 @@ module Ide.Plugin.ExplicitFixity(descriptor, Log) where
 
 import           Control.DeepSeq
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
-import           Control.Monad.Trans.Maybe
 import           Data.Either.Extra
 import           Data.Hashable
 import qualified Data.Map.Strict                      as M
@@ -20,6 +19,7 @@ import qualified Data.Set                             as S
 import qualified Data.Text                            as T
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
+import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping (idDelta)
 import           Development.IDE.Core.Shake           (addPersistentRule)
 import qualified Development.IDE.Core.Shake           as Shake
@@ -28,9 +28,7 @@ import qualified Development.IDE.GHC.Compat.Util      as Util
 import           Development.IDE.LSP.Notifications    (ghcideNotificationsPluginPriority)
 import           Development.IDE.Spans.AtPoint
 import           GHC.Generics                         (Generic)
-import           Ide.PluginUtils                      (getNormalizedFilePath,
-                                                       handleMaybeM,
-                                                       pluginResponse)
+import           Ide.Plugin.Error
 import           Ide.Types                            hiding (pluginId)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
@@ -45,14 +43,14 @@ descriptor recorder pluginId = (defaultPluginDescriptor pluginId)
     }
 
 hover :: PluginMethodHandler IdeState Method_TextDocumentHover
-hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = pluginResponse $ do
-    nfp <- getNormalizedFilePath uri
-    handleMaybeM "ExplicitFixity: Unable to get fixity" $ liftIO $ runIdeAction "ExplicitFixity" (shakeExtras state) $ runMaybeT $ do
-      (FixityMap fixmap, _) <- useE GetFixity nfp
-      (HAR{hieAst}, mapping) <- useE GetHieAst nfp
+hover state _ (HoverParams (TextDocumentIdentifier uri) pos _) = do
+    nfp <- getNormalizedFilePathE uri
+    runIdeActionE "ExplicitFixity" (shakeExtras state) $ do
+      (FixityMap fixmap, _) <-  useWithStaleFastE GetFixity nfp
+      (HAR{hieAst}, mapping) <- useWithStaleFastE GetHieAst nfp
       let ns = getNamesAtPoint hieAst pos mapping
           fs = mapMaybe (\n -> (n,) <$> M.lookup n fixmap) ns
-      pure $ maybeToNull $ toHover $ fs
+      pure $ maybeToNull $ toHover fs
     where
         toHover :: [(Name, Fixity)] -> Maybe Hover
         toHover [] = Nothing

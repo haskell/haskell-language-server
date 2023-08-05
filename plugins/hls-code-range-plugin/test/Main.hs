@@ -6,7 +6,7 @@ import           Control.Lens                   hiding (List, (<.>))
 import           Data.ByteString.Lazy           (ByteString)
 import qualified Data.ByteString.Lazy.Char8     as LBSChar8
 import           Data.String                    (fromString)
-import           Development.IDE.Types.Logger   (Priority (Debug),
+import           Ide.Logger                     (Priority (Debug),
                                                  Recorder (Recorder),
                                                  WithPriority (WithPriority),
                                                  makeDefaultStderrRecorder,
@@ -48,6 +48,7 @@ selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDi
         let res = resp ^. result
         pure $ fmap (showSelectionRangesForTest . absorbNull) res
     case res of
+        Left (ResponseError (InL LSPErrorCodes_RequestFailed) _ _) -> pure ""
         Left err     -> assertFailure (show err)
         Right golden -> pure golden
   where

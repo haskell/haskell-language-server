@@ -1,0 +1,40 @@
+cabal-version: 3.4
+name:          test-hls
+version:       0.1.0.0
+maintainer:    milky
+category:      Dev
+synopsis:      dsasd
+license:       MIT
+license-file:  ./LICENSE.md
+
+library
+  hs-source-dirs:   ./src-modules/Dir1/
+  exposed-modules:
+  build-depends:    base
+  default-language: Haskell2010
+
+benchmark benchie
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  build-depends: base
+  hs-source-dirs: ./src-modules/
+  exposed-modules:
+
+executable executie
+  main-is: Main.hs
+  build-depends: base
+  hs-source-dirs: ./src-modules/ ./src-modules/Dir1/
+  exposed-modules:
+
+executable exe-not-so-cutie
+  main-is: Main.hs
+  build-depends: base
+  hs-source-dirs: ./src-modules/Dir1/Dir2/ ./src-modules/Dir1/Dir3
+  exposed-modules:
+
+test-suite suitor
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  build-depends: base
+  hs-source-dirs: "./src-modules/Dir1/Dir3/Dir4"
+  exposed-modules:

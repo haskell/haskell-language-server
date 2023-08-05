@@ -14,10 +14,13 @@ module Development.IDE.Plugin.Test
 
 import           Control.Concurrent                   (threadDelay)
 import           Control.Monad
+import           Control.Monad.Except                 (ExceptT (..), throwError)
 import           Control.Monad.IO.Class
 import           Control.Monad.STM
-import           Data.Aeson
-import           Data.Aeson.Types
+import           Control.Monad.Trans.Class            (MonadTrans (lift))
+import           Data.Aeson                           (FromJSON (parseJSON),
+                                                       ToJSON (toJSON), Value)
+import qualified Data.Aeson.Types                     as A
 import           Data.Bifunctor
 import           Data.CaseInsensitive                 (CI, original)
 import qualified Data.HashMap.Strict                  as HM
@@ -44,9 +47,10 @@ import           Development.IDE.Types.HscEnvEq       (HscEnvEq (hscEnv))
 import           Development.IDE.Types.Location       (fromUri)
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.Config                    (CheckParents)
+import           Ide.Plugin.Error
 import           Ide.Types
 import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types          hiding (Null)
+import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server                  as LSP
 import qualified "list-t" ListT
 import qualified StmContainers.Map                    as STM
@@ -80,21 +84,21 @@ plugin = (defaultPluginDescriptor "test") {
     }
   where
       testRequestHandler' ide req
-        | Just customReq <- parseMaybe parseJSON req
-        = testRequestHandler ide customReq
+        | Just customReq <- A.parseMaybe parseJSON req
+        = ExceptT $ testRequestHandler ide customReq
         | otherwise
-        = return $ Left
-        $ ResponseError (InR ErrorCodes_InvalidRequest) "Cannot parse request" Nothing
+        = throwError
+        $ PluginInvalidParams "Cannot parse request"
 
 
 testRequestHandler ::  IdeState
                 -> TestRequest
-                -> LSP.LspM c (Either ResponseError Value)
+                -> LSP.LspM c (Either PluginError Value)
 testRequestHandler _ (BlockSeconds secs) = do
     LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/request")) $
       toJSON secs
     liftIO $ sleep secs
-    return (Right Null)
+    return (Right A.Null)
 testRequestHandler s (GetInterfaceFilesDir file) = liftIO $ do
     let nfp = fromUri $ toNormalizedUri file
     sess <- runAction "Test - GhcSession" s $ use_ GhcSession nfp
@@ -107,12 +111,12 @@ testRequestHandler s WaitForShakeQueue = liftIO $ do
     atomically $ do
         n <- countQueue $ actionQueue $ shakeExtras s
         when (n>0) retry
-    return $ Right Null
+    return $ Right A.Null
 testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
     let nfp = fromUri $ toNormalizedUri file
     success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) nfp
     let res = WaitForIdeRuleResult <$> success
-    return $ bimap mkResponseError toJSON res
+    return $ bimap PluginInvalidParams toJSON res
 testRequestHandler s GetBuildKeysBuilt = liftIO $ do
     keys <- getDatabaseKeys resultBuilt $ shakeDb s
     return $ Right $ toJSON $ map show keys
@@ -146,9 +150,6 @@ getDatabaseKeys field db = do
     step <- shakeGetBuildStep db
     return [ k | (k, res) <- keys, field res == Step step]
 
-mkResponseError :: Text -> ResponseError
-mkResponseError msg = ResponseError (InR ErrorCodes_InvalidRequest) msg Nothing
-
 parseAction :: CI String -> NormalizedFilePath -> Action (Either Text Bool)
 parseAction "typecheck" fp = Right . isJust <$> use TypeCheck fp
 parseAction "getLocatedImports" fp = Right . isJust <$> use GetLocatedImports fp
@@ -172,6 +173,6 @@ blockCommandDescriptor plId = (defaultPluginDescriptor plId) {
 
 blockCommandHandler :: CommandFunction state ExecuteCommandParams
 blockCommandHandler _ideState _params = do
-  LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/command")) Null
+  lift $ LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/command")) A.Null
   liftIO $ threadDelay maxBound
-  return (Right Null)
+  pure $ InR Null

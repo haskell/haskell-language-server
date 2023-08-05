@@ -37,8 +37,8 @@ import           Development.IDE.Core.Service          hiding (Log, LogShake)
 import           Development.IDE.Core.Shake            hiding (Log, Priority)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Shake           (toKey)
+import           Ide.Logger
 import           Ide.Types
 import           Numeric.Natural
 

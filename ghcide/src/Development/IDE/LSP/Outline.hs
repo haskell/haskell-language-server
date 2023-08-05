@@ -22,25 +22,24 @@ import           Development.IDE.GHC.Error      (rangeToRealSrcSpan,
                                                  realSrcSpanToRange)
 import           Development.IDE.Types.Location
 import           Development.IDE.GHC.Util       (printOutputable)
-import           Language.LSP.Server            (LspM)
+import           Ide.Types
 import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
                                                  DocumentSymbolParams (DocumentSymbolParams, _textDocument),
-                                                 SymbolInformation,
                                                  SymbolKind (..),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
-                                                 type (|?) (InL, InR), uriToFilePath, Null)
-import           Language.LSP.Protocol.Message   (ResponseError)
+                                                 type (|?) (InL, InR), uriToFilePath)
+import          Language.LSP.Protocol.Message
 #if MIN_VERSION_ghc(9,2,0)
 import Data.List.NonEmpty (nonEmpty)
 #endif
 
 moduleOutline
-  :: IdeState -> DocumentSymbolParams -> LspM c (Either ResponseError ([SymbolInformation] |? ([DocumentSymbol] |? Null)))
-moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
+  :: PluginMethodHandler IdeState 'Method_TextDocumentDocumentSymbol
+moduleOutline ideState _ DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
   = liftIO $ case uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do
       mb_decls <- fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule fp)
-      pure $ Right $ case mb_decls of
+      pure $ case mb_decls of
         Nothing -> InL []
         Just ParsedModule { pm_parsed_source = L _ltop HsModule { hsmodName, hsmodDecls, hsmodImports } }
           -> let
@@ -66,7 +65,7 @@ moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentif
                InR (InL allSymbols)
 
 
-    Nothing -> pure $ Right $ InL []
+    Nothing -> pure $ InL []
 
 documentSymbolForDecl :: LHsDecl GhcPs -> Maybe DocumentSymbol
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ FamDecl { tcdFam = FamilyDecl { fdLName = L _ n, fdInfo, fdTyVars } }))
