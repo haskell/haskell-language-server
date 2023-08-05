@@ -279,7 +279,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
         packageNameForImportStatement mod = do
           mpkg <- findImportedModule env mod :: IO (Maybe Module)
           let moduleName = printOutputable mod
-          case join $ traverse (flip packageNameWithVersion env) mpkg of
+          case mpkg >>= flip packageNameWithVersion env of
             Nothing             -> pure moduleName
             Just pkgWithVersion -> pure $ moduleName <> "\n\n" <> pkgWithVersion
 
