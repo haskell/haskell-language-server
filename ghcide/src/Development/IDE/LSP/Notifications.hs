@@ -40,6 +40,7 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Shake           (toKey)
 import           Ide.Logger
 import           Ide.Types
+import           Language.LSP.Server                   (sendRequest)
 import           Numeric.Natural
 
 data Log
@@ -127,6 +128,12 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
         setSomethingModified (VFSModified vfs) ide [toKey GetClientSettings emptyFilePath] "config change"
 
   , mkPluginNotificationHandler LSP.SMethod_Initialized $ \ide _ _ _ -> do
+
+      let params = ConfigurationParams [ConfigurationItem Nothing (Just "haskell.formattingProvider")]
+      void $ sendRequest LSP.SMethod_WorkspaceConfiguration params $ \res -> do
+        liftIO $ logWarning (ideLogger ide) $ "zltest: " <> (Text.pack $ show res)
+        pure ()
+
       --------- Initialize Shake session --------------------------------------------------------------------
       liftIO $ shakeSessionInit (cmapWithPrio LogShake recorder) ide
 
