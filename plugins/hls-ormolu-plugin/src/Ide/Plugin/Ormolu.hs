@@ -35,20 +35,22 @@ import           System.FilePath                 (takeFileName)
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkFormattingHandlers provider
+descriptor :: Recorder (WithPriority T.Text) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkFormattingHandlers $ provider recorder
   }
 
 -- ---------------------------------------------------------------------
 
-provider :: FormattingHandler IdeState
-provider ideState typ contents fp _ = ExceptT $ withIndefiniteProgress title Cancellable $ runExceptT $ do
+provider :: Recorder (WithPriority T.Text) -> FormattingHandler IdeState
+provider recorder ideState typ contents fp _ = ExceptT $ withIndefiniteProgress title Cancellable $ runExceptT $ do
   ghc <- liftIO $ runAction "Ormolu" ideState $ use GhcSession fp
   let df = hsc_dflags . hscEnv <$> ghc
   fileOpts <- case df of
     Nothing -> pure []
     Just df -> pure $ fromDyn df
+
+  logWith recorder Debug $ "Using ormolu-" <> VERSION_ormolu
 
   let
     fullRegion = RegionIndices Nothing Nothing
