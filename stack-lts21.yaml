@@ -41,9 +41,6 @@ packages:
 ghc-options:
   "$everything": -haddock
 
-# stylish-haskell>strict
-allow-newer: true
-
 extra-deps:
 - floskell-0.10.7
 - hiedb-0.4.3.0
@@ -53,6 +50,12 @@ extra-deps:
 - algebraic-graphs-0.6.1
 - retrie-1.2.2
 - stylish-haskell-0.14.4.0
+- ghc-prim-0.9.0@sha256:7207672ba12a3356b29428a65b8315ad5033bd4f4fb20f8e2b6912984ab7ce61,2698
+- lsp-2.1.0.0@sha256:ef6fc28eac6dc27672cd8471c9f83f14de646a9c1fcaf993a451d2ae4de274e8,3533
+- lsp-test-0.15.0.1@sha256:31e3a9969706dbdf6713c2dec4cad02efd9a3d75bf9b26c95cb442535aeaf998,3822
+- lsp-types-2.0.1.0@sha256:70a822473de72c165495c2eed00f4c2a728f7fe1e6d7d8b4709d474a41860940,29317
+- optparse-applicative-0.17.1.0@sha256:665fc6909fa6b8196ec5f40e40e0d9a4375890b169e7f44ff1e708e9e27aa3f3,4994
+
 
 configure-options:
   ghcide:
