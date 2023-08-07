@@ -69,11 +69,6 @@ type instance RuleResult GetParsedModule = ParsedModule
 -- all comments included using Opt_KeepRawTokenStream
 type instance RuleResult GetParsedModuleWithComments = ParsedModule
 
--- | The dependency information produced by following the imports recursively.
--- This rule will succeed even if there is an error, e.g., a module could not be located,
--- a module could not be parsed or an import cycle.
-type instance RuleResult GetDependencyInformation = DependencyInformation
-
 type instance RuleResult GetModuleGraph = DependencyInformation
 
 data GetKnownTargets = GetKnownTargets
@@ -262,8 +257,8 @@ type instance RuleResult GhcSessionDeps = HscEnvEq
 -- | Resolve the imports in a module to the file path of a module in the same package
 type instance RuleResult GetLocatedImports = [(Located ModuleName, Maybe ArtifactsLocation)]
 
--- | This rule is used to report import cycles. It depends on GetDependencyInformation.
--- We cannot report the cycles directly from GetDependencyInformation since
+-- | This rule is used to report import cycles. It depends on GetModuleGraph.
+-- We cannot report the cycles directly from GetModuleGraph since
 -- we can only report diagnostics for the current file.
 type instance RuleResult ReportImportCycles = ()
 
@@ -400,11 +395,6 @@ data NeedsCompilation = NeedsCompilation
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable NeedsCompilation
 instance NFData   NeedsCompilation
-
-data GetDependencyInformation = GetDependencyInformation
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetDependencyInformation
-instance NFData   GetDependencyInformation
 
 data GetModuleGraph = GetModuleGraph
     deriving (Eq, Show, Typeable, Generic)

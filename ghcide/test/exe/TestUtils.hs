@@ -1,132 +1,54 @@
-{-# LANGUAGE AllowAmbiguousTypes   #-}
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE ImplicitParams        #-}
-{-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE OverloadedLabels      #-}
-{-# LANGUAGE PatternSynonyms       #-}
-{-# LANGUAGE PolyKinds             #-}
-{-# LANGUAGE TypeOperators         #-}
+
+{-# LANGUAGE GADTs           #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TypeOperators   #-}
 
 module TestUtils where
 
 import           Control.Applicative.Combinators
-import           Control.Concurrent
-import           Control.Exception                    (bracket_, catch, finally,
-                                                       throw)
-import qualified Control.Lens                         as Lens
-import qualified Control.Lens.Extras                  as Lens
-import           Control.Monad
-import           Control.Monad.IO.Class               (MonadIO, liftIO)
-import           Data.Aeson                           (toJSON)
-import qualified Data.Aeson                           as A
-import           Data.Default
-import           Data.Foldable
-import           Data.List.Extra
-import           Data.Maybe
-import           Data.Proxy
-import           Data.Row
-import qualified Data.Set                             as Set
-import qualified Data.Text                            as T
-import           Data.Text.Utf16.Rope                 (Rope)
-import qualified Data.Text.Utf16.Rope                 as Rope
-import           Development.IDE.Core.PositionMapping (PositionResult (..),
-                                                       fromCurrent,
-                                                       positionResultToMaybe,
-                                                       toCurrent)
-import           Development.IDE.GHC.Compat           (GhcVersion (..),
-                                                       ghcVersion)
-import           Development.IDE.GHC.Util
-import qualified Development.IDE.Main                 as IDE
-import           Development.IDE.Plugin.TypeLenses    (typeLensCommandId)
-import           Development.IDE.Spans.Common
-import           Development.IDE.Test                 (Cursor, canonicalizeUri,
-                                                       configureCheckProject,
-                                                       diagnostic,
-                                                       expectCurrentDiagnostics,
-                                                       expectDiagnostics,
-                                                       expectDiagnosticsWithTags,
-                                                       expectNoMoreDiagnostics,
-                                                       flushMessages,
-                                                       getInterfaceFilesDir,
-                                                       getStoredKeys,
-                                                       isReferenceReady,
-                                                       referenceReady,
-                                                       standardizeQuotes,
-                                                       waitForAction, waitForGC,
-                                                       waitForTypecheck)
-import           Development.IDE.Test.Runfiles
-import qualified Development.IDE.Types.Diagnostics    as Diagnostics
-import           Development.IDE.Types.Location
-import           Development.Shake                    (getDirectoryFilesIO)
-import           Ide.Plugin.Config
-import qualified Language.LSP.Protocol.Lens           as L
-import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types          hiding
-                                                      (SemanticTokenAbsolute (..),
-                                                       SemanticTokenRelative (..),
-                                                       SemanticTokensEdit (..),
-                                                       mkRange)
-import           Language.LSP.Test
-import           Language.LSP.VFS                     (VfsLog, applyChange)
-import           Network.URI
-import           System.Directory
-import           System.Environment.Blank             (getEnv, setEnv, unsetEnv)
-import           System.Exit                          (ExitCode (ExitSuccess))
-import           System.FilePath
-import           System.Info.Extra                    (isMac, isWindows)
-import qualified System.IO.Extra
-import           System.IO.Extra                      hiding (withTempDir)
-import           System.Mem                           (performGC)
-import           System.Process.Extra                 (CreateProcess (cwd),
-                                                       createPipe, proc,
-                                                       readCreateProcessWithExitCode)
-import           Test.QuickCheck
--- import Test.QuickCheck.Instances ()
 import           Control.Concurrent.Async
-import           Control.Lens                         (to, (.~), (^.))
-import           Control.Monad.Extra                  (whenJust)
-import           Data.Function                        ((&))
-import           Data.Functor.Identity                (runIdentity)
-import           Data.IORef
-import           Data.IORef.Extra                     (atomicModifyIORef_)
-import           Data.String                          (IsString (fromString))
-import           Data.Tuple.Extra
-import           Development.IDE.Core.FileStore       (getModTime)
-import qualified Development.IDE.Plugin.HLS.GhcIde    as Ghcide
-import           Development.IDE.Plugin.Test          (TestRequest (BlockSeconds),
-                                                       WaitForIdeRuleResult (..),
-                                                       blockCommandId)
-import qualified FuzzySearch
-import           GHC.Stack                            (emptyCallStack)
-import           GHC.TypeLits                         (symbolVal)
-import qualified HieDbRetry
-import           Ide.Logger                           (Logger (Logger),
-                                                       LoggingColumn (DataColumn, PriorityColumn),
-                                                       Pretty (pretty),
-                                                       Priority (Debug),
-                                                       Recorder (Recorder, logger_),
-                                                       WithPriority (WithPriority, priority),
-                                                       cfilter, cmapWithPrio,
-                                                       makeDefaultStderrRecorder,
-                                                       toCologActionWithPrio)
-import           Ide.PluginUtils                      (pluginDescToIdePlugins)
-import           Ide.Types
-import qualified Progress
-import           System.Time.Extra
-import qualified Test.QuickCheck.Monadic              as MonadicQuickCheck
-import           Test.QuickCheck.Monadic              (forAllM, monadicIO)
+import           Control.Exception               (bracket_, finally, throw)
+import           Control.Lens                    ((.~), (^.))
+import qualified Control.Lens                    as Lens
+import qualified Control.Lens.Extras             as Lens
+import           Control.Monad
+import           Control.Monad.IO.Class          (liftIO)
+import           Data.Foldable
+import           Data.Function                   ((&))
+import           Data.Maybe
+import qualified Data.Text                       as T
+import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
+import           Development.IDE.GHC.Util
+import qualified Development.IDE.Main            as IDE
+import           Development.IDE.Test            (canonicalizeUri,
+                                                  configureCheckProject,
+                                                  expectNoMoreDiagnostics)
+import           Development.IDE.Test.Runfiles
+import           Development.IDE.Types.Location
+import           Development.Shake               (getDirectoryFilesIO)
+import           Ide.Logger                      (Recorder, WithPriority,
+                                                  cmapWithPrio)
+import qualified Language.LSP.Protocol.Lens      as L
+import           Language.LSP.Protocol.Message
+import           Language.LSP.Protocol.Types     hiding
+                                                 (SemanticTokenAbsolute (..),
+                                                  SemanticTokenRelative (..),
+                                                  SemanticTokensEdit (..),
+                                                  mkRange)
+import           Language.LSP.Test
+import           System.Directory
+import           System.Environment.Blank        (getEnv, setEnv, unsetEnv)
+import           System.FilePath
+import           System.Info.Extra               (isMac, isWindows)
+import qualified System.IO.Extra
+import           System.Process.Extra            (createPipe)
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
-import           Test.Tasty.Ingredients.Rerun
-import           Test.Tasty.QuickCheck
-import           Text.Printf                          (printf)
-import           Text.Regex.TDFA                      ((=~))
 
-import           Data.Traversable                     (for)
+import           LogType
+
+import           Data.Traversable                (for)
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -406,3 +328,18 @@ resolveCodeLens cl = do
   case rsp ^. L.result of
     Right cl -> return cl
     Left error -> throw (UnexpectedResponseError (SomeLspId $ fromJust $ rsp ^. L.id) error)
+
+testIde :: Recorder (WithPriority Log) -> IDE.Arguments -> Session () -> IO ()
+testIde recorder arguments session = do
+    config <- getConfigFromEnv
+    cwd <- getCurrentDirectory
+    (hInRead, hInWrite) <- createPipe
+    (hOutRead, hOutWrite) <- createPipe
+    let projDir = "."
+    let server = IDE.defaultMain (cmapWithPrio LogIDEMain recorder) arguments
+            { IDE.argsHandleIn = pure hInRead
+            , IDE.argsHandleOut = pure hOutWrite
+            }
+
+    flip finally (setCurrentDirectory cwd) $ withAsync server $ \_ ->
+        runSessionWithHandles hInWrite hOutRead config lspTestCaps projDir session

@@ -48,8 +48,10 @@ import           Language.LSP.Protocol.Types
 -- and then returning PluginRequestRefused should be the same as if no plugins
 -- passed the `pluginEnabled` stage.
 data PluginError
-  = -- |PluginInternalError should be used if something has gone horribly wrong.
-    -- All uncaught exceptions will be caught and converted to this error.
+  = -- |PluginInternalError should be used if an error has occurred. This
+    -- should only rarely be returned. As it's logged with Error, it will be
+    -- shown by the client to the user via `showWindow`. All uncaught exceptions
+    -- will be caught and converted to this error.
     --
     -- This error will be be converted into an InternalError response code. It
     -- will be logged with Error and takes the highest precedence (1) in being
@@ -110,6 +112,7 @@ instance Pretty PluginError where
       PluginInvalidUserState text -> "Invalid User State:" <+> pretty text
       PluginRequestRefused msg    -> "Request Refused: "   <+> pretty msg
 
+-- |Converts to ErrorCode used in LSP ResponseErrors
 toErrorCode :: PluginError -> (LSPErrorCodes |? ErrorCodes)
 toErrorCode (PluginInternalError _)    = InR ErrorCodes_InternalError
 toErrorCode (PluginInvalidParams _)    = InR ErrorCodes_InvalidParams
@@ -121,6 +124,9 @@ toErrorCode (PluginRequestRefused _)   = InR ErrorCodes_MethodNotFound
 toErrorCode (PluginRuleFailed _)       = InL LSPErrorCodes_RequestFailed
 toErrorCode PluginStaleResolve         = InL LSPErrorCodes_ContentModified
 
+-- |Converts to a logging priority. In addition to being used by the logger,
+-- `combineResponses` currently uses this to  choose which response to return,
+-- so care should be taken in changing it.
 toPriority :: PluginError -> Priority
 toPriority (PluginInternalError _)    = Error
 toPriority (PluginInvalidParams _)    = Warning

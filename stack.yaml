@@ -31,7 +31,6 @@ packages:
   - ./plugins/hls-pragmas-plugin
   - ./plugins/hls-qualify-imported-names-plugin
   - ./plugins/hls-refactor-plugin
-  - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
@@ -46,6 +45,7 @@ ghc-options:
 allow-newer: true
 
 extra-deps:
+- Cabal-syntax-3.10.1.0@sha256:bb835ebab577fd0f9c11dab96210dbb8d68ffc62652576f4b092563c345930e7,7434
 # - floskell-0.10.7
 - hiedb-0.4.3.0
 - implicit-hie-0.1.2.7

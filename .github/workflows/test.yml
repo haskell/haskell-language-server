@@ -180,10 +180,6 @@ jobs:
         run: cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || cabal test hls-tactics-plugin --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-refine-imports-plugin test suite
-        run: cabal test hls-refine-imports-plugin --test-options="$TEST_OPTS" || cabal test hls-refine-imports-plugin --test-options="$TEST_OPTS"
-
-      - if: matrix.test
         name: Test hls-explicit-imports-plugin test suite
         run: cabal test hls-explicit-imports-plugin --test-options="$TEST_OPTS" || cabal test hls-explicit-imports-plugin --test-options="$TEST_OPTS"
 
