@@ -59,7 +59,7 @@
       flake = false;
     };
     lsp-test = {
-      url = "https://hackage.haskell.org/package/lsp-test-0.15.0.0/lsp-test-0.15.0.1.tar.gz";
+      url = "https://hackage.haskell.org/package/lsp-test-0.15.0.1/lsp-test-0.15.0.1.tar.gz";
       flake = false;
     };
 
