@@ -57,4 +57,5 @@ test-suite tests
     , hls-ormolu-plugin
     , hls-test-utils     == 2.1.0.0
     , lsp-types
+    , text
     , ormolu
