@@ -4,10 +4,8 @@
 module Completion(tests) where
 
 import           Control.Lens               hiding ((.=))
-import           Control.Monad
 import           Data.Aeson                 (object, (.=))
 import           Data.Foldable              (find)
-import           Data.Maybe                 (isJust)
 import           Data.Row.Records           (focus)
 import qualified Data.Text                  as T
 import           Ide.Plugin.Config          (maxCompletions)
