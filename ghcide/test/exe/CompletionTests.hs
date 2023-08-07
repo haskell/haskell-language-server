@@ -48,21 +48,13 @@ completionTest :: HasCallStack => String -> [T.Text] -> Position -> [(T.Text, Co
 completionTest name src pos expected = testSessionWait name $ do
     docId <- createDoc "A.hs" "haskell" (T.unlines src)
     _ <- waitForDiagnostics
-    compls <- getCompletions docId pos
+    compls <- getAndResolveCompletions docId pos
     let compls' = [ (_label, _kind, _insertText, _additionalTextEdits) | CompletionItem{..} <- compls]
     let emptyToMaybe x = if T.null x then Nothing else Just x
     liftIO $ sortOn (Lens.view Lens._1) (take (length expected) compls') @?=
         sortOn (Lens.view Lens._1)
           [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
-    forM_ (zip compls expected) $ \(item, (_,_,_,expectedSig, expectedDocs, _)) -> do
-        CompletionItem{..} <-
-          if (expectedSig || expectedDocs) && isJust (item ^. L.data_)
-          then do
-            rsp <- request SMethod_CompletionItemResolve item
-            case rsp ^. L.result of
-              Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
-              Right x -> pure x
-          else pure item
+    forM_ (zip compls expected) $ \(CompletionItem{..}, (_,_,_,expectedSig, expectedDocs, _)) -> do
         when expectedSig $
             liftIO $ assertBool ("Missing type signature: " <> T.unpack _label) (isJust _detail)
         when expectedDocs $

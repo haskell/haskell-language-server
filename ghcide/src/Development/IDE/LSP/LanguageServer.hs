@@ -107,7 +107,7 @@ runLanguageServer recorder options inH outH defaultConfig onConfigurationChange 
             { LSP.onConfigurationChange = onConfigurationChange
             , LSP.defaultConfig = defaultConfig
             , LSP.doInitialize = doInitialize
-            , LSP.staticHandlers = staticHandlers
+            , LSP.staticHandlers = (const staticHandlers)
             , LSP.interpretHandler = interpretHandler
             , LSP.options = modifyOptions options
             }

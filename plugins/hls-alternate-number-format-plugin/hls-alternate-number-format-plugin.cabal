@@ -38,7 +38,7 @@ library
     , hls-plugin-api       == 2.1.0.0
     , hie-compat
     , lens
-    , lsp                  ^>=2.0.0.0
+    , lsp                  ^>=2.1.0.0
     , mtl
     , regex-tdfa
     , syb
