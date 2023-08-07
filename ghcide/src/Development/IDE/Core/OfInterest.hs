@@ -78,6 +78,7 @@ ofInterestRules recorder = do
     summarize (IsFOI OnDisk)           = BS.singleton 1
     summarize (IsFOI (Modified False)) = BS.singleton 2
     summarize (IsFOI (Modified True))  = BS.singleton 3
+    summarize (IsFOI ReadOnly)         = BS.singleton 4
 
 ------------------------------------------------------------
 newtype GarbageCollectVar = GarbageCollectVar (Var Bool)
@@ -130,23 +131,30 @@ scheduleGarbageCollection state = do
 --   Could be improved
 kick :: Action ()
 kick = do
-    files <- HashMap.keys <$> getFilesOfInterestUntracked
+    filesOfInterestMap <- getFilesOfInterestUntracked
     ShakeExtras{exportsMap, ideTesting = IdeTesting testing, lspEnv, progress} <- getShakeExtras
     let signal :: KnownSymbol s => Proxy s -> Action ()
         signal msg = when testing $ liftIO $
             mRunLspT lspEnv $
                 LSP.sendNotification (LSP.SMethod_CustomMethod msg) $
                 toJSON $ map fromNormalizedFilePath files
+        files :: [NormalizedFilePath]
+        files = HashMap.keys filesOfInterestMap
+        -- We cannot run all the Rules on ReadOnly dependency files, so
+        -- we filter those out.
+        projectFiles :: [NormalizedFilePath]
+        projectFiles = HashMap.keys
+            $ HashMap.filter (/= ReadOnly) filesOfInterestMap
 
     signal (Proxy @"kick/start")
     liftIO $ progressUpdate progress KickStarted
 
     -- Update the exports map
-    results <- uses GenerateCore files
+    results <- uses GenerateCore projectFiles
             <* uses GetHieAst files
             -- needed to have non local completions on the first edit
             -- when the first edit breaks the module header
-            <* uses NonLocalCompletions files
+            <* uses NonLocalCompletions projectFiles
     let mguts = catMaybes results
     void $ liftIO $ atomically $ modifyTVar' exportsMap (updateExportsMapMg mguts)
 

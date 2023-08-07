@@ -210,11 +210,11 @@ gotoDefinition withHieDb getHieFile ideOpts imports srcSpans pos
 atPoint
   :: IdeOptions
   -> HieAstResult
-  -> DocAndKindMap
-  -> HscEnv
+  -> Maybe DocAndKindMap
+  -> Maybe HscEnv
   -> Position
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env pos =
+atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) mDkMap mEnv pos =
     listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
@@ -253,9 +253,15 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
         prettyName (Right n, dets) = pure $ T.unlines $
           wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
           : maybeToList (pretty (definedAt n) (prettyPackageName n))
-          ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
+          ++ catMaybes [ T.unlines . spanDocToMarkdown <$> maybeDoc
                        ]
-          where maybeKind = fmap printOutputable $ safeTyThingType =<< lookupNameEnv km n
+          where maybeKind = do
+                  (DKMap _ km) <- mDkMap
+                  nameEnv <- lookupNameEnv km n
+                  printOutputable <$> safeTyThingType nameEnv
+                maybeDoc = do
+                  (DKMap dm _) <- mDkMap
+                  lookupNameEnv dm n
                 pretty Nothing Nothing = Nothing
                 pretty (Just define) Nothing = Just $ define <> "\n"
                 pretty Nothing (Just pkgName) = Just $ pkgName <> "\n"
@@ -272,7 +278,8 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
         -- the package(with version) this `ModuleName` belongs to.
         packageNameForImportStatement :: ModuleName -> IO T.Text
         packageNameForImportStatement mod = do
-          mpkg <- findImportedModule env mod :: IO (Maybe Module)
+          mpkg <- fmap join $ sequence $
+            flip findImportedModule mod <$> mEnv :: IO (Maybe Module)
           let moduleName = printOutputable mod
           case mpkg >>= packageNameWithVersion of
             Nothing             -> pure moduleName
@@ -281,12 +288,22 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
         -- Return the package name and version of a module.
         -- For example, given module `Data.List`, it should return something like `base-4.x`.
         packageNameWithVersion :: Module -> Maybe T.Text
-        packageNameWithVersion m = do
-          let pid = moduleUnit m
-          conf <- lookupUnit env pid
-          let pkgName = T.pack $ unitPackageNameString conf
-              version = T.pack $ showVersion (unitPackageVersion conf)
-          pure $ pkgName <> "-" <> version
+        packageNameWithVersion m = let pid = moduleUnit m in
+          case mEnv of
+            -- If we have an HscEnv (because this is a project file),
+            -- we can get the package name from that.
+            Just env -> do
+              conf <- lookupUnit env pid
+              let pkgName = T.pack $ unitPackageNameString conf
+                  version = T.pack $ showVersion (unitPackageVersion conf)
+              pure $ pkgName <> "-" <> version
+            -- If we don't have an HscEnv (because this is a dependency file),
+            -- then we can get a similar format for the package name
+            -- from the UnitId.
+            Nothing ->
+              let uid    = toUnitId pid
+                  pkgStr = takeWhile (/= ':') $ show uid
+               in Just $ T.pack pkgStr
 
         -- Type info for the current node, it may contains several symbols
         -- for one range, like wildcard

@@ -44,6 +44,8 @@ module Development.IDE.Core.Shake(
     define, defineNoDiagnostics,
     defineEarlyCutoff,
     defineNoFile, defineEarlyCutOffNoFile,
+    getSourceFileOrigin,
+    SourceFileOrigin(..),
     getDiagnostics,
     mRunLspT, mRunLspTCallback,
     getHiddenDiagnostics,
@@ -162,7 +164,9 @@ import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (IdePlugins (IdePlugins),
                                                          PluginDescriptor (pluginId),
-                                                         PluginId)
+                                                         PluginId,
+                                                         SourceFileOrigin (..),
+                                                         getSourceFileOrigin)
 import           Language.LSP.Diagnostics
 import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
@@ -1186,11 +1190,23 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                     Just (Succeeded ver v, _) -> Stale Nothing ver v
                     Just (Stale d ver v, _)   -> Stale d ver v
                     Just (Failed b, _)        -> Failed b
-                (mbBs, (diags, mbRes)) <- actionCatch
-                    (do v <- action staleV; liftIO $ evaluate $ force v) $
-                    \(e :: SomeException) -> do
-                        pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
-
+                (mbBs, (diags, mbRes)) <- do
+                    let doAction = actionCatch
+                            (do v <- action staleV; liftIO $ evaluate $ force v) $
+                            \(e :: SomeException) -> do
+                                pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
+                    case getSourceFileOrigin file of
+                        FromProject -> doAction
+                        FromDependency -> if isSafeDependencyRule key
+                            then doAction
+                            -- This should never happen. All code paths that run a
+                            -- Rule that is not on the whitelist defined by
+                            -- isSafeDependencyRule should be disabled for dependency
+                            -- files. If one is found, it should be changed.
+                            else error $
+                                "defineEarlyCutoff': Undefined action for dependency source files\n"
+                                ++ show file ++ "\n"
+                                ++ show key
                 ver <- estimateFileVersionUnsafely key mbRes file
                 (bs, res) <- case mbRes of
                     Nothing -> do
@@ -1231,6 +1247,22 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
+    isSafeDependencyRule
+        :: forall k v
+         . IdeRule k v
+        => k
+        -> Bool
+    isSafeDependencyRule _k
+        -- The only Rules that are safe for dependencies.
+        -- GetHieAst is necessary for hover,
+        -- which can be called in dependency files.
+        | Just Refl <- eqT @k @GetHieAst = True
+        -- Dependency files can be files of interest.
+        | Just Refl <- eqT @k @IsFileOfInterest = True
+        -- GetModificationTime is safe for any file, and
+        -- can be called in dependency files by estimateFileVersionUnsafely.
+        | Just Refl <- eqT @k @GetModificationTime = True
+        | otherwise = False
 
 traceA :: A v -> String
 traceA (A Failed{})    = "Failed"

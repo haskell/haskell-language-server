@@ -24,7 +24,7 @@
 {-# LANGUAGE ViewPatterns               #-}
 module Ide.Types
 ( PluginDescriptor(..), defaultPluginDescriptor, defaultCabalPluginDescriptor
-, defaultPluginPriority
+, defaultPluginPriority, defaultPluginFileExtensions
 , IdeCommand(..)
 , IdeMethod(..)
 , IdeNotification(..)
@@ -37,6 +37,7 @@ module Ide.Types
 , FormattingType(..), FormattingMethod, FormattingHandler, mkFormattingHandlers
 , HasTracing(..)
 , PluginCommand(..), CommandId(..), CommandFunction, mkLspCommand, mkLspCmdId
+, PluginFileType(..)
 , PluginId(..)
 , PluginHandler(..), mkPluginHandler
 , PluginHandlers(..)
@@ -45,6 +46,8 @@ module Ide.Types
 , PluginNotificationHandler(..), mkPluginNotificationHandler
 , PluginNotificationHandlers(..)
 , PluginRequestMethod(..)
+, SourceFileOrigin(..)
+, getSourceFileOrigin
 , getProcessID, getPid
 , installSigUsr1Handler
 , lookupCommandProvider
@@ -81,6 +84,7 @@ import           Data.Hashable                 (Hashable)
 import           Data.HashMap.Strict           (HashMap)
 import qualified Data.HashMap.Strict           as HashMap
 import           Data.Kind                     (Type)
+import           Data.List                     (isInfixOf)
 import           Data.List.Extra               (find, sortOn)
 import           Data.List.NonEmpty            (NonEmpty (..), toList)
 import qualified Data.Map                      as Map
@@ -275,23 +279,52 @@ data PluginDescriptor (ideState :: Type) =
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
                    , pluginModifyDynflags :: DynFlagsModifications
                    , pluginCli            :: Maybe (ParserInfo (IdeCommand ideState))
-                   , pluginFileType       :: [T.Text]
+                   , pluginFileType       :: PluginFileType
                    -- ^ File extension of the files the plugin is responsible for.
                    --   The plugin is only allowed to handle files with these extensions.
                    --   When writing handlers, etc. for this plugin it can be assumed that all handled files are of this type.
                    --   The file extension must have a leading '.'.
                    }
 
+-- A description of the types of files that the plugin
+-- is intended to work on. It includes the origin of the
+-- file (the project, a dependency, or both), and the
+-- file extensions the plugin should work on.
+data PluginFileType = PluginFileType [SourceFileOrigin] [T.Text]
+
+data SourceFileOrigin = FromProject | FromDependency deriving Eq
+
+-- Dependency files are written to the .hls/dependencies directory.
+-- If a file is not in this directory, we assume that it is a
+-- project file.
+getSourceFileOrigin :: NormalizedFilePath -> SourceFileOrigin
+getSourceFileOrigin f =
+    case [".hls", "dependencies"] `isInfixOf` (splitDirectories file) of
+        True  -> FromDependency
+        False -> FromProject
+    where
+        file :: FilePath
+        file = fromNormalizedFilePath f
+
 -- | Check whether the given plugin descriptor is responsible for the file with the given path.
 --   Compares the file extension of the file at the given path with the file extension
---   the plugin is responsible for.
+--   the plugin is responsible for. Also checks that the file origin is included
+--   in the valid file origins (project or dependency) for this plugin.
 pluginResponsible :: Uri -> PluginDescriptor c -> Bool
 pluginResponsible uri pluginDesc
     | Just fp <- mfp
-    , T.pack (takeExtension fp) `elem` pluginFileType pluginDesc = True
+    , checkFile (pluginFileType pluginDesc) fp = True
     | otherwise = False
     where
-      mfp = uriToFilePath uri
+        checkFile :: PluginFileType -> NormalizedFilePath -> Bool
+        checkFile (PluginFileType validOrigins validExtensions) fp =
+            getSourceFileOrigin fp `elem` validOrigins
+            &&
+            getExtension fp `elem` validExtensions
+        getExtension :: NormalizedFilePath -> T.Text
+        getExtension = T.pack . takeExtension . fromNormalizedFilePath
+        mfp :: Maybe NormalizedFilePath
+        mfp = uriToNormalizedFilePath $ toNormalizedUri uri
 
 -- | An existential wrapper of 'Properties'
 data CustomConfig = forall r. CustomConfig (Properties r)
@@ -862,7 +895,10 @@ defaultPluginDescriptor plId =
     mempty
     mempty
     Nothing
-    [".hs", ".lhs", ".hs-boot"]
+    (PluginFileType [FromProject] defaultPluginFileExtensions)
+
+defaultPluginFileExtensions :: [T.Text]
+defaultPluginFileExtensions = [".hs", ".lhs", ".hs-boot"]
 
 -- | Set up a plugin descriptor, initialized with default values.
 -- This plugin descriptor is prepared for @.cabal@ files and as such,
@@ -882,7 +918,7 @@ defaultCabalPluginDescriptor plId =
     mempty
     mempty
     Nothing
-    [".cabal"]
+    (PluginFileType [FromProject] [".cabal"])
 
 newtype CommandId = CommandId T.Text
   deriving (Show, Read, Eq, Ord)

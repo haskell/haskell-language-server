@@ -59,25 +59,37 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier _uri _version) []
       whenUriFile _uri $ \file -> do
+          let foiStatus = case getSourceFileOrigin file of
+                  FromProject    -> Modified{firstOpen=True}
+                  FromDependency -> ReadOnly
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
-          addFileOfInterest ide file Modified{firstOpen=True}
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
+          addFileOfInterest ide file foiStatus
+          unless (foiStatus == ReadOnly)
+              $ setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
           logDebug (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidChange $
       \ide vfs _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
         atomically $ updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
-          addFileOfInterest ide file Modified{firstOpen=False}
-          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
+          let foiStatus = case getSourceFileOrigin file of
+                  FromProject    -> Modified{firstOpen=True}
+                  FromDependency -> ReadOnly
+          addFileOfInterest ide file foiStatus
+          unless (foiStatus == ReadOnly)
+              $ setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
         logDebug (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidSave $
       \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
-            addFileOfInterest ide file OnDisk
-            setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file
+            let foiStatus = case getSourceFileOrigin file of
+                    FromProject    -> OnDisk
+                    FromDependency -> ReadOnly
+            addFileOfInterest ide file foiStatus
+            unless (foiStatus == ReadOnly)
+                $ setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file
         logDebug (ideLogger ide) $ "Saved text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.SMethod_TextDocumentDidClose $
@@ -141,6 +153,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
     -- The ghcide descriptors should come last'ish so that the notification handlers
     -- (which restart the Shake build) run after everything else
         pluginPriority = ghcideNotificationsPluginPriority
+    ,   pluginFileType = PluginFileType [FromProject, FromDependency] defaultPluginFileExtensions
     }
 
 ghcideNotificationsPluginPriority :: Natural

@@ -143,11 +143,18 @@ getAtPoint file pos = runMaybeT $ do
   opts <- liftIO $ getIdeOptionsIO ide
 
   (hf, mapping) <- useWithStaleFastMT GetHieAst file
-  env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
-  dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
+  -- The HscEnv and DKMap are not strictly necessary for hover
+  -- to work, so we only calculate them for project files, not
+  -- for dependency files.
+  (mEnv, mDkMap) <- case getSourceFileOrigin file of
+    FromDependency -> pure (Nothing, Nothing)
+    FromProject -> do
+      env <- hscEnv . fst <$> useWithStaleFastMT GhcSession file
+      dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
+      pure (Just env, Just dkMap)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-  MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$> AtPoint.atPoint opts hf dkMap env pos'
+  MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$> AtPoint.atPoint opts hf mDkMap mEnv pos'
 
 -- | For each Location, determine if we have the PositionMapping
 -- for the correct file. If not, get the correct position mapping

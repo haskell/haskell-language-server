@@ -571,9 +571,36 @@ reportImportCyclesRule recorder =
 getHieAstsRule :: Recorder (WithPriority Log) -> Rules ()
 getHieAstsRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetHieAst f -> do
-      tmr <- use_ TypeCheck f
-      hsc <- hscEnv <$> use_ GhcSessionDeps f
-      getHieAstRuleDefinition f hsc tmr
+        case getSourceFileOrigin f of
+            -- For dependency source files, get the HieAstResult from
+            -- the HIE file in the HieDb database.
+            FromDependency -> do
+                se <- getShakeExtras
+                mHieFile <- liftIO
+                    $ runIdeAction "GetHieAst" se
+                    $ runMaybeT
+                    -- We can look up the HIE file from its source
+                    -- because at this point lookupMod has already been
+                    -- called and has created the the source file in
+                    -- the .hls directory and indexed it.
+                    $ readHieFileForSrcFromDisk recorder f
+                pure ([], makeHieAstResult <$> mHieFile)
+            FromProject -> do
+                tmr <- use_ TypeCheck f
+                hsc <- hscEnv <$> use_ GhcSessionDeps f
+                getHieAstRuleDefinition f hsc tmr
+    where
+        makeHieAstResult :: Compat.HieFile -> HieAstResult
+        makeHieAstResult hieFile =
+            HAR
+                (Compat.hie_module hieFile)
+                hieAsts
+                (Compat.generateReferencesMap $ M.elems $ getAsts hieAsts)
+                mempty
+                (HieFromDisk hieFile)
+            where
+                hieAsts :: HieASTs TypeIndex
+                hieAsts = Compat.hie_asts hieFile
 
 persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
