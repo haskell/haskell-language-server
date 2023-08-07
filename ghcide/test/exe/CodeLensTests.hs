@@ -3,10 +3,13 @@
 module CodeLensTests (tests) where
 
 import           Control.Applicative.Combinators
+import           Control.Lens                    ((^.))
+import           Control.Monad                   (void)
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
 import           Data.Maybe
 import qualified Data.Text                       as T
+import           Data.Tuple.Extra
 import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
@@ -16,11 +19,6 @@ import           Language.LSP.Protocol.Types     hiding
                                                   SemanticTokensEdit (..),
                                                   mkRange)
 import           Language.LSP.Test
--- import Test.QuickCheck.Instances ()
-import           Control.Exception               (throw)
-import           Control.Lens                    ((^.))
-import           Control.Monad                   (void)
-import           Data.Tuple.Extra
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           TestUtils
