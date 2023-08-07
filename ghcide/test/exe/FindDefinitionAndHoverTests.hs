@@ -173,6 +173,7 @@ tests = let
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 (if ghcVersion >= GHC94 then 5 else 0) 3 (if ghcVersion >= GHC94 then 8 else 14)]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
   cmtL68 = Position 67  0  ;  lackOfdEq = [ExpectHoverExcludeText ["$dEq"]]
+  import310 = Position 3 10; pkgTxt = [ExpectHoverText ["Data.Text\n\ntext-"]]
   in
   mkFindTests
   --      def    hover  look       expect
@@ -236,6 +237,7 @@ tests = let
         test  no     broken    thLocL57   thLoc         "TH Splice Hover"
        | otherwise ->
         test  no     yes       thLocL57   thLoc         "TH Splice Hover"
+  , test yes yes import310 pkgTxt "show package name and its version"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
