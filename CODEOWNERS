@@ -23,14 +23,13 @@
 /plugins/hls-ormolu-plugin @georgefst
 /plugins/hls-pragmas-plugin @berberman @Ailrun @eddiemundo
 /plugins/hls-qualify-imported-names-plugin @eddiemundo
-/plugins/hls-refine-imports-plugin
 /plugins/hls-rename-plugin @OliverMadine
 /plugins/hls-refactor-plugin @santiweight
 /plugins/hls-retrie-plugin @pepeiborra
 /plugins/hls-code-range-plugin @kokobd
 /plugins/hls-splice-plugin @konn
 /plugins/hls-stylish-haskell-plugin @Ailrun
-/plugins/hls-tactics-plugin @isovector
+/plugins/hls-tactics-plugin
 /plugins/hls-stan-plugin @uhbif19
 /plugins/hls-explicit-record-fields-plugin @ozkutuk
 /plugins/hls-overloaded-record-dot-plugin @joyfulmantis

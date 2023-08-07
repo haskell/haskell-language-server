@@ -1,23 +1,24 @@
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE OverloadedLabels      #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PackageImports        #-}
-{-# LANGUAGE PatternSynonyms       #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE StrictData            #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE ViewPatterns          #-}
-
+{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE DeriveAnyClass            #-}
+{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DuplicateRecordFields     #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE MultiWayIf                #-}
+{-# LANGUAGE NamedFieldPuns            #-}
+{-# LANGUAGE OverloadedLabels          #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE PackageImports            #-}
+{-# LANGUAGE PatternSynonyms           #-}
+{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE StrictData                #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeApplications          #-}
+{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE ViewPatterns              #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
 -- On 9.4 we get a new redundant constraint warning, but deleting the
@@ -42,8 +43,11 @@ import           Control.DeepSeq
 import           Control.Exception
 import           Control.Lens                                       ((?~), (^.))
 import           Control.Monad
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Except
+import           Control.Monad.Error.Class                          (MonadError (throwError))
+import           Control.Monad.IO.Class                             (MonadIO (liftIO))
+import           Control.Monad.Trans.Class                          (MonadTrans (lift))
+import           Control.Monad.Trans.Except                         (ExceptT (..),
+                                                                     runExceptT)
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
                                                                      Value (..))
@@ -113,10 +117,11 @@ import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (.
 import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
 import qualified Refact.Fixity                                      as Refact
 #endif
-
 import           Ide.Plugin.Config                                  hiding
                                                                     (Config)
+import           Ide.Plugin.Error
 import           Ide.Plugin.Properties
+import           Ide.Plugin.Resolve
 import           Ide.PluginUtils
 import           Ide.Types                                          hiding
                                                                     (Config)
@@ -143,8 +148,7 @@ import           GHC.Generics                                       (Generic)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 #endif
-import           Data.Aeson                                         (Result (Error, Success),
-                                                                     fromJSON)
+import           Development.IDE.Core.PluginUtils                   as PluginUtils
 import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
@@ -154,7 +158,7 @@ data Log
   | LogGeneratedIdeas NormalizedFilePath [[Refact.Refactoring Refact.SrcSpan]]
   | LogGetIdeas NormalizedFilePath
   | LogUsingExtensions NormalizedFilePath [String] -- Extension is only imported conditionally, so we just stringify them
-  deriving Show
+  | forall a. (Pretty a) => LogResolve a
 
 instance Pretty Log where
   pretty = \case
@@ -163,6 +167,7 @@ instance Pretty Log where
     LogGeneratedIdeas fp ideas -> "Generated hlint ideas for for" <+> viaShow fp <> ":" <+> viaShow ideas
     LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <+> pretty exts
     LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp
+    LogResolve msg -> pretty msg
 
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
@@ -188,7 +193,8 @@ fromStrictMaybe  Strict.Nothing  = Nothing
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-  let (pluginCommands, pluginHandlers) = mkCodeActionWithResolveAndCommand plId codeActionProvider (resolveProvider recorder)
+  let resolveRecorder = cmapWithPrio LogResolve recorder
+      (pluginCommands, pluginHandlers) = mkCodeActionWithResolveAndCommand resolveRecorder plId codeActionProvider (resolveProvider recorder)
   in (defaultPluginDescriptor plId)
   { pluginRules = rules recorder plId
   , pluginCommands = pluginCommands
@@ -400,8 +406,8 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
   | let TextDocumentIdentifier uri = documentId
   , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
   = do
-    verTxtDocId <- getVersionedTextDoc documentId
-    liftIO $ fmap (Right . InL . map LSP.InR) $ do
+    verTxtDocId <- lift $ getVersionedTextDoc documentId
+    liftIO $ fmap (InL . map LSP.InR) $ do
       allDiagnostics <- atomically $ getDiagnostics ideState
 
       let numHintsInDoc = length
@@ -419,11 +425,11 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
       else
         pure singleHintCodeActions
   | otherwise
-  = pure $ Right $ InL []
+  = pure $ InL []
 
   where
     applyAllAction verTxtDocId =
-      let args = Just $ toJSON (AA verTxtDocId)
+      let args = Just $ toJSON (ApplyHint verTxtDocId Nothing)
         in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionKind_QuickFix) Nothing Nothing Nothing Nothing Nothing args
 
     -- |Some hints do not have an associated refactoring
@@ -434,24 +440,16 @@ codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId _ context
 
     diags = context ^. LSP.diagnostics
 
-resolveProvider :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_CodeActionResolve
-resolveProvider recorder ideState _pluginId ca@CodeAction {_data_ = Just data_} = pluginResponse $ do
-  case fromJSON data_ of
-    (Success (AA verTxtDocId@(VersionedTextDocumentIdentifier uri _))) -> do
-        file <-  getNormalizedFilePath uri
-        edit <- ExceptT $ liftIO $ applyHint recorder ideState file Nothing verTxtDocId
+resolveProvider :: Recorder (WithPriority Log) -> ResolveFunction IdeState HlintResolveCommands Method_CodeActionResolve
+resolveProvider recorder ideState _plId ca uri resolveValue = do
+  file <-  getNormalizedFilePathE uri
+  case resolveValue of
+    (ApplyHint verTxtDocId oneHint) -> do
+        edit <- ExceptT $ liftIO $ applyHint recorder ideState file oneHint verTxtDocId
         pure $ ca & LSP.edit ?~ edit
-    (Success (AO verTxtDocId@(VersionedTextDocumentIdentifier uri _) pos hintTitle)) -> do
-        let oneHint = OneHint pos hintTitle
-        file <-  getNormalizedFilePath uri
-        edit <- ExceptT $ liftIO $ applyHint recorder ideState file (Just oneHint) verTxtDocId
-        pure $ ca & LSP.edit ?~ edit
-    (Success (IH verTxtDocId@(VersionedTextDocumentIdentifier uri _) hintTitle )) -> do
-        file <-  getNormalizedFilePath uri
+    (IgnoreHint verTxtDocId hintTitle ) -> do
         edit <- ExceptT $ liftIO $ ignoreHint recorder ideState file verTxtDocId hintTitle
         pure $ ca & LSP.edit ?~ edit
-    Error s-> throwE ("JSON decoding error: " <> s)
-resolveProvider _ _ _ _ = pluginResponse $ throwE "CodeAction with no data field"
 
 -- | Convert a hlint diagnostic into an apply and an ignore code action
 -- if applicable
@@ -461,13 +459,13 @@ diagnosticToCodeActions verTxtDocId diagnostic
   , let isHintApplicable = "refact:" `T.isPrefixOf` code
   , let hint = T.replace "refact:" "" code
   , let suppressHintTitle = "Ignore hint \"" <> hint <> "\" in this module"
-  , let suppressHintArguments = IH verTxtDocId hint
+  , let suppressHintArguments = IgnoreHint verTxtDocId hint
   = catMaybes
       -- Applying the hint is marked preferred because it addresses the underlying error.
       -- Disabling the rule isn't, because less often used and configuration can be adapted.
       [ if | isHintApplicable
            , let applyHintTitle = "Apply hint \"" <> hint <> "\""
-                 applyHintArguments = AO verTxtDocId start hint ->
+                 applyHintArguments = ApplyHint verTxtDocId (Just $ OneHint start hint) ->
                Just (mkCodeAction applyHintTitle diagnostic (Just (toJSON applyHintArguments)) True)
            | otherwise -> Nothing
       , Just (mkCodeAction suppressHintTitle diagnostic (Just (toJSON suppressHintArguments)) False)
@@ -508,10 +506,10 @@ mkSuppressHintTextEdits dynFlags fileContents hint =
     combinedTextEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
-ignoreHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either String WorkspaceEdit)
-ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = do
-  (_, fileContents) <- runAction "Hlint.GetFileContents" ideState $ getFileContents nfp
-  (msr, _) <- runAction "Hlint.GetModSummaryWithoutTimestamps" ideState $ useWithStale_ GetModSummaryWithoutTimestamps nfp
+ignoreHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> VersionedTextDocumentIdentifier -> HintTitle -> IO (Either PluginError WorkspaceEdit)
+ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = runExceptT $ do
+  (_, fileContents) <- runActionE "Hlint.GetFileContents" ideState $ useE GetFileContents nfp
+  (msr, _) <- runActionE "Hlint.GetModSummaryWithoutTimestamps" ideState $ useWithStaleE GetModSummaryWithoutTimestamps nfp
   case fileContents of
     Just contents -> do
         let dynFlags = ms_hspp_opts $ msrModSummary msr
@@ -521,28 +519,31 @@ ignoreHint _recorder ideState nfp verTxtDocId ignoreHintTitle = do
                   (Just (M.singleton (verTxtDocId ^. LSP.uri) textEdits))
                   Nothing
                   Nothing
-        pure $ Right workspaceEdit
-    Nothing -> pure $ Left  "Unable to get fileContents"
+        pure workspaceEdit
+    Nothing -> throwError $ PluginInternalError "Unable to get fileContents"
 
 -- ---------------------------------------------------------------------
-data HlintResolveCommands = AA { verTxtDocId :: VersionedTextDocumentIdentifier}
-                          | AO { verTxtDocId :: VersionedTextDocumentIdentifier
-                               , start_pos   :: Position
-                               -- | There can be more than one hint suggested at the same position, so HintTitle is used to distinguish between them.
-                               , hintTitle   :: HintTitle
-                               }
-                          | IH { verTxtDocId     :: VersionedTextDocumentIdentifier
-                               , ignoreHintTitle :: HintTitle
-                               } deriving (Generic, ToJSON, FromJSON)
+data HlintResolveCommands =
+    ApplyHint
+      { verTxtDocId :: VersionedTextDocumentIdentifier
+      -- |If Nothing, apply all hints, otherise only apply
+      -- the given hint
+      , oneHint     :: Maybe OneHint
+      }
+  | IgnoreHint
+      { verTxtDocId     :: VersionedTextDocumentIdentifier
+      , ignoreHintTitle :: HintTitle
+      } deriving (Generic, ToJSON, FromJSON)
 
 type HintTitle = T.Text
 
-data OneHint = OneHint
-  { oneHintPos   :: Position
-  , oneHintTitle :: HintTitle
-  } deriving (Eq, Show)
+data OneHint =
+  OneHint
+    { oneHintPos   :: Position
+    , oneHintTitle :: HintTitle
+    } deriving (Generic, Eq, Show, ToJSON, FromJSON)
 
-applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either String WorkspaceEdit)
+applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> VersionedTextDocumentIdentifier -> IO (Either PluginError WorkspaceEdit)
 applyHint recorder ide nfp mhint verTxtDocId =
   runExceptT $ do
     let runAction' :: Action a -> IO a
@@ -550,7 +551,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
     let errorHandlers = [ Handler $ \e -> return (Left (show (e :: IOException)))
                         , Handler $ \e -> return (Left (show (e :: ErrorCall)))
                         ]
-    ideas <- bimapExceptT showParseError id $ ExceptT $ runAction' $ getIdeas recorder nfp
+    ideas <- bimapExceptT (PluginInternalError . T.pack . showParseError) id $ ExceptT $ runAction' $ getIdeas recorder nfp
     let ideas' = maybe ideas (`filterIdeas` ideas) mhint
     let commands = map ideaRefactoring ideas'
     logWith recorder Debug $ LogGeneratedIdeas nfp commands
@@ -586,7 +587,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
     mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
     res <-
         case mbParsedModule of
-            Nothing -> throwE "Apply hint: error parsing the module"
+            Nothing -> throwError "Apply hint: error parsing the module"
             Just pm -> do
                 let anns = pm_annotations pm
                 let modu = pm_parsed_source pm
@@ -603,7 +604,7 @@ applyHint recorder ide nfp mhint verTxtDocId =
         let wsEdit = diffText' True (verTxtDocId, oldContent) (T.pack appliedFile) IncludeDeletions
         ExceptT $ return (Right wsEdit)
       Left err ->
-        throwE err
+        throwError $ PluginInternalError $ T.pack err
     where
           -- | If we are only interested in applying a particular hint then
           -- let's filter out all the irrelevant ideas

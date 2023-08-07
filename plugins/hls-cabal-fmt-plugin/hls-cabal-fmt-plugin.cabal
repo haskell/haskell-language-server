@@ -37,6 +37,7 @@ library
     , hls-plugin-api  == 2.1.0.0
     , lens
     , lsp-types
+    , mtl
     , process
     , text
     , transformers

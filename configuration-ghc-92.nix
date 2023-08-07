@@ -21,21 +21,17 @@ let
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
       apply-refact = hsuper.apply-refact_0_13_0_0;
 
-      # ptr-poker breaks on MacOS without SSE2 optimizations
-      # https://github.com/nikita-volkov/ptr-poker/issues/11
-      ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
-
       Cabal-syntax = hself.Cabal-syntax_3_8_1_0;
 
-      ghc-lib-parser = hself.callCabal2nix "ghc-lib-parser" inputs.ghc-lib-parser-94 {};
+      ghc-lib-parser = hsuper.ghc-lib-parser_9_4_5_20230430;
 
       hlint = appendConfigureFlag (hself.callCabal2nix "hlint" inputs.hlint-35 {}) "-fghc-lib";
 
       ormolu = hself.callCabal2nix "ormolu" inputs.ormolu-052 {};
 
-      fourmolu = hself.callHackage "fourmolu" "0.10.1.0" {};
+      fourmolu = hsuper.fourmolu_0_10_1_0;
 
-      stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
+      stylish-haskell = hsuper.stylish-haskell_0_14_4_0;
 
       hie-bios = hself.callCabal2nix "hie-bios" inputs.haskell-hie-bios { };
 
@@ -43,7 +39,7 @@ let
 
       lsp = hself.callCabal2nix "lsp" inputs.lsp {};
       lsp-types = hself.callCabal2nix "lsp-types" inputs.lsp-types {};
-      lsp-test = hself.callCabal2nix "lsp-test" inputs.lsp-test {};
+      lsp-test = dontCheck (hself.callCabal2nix "lsp-test" inputs.lsp-test {});
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =

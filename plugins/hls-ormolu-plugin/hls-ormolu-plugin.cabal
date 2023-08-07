@@ -29,6 +29,7 @@ library
   hs-source-dirs:   src
   build-depends:
     , base            >=4.12  && <5
+    , extra
     , filepath
     , ghc
     , ghc-boot-th
@@ -36,6 +37,7 @@ library
     , hls-plugin-api  == 2.1.0.0
     , lens
     , lsp
+    , mtl
     , ormolu          ^>=0.1.2 || ^>= 0.2 || ^>= 0.3 || ^>= 0.5 || ^>= 0.6 || ^>= 0.7
     , text
 

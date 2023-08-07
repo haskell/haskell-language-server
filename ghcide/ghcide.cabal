@@ -154,6 +154,7 @@ library
         Development.IDE.Core.FileUtils
         Development.IDE.Core.IdeConfiguration
         Development.IDE.Core.OfInterest
+        Development.IDE.Core.PluginUtils
         Development.IDE.Core.PositionMapping
         Development.IDE.Core.Preprocessor
         Development.IDE.Core.ProgressReporting
@@ -197,7 +198,6 @@ library
         Development.IDE.Types.HscEnvEq
         Development.IDE.Types.KnownTargets
         Development.IDE.Types.Location
-        Development.IDE.Types.Logger
         Development.IDE.Types.Monitoring
         Development.IDE.Monitoring.OpenTelemetry
         Development.IDE.Types.Options
@@ -347,6 +347,7 @@ test-suite ghcide-tests
         lens,
         list-t,
         lsp-test ^>= 0.15,
+        mtl,
         monoid-subclasses,
         network-uri,
         QuickCheck,
@@ -383,6 +384,39 @@ test-suite ghcide-tests
         HieDbRetry
         Development.IDE.Test
         Development.IDE.Test.Diagnostic
+        ExceptionTests
+        -- Tests that have been pulled out of the main file
+        BootTests
+        CodeLensTests
+        CompletionTests
+        CPPTests
+        CradleTests
+        DependentFileTest
+        DiagnosticTests
+        FindDefinitionAndHoverTests
+        HaddockTests
+        HighlightTests
+        IfaceTests
+        InitializeResponseTests
+        LogType
+        NonLspCommandLine
+        OutlineTests
+        PluginParsedResultTests
+        PluginSimpleTests
+        PositionMappingTests
+        PreprocessorTests
+        RootUriTests
+        SafeTests
+        SymlinkTests
+        TestUtils
+        THTests
+        UnitTests
+        WatchedFileTests
+        AsyncTests
+        ClientSettingsTests
+        ReferenceTests
+        GarbageCollectionTests
+        OpenCloseTest
     default-extensions:
         BangPatterns
         DeriveFunctor

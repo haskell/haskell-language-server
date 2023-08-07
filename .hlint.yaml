@@ -117,6 +117,11 @@
     - Wingman.Judgements
     - Wingman.Machinery
     - Wingman.Tactics
+    - CompletionTests #Previously part of GHCIDE Main tests
+    - DiagnosticTests #Previously part of GHCIDE Main tests
+    - FindDefinitionAndHoverTests #Previously part of GHCIDE Main tests
+    - TestUtils #Previously part of GHCIDE Main tests
+    - CodeLensTests #Previously part of GHCIDE Main tests
 
   - name: [Prelude.tail, Data.List.tail]
     within:
@@ -126,6 +131,7 @@
     - Development.IDE.Plugin.CodeAction.ExactPrint
     - Development.IDE.Session
     - UnificationSpec
+    - WatchedFileTests #Previously part of GHCIDE Main tests
 
   - name: [Prelude.last, Data.List.last]
     within:
@@ -137,6 +143,7 @@
     - Ide.PluginUtils
     - Ide.Plugin.Eval.Parse.Comments
     - Ide.Plugin.Eval.CodeLens
+    - FindDefinitionAndHoverTests #Previously part of GHCIDE Main tests
 
   - name: [Prelude.init, Data.List.init]
     within:
@@ -146,6 +153,9 @@
     - Wingman.Metaprogramming.Parser
     - Development.Benchmark.Rules
     - ErrorGivenPartialSignature
+    - IfaceTests #Previously part of GHCIDE Main tests
+    - THTests #Previously part of GHCIDE Main tests
+    - WatchedFileTests #Previously part of GHCIDE Main tests
 
   - name: Data.List.foldl1'
     within: []
@@ -164,6 +174,8 @@
     - TErrorGivenPartialSignature
     - Wingman.CaseSplit
     - Wingman.Simplify
+    - InitializeResponseTests #Previously part of GHCIDE Main tests
+    - PositionMappingTests #Previously part of GHCIDE Main tests
 
   - name: Data.Text.head
     within:
@@ -194,6 +206,7 @@
     - Development.IDE.Graph.Internal.Profile
     - Development.IDE.Graph.Internal.Rules
     - Ide.Plugin.Class
+    - CodeLensTests #Previously part of GHCIDE Main tests
 
   - name: "Data.Map.!"
     within:

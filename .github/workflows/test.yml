@@ -41,6 +41,7 @@ jobs:
                          , "**/stack*.yaml"
                          , ".gitlab-ci.yaml"
                          , ".gitlab/**"
+                         , "CODEOWNERS"
                          ]'
       # If we only change ghcide downstream packages we have not test ghcide itself
       - id: skip_ghcide_check
@@ -177,10 +178,6 @@ jobs:
       - if: matrix.test && matrix.ghc != '9.2' && matrix.ghc != '9.4' && matrix.ghc != '9.6'
         name: Test hls-tactics-plugin test suite
         run: cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || cabal test hls-tactics-plugin --test-options="$TEST_OPTS"
-
-      - if: matrix.test
-        name: Test hls-refine-imports-plugin test suite
-        run: cabal test hls-refine-imports-plugin --test-options="$TEST_OPTS" || cabal test hls-refine-imports-plugin --test-options="$TEST_OPTS"
 
       - if: matrix.test
         name: Test hls-explicit-imports-plugin test suite

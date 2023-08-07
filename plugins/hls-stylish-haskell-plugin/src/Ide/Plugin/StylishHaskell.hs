@@ -1,22 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.StylishHaskell
   ( descriptor
   , provider
   )
 where
 
+import           Control.Monad.Except             (throwError)
 import           Control.Monad.IO.Class
-import           Data.Text                       (Text)
-import qualified Data.Text                       as T
-import           Development.IDE                 hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat      (ModSummary (ms_hspp_opts),
-                                                  extensionFlags)
-import qualified Development.IDE.GHC.Compat.Util as Util
+import           Data.Text                        (Text)
+import qualified Data.Text                        as T
+import           Development.IDE                  hiding (pluginHandlers)
+import           Development.IDE.Core.PluginUtils
+import           Development.IDE.GHC.Compat       (ModSummary (ms_hspp_opts),
+                                                   extensionFlags)
+import qualified Development.IDE.GHC.Compat.Util  as Util
 import           GHC.LanguageExtensions.Type
+import           Ide.Plugin.Error                 (PluginError (PluginInternalError))
 import           Ide.PluginUtils
-import           Ide.Types                       hiding (Config)
+import           Ide.Types                        hiding (Config)
 import           Language.Haskell.Stylish
-import           Language.LSP.Protocol.Types     as LSP
+import           Language.LSP.Protocol.Types      as LSP
 import           System.Directory
 import           System.FilePath
 
@@ -30,17 +34,17 @@ descriptor plId = (defaultPluginDescriptor plId)
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: FormattingHandler IdeState
 provider ide typ contents fp _opts = do
-  dyn <- fmap (ms_hspp_opts . msrModSummary) $ liftIO $ runAction "stylish-haskell" ide $ use_ GetModSummary fp
+  (msrModSummary -> ms_hspp_opts -> dyn) <- runActionE "stylish-haskell" ide $ useE GetModSummary fp
   let file = fromNormalizedFilePath fp
   config <- liftIO $ loadConfigFrom file
   mergedConfig <- liftIO $ getMergedConfig dyn config
   let (range, selectedContents) = case typ of
         FormatText    -> (fullRange contents, contents)
-        FormatRange r -> (normalize r, extractRange r contents)
+        FormatRange r -> (normalize r, extractTextInRange (extendToFullLines r) contents)
       result = runStylishHaskell file mergedConfig selectedContents
   case result of
-    Left  err -> return $ Left $ responseError $ T.pack $ "stylishHaskellCmd: " ++ err
-    Right new -> return $ Right $ LSP.InL [TextEdit range new]
+    Left  err -> throwError $ PluginInternalError $ T.pack $ "stylishHaskellCmd: " ++ err
+    Right new -> pure $ LSP.InL [TextEdit range new]
   where
     getMergedConfig dyn config
       | null (configLanguageExtensions config)

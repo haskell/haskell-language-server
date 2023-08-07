@@ -1,6 +1,19 @@
+
 cradle:
   direct:
     arguments:
-    - UsualCase.hs
-    - Exported.hs
-    - A.hs
+    - ExplicitOnlyThis.hs
+    - ExplicitStaleAction.hs
+    - ExplicitUsualCase.hs
+    - ExplicitExported.hs
+    - ExplicitA.hs
+    - ExplicitB.hs
+    - RefineUsualCase.hs
+    - RefineWithOverride.hs
+    - RefineA.hs
+    - RefineB.hs
+    - RefineC.hs
+    - RefineD.hs
+    - RefineE.hs
+    - RefineF.hs
+    - RefineG.hs

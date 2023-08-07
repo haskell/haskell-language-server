@@ -67,13 +67,6 @@ import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
                                                        newHscEnvEqPreserveImportPaths)
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger         (Pretty (pretty),
-                                                       Priority (Debug, Error, Info, Warning),
-                                                       Recorder, WithPriority,
-                                                       cmapWithPrio, logWith,
-                                                       nest,
-                                                       toCologActionWithPrio,
-                                                       vcat, viaShow, (<+>))
 import           Development.IDE.Types.Options
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
@@ -82,6 +75,13 @@ import           HIE.Bios.Environment                 hiding (getCacheDir)
 import           HIE.Bios.Types                       hiding (Log)
 import qualified HIE.Bios.Types                       as HieBios
 import           Hie.Implicit.Cradle                  (loadImplicitHieCradle)
+import           Ide.Logger                           (Pretty (pretty),
+                                                       Priority (Debug, Error, Info, Warning),
+                                                       Recorder, WithPriority,
+                                                       cmapWithPrio, logWith,
+                                                       nest,
+                                                       toCologActionWithPrio,
+                                                       vcat, viaShow, (<+>))
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Server
 import           System.Directory
@@ -487,7 +487,25 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
         packageSetup (hieYaml, cfp, opts, libDir) = do
           -- Parse DynFlags for the newly discovered component
           hscEnv <- emptyHscEnv ideNc libDir
-          (df, targets) <- evalGhcEnv hscEnv $ setOptions opts (hsc_dflags hscEnv)
+          (df', targets) <- evalGhcEnv hscEnv $ setOptions opts (hsc_dflags hscEnv)
+          let df =
+#if MIN_VERSION_ghc(9,3,0)
+                case unitIdString (homeUnitId_ df') of
+                     -- cabal uses main for the unit id of all executable packages
+                     -- This makes multi-component sessions confused about what
+                     -- options to use for that component.
+                     -- Solution: hash the options and use that as part of the unit id
+                     -- This works because there won't be any dependencies on the
+                     -- executable unit.
+                     "main" ->
+                       let hash = B.unpack $ B16.encode $ H.finalize $ H.updates H.init (map B.pack $ componentOptions opts)
+                           hashed_uid = Compat.toUnitId (Compat.stringToUnit ("main-"++hash))
+                       in setHomeUnitId_ hashed_uid df'
+                     _ -> df'
+#else
+                df'
+#endif
+
           let deps = componentDependencies opts ++ maybeToList hieYaml
           dep_info <- getDependencyInfo deps
           -- Now lookup to see whether we are combining with an existing HscEnv
@@ -502,6 +520,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   -- We will modify the unitId and DynFlags used for
                   -- compilation but these are the true source of
                   -- information.
+                  
                   new_deps = RawComponentInfo (homeUnitId_ df) df targets cfp opts dep_info
                                 : maybe [] snd oldDeps
                   -- Get all the unit-ids for things in this component

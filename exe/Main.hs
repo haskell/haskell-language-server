@@ -13,7 +13,7 @@ import           Data.Function                 ((&))
 import           Data.Functor                  ((<&>))
 import           Data.Maybe                    (catMaybes)
 import           Data.Text                     (Text)
-import           Development.IDE.Types.Logger  (Doc, Priority (Error, Info),
+import           Ide.Logger  (Doc, Priority (Error, Info),
                                                 Recorder,
                                                 WithPriority (WithPriority, priority),
                                                 cfilter, cmapWithPrio,
@@ -21,7 +21,7 @@ import           Development.IDE.Types.Logger  (Doc, Priority (Error, Info),
                                                 layoutPretty, logWith,
                                                 makeDefaultStderrRecorder,
                                                 renderStrict, withFileRecorder)
-import qualified Development.IDE.Types.Logger  as Logger
+import qualified Ide.Logger  as Logger
 import qualified HlsPlugins                    as Plugins
 import           Ide.Arguments                 (Arguments (..),
                                                 GhcideArguments (..),
