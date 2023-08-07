@@ -65,7 +65,7 @@ getAtPoint file pos = runMaybeT $ do
   dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> runMaybeT (useWithStaleFastMT GetDocMap file)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-  MaybeT $ pure $ first (toCurrentRange mapping =<<) <$> AtPoint.atPoint opts hf dkMap env pos'
+  MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$> AtPoint.atPoint opts hf dkMap env pos'
 
 -- | For each Loacation, determine if we have the PositionMapping
 -- for the correct file. If not, get the correct position mapping

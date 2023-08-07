@@ -1,9 +1,10 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP        #-}
-{-# LANGUAGE GADTs      #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Gives information about symbols at a given point in DAML files.
 -- These are all pure functions that should execute quickly.
@@ -213,21 +214,33 @@ atPoint
   -> DocAndKindMap
   -> HscEnv
   -> Position
-  -> Maybe (Maybe Range, [T.Text])
-atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ pointCommand hf pos hoverInfo
+  -> IO (Maybe (Maybe Range, [T.Text]))
+atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env pos =
+    listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
-    hoverInfo ast = (Just range, prettyNames ++ pTypes)
+    hoverInfo :: HieAST hietype -> IO (Maybe Range, [T.Text])
+    hoverInfo ast = do
+        prettyNames <- mapM prettyName filteredNames
+        pure (Just range, prettyNames ++ pTypes)
       where
+        pTypes :: [T.Text]
         pTypes
           | Prelude.length names == 1 = dropEnd1 $ map wrapHaskell prettyTypes
           | otherwise = map wrapHaskell prettyTypes
 
+        range :: Range
         range = realSrcSpanToRange $ nodeSpan ast
 
+        wrapHaskell :: T.Text -> T.Text
         wrapHaskell x = "\n```haskell\n"<>x<>"\n```\n"
+
+        info :: NodeInfo hietype
         info = nodeInfoH kind ast
+
+        names :: [(Identifier, IdentifierDetails hietype)]
         names = M.assocs $ nodeIdentifiers info
+
         -- Check for evidence bindings
         isInternal :: (Identifier, IdentifierDetails a) -> Bool
         isInternal (Right _, dets) =
@@ -237,11 +250,12 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
           False
 #endif
         isInternal (Left _, _) = False
+
+        filteredNames :: [(Identifier, IdentifierDetails hietype)]
         filteredNames = filter (not . isInternal) names
-        types = nodeType info
-        prettyNames :: [T.Text]
-        prettyNames = map prettyName filteredNames
-        prettyName (Right n, dets) = T.unlines $
+
+        prettyName :: (Either ModuleName Name, IdentifierDetails hietype) -> IO T.Text
+        prettyName (Right n, dets) = pure $ T.unlines $
           wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
           : maybeToList (pretty (definedAt n) (prettyPackageName n))
           ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
@@ -251,21 +265,48 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
                 pretty (Just define) Nothing = Just $ define <> "\n"
                 pretty Nothing (Just pkgName) = Just $ pkgName <> "\n"
                 pretty (Just define) (Just pkgName) = Just $ define <> " " <> pkgName <> "\n"
-        prettyName (Left m,_) = printOutputable m
+        prettyName (Left m,_) = packageNameForImportStatement m
 
+        prettyPackageName :: Name -> Maybe T.Text
         prettyPackageName n = do
           m <- nameModule_maybe n
+          pkgTxt <- packageNameWithVersion m env
+          pure $ "*(" <> pkgTxt <> ")*"
+
+        -- Return the module text itself and
+        -- the package(with version) this `ModuleName` belongs to.
+        packageNameForImportStatement :: ModuleName -> IO T.Text
+        packageNameForImportStatement mod = do
+          mpkg <- findImportedModule env mod :: IO (Maybe Module)
+          let moduleName = printOutputable mod
+          case mpkg >>= flip packageNameWithVersion env of
+            Nothing             -> pure moduleName
+            Just pkgWithVersion -> pure $ moduleName <> "\n\n" <> pkgWithVersion
+
+        -- Return the package name and version of a module.
+        -- For example, given module `Data.List`, it should return something like `base-4.x`.
+        packageNameWithVersion :: Module -> HscEnv -> Maybe T.Text
+        packageNameWithVersion m env = do
           let pid = moduleUnit m
           conf <- lookupUnit env pid
           let pkgName = T.pack $ unitPackageNameString conf
               version = T.pack $ showVersion (unitPackageVersion conf)
-          pure $ "*(" <> pkgName <> "-" <> version <> ")*"
+          pure $ pkgName <> "-" <> version
 
+        -- Type info for the current node, it may contains several symbols
+        -- for one range, like wildcard
+        types :: [hietype]
+        types = nodeType info
+
+        prettyTypes :: [T.Text]
         prettyTypes = map (("_ :: "<>) . prettyType) types
+
+        prettyType :: hietype -> T.Text
         prettyType t = case kind of
           HieFresh -> printOutputable t
           HieFromDisk full_file -> printOutputable $ hieTypeToIface $ recoverFullType t (hie_types full_file)
 
+        definedAt :: Name -> Maybe T.Text
         definedAt name =
           -- do not show "at <no location info>" and similar messages
           -- see the code of 'pprNameDefnLoc' for more information
