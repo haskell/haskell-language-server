@@ -439,6 +439,7 @@ test-suite ghcide-tests
         ReferenceTests
         GarbageCollectionTests
         OpenCloseTest
+        Dependency
     default-extensions:
         BangPatterns
         DeriveFunctor
