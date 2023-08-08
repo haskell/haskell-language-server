@@ -24,6 +24,7 @@ import           Control.Monad.Trans.Except      (ExceptT (..), mapExceptT,
 import           Control.Monad.IO.Class          (MonadIO (liftIO))
 import           Control.Monad.Trans.Class       (MonadTrans (lift))
 import           Data.Bifunctor                  (bimap)
+import           Data.List                       (intercalate)
 import           Data.Maybe                      (catMaybes)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
@@ -75,6 +76,7 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
             (pure . Left . PluginInternalError . T.pack . show)
              $ runExceptT $ cliHandler fileOpts
         else do
+            logWith recorder Debug $ LogCompiledInVersion VERSION_fourmolu
             let format fourmoluConfig = ExceptT $
                     bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
 #if MIN_VERSION_fourmolu(0,11,0)
@@ -129,10 +131,13 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                     "fourmolu" : v : _ <- pure $ T.words out
                     traverse (readMaybe @Int . T.unpack) $ T.splitOn "." v
             case version of
-                Just v -> pure CLIVersionInfo
-                    { noCabal = v >= [0, 7]
-                    }
+                Just v -> do
+                    logWith recorder Debug $ LogExternalVersion v
+                    pure CLIVersionInfo
+                        { noCabal = v >= [0, 7]
+                        }
                 Nothing -> do
+                    logWith recorder Debug $ LogExternalVersion []
                     logWith recorder Warning $ NoVersion out
                     pure CLIVersionInfo
                         { noCabal = True
@@ -161,6 +166,8 @@ data LogEvent
     | ConfigPath FilePath
     | NoConfigPath [FilePath]
     | StdErr Text
+    | LogCompiledInVersion String
+    | LogExternalVersion [Int]
     deriving (Show)
 
 instance Pretty LogEvent where
@@ -170,6 +177,11 @@ instance Pretty LogEvent where
         NoConfigPath ps -> "No " <> pretty configFileName <> " found in any of:"
             <> line <> indent 2 (vsep (map (pretty . show) ps))
         StdErr t -> "Fourmolu stderr:" <> line <> indent 2 (pretty t)
+        LogCompiledInVersion v -> "Using compiled in fourmolu-" <> pretty v
+        LogExternalVersion v ->
+            "Using external fourmolu"
+            <> if null v then "" else "-"
+            <> pretty (intercalate "." $ map show v)
 
 convertDynFlags :: DynFlags -> [String]
 convertDynFlags df =
