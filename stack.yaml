@@ -41,9 +41,6 @@ packages:
 ghc-options:
   "$everything": -haddock
 
-# Remove this after https://github.com/haskell-works/hw-prim/pull/146 merged
-allow-newer: true
-
 extra-deps:
 - Cabal-syntax-3.10.1.0@sha256:bb835ebab577fd0f9c11dab96210dbb8d68ffc62652576f4b092563c345930e7,7434
 # - floskell-0.10.7
