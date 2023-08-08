@@ -120,9 +120,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
     -- (Remember here, as the code lens is not resolved yet, we only really need
     -- the range and any data that will help us resolve it later)
     let -- The first option is to generate lens from diagnostics about
-        -- top level bindings. Even though we don't need any extra data besides
-        -- the range to resolve this later, we still need to put data in here
-        -- because code lenses without data are not resolvable with HLS
+        -- top level bindings.
         generateLensFromGlobalDiags diags =
           -- We don't actually pass any data to resolve, however we need this
           -- dummy type to make sure HLS resolves our lens
@@ -140,13 +138,13 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
             , Just newRange <- [toCurrentRange mp range]]
     if mode == Always || mode == Exported
       then do
-        -- This is sort of a hybrid method, where we get the global bindings
-        -- from the GlobalBindingTypeSigs rule, and the local bindings from
-        -- diagnostics.
+        -- In this mode we get the global bindings from the
+        -- GlobalBindingTypeSigs rule.
         (GlobalBindingTypeSigsResult gblSigs, gblSigsMp) <-
           runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
           $ useWithStaleE GetGlobalBindingTypeSigs nfp
-
+        -- Depending on whether we only want exported or not we filter our list
+        -- of signatures to get what we want
         let relevantGlobalSigs =
               if mode == Exported
                 then filter gbExported gblSigs
@@ -155,7 +153,6 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
       else do
         -- For this mode we exclusively use diagnostics to create the lenses.
         -- However we will still use the GlobalBindingTypeSigs to resolve them.
-        -- This is how it was done also before the changes to support resolve.
         diags <- liftIO $ atomically $ getDiagnostics ideState
         hDiags <- liftIO $ atomically $ getHiddenDiagnostics ideState
         let allDiags = diags <> hDiags
@@ -204,12 +201,8 @@ suggestGlobalSignature isQuickFix mGblSigs diag@Diagnostic{_range}
 isGlobalDiagnostic :: Diagnostic -> Bool
 isGlobalDiagnostic Diagnostic{_message} = _message =~ ("(Top-level binding|Pattern synonym) with no type signature" :: T.Text)
 
--- We have the option of calling this function with a PositionMapping.
--- If there is no PositionMapping provided, this function won't
--- convert ranges. However if a PositionMapping is supplied, it will assume
--- that the range provided is already converted with the PositionMapping,
--- and will attempt to convert it back before attempting to find the signature
--- from the rule.
+-- If a PositionMapping is supplied, this function will call
+-- gblBindingTypeSigToEdit with it to create a TextEdit in the right location.
 suggestGlobalSignature' :: Bool -> Maybe GlobalBindingTypeSigsResult -> Maybe PositionMapping -> Range -> Maybe (T.Text, TextEdit)
 suggestGlobalSignature' isQuickFix mGblSigs pm range
   |   Just (GlobalBindingTypeSigsResult sigs) <- mGblSigs
