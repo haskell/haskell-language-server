@@ -134,13 +134,6 @@ codeActionOnlyResolveGoldenTest fp l c = goldenWithImportActions " code action r
   resolved <- resolveCodeAction x
   executeCodeAction resolved
 
--- TODO: use the one from lsp-test once that's released
-resolveCodeAction :: CodeAction -> Session CodeAction
-resolveCodeAction ca = do
-  resolveResponse <- request SMethod_CodeActionResolve ca
-  Right resolved <- pure $ resolveResponse ^. L.result
-  pure resolved
-
 maybeResolveCodeAction :: CodeAction -> Session (Maybe CodeAction)
 maybeResolveCodeAction ca = do
   resolveResponse <- request SMethod_CodeActionResolve ca
@@ -164,13 +157,6 @@ notRefineImports :: CodeLens -> Bool
 notRefineImports (CodeLens _ (Just (Command text _ _)) _)
   | "Refine imports to" `T.isPrefixOf` text = False
 notRefineImports _ = True
-
--- TODO: use the one from lsp-test once that's released
-resolveCodeLens :: CodeLens -> Session CodeLens
-resolveCodeLens cl = do
-  resolveResponse <- request SMethod_CodeLensResolve cl
-  Right resolved <- pure $ resolveResponse ^. L.result
-  pure resolved
 
 -- Execute command and wait for result
 executeCmd :: Command -> Session ()

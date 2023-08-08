@@ -169,7 +169,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "tactics" in Tactic.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_ormolu
-      Ormolu.descriptor   "ormolu" :
+      let pId = "ormolu" in Ormolu.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_stylishHaskell
       StylishHaskell.descriptor "stylish-haskell" :
