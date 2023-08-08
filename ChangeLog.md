@@ -74,8 +74,64 @@
   ([#3672](https://github.com/haskell/haskell-language-server/pull/3672)) by @michaelpj
 - Enable stylish-haskell for 9.6
   ([#3670](https://github.com/haskell/haskell-language-server/pull/3670)) by @michaelpj
+- Bump supported ormolu, allow for 9.6
+  ([#3668](https://github.com/haskell/haskell-language-server/pull/3668)) by @michaelpj
+- Bump cachix/install-nix-action from 21 to 22
+  ([#3666](https://github.com/haskell/haskell-language-server/pull/3666)) by @dependabot[bot]
+- Add arguments to direct logs to various locations
+  ([#3665](https://github.com/haskell/haskell-language-server/pull/3665)) by @michaelpj
+- Support fourmolu 0.13
+  ([#3662](https://github.com/haskell/haskell-language-server/pull/3662)) by @brandonchinn178
 - Resolve 1: Support for resolve in overloaded-record-dot
   ([#3658](https://github.com/haskell/haskell-language-server/pull/3658)) by @joyfulmantis
+- fix ISO8601 related deprecation in time
+  ([#3654](https://github.com/haskell/haskell-language-server/pull/3654)) by @HugoPeters1024
+- Add a log-level argument to set the log level
+  ([#3651](https://github.com/haskell/haskell-language-server/pull/3651)) by @michaelpj
+- Update Contributing.md
+  ([#3650](https://github.com/haskell/haskell-language-server/pull/3650)) by @VeryMilkyJoe
+- Commit to prettyprinter >= 1.7
+  ([#3649](https://github.com/haskell/haskell-language-server/pull/3649)) by @michaelpj
+- Add missing Monad constraint in the eval plugin
+  ([#3648](https://github.com/haskell/haskell-language-server/pull/3648)) by @sandydoo
+- hls-pragmas-plugin: Reduce noisy completions
+  ([#3647](https://github.com/haskell/haskell-language-server/pull/3647)) by @akshaymankar
+- Correctly pass VersionedTextDocumentIdentifier through hls
+  ([#3643](https://github.com/haskell/haskell-language-server/pull/3643)) by @maralorn
+- Add an assist for importing record fields when using OverloadedRecordDot
+  ([#3642](https://github.com/haskell/haskell-language-server/pull/3642)) by @simmsb
+- update flakes to compile with ghc928 and ghc962
+  ([#3641](https://github.com/haskell/haskell-language-server/pull/3641)) by @smunix
+- Split pragmas plugin by providers + decrease disable-warning priority
+  ([#3640](https://github.com/haskell/haskell-language-server/pull/3640)) by @mrcjkb
+- Reintroduce cabal-install in flake.nix
+  ([#3637](https://github.com/haskell/haskell-language-server/pull/3637)) by @cgeorgii
+- Delete dead cbits
+  ([#3635](https://github.com/haskell/haskell-language-server/pull/3635)) by @michaelpj
+- Simplify selection of GHCs to build on
+  ([#3633](https://github.com/haskell/haskell-language-server/pull/3633)) by @michaelpj
+- Support fourmolu 0.13.0.0
+  ([#3631](https://github.com/haskell/haskell-language-server/pull/3631)) by @brandonchinn178
+- Bump haskell/actions from 2.4.1 to 2.4.3 in /.github/actions/setup-build
+  ([#3627](https://github.com/haskell/haskell-language-server/pull/3627)) by @dependabot[bot]
+- Bump haskell/actions from 2.4.1 to 2.4.3
+  ([#3626](https://github.com/haskell/haskell-language-server/pull/3626)) by @dependabot[bot]
+- remove ghc minor versions in nix flake package builds
+  ([#3625](https://github.com/haskell/haskell-language-server/pull/3625)) by @smunix
+- HLS for the new generated LSP 2 release
+  ([#3621](https://github.com/haskell/haskell-language-server/pull/3621)) by @joyfulmantis
+- Keep plugin id of cabal-fmt in sync with default config id
+  ([#3615](https://github.com/haskell/haskell-language-server/pull/3615)) by @VeryMilkyJoe
+- Fix some grammar mistakes and typos
+  ([#3614](https://github.com/haskell/haskell-language-server/pull/3614)) by @VeryMilkyJoe
+- Bump cachix/install-nix-action from 20 to 21
+  ([#3612](https://github.com/haskell/haskell-language-server/pull/3612)) by @dependabot[bot]
+- fix: remove the `Indexing` progress message when exeption in withHieDb
+  ([#3610](https://github.com/haskell/haskell-language-server/pull/3610)) by @guibou
+- Bump haskell/actions from 2.4.0 to 2.4.1 in /.github/actions/setup-build
+  ([#3604](https://github.com/haskell/haskell-language-server/pull/3604)) by @dependabot[bot]
+- Bump haskell/actions from 2.4.0 to 2.4.1
+  ([#3603](https://github.com/haskell/haskell-language-server/pull/3603)) by @dependabot[bot]
 - Cabal file completions
   ([#3268](https://github.com/haskell/haskell-language-server/pull/3268)) by @VeryMilkyJoe
 - Share ModuleGraphs for all files
