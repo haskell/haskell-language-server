@@ -1,8 +1,89 @@
 # Changelog for haskell-language-server
 
+## 2.1.0.0
+
+* Binaries for GHC 9.4.6
+* Completions for .cabal files
+* Performance improvements
+
+### Pull requests merged
+
+- Update to latest lsp packages
+  ([#3747](https://github.com/haskell/haskell-language-server/pull/3747)) by @joyfulmantis
+- Remove unnecessary allow-newer in stack.yaml
+  ([#3746](https://github.com/haskell/haskell-language-server/pull/3746)) by @July541
+- Log fourmolu and ormolu version that hls using
+  ([#3744](https://github.com/haskell/haskell-language-server/pull/3744)) by @July541
+- Various PluginError PR suggestions I missed earlier
+  ([#3737](https://github.com/haskell/haskell-language-server/pull/3737)) by @joyfulmantis
+- Add resolve support in refine imports by merging it with explicit imports
+  ([#3729](https://github.com/haskell/haskell-language-server/pull/3729)) by @joyfulmantis
+- Fix other file goto definition
+  ([#3725](https://github.com/haskell/haskell-language-server/pull/3725)) by @nlander
+- Fix Nix builds
+  ([#3724](https://github.com/haskell/haskell-language-server/pull/3724)) by @cydparser
+- Better plugin error infrastructure
+  ([#3717](https://github.com/haskell/haskell-language-server/pull/3717)) by @joyfulmantis
+- Move Recorder to hls-plugin-api
+  ([#3714](https://github.com/haskell/haskell-language-server/pull/3714)) by @joyfulmantis
+- Actually force usages
+  ([#3713](https://github.com/haskell/haskell-language-server/pull/3713)) by @wz1000
+- Best-effort support of Qualified Imports in GHC 9.4
+  ([#3712](https://github.com/haskell/haskell-language-server/pull/3712)) by @konn
+- Skip test if only CODEOWNERS changed
+  ([#3707](https://github.com/haskell/haskell-language-server/pull/3707)) by @July541
+- Update stack stuff
+  ([#3706](https://github.com/haskell/haskell-language-server/pull/3706)) by @July541
+- Mark hls-floskell-plugin as tier 3
+  ([#3705](https://github.com/haskell/haskell-language-server/pull/3705)) by @July541
+- Remove isovector as an owner
+  ([#3700](https://github.com/haskell/haskell-language-server/pull/3700)) by @isovector
+- Bump haskell/actions from 2.4.3 to 2.4.4 in /.github/actions/setup-build
+  ([#3699](https://github.com/haskell/haskell-language-server/pull/3699)) by @dependabot[bot]
+- Bump haskell/actions from 2.4.3 to 2.4.4
+  ([#3698](https://github.com/haskell/haskell-language-server/pull/3698)) by @dependabot[bot]
+- Catch exceptions in commands and use lsp null
+  ([#3696](https://github.com/haskell/haskell-language-server/pull/3696)) by @joyfulmantis
+- Show package name and its version while hovering on import statements
+  ([#3691](https://github.com/haskell/haskell-language-server/pull/3691)) by @July541
+- Resolve refactoring
+  ([#3688](https://github.com/haskell/haskell-language-server/pull/3688)) by @joyfulmantis
+- Prefer non-boot files when creating the FinderCache.
+  ([#3687](https://github.com/haskell/haskell-language-server/pull/3687)) by @wz1000
+- Some fixes for multi component stuff
+  ([#3686](https://github.com/haskell/haskell-language-server/pull/3686)) by @wz1000
+- Further hlint resolve changes.
+  ([#3685](https://github.com/haskell/haskell-language-server/pull/3685)) by @joyfulmantis
+- docs (plugin-support): fix plugin name typo
+  ([#3683](https://github.com/haskell/haskell-language-server/pull/3683)) by @PiDelport
+- Resolve for explicit-imports
+  ([#3682](https://github.com/haskell/haskell-language-server/pull/3682)) by @joyfulmantis
+- Hls 2.0.0.1 forward port
+  ([#3680](https://github.com/haskell/haskell-language-server/pull/3680)) by @hasufell
+- Resolve 2: Support for resolve in hls-hlint-plugin
+  ([#3679](https://github.com/haskell/haskell-language-server/pull/3679)) by @joyfulmantis
+- Resolve 0: Generic support for resolve in hls packages
+  ([#3678](https://github.com/haskell/haskell-language-server/pull/3678)) by @joyfulmantis
+- Ship hls-hlint-plugin for ghc-9.6
+  ([#3677](https://github.com/haskell/haskell-language-server/pull/3677)) by @July541
+- Remove extra call to newHscEnvEqWithImportPaths
+  ([#3676](https://github.com/haskell/haskell-language-server/pull/3676)) by @nlander
+- Fixes pragma plugin offering incorrect code actions #3673
+  ([#3674](https://github.com/haskell/haskell-language-server/pull/3674)) by @joyfulmantis
+- Restore short option for logfile
+  ([#3672](https://github.com/haskell/haskell-language-server/pull/3672)) by @michaelpj
+- Enable stylish-haskell for 9.6
+  ([#3670](https://github.com/haskell/haskell-language-server/pull/3670)) by @michaelpj
+- Resolve 1: Support for resolve in overloaded-record-dot
+  ([#3658](https://github.com/haskell/haskell-language-server/pull/3658)) by @joyfulmantis
+- Cabal file completions
+  ([#3268](https://github.com/haskell/haskell-language-server/pull/3268)) by @VeryMilkyJoe
+- Share ModuleGraphs for all files
+  ([#3232](https://github.com/haskell/haskell-language-server/pull/3232)) by @wz1000
+
 ## 2.0.0.1
 
-- Add overloaded record dot plugin intial version (closes #3350) (#3560)
+- Add overloaded record dot plugin initial version (closes #3350) (#3560)
 - Binaries for GHC 9.2.8 and GHC 9.6.2
 
 ## 2.0.0.0
