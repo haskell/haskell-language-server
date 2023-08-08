@@ -105,22 +105,68 @@ jobs:
                     }
                   ]
         # TODO: rm
-        # we need a different image for 9.4.5, because GHC bindists are busted
-        # See for https://gitlab.haskell.org/ghc/ghc/-/issues/22268 details.
-        # TLDR; remove this code once we drop support for GHC 9.4
+        # Instead of manually adding the Unknown Linux Bindist jobs here,
+        # it should be part of the matrix above.
+        # However, due to GHC 9.4 shenanigans, we need some special logic.
+        # https://gitlab.haskell.org/ghc/ghc/-/issues/22268
+        #
+        # Perhaps we can migrate *all* unknown linux builds to a uniform
+        # image.
         include:
           - ghc: 8.10.7
-            platform: { image: "rockylinux:8", installCmd: "yum -y install epel-release && yum install -y --allowerasing", toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf", DISTRO: "Unknown", ARTIFACT: "x86_64-linux-unknown", ADD_CABAL_ARGS: "--enable-split-sections" }
+            platform:
+              { image: "rockylinux:8"
+              , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
+              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+              , DISTRO: "Unknown"
+              , ARTIFACT: "x86_64-linux-unknown"
+              , ADD_CABAL_ARGS: "--enable-split-sections"
+              }
           - ghc: 9.0.2
-            platform: { image: "rockylinux:8", installCmd: "yum -y install epel-release && yum install -y --allowerasing", toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf", DISTRO: "Unknown", ARTIFACT: "x86_64-linux-unknown", ADD_CABAL_ARGS: "--enable-split-sections" }
+            platform:
+              { image: "rockylinux:8"
+              , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
+              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+              , DISTRO: "Unknown"
+              , ARTIFACT: "x86_64-linux-unknown"
+              , ADD_CABAL_ARGS: "--enable-split-sections"
+              }
           - ghc: 9.2.8
-            platform: { image: "rockylinux:8", installCmd: "yum -y install epel-release && yum install -y --allowerasing", toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf", DISTRO: "Unknown", ARTIFACT: "x86_64-linux-unknown", ADD_CABAL_ARGS: "--enable-split-sections" }
+            platform:
+              { image: "rockylinux:8"
+              , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
+              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+              , DISTRO: "Unknown"
+              , ARTIFACT: "x86_64-linux-unknown"
+              , ADD_CABAL_ARGS: "--enable-split-sections"
+              }
           - ghc: 9.4.5
-            platform: { image: "fedora:33", installCmd: "dnf install -y", toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf tree", DISTRO: "Unknown", ARTIFACT: "x86_64-linux-unknown", ADD_CABAL_ARGS: "--enable-split-sections" }
+            platform:
+              { image: "fedora:27"
+              , installCmd: "dnf install -y"
+              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+              , DISTRO: "Unknown"
+              , ARTIFACT: "x86_64-linux-unknown"
+              , ADD_CABAL_ARGS: "--enable-split-sections"
+              }
           - ghc: 9.4.6
-            platform: { image: "fedora:33", installCmd: "dnf install -y", toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf tree", DISTRO: "Unknown", ARTIFACT: "x86_64-linux-unknown", ADD_CABAL_ARGS: "--enable-split-sections" }
+            platform:
+              { image: "fedora:27"
+              , installCmd: "dnf install -y"
+              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+              , DISTRO: "Unknown"
+              , ARTIFACT: "x86_64-linux-unknown"
+              , ADD_CABAL_ARGS: "--enable-split-sections"
+              }
           - ghc: 9.6.2
-            platform: { image: "rockylinux:8", installCmd: "yum -y install epel-release && yum install -y --allowerasing", toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf", DISTRO: "Unknown", ARTIFACT: "x86_64-linux-unknown", ADD_CABAL_ARGS: "--enable-split-sections" }
+            platform:
+              { image: "rockylinux:8"
+              , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
+              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+              , DISTRO: "Unknown"
+              , ARTIFACT: "x86_64-linux-unknown"
+              , ADD_CABAL_ARGS: "--enable-split-sections"
+              }
     container:
       image: ${{ matrix.platform.image }}
     steps:
