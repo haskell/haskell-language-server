@@ -453,13 +453,9 @@ goldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 goldenResolveTest testCaseName goldenFilename point hintText =
   setupGoldenHlintResolveTest testCaseName goldenFilename $ \document -> do
     waitForDiagnosticsFromSource document "hlint"
-    actions <- getCodeActions document $ pointToRange point
+    actions <- getAndResolveCodeActions document $ pointToRange point
     case find ((== Just hintText) . getCodeActionTitle) actions of
-      Just (InR codeAction) -> do
-        rsp <- request SMethod_CodeActionResolve codeAction
-        case rsp ^. L.result of
-          Right ca -> executeCodeAction ca
-          Left re  -> liftIO $ assertFailure $ show re
+      Just (InR codeAction) -> executeCodeAction codeAction
       _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
 
 setupGoldenHlintResolveTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
