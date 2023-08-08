@@ -4,28 +4,14 @@
 module Completion(tests) where
 
 import           Control.Lens               hiding ((.=))
-import           Control.Monad
 import           Data.Aeson                 (object, (.=))
 import           Data.Foldable              (find)
-import           Data.Maybe                 (isJust)
 import           Data.Row.Records           (focus)
 import qualified Data.Text                  as T
 import           Ide.Plugin.Config          (maxCompletions)
 import           Language.LSP.Protocol.Lens hiding (applyEdit, length)
 import           Test.Hls
 import           Test.Hls.Command
-
-getResolvedCompletions :: TextDocumentIdentifier -> Position -> Session [CompletionItem]
-getResolvedCompletions doc pos = do
-  xs <- getCompletions doc pos
-  forM xs $ \item -> do
-    if isJust (item ^. data_)
-      then do
-        rsp <- request SMethod_CompletionItemResolve item
-        case rsp ^. result of
-          Left err -> liftIO $ assertFailure ("completionItem/resolve failed with: " <> show err)
-          Right x -> pure x
-      else pure item
 
 tests :: TestTree
 tests = testGroup "completions" [
@@ -35,7 +21,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 5 7) (Position 5 24)) "put"
          _ <- applyEdit doc te
 
-         compls <- getResolvedCompletions doc (Position 5 9)
+         compls <- getAndResolveCompletions doc (Position 5 9)
          item <- getCompletionByLabel "putStrLn" compls
          liftIO $ do
              item ^. label @?= "putStrLn"
@@ -50,7 +36,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 5 7) (Position 5 24)) "put"
          _ <- applyEdit doc te
 
-         compls <- getResolvedCompletions doc (Position 5 9)
+         compls <- getAndResolveCompletions doc (Position 5 9)
          item <- getCompletionByLabel "putStrLn" compls
          liftIO $ do
                  item ^. label @?= "putStrLn"
@@ -67,7 +53,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 1 17) (Position 1 26)) "Data.M"
          _ <- applyEdit doc te
 
-         compls <- getResolvedCompletions doc (Position 1 23)
+         compls <- getAndResolveCompletions doc (Position 1 23)
          item <- getCompletionByLabel "Maybe" compls
          liftIO $ do
              item ^. label @?= "Maybe"
@@ -82,7 +68,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 2 17) (Position 2 25)) "Data.L"
          _ <- applyEdit doc te
 
-         compls <- getResolvedCompletions doc (Position 2 24)
+         compls <- getAndResolveCompletions doc (Position 2 24)
          item <- getCompletionByLabel "List" compls
          liftIO $ do
              item ^. label @?= "List"
@@ -92,7 +78,7 @@ tests = testGroup "completions" [
      , testCase "completes with no prefix" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         compls <- getResolvedCompletions doc (Position 5 7)
+         compls <- getAndResolveCompletions doc (Position 5 7)
          liftIO $ assertBool "Expected completions" $ not $ null compls
 
      , expectFailIfBeforeGhc92 "record dot syntax is introduced in GHC 9.2"
@@ -103,7 +89,7 @@ tests = testGroup "completions" [
             let te = TextEdit (Range (Position 25 0) (Position 25 5)) "z = x.a"
             _ <- applyEdit doc te
 
-            compls <- getResolvedCompletions doc (Position 25 6)
+            compls <- getAndResolveCompletions doc (Position 25 6)
             item <- getCompletionByLabel "a" compls
 
             liftIO $ do
@@ -114,7 +100,7 @@ tests = testGroup "completions" [
             let te = TextEdit (Range (Position 27 0) (Position 27 8)) "z2 = x.c.z"
             _ <- applyEdit doc te
 
-            compls <- getResolvedCompletions doc (Position 27 9)
+            compls <- getAndResolveCompletions doc (Position 27 9)
             item <- getCompletionByLabel "z" compls
 
             liftIO $ do
@@ -128,7 +114,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 5 0) (Position 5 2)) "acc"
          _ <- applyEdit doc te
 
-         compls <- getResolvedCompletions doc (Position 5 4)
+         compls <- getAndResolveCompletions doc (Position 5 4)
          item <- getCompletionByLabel "accessor" compls
          liftIO $ do
              item ^. label @?= "accessor"
@@ -138,7 +124,7 @@ tests = testGroup "completions" [
 
          let te = TextEdit (Range (Position 5 7) (Position 5 9)) "id"
          _ <- applyEdit doc te
-         compls <- getResolvedCompletions doc (Position 5 9)
+         compls <- getAndResolveCompletions doc (Position 5 9)
          item <- getCompletionByLabel "id" compls
          liftIO $ do
              item ^. detail @?= Just ":: a -> a\nfrom Prelude"
@@ -148,7 +134,7 @@ tests = testGroup "completions" [
 
          let te = TextEdit (Range (Position 5 7) (Position 5 24)) "flip"
          _ <- applyEdit doc te
-         compls <- getResolvedCompletions doc (Position 5 11)
+         compls <- getAndResolveCompletions doc (Position 5 11)
          item <- getCompletionByLabel "flip" compls
          liftIO $
              item ^. detail @?= Just ":: (a -> b -> c) -> b -> a -> c\nfrom Prelude"
@@ -156,7 +142,7 @@ tests = testGroup "completions" [
      , testCase "maxCompletions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         compls <- getResolvedCompletions doc (Position 5 7)
+         compls <- getAndResolveCompletions doc (Position 5 7)
          liftIO $ length compls @?= maxCompletions def
 
      , testCase "import function completions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -165,7 +151,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 0 30) (Position 0 41)) "A"
          _ <- applyEdit doc te
 
-         compls <- getResolvedCompletions doc (Position 0 31)
+         compls <- getAndResolveCompletions doc (Position 0 31)
          item <- getCompletionByLabel "Alternative" compls
          liftIO $ do
              item ^. label @?= "Alternative"
@@ -178,7 +164,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 0 39) (Position 0 39)) ", l"
          _ <- applyEdit doc te
 
-         compls <- getResolvedCompletions doc (Position 0 42)
+         compls <- getAndResolveCompletions doc (Position 0 42)
          item <- getCompletionByLabel "liftA" compls
          liftIO $ do
              item ^. label @?= "liftA"
@@ -188,7 +174,7 @@ tests = testGroup "completions" [
      , testCase "completes locally defined associated type family" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "AssociatedTypeFamily.hs" "haskell"
 
-         compls <- getResolvedCompletions doc (Position 5 20)
+         compls <- getAndResolveCompletions doc (Position 5 20)
          item <- getCompletionByLabel "Fam" compls
          liftIO $ do
              item ^. label @?= "Fam"
@@ -206,7 +192,7 @@ snippetTests = testGroup "snippets" [
       let te = TextEdit (Range (Position 5 7) (Position 5 24)) "Nothing"
       _ <- applyEdit doc te
 
-      compls <- getResolvedCompletions doc (Position 5 14)
+      compls <- getAndResolveCompletions doc (Position 5 14)
       item <- getCompletionByLabel "Nothing" compls
       liftIO $ do
           item ^. insertTextFormat @?= Just InsertTextFormat_Snippet
@@ -218,7 +204,7 @@ snippetTests = testGroup "snippets" [
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "fold"
         _ <- applyEdit doc te
 
-        compls <- getResolvedCompletions doc (Position 5 11)
+        compls <- getAndResolveCompletions doc (Position 5 11)
         item <- getCompletionByLabel "foldl" compls
         liftIO $ do
             item ^. label @?= "foldl"
@@ -232,7 +218,7 @@ snippetTests = testGroup "snippets" [
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "mapM"
         _ <- applyEdit doc te
 
-        compls <- getResolvedCompletions doc (Position 5 11)
+        compls <- getAndResolveCompletions doc (Position 5 11)
         item <- getCompletionByLabel "mapM" compls
         liftIO $ do
             item ^. label @?= "mapM"
@@ -246,7 +232,7 @@ snippetTests = testGroup "snippets" [
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "even `filte"
         _ <- applyEdit doc te
 
-        compls <- getResolvedCompletions doc (Position 5 18)
+        compls <- getAndResolveCompletions doc (Position 5 18)
         item <- getCompletionByLabel "filter" compls
         liftIO $ do
             item ^. label @?= "filter"
@@ -260,7 +246,7 @@ snippetTests = testGroup "snippets" [
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "even `filte`"
         _ <- applyEdit doc te
 
-        compls <- getResolvedCompletions doc (Position 5 18)
+        compls <- getAndResolveCompletions doc (Position 5 18)
         item <- getCompletionByLabel "filter" compls
         liftIO $ do
             item ^. label @?= "filter"
@@ -274,7 +260,7 @@ snippetTests = testGroup "snippets" [
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "\"\" `Data.List.interspe"
         _ <- applyEdit doc te
 
-        compls <- getResolvedCompletions doc (Position 5 29)
+        compls <- getAndResolveCompletions doc (Position 5 29)
         item <- getCompletionByLabel "intersperse" compls
         liftIO $ do
             item ^. label @?= "intersperse"
@@ -288,7 +274,7 @@ snippetTests = testGroup "snippets" [
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "\"\" `Data.List.interspe`"
         _ <- applyEdit doc te
 
-        compls <- getResolvedCompletions doc (Position 5 29)
+        compls <- getAndResolveCompletions doc (Position 5 29)
         item <- getCompletionByLabel "intersperse" compls
         liftIO $ do
             item ^. label @?= "intersperse"
@@ -315,7 +301,7 @@ snippetTests = testGroup "snippets" [
          let te = TextEdit (Range (Position 1 0) (Position 1 2)) "MkF"
          _ <- applyEdit doc te
 
-         compls <- getResolvedCompletions doc (Position 1 6)
+         compls <- getAndResolveCompletions doc (Position 1 6)
          item <- case find (\c -> (c ^. label == "MkFoo") && maybe False ("MkFoo {" `T.isPrefixOf`) (c ^. insertText)) compls of
             Just c -> pure c
             Nothing -> liftIO . assertFailure $ "Completion with label 'MkFoo' and insertText starting with 'MkFoo {' not found among " <> show compls
@@ -328,7 +314,7 @@ snippetTests = testGroup "snippets" [
             let te = TextEdit (Range (Position 5 7) (Position 5 24)) "fold"
             _      <- applyEdit doc te
 
-            compls <- getResolvedCompletions doc (Position 5 11)
+            compls <- getAndResolveCompletions doc (Position 5 11)
             item <- getCompletionByLabel "foldl" compls
             liftIO $ do
                 item ^. label @?= "foldl"
@@ -353,7 +339,7 @@ contextTests = testGroup "contexts" [
     testCase "only provides type suggestions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
       doc <- openDoc "Context.hs" "haskell"
 
-      compls <- getResolvedCompletions doc (Position 2 17)
+      compls <- getAndResolveCompletions doc (Position 2 17)
       liftIO $ do
         compls `shouldContainCompl` "Integer"
         compls `shouldNotContainCompl` "interact"
@@ -361,7 +347,7 @@ contextTests = testGroup "contexts" [
     , testCase "only provides value suggestions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
       doc <- openDoc "Context.hs" "haskell"
 
-      compls <- getResolvedCompletions doc (Position 3 10)
+      compls <- getAndResolveCompletions doc (Position 3 10)
       liftIO $ do
         compls `shouldContainCompl` "abs"
         compls `shouldNotContainCompl` "Applicative"
@@ -369,7 +355,7 @@ contextTests = testGroup "contexts" [
     , testCase "completes qualified type suggestions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Context.hs" "haskell"
 
-        compls <- getResolvedCompletions doc (Position 2 26)
+        compls <- getAndResolveCompletions doc (Position 2 26)
         liftIO $ do
             compls `shouldNotContainCompl` "forkOn"
             compls `shouldContainCompl` "MVar"

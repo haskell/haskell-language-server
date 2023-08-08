@@ -5,27 +5,11 @@
 
 module Main ( main ) where
 
-import           Control.Lens                   ((^.))
 import           Data.Either                    (rights)
-import           Data.Functor                   (void)
-import           Data.Maybe                     (isNothing)
-import           Data.Row
 import qualified Data.Text                      as T
-import qualified Data.Text.Lazy                 as TL
-import qualified Data.Text.Lazy.Encoding        as TL
-import           Ide.Logger                     (Doc, Logger (Logger),
-                                                 Pretty (pretty),
-                                                 Priority (Debug),
-                                                 Recorder (Recorder, logger_),
-                                                 WithPriority (WithPriority, priority),
-                                                 cfilter, cmapWithPrio,
-                                                 makeDefaultStderrRecorder)
 import qualified Ide.Plugin.OverloadedRecordDot as OverloadedRecordDot
-import           Language.LSP.Protocol.Lens     as L
-import           System.FilePath                ((<.>), (</>))
+import           System.FilePath                ((</>))
 import           Test.Hls
-import           Test.Hls.Util                  (codeActionNoResolveCaps,
-                                                 codeActionResolveCaps)
 
 main :: IO ()
 main =
@@ -59,7 +43,7 @@ mkNoResolveTest title fp selectorName x1 y1 x2 y2 =
 mkResolveTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> TestTree
 mkResolveTest title fp selectorName x1 y1 x2 y2 =
   goldenWithHaskellAndCaps codeActionResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
-    ((Right act):_) <- getAndResolveExplicitFieldsActions doc selectorName x1 y1 x2 y2
+    (act:_) <- getAndResolveExplicitFieldsActions doc selectorName x1 y1 x2 y2
     executeCodeAction act
 
 
@@ -77,12 +61,9 @@ getAndResolveExplicitFieldsActions
   :: TextDocumentIdentifier
   -> T.Text
   -> UInt -> UInt -> UInt -> UInt
-  -> Session [Either ResponseError CodeAction]
+  -> Session [CodeAction]
 getAndResolveExplicitFieldsActions doc selectorName x1 y1 x2 y2 = do
-    actions <- findExplicitFieldsAction selectorName <$> getCodeActions doc range
-    rsp <- mapM (request SMethod_CodeActionResolve) (filter (\x -> isNothing (x ^. L.edit)) actions)
-    pure $ (^. L.result) <$> rsp
-
+    findExplicitFieldsAction selectorName <$> getAndResolveCodeActions doc range
   where
     range = Range (Position x1 y1) (Position x2 y2)
 
