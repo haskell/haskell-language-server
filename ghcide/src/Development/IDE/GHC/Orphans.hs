@@ -39,8 +39,8 @@ import           Data.Hashable
 import           Data.String                (IsString (fromString))
 import           Data.Text                  (unpack)
 #if MIN_VERSION_ghc(9,0,0)
+import           GHC                        (ModuleGraph)
 import           GHC.ByteCode.Types
-import GHC (ModuleGraph)
 #else
 import           ByteCodeTypes
 #endif
@@ -242,6 +242,9 @@ instance NFData HomeModLinkable where
 #endif
 
 instance NFData (HsExpr (GhcPass 'Renamed)) where
+    rnf = rwhnf
+
+instance NFData (Pat (GhcPass 'Renamed)) where
     rnf = rwhnf
 
 instance NFData Extension where

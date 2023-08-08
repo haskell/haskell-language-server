@@ -1,40 +1,49 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DerivingStrategies    #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PatternSynonyms       #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE DataKinds                 #-}
+{-# LANGUAGE DeriveGeneric             #-}
+{-# LANGUAGE DerivingStrategies        #-}
+{-# LANGUAGE DuplicateRecordFields     #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE NamedFieldPuns            #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE PatternSynonyms           #-}
+{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE TypeOperators             #-}
+{-# LANGUAGE ViewPatterns              #-}
 
 module Ide.Plugin.ExplicitFields
   ( descriptor
   , Log
   ) where
 
-import           Control.Lens                     ((^.))
-import           Control.Monad.IO.Class           (MonadIO, liftIO)
-import           Control.Monad.Trans.Except       (ExceptT, runExceptT)
-import           Data.Functor                     ((<&>))
-import           Data.Generics                    (GenericQ, everything, extQ,
-                                                   mkQ)
+import           Control.Lens                     ((&), (?~), (^.))
+import           Control.Monad.IO.Class           (MonadIO (liftIO))
+import           Control.Monad.Trans.Maybe
+import           Data.Aeson                       (toJSON)
+import           Data.Generics                    (GenericQ, everything,
+                                                   everythingBut, extQ, mkQ)
+import qualified Data.IntMap.Strict               as IntMap
 import qualified Data.Map                         as Map
 import           Data.Maybe                       (fromMaybe, isJust,
-                                                   listToMaybe, maybeToList)
+                                                   maybeToList)
 import           Data.Text                        (Text)
-import           Development.IDE                  (IdeState, NormalizedFilePath,
-                                                   Pretty (..), Recorder (..),
-                                                   Rules, WithPriority (..),
-                                                   realSrcSpanToRange)
+import           Data.Unique                      (hashUnique, newUnique)
+
+import           Control.Monad                    (replicateM)
+import           Development.IDE                  (IdeState, Pretty (..), Range,
+                                                   Recorder (..), Rules,
+                                                   WithPriority (..),
+                                                   defineNoDiagnostics,
+                                                   realSrcSpanToRange, viaShow)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.RuleTypes   (TcModuleResult (..),
                                                    TypeCheck (..))
-import           Development.IDE.Core.Shake       (define, use)
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       (HsConDetails (RecCon),
+                                                   HsExpansion (HsExpanded),
+                                                   HsExpr (XExpr),
                                                    HsRecFields (..), LPat,
                                                    Outputable, getLoc,
                                                    recDotDot, unLoc)
@@ -61,117 +70,111 @@ import           Development.IDE.Spans.Pragmas    (NextPragmaInfo (..),
 import           GHC.Generics                     (Generic)
 import           Ide.Logger                       (Priority (..), cmapWithPrio,
                                                    logWith, (<+>))
-import           Ide.Plugin.Error                 (PluginError,
-                                                   getNormalizedFilePathE)
+import           Ide.Plugin.Error                 (PluginError (PluginStaleResolve),
+                                                   getNormalizedFilePathE,
+                                                   handleMaybe)
 import           Ide.Plugin.RangeMap              (RangeMap)
 import qualified Ide.Plugin.RangeMap              as RangeMap
+import           Ide.Plugin.Resolve               (mkCodeActionWithResolveAndCommand)
 import           Ide.Types                        (PluginDescriptor (..),
                                                    PluginId (..),
                                                    PluginMethodHandler,
-                                                   defaultPluginDescriptor,
-                                                   mkPluginHandler)
+                                                   ResolveFunction,
+                                                   defaultPluginDescriptor)
 import qualified Language.LSP.Protocol.Lens       as L
-import           Language.LSP.Protocol.Message    (Method (..), SMethod (..))
+import           Language.LSP.Protocol.Message    (Method (..))
 import           Language.LSP.Protocol.Types      (CodeAction (..),
                                                    CodeActionKind (CodeActionKind_RefactorRewrite),
                                                    CodeActionParams (..),
                                                    Command, TextEdit (..),
                                                    WorkspaceEdit (WorkspaceEdit),
-                                                   fromNormalizedUri,
-                                                   normalizedFilePathToUri,
                                                    type (|?) (InL, InR))
 
 
 data Log
   = LogShake Shake.Log
   | LogCollectedRecords [RecordInfo]
-  | LogRenderedRecords [RenderedRecordInfo]
+  | LogRenderedRecords [TextEdit]
+  | forall a. (Pretty a) => LogResolve a
+
 
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
     LogCollectedRecords recs -> "Collected records with wildcards:" <+> pretty recs
-    LogRenderedRecords recs -> "Rendered records:" <+> pretty recs
+    LogRenderedRecords recs -> "Rendered records:" <+> viaShow recs
+    LogResolve msg -> pretty msg
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider
-  , pluginRules = collectRecordsRule recorder *> collectNamesRule
+descriptor recorder plId =
+  let resolveRecorder = cmapWithPrio LogResolve recorder
+      (carCommands, caHandlers) = mkCodeActionWithResolveAndCommand resolveRecorder plId codeActionProvider codeActionResolveProvider
+  in (defaultPluginDescriptor plId)
+  { pluginHandlers = caHandlers
+  , pluginCommands = carCommands
+  , pluginRules = collectRecordsRule recorder
   }
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeActionProvider ideState pId (CodeActionParams _ _ docId range _) = do
+codeActionProvider ideState _ (CodeActionParams _ _ docId range _) = do
   nfp <- getNormalizedFilePathE (docId ^. L.uri)
-  pragma <- getFirstPragma pId ideState nfp
-  CRR recMap exts <- collectRecords' ideState nfp
-  let actions = map (mkCodeAction nfp exts pragma) (RangeMap.filterByRange range recMap)
+  CRR{..} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
+  let actions = map (mkCodeAction enabledExtensions) (RangeMap.filterByRange range crCodeActions)
   pure $ InL actions
-
   where
-    mkCodeAction :: NormalizedFilePath -> [Extension] -> NextPragmaInfo -> RenderedRecordInfo -> Command |? CodeAction
-    mkCodeAction nfp exts pragma rec = InR CodeAction
-      { _title = mkCodeActionTitle exts
+    mkCodeAction ::  [Extension] ->  Int -> Command |? CodeAction
+    mkCodeAction  exts uid = InR CodeAction
+      { _title = "Expand record wildcard"
+                  <> if NamedFieldPuns `elem` exts
+                    then mempty
+                    else " (needs extension: NamedFieldPuns)"
       , _kind = Just CodeActionKind_RefactorRewrite
       , _diagnostics = Nothing
       , _isPreferred = Nothing
       , _disabled = Nothing
-      , _edit = Just $ mkWorkspaceEdit nfp edits
+      , _edit = Nothing
       , _command = Nothing
-      , _data_ = Nothing
+      , _data_ = Just $ toJSON uid
       }
-      where
-        edits = mkTextEdit rec : maybeToList pragmaEdit
 
-        mkTextEdit :: RenderedRecordInfo -> TextEdit
-        mkTextEdit (RenderedRecordInfo ss r) = TextEdit (realSrcSpanToRange ss) r
-
-        pragmaEdit :: Maybe TextEdit
-        pragmaEdit = if NamedFieldPuns `elem` exts
-                       then Nothing
-                       else Just $ insertNewPragma pragma NamedFieldPuns
-
-    mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
-    mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
-      where
-        changes = Just $ Map.singleton (fromNormalizedUri (normalizedFilePathToUri nfp)) edits
-
-    mkCodeActionTitle :: [Extension] -> Text
-    mkCodeActionTitle exts =
-      if NamedFieldPuns `elem` exts
-        then title
-        else title <> " (needs extension: NamedFieldPuns)"
-        where
-          title = "Expand record wildcard"
+codeActionResolveProvider :: ResolveFunction IdeState Int 'Method_CodeActionResolve
+codeActionResolveProvider ideState pId ca uri uid = do
+  nfp <- getNormalizedFilePathE uri
+  pragma <- getFirstPragma pId ideState nfp
+  CRR{..} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
+  record <- handleMaybe PluginStaleResolve $ IntMap.lookup uid crCodeActionResolve
+  let edits = maybeToList (renderRecordInfo nameMap record)
+              <> maybeToList (pragmaEdit enabledExtensions pragma)
+  pure $ ca & L.edit ?~ mkWorkspaceEdit edits
+  where
+    mkWorkspaceEdit ::[TextEdit] -> WorkspaceEdit
+    mkWorkspaceEdit edits = WorkspaceEdit (Just $ Map.singleton uri edits) Nothing Nothing
+    pragmaEdit :: [Extension] -> NextPragmaInfo -> Maybe TextEdit
+    pragmaEdit exts pragma = if NamedFieldPuns `elem` exts
+                      then Nothing
+                      else Just $ insertNewPragma pragma NamedFieldPuns
 
 collectRecordsRule :: Recorder (WithPriority Log) -> Rules ()
-collectRecordsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectRecords nfp ->
-  use TypeCheck nfp >>= \case
-    Nothing -> pure ([], Nothing)
-    Just tmr -> do
-      let exts = getEnabledExtensions tmr
-          recs = getRecords tmr
-      logWith recorder Debug (LogCollectedRecords recs)
-      use CollectNames nfp >>= \case
-        Nothing -> pure ([], Nothing)
-        Just (CNR names) -> do
-          let renderedRecs = traverse (renderRecordInfo names) recs
-              recMap = RangeMap.fromList (realSrcSpanToRange . renderedSrcSpan) <$> renderedRecs
-          logWith recorder Debug (LogRenderedRecords (concat renderedRecs))
-          pure ([], CRR <$> recMap <*> Just exts)
-
+collectRecordsRule recorder =
+  defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \CollectRecords nfp -> runMaybeT $ do
+  tmr <- useMT TypeCheck nfp
+  let recs = getRecords tmr
+  logWith recorder Debug (LogCollectedRecords recs)
+  uniques <- liftIO $ replicateM (length recs) (hashUnique <$> newUnique)
+  let recsWithUniques = zip uniques recs
+      crCodeActions = RangeMap.fromList' (toRangeAndUnique <$> recsWithUniques)
+      crCodeActionResolve = IntMap.fromList recsWithUniques
+      nameMap = getNames tmr
+      enabledExtensions = getEnabledExtensions tmr
+  pure CRR {crCodeActions, crCodeActionResolve, nameMap, enabledExtensions}
   where
     getEnabledExtensions :: TcModuleResult -> [Extension]
     getEnabledExtensions =  getExtensions . tmrParsed
+    toRangeAndUnique (uid, recordInfo) = (recordInfoToRange recordInfo, uid)
 
 getRecords :: TcModuleResult -> [RecordInfo]
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
   collectRecords valBinds
-
-collectNamesRule :: Rules ()
-collectNamesRule = define mempty $ \CollectNames nfp ->
-  use TypeCheck nfp <&> \case
-    Nothing  -> ([], Nothing)
-    Just tmr -> ([], Just (CNR (getNames tmr)))
 
 -- | Collects all 'Name's of a given source file, to be used
 -- in the variable usage analysis.
@@ -185,33 +188,21 @@ instance Hashable CollectRecords
 instance NFData CollectRecords
 
 data CollectRecordsResult = CRR
-  { recordInfos       :: RangeMap RenderedRecordInfo
-  , enabledExtensions :: [Extension]
+  { crCodeActions       :: RangeMap Int
+  , crCodeActionResolve :: IntMap.IntMap RecordInfo
+  , nameMap             :: NameMap
+  , enabledExtensions   :: [Extension]
   }
   deriving (Generic)
 
 instance NFData CollectRecordsResult
+instance NFData RecordInfo
 
 instance Show CollectRecordsResult where
   show _ = "<CollectRecordsResult>"
 
 type instance RuleResult CollectRecords = CollectRecordsResult
 
-data CollectNames = CollectNames
-                  deriving (Eq, Show, Generic)
-
-instance Hashable CollectNames
-instance NFData CollectNames
-
-data CollectNamesResult = CNR NameMap
-  deriving (Generic)
-
-instance NFData CollectNamesResult
-
-instance Show CollectNamesResult where
-  show _ = "<CollectNamesResult>"
-
-type instance RuleResult CollectNames = CollectNamesResult
 
 -- As with `GhcExtension`, this newtype exists mostly to attach
 -- an `NFData` instance to `UniqFM`.(without resorting to creating an orphan instance).
@@ -223,25 +214,19 @@ instance NFData NameMap where
 data RecordInfo
   = RecordInfoPat RealSrcSpan (Pat (GhcPass 'Renamed))
   | RecordInfoCon RealSrcSpan (HsExpr (GhcPass 'Renamed))
+  deriving (Generic)
 
 instance Pretty RecordInfo where
   pretty (RecordInfoPat ss p) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable p)
   pretty (RecordInfoCon ss e) = pretty (printOutputable ss) <> ":" <+> pretty (printOutputable e)
 
-data RenderedRecordInfo = RenderedRecordInfo
-  { renderedSrcSpan :: RealSrcSpan
-  , renderedRecord  :: Text
-  }
-  deriving (Generic)
+recordInfoToRange :: RecordInfo -> Range
+recordInfoToRange (RecordInfoPat ss _) = realSrcSpanToRange ss
+recordInfoToRange (RecordInfoCon ss _) = realSrcSpanToRange ss
 
-instance Pretty RenderedRecordInfo where
-  pretty (RenderedRecordInfo ss r) = pretty (printOutputable ss) <> ":" <+> pretty r
-
-instance NFData RenderedRecordInfo
-
-renderRecordInfo :: NameMap -> RecordInfo -> Maybe RenderedRecordInfo
-renderRecordInfo names (RecordInfoPat ss pat) = RenderedRecordInfo ss <$> showRecordPat names pat
-renderRecordInfo _ (RecordInfoCon ss expr) = RenderedRecordInfo ss <$> showRecordCon expr
+renderRecordInfo :: NameMap -> RecordInfo -> Maybe TextEdit
+renderRecordInfo names (RecordInfoPat ss pat) = TextEdit (realSrcSpanToRange ss) <$> showRecordPat names pat
+renderRecordInfo _ (RecordInfoCon ss expr) = TextEdit (realSrcSpanToRange ss) <$> showRecordCon expr
 
 -- | Checks if a 'Name' is referenced in the given map of names. The
 -- 'hasNonBindingOcc' check is necessary in order to make sure that only the
@@ -323,7 +308,7 @@ showRecordCon expr@(RecordCon _ _ flds) =
 showRecordCon _ = Nothing
 
 collectRecords :: GenericQ [RecordInfo]
-collectRecords = everything (<>) (maybeToList . (Nothing `mkQ` getRecPatterns `extQ` getRecCons))
+collectRecords = everythingBut (<>) (([], False) `mkQ` getRecPatterns `extQ` getRecCons)
 
 -- | Collect 'Name's into a map, indexed by the names' unique identifiers.
 -- The 'Eq' instance of 'Name's makes use of their unique identifiers, hence
@@ -340,25 +325,27 @@ collectRecords = everything (<>) (maybeToList . (Nothing `mkQ` getRecPatterns `e
 collectNames :: GenericQ (UniqFM Name [Name])
 collectNames = everything (plusUFM_C (<>)) (emptyUFM `mkQ` (\x -> unitUFM x [x]))
 
-getRecCons :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordInfo
+getRecCons :: LHsExpr (GhcPass 'Renamed) -> ([RecordInfo], Bool)
+-- When we stumble upon an occurrence of HsExpanded, we only want to follow a
+-- single branch. We do this here, by explicitly returning occurrences from
+-- traversing the original branch, and returning True, which keeps syb from
+-- implicitly continuing to traverse.
+getRecCons (unLoc -> XExpr (HsExpanded _ expanded)) = (collectRecords expanded, True)
 getRecCons e@(unLoc -> RecordCon _ _ flds)
-  | isJust (rec_dotdot flds) = mkRecInfo e
+  | isJust (rec_dotdot flds) = (mkRecInfo e, False)
   where
-    mkRecInfo :: LHsExpr (GhcPass 'Renamed) -> Maybe RecordInfo
-    mkRecInfo expr = listToMaybe
+    mkRecInfo :: LHsExpr (GhcPass 'Renamed) -> [RecordInfo]
+    mkRecInfo expr =
       [ RecordInfoCon realSpan' (unLoc expr) | RealSrcSpan realSpan' _ <- [ getLoc expr ]]
-getRecCons _ = Nothing
+getRecCons _ = ([], False)
 
-getRecPatterns :: LPat (GhcPass 'Renamed) -> Maybe RecordInfo
+getRecPatterns :: LPat (GhcPass 'Renamed) -> ([RecordInfo], Bool)
 getRecPatterns conPat@(conPatDetails . unLoc -> Just (RecCon flds))
-  | isJust (rec_dotdot flds) = mkRecInfo conPat
+  | isJust (rec_dotdot flds) = (mkRecInfo conPat, False)
   where
-    mkRecInfo :: LPat (GhcPass 'Renamed) -> Maybe RecordInfo
-    mkRecInfo pat = listToMaybe
+    mkRecInfo :: LPat (GhcPass 'Renamed) -> [RecordInfo]
+    mkRecInfo pat =
       [ RecordInfoPat realSpan' (unLoc pat) | RealSrcSpan realSpan' _ <- [ getLoc pat ]]
-getRecPatterns _ = Nothing
+getRecPatterns _ = ([], False)
 
-collectRecords' :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT PluginError m CollectRecordsResult
-collectRecords' ideState = runActionE "ExplicitFields" ideState
-    . useE CollectRecords
 
