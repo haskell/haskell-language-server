@@ -5,6 +5,10 @@
 * Binaries for GHC 9.4.6
 * Completions for .cabal files
 * Performance improvements
+* Show package name and its version while hovering on import statements
+  ([#3691](https://github.com/haskell/haskell-language-server/pull/3691))
+* Fix code edits in lsp spec compliant editors like helix.
+  ([#3643](https://github.com/haskell/haskell-language-server/pull/3643))
 
 ### Pull requests merged
 
