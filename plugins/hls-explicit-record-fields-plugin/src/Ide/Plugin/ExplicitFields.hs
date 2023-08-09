@@ -70,7 +70,7 @@ import           Development.IDE.Spans.Pragmas    (NextPragmaInfo (..),
 import           GHC.Generics                     (Generic)
 import           Ide.Logger                       (Priority (..), cmapWithPrio,
                                                    logWith, (<+>))
-import           Ide.Plugin.Error                 (PluginError (PluginStaleResolve),
+import           Ide.Plugin.Error                 (PluginError (PluginInternalError, PluginStaleResolve),
                                                    getNormalizedFilePathE,
                                                    handleMaybe)
 import           Ide.Plugin.RangeMap              (RangeMap)
@@ -143,7 +143,8 @@ codeActionResolveProvider ideState pId ca uri uid = do
   pragma <- getFirstPragma pId ideState nfp
   CRR{..} <- runActionE "ExplicitFields.CollectRecords" ideState $ useE CollectRecords nfp
   record <- handleMaybe PluginStaleResolve $ IntMap.lookup uid crCodeActionResolve
-  let edits = maybeToList (renderRecordInfo nameMap record)
+  rendered <- handleMaybe (PluginInternalError "Failed to render") $ renderRecordInfo nameMap record
+  let edits = [rendered]
               <> maybeToList (pragmaEdit enabledExtensions pragma)
   pure $ ca & L.edit ?~ mkWorkspaceEdit edits
   where
