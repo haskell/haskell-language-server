@@ -19,6 +19,7 @@ module Development.IDE.GHC.Compat.Units (
     -- * UnitInfoMap
     UnitInfoMap,
     getUnitInfoMap,
+    getUnitInfo,
     lookupUnit,
     lookupUnit',
     -- * UnitInfo
@@ -42,6 +43,7 @@ module Development.IDE.GHC.Compat.Units (
     installedModule,
     -- * Module
     toUnitId,
+    fromUnitId,
     Development.IDE.GHC.Compat.Units.moduleUnitId,
     moduleUnit,
     -- * ExternalPackageState
@@ -213,6 +215,16 @@ getUnitInfoMap =
   unitInfoMap . unitState
 #endif
 
+getUnitInfo :: HscEnv -> [UnitInfo]
+getUnitInfo =
+#if MIN_VERSION_ghc(9,2,0)
+  State.listUnitInfo . ue_units . hsc_unit_env
+#elif MIN_VERSION_ghc(9,0,0)
+  State.listUnitInfo . unitState
+#else
+  Packages.listPackageConfigMap . hsc_dflags
+#endif
+
 lookupUnit :: HscEnv -> Unit -> Maybe UnitInfo
 lookupUnit env pid = State.lookupUnit (unitState env) pid
 
@@ -220,7 +232,11 @@ preloadClosureUs :: HscEnv -> PreloadUnitClosure
 preloadClosureUs = State.preloadClosure . unitState
 
 unitHiddenModules :: UnitInfo -> [ModuleName]
+#if MIN_VERSION_ghc(9,0,0)
 unitHiddenModules = UnitInfo.unitHiddenModules
+#else
+unitHiddenModules = Packages.hiddenModules
+#endif
 
 unitLibraryDirs :: UnitInfo -> [FilePath]
 unitLibraryDirs =
@@ -259,6 +275,14 @@ definiteUnitId         = RealUnit
 defUnitId              = Definite
 installedModule        = Module
 
+#endif
+
+fromUnitId :: UnitId -> Unit
+fromUnitId =
+#if MIN_VERSION_ghc(9,0,0)
+    RealUnit . Definite
+#else
+    id
 #endif
 
 moduleUnitId :: Module -> UnitId

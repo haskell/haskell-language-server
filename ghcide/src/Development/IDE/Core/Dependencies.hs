@@ -68,7 +68,7 @@ indexDependencyHieFiles recorder se hscEnv = do
                 hieDir :: FilePath
                 hieDir = pkgLibDir </> "extra-compilation-artifacts"
                 unit :: GHC.Unit
-                unit = GHC.RealUnit $ GHC.Definite $ GHC.unitId package
+                unit = GHC.fromUnitId $ GHC.unitId package
             -- Check if we have already indexed this package.
             moduleRows <- withHieDb se $ \db ->
                 lookupPackage db unit
@@ -104,16 +104,14 @@ indexDependencyHieFiles recorder se hscEnv = do
         packages :: Set Package
         packages = Set.fromList
             $ map Package
-            $ Map.elems
-            -- Take only the packages in the unitInfoMap that are direct
-            -- or transitive dependencies.
-            $ Map.filterWithKey (\uid _ -> uid `Set.member` dependencyIds) unitInfoMap
+            -- Take only the packages that are direct or transitive dependencies.
+            $ filter (\unitInfo -> GHC.unitId unitInfo `Set.member` dependencyIds) allPackages
             where
-                unitInfoMap :: GHC.UnitInfoMap
-                unitInfoMap = GHC.getUnitInfoMap hscEnv
+                allPackages :: [GHC.UnitInfo]
+                allPackages = GHC.getUnitInfo hscEnv
                 dependencyIds :: Set GHC.UnitId
                 dependencyIds =
-                    calculateTransitiveDependencies unitInfoMap directDependencyIds directDependencyIds
+                    calculateTransitiveDependencies allPackages directDependencyIds directDependencyIds
                 directDependencyIds :: Set GHC.UnitId
                 directDependencyIds = Set.fromList
                     $ map GHC.toUnitId
@@ -122,14 +120,14 @@ indexDependencyHieFiles recorder se hscEnv = do
 
 -- calculateTransitiveDependencies finds the UnitId keys in the UnitInfoMap
 -- that are dependencies or transitive dependencies.
-calculateTransitiveDependencies :: GHC.UnitInfoMap -> Set GHC.UnitId -> Set GHC.UnitId -> Set GHC.UnitId
-calculateTransitiveDependencies unitInfoMap allDependencies newDepencencies
-    -- If there are no new dependencies, we have found them all,
+calculateTransitiveDependencies :: [GHC.UnitInfo] -> Set GHC.UnitId -> Set GHC.UnitId -> Set GHC.UnitId
+calculateTransitiveDependencies allPackages allDependencies newDepencencies
+    -- If there are no new dependencies, then we have found them all,
     -- so return allDependencies
     | Set.null newDepencencies = allDependencies
     -- Otherwise recursively add any dependencies of the newDepencencies
     -- that are not in allDependencies already.
-    | otherwise = calculateTransitiveDependencies unitInfoMap nextAll nextNew
+    | otherwise = calculateTransitiveDependencies allPackages nextAll nextNew
     where
         nextAll :: Set GHC.UnitId
         nextAll = Set.union allDependencies nextNew
@@ -140,8 +138,7 @@ calculateTransitiveDependencies unitInfoMap allDependencies newDepencencies
         nextNew = flip Set.difference allDependencies
             $ Set.unions
             $ map (Set.fromList . GHC.unitDepends)
-            $ Map.elems
-            $ Map.filterWithKey (\uid _ -> uid `Set.member` newDepencencies) unitInfoMap
+            $ filter (\unitInfo -> GHC.unitId unitInfo `Set.member` newDepencencies) allPackages
 
 getModulesForPackage :: Package -> [GHC.Module]
 getModulesForPackage (Package package) =
