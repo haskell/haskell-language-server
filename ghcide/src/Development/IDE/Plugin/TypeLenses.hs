@@ -169,8 +169,15 @@ codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve
   (gblSigs@(GlobalBindingTypeSigsResult _), pm) <-
     runActionE "codeLens.GetGlobalBindingTypeSigs" ideState
     $ useWithStaleE GetGlobalBindingTypeSigs nfp
-  let newRange = fromMaybe _range (fromCurrentRange pm _range)
-  (title, edit) <- handleMaybe PluginStaleResolve $ suggestGlobalSignature' False (Just gblSigs) (Just pm) newRange
+  -- regardless of how the original lens was generated, we want to get the range
+  -- that the global bindings rule would expect here, hence the need to reverse
+  -- position map the range, regardless of whether it was position mapped in the
+  -- beginning or freshly taken from diagnostics.
+  newRange <- handleMaybe PluginStaleResolve (fromCurrentRange pm _range)
+  -- We also pass on the PositionMapping so that the generated text edit can
+  -- have the range adjusted.
+  (title, edit) <-
+        handleMaybe PluginStaleResolve $ suggestGlobalSignature' False (Just gblSigs) (Just pm) newRange
   pure $ lens & L.command ?~ generateLensCommand pId uri title edit
 
 generateLensCommand :: PluginId -> Uri -> T.Text -> TextEdit -> Command
@@ -226,7 +233,7 @@ gblBindingTypeSigToEdit GlobalBindingTypeSig{..} mmp
   | Just Range{..} <- srcSpanToRange $ getSrcSpan gbName
     , startOfLine <- Position (_line _start) 0
     , beforeLine <- Range startOfLine startOfLine
-    -- If `mmp` is `Nothing`, return the original range, it used by lenses from diagnostic,
+    -- If `mmp` is `Nothing`, return the original range,
     -- otherwise we apply `toCurrentRange`, and the guard should fail if `toCurrentRange` failed.
     , Just range <- maybe (Just beforeLine) (flip toCurrentRange beforeLine) mmp
     -- We need to flatten the signature, as otherwise long signatures are
@@ -235,8 +242,8 @@ gblBindingTypeSigToEdit GlobalBindingTypeSig{..} mmp
     = Just $ TextEdit range $ T.pack renderedFlat <> "\n"
   | otherwise = Nothing
 
--- |What we need to resolve our lenses, the type of binding it is, and if it's
--- a local binding, it's identifier and range.
+-- |We don't need anything to resolve our lens, but a data field is mandatory
+-- to get types resolved in HLS
 data TypeLensesResolve = TypeLensesResolve
   deriving (Generic, A.FromJSON, A.ToJSON)
 
