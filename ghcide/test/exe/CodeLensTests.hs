@@ -89,6 +89,7 @@ addSigLensesTests =
         , ("promotedKindTest = Proxy @Nothing", if ghcVersion >= GHC96 then "promotedKindTest :: Proxy Nothing" else "promotedKindTest :: Proxy 'Nothing")
         , ("typeOperatorTest = Refl", if ghcVersion >= GHC92 then "typeOperatorTest :: forall {k} {a :: k}. a :~: a" else "typeOperatorTest :: a :~: a")
         , ("notInScopeTest = mkCharType", "notInScopeTest :: String -> Data.Data.DataType")
+        , ("aVeryLongSignature a b c d e f g h i j k l m n = a && b && c && d && e && f && g && h && i && j && k && l && m && n", "aVeryLongSignature :: Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool")
         ]
    in testGroup
         "add signature"

@@ -130,7 +130,12 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
             , isGlobalDiagnostic diag]
         -- The second option is to generate lenses from the GlobalBindingTypeSig
         -- rule. This is the only type that needs to have the range adjusted
-        -- with PositionMapping
+        -- with PositionMapping.
+        -- PositionMapping for diagnostics doesn't make sense, because we always
+        -- have fresh diagnostics even if current module parsed failed (the
+        -- diagnostic would then be parse failed). See
+        -- https://github.com/haskell/haskell-language-server/pull/3558 for this
+        -- discussion.
         generateLensFromGlobal sigs mp = do
           [ CodeLens newRange Nothing (Just $ toJSON TypeLensesResolve)
             | sig <- sigs

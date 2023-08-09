@@ -315,20 +315,6 @@ thDollarIdx :: UInt
 thDollarIdx | ghcVersion >= GHC90 = 1
             | otherwise = 0
 
--- TODO Replace with lsp-test function when updated to the latest release
-getAndResolveCodeLenses :: TextDocumentIdentifier -> Session [CodeLens]
-getAndResolveCodeLenses tId = do
-    codeLenses <- getCodeLenses tId
-    for codeLenses $ \codeLens -> if isJust (codeLens ^. L.data_) then resolveCodeLens codeLens else pure codeLens
-
--- |Resolves the provided code lens.
-resolveCodeLens :: CodeLens -> Session CodeLens
-resolveCodeLens cl = do
-  rsp <- request SMethod_CodeLensResolve cl
-  case rsp ^. L.result of
-    Right cl -> return cl
-    Left error -> throw (UnexpectedResponseError (SomeLspId $ fromJust $ rsp ^. L.id) error)
-
 testIde :: Recorder (WithPriority Log) -> IDE.Arguments -> Session () -> IO ()
 testIde recorder arguments session = do
     config <- getConfigFromEnv
