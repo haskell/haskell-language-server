@@ -249,3 +249,6 @@ instance NFData (Pat (GhcPass 'Renamed)) where
 
 instance NFData Extension where
   rnf = rwhnf
+
+instance NFData (UniqFM Name [Name]) where
+  rnf (ufmToIntMap -> m) = rnf m
