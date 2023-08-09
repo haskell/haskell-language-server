@@ -13,6 +13,11 @@ env:
 jobs:
   build-linux:
     name: Build linux binaries
+    ## We need the environment here, to have access to the `vars` context.
+    ## Allows us to specify: `CABAL_CACHE_DISABLE=yes`.
+    ## The environments can be seen in https://github.com/haskell/haskell-language-server/settings/environments
+    ## assuming you have the proper permissions.
+    environment: CI
     runs-on: ubuntu-latest
     env:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -206,6 +211,11 @@ jobs:
 
   build-arm:
     name: Build ARM binary
+    ## We need the environment here, to have access to the `vars` context.
+    ## Allows us to specify: `CABAL_CACHE_DISABLE=yes`.
+    ## The environments can be seen in https://github.com/haskell/haskell-language-server/settings/environments
+    ## assuming you have the proper permissions.
+    environment: CI
     runs-on: [self-hosted, Linux, ARM64]
     env:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -262,6 +272,11 @@ jobs:
 
   build-mac-x86_64:
     name: Build binary (Mac x86_64)
+    ## We need the environment here, to have access to the `vars` context.
+    ## Allows us to specify: `CABAL_CACHE_DISABLE=yes`.
+    ## The environments can be seen in https://github.com/haskell/haskell-language-server/settings/environments
+    ## assuming you have the proper permissions.
+    environment: CI
     runs-on: macOS-11
     env:
       MACOSX_DEPLOYMENT_TARGET: 10.13
@@ -301,6 +316,11 @@ jobs:
 
   build-mac-aarch64:
     name: Build binary (Mac aarch64)
+    ## We need the environment here, to have access to the `vars` context.
+    ## Allows us to specify: `CABAL_CACHE_DISABLE=yes`.
+    ## The environments can be seen in https://github.com/haskell/haskell-language-server/settings/environments
+    ## assuming you have the proper permissions.
+    environment: CI
     runs-on: [self-hosted, macOS, ARM64]
     env:
       MACOSX_DEPLOYMENT_TARGET: 10.13
@@ -352,6 +372,11 @@ jobs:
 
   build-win:
     name: Build binary (Win)
+    ## We need the environment here, to have access to the `vars` context.
+    ## Allows us to specify: `CABAL_CACHE_DISABLE=yes`.
+    ## The environments can be seen in https://github.com/haskell/haskell-language-server/settings/environments
+    ## assuming you have the proper permissions.
+    environment: CI
     runs-on: windows-latest
     env:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
