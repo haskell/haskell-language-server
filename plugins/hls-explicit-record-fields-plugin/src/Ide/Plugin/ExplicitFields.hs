@@ -1,7 +1,5 @@
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE DerivingStrategies        #-}
-{-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE LambdaCase                #-}
