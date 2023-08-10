@@ -32,7 +32,6 @@ import           System.FilePath
 import           System.IO.Extra
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Utils.Logger                  (LogFlags (..))
-import           GHC.Utils.Outputable              (renderWithContext)
 #endif
 
 -- | Given a file and some contents, apply any necessary preprocessors,

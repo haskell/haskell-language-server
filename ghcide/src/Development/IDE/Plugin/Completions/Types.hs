@@ -19,7 +19,7 @@ import           Data.Text                    (Text)
 import           Data.Typeable                (Typeable)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph        (RuleResult)
-import           Development.IDE.Spans.Common
+import           Development.IDE.Spans.Common ()
 import           GHC.Generics                 (Generic)
 import           Ide.Plugin.Properties
 import           Language.LSP.Protocol.Types  (CompletionItemKind (..), Uri)
@@ -200,7 +200,7 @@ instance ToJSON NameDetails where
 instance Show NameDetails where
   show = show . toJSON
 
--- | The data that is acutally sent for resolve support
+-- | The data that is actually sent for resolve support
 -- We need the URI to be able to reconstruct the GHC environment
 -- in the file the completion was triggered in.
 data CompletionResolveData = CompletionResolveData

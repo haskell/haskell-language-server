@@ -21,31 +21,28 @@ module Development.IDE.GHC.Compat.Plugins (
 
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Driver.Env                        as Env
+import qualified GHC.Driver.Env                    as Env
 #endif
-import           GHC.Driver.Plugins                    (Plugin (..),
-                                                        PluginWithArgs (..),
-                                                        StaticPlugin (..),
-                                                        defaultPlugin,
-                                                        withPlugins)
+import           GHC.Driver.Plugins                (Plugin (..),
+                                                    PluginWithArgs (..),
+                                                    StaticPlugin (..),
+                                                    defaultPlugin, withPlugins)
 #if MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Plugins                    (ParsedResult (..),
-                                                        PsMessages (..),
-                                                        staticPlugins)
-import qualified GHC.Parser.Lexer                      as Lexer
+import           GHC.Driver.Plugins                (ParsedResult (..),
+                                                    PsMessages (..),
+                                                    staticPlugins)
+import qualified GHC.Parser.Lexer                  as Lexer
 #else
-import           Data.Bifunctor                        (bimap)
+import           Data.Bifunctor                    (bimap)
 #endif
-import qualified GHC.Runtime.Loader                    as Loader
+import qualified GHC.Runtime.Loader                as Loader
 #else
-import qualified DynamicLoading                        as Loader
+import qualified DynamicLoading                    as Loader
 import           Plugins
 #endif
 import           Development.IDE.GHC.Compat.Core
-import           Development.IDE.GHC.Compat.Env        (hscSetFlags, hsc_dflags)
-import           Development.IDE.GHC.Compat.Outputable as Out
-import           Development.IDE.GHC.Compat.Parser     as Parser
-import           Development.IDE.GHC.Compat.Util       (Bag)
+import           Development.IDE.GHC.Compat.Env    (hscSetFlags, hsc_dflags)
+import           Development.IDE.GHC.Compat.Parser as Parser
 
 
 #if !MIN_VERSION_ghc(9,3,0)

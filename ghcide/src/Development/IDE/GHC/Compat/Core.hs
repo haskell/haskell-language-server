@@ -3,10 +3,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE ViewPatterns   #-}
--- TODO: remove
-{-# OPTIONS -Wno-dodgy-imports -Wno-unused-imports #-}
 
--- | Compat Core module that handles the GHC module hierarchy re-organisation
+-- | Compat Core module that handles the GHC module hierarchy re-organization
 -- by re-exporting everything we care about.
 --
 -- This module provides no other compat mechanisms, except for simple
@@ -503,9 +501,6 @@ module Development.IDE.GHC.Compat.Core (
 import qualified GHC
 
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Iface.Recomp (CompileReason(..))
-import GHC.Driver.Env.Types (hsc_type_env_vars)
-import GHC.Driver.Env (hscUpdateHUG, hscUpdateHPT, hsc_HUG)
 import GHC.Driver.Env.KnotVars
 import GHC.Iface.Recomp
 import GHC.Linker.Types
@@ -566,7 +561,6 @@ import           GHC.Driver.CmdLine           (Warn (..))
 import           GHC.Driver.Hooks
 import           GHC.Driver.Main              as GHC
 import           GHC.Driver.Monad
-import           GHC.Driver.Phases
 import           GHC.Driver.Pipeline
 import           GHC.Driver.Plugins
 import           GHC.Driver.Session           hiding (ExposePackage)
@@ -581,7 +575,6 @@ import           GHC.Hs.ImpExp
 import           GHC.Hs.Pat
 import           GHC.Hs.Type
 import           GHC.Hs.Utils                 hiding (collectHsBindsBinders)
-import qualified GHC.Hs.Utils                 as GHC
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
 import           GHC.Hs                       hiding (HsLet, LetStmt)
@@ -590,9 +583,7 @@ import           GHC.HsToCore.Docs
 import           GHC.HsToCore.Expr
 import           GHC.HsToCore.Monad
 import           GHC.Iface.Load
-import           GHC.Iface.Make               (mkFullIface, mkPartialIface)
 import           GHC.Iface.Make               as GHC
-import           GHC.Iface.Recomp
 import           GHC.Iface.Syntax
 import           GHC.Iface.Tidy               as GHC
 import           GHC.IfaceToCore
@@ -600,7 +591,6 @@ import           GHC.Parser
 import           GHC.Parser.Header            hiding (getImports)
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Linker.Loader            as Linker
-import           GHC.Linker.Types
 import           GHC.Parser.Lexer             hiding (initParserState, getPsMessages)
 import           GHC.Parser.Annotation        (EpAnn (..))
 import           GHC.Platform.Ways
@@ -669,7 +659,6 @@ import           GHC.Unit.Module              hiding (ModLocation (..), UnitId,
                                                toUnitId)
 import qualified GHC.Unit.Module              as Module
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Unit.Module.Graph        (mkModuleGraph)
 import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
@@ -679,7 +668,6 @@ import           GHC.Unit.Module.ModSummary   (ModSummary (..))
 #endif
 import           GHC.Unit.State               (ModuleOrigin (..))
 import           GHC.Utils.Error              (Severity (..), emptyMessages)
-import           GHC.Utils.Panic              hiding (try)
 import qualified GHC.Utils.Panic.Plain        as Plain
 #else
 import qualified Avail
@@ -769,8 +757,6 @@ import           SrcLoc                       (Located, SrcLoc (UnhelpfulLoc),
 #endif
 
 
-import           Data.List                    (isSuffixOf)
-import           System.FilePath
 
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -1132,6 +1118,7 @@ makeSimpleDetails hsc_env =
               hsc_env
 #endif
 
+mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary -> TcGblEnv -> IO ModIface
 mkIfaceTc hsc_env sf details ms tcGblEnv =
   GHC.mkIfaceTc hsc_env sf details
 #if MIN_VERSION_ghc(9,3,0)
@@ -1159,6 +1146,7 @@ initTidyOpts =
   pure
 #endif
 
+driverNoStop :: StopPhase
 driverNoStop =
 #if MIN_VERSION_ghc(9,3,0)
                                          NoStop
@@ -1203,6 +1191,7 @@ groupOrigin = mg_ext
 #else
 mapLoc :: (a -> b) -> SrcLoc.GenLocated l a -> SrcLoc.GenLocated l b
 mapLoc = SrcLoc.mapLoc
+groupOrigin :: MatchGroup p body -> Origin
 groupOrigin = mg_origin
 #endif
 

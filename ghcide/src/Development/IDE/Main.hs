@@ -1,6 +1,5 @@
-{-# LANGUAGE PackageImports #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE RankNTypes     #-}
+{-# LANGUAGE RankNTypes #-}
 module Development.IDE.Main
 (Arguments(..)
 ,defaultArguments
@@ -30,10 +29,8 @@ import           Data.List.Extra                          (intercalate,
 import           Data.Maybe                               (catMaybes, isJust)
 import qualified Data.Text                                as T
 import           Development.IDE                          (Action,
-                                                           GhcVersion (..),
                                                            Priority (Debug, Error),
-                                                           Rules, ghcVersion,
-                                                           hDuplicateTo')
+                                                           Rules, hDuplicateTo')
 import           Development.IDE.Core.Debouncer           (Debouncer,
                                                            newAsyncDebouncer)
 import           Development.IDE.Core.FileStore           (isWatchSupported)
@@ -77,14 +74,6 @@ import           Development.IDE.Session                  (SessionLoadingOptions
 import qualified Development.IDE.Session                  as Session
 import           Development.IDE.Types.Location           (NormalizedUri,
                                                            toNormalizedFilePath')
-import           Ide.Logger             (Logger,
-                                                           Pretty (pretty),
-                                                           Priority (Info, Warning),
-                                                           Recorder,
-                                                           WithPriority,
-                                                           cmapWithPrio,
-                                                           logWith, nest, vsep,
-                                                           (<+>))
 import           Development.IDE.Types.Monitoring         (Monitoring)
 import           Development.IDE.Types.Options            (IdeGhcSession,
                                                            IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
@@ -99,6 +88,14 @@ import           GHC.IO.Encoding                          (setLocaleEncoding)
 import           GHC.IO.Handle                            (hDuplicate)
 import           HIE.Bios.Cradle                          (findCradle)
 import qualified HieDb.Run                                as HieDb
+import           Ide.Logger                               (Logger,
+                                                           Pretty (pretty),
+                                                           Priority (Info),
+                                                           Recorder,
+                                                           WithPriority,
+                                                           cmapWithPrio,
+                                                           logWith, nest, vsep,
+                                                           (<+>))
 import           Ide.Plugin.Config                        (CheckParents (NeverCheck),
                                                            Config, checkParents,
                                                            checkProject,

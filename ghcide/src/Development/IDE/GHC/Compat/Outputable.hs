@@ -59,14 +59,13 @@ import           GHC.Parser.Errors
 #else
 import           GHC.Parser.Errors.Types
 #endif
-import qualified GHC.Parser.Errors.Ppr           as Ppr
 import qualified GHC.Types.Error                 as Error
 import           GHC.Types.Name.Ppr
 import           GHC.Types.Name.Reader
 import           GHC.Types.SourceError
 import           GHC.Types.SrcLoc
 import           GHC.Unit.State
-import           GHC.Utils.Error                 hiding (mkWarnMsg)
+import           GHC.Utils.Error
 import           GHC.Utils.Outputable            as Out hiding
                                                         (defaultUserStyle)
 import qualified GHC.Utils.Outputable            as Out
@@ -98,7 +97,6 @@ import           GHC.Driver.Errors.Types         (GhcMessage)
 #if MIN_VERSION_ghc(9,3,0)
 import           Data.Maybe
 import           GHC.Driver.Config.Diagnostic
-import           GHC.Utils.Logger
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
@@ -220,17 +218,21 @@ type ErrMsg  = MsgEnvelope DecoratedSDoc
 type WarnMsg  = MsgEnvelope DecoratedSDoc
 #endif
 
+#if MIN_VERSION_ghc(9,5,0)
 mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
 mkPrintUnqualifiedDefault env =
-#if MIN_VERSION_ghc(9,5,0)
   mkNamePprCtx ptc (hsc_unit_env env)
     where
       ptc = initPromotionTickContext (hsc_dflags env)
 #elif MIN_VERSION_ghc(9,2,0)
+mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
+mkPrintUnqualifiedDefault env =
   -- GHC 9.2 version
   -- mkPrintUnqualified :: UnitEnv -> GlobalRdrEnv -> PrintUnqualified
   mkPrintUnqualified (hsc_unit_env env)
 #else
+mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
+mkPrintUnqualifiedDefault env =
   HscTypes.mkPrintUnqualified (hsc_dflags env)
 #endif
 

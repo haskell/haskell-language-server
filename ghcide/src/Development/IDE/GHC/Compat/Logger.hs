@@ -14,7 +14,6 @@ import           Development.IDE.GHC.Compat.Env        as Env
 import           Development.IDE.GHC.Compat.Outputable
 
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC.Driver.Session                    as DynFlags
 import           GHC.Utils.Outputable
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Env                        (hsc_logger)

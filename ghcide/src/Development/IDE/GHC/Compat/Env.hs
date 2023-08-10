@@ -53,51 +53,53 @@ module Development.IDE.GHC.Compat.Env (
     Development.IDE.GHC.Compat.Env.platformDefaultBackend,
     ) where
 
-import           GHC                  (setInteractiveDynFlags)
+import           GHC                                 (setInteractiveDynFlags)
 
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Backend   as Backend
+import           GHC.Driver.Backend                  as Backend
 #if MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Env       (HscEnv)
+import           GHC.Driver.Env                      (HscEnv)
 #else
-import           GHC.Driver.Env       (HscEnv, hsc_EPS)
+import           GHC.Driver.Env                      (HscEnv, hsc_EPS)
 #endif
-import qualified GHC.Driver.Env       as Env
-import qualified GHC.Driver.Session   as Session
-import           GHC.Platform.Ways    hiding (hostFullWays)
-import qualified GHC.Platform.Ways    as Ways
+import qualified GHC.Driver.Env                      as Env
+import qualified GHC.Driver.Session                  as Session
+import           GHC.Platform.Ways                   hiding (hostFullWays)
+import qualified GHC.Platform.Ways                   as Ways
 import           GHC.Runtime.Context
-import           GHC.Unit.Env         (UnitEnv)
-import           GHC.Unit.Home        as Home
+import           GHC.Unit.Env                        (UnitEnv)
+import           GHC.Unit.Home                       as Home
 import           GHC.Utils.Logger
 import           GHC.Utils.TmpFs
 #else
-import qualified GHC.Driver.Session   as DynFlags
-import           GHC.Driver.Types     (HscEnv, InteractiveContext (..), hsc_EPS,
-                                       setInteractivePrintName)
-import qualified GHC.Driver.Types     as Env
-import           GHC.Driver.Ways      hiding (hostFullWays)
-import qualified GHC.Driver.Ways      as Ways
+import qualified GHC.Driver.Session                  as DynFlags
+import           GHC.Driver.Types                    (HscEnv,
+                                                      InteractiveContext (..),
+                                                      hsc_EPS,
+                                                      setInteractivePrintName)
+import qualified GHC.Driver.Types                    as Env
+import           GHC.Driver.Ways                     hiding (hostFullWays)
+import qualified GHC.Driver.Ways                     as Ways
 #endif
-import           GHC.Driver.Hooks     (Hooks)
-import           GHC.Driver.Session   hiding (mkHomeModule)
+import           GHC.Driver.Hooks                    (Hooks)
+import           GHC.Driver.Session                  hiding (mkHomeModule)
 #if __GLASGOW_HASKELL__ >= 905
 import           Language.Haskell.Syntax.Module.Name
 #else
 import           GHC.Unit.Module.Name
 #endif
-import           GHC.Unit.Types       (Module, Unit, UnitId, mkModule)
+import           GHC.Unit.Types                      (Module, UnitId)
 #else
 import           DynFlags
 import           Hooks
-import           HscTypes             as Env
+import           HscTypes                            as Env
 import           Module
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
 #if !MIN_VERSION_ghc(9,2,0)
-import qualified Data.Set             as Set
+import qualified Data.Set                            as Set
 #endif
 #endif
 #if !MIN_VERSION_ghc(9,2,0)

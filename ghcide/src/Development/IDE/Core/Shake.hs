@@ -86,6 +86,7 @@ import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception.Extra                hiding (bracket_)
+import           Control.Lens                           ((&), (?~))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
@@ -99,14 +100,13 @@ import           Data.Default
 import           Data.Dynamic
 import           Data.EnumMap.Strict                    (EnumMap)
 import qualified Data.EnumMap.Strict                    as EM
-import           Data.Foldable                          (find, for_, toList)
+import           Data.Foldable                          (find, for_)
 import           Data.Functor                           ((<&>))
 import           Data.Functor.Identity
 import           Data.Hashable
 import qualified Data.HashMap.Strict                    as HMap
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.IORef
 import           Data.List.Extra                        (foldl', partition,
                                                          takeEnd)
 import qualified Data.Map.Strict                        as Map
@@ -128,10 +128,9 @@ import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
 import           Development.IDE.GHC.Compat             (NameCache,
-                                                         NameCacheUpdater (..),
+                                                         NameCacheUpdater,
                                                          initNameCache,
-                                                         knownKeyNames,
-                                                         mkSplitUniqSupply)
+                                                         knownKeyNames)
 #if !MIN_VERSION_ghc(9,3,0)
 import           Development.IDE.GHC.Compat             (upNameCache)
 #endif
@@ -167,6 +166,7 @@ import           Ide.Types                              (IdePlugins (IdePlugins)
                                                          PluginDescriptor (pluginId),
                                                          PluginId)
 import           Language.LSP.Diagnostics
+import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Protocol.Types            as LSP
@@ -1281,9 +1281,8 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
     where
         diagsFromRule :: Diagnostic -> Diagnostic
         diagsFromRule c@Diagnostic{_range}
-            | coerce ideTesting = c
-                {_relatedInformation =
-                    Just $  [
+            | coerce ideTesting = c & L.relatedInformation ?~
+                         [
                         DiagnosticRelatedInformation
                             (Location
                                 (filePathToUri $ fromNormalizedFilePath fp)
@@ -1291,7 +1290,6 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                             )
                             (T.pack $ show k)
                             ]
-                }
             | otherwise = c
 
 

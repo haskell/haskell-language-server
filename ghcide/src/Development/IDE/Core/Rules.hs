@@ -73,9 +73,7 @@ import           Control.Monad.State
 import           Control.Monad.Trans.Except                   (ExceptT, except,
                                                                runExceptT)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                                   (Result (Success),
-                                                               toJSON)
-import qualified Data.Aeson.Types                             as A
+import           Data.Aeson                                   (toJSON)
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
@@ -146,9 +144,8 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                Properties,
                                                                ToHsType,
                                                                useProperty)
-import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
-                                                               PluginId, PluginDescriptor (pluginId), IdePlugins (IdePlugins))
+                                                               PluginId)
 import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
 import System.Info.Extra (isWindows)
@@ -157,18 +154,14 @@ import Ide.Logger (Recorder, logWith, cmapWithPrio, WithPriority, Pretty (pretty
 import qualified Development.IDE.Core.Shake as Shake
 import qualified Ide.Logger as Logger
 import qualified Development.IDE.Types.Shake as Shake
-import           Development.IDE.GHC.CoreFile
 import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)
 import Control.Monad.IO.Unlift
 import qualified Data.IntMap as IM
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Unit.Module.Graph
-import GHC.Unit.Env
 #endif
 #if MIN_VERSION_ghc(9,5,0)
 import GHC.Unit.Home.ModInfo
 #endif
-import GHC (mgModSummaries)
 import GHC.Fingerprint
 
 data Log
@@ -852,7 +845,6 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
     Just session -> do
       linkableType <- getLinkableType f
       ver <- use_ GetModificationTime f
-      ShakeExtras{ideNc} <- getShakeExtras
       let m_old = case old of
             Shake.Succeeded (Just old_version) v -> Just (v, old_version)
             Shake.Stale _   (Just old_version) v -> Just (v, old_version)
@@ -982,7 +974,7 @@ generateCoreRule recorder =
 getModIfaceRule :: Recorder (WithPriority Log) -> Rules ()
 getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModIface f -> do
   fileOfInterest <- use_ IsFileOfInterest f
-  res@(_,(_,mhmi)) <- case fileOfInterest of
+  res <- case fileOfInterest of
     IsFOI status -> do
       -- Never load from disk for files of interest
       tmr <- use_ TypeCheck f
@@ -1128,8 +1120,6 @@ getLinkableRule recorder =
       Nothing -> error "called GetLinkable for a file without a linkable"
       Just (bin_core, hash) -> do
         session <- use_ GhcSessionDeps f
-        ShakeExtras{ideNc} <- getShakeExtras
-        let namecache_updater = mkUpdater ideNc
         linkableType <- getLinkableType f >>= \case
           Nothing -> error "called GetLinkable for a file which doesn't need compilation"
           Just t -> pure t
@@ -1220,16 +1210,18 @@ uses_th_qq (ms_hspp_opts -> dflags) =
 -- (assuming we do in fact need to compile it).
 -- Depends on whether it uses unboxed tuples or sums
 computeLinkableTypeForDynFlags :: DynFlags -> LinkableType
-computeLinkableTypeForDynFlags d
 #if defined(GHC_PATCHED_UNBOXED_BYTECODE) || MIN_VERSION_ghc(9,2,0)
+computeLinkableTypeForDynFlags _
           = BCOLinkable
 #else
+computeLinkableTypeForDynFlags d
           | unboxed_tuples_or_sums = ObjectLinkable
           | otherwise              = BCOLinkable
-#endif
   where
         unboxed_tuples_or_sums =
             xopt LangExt.UnboxedTuples d || xopt LangExt.UnboxedSums d
+#endif
+
 
 -- | Tracks which linkables are current, so we don't need to unload them
 newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (ModuleEnv UTCTime) }

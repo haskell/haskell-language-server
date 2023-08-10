@@ -112,7 +112,7 @@ delayedProgressReporting
   -> Maybe (LSP.LanguageContextEnv c)
   -> ProgressReportingStyle
   -> IO ProgressReporting
-delayedProgressReporting before after Nothing optProgressStyle = noProgressReporting
+delayedProgressReporting _before _after Nothing _optProgressStyle = noProgressReporting
 delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
     inProgressState <- newInProgress
     progressState <- newVar NotStarted

@@ -23,19 +23,15 @@ module Development.IDE.Types.Exports
 
 import           Control.DeepSeq             (NFData (..), force, ($!!))
 import           Control.Monad
-import           Data.Bifunctor              (Bifunctor (second))
 import           Data.Char                   (isUpper)
 import           Data.Hashable               (Hashable)
-import           Data.HashMap.Strict         (HashMap, elems)
-import qualified Data.HashMap.Strict         as Map
 import           Data.HashSet                (HashSet)
 import qualified Data.HashSet                as Set
-import           Data.List                   (foldl', isSuffixOf)
+import           Data.List                   (isSuffixOf)
 import           Data.Text                   (Text, uncons)
 import           Data.Text.Encoding          (decodeUtf8, encodeUtf8)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
-import           Development.IDE.GHC.Util
 import           GHC.Generics                (Generic)
 import           HieDb
 
@@ -63,13 +59,13 @@ instance Show ExportsMap where
 updateExportsMap :: ExportsMap -> ExportsMap -> ExportsMap
 updateExportsMap old new = ExportsMap
   { getExportsMap = delListFromOccEnv (getExportsMap old) old_occs `plusOccEnv` getExportsMap new -- plusOccEnv is right biased
-  , getModuleExportsMap = (getModuleExportsMap old) `plusUFM` (getModuleExportsMap new) -- plusUFM is right biased
+  , getModuleExportsMap = getModuleExportsMap old `plusUFM` getModuleExportsMap new -- plusUFM is right biased
   }
   where old_occs = concat [map name $ Set.toList (lookupWithDefaultUFM_Directly (getModuleExportsMap old) mempty m_uniq)
                           | m_uniq <- nonDetKeysUFM (getModuleExportsMap new)]
 
 size :: ExportsMap -> Int
-size = sum . map (Set.size) . nonDetOccEnvElts . getExportsMap
+size = sum . map Set.size . nonDetOccEnvElts . getExportsMap
 
 mkVarOrDataOcc :: Text -> OccName
 mkVarOrDataOcc t = mkOcc $ mkFastStringByteString $ encodeUtf8 t
@@ -162,7 +158,7 @@ createExportsMap modIface = do
   where
     doOne modIFace = do
       let getModDetails = unpackAvail $ moduleName $ mi_module modIFace
-      concatMap (getModDetails) (mi_exports modIFace)
+      concatMap getModDetails (mi_exports modIFace)
 
 createExportsMapMg :: [ModGuts] -> ExportsMap
 createExportsMapMg modGuts = do

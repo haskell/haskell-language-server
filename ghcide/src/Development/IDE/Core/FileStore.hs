@@ -56,7 +56,6 @@ import qualified System.Directory                             as Dir
 
 import qualified Ide.Logger                                   as L
 
-import           Data.Aeson                                   (ToJSON (toJSON))
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.List                                    (foldl')

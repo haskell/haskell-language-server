@@ -9,8 +9,8 @@ module Development.IDE.Spans.Pragmas
   , insertNewPragma
   , getFirstPragma ) where
 
+import           Control.Lens                    ((&), (.~))
 import           Data.Bits                       (Bits (setBit))
-import           Data.Function                   ((&))
 import qualified Data.List                       as List
 import qualified Data.Maybe                      as Maybe
 import           Data.Text                       (Text, pack)
@@ -25,7 +25,7 @@ import Ide.Plugin.Error (PluginError)
 import Ide.Types (PluginId(..))
 import qualified Data.Text as T
 import  Development.IDE.Core.PluginUtils
-
+import qualified Language.LSP.Protocol.Lens as L
 getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
 getNextPragmaInfo dynFlags sourceText =
   if | Just sourceText <- sourceText
@@ -46,7 +46,7 @@ showExtension NamedFieldPuns = "NamedFieldPuns"
 showExtension ext = pack (show ext)
 
 insertNewPragma :: NextPragmaInfo -> Extension -> LSP.TextEdit
-insertNewPragma (NextPragmaInfo _ (Just (LineSplitTextEdits ins _))) newPragma = ins { LSP._newText = "{-# LANGUAGE " <> showExtension newPragma <> " #-}\n" } :: LSP.TextEdit
+insertNewPragma (NextPragmaInfo _ (Just (LineSplitTextEdits ins _))) newPragma = ins & L.newText .~ "{-# LANGUAGE " <> showExtension newPragma <> " #-}\n" :: LSP.TextEdit
 insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit pragmaInsertRange $ "{-# LANGUAGE " <> showExtension newPragma <> " #-}\n"
     where
         pragmaInsertPosition = LSP.Position (fromIntegral nextPragmaLine) 0

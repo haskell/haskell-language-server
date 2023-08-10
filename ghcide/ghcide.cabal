@@ -221,9 +221,7 @@ library
 
     ghc-options:
                 -Wall
-                -Wno-name-shadowing
                 -Wincomplete-uni-patterns
-                -Wno-unticked-promoted-constructors
                 -fno-ignore-asserts
 
     if flag(ghc-patched-unboxed-bytecode)

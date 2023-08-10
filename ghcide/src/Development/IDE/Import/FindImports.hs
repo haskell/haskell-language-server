@@ -15,7 +15,6 @@ module Development.IDE.Import.FindImports
 
 import           Control.DeepSeq
 import           Development.IDE.GHC.Compat        as Compat
-import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics
@@ -89,7 +88,7 @@ locateModuleFile import_dirss exts targetFor isSource modName = do
 -- as they can never be imported into another package.
 #if MIN_VERSION_ghc(9,3,0)
 mkImportDirs :: HscEnv -> (UnitId, DynFlags) -> Maybe (UnitId, [FilePath])
-mkImportDirs env (i, flags) = Just (i, importPaths flags)
+mkImportDirs _env (i, flags) = Just (i, importPaths flags)
 #else
 mkImportDirs :: HscEnv -> (UnitId, DynFlags) -> Maybe (PackageName, (UnitId, [FilePath]))
 mkImportDirs env (i, flags) = (, (i, importPaths flags)) <$> getUnitName env i

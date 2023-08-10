@@ -15,13 +15,11 @@
 module Development.IDE.GHC.CPP(doCpp, addOptP)
 where
 
-import           Control.Monad
 import           Development.IDE.GHC.Compat      as Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC
 
 #if MIN_VERSION_ghc(9,0,0)
-import qualified GHC.Driver.Pipeline             as Pipeline
 import           GHC.Settings
 #elif MIN_VERSION_ghc (8,10,0)
 import qualified DriverPipeline                  as Pipeline

@@ -82,7 +82,6 @@ import           GHC.Data.StringBuffer
 import           GHC.Types.Unique
 import           GHC.Types.Unique.DFM
 import           GHC.Utils.Fingerprint
-import           GHC.Utils.Misc
 import           GHC.Utils.Outputable    (pprHsString)
 import           GHC.Utils.Panic         hiding (try)
 #else

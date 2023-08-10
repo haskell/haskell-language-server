@@ -19,7 +19,7 @@ import           Control.Monad                        (mzero)
 import           Control.Monad.Extra                  (whenMaybe)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
-import           Data.Aeson.Types                     (Value, toJSON)
+import           Data.Aeson.Types                     (toJSON)
 import qualified Data.Aeson.Types                     as A
 import           Data.List                            (find)
 import qualified Data.Map                             as Map

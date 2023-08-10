@@ -42,8 +42,8 @@ module Development.IDE.Core.Compile
 import           Control.Monad.IO.Class
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats      hiding (orElse)
-import           Control.DeepSeq                   (NFData (..), force, liftRnf,
-                                                    rnf, rwhnf)
+import           Control.DeepSeq                   (NFData (..), force,
+                                                    rnf)
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe
 import           Control.Lens                      hiding (List, (<.>))
@@ -62,10 +62,8 @@ import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import qualified Data.HashMap.Strict               as HashMap
 import           Data.IntMap                       (IntMap)
-import qualified Data.IntMap.Strict                as IntMap
 import           Data.IORef
 import           Data.List.Extra
-import           Data.Map                          (Map)
 import qualified Data.Map.Strict                   as Map
 import           Data.Proxy                        (Proxy(Proxy))
 import qualified Data.Set                          as Set
@@ -96,7 +94,6 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC                               (ForeignHValue,
                                                     GetDocsFailure (..),
-                                                    GhcException (..),
                                                     parsedSource)
 import qualified GHC.LanguageExtensions            as LangExt
 import           GHC.Serialized
@@ -108,7 +105,6 @@ import qualified Language.LSP.Protocol.Message            as LSP
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
-import           Unsafe.Coerce
 
 #if MIN_VERSION_ghc(9,0,1)
 import           GHC.Tc.Gen.Splice
@@ -127,17 +123,7 @@ import           TcSplice
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC                               (Anchor (anchor),
-                                                    EpaComment (EpaComment),
-                                                    EpaCommentTok (EpaBlockComment, EpaLineComment),
-                                                    ModuleGraph, epAnnComments,
-                                                    mgLookupModule,
-                                                    mgModSummaries,
-                                                    priorComments)
 import qualified GHC                               as G
-import           GHC.Hs                            (LEpaComment)
-import qualified GHC.Types.Error                   as Error
-import Development.IDE.Import.DependencyInformation
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
@@ -178,7 +164,7 @@ computePackageDeps env pkg = do
 
 newtype TypecheckHelpers
   = TypecheckHelpers
-  { getLinkables       :: ([NormalizedFilePath] -> IO [LinkableResult]) -- ^ hls-graph action to get linkables for files
+  { getLinkables       :: [NormalizedFilePath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
   }
 
 typecheckModule :: IdeDefer
@@ -366,7 +352,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
     -- We shouldn't get boot files here, but to be safe, never map them to an installed module
     -- because boot files don't have linkables we can load, and we will fail if we try to look
     -- for them
-    nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB mod IsBoot) uid)) = Nothing
+    nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB _ IsBoot) _)) = Nothing
     nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB mod _) uid)) = Just $ mkModule uid mod
     nodeKeyToInstalledModule _ = Nothing
     moduleToNodeKey :: Module -> NodeKey
@@ -508,7 +494,6 @@ mkHiFileResultCompile
 mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
   let session = hscSetFlags (ms_hspp_opts ms) session'
       ms = pm_mod_summary $ tmrParsed tcm
-      tcGblEnv = tmrTypechecked tcm
 
   (details, guts) <- do
         -- write core file
@@ -594,8 +579,8 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
       (prepd_binds', _)
 #endif
         <- corePrep unprep_binds' data_tycons
-      let binds  = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds
-          binds' = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds'
+      let binds  = noUnfoldings $ (map flattenBinds . (:[])) prepd_binds
+          binds' = noUnfoldings $ (map flattenBinds . (:[])) prepd_binds'
 
           -- diffBinds is unreliable, sometimes it goes down the wrong track.
           -- This fixes the order of the bindings so that it is less likely to do so.
@@ -1578,6 +1563,7 @@ checkLinkableDependencies hsc_env get_linkable_hashes runtime_deps = do
         _ -> pure $ Just $ recompBecause
               $ "out of date runtime dependencies: " ++ intercalate ", " (map show out_of_date)
 
+recompBecause :: String -> RecompileRequired
 recompBecause =
 #if MIN_VERSION_ghc(9,3,0)
                 NeedsRecompile .
@@ -1689,8 +1675,7 @@ getDocsBatch hsc_env _names = do
 #else
                                   Map.findWithDefault mempty name amap))
 #endif
-    return $ map (first $ T.unpack . printOutputable)
-           $ res
+    return $ map (first $ T.unpack . printOutputable) res
   where
     compiled n =
       -- TODO: Find a more direct indicator.

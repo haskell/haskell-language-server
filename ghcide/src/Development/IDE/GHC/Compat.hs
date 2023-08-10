@@ -142,7 +142,6 @@ module Development.IDE.GHC.Compat(
 #endif
     ) where
 
-import           Data.Bifunctor
 import           Development.IDE.GHC.Compat.Core hiding (moduleUnitId)
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Iface
@@ -178,7 +177,6 @@ import qualified GHC.CoreToStg.Prep                    as GHC
 import           GHC.Driver.Hooks                      (hscCompileCoreExprHook)
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Linker.Loader                     (loadExpr)
-import           GHC.Linker.Types                      (isObjectLinkable)
 import           GHC.Runtime.Context                   (icInteractiveModule)
 import           GHC.Unit.Home.ModInfo                 (HomePackageTable,
                                                         lookupHpt)
@@ -233,11 +231,9 @@ import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                    hiding (ExposePackage)
 import qualified GHC.Types.SrcLoc                      as SrcLoc
 import           GHC.Types.Var.Env
-import           GHC.Utils.Error
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Env                        as Env
 import           GHC.Unit.Module.ModIface
-import           GHC.Unit.Module.ModSummary
 #else
 import           GHC.Driver.Types
 #endif
@@ -262,7 +258,6 @@ import           Compat.HieTypes                       hiding (nodeAnnotations)
 import qualified Compat.HieTypes                       as GHC (nodeAnnotations)
 import           Compat.HieUtils
 import qualified Data.ByteString                       as BS
-import           Data.IORef
 
 import           Data.List                             (foldl')
 import qualified Data.Map                              as Map
@@ -274,7 +269,6 @@ import           GHC.ByteCode.Types
 import           GHC.CoreToStg
 import           GHC.Data.Maybe
 import           GHC.Linker.Loader                     (loadDecls)
-import           GHC.Runtime.Interpreter
 import           GHC.Stg.Pipeline
 import           GHC.Stg.Syntax
 import           GHC.StgToByteCode
@@ -283,9 +277,7 @@ import           GHC.Types.IPE
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Types.Error
 import GHC.Driver.Config.Stg.Pipeline
-import GHC.Driver.Plugins                              (PsMessages (..))
 #endif
 
 #if !MIN_VERSION_ghc(9,3,0)

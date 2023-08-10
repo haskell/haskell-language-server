@@ -34,7 +34,6 @@ import           System.FilePath
 
 import           Language.LSP.Protocol.Types     (filePathToUri, getUri)
 #if MIN_VERSION_ghc(9,3,0)
-import           GHC.Types.Unique.Map
 #endif
 
 mkDocMap

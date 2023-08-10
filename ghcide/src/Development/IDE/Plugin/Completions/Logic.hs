@@ -1,8 +1,8 @@
-{-# LANGUAGE CPP              #-}
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE GADTs            #-}
-{-# LANGUAGE MultiWayIf       #-}
-{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE OverloadedLabels      #-}
 
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
@@ -24,8 +24,8 @@ import           Data.List.Extra                          as List hiding
 import qualified Data.Map                                 as Map
 import           Data.Row
 
-import           Data.Maybe                               (catMaybes, fromMaybe,
-                                                           isJust, isNothing,
+import           Data.Maybe                               (fromMaybe, isJust,
+                                                           isNothing,
                                                            listToMaybe,
                                                            mapMaybe)
 import qualified Data.Text                                as T
@@ -34,14 +34,11 @@ import qualified Text.Fuzzy.Parallel                      as Fuzzy
 import           Control.Monad
 import           Data.Aeson                               (ToJSON (toJSON))
 import           Data.Function                            (on)
-import           Data.Functor
-import qualified Data.HashMap.Strict                      as HM
 
 import qualified Data.HashSet                             as HashSet
 import           Data.Monoid                              (First (..))
 import           Data.Ord                                 (Down (Down))
 import qualified Data.Set                                 as Set
-import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat               hiding (ppr)
 import qualified Development.IDE.GHC.Compat               as GHC
@@ -50,19 +47,14 @@ import           Development.IDE.GHC.CoreFile             (occNamePrefixes)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
-import           Development.IDE.Spans.Common
-import           Development.IDE.Spans.Documentation
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Options
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Plugins                              (Depth (AllTheWay),
-                                                           defaultSDocContext,
                                                            mkUserStyle,
                                                            neverQualify,
-                                                           renderWithContext,
                                                            sdocStyle)
 #endif
 import           Ide.PluginUtils                          (mkLspCommand)
@@ -144,12 +136,15 @@ getCContext pos pm
           | pos `isInsideSrcSpan` r = Just TypeContext
         goInline _ = Nothing
 
+#if MIN_VERSION_ghc(9,5,0)
         importGo :: GHC.LImportDecl GhcPs -> Maybe Context
         importGo (L (locA -> r) impDecl)
           | pos `isInsideSrcSpan` r
-#if MIN_VERSION_ghc(9,5,0)
           = importInline importModuleName (fmap (fmap reLoc) $ ideclImportList impDecl)
 #else
+        importGo :: GHC.LImportDecl GhcPs -> Maybe Context
+        importGo (L (locA -> r) impDecl)
+          | pos `isInsideSrcSpan` r
           = importInline importModuleName (fmap (fmap reLoc) $ ideclHiding impDecl)
 #endif
           <|> Just (ImportContext importModuleName)
@@ -160,18 +155,24 @@ getCContext pos pm
         -- importInline :: String -> Maybe (Bool,  GHC.Located [LIE GhcPs]) -> Maybe Context
 #if MIN_VERSION_ghc(9,5,0)
         importInline modName (Just (EverythingBut, L r _))
-#else
-        importInline modName (Just (True, L r _))
-#endif
           | pos `isInsideSrcSpan` r = Just $ ImportHidingContext modName
           | otherwise = Nothing
+#else
+        importInline modName (Just (True, L r _))
+          | pos `isInsideSrcSpan` r = Just $ ImportHidingContext modName
+          | otherwise = Nothing
+#endif
+
 #if MIN_VERSION_ghc(9,5,0)
         importInline modName (Just (Exactly, L r _))
-#else
-        importInline modName (Just (False, L r _))
-#endif
           | pos `isInsideSrcSpan` r = Just $ ImportListContext modName
           | otherwise = Nothing
+#else
+        importInline modName (Just (False, L r _))
+          | pos `isInsideSrcSpan` r = Just $ ImportListContext modName
+          | otherwise = Nothing
+#endif
+
         importInline _ _ = Nothing
 
 occNameToComKind :: OccName -> CompletionItemKind
@@ -191,7 +192,7 @@ mkCompl :: Maybe PluginId -- ^ Plugin to use for the extend import command
         -> IdeOptions -> Uri -> CompItem -> CompletionItem
 mkCompl
   pId
-  IdeOptions {..}
+  _ideOptions
   uri
   CI
     { compKind,
@@ -285,27 +286,27 @@ showForSnippet x = printOutputable x
 
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
-    (defaultCompletionItemWithLabel label)
-    { _kind = Just CompletionItemKind_Module }
+    defaultCompletionItemWithLabel label
+    & L.kind ?~ CompletionItemKind_Module
 
 mkModuleFunctionImport :: T.Text -> T.Text -> CompletionItem
 mkModuleFunctionImport moduleName label =
-    (defaultCompletionItemWithLabel label)
-    { _kind = Just CompletionItemKind_Function
-    , _detail = Just moduleName }
+    defaultCompletionItemWithLabel label
+    & L.kind ?~ CompletionItemKind_Function
+    & L.detail ?~ moduleName
 
 mkImportCompl :: T.Text -> T.Text -> CompletionItem
 mkImportCompl enteredQual label =
-    (defaultCompletionItemWithLabel m)
-    { _kind = Just CompletionItemKind_Module
-    , _detail = Just label }
+    defaultCompletionItemWithLabel m
+    & L.kind ?~ CompletionItemKind_Module
+    & L.detail ?~ label
   where
     m = fromMaybe "" (T.stripPrefix enteredQual label)
 
 mkExtCompl :: T.Text -> CompletionItem
 mkExtCompl label =
-    (defaultCompletionItemWithLabel label)
-    { _kind = Just CompletionItemKind_Keyword }
+    defaultCompletionItemWithLabel label
+    & L.kind ?~ CompletionItemKind_Keyword
 
 defaultCompletionItemWithLabel :: T.Text -> CompletionItem
 defaultCompletionItemWithLabel label =
@@ -396,7 +397,7 @@ cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
           in (unqual,QualCompls qual)
 
       toCompItem :: Parent -> Module -> T.Text -> Name -> Maybe (LImportDecl GhcPs) -> [CompItem]
-      toCompItem par m mn n imp' =
+      toCompItem par _ mn n imp' =
         -- docs <- getDocumentationTryGhc packageState curMod n
         let (mbParent, originName) = case par of
                             NoParent -> (Nothing, nameOccName n)

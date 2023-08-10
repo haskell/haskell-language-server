@@ -2,8 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 -- | Options
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE RankNTypes       #-}
+{-# LANGUAGE RankNTypes #-}
 module Development.IDE.Types.Options
   ( IdeOptions(..)
   , IdePreprocessedSource(..)

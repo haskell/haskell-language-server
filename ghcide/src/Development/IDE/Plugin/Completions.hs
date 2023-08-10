@@ -11,11 +11,10 @@ module Development.IDE.Plugin.Completions
 
 import           Control.Concurrent.Async                 (concurrently)
 import           Control.Concurrent.STM.Stats             (readTVarIO)
-import           Control.Lens                             ((&), (.~))
+import           Control.Lens                             ((&), (.~), (?~))
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except               (ExceptT (ExceptT),
                                                            withExceptT)
-import           Data.Aeson
 import qualified Data.HashMap.Strict                      as Map
 import qualified Data.HashSet                             as Set
 import           Data.Maybe
@@ -155,7 +154,7 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
             InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator (old:doc)
           _ -> InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator doc
     pure  (comp & L.detail .~ (det1 <> _detail)
-                & L.documentation .~ Just doc1)
+                & L.documentation ?~ doc1)
   where
     stripForall ty = case splitForAllTyCoVars ty of
       (_,res) -> res
@@ -207,7 +206,7 @@ getCompletionsLSP ide plId
           Just (cci', parsedMod, bindMap) -> do
             let pfix = getCompletionPrefix position cnts
             case (pfix, completionContext) of
-              ((PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
+              (PosPrefixInfo _ "" _ _, Just CompletionContext { _triggerCharacter = Just "."})
                 -> return (InL [])
               (_, _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide

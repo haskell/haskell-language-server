@@ -19,7 +19,7 @@ import           Data.Foldable
 import           Data.IORef
 import           Data.List                       (isPrefixOf)
 import           Data.Maybe
-import qualified Data.Text as T
+import qualified Data.Text                       as T
 import           GHC.Fingerprint
 
 import           Development.IDE.GHC.Compat
@@ -118,7 +118,7 @@ writeBinCoreFile core_path fat_iface = do
 #if MIN_VERSION_ghc(9,2,0)
           QuietBinIFace
 #else
-          (const $ pure ())
+          const $ pure ()
 #endif
 
     putWithUserData quietTrace bh fat_iface

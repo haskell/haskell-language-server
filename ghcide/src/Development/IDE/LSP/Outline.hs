@@ -14,7 +14,6 @@ import           Data.Functor
 import           Data.Foldable                  (toList)
 import           Data.Generics                  hiding (Prefix)
 import           Data.Maybe
-import qualified Data.Text                      as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
