@@ -3,10 +3,13 @@
 module CodeLensTests (tests) where
 
 import           Control.Applicative.Combinators
+import           Control.Lens                    ((^.))
+import           Control.Monad                   (void)
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
 import           Data.Maybe
 import qualified Data.Text                       as T
+import           Data.Tuple.Extra
 import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
@@ -16,9 +19,6 @@ import           Language.LSP.Protocol.Types     hiding
                                                   SemanticTokensEdit (..),
                                                   mkRange)
 import           Language.LSP.Test
--- import Test.QuickCheck.Instances ()
-import           Control.Lens                    ((^.))
-import           Data.Tuple.Extra
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           TestUtils
@@ -46,13 +46,18 @@ addSigLensesTests =
       after' enableGHCWarnings exported (def, sig) others =
         T.unlines $ [pragmas | enableGHCWarnings] <> [moduleH exported] <> maybe [] pure sig <> [def] <> others
       createConfig mode = A.object ["haskell" A..= A.object ["plugin" A..= A.object ["ghcide-type-lenses" A..= A.object ["config" A..= A.object ["mode" A..= A.String mode]]]]]
-      sigSession testName enableGHCWarnings mode exported def others = testSession testName $ do
+      sigSession testName enableGHCWarnings waitForDiags mode exported def others = testSession testName $ do
         let originalCode = before enableGHCWarnings exported def others
         let expectedCode = after' enableGHCWarnings exported def others
         sendNotification SMethod_WorkspaceDidChangeConfiguration $ DidChangeConfigurationParams $ createConfig mode
         doc <- createDoc "Sigs.hs" "haskell" originalCode
-        waitForProgressDone
-        codeLenses <- getCodeLenses doc
+        -- Because the diagnostics mode is really relying only on diagnostics now
+        -- to generate the code lens we need to make sure we wait till the file
+        -- is parsed before asking for codelenses, otherwise we will get nothing.
+        if waitForDiags
+          then void waitForDiagnostics
+          else waitForProgressDone
+        codeLenses <- getAndResolveCodeLenses doc
         if not $ null $ snd def
           then do
             liftIO $ length codeLenses == 1 @? "Expected 1 code lens, but got: " <> show codeLenses
@@ -84,15 +89,16 @@ addSigLensesTests =
         , ("promotedKindTest = Proxy @Nothing", if ghcVersion >= GHC96 then "promotedKindTest :: Proxy Nothing" else "promotedKindTest :: Proxy 'Nothing")
         , ("typeOperatorTest = Refl", if ghcVersion >= GHC92 then "typeOperatorTest :: forall {k} {a :: k}. a :~: a" else "typeOperatorTest :: a :~: a")
         , ("notInScopeTest = mkCharType", "notInScopeTest :: String -> Data.Data.DataType")
+        , ("aVeryLongSignature a b c d e f g h i j k l m n = a && b && c && d && e && f && g && h && i && j && k && l && m && n", "aVeryLongSignature :: Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool -> Bool")
         ]
    in testGroup
         "add signature"
-        [ testGroup "signatures are correct" [sigSession (T.unpack $ T.replace "\n" "\\n" def) False "always" "" (def, Just sig) [] | (def, sig) <- cases]
-        , sigSession "exported mode works" False "exported" "xyz" ("xyz = True", Just "xyz :: Bool") (fst <$> take 3 cases)
+        [ testGroup "signatures are correct" [sigSession (T.unpack $ T.replace "\n" "\\n" def) False False "always" "" (def, Just sig) [] | (def, sig) <- cases]
+        , sigSession "exported mode works" False False "exported" "xyz" ("xyz = True", Just "xyz :: Bool") (fst <$> take 3 cases)
         , testGroup
             "diagnostics mode works"
-            [ sigSession "with GHC warnings" True "diagnostics" "" (second Just $ head cases) []
-            , sigSession "without GHC warnings" False "diagnostics" "" (second (const Nothing) $ head cases) []
+            [ sigSession "with GHC warnings" True True "diagnostics" "" (second Just $ head cases) []
+            , sigSession "without GHC warnings" False False "diagnostics" "" (second (const Nothing) $ head cases) []
             ]
         , testSession "keep stale lens" $ do
             let content = T.unlines
@@ -112,3 +118,5 @@ addSigLensesTests =
 listOfChar :: T.Text
 listOfChar | ghcVersion >= GHC90 = "String"
            | otherwise = "[Char]"
+
+
