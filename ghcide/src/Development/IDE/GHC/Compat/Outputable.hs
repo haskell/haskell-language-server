@@ -61,7 +61,7 @@ import           GHC.Utils.Outputable            as Out hiding
 import qualified GHC.Utils.Outputable            as Out
 #endif
 
-#if !MIN_VERSION_ghc(9,2,0)
+#if !MIN_VERSION_ghc(9,0,0)
 import           Development.IDE.GHC.Compat.Core (GlobalRdrEnv)
 import           DynFlags
 import           ErrUtils                        hiding (mkWarnMsg)

@@ -1097,7 +1097,6 @@ makeSimpleDetails hsc_env =
               hsc_env
 #endif
 
-mkIfaceTc :: HscEnv -> GHC.SafeHaskellMode -> ModDetails -> ModSummary -> TcGblEnv -> IO ModIface
 mkIfaceTc hsc_env sf details ms tcGblEnv =
   GHC.mkIfaceTc hsc_env sf details
 #if MIN_VERSION_ghc(9,3,0)
@@ -1125,13 +1124,11 @@ initTidyOpts =
   pure
 #endif
 
-
+driverNoStop =
 #if MIN_VERSION_ghc(9,3,0)
-driverNoStop :: StopPhase
-driverNoStop = NoStop
+                                         NoStop
 #else
-driverNoStop :: Phase
-driverNoStop = StopLn
+                                         StopLn
 #endif
 
 #if !MIN_VERSION_ghc(9,3,0)
