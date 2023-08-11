@@ -43,7 +43,9 @@ allow-newer: true
 
 extra-deps:
 - floskell-0.10.7
-- hiedb-0.4.3.0
+# - hiedb-0.4.3.0
+- git: https://github.com/nlander/HieDb.git
+  commit: 4eebfcf8fab54f24808e6301227d77ae64d2509c
 - implicit-hie-0.1.2.7
 - implicit-hie-cradle-0.5.0.1
 - monad-dijkstra-0.1.1.3
