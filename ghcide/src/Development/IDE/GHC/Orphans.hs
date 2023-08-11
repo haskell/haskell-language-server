@@ -12,6 +12,7 @@ module Development.IDE.GHC.Orphans() where
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Parser.Annotation
 #endif
+
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.Bag
 import           GHC.Data.FastString
@@ -23,7 +24,7 @@ import           GHC.Unit.Info
 import           GHC.Utils.Outputable
 #else
 import           Bag
-import           GhcPlugins
+import           GhcPlugins                 hiding (UniqFM)
 import qualified StringBuffer               as SB
 import           Unique                     (getKey)
 #endif

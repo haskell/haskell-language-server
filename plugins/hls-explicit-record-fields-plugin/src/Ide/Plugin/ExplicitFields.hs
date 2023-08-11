@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE ExistentialQuantification #-}
@@ -39,7 +40,6 @@ import           Development.IDE.Core.RuleTypes   (TcModuleResult (..),
                                                    TypeCheck (..))
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       (HsConDetails (RecCon),
-                                                   HsExpansion (HsExpanded),
                                                    HsExpr (XExpr),
                                                    HsRecFields (..), LPat,
                                                    Outputable, getLoc,
@@ -86,6 +86,9 @@ import           Language.LSP.Protocol.Types      (CodeAction (..),
                                                    WorkspaceEdit (WorkspaceEdit),
                                                    type (|?) (InL, InR))
 
+#if MIN_VERSION_ghc(9,0,0)
+import           Development.IDE.GHC.Compat       (HsExpansion (HsExpanded))
+#endif
 
 data Log
   = LogShake Shake.Log
@@ -108,7 +111,7 @@ descriptor recorder plId =
   in (defaultPluginDescriptor plId)
   { pluginHandlers = caHandlers
   , pluginCommands = carCommands
-  , pluginRules = collectRecordsRule recorder
+  , pluginRules = collectRecordsRule recorder *> collectNamesRule
   }
 
 codeActionProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
@@ -160,6 +163,7 @@ collectRecordsRule :: Recorder (WithPriority Log) -> Rules ()
 collectRecordsRule recorder =
   defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \CollectRecords nfp -> runMaybeT $ do
   tmr <- useMT TypeCheck nfp
+  (CNR nameMap) <- useMT CollectNames nfp
   let recs = getRecords tmr
   logWith recorder Debug (LogCollectedRecords recs)
   -- We want a list of unique numbers to link our the original code action we
@@ -171,7 +175,6 @@ collectRecordsRule recorder =
       -- For resolving the code actions, a IntMap which links the unique id to
       -- the relevant record info.
       crCodeActionResolve = IntMap.fromList recsWithUniques
-      nameMap = getNames tmr
       enabledExtensions = getEnabledExtensions tmr
   pure CRR {crCodeActions, crCodeActionResolve, nameMap, enabledExtensions}
   where
@@ -182,6 +185,11 @@ collectRecordsRule recorder =
 getRecords :: TcModuleResult -> [RecordInfo]
 getRecords (tmrRenamed -> (hs_valds -> valBinds,_,_,_)) =
   collectRecords valBinds
+
+collectNamesRule :: Rules ()
+collectNamesRule = defineNoDiagnostics mempty $ \CollectNames nfp -> runMaybeT $ do
+  tmr <- useMT TypeCheck nfp
+  pure (CNR (getNames tmr))
 
 -- | Collects all 'Name's of a given source file, to be used
 -- in the variable usage analysis.
@@ -219,6 +227,22 @@ instance Show CollectRecordsResult where
   show _ = "<CollectRecordsResult>"
 
 type instance RuleResult CollectRecords = CollectRecordsResult
+
+data CollectNames = CollectNames
+                  deriving (Eq, Show, Generic)
+
+instance Hashable CollectNames
+instance NFData CollectNames
+
+data CollectNamesResult = CNR (UniqFM Name [Name])
+  deriving (Generic)
+
+instance NFData CollectNamesResult
+
+instance Show CollectNamesResult where
+  show _ = "<CollectNamesResult>"
+
+type instance RuleResult CollectNames = CollectNamesResult
 
 data RecordInfo
   = RecordInfoPat RealSrcSpan (Pat (GhcPass 'Renamed))
@@ -339,7 +363,11 @@ getRecCons :: LHsExpr (GhcPass 'Renamed) -> ([RecordInfo], Bool)
 -- implicitly continuing to traverse. In addition, we have to return a list,
 -- because there is a possibility that there were be more than one result per
 -- branch
-getRecCons (unLoc -> XExpr (HsExpanded _ expanded)) = (collectRecords expanded, True)
+
+#if MIN_VERSION_ghc(9,0,0)
+getRecCons (unLoc -> XExpr (HsExpanded a _)) = (collectRecords a, True)
+#endif
+
 getRecCons e@(unLoc -> RecordCon _ _ flds)
   | isJust (rec_dotdot flds) = (mkRecInfo e, False)
   where
