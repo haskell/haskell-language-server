@@ -100,13 +100,15 @@ import           Data.Default
 import           Data.Dynamic
 import           Data.EnumMap.Strict                    (EnumMap)
 import qualified Data.EnumMap.Strict                    as EM
-import           Data.Foldable                          (find, for_)
+import           Data.Foldable                          (find, for_, toList)
+-- 8.10 The import of ‘toList’ from module ‘Data.Foldable’ is redundant
 import           Data.Functor                           ((<&>))
 import           Data.Functor.Identity
 import           Data.Hashable
 import qualified Data.HashMap.Strict                    as HMap
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
+import           Data.IORef
 import           Data.List.Extra                        (foldl', partition,
                                                          takeEnd)
 import qualified Data.Map.Strict                        as Map
@@ -128,12 +130,11 @@ import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
 import           Development.IDE.GHC.Compat             (NameCache,
-                                                         NameCacheUpdater,
+                                                         NameCacheUpdater (..),
                                                          initNameCache,
-                                                         knownKeyNames)
-#if !MIN_VERSION_ghc(9,3,0)
-import           Development.IDE.GHC.Compat             (upNameCache)
-#endif
+                                                         knownKeyNames,
+                                                         mkSplitUniqSupply)
+
 import qualified Data.Aeson.Types                       as A
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
@@ -178,6 +179,10 @@ import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
+
+#if !MIN_VERSION_ghc(9,3,0)
+import           Development.IDE.GHC.Compat             (upNameCache)
+#endif
 
 data Log
   = LogCreateHieDbExportsMapStart

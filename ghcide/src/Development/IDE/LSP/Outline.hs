@@ -12,8 +12,10 @@ where
 import           Control.Monad.IO.Class
 import           Data.Functor
 import           Data.Foldable                  (toList)
+--8.10 The import of ‘Data.Foldable’ is redundant except perhaps to import instances from ‘Data.Foldable’
 import           Data.Generics                  hiding (Prefix)
 import           Data.Maybe
+import qualified Data.Text                      as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
@@ -28,6 +30,7 @@ import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
                                                  type (|?) (InL, InR), uriToFilePath)
 import          Language.LSP.Protocol.Message
+
 #if MIN_VERSION_ghc(9,2,0)
 import Data.List.NonEmpty (nonEmpty)
 #endif

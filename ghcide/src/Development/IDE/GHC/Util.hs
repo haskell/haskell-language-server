@@ -30,6 +30,58 @@ module Development.IDE.GHC.Util(
     getExtensions
     ) where
 
+import           Control.Concurrent
+import           Control.Exception                 as E
+import           Data.Binary.Put                   (Put, runPut)
+import qualified Data.ByteString                   as BS
+import           Data.ByteString.Internal          (ByteString (..))
+import qualified Data.ByteString.Internal          as BS
+import qualified Data.ByteString.Lazy              as LBS
+import           Data.Data                         (Data)
+-- 8.10 The import of ‘Data.Data’ is redundant except perhaps to import instances from ‘Data.Data’
+import           Data.IORef
+import           Data.List.Extra
+import           Data.Maybe
+import qualified Data.Text                         as T
+import qualified Data.Text.Encoding                as T
+import qualified Data.Text.Encoding.Error          as T
+import           Data.Time.Clock.POSIX             (POSIXTime, getCurrentTime,
+                                                    utcTimeToPOSIXSeconds)
+-- 8.10 The import of ‘Data.Time.Clock.POSIX’ is redundant except perhaps to import instances from ‘Data.Time.Clock.POSIX’
+import           Data.Typeable
+import qualified Data.Unique                       as U
+-- 8.10 The qualified import of ‘Data.Unique’ is redundant except perhaps to import instances from ‘Data.Unique’
+import           Debug.Trace
+-- 8.10 The import of ‘Debug.Trace’ is redundant except perhaps to import instances from ‘Debug.Trace’
+import           Development.IDE.GHC.Compat        as GHC
+import qualified Development.IDE.GHC.Compat.Parser as Compat
+import qualified Development.IDE.GHC.Compat.Units  as Compat
+import           Development.IDE.Types.Location
+import           Foreign.ForeignPtr
+import           Foreign.Ptr
+import           Foreign.Storable
+import           GHC                               hiding (ParsedModule (..))
+import           GHC.IO.BufferedIO                 (BufferedIO)
+import           GHC.IO.Device                     as IODevice
+import           GHC.IO.Encoding
+import           GHC.IO.Exception
+import           GHC.IO.Handle.Internals
+import           GHC.IO.Handle.Types
+import           GHC.Stack
+-- 8.10 The import of ‘GHC.Stack’ is redundant except perhaps to import instances from ‘GHC.Stack’
+import           Ide.PluginUtils                   (unescape)
+import           System.Environment.Blank          (getEnvDefault)
+-- 8.10 The import of ‘System.Environment.Blank’ is redundant except perhaps to import instances from ‘System.Environment.Blank’
+import           System.FilePath
+import           System.IO.Unsafe
+-- 8.10 The import of ‘System.IO.Unsafe’ is redundant except perhaps to import instances from ‘System.IO.Unsafe’
+import           Text.Printf
+-- 8.10 The import of ‘Text.Printf’ is redundant except perhaps to import instances from ‘Text.Printf’
+
+#if !MIN_VERSION_ghc(9,2,0)
+import           Development.IDE.GHC.Compat.Util
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Data.EnumSet
 import           GHC.Data.FastString
@@ -46,41 +98,7 @@ import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
 import           GHC.Utils.Fingerprint
 import           GHC.Utils.Outputable
-#else
-import           Development.IDE.GHC.Compat.Util
 #endif
-import           Control.Concurrent
-import           Control.Exception                 as E
-import           Data.Binary.Put                   (Put, runPut)
-import qualified Data.ByteString                   as BS
-import           Data.ByteString.Internal          (ByteString (..))
-import qualified Data.ByteString.Internal          as BS
-import qualified Data.ByteString.Lazy              as LBS
-import           Data.IORef
-import           Data.List.Extra
-import           Data.Maybe
-import qualified Data.Text                         as T
-import qualified Data.Text.Encoding                as T
-import qualified Data.Text.Encoding.Error          as T
-import           Data.Typeable
-import           Development.IDE.GHC.Compat        as GHC
-import qualified Development.IDE.GHC.Compat.Parser as Compat
-import qualified Development.IDE.GHC.Compat.Units  as Compat
-import           Development.IDE.Types.Location
-import           Foreign.ForeignPtr
-import           Foreign.Ptr
-import           Foreign.Storable
-import           GHC                               hiding (ParsedModule (..))
-import           GHC.IO.BufferedIO                 (BufferedIO)
-import           GHC.IO.Device                     as IODevice
-import           GHC.IO.Encoding
-import           GHC.IO.Exception
-import           GHC.IO.Handle.Internals
-import           GHC.IO.Handle.Types
-import           Ide.PluginUtils                   (unescape)
-import           System.FilePath
-
-
 ----------------------------------------------------------------------
 -- GHC setup
 

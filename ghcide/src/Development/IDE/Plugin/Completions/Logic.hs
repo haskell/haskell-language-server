@@ -24,21 +24,28 @@ import           Data.List.Extra                          as List hiding
 import qualified Data.Map                                 as Map
 import           Data.Row
 
-import           Data.Maybe                               (fromMaybe, isJust,
-                                                           isNothing,
+import           Data.Maybe                               (catMaybes, fromMaybe,
+                                                           isJust, isNothing,
                                                            listToMaybe,
                                                            mapMaybe)
+-- 8.10 The import of ‘catMaybes’ from module ‘Data.Maybe’ is redundant
 import qualified Data.Text                                as T
 import qualified Text.Fuzzy.Parallel                      as Fuzzy
 
 import           Control.Monad
 import           Data.Aeson                               (ToJSON (toJSON))
 import           Data.Function                            (on)
+import           Data.Functor
+-- 8.10 The import of ‘Data.Functor’ is redundant except perhaps to import instances from ‘Data.Functor’
+import qualified Data.HashMap.Strict                      as HM
+-- 8.10 The qualified import of ‘Data.HashMap.Strict’ is redundant except perhaps to import instances from ‘Data.HashMap.Strict’
 
 import qualified Data.HashSet                             as HashSet
 import           Data.Monoid                              (First (..))
 import           Data.Ord                                 (Down (Down))
 import qualified Data.Set                                 as Set
+import           Development.IDE.Core.Compile
+-- 8.10 The import of ‘Development.IDE.Core.Compile’ is redundant except perhaps to import instances from ‘Development.IDE.Core.Compile’
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat               hiding (ppr)
 import qualified Development.IDE.GHC.Compat               as GHC
@@ -47,16 +54,15 @@ import           Development.IDE.GHC.CoreFile             (occNamePrefixes)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
+import           Development.IDE.Spans.Common
+-- 8.10 The import of ‘Development.IDE.Spans.Common’ is redundant except perhaps to import instances from ‘Development.IDE.Spans.Common’
+import           Development.IDE.Spans.Documentation
+-- 8.10 The import of ‘Development.IDE.Spans.Documentation’ is redundant except perhaps to import instances from ‘Development.IDE.Spans.Documentation’
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports
+import           Development.IDE.Types.HscEnvEq
+-- 8.10 The import of ‘Development.IDE.Types.HscEnvEq’ is redundant except perhaps to import instances from ‘Development.IDE.Types.HscEnvEq’
 import           Development.IDE.Types.Options
-
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Plugins                              (Depth (AllTheWay),
-                                                           mkUserStyle,
-                                                           neverQualify,
-                                                           sdocStyle)
-#endif
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
                                                            IdePlugins (..),
@@ -71,6 +77,15 @@ import qualified Data.Text.Utf16.Rope                     as Rope
 import           Development.IDE
 
 import           Development.IDE.Spans.AtPoint            (pointCommand)
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Plugins                              (Depth (AllTheWay),
+                                                           defaultSDocContext,
+                                                           mkUserStyle,
+                                                           neverQualify,
+                                                           renderWithContext,
+                                                           sdocStyle)
+#endif
 
 #if MIN_VERSION_ghc(9,5,0)
 import           Language.Haskell.Syntax.Basic

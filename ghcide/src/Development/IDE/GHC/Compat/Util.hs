@@ -69,22 +69,7 @@ module Development.IDE.GHC.Compat.Util (
     atEnd,
     ) where
 
-#if MIN_VERSION_ghc(9,0,0)
-import           Control.Exception.Safe  (MonadCatch, catch, try)
-import           GHC.Data.Bag
-import           GHC.Data.BooleanFormula
-import           GHC.Data.EnumSet
-
-import           GHC.Data.FastString
-import           GHC.Data.Maybe
-import           GHC.Data.Pair
-import           GHC.Data.StringBuffer
-import           GHC.Types.Unique
-import           GHC.Types.Unique.DFM
-import           GHC.Utils.Fingerprint
-import           GHC.Utils.Outputable    (pprHsString)
-import           GHC.Utils.Panic         hiding (try)
-#else
+#if !MIN_VERSION_ghc(9,0,0)
 import           Bag
 import           BooleanFormula
 import           EnumSet
@@ -99,6 +84,24 @@ import           StringBuffer
 import           UniqDFM
 import           Unique
 import           Util
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+import           Control.Exception.Safe  (MonadCatch, catch, try)
+import           GHC.Data.Bag
+import           GHC.Data.BooleanFormula
+import           GHC.Data.EnumSet
+
+import           GHC.Data.FastString
+import           GHC.Data.Maybe
+import           GHC.Data.Pair
+import           GHC.Data.StringBuffer
+import           GHC.Types.Unique
+import           GHC.Types.Unique.DFM
+import           GHC.Utils.Fingerprint
+import           GHC.Utils.Misc
+import           GHC.Utils.Outputable    (pprHsString)
+import           GHC.Utils.Panic         hiding (try)
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)

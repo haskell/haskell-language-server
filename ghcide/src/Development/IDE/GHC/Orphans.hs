@@ -8,42 +8,46 @@
 -- | Orphan instances for GHC.
 --   Note that the 'NFData' instances may not be law abiding.
 module Development.IDE.GHC.Orphans() where
-
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Parser.Annotation
-#endif
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC.Data.Bag
-import           GHC.Data.FastString
-import qualified GHC.Data.StringBuffer      as SB
-import           GHC.Types.Name.Occurrence
-import           GHC.Types.SrcLoc
-import           GHC.Unit.Info
-#else
-import           Bag
-import           GhcPlugins
-import qualified StringBuffer               as SB
-import           Unique                     (getKey)
-#endif
-
-
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 
 import           Control.DeepSeq
 import           Data.Aeson
 import           Data.Bifunctor             (Bifunctor (..))
+-- 8.10 The import of ‘Data.Bifunctor’ is redundant except perhaps to import instances from ‘Data.Bifunctor’
 import           Data.Hashable
 import           Data.String                (IsString (fromString))
 import           Data.Text                  (unpack)
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC.ByteCode.Types
-#else
+
+#if !MIN_VERSION_ghc(9,0,0)
+import           Bag
 import           ByteCodeTypes
+import           GhcPlugins
+import qualified StringBuffer               as SB
+import           Unique                     (getKey)
 #endif
+
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC                        (ModuleGraph)
+import           GHC.ByteCode.Types
+import           GHC.Data.Bag
+import           GHC.Data.FastString
+import qualified GHC.Data.StringBuffer      as SB
+import           GHC.Types.Name.Occurrence
+import           GHC.Types.SrcLoc
+import           GHC.Types.Unique           (getKey)
+import           GHC.Unit.Info
+import           GHC.Utils.Outputable
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Parser.Annotation
+#endif
+
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
 #endif
+
 #if MIN_VERSION_ghc(9,5,0)
 import           GHC.Unit.Home.ModInfo
 #endif

@@ -18,14 +18,15 @@ import qualified Data.Text                       as Text
 import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import qualified Language.LSP.Protocol.Types              as LSP
-import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.Except (ExceptT)
-import Ide.Plugin.Error (PluginError)
-import Ide.Types (PluginId(..))
-import qualified Data.Text as T
-import  Development.IDE.Core.PluginUtils
-import qualified Language.LSP.Protocol.Lens as L
+import qualified Language.LSP.Protocol.Types    as LSP
+import           Control.Monad.IO.Class         (MonadIO (..))
+import           Control.Monad.Trans.Except     (ExceptT)
+import           Ide.Plugin.Error               (PluginError)
+import           Ide.Types                      (PluginId(..))
+import qualified Data.Text                      as T
+import           Development.IDE.Core.PluginUtils
+import qualified Language.LSP.Protocol.Lens     as L
+
 getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
 getNextPragmaInfo dynFlags sourceText =
   if | Just sourceText <- sourceText

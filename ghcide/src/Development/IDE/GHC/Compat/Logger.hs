@@ -13,16 +13,21 @@ import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env        as Env
 import           Development.IDE.GHC.Compat.Outputable
 
+#if !MIN_VERSION_ghc(9,0,0)
+import           DynFlags
+import           Outputable                            (queryQual)
+#endif
+
 #if MIN_VERSION_ghc(9,0,0)
+import           GHC.Driver.Session                    as DynFlags
 import           GHC.Utils.Outputable
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Env                        (hsc_logger)
 import           GHC.Utils.Logger                      as Logger
 #endif
-#else
-import           DynFlags
-import           Outputable                            (queryQual)
-#endif
+
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.Error
 #endif

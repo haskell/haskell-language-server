@@ -3,6 +3,7 @@ module Development.IDE.Monitoring.EKG(monitoring) where
 
 import           Development.IDE.Types.Monitoring (Monitoring (..))
 import           Ide.Logger                       (Logger)
+
 #ifdef MONITORING_EKG
 import           Control.Concurrent               (killThread)
 import           Control.Concurrent.Async         (async, waitCatch)

@@ -55,24 +55,22 @@ module Development.IDE.GHC.Compat.Env (
 
 import           GHC                                 (setInteractiveDynFlags)
 
-#if MIN_VERSION_ghc(9,0,0)
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Backend                  as Backend
-#if MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Env                      (HscEnv)
-#else
-import           GHC.Driver.Env                      (HscEnv, hsc_EPS)
+#if !MIN_VERSION_ghc(9,0,0)
+import           DynFlags
+import           Hooks
+import           HscTypes                            as Env
+import           Module
 #endif
-import qualified GHC.Driver.Env                      as Env
-import qualified GHC.Driver.Session                  as Session
-import           GHC.Platform.Ways                   hiding (hostFullWays)
-import qualified GHC.Platform.Ways                   as Ways
-import           GHC.Runtime.Context
-import           GHC.Unit.Env                        (UnitEnv)
-import           GHC.Unit.Home                       as Home
-import           GHC.Utils.Logger
-import           GHC.Utils.TmpFs
-#else
+
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Driver.Hooks                    (Hooks)
+import           GHC.Driver.Session                  hiding (mkHomeModule)
+import           GHC.Unit.Types                      (Module, Unit, UnitId,
+                                                      mkModule)
+#endif
+
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+import qualified Data.Set                            as Set
 import qualified GHC.Driver.Session                  as DynFlags
 import           GHC.Driver.Types                    (HscEnv,
                                                       InteractiveContext (..),
@@ -82,28 +80,38 @@ import qualified GHC.Driver.Types                    as Env
 import           GHC.Driver.Ways                     hiding (hostFullWays)
 import qualified GHC.Driver.Ways                     as Ways
 #endif
-import           GHC.Driver.Hooks                    (Hooks)
-import           GHC.Driver.Session                  hiding (mkHomeModule)
-#if __GLASGOW_HASKELL__ >= 905
-import           Language.Haskell.Syntax.Module.Name
-#else
+
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,5,0)
 import           GHC.Unit.Module.Name
 #endif
-import           GHC.Unit.Types                      (Module, UnitId)
-#else
-import           DynFlags
-import           Hooks
-import           HscTypes                            as Env
-import           Module
-#endif
 
-#if MIN_VERSION_ghc(9,0,0)
-#if !MIN_VERSION_ghc(9,2,0)
-import qualified Data.Set                            as Set
-#endif
-#endif
 #if !MIN_VERSION_ghc(9,2,0)
 import           Data.IORef
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Backend                  as Backend
+import qualified GHC.Driver.Env                      as Env
+import qualified GHC.Driver.Session                  as Session
+import           GHC.Platform.Ways                   hiding (hostFullWays)
+import qualified GHC.Platform.Ways                   as Ways
+import           GHC.Runtime.Context
+import           GHC.Unit.Env                        (UnitEnv)
+import           GHC.Unit.Home                       as Home
+import           GHC.Utils.Logger
+import           GHC.Utils.TmpFs
+#endif
+
+#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+import           GHC.Driver.Env                      (HscEnv, hsc_EPS)
+#endif
+
+#if MIN_VERSION_ghc(9,3,0)
+import           GHC.Driver.Env                      (HscEnv)
+#endif
+
+#if MIN_VERSION_ghc(9,5,0)
+import           Language.Haskell.Syntax.Module.Name
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)

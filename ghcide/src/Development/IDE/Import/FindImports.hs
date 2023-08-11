@@ -15,6 +15,7 @@ module Development.IDE.Import.FindImports
 
 import           Control.DeepSeq
 import           Development.IDE.GHC.Compat        as Compat
+import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics
@@ -26,6 +27,7 @@ import           Control.Monad.IO.Class
 import           Data.List                         (isSuffixOf)
 import           Data.Maybe
 import           System.FilePath
+
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
 import           GHC.Unit.State

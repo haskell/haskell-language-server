@@ -12,12 +12,15 @@ module Development.IDE.Core.IdeConfiguration
 where
 
 import           Control.Concurrent.Strict
+import           Control.Lens                   ((^.))
+-- 8.10 The import of ‘Control.Lens’ is redundant except perhaps to import instances from ‘Control.Lens’
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Aeson.Types               (Value)
 import           Data.Hashable                  (Hashed, hashed, unhashed)
 import           Data.HashSet                   (HashSet, singleton)
-import           Data.Text                      (isPrefixOf)
+import           Data.Text                      (Text, isPrefixOf)
+-- 8.10 The import of ‘Text’ from module ‘Data.Text’ is redundant
 import           Development.IDE.Core.Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location

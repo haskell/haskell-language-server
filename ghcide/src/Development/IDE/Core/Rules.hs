@@ -73,7 +73,11 @@ import           Control.Monad.State
 import           Control.Monad.Trans.Except                   (ExceptT, except,
                                                                runExceptT)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson                                   (toJSON)
+import           Data.Aeson                                   (Result (Success),
+                                                               toJSON)
+-- 8.10 The import of ‘Result, Success’from module ‘Data.Aeson’ is redundant
+import qualified Data.Aeson.Types                             as A
+-- 8.10 The qualified import of ‘Data.Aeson.Types’ is redundant except perhaps to import instances from ‘Data.Aeson.Types’
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
@@ -144,8 +148,11 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                Properties,
                                                                ToHsType,
                                                                useProperty)
+import           Ide.PluginUtils                              (configForPlugin)
+-- 8.10 The import of ‘Ide.PluginUtils’ is redundant except perhaps to import instances from ‘Ide.PluginUtils’
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
-                                                               PluginId)
+                                                               PluginId, PluginDescriptor (pluginId), IdePlugins (IdePlugins))
+-- 8.10 The import of ‘IdePlugins, IdePlugins, PluginDescriptor, PluginDescriptor(pluginId)’from module ‘Ide.Types’ is redundant
 import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
 import System.Info.Extra (isWindows)
@@ -154,15 +161,25 @@ import Ide.Logger (Recorder, logWith, cmapWithPrio, WithPriority, Pretty (pretty
 import qualified Development.IDE.Core.Shake as Shake
 import qualified Ide.Logger as Logger
 import qualified Development.IDE.Types.Shake as Shake
+import           Development.IDE.GHC.CoreFile
+-- The import of ‘Development.IDE.GHC.CoreFile’ is redundant except perhaps to import instances from ‘Development.IDE.GHC.CoreFile’
 import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)
 import Control.Monad.IO.Unlift
 import qualified Data.IntMap as IM
+-- The qualified import of ‘Data.IntMap’ is redundant except perhaps to import instances from ‘Data.IntMap’
+import GHC (mgModSummaries)
+import GHC.Fingerprint
+
 #if MIN_VERSION_ghc(9,3,0)
+import GHC.Unit.Module.Graph
+import GHC.Unit.Env
 #endif
+
 #if MIN_VERSION_ghc(9,5,0)
 import GHC.Unit.Home.ModInfo
 #endif
-import GHC.Fingerprint
+
+
 
 data Log
   = LogShake Shake.Log

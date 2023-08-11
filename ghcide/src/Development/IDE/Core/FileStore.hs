@@ -56,6 +56,8 @@ import qualified System.Directory                             as Dir
 
 import qualified Ide.Logger                                   as L
 
+import           Data.Aeson                                   (ToJSON (toJSON))
+-- 8.0 The import of ‘Data.Aeson’ is redundant except perhaps to import instances from ‘Data.Aeson’
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.List                                    (foldl')

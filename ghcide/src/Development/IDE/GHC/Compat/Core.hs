@@ -500,176 +500,20 @@ module Development.IDE.GHC.Compat.Core (
 
 import qualified GHC
 
-#if MIN_VERSION_ghc(9,3,0)
-import GHC.Driver.Env.KnotVars
-import GHC.Iface.Recomp
-import GHC.Linker.Types
-import GHC.Unit.Module.Graph
-import GHC.Driver.Errors.Types
-import GHC.Types.Unique.Map
-import GHC.Types.Unique
-import GHC.Utils.TmpFs
-import GHC.Utils.Panic
-import GHC.Unit.Finder.Types
-import GHC.Unit.Env
-import GHC.Driver.Phases
-#endif
+import           Data.List                    (isSuffixOf)
+-- 8.10 The import of ‘Data.List’ is redundant except perhaps to import instances from ‘Data.List’
+import           System.FilePath
+-- 8.10 The import of ‘System.FilePath’ is redundant except perhaps to import instances from ‘System.FilePath’
+import Data.Foldable (toList)
+-- 8.10 The import of ‘Data.Foldable’ is redundant except perhaps to import instances from ‘Data.Foldable’
+-- NOTE(ozkutuk): Cpp clashes Phase.Cpp, so we hide it.
+-- Not the greatest solution, but gets the job done
+-- (until the CPP extension is actually needed).
+import GHC.LanguageExtensions.Type hiding (Cpp)
 
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC.Builtin.Names            hiding (Unique, printName)
-import           GHC.Builtin.Types
-import           GHC.Builtin.Types.Prim
-import           GHC.Builtin.Utils
-import           GHC.Core.Class
-import           GHC.Core.Coercion
-import           GHC.Core.ConLike
-import           GHC.Core.DataCon             hiding (dataConExTyCoVars)
-import qualified GHC.Core.DataCon             as DataCon
-import           GHC.Core.FamInstEnv          hiding (pprFamInst)
-import           GHC.Core.InstEnv
-import           GHC.Types.Unique.FM hiding (UniqFM)
-import qualified GHC.Types.Unique.FM          as UniqFM
-#if MIN_VERSION_ghc(9,3,0)
-import qualified GHC.Driver.Config.Tidy       as GHC
-import qualified GHC.Data.Strict              as Strict
-#endif
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Data.Bag
-import           GHC.Core.Multiplicity        (scaledThing)
-#else
-import           GHC.Core.Ppr.TyThing         hiding (pprFamInst)
-import           GHC.Core.TyCo.Rep            (scaledThing)
-#endif
-import           GHC.Core.PatSyn
-import           GHC.Core.Predicate
-import           GHC.Core.TyCo.Ppr
-import qualified GHC.Core.TyCo.Rep            as TyCoRep
-import           GHC.Core.TyCon
-import           GHC.Core.Type                hiding (mkInfForAllTys)
-import           GHC.Core.Unify
-import           GHC.Core.Utils
+import           GHC.Hs.Binds
 
-
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Env
-#else
-import           GHC.Driver.Finder hiding     (mkHomeModLocation)
-import           GHC.Driver.Types
-import           GHC.Driver.Ways
-#endif
-import           GHC.Driver.CmdLine           (Warn (..))
-import           GHC.Driver.Hooks
-import           GHC.Driver.Main              as GHC
-import           GHC.Driver.Monad
-import           GHC.Driver.Pipeline
-import           GHC.Driver.Plugins
-import           GHC.Driver.Session           hiding (ExposePackage)
-import qualified GHC.Driver.Session           as DynFlags
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Hs                       (HsModule (..), SrcSpanAnn')
-import           GHC.Hs.Decls                 hiding (FunDep)
-import           GHC.Hs.Doc
-import           GHC.Hs.Expr
-import           GHC.Hs.Extension
-import           GHC.Hs.ImpExp
-import           GHC.Hs.Pat
-import           GHC.Hs.Type
-import           GHC.Hs.Utils                 hiding (collectHsBindsBinders)
-#endif
-#if !MIN_VERSION_ghc(9,2,0)
-import           GHC.Hs                       hiding (HsLet, LetStmt)
-#endif
-import           GHC.HsToCore.Docs
-import           GHC.HsToCore.Expr
-import           GHC.HsToCore.Monad
-import           GHC.Iface.Load
-import           GHC.Iface.Make               as GHC
-import           GHC.Iface.Syntax
-import           GHC.Iface.Tidy               as GHC
-import           GHC.IfaceToCore
-import           GHC.Parser
-import           GHC.Parser.Header            hiding (getImports)
-#if MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Linker.Loader            as Linker
-import           GHC.Parser.Lexer             hiding (initParserState, getPsMessages)
-import           GHC.Parser.Annotation        (EpAnn (..))
-import           GHC.Platform.Ways
-import           GHC.Runtime.Context          (InteractiveImport (..))
-#else
-import           GHC.Parser.Lexer
-import qualified GHC.Runtime.Linker           as Linker
-#endif
-import           GHC.Rename.Fixity            (lookupFixityRn)
-import           GHC.Rename.Names
-import           GHC.Rename.Splice
-import qualified GHC.Runtime.Interpreter      as GHCi
-import           GHC.Tc.Instance.Family
-import           GHC.Tc.Module
-import           GHC.Tc.Types
-import           GHC.Tc.Types.Evidence        hiding ((<.>))
-import           GHC.Tc.Utils.Env
-import           GHC.Tc.Utils.Monad           hiding (Applicative (..), IORef,
-                                               MonadFix (..), MonadIO (..),
-                                               allM, anyM, concatMapM,
-                                               mapMaybeM, (<$>))
-import           GHC.Tc.Utils.TcType          as TcType
-import qualified GHC.Types.Avail              as Avail
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Types.Avail              (greNamePrintableName)
-import           GHC.Types.Fixity             (LexicalFixity (..), Fixity (..), defaultFixity)
-#endif
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Types.Meta
-#endif
-import           GHC.Types.Basic
-import           GHC.Types.Id
-import           GHC.Types.Name               hiding (varName)
-import           GHC.Types.Name.Cache
-import           GHC.Types.Name.Env
-import           GHC.Types.Name.Reader        hiding (GRE, gre_name, gre_imp, gre_lcl, gre_par)
-import qualified GHC.Types.Name.Reader        as RdrName
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Types.Name.Set
-import           GHC.Types.SourceFile         (HscSource (..),
-#if !MIN_VERSION_ghc(9,3,0)
-                                               SourceModified(..)
-#endif
-                                               )
-import           GHC.Types.SourceText
-import           GHC.Types.Target             (Target (..), TargetId (..))
-import           GHC.Types.TyThing
-import           GHC.Types.TyThing.Ppr
-#else
-import           GHC.Types.Name.Set
-#endif
-import           GHC.Types.SrcLoc             (BufPos, BufSpan,
-                                               SrcLoc (UnhelpfulLoc),
-                                               SrcSpan (UnhelpfulSpan))
-import qualified GHC.Types.SrcLoc             as SrcLoc
-import           GHC.Types.Unique.Supply
-import           GHC.Types.Var                (Var (varName), setTyVarUnique,
-                                               setVarUnique)
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Unit.Finder              hiding (mkHomeModLocation)
-import           GHC.Unit.Home.ModInfo
-#endif
-import           GHC.Unit.Info                (PackageName (..))
-import           GHC.Unit.Module              hiding (ModLocation (..), UnitId,
-                                               addBootSuffixLocnOut, moduleUnit,
-                                               toUnitId)
-import qualified GHC.Unit.Module              as Module
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Unit.Module.Imported
-import           GHC.Unit.Module.ModDetails
-import           GHC.Unit.Module.ModGuts
-import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface (..),
-                                               ModIface_ (..), mi_fix)
-import           GHC.Unit.Module.ModSummary   (ModSummary (..))
-#endif
-import           GHC.Unit.State               (ModuleOrigin (..))
-import           GHC.Utils.Error              (Severity (..), emptyMessages)
-import qualified GHC.Utils.Panic.Plain        as Plain
-#else
+#if !MIN_VERSION_ghc(9,0,0)
 import qualified Avail
 import           BasicTypes                   hiding (Version)
 import           Class
@@ -699,7 +543,7 @@ import           HscTypes
 import           Id
 import           IfaceSyn
 import           InstEnv
-import           Lexer                        hiding (getSrcLoc)
+import           Lexer                        
 import qualified Linker
 import           LoadIface
 import           MkIface                      as GHC
@@ -736,7 +580,6 @@ import           TcRnMonad                    hiding (Applicative (..), IORef,
                                                mapMaybeM, (<$>))
 import           TcRnTypes
 import           TcType
-import qualified TcType
 import           TidyPgm                     as GHC
 import qualified TyCoRep
 import           TyCon
@@ -754,37 +597,173 @@ import           Coercion                     (coercionKind)
 import           Predicate
 import           SrcLoc                       (Located, SrcLoc (UnhelpfulLoc),
                                                SrcSpan (UnhelpfulSpan))
-#endif
-
-
-
-
-#if MIN_VERSION_ghc(9,2,0)
-import           Language.Haskell.Syntax hiding (FunDep)
-#endif
-#if MIN_VERSION_ghc(9,3,0)
-import GHC.Driver.Env as GHCi
-#endif
-
-import Data.Foldable (toList)
-
-#if MIN_VERSION_ghc(9,3,0)
-import qualified GHC.Unit.Finder as GHC
-import qualified GHC.Driver.Config.Finder as GHC
-#elif MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Unit.Finder as GHC
-#elif MIN_VERSION_ghc(9,0,0)
-import qualified GHC.Driver.Finder as GHC
-#else
 import qualified Finder as GHC
 #endif
 
--- NOTE(ozkutuk): Cpp clashes Phase.Cpp, so we hide it.
--- Not the greatest solution, but gets the job done
--- (until the CPP extension is actually needed).
-import GHC.LanguageExtensions.Type hiding (Cpp)
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Builtin.Names            hiding (Unique, printName)
+import           GHC.Builtin.Types
+import           GHC.Builtin.Types.Prim
+import           GHC.Builtin.Utils
+import           GHC.Core.Class
+import           GHC.Core.Coercion
+import           GHC.Core.ConLike
+import           GHC.Core.DataCon             hiding (dataConExTyCoVars)
+import qualified GHC.Core.DataCon             as DataCon
+import           GHC.Core.FamInstEnv          hiding (pprFamInst)
+import           GHC.Core.InstEnv
+import           GHC.Types.Unique.FM hiding (UniqFM)
+import qualified GHC.Types.Unique.FM          as UniqFM
+import           GHC.Core.PatSyn
+import           GHC.Core.Predicate
+import           GHC.Core.TyCo.Ppr
+import qualified GHC.Core.TyCo.Rep            as TyCoRep
+import           GHC.Core.TyCon
+import           GHC.Core.Type                hiding (mkInfForAllTys)
+import           GHC.Core.Unify
+import           GHC.Core.Utils
+import           GHC.Driver.CmdLine           (Warn (..))
+import           GHC.Driver.Hooks
+import           GHC.Driver.Main              as GHC
+import           GHC.Driver.Monad
+import           GHC.Driver.Phases
+import           GHC.Driver.Pipeline
+import           GHC.Driver.Plugins
+import           GHC.Driver.Session           hiding (ExposePackage)
+import qualified GHC.Driver.Session           as DynFlags
+import           GHC.HsToCore.Docs
+import           GHC.HsToCore.Expr
+import           GHC.HsToCore.Monad
+import           GHC.Iface.Load
+import           GHC.Iface.Make               (mkFullIface, mkPartialIface)
+import           GHC.Iface.Make               as GHC
+import           GHC.Iface.Recomp
+import           GHC.Iface.Syntax
+import           GHC.Iface.Tidy               as GHC
+import           GHC.IfaceToCore
+import           GHC.Parser
+import           GHC.Parser.Header            hiding (getImports)
+import           GHC.Rename.Fixity            (lookupFixityRn)
+import           GHC.Rename.Names
+import           GHC.Rename.Splice
+import qualified GHC.Runtime.Interpreter      as GHCi
+import           GHC.Tc.Instance.Family
+import           GHC.Tc.Module
+import           GHC.Tc.Types
+import           GHC.Tc.Types.Evidence        hiding ((<.>))
+import           GHC.Tc.Utils.Env
+import           GHC.Tc.Utils.Monad           hiding (Applicative (..), IORef,
+                                               MonadFix (..), MonadIO (..),
+                                               allM, anyM, concatMapM,
+                                               mapMaybeM, (<$>))
+import           GHC.Tc.Utils.TcType          as TcType
+import qualified GHC.Types.Avail              as Avail
+import           GHC.Types.Basic
+import           GHC.Types.Id
+import           GHC.Types.Name               hiding (varName)
+import           GHC.Types.Name.Cache
+import           GHC.Types.Name.Env
+import           GHC.Types.Name.Reader        hiding (GRE, gre_name, gre_imp, gre_lcl, gre_par)
+import qualified GHC.Types.Name.Reader        as RdrName
+import           GHC.Types.SrcLoc             (BufPos, BufSpan,
+                                               SrcLoc (UnhelpfulLoc),
+                                               SrcSpan (UnhelpfulSpan))
+import qualified GHC.Types.SrcLoc             as SrcLoc
+import           GHC.Types.Unique.Supply
+import           GHC.Types.Var                (Var (varName), setTyVarUnique,
+                                               setVarUnique)
+import           GHC.Unit.Info                (PackageName (..))
+import           GHC.Unit.Module              hiding (ModLocation (..), UnitId,
+                                               addBootSuffixLocnOut, moduleUnit,
+                                               toUnitId)
+import qualified GHC.Unit.Module              as Module
+import           GHC.Unit.State               (ModuleOrigin (..))
+import           GHC.Utils.Error              (Severity (..), emptyMessages)
+import           GHC.Utils.Panic              hiding (try)
+import qualified GHC.Utils.Panic.Plain        as Plain
+#endif
 
-import           GHC.Hs.Binds
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+import           GHC.Core.Ppr.TyThing         hiding (pprFamInst)
+import           GHC.Core.TyCo.Rep            (scaledThing)
+import           GHC.Driver.Finder hiding     (mkHomeModLocation)
+import           GHC.Driver.Types
+import           GHC.Driver.Ways
+import           GHC.Hs                       hiding (HsLet, LetStmt)
+import           GHC.Parser.Lexer
+import qualified GHC.Runtime.Linker           as Linker
+import           GHC.Types.Name.Set
+import qualified GHC.Driver.Finder as GHC
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Data.Bag
+import           GHC.Core.Multiplicity        (scaledThing)
+import           GHC.Driver.Env
+import           GHC.Hs                       (HsModule (..), SrcSpanAnn')
+import           GHC.Hs.Decls                 hiding (FunDep)
+import           GHC.Hs.Doc
+import           GHC.Hs.Expr
+import           GHC.Hs.Extension
+import           GHC.Hs.ImpExp
+import           GHC.Hs.Pat
+import           GHC.Hs.Type
+import           GHC.Hs.Utils                 hiding (collectHsBindsBinders)
+import qualified GHC.Hs.Utils                 as GHC
+import qualified GHC.Linker.Loader            as Linker
+import           GHC.Linker.Types
+import           GHC.Parser.Lexer             hiding (initParserState, getPsMessages)
+import           GHC.Parser.Annotation        (EpAnn (..))
+import           GHC.Platform.Ways
+import           GHC.Runtime.Context          (InteractiveImport (..))
+import           GHC.Types.Avail              (greNamePrintableName)
+import           GHC.Types.Fixity             (LexicalFixity (..), Fixity (..), defaultFixity)
+import           GHC.Types.Meta
+import           GHC.Types.Name.Set
+import           GHC.Types.SourceFile         (HscSource (..))
+import           GHC.Types.SourceText
+import           GHC.Types.Target             (Target (..), TargetId (..))
+import           GHC.Types.TyThing
+import           GHC.Types.TyThing.Ppr
+import           GHC.Unit.Finder              hiding (mkHomeModLocation)
+import           GHC.Unit.Home.ModInfo
+import           GHC.Unit.Module.Graph        (mkModuleGraph)
+import           GHC.Unit.Module.Imported
+import           GHC.Unit.Module.ModDetails
+import           GHC.Unit.Module.ModGuts
+import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface (..),
+                                               ModIface_ (..), mi_fix)
+import           GHC.Unit.Module.ModSummary   (ModSummary (..))
+import           Language.Haskell.Syntax hiding (FunDep)
+#endif
+
+#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+import           GHC.Types.SourceFile         (SourceModified(..))
+import qualified GHC.Unit.Finder as GHC
+#endif
+
+#if MIN_VERSION_ghc(9,3,0)
+import GHC.Iface.Recomp (CompileReason(..))
+import GHC.Driver.Env.Types (hsc_type_env_vars)
+import GHC.Driver.Env (hscUpdateHUG, hscUpdateHPT, hsc_HUG)
+import GHC.Driver.Env.KnotVars
+import GHC.Iface.Recomp
+import GHC.Linker.Types
+import GHC.Unit.Module.Graph
+import GHC.Driver.Errors.Types
+import GHC.Types.Unique.Map
+import GHC.Types.Unique
+import GHC.Utils.TmpFs
+import GHC.Utils.Panic
+import GHC.Unit.Finder.Types
+import GHC.Unit.Env
+import GHC.Driver.Phases
+import qualified GHC.Driver.Config.Tidy       as GHC
+import qualified GHC.Data.Strict              as Strict
+import GHC.Driver.Env as GHCi
+import qualified GHC.Unit.Finder as GHC
+import qualified GHC.Driver.Config.Finder as GHC
+#endif
 
 mkHomeModLocation :: DynFlags -> ModuleName -> FilePath -> IO Module.ModLocation
 #if MIN_VERSION_ghc(9,3,0)
@@ -1146,12 +1125,13 @@ initTidyOpts =
   pure
 #endif
 
-driverNoStop :: StopPhase
-driverNoStop =
+
 #if MIN_VERSION_ghc(9,3,0)
-                                         NoStop
+driverNoStop :: StopPhase
+driverNoStop = NoStop
 #else
-                                         StopLn
+driverNoStop :: Phase
+driverNoStop = StopLn
 #endif
 
 #if !MIN_VERSION_ghc(9,3,0)

@@ -20,9 +20,21 @@ import           Data.IORef
 import           Data.List                       (isPrefixOf)
 import           Data.Maybe
 import qualified Data.Text                       as T
+import           Development.IDE.GHC.Compat
+import qualified Development.IDE.GHC.Compat.Util as Util
 import           GHC.Fingerprint
 
-import           Development.IDE.GHC.Compat
+#if !MIN_VERSION_ghc(9,0,0)
+import           Binary
+import           BinFingerprint                  (fingerprintBinMem)
+import           BinIface
+import           CoreSyn
+import           HscTypes
+import           IfaceEnv
+import           MkId
+import           TcIface
+import           ToIface
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Core
@@ -33,29 +45,16 @@ import           GHC.Iface.Recomp.Binary         (fingerprintBinMem)
 import           GHC.IfaceToCore
 import           GHC.Types.Id.Make
 import           GHC.Utils.Binary
+#endif
 
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Types.TypeEnv
-#else
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Types
 #endif
 
-#else
-import           Binary
-import           BinFingerprint                  (fingerprintBinMem)
-import           BinIface
-import           CoreSyn
-import           HscTypes
-import           IdInfo
-import           IfaceEnv
-import           MkId
-import           TcIface
-import           ToIface
-import           Unique
-import           Var
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Types.TypeEnv
 #endif
 
-import qualified Development.IDE.GHC.Compat.Util as Util
 
 -- | Initial ram buffer to allocate for writing interface files
 initBinMemSize :: Int

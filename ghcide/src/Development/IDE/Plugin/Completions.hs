@@ -15,6 +15,8 @@ import           Control.Lens                             ((&), (.~), (?~))
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except               (ExceptT (ExceptT),
                                                            withExceptT)
+import           Data.Aeson
+-- 8.10 The import of ‘Data.Aeson’ is redundant except perhaps to import instances from ‘Data.Aeson’
 import qualified Data.HashMap.Strict                      as Map
 import qualified Data.HashSet                             as Set
 import           Data.Maybe
@@ -53,6 +55,7 @@ import           Text.Fuzzy.Parallel                      (Scored (..))
 
 import           Development.IDE.Core.Rules               (usePropertyAction)
 import qualified GHC.LanguageExtensions                   as LangExt
+-- 8.10 The qualified import of ‘GHC.LanguageExtensions’ is redundant except perhaps to import instances from ‘GHC.LanguageExtensions’
 import qualified Ide.Plugin.Config                        as Config
 
 data Log = LogShake Shake.Log deriving Show
