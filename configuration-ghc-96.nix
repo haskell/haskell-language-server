@@ -48,6 +48,8 @@ let
       lsp-types = hself.callCabal2nix "lsp-types" inputs.lsp-types {};
       lsp-test = dontCheck (hself.callCabal2nix "lsp-test" inputs.lsp-test {});
 
+      hiedb = hself.callCabal2nix "hiedb" inputs.hiedb {};
+
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.

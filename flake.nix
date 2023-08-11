@@ -81,6 +81,10 @@
       url = "github:smunix/implicit-hie-cradle?ref=smunix-patch-hls-0.5-1";
       flake = false;
     };
+    hiedb = {
+      url = "github:nlander/HieDb?ref=all-new-functions";
+      flake = false;
+    };
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, gitignore, ... }:
