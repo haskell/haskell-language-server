@@ -49,7 +49,7 @@ tests = withResource acquire release tests where
     , chk "   doc symbol"           _documentSymbolProvider (Just $ InL True)
     , chk "   workspace symbol"    _workspaceSymbolProvider (Just $ InL True)
     , chk "   code action"             _codeActionProvider  (Just $ InL False)
-    , chk "   code lens"                 _codeLensProvider  (Just $ CodeLensOptions (Just False) (Just False))
+    , chk "   code lens"                 _codeLensProvider  (Just $ CodeLensOptions (Just False) (Just True))
     , chk "NO doc formatting"   _documentFormattingProvider (Just $ InL False)
     , chk "NO doc range formatting"
                            _documentRangeFormattingProvider (Just $ InL False)
