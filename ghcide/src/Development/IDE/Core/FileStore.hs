@@ -28,16 +28,22 @@ import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Exception
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
+import qualified Data.Binary                                  as B
 import qualified Data.ByteString                              as BS
+import qualified Data.ByteString.Lazy                         as LBS
 import qualified Data.HashMap.Strict                          as HashMap
 import           Data.IORef
+import           Data.List                                    (foldl')
 import qualified Data.Text                                    as T
+import qualified Data.Text                                    as Text
 import qualified Data.Text.Utf16.Rope                         as Rope
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.FileUtils
+import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
+import qualified Development.IDE.Core.Shake                   as Shake
 import           Development.IDE.GHC.Orphans                  ()
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
@@ -45,25 +51,6 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           HieDb.Create                                 (deleteMissingRealFiles)
-import           Ide.Plugin.Config                            (CheckParents (..),
-                                                               Config)
-import           System.IO.Error
-
-#ifdef mingw32_HOST_OS
-import qualified System.Directory                             as Dir
-#else
-#endif
-
-import qualified Ide.Logger                                   as L
-
-import           Data.Aeson                                   (ToJSON (toJSON))
--- 8.0 The import of ‘Data.Aeson’ is redundant except perhaps to import instances from ‘Data.Aeson’
-import qualified Data.Binary                                  as B
-import qualified Data.ByteString.Lazy                         as LBS
-import           Data.List                                    (foldl')
-import qualified Data.Text                                    as Text
-import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
-import qualified Development.IDE.Core.Shake                   as Shake
 import           Ide.Logger                                   (Pretty (pretty),
                                                                Priority (Info),
                                                                Recorder,
@@ -71,6 +58,9 @@ import           Ide.Logger                                   (Pretty (pretty),
                                                                cmapWithPrio,
                                                                logWith, viaShow,
                                                                (<+>))
+import qualified Ide.Logger                                   as L
+import           Ide.Plugin.Config                            (CheckParents (..),
+                                                               Config)
 import           Language.LSP.Protocol.Message                (toUntypedRegistration)
 import qualified Language.LSP.Protocol.Message                as LSP
 import           Language.LSP.Protocol.Types                  (DidChangeWatchedFilesRegistrationOptions (DidChangeWatchedFilesRegistrationOptions),
@@ -80,7 +70,13 @@ import qualified Language.LSP.Protocol.Types                  as LSP
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.VFS
 import           System.FilePath
+import           System.IO.Error
 import           System.IO.Unsafe
+
+#ifdef mingw32_HOST_OS
+import qualified System.Directory                             as Dir
+#else
+#endif
 
 data Log
   = LogCouldNotIdentifyReverseDeps !NormalizedFilePath

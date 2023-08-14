@@ -142,7 +142,6 @@ module Development.IDE.GHC.Compat(
 #endif
     ) where
 
-import           Data.Bifunctor
 import           Development.IDE.GHC.Compat.Core hiding (moduleUnitId)
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Iface
@@ -164,7 +163,6 @@ import           Compat.HieTypes                       hiding (nodeAnnotations)
 import qualified Compat.HieTypes                       as GHC (nodeAnnotations)
 import           Compat.HieUtils
 import qualified Data.ByteString                       as BS
-import           Data.IORef
 import           Data.List                             (foldl')
 import qualified Data.Map                              as Map
 import qualified Data.Set                              as S
@@ -219,23 +217,16 @@ import           GHC.Data.FastString
 import           GHC.Core
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                    hiding (ExposePackage)
-import qualified GHC.Types.SrcLoc                      as SrcLoc
 import           GHC.Types.Var.Env
-import           GHC.Utils.Error
-import           GHC.Iface.Env
 import           GHC.Iface.Make                        (mkIfaceExports)
 import qualified GHC.SysTools.Tasks                    as SysTools
 import qualified GHC.Types.Avail                       as Avail
 #endif
 
 #if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+import           GHC.Utils.Error
 import           GHC.CoreToByteCode                    (coreExprToBCOs)
-import           GHC.Driver.Types                      (Dependencies (dep_mods),
-                                                        HomePackageTable,
-                                                        icInteractiveModule,
-                                                        lookupHpt)
 import           GHC.Runtime.Linker                    (linkExpr)
-
 import           GHC.Driver.Types
 #endif
 
@@ -243,21 +234,24 @@ import           GHC.Driver.Types
 import           GHC.Core.Lint                         (lintInteractiveExpr)
 #endif
 
+#if !MIN_VERSION_ghc(9,2,0)
+import           Data.Bifunctor
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Iface.Env
+import qualified GHC.Types.SrcLoc                      as SrcLoc
 import           GHC.Linker.Loader                     (loadExpr)
-import           GHC.Linker.Types                      (isObjectLinkable)
 import           GHC.Runtime.Context                   (icInteractiveModule)
 import           GHC.Unit.Home.ModInfo                 (HomePackageTable,
                                                         lookupHpt)
 import           GHC.Driver.Env                        as Env
 import           GHC.Unit.Module.ModIface
-import           GHC.Unit.Module.ModSummary
 import           GHC.Builtin.Uniques
 import           GHC.ByteCode.Types
 import           GHC.CoreToStg
 import           GHC.Data.Maybe
 import           GHC.Linker.Loader                     (loadDecls)
-import           GHC.Runtime.Interpreter
 import           GHC.Stg.Pipeline
 import           GHC.Stg.Syntax
 import           GHC.StgToByteCode
@@ -266,14 +260,19 @@ import           GHC.Types.IPE
 #endif            
 
 #if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
-import GHC.Unit.Module.Deps (Dependencies(dep_mods), Usage(..))
+import           GHC.Unit.Module.Deps (Dependencies(dep_mods), Usage(..))
+import           GHC.Linker.Types                      (isObjectLinkable)
+import           GHC.Unit.Module.ModSummary
+import           GHC.Runtime.Interpreter
+#endif
+
+#if !MIN_VERSION_ghc(9,3,0)
+import           Data.IORef
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Unit.Module.Deps (Dependencies(dep_direct_mods), Usage(..))
-import GHC.Types.Error
 import GHC.Driver.Config.Stg.Pipeline
-import GHC.Driver.Plugins                              (PsMessages (..))
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)

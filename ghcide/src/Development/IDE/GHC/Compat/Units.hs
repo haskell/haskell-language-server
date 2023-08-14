@@ -53,19 +53,11 @@ module Development.IDE.GHC.Compat.Units (
     findImportedModule,
     ) where
 
-import           Control.Monad
--- 8.10 The import of ‘Control.Monad’ is redundant except perhaps to import instances from ‘Control.Monad’
-import qualified Data.List.NonEmpty                    as NE
--- 8.10 The qualified import of ‘Data.List.NonEmpty’ is redundant except perhaps to import instances from ‘Data.List.NonEmpty’
-import qualified Data.Map.Strict                       as Map
--- 8.10 The qualified import of ‘Data.Map.Strict’ is redundant except perhaps to import instances from ‘Data.Map.Strict’
 import           Data.Either
 import           Data.Version
 import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Outputable
-import qualified GHC
--- 8.10 The qualified import of ‘GHC’ is redundant except perhaps to import instances from ‘GHC’
 
 #if !MIN_VERSION_ghc(9,0,0)
 import qualified DynFlags
@@ -85,8 +77,6 @@ import qualified Packages
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC.Data.FastString
-import qualified GHC.Driver.Session                    as DynFlags
 import           GHC.Types.Unique.Set
 import qualified GHC.Unit.Info                         as UnitInfo
 import           GHC.Unit.State                        (LookupResult, UnitInfo,
@@ -95,30 +85,38 @@ import qualified GHC.Unit.State                        as State
 import           GHC.Unit.Types                        hiding (moduleUnit,
                                                         toUnitId)
 import qualified GHC.Unit.Types                        as Unit
-import           GHC.Utils.Outputable
 #endif
 
 #if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
 import           Data.Map                              (Map)
 import qualified GHC.Driver.Finder                     as GHC
+import qualified GHC.Driver.Session                    as DynFlags
 import           GHC.Driver.Types
+#endif
+
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,3,0)
+import           GHC.Data.FastString
+
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Data.ShortText                    as ST
-import           GHC.Driver.Ppr
-import           GHC.Unit.Env
 import           GHC.Unit.External
-import           GHC.Unit.Finder                       hiding
-                                                       (findImportedModule)
 import qualified GHC.Unit.Finder                       as GHC
 #endif
 
 #if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Env                        (hsc_unit_dbs)
+import           GHC.Unit.Env
+import           GHC.Unit.Finder                       hiding
+                                                       (findImportedModule)
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
+import           Control.Monad
+import qualified Data.List.NonEmpty                    as NE
+import qualified Data.Map.Strict                       as Map
+import qualified GHC
+import qualified GHC.Driver.Session                    as DynFlags
 import           GHC.Types.PkgQual                     (PkgQual (NoPkgQual))
 import           GHC.Unit.Home.ModInfo
 #endif

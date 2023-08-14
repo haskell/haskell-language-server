@@ -65,8 +65,7 @@ import           Module
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Driver.Hooks                    (Hooks)
 import           GHC.Driver.Session                  hiding (mkHomeModule)
-import           GHC.Unit.Types                      (Module, Unit, UnitId,
-                                                      mkModule)
+import           GHC.Unit.Types                      (Module, UnitId)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
@@ -79,6 +78,7 @@ import           GHC.Driver.Types                    (HscEnv,
 import qualified GHC.Driver.Types                    as Env
 import           GHC.Driver.Ways                     hiding (hostFullWays)
 import qualified GHC.Driver.Ways                     as Ways
+import           GHC.Unit.Types                      (Unit, mkModule)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,5,0)

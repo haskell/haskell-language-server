@@ -42,9 +42,8 @@ module Development.IDE.Core.Compile
 import           Control.Monad.IO.Class
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats      hiding (orElse)
-import           Control.DeepSeq                   (NFData (..), force, liftRnf,
-                                                    rnf, rwhnf)
--- 8.10 The import of ‘liftRnf, rwhnf’from module ‘Control.DeepSeq’ is redundant
+import           Control.DeepSeq                   (NFData (..), force,
+                                                    rnf)
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe
 import           Control.Lens                      hiding (List, (<.>))
@@ -63,14 +62,10 @@ import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import qualified Data.HashMap.Strict               as HashMap
 import           Data.IntMap                       (IntMap)
-import qualified Data.IntMap.Strict                as IntMap
 import           Data.IORef
 import           Data.List.Extra
-import           Data.Map                          (Map)
 import qualified Data.Map.Strict                   as Map
 import           Data.Proxy                        (Proxy(Proxy))
-import qualified Data.Set                          as Set
--- 8.10 The qualified import of ‘Data.Set’ is redundant except perhaps to import instances from ‘Data.Set’
 import           Data.Maybe
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime (..))
@@ -98,7 +93,6 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC                               (ForeignHValue,
                                                     GetDocsFailure (..),
-                                                    GhcException (..),
                                                     parsedSource)
 import qualified GHC.LanguageExtensions            as LangExt
 import           GHC.Serialized
@@ -110,7 +104,7 @@ import qualified Language.LSP.Protocol.Message            as LSP
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
-import           Unsafe.Coerce
+
 
 #if !MIN_VERSION_ghc(9,0,1)
 import           HscTypes
@@ -125,18 +119,17 @@ import           GHC.Tc.Gen.Splice
 import           GHC.Driver.Types
 #endif
 
+#if !MIN_VERSION_ghc(9,2,0)
+import qualified Data.IntMap.Strict                as IntMap
+import           Unsafe.Coerce
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC                               (Anchor (anchor),
-                                                    EpaComment (EpaComment),
-                                                    EpaCommentTok (EpaBlockComment, EpaLineComment),
-                                                    ModuleGraph, epAnnComments,
-                                                    mgLookupModule,
-                                                    mgModSummaries,
-                                                    priorComments)
 import qualified GHC                               as G
-import           GHC.Hs                            (LEpaComment)
-import qualified GHC.Types.Error                   as Error
-import Development.IDE.Import.DependencyInformation
+#endif
+
+#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+import           GHC                               (ModuleGraph)
 #endif
 
 #if MIN_VERSION_ghc(9,2,1)
@@ -145,12 +138,21 @@ import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
 #endif
 
-#if MIN_VERSION_ghc(9,5,0)
-import GHC.Driver.Config.CoreToStg.Prep
-import GHC.Core.Lint.Interactive
+#if !MIN_VERSION_ghc(9,3,0)
+import           Data.Map                          (Map)
+import           GHC                               (GhcException (..))
 #endif
 
---Simple constansts to make sure the source is consistently named
+#if MIN_VERSION_ghc(9,3,0)
+import qualified Data.Set                          as Set
+#endif
+
+#if MIN_VERSION_ghc(9,5,0)
+import           GHC.Driver.Config.CoreToStg.Prep
+import           GHC.Core.Lint.Interactive
+#endif
+
+--Simple constants to make sure the source is consistently named
 sourceTypecheck :: T.Text
 sourceTypecheck = "typecheck"
 sourceParser :: T.Text

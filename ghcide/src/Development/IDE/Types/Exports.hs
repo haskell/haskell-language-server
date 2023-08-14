@@ -23,24 +23,15 @@ module Development.IDE.Types.Exports
 
 import           Control.DeepSeq             (NFData (..), force, ($!!))
 import           Control.Monad
-import           Data.Bifunctor              (Bifunctor (second))
--- 8.10 The import of ‘Data.Bifunctor’ is redundant except perhaps to import instances from ‘Data.Bifunctor’
 import           Data.Char                   (isUpper)
 import           Data.Hashable               (Hashable)
-import           Data.HashMap.Strict         (HashMap, elems)
--- 8.10 The import of ‘Data.HashMap.Strict’ is redundant except perhaps to import instances from ‘Data.HashMap.Strict’
-import qualified Data.HashMap.Strict         as Map
--- 8.10 The qualified import of ‘Data.HashMap.Strict’ is redundant except perhaps to import instances from ‘Data.HashMap.Strict’
 import           Data.HashSet                (HashSet)
 import qualified Data.HashSet                as Set
-import           Data.List                   (foldl', isSuffixOf)
--- 8.10 The import of ‘foldl'’ from module ‘Data.List’ is redundant
+import           Data.List                   (isSuffixOf)
 import           Data.Text                   (Text, uncons)
 import           Data.Text.Encoding          (decodeUtf8, encodeUtf8)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
-import           Development.IDE.GHC.Util
--- 8.10 The import of ‘Development.IDE.GHC.Util’ is redundant except perhaps to import instances from ‘Development.IDE.GHC.Util’
 import           GHC.Generics                (Generic)
 import           HieDb
 

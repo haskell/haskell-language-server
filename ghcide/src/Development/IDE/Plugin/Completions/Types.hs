@@ -9,29 +9,27 @@ module Development.IDE.Plugin.Completions.Types (
 ) where
 
 import           Control.DeepSeq
-import qualified Data.Map                     as Map
-import qualified Data.Text                    as T
+import qualified Data.Map                    as Map
+import qualified Data.Text                   as T
 
 import           Data.Aeson
 import           Data.Aeson.Types
-import           Data.Hashable                (Hashable)
-import           Data.Text                    (Text)
-import           Data.Typeable                (Typeable)
+import           Data.Hashable               (Hashable)
+import           Data.Text                   (Text)
+import           Data.Typeable               (Typeable)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Graph        (RuleResult)
-import           Development.IDE.Spans.Common
--- 8.10 The import of ‘Development.IDE.Spans.Common’ is redundant except perhaps to import instances from ‘Development.IDE.Spans.Common’
-import           GHC.Generics                 (Generic)
+import           Development.IDE.Graph       (RuleResult)
+import           GHC.Generics                (Generic)
 import           Ide.Plugin.Properties
-import           Language.LSP.Protocol.Types  (CompletionItemKind (..), Uri)
-import qualified Language.LSP.Protocol.Types  as J
+import           Language.LSP.Protocol.Types (CompletionItemKind (..), Uri)
+import qualified Language.LSP.Protocol.Types as J
 
 #if !MIN_VERSION_ghc(9,0,0)
-import qualified OccName                      as Occ
+import qualified OccName                     as Occ
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import qualified GHC.Types.Name.Occurrence    as Occ
+import qualified GHC.Types.Name.Occurrence   as Occ
 #endif
 
 

@@ -19,8 +19,11 @@ import           Outputable                            (queryQual)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC.Driver.Session                    as DynFlags
 import           GHC.Utils.Outputable
+#endif
+
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Session                    as DynFlags
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)

@@ -21,10 +21,7 @@ module Development.IDE.GHC.Compat.Plugins (
 
 import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env        (hscSetFlags, hsc_dflags)
-import           Development.IDE.GHC.Compat.Outputable as Out
--- 8.10 The import of ‘Development.IDE.GHC.Compat.Outputable’ is redundant except perhaps to import instances from ‘Development.IDE.GHC.Compat.Outputable’
 import           Development.IDE.GHC.Compat.Parser     as Parser
-import           Development.IDE.GHC.Compat.Util       (Bag)
 
 #if !MIN_VERSION_ghc(9,0,0)
 import qualified DynamicLoading                        as Loader
@@ -41,11 +38,19 @@ import qualified GHC.Runtime.Loader                    as Loader
 #endif
 
 #if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,3,0)
-import           Data.Bifunctor                        (bimap)
+import           Development.IDE.GHC.Compat.Outputable as Out
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Driver.Env                        as Env
+#endif
+
+#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+import           Data.Bifunctor                        (bimap)
+#endif
+
+#if !MIN_VERSION_ghc(9,3,0)
+import           Development.IDE.GHC.Compat.Util       (Bag)
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)

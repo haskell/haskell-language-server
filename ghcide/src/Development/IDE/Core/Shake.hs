@@ -93,6 +93,7 @@ import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                             (Result (Success),
                                                          toJSON)
+import qualified Data.Aeson.Types                       as A
 import qualified Data.ByteString.Char8                  as BS
 import qualified Data.ByteString.Char8                  as BS8
 import           Data.Coerce                            (coerce)
@@ -100,15 +101,13 @@ import           Data.Default
 import           Data.Dynamic
 import           Data.EnumMap.Strict                    (EnumMap)
 import qualified Data.EnumMap.Strict                    as EM
-import           Data.Foldable                          (find, for_, toList)
--- 8.10 The import of ‘toList’ from module ‘Data.Foldable’ is redundant
+import           Data.Foldable                          (find, for_)
 import           Data.Functor                           ((<&>))
 import           Data.Functor.Identity
 import           Data.Hashable
 import qualified Data.HashMap.Strict                    as HMap
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.IORef
 import           Data.List.Extra                        (foldl', partition,
                                                          takeEnd)
 import qualified Data.Map.Strict                        as Map
@@ -132,10 +131,7 @@ import           Development.IDE.Core.Tracing
 import           Development.IDE.GHC.Compat             (NameCache,
                                                          NameCacheUpdater (..),
                                                          initNameCache,
-                                                         knownKeyNames,
-                                                         mkSplitUniqSupply)
-
-import qualified Data.Aeson.Types                       as A
+                                                         knownKeyNames)
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
@@ -181,7 +177,9 @@ import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 
 #if !MIN_VERSION_ghc(9,3,0)
-import           Development.IDE.GHC.Compat             (upNameCache)
+import           Data.IORef
+import           Development.IDE.GHC.Compat             (mkSplitUniqSupply,
+                                                         upNameCache)
 #endif
 
 data Log

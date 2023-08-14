@@ -500,12 +500,6 @@ module Development.IDE.GHC.Compat.Core (
 
 import qualified GHC
 
-import           Data.List                    (isSuffixOf)
--- 8.10 The import of ‘Data.List’ is redundant except perhaps to import instances from ‘Data.List’
-import           System.FilePath
--- 8.10 The import of ‘System.FilePath’ is redundant except perhaps to import instances from ‘System.FilePath’
-import Data.Foldable (toList)
--- 8.10 The import of ‘Data.Foldable’ is redundant except perhaps to import instances from ‘Data.Foldable’
 -- NOTE(ozkutuk): Cpp clashes Phase.Cpp, so we hide it.
 -- Not the greatest solution, but gets the job done
 -- (until the CPP extension is actually needed).
@@ -635,7 +629,6 @@ import           GHC.HsToCore.Docs
 import           GHC.HsToCore.Expr
 import           GHC.HsToCore.Monad
 import           GHC.Iface.Load
-import           GHC.Iface.Make               (mkFullIface, mkPartialIface)
 import           GHC.Iface.Make               as GHC
 import           GHC.Iface.Recomp
 import           GHC.Iface.Syntax
@@ -697,6 +690,7 @@ import qualified GHC.Driver.Finder as GHC
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
+import           Data.Foldable (toList)
 import           GHC.Data.Bag
 import           GHC.Core.Multiplicity        (scaledThing)
 import           GHC.Driver.Env
@@ -709,7 +703,6 @@ import           GHC.Hs.ImpExp
 import           GHC.Hs.Pat
 import           GHC.Hs.Type
 import           GHC.Hs.Utils                 hiding (collectHsBindsBinders)
-import qualified GHC.Hs.Utils                 as GHC
 import qualified GHC.Linker.Loader            as Linker
 import           GHC.Linker.Types
 import           GHC.Parser.Lexer             hiding (initParserState, getPsMessages)
@@ -727,7 +720,6 @@ import           GHC.Types.TyThing
 import           GHC.Types.TyThing.Ppr
 import           GHC.Unit.Finder              hiding (mkHomeModLocation)
 import           GHC.Unit.Home.ModInfo
-import           GHC.Unit.Module.Graph        (mkModuleGraph)
 import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
@@ -739,16 +731,12 @@ import           Language.Haskell.Syntax hiding (FunDep)
 
 #if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.SourceFile         (SourceModified(..))
+import           GHC.Unit.Module.Graph        (mkModuleGraph)
 import qualified GHC.Unit.Finder as GHC
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Iface.Recomp (CompileReason(..))
-import GHC.Driver.Env.Types (hsc_type_env_vars)
-import GHC.Driver.Env (hscUpdateHUG, hscUpdateHPT, hsc_HUG)
 import GHC.Driver.Env.KnotVars
-import GHC.Iface.Recomp
-import GHC.Linker.Types
 import GHC.Unit.Module.Graph
 import GHC.Driver.Errors.Types
 import GHC.Types.Unique.Map
@@ -757,7 +745,6 @@ import GHC.Utils.TmpFs
 import GHC.Utils.Panic
 import GHC.Unit.Finder.Types
 import GHC.Unit.Env
-import GHC.Driver.Phases
 import qualified GHC.Driver.Config.Tidy       as GHC
 import qualified GHC.Data.Strict              as Strict
 import GHC.Driver.Env as GHCi

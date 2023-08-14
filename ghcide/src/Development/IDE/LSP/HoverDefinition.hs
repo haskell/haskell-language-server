@@ -31,9 +31,9 @@ import qualified Language.LSP.Server            as LSP
 
 import qualified Data.Text                      as T
 
-gotoDefinition :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) (MessageResult Method_TextDocumentDefinition)
+gotoDefinition :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) (MessageResult 'Method_TextDocumentDefinition)
 hover          :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) (Hover |? Null)
-gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) (MessageResult Method_TextDocumentTypeDefinition)
+gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) (MessageResult 'Method_TextDocumentTypeDefinition)
 documentHighlight :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) ([DocumentHighlight] |? Null)
 gotoDefinition = request "Definition" getDefinition (InR $ InR Null) (InL . Definition. InR)
 gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InR Null) (InL . Definition. InR)

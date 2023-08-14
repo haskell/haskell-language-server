@@ -40,7 +40,6 @@ import           Data.Either.Extra
 import           Data.Function
 import           Data.Hashable
 import qualified Data.HashMap.Strict                  as HM
-import           Data.IORef
 import           Data.List
 import           Data.List.Extra                      (dropPrefix, split)
 import qualified Data.Map.Strict                      as Map
@@ -110,6 +109,10 @@ import           HieDb.Types
 import           HieDb.Utils
 import qualified System.Random                        as Random
 import           System.Random                        (RandomGen)
+
+#if !MIN_VERSION_ghc(9,4,0)
+import           Data.IORef
+#endif
 
 data Log
   = LogSettingInitialDynFlags
@@ -520,7 +523,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   -- We will modify the unitId and DynFlags used for
                   -- compilation but these are the true source of
                   -- information.
-                  
+
                   new_deps = RawComponentInfo (homeUnitId_ df) df targets cfp opts dep_info
                                 : maybe [] snd oldDeps
                   -- Get all the unit-ids for things in this component

@@ -99,9 +99,12 @@ import           GHC.Data.StringBuffer
 import           GHC.Types.Unique
 import           GHC.Types.Unique.DFM
 import           GHC.Utils.Fingerprint
-import           GHC.Utils.Misc
 import           GHC.Utils.Outputable    (pprHsString)
 import           GHC.Utils.Panic         hiding (try)
+#endif
+
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,3,0)
+import           GHC.Utils.Misc
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)

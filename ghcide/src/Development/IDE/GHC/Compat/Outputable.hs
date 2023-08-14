@@ -77,7 +77,6 @@ import           SrcLoc
 import           GHC.Driver.Env
 import           GHC.Driver.Ppr
 import           GHC.Driver.Session
-import qualified GHC.Parser.Errors.Ppr           as Ppr
 import qualified GHC.Types.Error                 as Error
 import           GHC.Types.Name.Ppr
 import           GHC.Types.Name.Reader
@@ -93,13 +92,13 @@ import           GHC.Utils.Panic
 
 #if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
 import           GHC.Parser.Errors
+import qualified GHC.Parser.Errors.Ppr           as Ppr
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
 import           Data.Maybe
 import           GHC.Driver.Config.Diagnostic
 import           GHC.Parser.Errors.Types
-import           GHC.Utils.Logger
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)

@@ -71,18 +71,12 @@ import qualified GHC
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC                             (Anchor (anchor),
-                                                  EpAnnComments (priorComments),
-                                                  EpaComment (EpaComment),
-                                                  EpaCommentTok (..),
-                                                  epAnnComments,
+import           GHC                             (EpaCommentTok (..),
                                                   pm_extra_src_files,
                                                   pm_mod_summary,
                                                   pm_parsed_source)
 import qualified GHC
-import           GHC.Hs                          (LEpaComment, hpm_module,
-                                                  hpm_src_files)
-import           GHC.Parser.Lexer                hiding (initParserState)
+import           GHC.Hs                          (hpm_module, hpm_src_files)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
