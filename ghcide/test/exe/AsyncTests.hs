@@ -35,7 +35,7 @@ tests = testGroup "async"
               , "foo = id"
               ]
             void waitForDiagnostics
-            codeLenses <- getCodeLenses doc
+            codeLenses <- getAndResolveCodeLenses doc
             liftIO $ [ _title | CodeLens{_command = Just Command{_title}} <- codeLenses] @=?
               [ "foo :: a -> a" ]
     , testSession "request" $ do
@@ -47,7 +47,7 @@ tests = testGroup "async"
               , "foo = id"
               ]
             void waitForDiagnostics
-            codeLenses <- getCodeLenses doc
+            codeLenses <- getAndResolveCodeLenses doc
             liftIO $ [ _title | CodeLens{_command = Just Command{_title}} <- codeLenses] @=?
               [ "foo :: a -> a" ]
     ]

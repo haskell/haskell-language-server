@@ -39,6 +39,10 @@ test_all_hls() {
         if ! [[ "${bin_noexe}" =~ "haskell-language-server-wrapper" ]] && ! [[ "${bin_noexe}" =~ "~" ]] ; then
             if ghcup install ghc --set "${bin_noexe/haskell-language-server-/}" ; then
                 "${hls}" typecheck "${test_module}" || fail "failed to typecheck with HLS for GHC ${bin_noexe/haskell-language-server-/}"
+
+                # After running the test, free up disk space by deleting the unneeded GHC version.
+                # Helps us staying beneath the 14GB SSD disk limit.
+                ghcup rm ghc "${bin_noexe/haskell-language-server-/}"
             else
                 fail "GHCup failed to install GHC ${bin_noexe/haskell-language-server-/}"
             fi
