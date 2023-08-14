@@ -121,7 +121,6 @@ import           GHC.Driver.Types
 
 #if !MIN_VERSION_ghc(9,2,0)
 import qualified Data.IntMap.Strict                as IntMap
-import           Unsafe.Coerce
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -141,6 +140,7 @@ import           GHC.Types.TypeEnv
 #if !MIN_VERSION_ghc(9,3,0)
 import           Data.Map                          (Map)
 import           GHC                               (GhcException (..))
+import           Unsafe.Coerce
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
