@@ -47,7 +47,7 @@ jobs:
     needs: pre_job
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         ghc: ${{ fromJSON(needs.pre_job.outputs.ghcs) }}
         os:
@@ -75,9 +75,7 @@ jobs:
       - name: Build `ghcide` with flags
         run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe ekg"
 
-      # we have to clean up warnings for 9.0 and 9.2 before enable -Wall
-      - if: matrix.ghc != '9.0' && matrix.ghc != '9.2'
-        name: Build with pedantic (-WError)
+      - name: Build with pedantic (-WError)
         run: cabal v2-build --flags="pedantic"
 
   flags_post_job:
