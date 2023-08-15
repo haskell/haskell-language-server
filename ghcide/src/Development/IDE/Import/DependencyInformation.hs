@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP #-}
 
 module Development.IDE.Import.DependencyInformation
   ( DependencyInformation(..)
@@ -55,7 +56,10 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 
 import           Development.IDE.GHC.Compat
+
+#if !MIN_VERSION_ghc(9,3,0)
 import           GHC
+#endif
 
 -- | The imports for a given module.
 newtype ModuleImports = ModuleImports
