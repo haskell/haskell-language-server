@@ -15,7 +15,8 @@ module Development.IDE.Plugin.Completions.Logic (
 ) where
 
 import           Control.Applicative
-import           Control.Lens                             hiding (Context)
+import           Control.Lens                             hiding (Context,
+                                                           parts)
 import           Data.Char                                (isAlphaNum, isUpper)
 import           Data.Default                             (def)
 import           Data.Generics
@@ -23,6 +24,7 @@ import           Data.List.Extra                          as List hiding
                                                                   (stripPrefix)
 import qualified Data.Map                                 as Map
 import           Data.Row
+import           Prelude                                  hiding (mod)
 
 import           Data.Maybe                               (fromMaybe, isJust,
                                                            isNothing,
@@ -40,7 +42,7 @@ import           Data.Monoid                              (First (..))
 import           Data.Ord                                 (Down (Down))
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.GHC.Compat               hiding (ppr)
+import           Development.IDE.GHC.Compat               hiding (isQual, ppr)
 import qualified Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.CoreFile             (occNamePrefixes)
@@ -61,7 +63,7 @@ import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
 
 import qualified Data.Text.Utf16.Rope                     as Rope
-import           Development.IDE
+import           Development.IDE                          hiding (line)
 
 import           Development.IDE.Spans.AtPoint            (pointCommand)
 
@@ -319,14 +321,14 @@ defaultCompletionItemWithLabel label =
                          def def def def def def def def def
 
 fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
-fromIdentInfo doc id@IdentInfo{..} q = CI
+fromIdentInfo doc identInfo@IdentInfo{..} q = CI
   { compKind= occNameToComKind name
   , insertText=rend
   , provenance = DefinedIn mod
   , label=rend
   , typeText = Nothing
   , isInfix=Nothing
-  , isTypeCompl= not (isDatacon id) && isUpper (T.head rend)
+  , isTypeCompl= not (isDatacon identInfo) && isUpper (T.head rend)
   , additionalTextEdits= Just $
         ExtendImport
           { doc,
@@ -338,8 +340,8 @@ fromIdentInfo doc id@IdentInfo{..} q = CI
   , nameDetails = Nothing
   , isLocalCompletion = False
   }
-  where rend = rendered id
-        mod = moduleNameText id
+  where rend = rendered identInfo
+        mod = moduleNameText identInfo
 
 cacheDataProducer :: Uri -> [ModuleName] -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> CachedCompletions
 cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
@@ -445,34 +447,34 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
         }
   where
     typeSigIds = Set.fromList
-        [ id
+        [ identifier
             | L _ (SigD _ (TypeSig _ ids _)) <- hsmodDecls
-            , L _ id <- ids
+            , L _ identifier <- ids
             ]
     hasTypeSig = (`Set.member` typeSigIds) . unLoc
 
     compls = concat
         [ case decl of
             SigD _ (TypeSig _ ids typ) ->
-                [mkComp id CompletionItemKind_Function (Just $ showForSnippet typ) | id <- ids]
+                [mkComp identifier CompletionItemKind_Function (Just $ showForSnippet typ) | identifier <- ids]
             ValD _ FunBind{fun_id} ->
                 [ mkComp fun_id CompletionItemKind_Function Nothing
                 | not (hasTypeSig fun_id)
                 ]
             ValD _ PatBind{pat_lhs} ->
-                [mkComp id CompletionItemKind_Variable Nothing
-                | VarPat _ id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
+                [mkComp identifier CompletionItemKind_Variable Nothing
+                | VarPat _ identifier <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
             TyClD _ ClassDecl{tcdLName, tcdSigs, tcdATs} ->
                 mkComp tcdLName CompletionItemKind_Interface (Just $ showForSnippet tcdLName) :
-                [ mkComp id CompletionItemKind_Function (Just $ showForSnippet typ)
+                [ mkComp identifier CompletionItemKind_Function (Just $ showForSnippet typ)
                 | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
-                , id <- ids] ++
+                , identifier <- ids] ++
                 [ mkComp fdLName CompletionItemKind_Struct (Just $ showForSnippet fdLName)
                 | L _ (FamilyDecl{fdLName}) <- tcdATs]
             TyClD _ x ->
-                let generalCompls = [mkComp id cl (Just $ showForSnippet $ tyClDeclLName x)
-                        | id <- listify (\(_ :: LIdP GhcPs) -> True) x
-                        , let cl = occNameToComKind (rdrNameOcc $ unLoc id)]
+                let generalCompls = [mkComp identifier cl (Just $ showForSnippet $ tyClDeclLName x)
+                        | identifier <- listify (\(_ :: LIdP GhcPs) -> True) x
+                        , let cl = occNameToComKind (rdrNameOcc $ unLoc identifier)]
                     -- here we only have to look at the outermost type
                     recordCompls = findRecordCompl uri (Local pos) x
                 in
@@ -676,9 +678,9 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
             | otherwise = ((qual,) <$> Map.findWithDefault [] prefixScope (getQualCompls qualCompls))
                  ++ map (\compl -> (notQual, compl (Just prefixScope))) anyQualCompls
 
-      filtListWith f list =
+      filtListWith f xs =
         [ fmap f label
-        | label <- Fuzzy.simpleFilter chunkSize maxC fullPrefix list
+        | label <- Fuzzy.simpleFilter chunkSize maxC fullPrefix xs
         , enteredQual `T.isPrefixOf` original label
         ]
 

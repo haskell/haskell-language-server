@@ -31,7 +31,7 @@ genericIsSubspan ::
     SrcSpan ->
     GenericQ (Maybe (Bool, ast))
 genericIsSubspan _ dst = mkQ Nothing $ \case
-  (L span ast :: Located ast) -> Just (dst `isSubspanOf` span, ast)
+  (L srcSpan ast :: Located ast) -> Just (dst `isSubspanOf` srcSpan, ast)
 
 
 -- | Lift a function that replaces a value with several values into a generic

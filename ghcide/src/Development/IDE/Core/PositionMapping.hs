@@ -222,6 +222,6 @@ deltaFromDiff (T.lines -> old) (T.lines -> new) =
     -- -1 for unsuccessful mapping
     go :: [Diff T.Text] -> Int -> Int -> ([Int], [Int])
     go [] _ _ = ([],[])
-    go (Both _ _ : xs) !lold !lnew = bimap  (lnew :) (lold :) $ go xs (lold+1) (lnew+1)
-    go (First _  : xs) !lold !lnew = first  (-1   :)          $ go xs (lold+1) lnew
-    go (Second _ : xs) !lold !lnew = second          (-1   :) $ go xs lold     (lnew+1)
+    go (Both _ _ : xs) !glold !glnew = bimap  (glnew :) (glold :) $ go xs (glold+1) (glnew+1)
+    go (First _  : xs) !glold !glnew = first  (-1   :)          $ go xs (glold+1) glnew
+    go (Second _ : xs) !glold !glnew = second          (-1   :) $ go xs glold     (glnew+1)

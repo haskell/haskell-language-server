@@ -133,7 +133,8 @@ import           Development.IDE.GHC.Compat             (NameCache,
                                                          initNameCache,
                                                          knownKeyNames)
 import           Development.IDE.GHC.Orphans            ()
-import           Development.IDE.Graph                  hiding (ShakeValue)
+import           Development.IDE.Graph                  hiding (ShakeValue,
+                                                         action)
 import qualified Development.IDE.Graph                  as Shake
 import           Development.IDE.Graph.Database         (ShakeDatabase,
                                                          shakeGetBuildStep,
@@ -144,7 +145,7 @@ import           Development.IDE.Graph.Database         (ShakeDatabase,
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.Diagnostics
-import           Development.IDE.Types.Exports
+import           Development.IDE.Types.Exports          hiding (exportsMapSize)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import           Development.IDE.Types.KnownTargets
 import           Development.IDE.Types.Location
@@ -170,7 +171,7 @@ import qualified Language.LSP.Protocol.Types            as LSP
 import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.VFS                       hiding (start)
 import qualified "list-t" ListT
-import           OpenTelemetry.Eventlog
+import           OpenTelemetry.Eventlog                 hiding (addEvent)
 import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
@@ -208,10 +209,10 @@ instance Pretty Log where
         , "Aborting previous build session took" <+> pretty (showDuration abortDuration) <+> pretty shakeProfilePath ]
     LogBuildSessionRestartTakingTooLong seconds ->
         "Build restart is taking too long (" <> pretty seconds <> " seconds)"
-    LogDelayedAction delayedAction duration ->
+    LogDelayedAction delayedAct seconds ->
       hsep
-        [ "Finished:" <+> pretty (actionName delayedAction)
-        , "Took:" <+> pretty (showDuration duration) ]
+        [ "Finished:" <+> pretty (actionName delayedAct)
+        , "Took:" <+> pretty (showDuration seconds) ]
     LogBuildSessionFinish e ->
       vcat
         [ "Finished build session"
@@ -382,9 +383,9 @@ getIdeGlobalExtras ShakeExtras{globals} = do
     let typ = typeRep (Proxy :: Proxy a)
     x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readTVarIO globals
     case x of
-        Just x
-            | Just x <- fromDynamic x -> pure x
-            | otherwise -> errorIO $ "Internal error, getIdeGlobalExtras, wrong type for " ++ show typ ++ " (got " ++ show (dynTypeRep x) ++ ")"
+        Just y
+            | Just z <- fromDynamic y -> pure z
+            | otherwise -> errorIO $ "Internal error, getIdeGlobalExtras, wrong type for " ++ show typ ++ " (got " ++ show (dynTypeRep y) ++ ")"
         Nothing -> errorIO $ "Internal error, getIdeGlobalExtras, no entry for " ++ show typ
 
 getIdeGlobalAction :: forall a . (HasCallStack, IsIdeGlobal a) => Action a
@@ -399,8 +400,8 @@ instance IsIdeGlobal GlobalIdeOptions
 getIdeOptions :: Action IdeOptions
 getIdeOptions = do
     GlobalIdeOptions x <- getIdeGlobalAction
-    env <- lspEnv <$> getShakeExtras
-    case env of
+    mbEnv <- lspEnv <$> getShakeExtras
+    case mbEnv of
         Nothing -> return x
         Just env -> do
             config <- liftIO $ LSP.runLspT env HLS.getClientConfig
@@ -432,8 +433,8 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
             Nothing -> atomicallyNamed "lastValueIO 1" $ do
                 STM.focus (Focus.alter (alterValue $ Failed True)) (toKey k file) state
                 return Nothing
-            Just (v,del,ver) -> do
-                actual_version <- case ver of
+            Just (v,del,mbVer) -> do
+                actual_version <- case mbVer of
                   Just ver -> pure (Just $ VFSVersion ver)
                   Nothing -> (Just . ModificationTime <$> getModTime (fromNormalizedFilePath file))
                               `catch` (\(_ :: IOException) -> pure Nothing)
@@ -451,7 +452,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
 
     atomicallyNamed "lastValueIO 4"  (STM.lookup (toKey k file) state) >>= \case
       Nothing -> readPersistent
-      Just (ValueWithDiagnostics v _) -> case v of
+      Just (ValueWithDiagnostics value _) -> case value of
         Succeeded ver (fromDynamic -> Just v) ->
             atomicallyNamed "lastValueIO 5"  $ Just . (v,) <$> mappingForVersion positionMapping file ver
         Stale del ver (fromDynamic -> Just v) ->
@@ -602,8 +603,6 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
   shakeProfileDir (IdeReportProgress reportProgress)
   ideTesting@(IdeTesting testing)
   withHieDb indexQueue opts monitoring rules = mdo
-    let log :: Logger.Priority -> Log -> IO ()
-        log = logWith recorder
 
 #if MIN_VERSION_ghc(9,3,0)
     ideNc <- initNameCache 'r' knownKeyNames
@@ -629,10 +628,10 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
         -- lazily initialize the exports map with the contents of the hiedb
         -- TODO: exceptions can be swallowed here?
         _ <- async $ do
-            log Debug LogCreateHieDbExportsMapStart
+            logWith recorder Debug LogCreateHieDbExportsMapStart
             em <- createExportsMapHieDb withHieDb
             atomically $ modifyTVar' exportsMap (<> em)
-            log Debug $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
+            logWith recorder Debug $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
 
         progress <- do
             let (before, after) = if testing then (0,0.1) else (0.1,0.1)
@@ -735,14 +734,13 @@ shakeRestart recorder IdeState{..} vfs reason acts =
     withMVar'
         shakeSession
         (\runner -> do
-              let log = logWith recorder
-              (stopTime,()) <- duration $ logErrorAfter 10 recorder $ cancelShakeSession runner
+              (stopTime,()) <- duration $ logErrorAfter 10 $ cancelShakeSession runner
               res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
               -- this log is required by tests
-              log Debug $ LogBuildSessionRestart reason queue backlog stopTime res
+              logWith recorder Debug $ LogBuildSessionRestart reason queue backlog stopTime res
         )
         -- It is crucial to be masked here, otherwise we can get killed
         -- between spawning the new thread and updating shakeSession.
@@ -750,8 +748,8 @@ shakeRestart recorder IdeState{..} vfs reason acts =
         (\() -> do
           (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
     where
-        logErrorAfter :: Seconds -> Recorder (WithPriority Log) -> IO () -> IO ()
-        logErrorAfter seconds recorder action = flip withAsync (const action) $ do
+        logErrorAfter :: Seconds -> IO () -> IO ()
+        logErrorAfter seconds action = flip withAsync (const action) $ do
             sleep seconds
             logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
 
@@ -764,8 +762,8 @@ shakeEnqueue :: ShakeExtras -> DelayedAction a -> IO (IO a)
 shakeEnqueue ShakeExtras{actionQueue, logger} act = do
     (b, dai) <- instantiateDelayedAction act
     atomicallyNamed "actionQueue - push" $ pushQueue dai actionQueue
-    let wait' b =
-            waitBarrier b `catches`
+    let wait' barrier =
+            waitBarrier barrier `catches`
               [ Handler(\BlockedIndefinitelyOnMVar ->
                     fail $ "internal bug: forever blocked on MVar for " <>
                             actionName act)
@@ -1032,7 +1030,7 @@ useWithStaleFast' key file = do
 
   -- Async trigger the key to be built anyway because we want to
   -- keep updating the value in the key.
-  wait <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath file) Debug $ use key file
+  waitValue <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath file) Debug $ use key file
 
   s@ShakeExtras{state} <- askShake
   r <- liftIO $ atomicallyNamed "useStateFast" $ getValues state key file
@@ -1043,13 +1041,13 @@ useWithStaleFast' key file = do
       res <- lastValueIO s key file
       case res of
         Nothing -> do
-          a <- wait
+          a <- waitValue
           pure $ FastResult ((,zeroMapping) <$> a) (pure a)
-        Just _ -> pure $ FastResult res wait
+        Just _ -> pure $ FastResult res waitValue
     -- Otherwise, use the computed value even if it's out of date.
     Just _ -> do
       res <- lastValueIO s key file
-      pure $ FastResult res wait
+      pure $ FastResult res waitValue
 
 useNoFile :: IdeRule k v => k -> Action (Maybe v)
 useNoFile key = use key emptyFilePath
@@ -1147,7 +1145,7 @@ defineNoFile recorder f = defineNoDiagnostics recorder $ \k file -> do
 
 defineEarlyCutOffNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
 defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k file -> do
-    if file == emptyFilePath then do (hash, res) <- f k; return (Just hash, Just res) else
+    if file == emptyFilePath then do (hashString, res) <- f k; return (Just hashString, Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
 defineEarlyCutoff'
@@ -1161,14 +1159,14 @@ defineEarlyCutoff'
     -> RunMode
     -> (Value v -> Action (Maybe BS.ByteString, IdeResult v))
     -> Action (RunResult (A (RuleResult k)))
-defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
+defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
     ShakeExtras{state, progress, dirtyKeys} <- getShakeExtras
     options <- getIdeOptions
     (if optSkipProgress options key then id else inProgress progress file) $ do
-        val <- case old of
+        val <- case mbOld of
             Just old | mode == RunDependenciesSame -> do
-                v <- liftIO $ atomicallyNamed "define - read 1" $ getValues state key file
-                case v of
+                mbValue <- liftIO $ atomicallyNamed "define - read 1" $ getValues state key file
+                case mbValue of
                     -- No changes in the dependencies and we have
                     -- an existing successful result.
                     Just (v@(Succeeded _ x), diags) -> do
@@ -1188,19 +1186,19 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     Just (Succeeded ver v, _) -> Stale Nothing ver v
                     Just (Stale d ver v, _)   -> Stale d ver v
                     Just (Failed b, _)        -> Failed b
-                (bs, (diags, res)) <- actionCatch
+                (mbBs, (diags, mbRes)) <- actionCatch
                     (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
                         pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
 
-                ver <- estimateFileVersionUnsafely key res file
-                (bs, res) <- case res of
+                ver <- estimateFileVersionUnsafely key mbRes file
+                (bs, res) <- case mbRes of
                     Nothing -> do
-                        pure (toShakeValue ShakeStale bs, staleV)
-                    Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded ver v)
+                        pure (toShakeValue ShakeStale mbBs, staleV)
+                    Just v -> pure (maybe ShakeNoCutoff ShakeResult mbBs, Succeeded ver v)
                 liftIO $ atomicallyNamed "define - write" $ setValues state key file res (Vector.fromList diags)
                 doDiagnostics (vfsVersion =<< ver) diags
-                let eq = case (bs, fmap decodeShakeValue old) of
+                let eq = case (bs, fmap decodeShakeValue mbOld) of
                         (ShakeResult a, Just (ShakeResult b)) -> cmp a b
                         (ShakeStale a, Just (ShakeStale b))   -> cmp a b
                         -- If we do not have a previous result
@@ -1217,9 +1215,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
     -- without creating a dependency on the GetModificationTime rule
     -- (and without creating cycles in the build graph).
     estimateFileVersionUnsafely
-        :: forall k v
-         . IdeRule k v
-        => k
+        :: k
         -> Maybe v
         -> NormalizedFilePath
         -> Action (Maybe FileVersion)
@@ -1257,7 +1253,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
         addTagUnsafe :: String -> String -> String -> a -> a
         addTagUnsafe msg t x v = unsafePerformIO(addTag (msg <> t) x) `seq` v
         update :: (forall a. String -> String -> a -> a) -> [Diagnostic] -> STMDiagnosticStore -> STM [Diagnostic]
-        update addTagUnsafe new store = addTagUnsafe "count" (show $ Prelude.length new) $ setStageDiagnostics addTagUnsafe uri ver (renderKey k) new store
+        update addTagUnsafeMethod new store = addTagUnsafeMethod "count" (show $ Prelude.length new) $ setStageDiagnostics addTagUnsafeMethod uri ver (renderKey k) new store
         current = second diagsFromRule <$> current0
     addTag "version" (show ver)
     mask_ $ do
@@ -1267,11 +1263,11 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
         -- publishDiagnosticsNotification.
         newDiags <- liftIO $ atomicallyNamed "diagnostics - update" $ update (addTagUnsafe "shown ") (map snd currentShown) diagnostics
         _ <- liftIO $ atomicallyNamed "diagnostics - hidden" $ update (addTagUnsafe "hidden ") (map snd currentHidden) hiddenDiagnostics
-        let uri = filePathToUri' fp
+        let uri' = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
-        registerEvent debouncer delay uri $ withTrace ("report diagnostics " <> fromString (fromNormalizedFilePath fp)) $ \tag -> do
+        registerEvent debouncer delay uri' $ withTrace ("report diagnostics " <> fromString (fromNormalizedFilePath fp)) $ \tag -> do
              join $ mask_ $ do
-                 lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
+                 lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri' publishedDiagnostics
                  let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
                             logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
@@ -1279,7 +1275,7 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                             liftIO $ tag "count" (show $ Prelude.length newDiags)
                             liftIO $ tag "key" (show k)
                             LSP.sendNotification SMethod_TextDocumentPublishDiagnostics $
-                                LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) ( newDiags)
+                                LSP.PublishDiagnosticsParams (fromNormalizedUri uri') (fmap fromIntegral ver) ( newDiags)
                  return action
     where
         diagsFromRule :: Diagnostic -> Diagnostic

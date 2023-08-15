@@ -27,9 +27,9 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogNotifications log -> pretty log
-    LogCompletions log   -> pretty log
-    LogTypeLenses log    -> pretty log
+    LogNotifications msg -> pretty msg
+    LogCompletions msg   -> pretty msg
+    LogTypeLenses msg    -> pretty msg
 
 descriptors :: Recorder (WithPriority Log) -> [PluginDescriptor IdeState]
 descriptors recorder =

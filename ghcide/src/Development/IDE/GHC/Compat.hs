@@ -413,9 +413,9 @@ simplifyExpr _ = GHC.simplifyExpr
 
 corePrepExpr :: DynFlags -> HscEnv -> CoreExpr -> IO CoreExpr
 #if MIN_VERSION_ghc(9,5,0)
-corePrepExpr _ env exp = do
+corePrepExpr _ env expr = do
   cfg <- initCorePrepConfig env
-  GHC.corePrepExpr (Development.IDE.GHC.Compat.Env.hsc_logger env) cfg exp
+  GHC.corePrepExpr (Development.IDE.GHC.Compat.Env.hsc_logger env) cfg expr
 #else
 corePrepExpr _ = GHC.corePrepExpr
 #endif
@@ -569,12 +569,12 @@ combineNodeInfo' :: Ord a => NodeInfo a -> NodeInfo a -> NodeInfo a
   NodeInfo (S.union as bs) (mergeSorted ai bi) (Map.unionWith (<>) ad bd)
   where
     mergeSorted :: Ord a => [a] -> [a] -> [a]
-    mergeSorted la@(a:as) lb@(b:bs) = case compare a b of
-                                        LT -> a : mergeSorted as lb
-                                        EQ -> a : mergeSorted as bs
-                                        GT -> b : mergeSorted la bs
-    mergeSorted as [] = as
-    mergeSorted [] bs = bs
+    mergeSorted la@(a:axs) lb@(b:bxs) = case compare a b of
+                                        LT -> a : mergeSorted axs lb
+                                        EQ -> a : mergeSorted axs bxs
+                                        GT -> b : mergeSorted la bxs
+    mergeSorted axs [] = axs
+    mergeSorted [] bxs = bxs
 
 #else
 

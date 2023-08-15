@@ -86,7 +86,7 @@ data Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogShake log -> pretty log
+    LogShake msg -> pretty msg
 
 
 typeLensCommandId :: T.Text
@@ -313,11 +313,11 @@ gblBindingType (Just hsc) (Just gblEnv) = do
       showDoc = showDocRdrEnv hsc rdrEnv
       hasSig :: (Monad m) => Name -> m a -> m (Maybe a)
       hasSig name f = whenMaybe (name `elemNameSet` sigs) f
-      bindToSig id = do
-        let name = idName id
+      bindToSig identifier = do
+        let name = idName identifier
         hasSig name $ do
           env <- tcInitTidyEnv
-          let (_, ty) = tidyOpenType env (idType id)
+          let (_, ty) = tidyOpenType env (idType identifier)
           pure $ GlobalBindingTypeSig name (printName name <> " :: " <> showDoc (pprSigmaType ty)) (name `elemNameSet` exports)
       patToSig p = do
         let name = patSynName p

@@ -61,6 +61,7 @@ module Development.IDE.Core.Rules(
     DisplayTHWarning(..),
     ) where
 
+import           Prelude                                      hiding (mod)
 import           Control.Applicative
 import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.Strict
@@ -114,7 +115,7 @@ import           Development.IDE.GHC.Compat                   hiding
                                                                TargetId(..),
                                                                loadInterface,
                                                                Var,
-                                                               (<+>))
+                                                               (<+>), settings)
 import qualified Development.IDE.GHC.Compat                   as Compat hiding (vcat, nest)
 import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
@@ -181,7 +182,7 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogShake log -> pretty log
+    LogShake msg -> pretty msg
     LogReindexingHieFile path ->
       "Re-indexing hie file for" <+> pretty (fromNormalizedFilePath path)
     LogLoadingHieFile path ->
@@ -333,10 +334,10 @@ getParsedModuleWithCommentsRule recorder =
 
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
     modify_dflags <- getModifyDynFlags dynFlagsModifyParser
-    let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
+    let ms'' = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition hsc opt file ms
+    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition hsc opt file ms''
 
 getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags f = do
@@ -369,7 +370,7 @@ getLocatedImportsRule recorder =
         let import_dirs = deps env_eq
         let dflags = hsc_dflags env
             isImplicitCradle = isNothing $ envImportPaths env_eq
-        dflags <- return $ if isImplicitCradle
+        dflags' <- return $ if isImplicitCradle
                     then addRelativeImport file (moduleName $ ms_mod ms) dflags
                     else dflags
         opt <- getIdeOptions
@@ -390,7 +391,7 @@ getLocatedImportsRule recorder =
                 | otherwise
                 = return Nothing
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
-            diagOrImp <- locateModule (hscSetFlags dflags env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
+            diagOrImp <- locateModule (hscSetFlags dflags' env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
@@ -437,16 +438,16 @@ rawDependencyInformation fs = do
     go :: NormalizedFilePath -- ^ Current module being processed
        -> Maybe ModSummary   -- ^ ModSummary of the module
        -> RawDepM FilePathId
-    go f msum = do
+    go f mbMSum = do
       -- First check to see if we have already processed the FilePath
       -- If we have, just return its Id but don't update any of the state.
       -- Otherwise, we need to process its imports.
       checkAlreadyProcessed f $ do
-          let al = modSummaryToArtifactsLocation f msum
+          let al = modSummaryToArtifactsLocation f mbMSum
           -- Get a fresh FilePathId for the new file
           fId <- getFreshFid al
           -- Record this module and its location
-          whenJust msum $ \ms ->
+          whenJust mbMSum $ \ms ->
             modifyRawDepInfo (\rd -> rd { rawModuleMap = IntMap.insert (getFilePathId fId)
                                                                            (ShowableModule $ ms_mod ms)
                                                                            (rawModuleMap rd)})
@@ -535,9 +536,8 @@ reportImportCyclesRule recorder =
                   let cycles = mapMaybe (cycleErrorInFile fileId) (toList errs)
                   -- Convert cycles of files into cycles of module names
                   forM cycles $ \(imp, files) -> do
-                      modNames <- forM files $ \fileId -> do
-                          let file = idToPath depPathIdMap fileId
-                          getModuleName file
+                      modNames <- forM files $ \filePathId ->
+                          getModuleName $ idToPath depPathIdMap filePathId
                       pure $ toDiag imp $ sort modNames
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
@@ -594,8 +594,8 @@ getHieAstRuleDefinition f hsc tmr = do
     _ | Just asts <- masts -> do
           source <- getSourceFileSource f
           let exports = tcg_exports $ tmrTypechecked tmr
-              msum = tmrModSummary tmr
-          liftIO $ writeAndIndexHieFile hsc se msum f exports asts source
+              modSum = tmrModSummary tmr
+          liftIO $ writeAndIndexHieFile hsc se modSum f exports asts source
     _ -> pure []
 
   let refmap = Compat.generateReferencesMap . Compat.getAsts <$> masts
@@ -648,10 +648,9 @@ readHieFileFromDisk :: Recorder (WithPriority Log) -> FilePath -> ExceptT SomeEx
 readHieFileFromDisk recorder hie_loc = do
   nc <- asks ideNc
   res <- liftIO $ tryAny $ loadHieFile (mkUpdater nc) hie_loc
-  let log = (liftIO .) . logWith recorder
   case res of
-    Left e -> log Logger.Debug $ LogLoadingHieFileFail hie_loc e
-    Right _ -> log Logger.Debug $ LogLoadingHieFileSuccess hie_loc
+    Left e -> liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFileFail hie_loc e
+    Right _ -> liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFileSuccess hie_loc
   except res
 
 -- | Typechecks a module.
@@ -887,12 +886,12 @@ getModIfaceFromDiskAndIndexRule recorder =
   -- GetModIfaceFromDisk should have written a `.hie` file, must check if it matches version in db
   let ms = hirModSummary x
       hie_loc = Compat.ml_hie_file $ ms_location ms
-  hash <- liftIO $ Util.getFileHash hie_loc
+  fingerPrint <- liftIO $ Util.getFileHash hie_loc
   mrow <- liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb (fromNormalizedFilePath f))
   hie_loc' <- liftIO $ traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
   case mrow of
     Just row
-      | hash == HieDb.modInfoHash (HieDb.hieModInfo row)
+      | fingerPrint == HieDb.modInfoHash (HieDb.hieModInfo row)
       && Just hie_loc == hie_loc'
       -> do
       -- All good, the db has indexed the file
@@ -909,7 +908,7 @@ getModIfaceFromDiskAndIndexRule recorder =
         -- can just re-index the file we read from disk
         Right hf -> liftIO $ do
           logWith recorder Logger.Debug $ LogReindexingHieFile f
-          indexHieFile se ms f hash hf
+          indexHieFile se ms f fingerPrint hf
 
   return (Just x)
 
@@ -956,14 +955,14 @@ getModSummaryRule displayTHWarning recorder = do
         ms <- use GetModSummary f
         case ms of
             Just res@ModSummaryResult{..} -> do
-                let ms = msrModSummary {
+                let modSum = msrModSummary {
 #if !MIN_VERSION_ghc(9,3,0)
                     ms_hs_date = error "use GetModSummary instead of GetModSummaryWithoutTimestamps",
 #endif
                     ms_hspp_buf = error "use GetModSummary instead of GetModSummaryWithoutTimestamps"
                     }
                     fp = fingerprintToBS msrFingerprint
-                return (Just fp, Just res{msrModSummary = ms})
+                return (Just fp, Just res{msrModSummary = modSum})
             Nothing -> return (Nothing, Nothing)
 
 generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult ModGuts)
@@ -988,14 +987,14 @@ getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ 
       hsc <- hscEnv <$> use_ GhcSessionDeps f
       let compile = fmap ([],) $ use GenerateCore f
       se <- getShakeExtras
-      (diags, !hiFile) <- writeCoreFileIfNeeded se hsc linkableType compile tmr
-      let fp = hiFileFingerPrint <$> hiFile
-      hiDiags <- case hiFile of
+      (diags, !mbHiFile) <- writeCoreFileIfNeeded se hsc linkableType compile tmr
+      let fp = hiFileFingerPrint <$> mbHiFile
+      hiDiags <- case mbHiFile of
         Just hiFile
           | OnDisk <- status
           , not (tmrDeferredError tmr) -> liftIO $ writeHiFile se hsc hiFile
         _ -> pure []
-      return (fp, (diags++hiDiags, hiFile))
+      return (fp, (diags++hiDiags, mbHiFile))
     NotFOI -> do
       hiFile <- use GetModIfaceFromDiskAndIndex f
       let fp = hiFileFingerPrint <$> hiFile
@@ -1027,22 +1026,22 @@ regenerateHiFile sess f ms compNeeded = do
 
     -- Embed haddocks in the interface file
     (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f (withOptHaddock ms)
-    (diags, mb_pm) <-
+    (diags', mb_pm') <-
         -- We no longer need to parse again if GHC version is above 9.0. https://github.com/haskell/haskell-language-server/issues/1892
         if Compat.ghcVersion >= Compat.GHC90 || isJust mb_pm then do
             return (diags, mb_pm)
         else do
             -- if parsing fails, try parsing again with Haddock turned off
-            (diagsNoHaddock, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f ms
-            return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm)
-    case mb_pm of
-        Nothing -> return (diags, Nothing)
+            (diagsNoHaddock, mb_pm'') <- liftIO $ getParsedModuleDefinition hsc opt f ms
+            return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm'')
+    case mb_pm' of
+        Nothing -> return (diags', Nothing)
         Just pm -> do
             -- Invoke typechecking directly to update it without incurring a dependency
             -- on the parsed module and the typecheck rules
-            (diags', mtmr) <- typeCheckRuleDefinition hsc pm
+            (diags'', mtmr) <- typeCheckRuleDefinition hsc pm
             case mtmr of
-              Nothing -> pure (diags', Nothing)
+              Nothing -> pure (diags'', Nothing)
               Just tmr -> do
 
                 let compile = liftIO $ compileModule (RunSimplifier True) hsc (pm_mod_summary pm) $ tmrTypechecked tmr
@@ -1050,7 +1049,7 @@ regenerateHiFile sess f ms compNeeded = do
                 se <- getShakeExtras
 
                 -- Bang pattern is important to avoid leaking 'tmr'
-                (diags'', !res) <- writeCoreFileIfNeeded se hsc compNeeded compile tmr
+                (diags''', !res) <- writeCoreFileIfNeeded se hsc compNeeded compile tmr
 
                 -- Write hi file
                 hiDiags <- case res of
@@ -1059,22 +1058,22 @@ regenerateHiFile sess f ms compNeeded = do
                     -- Write hie file. Do this before writing the .hi file to
                     -- ensure that we always have a up2date .hie file if we have
                     -- a .hi file
-                    se <- getShakeExtras
+                    se' <- getShakeExtras
                     (gDiags, masts) <- liftIO $ generateHieAsts hsc tmr
                     source <- getSourceFileSource f
                     wDiags <- forM masts $ \asts ->
-                      liftIO $ writeAndIndexHieFile hsc se (tmrModSummary tmr) f (tcg_exports $ tmrTypechecked tmr) asts source
+                      liftIO $ writeAndIndexHieFile hsc se' (tmrModSummary tmr) f (tcg_exports $ tmrTypechecked tmr) asts source
 
                     -- We don't write the `.hi` file if there are deferred errors, since we won't get
                     -- accurate diagnostics next time if we do
                     hiDiags <- if not $ tmrDeferredError tmr
-                               then liftIO $ writeHiFile se hsc hiFile
+                               then liftIO $ writeHiFile se' hsc hiFile
                                else pure []
 
                     pure (hiDiags <> gDiags <> concat wDiags)
                   Nothing -> pure []
 
-                return (diags <> diags' <> diags'' <> hiDiags, res)
+                return (diags''' <> diags''' <> diags''' <> hiDiags, res)
 
 
 -- | HscEnv should have deps included already
@@ -1124,7 +1123,7 @@ getLinkableRule recorder =
     core_t <- liftIO $ getModTime core_file
     case hirCoreFp of
       Nothing -> error "called GetLinkable for a file without a linkable"
-      Just (bin_core, hash) -> do
+      Just (bin_core, cfHash) -> do
         session <- use_ GhcSessionDeps f
         linkableType <- getLinkableType f >>= \case
           Nothing -> error "called GetLinkable for a file which doesn't need compilation"
@@ -1161,9 +1160,9 @@ getLinkableRule recorder =
               --just before returning it to be loaded. This has a substantial effect on recompile
               --times as the number of loaded modules and splices increases.
               --
-              unload (hscEnv session) (map (\(mod, time) -> LM time mod []) $ moduleEnvToList to_keep)
+              unload (hscEnv session) (map (\(mod', time') -> LM time' mod' []) $ moduleEnvToList to_keep)
               return (to_keep, ())
-        return (hash <$ hmi, (warns, LinkableResult <$> hmi <*> pure hash))
+        return (cfHash <$ hmi, (warns, LinkableResult <$> hmi <*> pure cfHash))
 
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)

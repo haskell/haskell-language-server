@@ -28,8 +28,8 @@ import           Development.IDE.Core.PluginUtils
 import qualified Language.LSP.Protocol.Lens     as L
 
 getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
-getNextPragmaInfo dynFlags sourceText =
-  if | Just sourceText <- sourceText
+getNextPragmaInfo dynFlags mbSourceText =
+  if | Just sourceText <- mbSourceText
      , let sourceStringBuffer = stringToStringBuffer (Text.unpack sourceText)
      , POk _ parserState <- parsePreDecl dynFlags sourceStringBuffer
      -> case parserState of
@@ -99,8 +99,8 @@ isDownwardLineHaddock = List.isPrefixOf "-- |"
 -- need to merge tokens that are deleted/inserted into one TextEdit each
 -- to work around some weird TextEdits applied in reversed order issue
 updateLineSplitTextEdits :: LSP.Range -> String -> Maybe LineSplitTextEdits -> LineSplitTextEdits
-updateLineSplitTextEdits tokenRange tokenString prevLineSplitTextEdits
-  | Just prevLineSplitTextEdits <- prevLineSplitTextEdits
+updateLineSplitTextEdits tokenRange tokenString mbPrevLineSplitTextEdits
+  | Just prevLineSplitTextEdits <- mbPrevLineSplitTextEdits
   , let LineSplitTextEdits
           { lineSplitInsertTextEdit = prevInsertTextEdit
           , lineSplitDeleteTextEdit = prevDeleteTextEdit } = prevLineSplitTextEdits
@@ -291,8 +291,8 @@ updateParserState token range prevParserState
   | otherwise = prevParserState
   where
     hasDeleteStartedOnSameLine :: Int -> Maybe LineSplitTextEdits -> Bool
-    hasDeleteStartedOnSameLine line lineSplitTextEdits
-      | Just lineSplitTextEdits <- lineSplitTextEdits
+    hasDeleteStartedOnSameLine line mbLineSplitTextEdits
+      | Just lineSplitTextEdits <- mbLineSplitTextEdits
       , let LineSplitTextEdits{ lineSplitDeleteTextEdit } = lineSplitTextEdits
       , let LSP.TextEdit deleteRange _ = lineSplitDeleteTextEdit
       , let LSP.Range _ deleteEndPosition = deleteRange

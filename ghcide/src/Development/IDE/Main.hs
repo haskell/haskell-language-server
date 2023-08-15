@@ -145,7 +145,7 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogHeapStats log -> pretty log
+    LogHeapStats msg -> pretty msg
     LogLspStart pluginIds ->
       nest 2 $ vsep
         [ "Starting LSP server..."
@@ -158,13 +158,13 @@ instance Pretty Log where
       "shouldRunSubset:" <+> pretty shouldRunSubset
     LogSetInitialDynFlagsException e ->
       "setInitialDynFlags:" <+> pretty (displayException e)
-    LogService log -> pretty log
-    LogShake log -> pretty log
-    LogGhcIde log -> pretty log
-    LogLanguageServer log -> pretty log
-    LogSession log -> pretty log
-    LogPluginHLS log -> pretty log
-    LogRules log -> pretty log
+    LogService msg -> pretty msg
+    LogShake msg -> pretty msg
+    LogGhcIde msg -> pretty msg
+    LogLanguageServer msg -> pretty msg
+    LogSession msg -> pretty msg
+    LogPluginHLS msg -> pretty msg
+    LogRules msg -> pretty msg
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
@@ -279,9 +279,6 @@ testing recorder logger plugins =
 defaultMain :: Recorder (WithPriority Log) -> Arguments -> IO ()
 defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats recorder) fun
  where
-  log :: Priority -> Log -> IO ()
-  log = logWith recorder
-
   fun = do
     setLocaleEncoding utf8
     pid <- T.pack . show <$> getProcessID
@@ -304,14 +301,14 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
 
     case argCommand of
         LSP -> withNumCapabilities numCapabilities $ do
-            t <- offsetTime
-            log Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
+            ioT <- offsetTime
+            logWith recorder Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
 
             let getIdeState :: LSP.LanguageContextEnv Config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState
                 getIdeState env rootPath withHieDb hieChan = do
                   traverse_ IO.setCurrentDirectory rootPath
-                  t <- t
-                  log Info $ LogLspStartDuration t
+                  t <- ioT
+                  logWith recorder Info $ LogLspStartDuration t
 
                   dir <- maybe IO.getCurrentDirectory return rootPath
 
@@ -320,7 +317,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                   _mlibdir <-
                       setInitialDynFlags (cmapWithPrio LogSession recorder) dir argsSessionLoadingOptions
                           -- TODO: should probably catch/log/rethrow at top level instead
-                          `catchAny` (\e -> log Error (LogSetInitialDynFlagsException e) >> pure Nothing)
+                          `catchAny` (\e -> logWith recorder Error (LogSetInitialDynFlagsException e) >> pure Nothing)
 
                   sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions dir
                   config <- LSP.runLspT env LSP.getConfig
@@ -328,9 +325,9 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
 
                   -- disable runSubset if the client doesn't support watched files
                   runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
-                  log Debug $ LogShouldRunSubset runSubset
+                  logWith recorder Debug $ LogShouldRunSubset runSubset
 
-                  let options = def_options
+                  let ideOptions = def_options
                               { optReportProgress = clientSupportsProgress caps
                               , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                               , optRunSubset = runSubset
@@ -345,7 +342,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                       (Just env)
                       logger
                       debouncer
-                      options
+                      ideOptions
                       withHieDb
                       hieChan
                       monitoring
@@ -368,11 +365,11 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             putStrLn $ "\nStep 1/4: Finding files to test in " ++ dir
             files <- expandFiles (argFiles ++ ["." | null argFiles])
             -- LSP works with absolute file paths, so try and behave similarly
-            files <- nubOrd <$> mapM IO.canonicalizePath files
-            putStrLn $ "Found " ++ show (length files) ++ " files"
+            absoluteFiles <- nubOrd <$> mapM IO.canonicalizePath files
+            putStrLn $ "Found " ++ show (length absoluteFiles) ++ " files"
 
             putStrLn "\nStep 2/4: Looking for hie.yaml files that control setup"
-            cradles <- mapM findCradle files
+            cradles <- mapM findCradle absoluteFiles
             let ucradles = nubOrd cradles
             let n = length ucradles
             putStrLn $ "Found " ++ show n ++ " cradle" ++ ['s' | n /= 1]
@@ -380,25 +377,25 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             putStrLn "\nStep 3/4: Initializing the IDE"
             sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions dir
             let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
-                options = def_options
+                ideOptions = def_options
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
                         , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                         }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing logger debouncer options hiedb hieChan mempty
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing logger debouncer ideOptions hiedb hieChan mempty
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
             putStrLn "\nStep 4/4: Type checking the files"
-            setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') files
-            results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' files)
-            _results <- runAction "GetHie" ide $ uses GetHieAst (map toNormalizedFilePath' files)
-            _results <- runAction "GenerateCore" ide $ uses GenerateCore (map toNormalizedFilePath' files)
-            let (worked, failed) = partition fst $ zip (map isJust results) files
+            setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') absoluteFiles
+            results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' absoluteFiles)
+            _results <- runAction "GetHie" ide $ uses GetHieAst (map toNormalizedFilePath' absoluteFiles)
+            _results <- runAction "GenerateCore" ide $ uses GenerateCore (map toNormalizedFilePath' absoluteFiles)
+            let (worked, failed) = partition fst $ zip (map isJust results) absoluteFiles
             when (failed /= []) $
                 putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed
 
-            let nfiles xs = let n = length xs in if n == 1 then "1 file" else show n ++ " files"
+            let nfiles xs = let n' = length xs in if n' == 1 then "1 file" else show n' ++ " files"
             putStrLn $ "\nCompleted (" ++ nfiles worked ++ " worked, " ++ nfiles failed ++ " failed)"
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
@@ -418,12 +415,12 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
           runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \hiedb hieChan -> do
             sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions "."
             let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
-                options = def_options
+                ideOptions = def_options
                     { optCheckParents = pure NeverCheck
                     , optCheckProject = pure False
                     , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                     }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing logger debouncer options hiedb hieChan mempty
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig argsHlsPlugins rules Nothing logger debouncer ideOptions hiedb hieChan mempty
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide
@@ -435,9 +432,9 @@ expandFiles = concatMapM $ \x -> do
         then return [x]
         else do
             let recurse "." = True
-                recurse x | "." `isPrefixOf` takeFileName x = False -- skip .git etc
-                recurse x = takeFileName x `notElem` ["dist", "dist-newstyle"] -- cabal directories
-            files <- filter (\x -> takeExtension x `elem` [".hs", ".lhs"]) <$> IO.listFilesInside (return . recurse) x
+                recurse y | "." `isPrefixOf` takeFileName y = False -- skip .git etc
+                recurse y = takeFileName y `notElem` ["dist", "dist-newstyle"] -- cabal directories
+            files <- filter (\y -> takeExtension y `elem` [".hs", ".lhs"]) <$> IO.listFilesInside (return . recurse) x
             when (null files) $
                 fail $ "Couldn't find any .hs/.lhs files inside directory: " ++ x
             return files

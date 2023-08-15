@@ -47,7 +47,7 @@ addOptP f = alterToolSettings $ \s -> s
           }
   where
     fingerprintStrings ss = fingerprintFingerprints $ map fingerprintString ss
-    alterToolSettings f dynFlags = dynFlags { toolSettings = f (toolSettings dynFlags) }
+    alterToolSettings g dynFlags = dynFlags { toolSettings = g (toolSettings dynFlags) }
 
 doCpp :: HscEnv -> FilePath -> FilePath -> IO ()
 doCpp env input_fn output_fn =

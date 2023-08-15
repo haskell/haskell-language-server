@@ -18,7 +18,7 @@ import           Control.Concurrent.STM.Stats   (TVar, atomicallyNamed,
                                                  modifyTVar', newTVarIO,
                                                  readTVarIO)
 import           Control.Concurrent.Strict
-import           Control.Monad.Extra
+import           Control.Monad.Extra            hiding (loop)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class      (lift)
 import           Data.Aeson                     (ToJSON (toJSON))
@@ -136,9 +136,9 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
                 ready <- waitBarrier b
                 LSP.runLspT lspEnv $ for_ ready $ const $ bracket_ (start u) (stop u) (loop u 0)
             where
-                start id = LSP.sendNotification SMethod_Progress $
+                start token = LSP.sendNotification SMethod_Progress $
                     LSP.ProgressParams
-                        { _token = id
+                        { _token = token
                         , _value = toJSON $ WorkDoneProgressBegin
                           { _kind = AString @"begin"
                           ,  _title = "Processing"
@@ -147,9 +147,9 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
                           , _percentage = Nothing
                           }
                         }
-                stop id = LSP.sendNotification SMethod_Progress
+                stop token = LSP.sendNotification SMethod_Progress
                     LSP.ProgressParams
-                        { _token = id
+                        { _token = token
                         , _value = toJSON $ WorkDoneProgressEnd
                           { _kind = AString @"end"
                            , _message = Nothing
@@ -157,11 +157,11 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
                         }
                 loop _ _ | optProgressStyle == NoProgress =
                     forever $ liftIO $ threadDelay maxBound
-                loop id prevPct = do
+                loop token prevPct = do
                     done <- liftIO $ readTVarIO doneVar
                     todo <- liftIO $ readTVarIO todoVar
                     liftIO $ sleep after
-                    if todo == 0 then loop id 0 else do
+                    if todo == 0 then loop token 0 else do
                         let
                             nextFrac :: Double
                             nextFrac = fromIntegral done / fromIntegral todo
@@ -170,7 +170,7 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
                         when (nextPct /= prevPct) $
                           LSP.sendNotification SMethod_Progress $
                           LSP.ProgressParams
-                              { _token = id
+                              { _token = token
                               , _value = case optProgressStyle of
                                   Explicit -> toJSON $ WorkDoneProgressReport
                                     { _kind = AString @"report"
@@ -186,7 +186,7 @@ delayedProgressReporting before after (Just lspEnv) optProgressStyle = do
                                     }
                                   NoProgress -> error "unreachable"
                               }
-                        loop id nextPct
+                        loop token nextPct
 
         updateStateForFile inProgress file = actionBracket (f succ) (const $ f pred) . const
             -- This functions are deliberately eta-expanded to avoid space leaks.

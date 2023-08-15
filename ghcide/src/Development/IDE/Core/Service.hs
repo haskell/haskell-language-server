@@ -52,9 +52,9 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogShake log      -> pretty log
-    LogOfInterest log -> pretty log
-    LogFileExists log -> pretty log
+    LogShake msg      -> pretty msg
+    LogOfInterest msg -> pretty msg
+    LogFileExists msg -> pretty msg
 
 ------------------------------------------------------------
 -- Exposed API

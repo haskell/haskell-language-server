@@ -33,7 +33,8 @@ import           Data.Text.Encoding          (decodeUtf8, encodeUtf8)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
 import           GHC.Generics                (Generic)
-import           HieDb
+import           HieDb                       hiding (withHieDb)
+import           Prelude                     hiding (mod)
 
 
 data ExportsMap = ExportsMap
@@ -42,7 +43,7 @@ data ExportsMap = ExportsMap
     }
 
 instance NFData ExportsMap where
-  rnf (ExportsMap a b) = foldOccEnv (\a b -> rnf a `seq` b) (seqEltsUFM rnf b) a
+  rnf (ExportsMap a b) = foldOccEnv (\c d -> rnf c `seq` d) (seqEltsUFM rnf b) a
 
 instance Show ExportsMap where
   show (ExportsMap occs mods) =
@@ -140,8 +141,8 @@ mkIdentInfos mod (AvailFL fl) =
 mkIdentInfos mod (AvailTC parent (n:nn) flds)
     -- Following the GHC convention that parent == n if parent is exported
     | n == parent
-    = [ IdentInfo (nameOccName n) (Just $! nameOccName parent) mod
-        | n <- nn ++ map flSelector flds
+    = [ IdentInfo (nameOccName name) (Just $! nameOccName parent) mod
+        | name <- nn ++ map flSelector flds
       ] ++
       [ IdentInfo (nameOccName n) Nothing mod]
 
@@ -198,7 +199,7 @@ unpackAvail mn
   | nonInternalModules mn = map f . mkIdentInfos mn
   | otherwise = const []
   where
-    f id@IdentInfo {..} = (name, mn, Set.singleton id)
+    f identInfo@IdentInfo {..} = (name, mn, Set.singleton identInfo)
 
 
 identInfoToKeyVal :: IdentInfo -> (ModuleName, IdentInfo)

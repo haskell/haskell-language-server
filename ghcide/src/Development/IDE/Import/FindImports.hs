@@ -59,14 +59,14 @@ instance NFData Import where
   rnf PackageImport  = ()
 
 modSummaryToArtifactsLocation :: NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
-modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source mod
+modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source mbMod
   where
     isSource HsSrcFile = True
     isSource _         = False
     source = case ms of
-      Nothing -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
-      Just ms -> isSource (ms_hsc_src ms)
-    mod = ms_mod <$> ms
+      Nothing     -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
+      Just modSum -> isSource (ms_hsc_src modSum)
+    mbMod = ms_mod <$> ms
 
 -- | locate a module in the file system. Where we go from *daml to Haskell
 locateModuleFile :: MonadIO m
@@ -134,7 +134,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
       | Just (uid, dirs) <- lookup (PackageName pkgName) import_paths
           -> lookupLocal uid dirs
 #endif
-      | otherwise -> lookupInPackageDB env
+      | otherwise -> lookupInPackageDB
 #if MIN_VERSION_ghc(9,3,0)
     NoPkgQual -> do
 #else
@@ -143,7 +143,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
 
       mbFile <- locateModuleFile ((homeUnitId_ dflags, importPaths dflags) : other_imports) exts targetFor isSource $ unLoc modName
       case mbFile of
-        Nothing          -> lookupInPackageDB env
+        Nothing          -> lookupInPackageDB
         Just (uid, file) -> toModLocation uid file
   where
     dflags = hsc_dflags env
@@ -182,19 +182,19 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
     toModLocation uid file = liftIO $ do
         loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
 #if MIN_VERSION_ghc(9,0,0)
-        let mod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
+        let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
 #else
-        let mod = mkModule uid (unLoc modName)
+        let genMod = mkModule uid (unLoc modName)
 #endif
-        return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just mod)
+        return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just genMod)
 
     lookupLocal uid dirs = do
       mbFile <- locateModuleFile [(uid, dirs)] exts targetFor isSource $ unLoc modName
       case mbFile of
         Nothing   -> return $ Left $ notFoundErr env modName $ LookupNotFound []
-        Just (uid, file) -> toModLocation uid file
+        Just (uid', file) -> toModLocation uid' file
 
-    lookupInPackageDB env = do
+    lookupInPackageDB = do
       case Compat.lookupModuleWithSuggestions env (unLoc modName) mbPkgName of
         LookupFound _m _pkgConfig -> return $ Right PackageImport
         reason -> return $ Left $ notFoundErr env modName reason

@@ -93,7 +93,7 @@ instance Pretty Log where
       <+> viaShow path
       <> ":"
       <+> pretty (fmap (fmap show) reverseDepPaths)
-    LogShake log -> pretty log
+    LogShake msg -> pretty msg
 
 addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile f -> do
@@ -240,11 +240,10 @@ typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) pa
 typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action ()
 typecheckParentsAction recorder nfp = do
     revs <- transitiveReverseDependencies nfp <$> useNoFile_ GetModuleGraph
-    let log = logWith recorder
     case revs of
-      Nothing -> log Info $ LogCouldNotIdentifyReverseDeps nfp
+      Nothing -> logWith recorder Info $ LogCouldNotIdentifyReverseDeps nfp
       Just rs -> do
-        log Info $ LogTypeCheckingReverseDeps nfp revs
+        logWith recorder Info $ LogTypeCheckingReverseDeps nfp revs
         void $ uses GetModIface rs
 
 -- | Note that some keys have been modified and restart the session

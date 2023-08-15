@@ -58,6 +58,7 @@ import           Data.Version
 import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Outputable
+import           Prelude                               hiding (mod)
 
 #if !MIN_VERSION_ghc(9,0,0)
 import qualified DynFlags

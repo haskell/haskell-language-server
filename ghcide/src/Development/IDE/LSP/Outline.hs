@@ -93,13 +93,13 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ ClassDecl { tcdLNa
     , _detail   = Just "class"
     , _children =
       Just $
-        [ (defDocumentSymbol l :: DocumentSymbol)
+        [ (defDocumentSymbol l' :: DocumentSymbol)
             { _name           = printOutputable n
             , _kind           = SymbolKind_Method
-            , _selectionRange = realSrcSpanToRange l'
+            , _selectionRange = realSrcSpanToRange l''
             }
-        | L (locA -> (RealSrcSpan l _))  (ClassOpSig _ False names _) <- tcdSigs
-        , L (locA -> (RealSrcSpan l' _)) n                            <- names
+        | L (locA -> (RealSrcSpan l' _))  (ClassOpSig _ False names _) <- tcdSigs
+        , L (locA -> (RealSrcSpan l'' _)) n                            <- names
         ]
     }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLName = L _ name, tcdDataDefn = HsDataDefn { dd_cons } }))
@@ -108,7 +108,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
     , _kind     = SymbolKind_Struct
     , _children =
       Just $
-        [ (defDocumentSymbol l :: DocumentSymbol)
+        [ (defDocumentSymbol l'' :: DocumentSymbol)
             { _name           = printOutputable n
             , _kind           = SymbolKind_Constructor
             , _selectionRange = realSrcSpanToRange l'
@@ -119,17 +119,17 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
         , let (cs, flds) = hsConDeclsBinders con
         , let childs = mapMaybe cvtFld flds
         , L (locA -> RealSrcSpan l' _) n <- cs
-        , let l = case con of
-                L (locA -> RealSrcSpan l _) _ -> l
+        , let l'' = case con of
+                L (locA -> RealSrcSpan l''' _) _ -> l'''
                 _ -> l'
         ]
     }
   where
     cvtFld :: LFieldOcc GhcPs -> Maybe DocumentSymbol
 #if MIN_VERSION_ghc(9,3,0)
-    cvtFld (L (locA -> RealSrcSpan l _) n) = Just $ (defDocumentSymbol l :: DocumentSymbol)
+    cvtFld (L (locA -> RealSrcSpan l' _) n) = Just $ (defDocumentSymbol l' :: DocumentSymbol)
 #else
-    cvtFld (L (RealSrcSpan l _) n) = Just $ (defDocumentSymbol l :: DocumentSymbol)
+    cvtFld (L (RealSrcSpan l' _) n) = Just $ (defDocumentSymbol l' :: DocumentSymbol)
 #endif
 #if MIN_VERSION_ghc(9,3,0)
                 { _name = printOutputable (unLoc (foLabel n))

@@ -44,14 +44,15 @@ import qualified Data.Text                         as T
 import qualified Data.Text.Encoding                as T
 import qualified Data.Text.Encoding.Error          as T
 import           Data.Typeable
-import           Development.IDE.GHC.Compat        as GHC
+import           Development.IDE.GHC.Compat        as GHC hiding (unitState)
 import qualified Development.IDE.GHC.Compat.Parser as Compat
 import qualified Development.IDE.GHC.Compat.Units  as Compat
 import           Development.IDE.Types.Location
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
 import           Foreign.Storable
-import           GHC                               hiding (ParsedModule (..))
+import           GHC                               hiding (ParsedModule (..),
+                                                    parser)
 import           GHC.IO.BufferedIO                 (BufferedIO)
 import           GHC.IO.Device                     as IODevice
 import           GHC.IO.Encoding
@@ -170,9 +171,9 @@ cgGutsToCoreModule safeMode guts modDetails = CoreModule
 --   Will produce an 8 byte unreadable ByteString.
 fingerprintToBS :: Fingerprint -> BS.ByteString
 fingerprintToBS (Fingerprint a b) = BS.unsafeCreate 8 $ \ptr -> do
-    ptr <- pure $ castPtr ptr
-    pokeElemOff ptr 0 a
-    pokeElemOff ptr 1 b
+    ptr' <- pure $ castPtr ptr
+    pokeElemOff ptr' 0 a
+    pokeElemOff ptr' 1 b
 
 -- | Take the 'Fingerprint' of a 'StringBuffer'.
 fingerprintFromStringBuffer :: StringBuffer -> IO Fingerprint

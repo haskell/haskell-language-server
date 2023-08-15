@@ -38,7 +38,7 @@ import           Data.Char                            (isLower)
 import           Data.Default
 import           Data.Either.Extra
 import           Data.Function
-import           Data.Hashable
+import           Data.Hashable                        hiding (hash)
 import qualified Data.HashMap.Strict                  as HM
 import           Data.List
 import           Data.List.Extra                      (dropPrefix, split)
@@ -50,11 +50,11 @@ import           Data.Time.Clock
 import           Data.Version
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake           hiding (Log, Priority,
-                                                       withHieDb)
+                                                       knownTargets, withHieDb)
 import qualified Development.IDE.GHC.Compat           as Compat
 import           Development.IDE.GHC.Compat.Core      hiding (Target,
                                                        TargetFile, TargetModule,
-                                                       Var, Warning)
+                                                       Var, Warning, getOptions)
 import qualified Development.IDE.GHC.Compat.Core      as GHC
 import           Development.IDE.GHC.Compat.Env       hiding (Logger)
 import           Development.IDE.GHC.Compat.Units     (UnitId)
@@ -151,21 +151,21 @@ instance Pretty Log where
           , "Cradle:" <+> viaShow cradle ]
     LogGetInitialGhcLibDirDefaultCradleNone ->
       "Couldn't load cradle. Cradle not found."
-    LogHieDbRetry delay maxDelay maxRetryCount e ->
+    LogHieDbRetry delay maxDelay retriesRemaining e ->
       nest 2 $
         vcat
           [ "Retrying hiedb action..."
           , "delay:" <+> pretty delay
           , "maximum delay:" <+> pretty maxDelay
-          , "retries remaining:" <+> pretty maxRetryCount
+          , "retries remaining:" <+> pretty retriesRemaining
           , "SQLite error:" <+> pretty (displayException e) ]
-    LogHieDbRetriesExhausted baseDelay maxDelay maxRetryCount e ->
+    LogHieDbRetriesExhausted baseDelay maxDelay retriesRemaining e ->
       nest 2 $
         vcat
           [ "Retries exhausted for hiedb action."
           , "base delay:" <+> pretty baseDelay
           , "maximum delay:" <+> pretty maxDelay
-          , "retries remaining:" <+> pretty maxRetryCount
+          , "retries remaining:" <+> pretty retriesRemaining
           , "Exception:" <+> pretty (displayException e) ]
     LogHieDbWriterThreadSQLiteError e ->
       nest 2 $
@@ -202,7 +202,7 @@ instance Pretty Log where
       "Cradle:" <+> viaShow cradle
     LogNewComponentCache componentCache ->
       "New component cache HscEnvEq:" <+> viaShow componentCache
-    LogHieBios log -> pretty log
+    LogHieBios msg -> pretty msg
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -266,17 +266,16 @@ loadWithImplicitCradle mHieYaml rootDir = do
 
 getInitialGhcLibDirDefault :: Recorder (WithPriority Log) -> FilePath -> IO (Maybe LibDir)
 getInitialGhcLibDirDefault recorder rootDir = do
-  let log = logWith recorder
   hieYaml <- findCradle def rootDir
   cradle <- loadCradle def hieYaml rootDir
   libDirRes <- getRuntimeGhcLibDir (toCologActionWithPrio (cmapWithPrio LogHieBios recorder)) cradle
   case libDirRes of
       CradleSuccess libdir -> pure $ Just $ LibDir libdir
       CradleFail err -> do
-        log Error $ LogGetInitialGhcLibDirDefaultCradleFail err rootDir hieYaml cradle
+        logWith recorder Error $ LogGetInitialGhcLibDirDefaultCradleFail err rootDir hieYaml cradle
         pure Nothing
       CradleNone -> do
-        log Warning LogGetInitialGhcLibDirDefaultCradleNone
+        logWith recorder Warning LogGetInitialGhcLibDirDefaultCradleNone
         pure Nothing
 
 -- | Sets `unsafeGlobalDynFlags` on using the hie-bios cradle and returns the GHC libdir
@@ -304,28 +303,26 @@ retryOnException
   -> g -- ^ random number generator
   -> m a -- ^ action that may throw exception
   -> m a
-retryOnException exceptionPred recorder maxDelay !baseDelay !maxRetryCount rng action = do
+retryOnException exceptionPred recorder maxDelay !baseDelay !maxTimesRetry rng action = do
   result <- tryJust exceptionPred action
   case result of
     Left e
-      | maxRetryCount > 0 -> do
+      | maxTimesRetry > 0 -> do
         -- multiply by 2 because baseDelay is midpoint of uniform range
         let newBaseDelay = min maxDelay (baseDelay * 2)
         let (delay, newRng) = Random.randomR (0, newBaseDelay) rng
-        let newMaxRetryCount = maxRetryCount - 1
+        let newMaxTimesRetry = maxTimesRetry - 1
         liftIO $ do
-          log Warning $ LogHieDbRetry delay maxDelay newMaxRetryCount (toException e)
+          logWith recorder Warning $ LogHieDbRetry delay maxDelay newMaxTimesRetry (toException e)
           threadDelay delay
-        retryOnException exceptionPred recorder maxDelay newBaseDelay newMaxRetryCount newRng action
+        retryOnException exceptionPred recorder maxDelay newBaseDelay newMaxTimesRetry newRng action
 
       | otherwise -> do
         liftIO $ do
-          log Warning $ LogHieDbRetriesExhausted baseDelay maxDelay maxRetryCount (toException e)
+          logWith recorder Warning $ LogHieDbRetriesExhausted baseDelay maxDelay maxTimesRetry (toException e)
           throwIO e
 
     Right b -> pure b
-  where
-    log = logWith recorder
 
 -- | in microseconds
 oneSecond :: Int
@@ -380,21 +377,19 @@ runWithDb recorder fp k = do
     withAsync (writerThread withWriteDbRetryable chan) $ \_ -> do
       withHieDb fp (\readDb -> k (makeWithHieDbRetryable recorder rng readDb) chan)
   where
-    log = logWith recorder
-
     writerThread :: WithHieDb -> IndexQueue -> IO ()
     writerThread withHieDbRetryable chan = do
       -- Clear the index of any files that might have been deleted since the last run
       _ <- withHieDbRetryable deleteMissingRealFiles
       _ <- withHieDbRetryable garbageCollectTypeNames
       forever $ do
-        k <- atomically $ readTQueue chan
+        l <- atomically $ readTQueue chan
         -- TODO: probably should let exceptions be caught/logged/handled by top level handler
-        k withHieDbRetryable
+        l withHieDbRetryable
           `Safe.catch` \e@SQLError{} -> do
-            log Error $ LogHieDbWriterThreadSQLiteError e
-          `Safe.catchAny` \e -> do
-            log Error $ LogHieDbWriterThreadException e
+            logWith recorder Error $ LogHieDbWriterThreadSQLiteError e
+          `Safe.catchAny` \f -> do
+            logWith recorder Error $ LogHieDbWriterThreadException f
 
 
 getHieDbLoc :: FilePath -> IO FilePath
@@ -557,11 +552,11 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
               -- scratch again (for now)
               -- It's important to keep the same NameCache though for reasons
               -- that I do not fully understand
-              log Info $ LogMakingNewHscEnv inplace
-              hscEnv <- emptyHscEnv ideNc libDir
+              logWith recorder Info $ LogMakingNewHscEnv inplace
+              hscEnvB <- emptyHscEnv ideNc libDir
               !newHscEnv <-
                 -- Add the options for the current component to the HscEnv
-                evalGhcEnv hscEnv $ do
+                evalGhcEnv hscEnvB $ do
                   _ <- setSessionDynFlags
 #if !MIN_VERSION_ghc(9,3,0)
                           $ setHomeUnitId_ fakeUid
@@ -598,7 +593,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
             res <- loadDLL hscEnv "libm.so.6"
             case res of
               Nothing  -> pure ()
-              Just err -> log Error $ LogDLLLoadError err
+              Just err -> logWith recorder Error $ LogDLLLoadError err
 
 
           -- Make a map from unit-id to DynFlags, this is used when trying to
@@ -640,21 +635,22 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                     let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
                     modIfaces <- uses GetModIface cs_exist
                     -- update exports map
-                    extras <- getShakeExtras
+                    shakeExtras <- getShakeExtras
                     let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
-                    liftIO $ atomically $ modifyTVar' (exportsMap extras) (exportsMap' <>)
+                    liftIO $ atomically $ modifyTVar' (exportsMap shakeExtras) (exportsMap' <>)
 
           return (second Map.keys res)
 
     let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         consultCradle hieYaml cfp = do
-           lfp <- flip makeRelative cfp <$> getCurrentDirectory
-           log Info $ LogCradlePath lfp
+           lfpLog <- flip makeRelative cfp <$> getCurrentDirectory
+           logWith recorder Info $ LogCradlePath lfpLog
 
            when (isNothing hieYaml) $
-             log Warning $ LogCradleNotFound lfp
+             logWith recorder Warning $ LogCradleNotFound lfpLog
 
            cradle <- loadCradle hieYaml dir
+           -- TODO: Why are we repeating the same command we have on line 646?
            lfp <- flip makeRelative cfp <$> getCurrentDirectory
 
            when optTesting $ mRunLspT lspEnv $
@@ -670,7 +666,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   addTag "result" (show res)
                   return res
 
-           log Debug $ LogSessionLoadingResult eopts
+           logWith recorder Debug $ LogSessionLoadingResult eopts
            case eopts of
              -- The cradle gave us some options so get to work turning them
              -- into and HscEnv.
@@ -730,11 +726,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
       opts <- liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
         -- If the cradle is not finished, then wait for it to finish.
         void $ wait as
-        as <- async $ getOptions file
-        return (as, wait as)
+        asyncRes <- async $ getOptions file
+        return (asyncRes, wait asyncRes)
       pure opts
-  where
-    log = logWith recorder
 
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
@@ -790,14 +784,14 @@ fromTargetId :: [FilePath]          -- ^ import paths
              -> DependencyInfo
              -> IO [TargetDetails]
 -- For a target module we consider all the import paths
-fromTargetId is exts (GHC.TargetModule mod) env dep = do
-    let fps = [i </> moduleNameSlashes mod -<.> ext <> boot
+fromTargetId is exts (GHC.TargetModule modName) env dep = do
+    let fps = [i </> moduleNameSlashes modName -<.> ext <> boot
               | ext <- exts
               , i <- is
               , boot <- ["", "-boot"]
               ]
     locs <- mapM (fmap toNormalizedFilePath' . makeAbsolute) fps
-    return [TargetDetails (TargetModule mod) env dep locs]
+    return [TargetDetails (TargetModule modName) env dep locs]
 -- For a 'TargetFile' we consider all the possible module names
 fromTargetId _ _ (GHC.TargetFile f _) env deps = do
     nf <- toNormalizedFilePath' <$> makeAbsolute f
@@ -1062,11 +1056,11 @@ getDependencyInfo :: [FilePath] -> IO DependencyInfo
 getDependencyInfo fs = Map.fromList <$> mapM do_one fs
 
   where
-    tryIO :: IO a -> IO (Either IOException a)
-    tryIO = Safe.try
+    safeTryIO :: IO a -> IO (Either IOException a)
+    safeTryIO = Safe.try
 
     do_one :: FilePath -> IO (FilePath, Maybe UTCTime)
-    do_one fp = (fp,) . eitherToMaybe <$> tryIO (getModificationTime fp)
+    do_one fp = (fp,) . eitherToMaybe <$> safeTryIO (getModificationTime fp)
 
 -- | This function removes all the -package flags which refer to packages we
 -- are going to deal with ourselves. For example, if a executable depends

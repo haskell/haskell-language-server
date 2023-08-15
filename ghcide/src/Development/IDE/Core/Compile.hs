@@ -39,6 +39,7 @@ module Development.IDE.Core.Compile
   , shareUsages
   ) where
 
+import           Prelude                           hiding (mod)
 import           Control.Monad.IO.Class
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats      hiding (orElse)
@@ -46,7 +47,7 @@ import           Control.DeepSeq                   (NFData (..), force,
                                                     rnf)
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe
-import           Control.Lens                      hiding (List, (<.>))
+import           Control.Lens                      hiding (List, (<.>), pre)
 import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Control.Monad.Trans.Except
@@ -96,7 +97,7 @@ import           GHC                               (ForeignHValue,
                                                     parsedSource)
 import qualified GHC.LanguageExtensions            as LangExt
 import           GHC.Serialized
-import           HieDb
+import           HieDb                             hiding (withHieDb)
 import qualified Language.LSP.Server               as LSP
 import           Language.LSP.Protocol.Types                (DiagnosticTag (..))
 import qualified Language.LSP.Protocol.Types                as LSP
@@ -200,14 +201,14 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
                                       (initPlugins hsc modSummary)
         case initialized of
           Left errs -> return (errs, Nothing)
-          Right (modSummary', hsc) -> do
+          Right (modSummary', hscEnv) -> do
             (warnings, etcm) <- withWarnings sourceTypecheck $ \tweak ->
                 let
-                  session = tweak (hscSetFlags dflags hsc)
+                  session = tweak (hscSetFlags dflags hscEnv)
                    -- TODO: maybe settings ms_hspp_opts is unnecessary?
                   mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
                 in
-                  catchSrcErrors (hsc_dflags hsc) sourceTypecheck $ do
+                  catchSrcErrors (hsc_dflags hscEnv) sourceTypecheck $ do
                     tcRnModule session tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
             let errorPipeline = unDefer . hideDiag dflags . tagDiag
                 diags = map errorPipeline warnings
@@ -342,8 +343,8 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
            ; moduleLocs <- readIORef (hsc_FC hsc_env)
 #endif
            ; lbs <- getLinkables [toNormalizedFilePath' file
-                                 | mod <- mods_transitive_list
-                                 , let ifr = fromJust $ lookupInstalledModuleEnv moduleLocs mod
+                                 | installedMod <- mods_transitive_list
+                                 , let ifr = fromJust $ lookupInstalledModuleEnv moduleLocs installedMod
                                        file = case ifr of
                                          InstalledFound loc _ ->
                                            fromJust $ ml_hs_file loc
@@ -374,7 +375,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
     -- because boot files don't have linkables we can load, and we will fail if we try to look
     -- for them
     nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB _ IsBoot) _)) = Nothing
-    nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB mod _) uid)) = Just $ mkModule uid mod
+    nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB moduleName _) uid)) = Just $ mkModule uid moduleName
     nodeKeyToInstalledModule _ = Nothing
     moduleToNodeKey :: Module -> NodeKey
     moduleToNodeKey mod = NodeKey_Module $ ModNodeKeyWithUid (GWIB (moduleName mod) NotBoot) (moduleUnitId mod)
@@ -441,8 +442,8 @@ tcRnModule hsc_env tc_helpers pmod = do
       hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) hsc_env
 
   ((tc_gbl_env', mrn_info), splices, mod_env)
-      <- captureSplicesAndDeps tc_helpers hsc_env_tmp $ \hsc_env_tmp ->
-             do  hscTypecheckRename hsc_env_tmp ms $
+      <- captureSplicesAndDeps tc_helpers hsc_env_tmp $ \hscEnvTmp ->
+             do  hscTypecheckRename hscEnvTmp ms $
                           HsParsedModule { hpm_module = parsedSource pmod,
                                            hpm_src_files = pm_extra_src_files pmod,
                                            hpm_annotations = pm_annotations pmod }
@@ -559,9 +560,9 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
         -- The serialized file however is much more compact and only requires a few
         -- hundred megabytes of memory total even in a large project with 1000s of
         -- modules
-        (core_file, !core_hash2) <- readBinCoreFile (mkUpdater $ hsc_NC session) core_fp
+        (coreFile, !core_hash2) <- readBinCoreFile (mkUpdater $ hsc_NC session) core_fp
         pure $ assert (core_hash1 == core_hash2)
-             $ Just (core_file, fingerprintToBS core_hash2)
+             $ Just (coreFile, fingerprintToBS core_hash2)
 
   -- Verify core file by roundtrip testing and comparison
   IdeOptions{optVerifyCoreFile} <- getIdeOptionsIO se
@@ -916,8 +917,8 @@ indexHieFile se mod_summary srcPath !hash hf = do
         -- We are now in the worker thread
         -- Check if a newer index of this file has been scheduled, and if so skip this one
         newerScheduled <- atomically $ do
-          pending <- readTVar indexPending
-          pure $ case HashMap.lookup srcPath pending of
+          pendingOps <- readTVar indexPending
+          pure $ case HashMap.lookup srcPath pendingOps of
             Nothing          -> False
             -- If the hash in the pending list doesn't match the current hash, then skip
             Just pendingHash -> pendingHash /= hash
@@ -963,8 +964,8 @@ indexHieFile se mod_summary srcPath !hash hf = do
         progressPct :: LSP.UInt
         progressPct = floor $ 100 * progressFrac
 
-      whenJust (lspEnv se) $ \env -> whenJust tok $ \tok -> LSP.runLspT env $
-        LSP.sendNotification LSP.SMethod_Progress $ LSP.ProgressParams tok $
+      whenJust (lspEnv se) $ \env -> whenJust tok $ \token -> LSP.runLspT env $
+        LSP.sendNotification LSP.SMethod_Progress $ LSP.ProgressParams token $
           toJSON $
             case style of
                 Percentage -> LSP.WorkDoneProgressReport
@@ -1004,8 +1005,8 @@ indexHieFile se mod_summary srcPath !hash hf = do
       whenJust mdone $ \done ->
         modifyVar_ indexProgressToken $ \tok -> do
           whenJust (lspEnv se) $ \env -> LSP.runLspT env $
-            whenJust tok $ \tok ->
-              LSP.sendNotification LSP.SMethod_Progress  $ LSP.ProgressParams tok $
+            whenJust tok $ \token ->
+              LSP.sendNotification LSP.SMethod_Progress  $ LSP.ProgressParams token $
                 toJSON $
                 LSP.WorkDoneProgressEnd
                   { _kind = LSP.AString @"end"
@@ -1134,11 +1135,11 @@ getModSummaryFromImports
   -> UTCTime
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
-getModSummaryFromImports env fp modTime contents = do
+getModSummaryFromImports env fp modTime mContents = do
 
-    (contents, opts, env, src_hash) <- preprocessor env fp contents
+    (contents, opts, ppEnv, src_hash) <- preprocessor env fp mContents
 
-    let dflags = hsc_dflags env
+    let dflags = hsc_dflags ppEnv
 
     -- The warns will hopefully be reported when we actually parse the module
     (_warns, L main_loc hsmod) <- parseHeader dflags fp contents
@@ -1172,7 +1173,7 @@ getModSummaryFromImports env fp modTime contents = do
         msrImports = implicit_imports ++ imps
 
 #if MIN_VERSION_ghc (9,3,0)
-        rn_pkg_qual = renameRawPkgQual (hsc_unit_env env)
+        rn_pkg_qual = renameRawPkgQual (hsc_unit_env ppEnv)
         rn_imps = fmap (\(pk, lmn@(L _ mn)) -> (rn_pkg_qual mn pk, lmn))
         srcImports = rn_imps $ map convImport src_idecls
         textualImports = rn_imps $ map convImport (implicit_imports ++ ordinary_imps)
@@ -1194,7 +1195,7 @@ getModSummaryFromImports env fp modTime contents = do
         then mkHomeModLocation dflags (pathToModuleName fp) fp
         else mkHomeModLocation dflags mod fp
 
-    let modl = mkHomeModule (hscHomeUnit env) mod
+    let modl = mkHomeModule (hscHomeUnit ppEnv) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
         msrModSummary2 =
             ModSummary
@@ -1222,7 +1223,7 @@ getModSummaryFromImports env fp modTime contents = do
                 }
 
     msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary2
-    (msrModSummary, msrHscEnv) <- liftIO $ initPlugins env msrModSummary2
+    (msrModSummary, msrHscEnv) <- liftIO $ initPlugins ppEnv msrModSummary2
     return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
@@ -1310,7 +1311,7 @@ parseFileContents env customPreprocessor filename ms = do
 
                let preproc_warnings = diagFromStrings sourceParser DiagnosticSeverity_Warning preproc_warns
                (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed psMessages
-               let (warns, errs) = renderMessages msgs
+               let (warns, errors) = renderMessages msgs
 
                -- Just because we got a `POk`, it doesn't mean there
                -- weren't errors! To clarify, the GHC parser
@@ -1321,8 +1322,8 @@ parseFileContents env customPreprocessor filename ms = do
                -- further errors/warnings can be collected). Fatal
                -- errors are those from which a parse tree just can't
                -- be produced.
-               unless (null errs) $
-                 throwE $ diagFromErrMsgs sourceParser dflags errs
+               unless (null errors) $
+                 throwE $ diagFromErrMsgs sourceParser dflags errors
 
 
                -- To get the list of extra source files, we take the list
@@ -1527,10 +1528,10 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
                Just msg -> do_regenerate msg
                Nothing
                  | isJust linkableNeeded -> handleErrs $ do
-                   (core_file@CoreFile{cf_iface_hash}, core_hash) <- liftIO $
+                   (coreFile@CoreFile{cf_iface_hash}, core_hash) <- liftIO $
                      readBinCoreFile (mkUpdater $ hsc_NC session) core_file
                    if cf_iface_hash == getModuleHash iface
-                   then return ([], Just $ mkHiFileResult ms iface details runtime_deps (Just (core_file, fingerprintToBS core_hash)))
+                   then return ([], Just $ mkHiFileResult ms iface details runtime_deps (Just (coreFile, fingerprintToBS core_hash)))
                    else do_regenerate (recompBecause "Core file out of date (doesn't match iface hash)")
                  | otherwise -> return ([], Just $ mkHiFileResult ms iface details runtime_deps Nothing)
                  where handleErrs = flip catches
@@ -1712,7 +1713,7 @@ lookupName :: HscEnv
            -> IO (Maybe TyThing)
 lookupName _ name
   | Nothing <- nameModule_maybe name = pure Nothing
-lookupName hsc_env name = handle $ do
+lookupName hsc_env name = exceptionHandle $ do
 #if MIN_VERSION_ghc(9,2,0)
   mb_thing <- liftIO $ lookupType hsc_env name
 #else
@@ -1732,7 +1733,7 @@ lookupName hsc_env name = handle $ do
           Util.Succeeded x -> return (Just x)
           _ -> return Nothing
   where
-    handle x = x `catch` \(_ :: IOEnvFailure) -> pure Nothing
+    exceptionHandle x = x `catch` \(_ :: IOEnvFailure) -> pure Nothing
 
 pathToModuleName :: FilePath -> ModuleName
 pathToModuleName = mkModuleName . map rep

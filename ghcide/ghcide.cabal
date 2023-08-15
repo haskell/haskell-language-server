@@ -35,6 +35,11 @@ flag ekg
     default:     False
     manual:      True
 
+flag pedantic
+    description: Enable -Werror
+    default:     False
+    manual:      True
+
 library
     default-language:   Haskell2010
     build-depends:
@@ -226,6 +231,21 @@ library
 
     if flag(ghc-patched-unboxed-bytecode)
       cpp-options: -DGHC_PATCHED_UNBOXED_BYTECODE
+
+    if flag(pedantic)
+        ghc-options: -Werror 
+                     -Wwarn=unused-packages 
+                     -Wwarn=dodgy-imports
+                     -Wwarn=missing-signatures
+                     -Wwarn=duplicate-exports
+                     -Wwarn=dodgy-exports
+                     -Wwarn=unused-top-binds
+                     -Wwarn=incomplete-patterns
+                     -Wwarn=unused-local-binds
+                     -Wwarn=orphans
+                     -Wwarn=unused-matches
+                     -Wwarn=ambiguous-fields
+                     -Wwarn=overlapping-patterns
 
     if impl(ghc >= 9)
         ghc-options: -Wunused-packages

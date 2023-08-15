@@ -24,7 +24,8 @@ import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service             hiding (Log, LogShake)
-import           Development.IDE.Core.Shake               hiding (Log)
+import           Development.IDE.Core.Shake               hiding (Log,
+                                                           knownTargets)
 import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
@@ -49,6 +50,7 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server                      as LSP
 import           Numeric.Natural
+import           Prelude                                  hiding (mod)
 import           Text.Fuzzy.Parallel                      (Scored (..))
 
 import           Development.IDE.Core.Rules               (usePropertyAction)
@@ -63,7 +65,7 @@ data Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogShake log -> pretty log
+    LogShake msg -> pretty msg
 
 ghcideCompletionsPluginPriority :: Natural
 ghcideCompletionsPluginPriority = defaultPluginPriority
@@ -82,8 +84,8 @@ produceCompletions :: Recorder (WithPriority Log) -> Rules ()
 produceCompletions recorder = do
     define (cmapWithPrio LogShake recorder) $ \LocalCompletions file -> do
         let uri = fromNormalizedUri $ normalizedFilePathToUri file
-        pm <- useWithStale GetParsedModule file
-        case pm of
+        mbPm <- useWithStale GetParsedModule file
+        case mbPm of
             Just (pm, _) -> do
                 let cdata = localCompletionsForParsedModule uri pm
                 return ([], Just cdata)
@@ -93,9 +95,9 @@ produceCompletions recorder = do
         -- synthesizing a fake module with an empty body from the buffer
         -- in the ModSummary, which preserves all the imports
         ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
-        sess <- fmap fst <$> useWithStale GhcSessionDeps file
+        mbSess <- fmap fst <$> useWithStale GhcSessionDeps file
 
-        case (ms, sess) of
+        case (ms, mbSess) of
             (Just ModSummaryResult{..}, Just sess) -> do
               let env = hscEnv sess
               -- We do this to be able to provide completions of items that are not restricted to the explicit list
@@ -140,8 +142,8 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
 #endif
     mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap file
     let (dm,km) = case mdkm of
-          Just (DKMap dm km, _) -> (dm,km)
-          Nothing               -> (mempty, mempty)
+          Just (DKMap docMap kindMap, _) -> (docMap,kindMap)
+          Nothing                        -> (mempty, mempty)
     doc <- case lookupNameEnv dm name of
       Just doc -> pure $ spanDocToMarkdown doc
       Nothing -> liftIO $ spanDocToMarkdown <$> getDocumentationTryGhc (hscEnv sess) name

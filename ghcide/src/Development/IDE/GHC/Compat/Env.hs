@@ -64,7 +64,7 @@ import           Module
 
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Driver.Hooks                    (Hooks)
-import           GHC.Driver.Session                  hiding (mkHomeModule)
+import           GHC.Driver.Session                  hiding (mkHomeModule, ways)
 import           GHC.Unit.Types                      (Module, UnitId)
 #endif
 

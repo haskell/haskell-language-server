@@ -30,6 +30,7 @@ import           Development.IDE.GHC.Orphans          ()
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types          hiding
                                                       (SemanticTokenAbsolute (..))
+import           Prelude                              hiding (mod)
 
 -- compiler and infrastructure
 import           Development.IDE.Core.PositionMapping
@@ -58,7 +59,8 @@ import           Data.List.Extra                      (dropEnd1, nubOrd)
 
 import           Data.Version                         (showVersion)
 import           Development.IDE.Types.Shake          (WithHieDb)
-import           HieDb                                hiding (pointCommand)
+import           HieDb                                hiding (pointCommand,
+                                                       withHieDb)
 import           System.Directory                     (doesFileExist)
 
 -- | Gives a Uri for the module, given the .hie file location and the the module info
@@ -93,11 +95,11 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
     Just (HAR _ hf _ _ _,mapping) ->
       let names = getNamesAtPoint hf pos mapping
           adjustedLocs = HM.foldr go [] asts
-          go (HAR _ _ rf tr _, mapping) xs = refs ++ typerefs ++ xs
+          go (HAR _ _ rf tr _, goMapping) xs = refs ++ typerefs ++ xs
             where
-              refs = mapMaybe (toCurrentLocation mapping . realSrcSpanToLocation . fst)
+              refs = mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation . fst)
                    $ concat $ mapMaybe (\n -> M.lookup (Right n) rf) names
-              typerefs = mapMaybe (toCurrentLocation mapping . realSrcSpanToLocation)
+              typerefs = mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation)
                    $ concat $ mapMaybe (`M.lookup` tr) names
         in (names, adjustedLocs,map fromNormalizedFilePath $ HM.keys asts)
 
@@ -133,8 +135,8 @@ referencesAtPoint withHieDb nfp pos refs = do
   typeRefs <- forM names $ \name ->
     case nameModule_maybe name of
       Just mod | isTcClsNameSpace (occNameSpace $ nameOccName name) -> do
-        refs <- liftIO $ withHieDb (\hieDb -> findTypeRefs hieDb True (nameOccName name) (Just $ moduleName mod) (Just $ moduleUnit mod) exclude)
-        pure $ mapMaybe typeRowToLoc refs
+        refs' <- liftIO $ withHieDb (\hieDb -> findTypeRefs hieDb True (nameOccName name) (Just $ moduleName mod) (Just $ moduleUnit mod) exclude)
+        pure $ mapMaybe typeRowToLoc refs'
       _ -> pure []
   pure $ nubOrd $ foiRefs ++ concat nonFOIRefs ++ concat typeRefs
 
@@ -270,7 +272,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
         prettyPackageName :: Name -> Maybe T.Text
         prettyPackageName n = do
           m <- nameModule_maybe n
-          pkgTxt <- packageNameWithVersion m env
+          pkgTxt <- packageNameWithVersion m
           pure $ "*(" <> pkgTxt <> ")*"
 
         -- Return the module text itself and
@@ -279,14 +281,14 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
         packageNameForImportStatement mod = do
           mpkg <- findImportedModule env mod :: IO (Maybe Module)
           let moduleName = printOutputable mod
-          case mpkg >>= flip packageNameWithVersion env of
+          case mpkg >>= packageNameWithVersion of
             Nothing             -> pure moduleName
             Just pkgWithVersion -> pure $ moduleName <> "\n\n" <> pkgWithVersion
 
         -- Return the package name and version of a module.
         -- For example, given module `Data.List`, it should return something like `base-4.x`.
-        packageNameWithVersion :: Module -> HscEnv -> Maybe T.Text
-        packageNameWithVersion m env = do
+        packageNameWithVersion :: Module -> Maybe T.Text
+        packageNameWithVersion m = do
           let pid = moduleUnit m
           conf <- lookupUnit env pid
           let pkgName = T.pack $ unitPackageNameString conf
@@ -331,20 +333,20 @@ typeLocationsAtPoint withHieDb lookupModule _ideOptions pos (HAR _ ast _ _ hieKi
           unfold = map (arr A.!)
           getts x = nodeType ni  ++ (mapMaybe identType $ M.elems $ nodeIdentifiers ni)
             where ni = nodeInfo' x
-          getTypes ts = flip concatMap (unfold ts) $ \case
+          getTypes' ts' = flip concatMap (unfold ts') $ \case
             HTyVarTy n -> [n]
-            HAppTy a (HieArgs xs) -> getTypes (a : map snd xs)
-            HTyConApp tc (HieArgs xs) -> ifaceTyConName tc : getTypes (map snd xs)
-            HForAllTy _ a -> getTypes [a]
+            HAppTy a (HieArgs xs) -> getTypes' (a : map snd xs)
+            HTyConApp tc (HieArgs xs) -> ifaceTyConName tc : getTypes' (map snd xs)
+            HForAllTy _ a -> getTypes' [a]
 #if MIN_VERSION_ghc(9,0,1)
-            HFunTy a b c -> getTypes [a,b,c]
+            HFunTy a b c -> getTypes' [a,b,c]
 #else
             HFunTy a b -> getTypes [a,b]
 #endif
-            HQualTy a b -> getTypes [a,b]
-            HCastTy a -> getTypes [a]
+            HQualTy a b -> getTypes' [a,b]
+            HCastTy a -> getTypes' [a]
             _ -> []
-        in fmap nubOrd $ concatMapM (fmap (fromMaybe []) . nameToLocation withHieDb lookupModule) (getTypes ts)
+        in fmap nubOrd $ concatMapM (fmap (fromMaybe []) . nameToLocation withHieDb lookupModule) (getTypes' ts)
     HieFresh ->
       let ts = concat $ pointCommand ast pos getts
           getts x = nodeType ni  ++ (mapMaybe identType $ M.elems $ nodeIdentifiers ni)
@@ -412,8 +414,8 @@ nameToLocation withHieDb lookupModule name = runMaybeT $
           -- This is a hack to make find definition work better with ghcide's nascent multi-component support,
           -- where names from a component that has been indexed in a previous session but not loaded in this
           -- session may end up with different unit ids
-          erow <- liftIO $ withHieDb (\hieDb -> findDef hieDb (nameOccName name) (Just $ moduleName mod) Nothing)
-          case erow of
+          erow' <- liftIO $ withHieDb (\hieDb -> findDef hieDb (nameOccName name) (Just $ moduleName mod) Nothing)
+          case erow' of
             [] -> MaybeT $ pure Nothing
             xs -> lift $ mapMaybeM (runMaybeT . defRowToLocation lookupModule) xs
         xs -> lift $ mapMaybeM (runMaybeT . defRowToLocation lookupModule) xs
