@@ -1262,6 +1262,9 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         -- GetModificationTime is safe for any file, and
         -- can be called in dependency files by estimateFileVersionUnsafely.
         | Just Refl <- eqT @k @GetModificationTime = True
+        -- AddWatchedFile can be called by GetModificationTime
+        -- and is also safe for any file.
+        | Just Refl <- eqT @k @AddWatchedFile = True
         | otherwise = False
 
 traceA :: A v -> String

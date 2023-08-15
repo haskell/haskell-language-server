@@ -9,6 +9,7 @@ import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
 import           Data.Bool                       (bool)
 import           Data.List                       (isSuffixOf)
+import           Data.Maybe                      (fromMaybe)
 import           Data.Proxy                      (Proxy (..))
 import           Language.LSP.Protocol.Message   (TCustomMessage (NotMess),
                                                   TNotificationMessage (..))
@@ -31,6 +32,7 @@ tests :: TestTree
 tests =
     testGroup "gotoDefinition for dependencies"
         [ dependencyTest
+        , transitiveDependencyTest
         ]
 
 fileDoneIndexing :: [String] -> Session FilePath
@@ -70,4 +72,50 @@ dependencyTest = testSessionWithExtraFiles "dependency" "gotoDefinition in async
             wrongLocation ->
                 liftIO $
                     assertFailure $ "Wrong location for AsyncCancelled: "
+                        ++ show wrongLocation
+
+-- Tests that we can go to the definition of a dependency, and then
+-- from the dependency file we can use gotoDefinition to see a
+-- tranisive dependency.
+transitiveDependencyTest :: TestTree
+transitiveDependencyTest = testSessionWithExtraFiles "dependency" "goto transitive dependency async -> hashable" $
+    \dir -> do
+        localDoc <- openDoc (dir </> "Dependency" <.> "hs") "haskell"
+        _asyncHieFile <- fileDoneIndexing ["Control", "Concurrent", "Async.hie"]
+        _hashableHieFile <- fileDoneIndexing ["Data", "Hashable", "Class.hie"]
+        asyncDefs <- getDefinitions localDoc (Position 5 20)
+        asyncHsFile <- case asyncDefs of
+            InL (Definition (InR [Location uri _actualRange])) ->
+                liftIO $ do
+                    let fp :: FilePath
+                        fp = fromMaybe "" $ uriToFilePath uri
+                        locationDirectories :: [String]
+                        locationDirectories = splitDirectories fp
+                    assertBool "AsyncCancelled found in a module that is not Control.Concurrent Async"
+                        $ ["Control", "Concurrent", "Async.hs"]
+                            `isSuffixOf` locationDirectories
+                    pure fp
+            wrongLocation ->
+                liftIO $
+                    assertFailure $ "Wrong location for AsyncCancelled: "
+                        ++ show wrongLocation
+        asyncDoc <- openDoc asyncHsFile "haskell"
+        hashableDefs <- getDefinitions asyncDoc (Position 246 11)
+        -- The location of the definition of Hashable in
+        -- Data.Hashable.Class
+        let expRange = Range (Position 198 14) (Position 198 22)
+        case hashableDefs of
+            InL (Definition (InR [Location uri actualRange])) ->
+                liftIO $ do
+                    let locationDirectories :: [String]
+                        locationDirectories =
+                            maybe [] splitDirectories $
+                                uriToFilePath uri
+                    assertBool "Hashable found in a module that is not Data.Hashable.Class"
+                        $ ["Data", "Hashable", "Class.hs"]
+                            `isSuffixOf` locationDirectories
+                    actualRange @?= expRange
+            wrongLocation ->
+                liftIO $
+                    assertFailure $ "Wrong location for Hashable: "
                         ++ show wrongLocation

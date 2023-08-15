@@ -193,7 +193,9 @@ getDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
     (HAR _ hf _ _ _, mapping) <- useWithStaleFastMT GetHieAst file
-    (ImportMap imports, _) <- useWithStaleFastMT GetImportMap file
+    (ImportMap imports, _) <- case getSourceFileOrigin file of
+      FromProject    -> useWithStaleFastMT GetImportMap file
+      FromDependency -> pure (ImportMap mempty, PositionMapping idDelta)
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
     locations <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
     MaybeT $ Just <$> toCurrentLocations mapping file locations
