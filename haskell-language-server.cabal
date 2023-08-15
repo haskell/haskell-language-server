@@ -632,8 +632,6 @@ library hls-hlint-plugin
     , ghc-lib-parser-ex
     , apply-refact
 
-  cpp-options:   -DHLINT_ON_GHC_LIB
-
   default-extensions:
     DataKinds
 

@@ -18,11 +18,7 @@
 -- lots of CPP, we just disable the warning until later.
 {-# OPTIONS_GHC -Wno-redundant-constraints   #-}
 
-#ifdef HLINT_ON_GHC_LIB
 #define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib_parser(x,y,z)
-#else
-#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc(x,y,z)
-#endif
 
 module Ide.Plugin.Hlint
   (
@@ -61,7 +57,6 @@ import           Development.IDE.Core.Shake                         (getDiagnost
 import qualified Refact.Apply                                       as Refact
 import qualified Refact.Types                                       as Refact
 
-#ifdef HLINT_ON_GHC_LIB
 import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      WarningFlag (Opt_WarnUnrecognisedPragmas),
                                                                      extensionFlags,
@@ -71,18 +66,18 @@ import           Development.IDE.GHC.Compat                         (DynFlags,
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 
 #if MIN_GHC_API_VERSION(9,4,0)
-import qualified "ghc-lib-parser" GHC.Data.Strict                   as Strict
+import qualified GHC.Data.Strict                                    as Strict
 #endif
 #if MIN_GHC_API_VERSION(9,0,0)
-import           "ghc-lib-parser" GHC.Types.SrcLoc                  hiding
+import           GHC.Types.SrcLoc                                   hiding
                                                                     (RealSrcSpan)
-import qualified "ghc-lib-parser" GHC.Types.SrcLoc                  as GHC
+import qualified GHC.Types.SrcLoc                                   as GHC
 #else
-import           "ghc-lib-parser" SrcLoc                            hiding
+import qualified SrcLoc                                             as GHC
+import           SrcLoc                                             hiding
                                                                     (RealSrcSpan)
-import qualified "ghc-lib-parser" SrcLoc                            as GHC
 #endif
-import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
+import           GHC.LanguageExtensions                             (Extension)
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 import           System.FilePath                                    (takeFileName)
 import           System.IO                                          (IOMode (WriteMode),
@@ -94,21 +89,7 @@ import           System.IO                                          (IOMode (Wri
                                                                      utf8,
                                                                      withFile)
 import           System.IO.Temp
-#else
-import           Development.IDE.GHC.Compat                         hiding
-                                                                    (setEnv,
-                                                                     (<+>))
-import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
-#if MIN_GHC_API_VERSION(9,2,0)
-import           Language.Haskell.GHC.ExactPrint.ExactPrint         (deltaOptions)
-#else
-import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
-#endif
-import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
-import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
-import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
-import qualified Refact.Fixity                                      as Refact
-#endif
+
 import           Ide.Plugin.Config                                  hiding
                                                                     (Config)
 import           Ide.Plugin.Error
@@ -159,7 +140,6 @@ instance Pretty Log where
     LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp
     LogResolve msg -> pretty msg
 
-#ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
 #if !MIN_GHC_API_VERSION(9,0,0)
 type BufSpan = ()
@@ -173,7 +153,6 @@ pattern RealSrcSpan x y = GHC.RealSrcSpan x y
 pattern RealSrcSpan x y <- ((,Nothing) -> (GHC.RealSrcSpan x, y))
 #endif
 {-# COMPLETE RealSrcSpan, UnhelpfulSpan #-}
-#endif
 
 #if MIN_GHC_API_VERSION(9,4,0)
 fromStrictMaybe :: Strict.Maybe a -> Maybe a
@@ -316,28 +295,6 @@ getIdeas recorder nfp = do
   fmap applyHints' (moduleEx flags)
 
   where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
-#ifndef HLINT_ON_GHC_LIB
-        moduleEx _flags = do
-          mbpm <- getParsedModuleWithComments nfp
-          return $ createModule <$> mbpm
-          where
-            createModule pm = Right (createModuleEx anns (applyParseFlagsFixities modu))
-                  where anns = pm_annotations pm
-                        modu = pm_parsed_source pm
-
-            applyParseFlagsFixities :: ParsedSource -> ParsedSource
-            applyParseFlagsFixities modul = GhclibParserEx.applyFixities (parseFlagsToFixities _flags) modul
-
-            parseFlagsToFixities :: ParseFlags -> [(String, Fixity)]
-            parseFlagsToFixities = map toFixity . Hlint.fixities
-
-            toFixity :: FixityInfo -> (String, Fixity)
-            toFixity (name, dir, i) = (name, Fixity NoSourceText i $ f dir)
-                where
-                    f LeftAssociative  = InfixL
-                    f RightAssociative = InfixR
-                    f NotAssociative   = InfixN
-#else
         moduleEx flags = do
           mbpm <- getParsedModuleWithComments nfp
           -- If ghc was not able to parse the module, we disable hlint diagnostics
@@ -360,11 +317,6 @@ getIdeas recorder nfp = do
 -- and the ModSummary dynflags. However using the parsedFlags extensions
 -- can sometimes interfere with the hlint parsing of the file.
 -- See https://github.com/haskell/haskell-language-server/issues/1279
---
--- Note: this is used when HLINT_ON_GHC_LIB is defined. We seem to need
--- these extensions to construct dynflags to parse the file again. Therefore
--- using hlint default extensions doesn't seem to be a problem when
--- HLINT_ON_GHC_LIB is not defined because we don't parse the file again.
 getExtensions :: NormalizedFilePath -> Action [Extension]
 getExtensions nfp = do
     dflags <- getFlags
@@ -375,7 +327,6 @@ getExtensions nfp = do
         getFlags = do
           modsum <- use_ GetModSummary nfp
           return $ ms_hspp_opts $ msrModSummary modsum
-#endif
 
 -- ---------------------------------------------------------------------
 
@@ -573,7 +524,6 @@ applyHint recorder ide nfp mhint verTxtDocId =
     -- But "Idea"s returned by HLint point to starting position of the expressions
     -- that contain refactorings, so they are often outside the refactorings' boundaries.
     let position = Nothing
-#ifdef HLINT_ON_GHC_LIB
     let writeFileUTF8NoNewLineTranslation file txt =
             withFile file WriteMode $ \h -> do
                 hSetEncoding h utf8
@@ -589,22 +539,6 @@ applyHint recorder ide nfp mhint verTxtDocId =
             let refactExts = map show $ enabled ++ disabled
             (Right <$> applyRefactorings (topDir dflags) position commands temp refactExts)
                 `catches` errorHandlers
-#else
-    mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
-    res <-
-        case mbParsedModule of
-            Nothing -> throwError "Apply hint: error parsing the module"
-            Just pm -> do
-                let anns = pm_annotations pm
-                let modu = pm_parsed_source pm
-                -- apply-refact uses RigidLayout
-                let rigidLayout = deltaOptions RigidLayout
-                (anns', modu') <-
-                    ExceptT $ mapM (uncurry Refact.applyFixities)
-                            $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
-                liftIO $ (Right <$> Refact.applyRefactorings' position commands anns' modu')
-                            `catches` errorHandlers
-#endif
     case res of
       Right appliedFile -> do
         let wsEdit = diffText' True (verTxtDocId, oldContent) (T.pack appliedFile) IncludeDeletions
