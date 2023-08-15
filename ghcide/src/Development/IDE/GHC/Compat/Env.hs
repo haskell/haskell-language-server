@@ -64,7 +64,7 @@ import           Module
 
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Driver.Hooks                    (Hooks)
-import           GHC.Driver.Session                  hiding (mkHomeModule, ways)
+import           GHC.Driver.Session                  hiding (mkHomeModule)
 import           GHC.Unit.Types                      (Module, UnitId)
 #endif
 
@@ -286,13 +286,13 @@ hostFullWays =
 #endif
 
 setWays :: Ways -> DynFlags -> DynFlags
-setWays ways flags =
+setWays newWays flags =
 #if MIN_VERSION_ghc(9,2,0)
-  flags { Session.targetWays_ = ways}
+  flags { Session.targetWays_ = newWays}
 #elif MIN_VERSION_ghc(9,0,0)
-  flags {ways = ways}
+  flags {ways = newWays}
 #else
-  updateWays $ flags {ways = ways}
+  updateWays $ flags {ways = newWays}
 #endif
 
 -- -------------------------------------------------------

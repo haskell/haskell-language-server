@@ -234,7 +234,8 @@ library
 
     if flag(pedantic)
         ghc-options: -Werror 
-                     -Wwarn=unused-packages 
+                     -Wwarn=unused-packages
+                     -Wwarn=unrecognised-pragmas
                      -Wwarn=dodgy-imports
                      -Wwarn=missing-signatures
                      -Wwarn=duplicate-exports

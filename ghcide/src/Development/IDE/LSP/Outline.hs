@@ -108,11 +108,11 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
     , _kind     = SymbolKind_Struct
     , _children =
       Just $
-        [ (defDocumentSymbol l'' :: DocumentSymbol)
+#if MIN_VERSION_ghc(9,2,0)
+          [ (defDocumentSymbol l'' :: DocumentSymbol)
             { _name           = printOutputable n
             , _kind           = SymbolKind_Constructor
             , _selectionRange = realSrcSpanToRange l'
-#if MIN_VERSION_ghc(9,2,0)
             , _children       = toList <$> nonEmpty childs
             }
         | con <- extract_cons dd_cons
@@ -140,6 +140,10 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
                 }
     cvtFld _  = Nothing
 #else
+          [ (defDocumentSymbol l :: DocumentSymbol)
+            { _name           = printOutputable n
+            , _kind           = SymbolKind_Constructor
+            , _selectionRange = realSrcSpanToRange l'
            , _children       = conArgRecordFields (con_args x)
             }
         | L (locA -> (RealSrcSpan l _ )) x <- dd_cons

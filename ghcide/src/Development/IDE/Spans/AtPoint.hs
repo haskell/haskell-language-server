@@ -341,7 +341,7 @@ typeLocationsAtPoint withHieDb lookupModule _ideOptions pos (HAR _ ast _ _ hieKi
 #if MIN_VERSION_ghc(9,0,1)
             HFunTy a b c -> getTypes' [a,b,c]
 #else
-            HFunTy a b -> getTypes [a,b]
+            HFunTy a b -> getTypes' [a,b]
 #endif
             HQualTy a b -> getTypes' [a,b]
             HCastTy a -> getTypes' [a]
