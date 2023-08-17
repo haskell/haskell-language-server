@@ -134,7 +134,7 @@ pattern HsParsedModule
     , hpm_annotations
     } <- ( (,()) -> (GHC.HsParsedModule{..}, hpm_annotations))
     where
-        HsParsedModule hpm_module hpm_src_files hpm_annotations =
+        HsParsedModule hpm_module hpm_src_files _hpm_annotations =
             GHC.HsParsedModule hpm_module hpm_src_files
 #endif
 
