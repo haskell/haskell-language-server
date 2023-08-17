@@ -247,6 +247,7 @@ library
                      -Wwarn=unused-matches
                      -Wwarn=overlapping-patterns
                      -Wwarn=incomplete-record-updates
+                     -Wwarn=unticked-promoted-constructors
     
     if impl(ghc >= 9) && flag(pedantic)
         ghc-options: -Wwarn=ambiguous-fields
