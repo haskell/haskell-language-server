@@ -11,6 +11,7 @@ import           Data.Bool                       (bool)
 import           Data.List                       (isSuffixOf)
 import           Data.Maybe                      (fromMaybe)
 import           Data.Proxy                      (Proxy (..))
+import           Development.IDE.GHC.Compat      (GhcVersion (..))
 import           Language.LSP.Protocol.Message   (TCustomMessage (NotMess),
                                                   TNotificationMessage (..))
 import           Language.LSP.Protocol.Types     (Definition (..),
@@ -26,13 +27,14 @@ import           System.FilePath                 (splitDirectories, (<.>),
 import           Test.Tasty                      (TestTree, testGroup)
 import           Test.Tasty.HUnit                (assertBool, assertFailure,
                                                   (@?=))
-import           TestUtils                       (testSessionWithExtraFiles)
+import           TestUtils                       (testSessionWithExtraFiles, knownBrokenForGhcVersions)
 
 tests :: TestTree
 tests =
     testGroup "gotoDefinition for dependencies"
         [ dependencyTest
         , transitiveDependencyTest
+        , autogenDependencyTest
         ]
 
 fileDoneIndexing :: [String] -> Session FilePath
@@ -119,3 +121,55 @@ transitiveDependencyTest = testSessionWithExtraFiles "dependency" "goto transiti
                 liftIO $
                     assertFailure $ "Wrong location for Hashable: "
                         ++ show wrongLocation
+
+-- Testing that we can go to a definition in an autogen module of a
+-- dependency. Stylish haskell is a package that has an autogen module,
+-- but it doesn't seem to build with ghc 9.0 or earlier. Suggestions on
+-- another package we could use for this test are welcome! This test
+-- doesn't go directly to the fuction in the autogen module because
+-- it is a hidden module, so we can't import that function directly
+-- in our project. However, hidden modules are also indexed, so we
+-- can go to a definition in a module that imports the autogen module
+-- and goto the autogen module from there.
+autogenDependencyTest :: TestTree
+autogenDependencyTest = knownBrokenForGhcVersions [GHC810, GHC90] "stylish-haskell does not build with older GHC versions" $
+    testSessionWithExtraFiles "dependency-autogen" "goto autogen module in dependency" $
+        \dir -> do
+            localDoc <- openDoc (dir </> "Dependency" <.> "hs") "haskell"
+            _hieFile <- fileDoneIndexing ["Paths_stylish_haskell.hie"]
+            stylishDefs <- getDefinitions localDoc (Position 5 5)
+            stylishFile <- case stylishDefs of
+                InL (Definition (InR [Location uri _actualRange])) ->
+                    liftIO $ do
+                        let fp :: FilePath
+                            fp = fromMaybe "" $ uriToFilePath uri
+                            locationDirectories :: [String]
+                            locationDirectories = splitDirectories fp
+                        assertBool "tags found in a module that is not Language.Haskell.Stylish"
+                            $ ["Language", "Haskell", "Stylish.hs"]
+                                `isSuffixOf` locationDirectories
+                        pure fp
+                wrongLocation ->
+                    liftIO $
+                        assertFailure $ "Wrong location for AsyncCancelled: "
+                            ++ show wrongLocation
+            stylishDoc <- openDoc stylishFile "haskell"
+            pathsDefs <- getDefinitions stylishDoc (Position 19 8)
+            -- The location of the definition of version in
+            -- Paths_stylish_haskell
+            let expRange = Range (Position 35 0) (Position 35 7)
+            case pathsDefs of
+                InL (Definition (InR [Location uri actualRange])) ->
+                    liftIO $ do
+                        let locationDirectories :: [String]
+                            locationDirectories =
+                                maybe [] splitDirectories $
+                                    uriToFilePath uri
+                        assertBool "version found in a module that is not Paths_stylish_haskell"
+                            $ ["Paths_stylish_haskell.hs"]
+                                `isSuffixOf` locationDirectories
+                        actualRange @?= expRange
+                wrongLocation ->
+                    liftIO $
+                        assertFailure $ "Wrong location for version: "
+                            ++ show wrongLocation

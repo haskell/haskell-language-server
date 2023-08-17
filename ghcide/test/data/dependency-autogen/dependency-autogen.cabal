@@ -1,0 +1,10 @@
+name:          dependency-autogen
+version:       0.1.0.0
+cabal-version: 2.0
+build-type:    Simple
+
+library
+  exposed-modules:  Dependency
+  default-language: Haskell2010
+  build-depends:    base
+                  , stylish-haskell == 0.14.5.0
