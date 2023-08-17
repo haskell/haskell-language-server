@@ -1,0 +1,3 @@
+packages: .
+package *
+  ghc-options: -fwrite-ide-info
