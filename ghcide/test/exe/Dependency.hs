@@ -25,6 +25,7 @@ import           Language.LSP.Test               (Session, anyMessage,
 import           System.FilePath                 (splitDirectories, (<.>),
                                                   (</>))
 import           Test.Tasty                      (TestTree, testGroup)
+import           Test.Tasty.ExpectedFailure      (expectFailBecause)
 import           Test.Tasty.HUnit                (assertBool, assertFailure,
                                                   (@?=))
 import           TestUtils                       (testSessionWithExtraFiles, knownBrokenForGhcVersions)
@@ -37,6 +38,7 @@ tests =
         , transitiveDependencyTest
         , autogenDependencyTest
         , bootDependencyTest
+        , whereClauseDependencyTest
         ]
 
 fileDoneIndexing :: [String] -> Session FilePath
@@ -234,4 +236,51 @@ bootDependencyTest = knownBrokenForGhcVersions [GHC810, GHC90, GHC92, GHC94, GHC
                 wrongLocation ->
                     liftIO $
                         assertFailure $ "Wrong location for empty: "
+                            ++ show wrongLocation
+
+-- Testing that we can go to a definition in a where clause in a dependency.
+-- This currently fails, but it is unclear why.
+whereClauseDependencyTest :: TestTree
+whereClauseDependencyTest = expectFailBecause "TODO: figure out why where clauses in dependencies are not indexed" $
+    testSessionWithExtraFiles "dependency-where" "goto where clause definition in dependency" $
+        \dir -> do
+            localDoc <- openDoc (dir </> "Dependency" <.> "hs") "haskell"
+            _hieFile <- fileDoneIndexing ["Data", "Scientific.hie"]
+            scientificDefs <- getDefinitions localDoc (Position 5 5)
+            scientificFile <- case scientificDefs of
+                InL (Definition (InR [Location uri _actualRange])) ->
+                    liftIO $ do
+                        let fp :: FilePath
+                            fp = fromMaybe "" $ uriToFilePath uri
+                            locationDirectories :: [String]
+                            locationDirectories = splitDirectories fp
+                        assertBool "base10Exponent found in a module that is not Data.Scientific"
+                            $ ["Data", "Scientific.hs"]
+                                `isSuffixOf` locationDirectories
+                        pure fp
+                wrongLocation ->
+                    liftIO $
+                        assertFailure $ "Wrong location for base10Exponent: "
+                            ++ show wrongLocation
+            scientificDoc <- openDoc scientificFile "haskell"
+            -- Where longDiv is referenced in the function body
+            -- of unsafeFromRational in Data.Scientific
+            longDivDefs <- getDefinitions scientificDoc (Position 367 33)
+            -- The location of the definition of longDiv in
+            -- the where clause of unsafeFromRational
+            let expRange = Range (Position 371 4) (Position 376 55)
+            case longDivDefs of
+                InL (Definition (InR [Location uri actualRange])) ->
+                    liftIO $ do
+                        let locationDirectories :: [String]
+                            locationDirectories =
+                                maybe [] splitDirectories $
+                                    uriToFilePath uri
+                        assertBool "longDiv found in a module that is not Data.Scientific"
+                            $ ["Data", "Scientific.hs"]
+                                `isSuffixOf` locationDirectories
+                        actualRange @?= expRange
+                wrongLocation ->
+                    liftIO $
+                        assertFailure $ "Wrong location for longDiv: "
                             ++ show wrongLocation
