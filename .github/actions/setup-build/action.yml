@@ -7,6 +7,9 @@ inputs:
   cabal:
     description: "Cabal version"
     required: false
+      # TODO: We should change this to 3.11 or latest once version 3.11 is released.
+      # For now we need the functionality in cabal head that generates HIE files
+      # for dependencies.
     default: "head"
   os:
     description: "Operating system: Linux, Windows or macOS"
