@@ -32,7 +32,8 @@ import           TestUtils                       (testSessionWithExtraFiles, kno
 tests :: TestTree
 tests =
     testGroup "gotoDefinition for dependencies"
-        [ dependencyTest
+        [ dependencyTermTest
+        , dependencyTypeTest
         , transitiveDependencyTest
         , autogenDependencyTest
         ]
@@ -53,13 +54,41 @@ fileDoneIndexing fpSuffix =
                         fpSuffix `isSuffixOf` fpDirs
                 other -> error $ "Failed to parse ghcide/reference/ready file: " <> show other
 
-dependencyTest :: TestTree
-dependencyTest = testSessionWithExtraFiles "dependency" "gotoDefinition in async" $
+-- Tests that we can go to the definition of a term in a dependency.
+-- In this case, we are getting the definition of the data
+-- constructor AsyncCancelled.
+dependencyTermTest :: TestTree
+dependencyTermTest = testSessionWithExtraFiles "dependency" "gotoDefinition term in async" $
     \dir -> do
         doc <- openDoc (dir </> "Dependency" <.> "hs") "haskell"
         _hieFile <- fileDoneIndexing ["Control", "Concurrent", "Async.hie"]
         defs <- getDefinitions doc (Position 5 20)
         let expRange = Range (Position 430 22) (Position 430 36)
+        case defs of
+            InL (Definition (InR [Location fp actualRange])) ->
+                liftIO $ do
+                    let locationDirectories :: [String]
+                        locationDirectories =
+                            maybe [] splitDirectories $
+                                uriToFilePath fp
+                    assertBool "AsyncCancelled found in a module that is not Control.Concurrent Async"
+                        $ ["Control", "Concurrent", "Async.hs"]
+                            `isSuffixOf` locationDirectories
+                    actualRange @?= expRange
+            wrongLocation ->
+                liftIO $
+                    assertFailure $ "Wrong location for AsyncCancelled: "
+                        ++ show wrongLocation
+
+-- Tests that we can go to the definition of a type in a dependency.
+-- In this case, we are getting the definition of the type AsyncCancelled.
+dependencyTypeTest :: TestTree
+dependencyTypeTest = testSessionWithExtraFiles "dependency" "gotoDefinition type in async" $
+    \dir -> do
+        doc <- openDoc (dir </> "Dependency" <.> "hs") "haskell"
+        _hieFile <- fileDoneIndexing ["Control", "Concurrent", "Async.hie"]
+        defs <- getDefinitions doc (Position 4 21)
+        let expRange = Range (Position 430 0) (Position 435 5)
         case defs of
             InL (Definition (InR [Location fp actualRange])) ->
                 liftIO $ do
