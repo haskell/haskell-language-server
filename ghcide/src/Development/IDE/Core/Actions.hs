@@ -37,6 +37,7 @@ import qualified Development.IDE.Spans.AtPoint        as AtPoint
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
 import           Development.IDE.Types.Location
 import qualified HieDb
+import           Ide.Types                            (hlsDirectory, dependenciesDirectory)
 import           Language.LSP.Protocol.Types          (DocumentHighlight (..),
                                                        SymbolInformation (..),
                                                        normalizedFilePathToUri,
@@ -116,7 +117,7 @@ lookupMod HieDbWriter{indexQueue} hieFile moduleName uid _boot = MaybeT $ do
         -- name and hash of the package the dependency module is
         -- found in. The name and hash are both parts of the UnitId.
         writeOutDir :: FilePath
-        writeOutDir = projectRoot </> ".hls" </> "dependencies" </> show uid
+        writeOutDir = projectRoot </> hlsDirectory </> dependenciesDirectory </> show uid
         -- The module name is separated into directories, with the
         -- last part of the module name giving the name of the
         -- haskell file with a .hs extension.

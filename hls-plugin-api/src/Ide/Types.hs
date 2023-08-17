@@ -47,6 +47,8 @@ module Ide.Types
 , PluginNotificationHandlers(..)
 , PluginRequestMethod(..)
 , SourceFileOrigin(..)
+, dependenciesDirectory
+, hlsDirectory
 , getSourceFileOrigin
 , getProcessID, getPid
 , installSigUsr1Handler
@@ -294,13 +296,19 @@ data PluginFileType = PluginFileType [SourceFileOrigin] [T.Text]
 
 data SourceFileOrigin = FromProject | FromDependency deriving Eq
 
+hlsDirectory :: FilePath
+hlsDirectory = ".hls"
+
+dependenciesDirectory :: FilePath
+dependenciesDirectory = "dependencies"
+
 -- | Dependency files are written to the .hls/dependencies directory
 --   under the project root.
 --   If a file is not in this directory, we assume that it is a
 --   project file.
 getSourceFileOrigin :: NormalizedFilePath -> SourceFileOrigin
 getSourceFileOrigin f =
-    case [".hls", "dependencies"] `isInfixOf` (splitDirectories file) of
+    case [hlsDirectory, dependenciesDirectory] `isInfixOf` (splitDirectories file) of
         True  -> FromDependency
         False -> FromProject
     where

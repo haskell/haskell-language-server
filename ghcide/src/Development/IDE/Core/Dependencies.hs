@@ -22,6 +22,7 @@ import           HieDb                          (SourceFile (FakeFile),
                                                  lookupPackage,
                                                  removeDependencySrcFiles)
 import           Ide.Logger                     (Recorder, WithPriority)
+import           Ide.Types                      (hlsDirectory)
 import           Language.LSP.Server            (resRootPath)
 import           System.Directory               (doesDirectoryExist)
 import           System.FilePath                ((<.>), (</>))
@@ -46,7 +47,7 @@ indexDependencyHieFiles recorder se hscEnv = do
         mHlsDir :: Maybe FilePath
         mHlsDir = do
             projectDir <- resRootPath =<< lspEnv se
-            pure $ projectDir </> ".hls"
+            pure $ projectDir </> hlsDirectory
         -- Add the deletion of dependency source files from the
         -- HieDb database to the database write queue.
         deleteMissingDependencySources :: IO ()
