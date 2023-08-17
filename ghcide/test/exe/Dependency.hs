@@ -28,7 +28,8 @@ import           Test.Tasty                      (TestTree, testGroup)
 import           Test.Tasty.ExpectedFailure      (expectFailBecause)
 import           Test.Tasty.HUnit                (assertBool, assertFailure,
                                                   (@?=))
-import           TestUtils                       (testSessionWithExtraFiles, knownBrokenForGhcVersions)
+import           TestUtils                       (knownBrokenForGhcVersions,
+                                                  testSessionWithExtraFiles)
 
 tests :: TestTree
 tests =
