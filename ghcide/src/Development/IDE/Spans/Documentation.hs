@@ -121,6 +121,9 @@ getDocumentation
  => [ParsedModule] -- ^ All of the possible modules it could be defined in.
  ->  name -- ^ The name you want documentation for.
  -> [T.Text]
+#if MIN_VERSION_ghc(9,2,0)
+getDocumentation _sources _targetName = []
+#else
 -- This finds any documentation between the name you want
 -- documentation for and the one before it. This is only an
 -- approximately correct algorithm and there are easily constructed
@@ -131,10 +134,7 @@ getDocumentation
 -- TODO : Implement this for GHC 9.2 with in-tree annotations
 --        (alternatively, just remove it and rely solely on GHC's parsing)
 getDocumentation sources targetName = fromMaybe [] $ do
-#if MIN_VERSION_ghc(9,2,0)
-  Nothing
-#else
-  -- Find the module the target is defined in.
+    -- Find the module the target is defined in.
   targetNameSpan <- realSpan $ getLoc targetName
   tc <-
     find ((==) (Just $ srcSpanFile targetNameSpan) . annotationFileName)

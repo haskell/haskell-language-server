@@ -91,7 +91,7 @@ runLanguageServer
     -> config
     -> (config -> Value -> Either T.Text config)
     -> (MVar ()
-        -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv config, a)),
+        -> IO (LSP.LanguageContextEnv config -> TRequestMessage 'Method_Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv config, a)),
                LSP.Handlers (m config),
                (LanguageContextEnv config, a) -> m config <~> IO))
     -> IO ()
@@ -132,7 +132,7 @@ setupLSP ::
   -> LSP.Handlers (ServerM config)
   -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
   -> MVar ()
-  -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
+  -> IO (LSP.LanguageContextEnv config -> TRequestMessage 'Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState)),
          LSP.Handlers (ServerM config),
          (LanguageContextEnv config, IdeState) -> ServerM config <~> IO)
 setupLSP  recorder getHieDbLoc userHandlers getIdeState clientMsgVar = do
@@ -194,7 +194,7 @@ handleInit
     -> (SomeLspId -> IO ())
     -> (SomeLspId -> IO ())
     -> Chan ReactorMessage
-    -> LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
+    -> LSP.LanguageContextEnv config -> TRequestMessage 'Method_Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
 handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (TRequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
     traceWithSpan sp params
     let root = LSP.resRootPath env

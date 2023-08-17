@@ -329,11 +329,11 @@ logErrors recorder errs = do
 
 
 -- | Combine the 'PluginHandler' for all plugins
-newtype IdeHandler (m :: Method ClientToServer Request)
+newtype IdeHandler (m :: Method 'ClientToServer 'Request)
   = IdeHandler [(PluginId, PluginDescriptor IdeState, IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either PluginError (MessageResult m))))]
 
 -- | Combine the 'PluginHandler' for all plugins
-newtype IdeNotificationHandler (m :: Method ClientToServer Notification)
+newtype IdeNotificationHandler (m :: Method 'ClientToServer 'Notification)
   = IdeNotificationHandler [(PluginId, PluginDescriptor IdeState, IdeState -> VFS -> MessageParams m -> LSP.LspM Config ())]
 -- type NotificationHandler (m :: Method ClientToServer Notification) = MessageParams m -> IO ()`
 

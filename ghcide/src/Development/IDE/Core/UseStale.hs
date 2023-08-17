@@ -82,8 +82,8 @@ dualPositionMap (PositionMap (P.PositionMapping (P.PositionDelta from to))) =
 -- a 'PositionMapping' that will fast-forward values to the current age.
 data TrackedStale a where
   TrackedStale
-      :: Tracked (Stale s) a
-      -> PositionMap (Stale s) Current
+      :: Tracked ('Stale s) a
+      -> PositionMap ('Stale s) 'Current
       -> TrackedStale a
 
 instance Functor TrackedStale where
@@ -136,7 +136,7 @@ unsafeMkCurrent :: age ->  Tracked 'Current age
 unsafeMkCurrent = coerce
 
 
-unsafeMkStale :: age -> Tracked (Stale s) age
+unsafeMkStale :: age -> Tracked ('Stale s) age
 unsafeMkStale = coerce
 
 

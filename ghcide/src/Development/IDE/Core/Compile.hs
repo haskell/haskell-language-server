@@ -856,9 +856,9 @@ generateHieAsts hscEnv tcm =
   where
     dflags = hsc_dflags hscEnv
 #if MIN_VERSION_ghc(9,0,0)
-    run ts =
+    run _ts = -- ts is only used in GHC 9.2
 #if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
-        fmap (join . snd) . liftIO . initDs hscEnv ts
+        fmap (join . snd) . liftIO . initDs hscEnv _ts
 #else
         id
 #endif
@@ -1086,7 +1086,7 @@ mergeEnvs env mg ms extraMods envs = do
         -- Prefer non-boot files over non-boot files
         -- otherwise we can get errors like https://gitlab.haskell.org/ghc/ghc/-/issues/19816
         -- if a boot file shadows over a non-boot file
-        combineModuleLocations a@(InstalledFound ml m) b | Just fp <- ml_hs_file ml, not ("boot" `isSuffixOf` fp) = a
+        combineModuleLocations a@(InstalledFound ml _) _ | Just fp <- ml_hs_file ml, not ("boot" `isSuffixOf` fp) = a
         combineModuleLocations _ b = b
 
         concatFC :: FinderCacheState -> [FinderCache] -> IO FinderCache
@@ -1135,9 +1135,10 @@ getModSummaryFromImports
   -> UTCTime
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
-getModSummaryFromImports env fp modTime mContents = do
-
-    (contents, opts, ppEnv, src_hash) <- preprocessor env fp mContents
+-- modTime is only used in GHC < 9.4
+getModSummaryFromImports env fp _modTime mContents = do
+-- src_hash is only used in GHC >= 9.4
+    (contents, opts, ppEnv, _src_hash) <- preprocessor env fp mContents
 
     let dflags = hsc_dflags ppEnv
 
@@ -1153,7 +1154,8 @@ getModSummaryFromImports env fp modTime mContents = do
         (src_idecls, ord_idecls) = partition ((== IsBoot) . ideclSource.unLoc) imps
 
         -- GHC.Prim doesn't exist physically, so don't go looking for it.
-        (ordinary_imps, ghc_prim_imports)
+        -- ghc_prim_imports is only used in GHC >= 9.4
+        (ordinary_imps, _ghc_prim_imports)
           = partition ((/= moduleName gHC_PRIM) . unLoc
                       . ideclName . unLoc)
                       ord_idecls
@@ -1177,7 +1179,7 @@ getModSummaryFromImports env fp modTime mContents = do
         rn_imps = fmap (\(pk, lmn@(L _ mn)) -> (rn_pkg_qual mn pk, lmn))
         srcImports = rn_imps $ map convImport src_idecls
         textualImports = rn_imps $ map convImport (implicit_imports ++ ordinary_imps)
-        ghc_prim_import = not (null ghc_prim_imports)
+        ghc_prim_import = not (null _ghc_prim_imports)
 #else
         srcImports = map convImport src_idecls
         textualImports = map convImport (implicit_imports ++ ordinary_imps)
@@ -1204,10 +1206,10 @@ getModSummaryFromImports env fp modTime mContents = do
 #if MIN_VERSION_ghc(9,3,0)
                 , ms_dyn_obj_date    = Nothing
                 , ms_ghc_prim_import = ghc_prim_import
-                , ms_hs_hash      = src_hash
+                , ms_hs_hash      = _src_hash
 
 #else
-                , ms_hs_date      = modTime
+                , ms_hs_date      = _modTime
 #endif
                 , ms_hsc_src      = sourceType
                 -- The contents are used by the GetModSummary rule
@@ -1475,19 +1477,21 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
 
     -- The source is modified if it is newer than the destination (iface file)
     -- A more precise check for the core file is performed later
-    let sourceMod = case mb_dest_version of
+    let _sourceMod = case mb_dest_version of -- sourceMod is only used in GHC < 9.4
           Nothing -> SourceModified -- destination file doesn't exist, assume modified source
           Just dest_version
             | source_version <= dest_version -> SourceUnmodified
             | otherwise -> SourceModified
 
-    old_iface <- case mb_old_iface of
+    -- old_iface is only used in GHC >= 9.4
+    _old_iface <- case mb_old_iface of
       Just iface -> pure (Just iface)
       Nothing -> do
-        let ncu = hsc_NC sessionWithMsDynFlags
-            read_dflags = hsc_dflags sessionWithMsDynFlags
+        -- ncu and read_dflags are only used in GHC >= 9.4
+        let _ncu = hsc_NC sessionWithMsDynFlags
+            _read_dflags = hsc_dflags sessionWithMsDynFlags
 #if MIN_VERSION_ghc(9,3,0)
-        read_result <- liftIO $ readIface read_dflags ncu mod iface_file
+        read_result <- liftIO $ readIface _read_dflags _ncu mod iface_file
 #else
         read_result <- liftIO $ initIfaceCheck (text "readIface") sessionWithMsDynFlags
                               $ readIface mod iface_file
@@ -1502,11 +1506,11 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
     -- given that the source is unmodified
     (recomp_iface_reqd, mb_checked_iface)
 #if MIN_VERSION_ghc(9,3,0)
-      <- liftIO $ checkOldIface sessionWithMsDynFlags ms old_iface >>= \case
+      <- liftIO $ checkOldIface sessionWithMsDynFlags ms _old_iface >>= \case
         UpToDateItem x -> pure (UpToDate, Just x)
         OutOfDateItem reason x -> pure (NeedsRecompile reason, x)
 #else
-      <- liftIO $ checkOldIface sessionWithMsDynFlags ms sourceMod mb_old_iface
+      <- liftIO $ checkOldIface sessionWithMsDynFlags ms _sourceMod mb_old_iface
 #endif
 
     let do_regenerate _reason = withTrace "regenerate interface" $ \setTag -> do

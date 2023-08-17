@@ -530,7 +530,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 #if MIN_VERSION_ghc(9,3,0)
                   let (df2, uids) = (rawComponentDynFlags, [])
 #else
-                  let (df2, uids) = removeInplacePackages fakeUid inplace rawComponentDynFlags
+                  let (df2, uids) = _removeInplacePackages fakeUid inplace rawComponentDynFlags
 #endif
                   let prefix = show rawComponentUnitId
                   -- See Note [Avoiding bad interface files]
@@ -1070,12 +1070,12 @@ getDependencyInfo fs = Map.fromList <$> mapM do_one fs
 -- There are several places in GHC (for example the call to hptInstances in
 -- tcRnImports) which assume that all modules in the HPT have the same unit
 -- ID. Therefore we create a fake one and give them all the same unit id.
-removeInplacePackages
+_removeInplacePackages --Only used in ghc < 9.4
     :: UnitId     -- ^ fake uid to use for our internal component
     -> [UnitId]
     -> DynFlags
     -> (DynFlags, [UnitId])
-removeInplacePackages fake_uid us df = (setHomeUnitId_ fake_uid $
+_removeInplacePackages fake_uid us df = (setHomeUnitId_ fake_uid $
                                        df { packageFlags = ps }, uids)
   where
     (uids, ps) = Compat.filterInplaceUnits us (packageFlags df)

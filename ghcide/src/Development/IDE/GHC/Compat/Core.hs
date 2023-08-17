@@ -1084,10 +1084,10 @@ makeSimpleDetails hsc_env =
               hsc_env
 #endif
 
-mkIfaceTc hsc_env sf details ms tcGblEnv =
+mkIfaceTc hsc_env sf details _ms tcGblEnv = -- ms is only used in GHC >= 9.4
   GHC.mkIfaceTc hsc_env sf details
 #if MIN_VERSION_ghc(9,3,0)
-              ms
+              _ms
 #endif
               tcGblEnv
 

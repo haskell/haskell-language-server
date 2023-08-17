@@ -850,7 +850,6 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
     Just session -> do
       linkableType <- getLinkableType f
       ver <- use_ GetModificationTime f
-      ShakeExtras{ideNc} <- getShakeExtras
       let m_old = case old of
             Shake.Succeeded (Just old_version) v -> Just (v, old_version)
             Shake.Stale _   (Just old_version) v -> Just (v, old_version)
@@ -1126,8 +1125,6 @@ getLinkableRule recorder =
       Nothing -> error "called GetLinkable for a file without a linkable"
       Just (bin_core, fileHash) -> do
         session <- use_ GhcSessionDeps f
-        ShakeExtras{ideNc} <- getShakeExtras
-        let namecache_updater = mkUpdater ideNc
         linkableType <- getLinkableType f >>= \case
           Nothing -> error "called GetLinkable for a file which doesn't need compilation"
           Just t -> pure t
@@ -1222,11 +1219,11 @@ computeLinkableTypeForDynFlags d
 #if defined(GHC_PATCHED_UNBOXED_BYTECODE) || MIN_VERSION_ghc(9,2,0)
           = BCOLinkable
 #else
-          | unboxed_tuples_or_sums = ObjectLinkable
+          | _unboxed_tuples_or_sums = ObjectLinkable
           | otherwise              = BCOLinkable
 #endif
-  where
-        unboxed_tuples_or_sums =
+  where -- unboxed_tuples_or_sums is only used in GHC < 9.2
+        _unboxed_tuples_or_sums =
             xopt LangExt.UnboxedTuples d || xopt LangExt.UnboxedSums d
 
 -- | Tracks which linkables are current, so we don't need to unload them

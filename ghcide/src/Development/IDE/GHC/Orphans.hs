@@ -12,6 +12,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 
 import           Control.DeepSeq
+import           Control.Monad.Trans.Reader (ReaderT (..))
 import           Data.Aeson
 import           Data.Hashable
 import           Data.String                (IsString (fromString))
@@ -51,6 +52,10 @@ import           GHC.Types.PkgQual
 #if MIN_VERSION_ghc(9,5,0)
 import           GHC.Unit.Home.ModInfo
 #endif
+
+-- Orphan instance for Shake.hs
+-- https://hub.darcs.net/ross/transformers/issue/86
+deriving instance (Semigroup (m a)) => Semigroup (ReaderT r m a)
 
 -- Orphan instances for types from the GHC API.
 instance Show CoreModule where show = unpack . printOutputable

@@ -110,7 +110,7 @@ properties = emptyProperties
     , (Diagnostics, "Follows error messages produced by GHC about missing signatures")
     ] Always
 
-codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
+codeLensProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
 codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
     mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
     nfp <- getNormalizedFilePathE uri
@@ -162,7 +162,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
         let allDiags = diags <> hDiags
         pure $ InL $ generateLensFromGlobalDiags allDiags
 
-codeLensResolveProvider :: ResolveFunction IdeState TypeLensesResolve Method_CodeLensResolve
+codeLensResolveProvider :: ResolveFunction IdeState TypeLensesResolve 'Method_CodeLensResolve
 codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve = do
   nfp <- getNormalizedFilePathE uri
   (gblSigs@(GlobalBindingTypeSigsResult _), pm) <-

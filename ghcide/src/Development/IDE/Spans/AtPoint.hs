@@ -245,9 +245,9 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
 
         -- Check for evidence bindings
         isInternal :: (Identifier, IdentifierDetails a) -> Bool
-        isInternal (Right _, dets) =
+        isInternal (Right _, _dets) = -- dets is only used in GHC >= 9.0.1
 #if MIN_VERSION_ghc(9,0,1)
-          any isEvidenceContext $ identInfo dets
+          any isEvidenceContext $ identInfo _dets
 #else
           False
 #endif

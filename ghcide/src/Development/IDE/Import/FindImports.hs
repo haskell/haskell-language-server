@@ -164,7 +164,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
     hpt_deps :: [UnitId]
     hpt_deps = homeUnitDepends units
 #else
-      import_paths'
+      _import_paths'
 #endif
 
       -- first try to find the module as a file. If we can't find it try to find it in the package
@@ -172,7 +172,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
       -- Here the importPaths for the current modules are added to the front of the import paths from the other components.
       -- This is particularly important for Paths_* modules which get generated for every component but unless you use it in
       -- each component will end up being found in the wrong place and cause a multi-cradle match failure.
-    import_paths' =
+    _import_paths' = -- import_paths' is only used in GHC < 9.4
 #if MIN_VERSION_ghc(9,3,0)
             import_paths
 #else

@@ -240,16 +240,11 @@ library
                      -Wwarn=missing-signatures
                      -Wwarn=duplicate-exports
                      -Wwarn=dodgy-exports
-                     -Wwarn=unused-top-binds
                      -Wwarn=incomplete-patterns
-                     -Wwarn=unused-local-binds
-                     -Wwarn=orphans
-                     -Wwarn=unused-matches
                      -Wwarn=overlapping-patterns
                      -Wwarn=incomplete-record-updates
-                     -Wwarn=unticked-promoted-constructors
     
-    if impl(ghc >= 9) && flag(pedantic)
+    if impl(ghc >= 9.2) && flag(pedantic)
         ghc-options: -Wwarn=ambiguous-fields
 
     if impl(ghc >= 9)

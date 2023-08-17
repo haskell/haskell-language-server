@@ -140,25 +140,25 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
                 }
     cvtFld _  = Nothing
 #else
-          [ (defDocumentSymbol l :: DocumentSymbol)
+          [ (defDocumentSymbol l'' :: DocumentSymbol)
             { _name           = printOutputable n
             , _kind           = SymbolKind_Constructor
             , _selectionRange = realSrcSpanToRange l'
            , _children       = conArgRecordFields (con_args x)
             }
-        | L (locA -> (RealSrcSpan l _ )) x <- dd_cons
+        | L (locA -> (RealSrcSpan l'' _ )) x <- dd_cons
         , L (locA -> (RealSrcSpan l' _)) n <- getConNames' x
         ]
     }
   where
     -- | Extract the record fields of a constructor
     conArgRecordFields (RecCon (L _ lcdfs)) = Just
-      [ (defDocumentSymbol l :: DocumentSymbol)
+      [ (defDocumentSymbol l' :: DocumentSymbol)
           { _name = printOutputable n
           , _kind = SymbolKind_Field
           }
       | L _ cdf <- lcdfs
-      , L (locA -> (RealSrcSpan l _)) n <- rdrNameFieldOcc . unLoc <$> cd_fld_names cdf
+      , L (locA -> (RealSrcSpan l' _)) n <- rdrNameFieldOcc . unLoc <$> cd_fld_names cdf
       ]
     conArgRecordFields _ = Nothing
 #endif
