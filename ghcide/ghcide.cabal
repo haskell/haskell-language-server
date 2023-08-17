@@ -245,8 +245,11 @@ library
                      -Wwarn=unused-local-binds
                      -Wwarn=orphans
                      -Wwarn=unused-matches
-                     -Wwarn=ambiguous-fields
                      -Wwarn=overlapping-patterns
+                     -Wwarn=incomplete-record-updates
+    
+    if impl(ghc >= 9) && flag(pedantic)
+        ghc-options: -Wwarn=ambiguous-fields
 
     if impl(ghc >= 9)
         ghc-options: -Wunused-packages

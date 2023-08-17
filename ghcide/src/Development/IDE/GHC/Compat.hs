@@ -142,6 +142,7 @@ module Development.IDE.GHC.Compat(
 #endif
     ) where
 
+import           Prelude                               hiding (mod)
 import           Development.IDE.GHC.Compat.Core hiding (moduleUnitId)
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Iface
