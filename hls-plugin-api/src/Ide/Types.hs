@@ -286,17 +286,18 @@ data PluginDescriptor (ideState :: Type) =
                    --   The file extension must have a leading '.'.
                    }
 
--- A description of the types of files that the plugin
--- is intended to work on. It includes the origin of the
--- file (the project, a dependency, or both), and the
--- file extensions the plugin should work on.
+-- | A description of the types of files that the plugin
+--   is intended to work on. It includes the origin of the
+--   file (the project, a dependency, or both), and the
+--   file extensions the plugin should work on.
 data PluginFileType = PluginFileType [SourceFileOrigin] [T.Text]
 
 data SourceFileOrigin = FromProject | FromDependency deriving Eq
 
--- Dependency files are written to the .hls/dependencies directory.
--- If a file is not in this directory, we assume that it is a
--- project file.
+-- | Dependency files are written to the .hls/dependencies directory
+--   under the project root.
+--   If a file is not in this directory, we assume that it is a
+--   project file.
 getSourceFileOrigin :: NormalizedFilePath -> SourceFileOrigin
 getSourceFileOrigin f =
     case [".hls", "dependencies"] `isInfixOf` (splitDirectories file) of
