@@ -21,7 +21,7 @@ import           Test.Hls                        (CodeAction (CodeAction, _title
                                                   TestName, TestTree,
                                                   TextDocumentIdentifier,
                                                   assertBool, assertFailure,
-                                                  defaultTestRunner,
+                                                  def, defaultTestRunner,
                                                   executeCodeAction,
                                                   getCodeActions,
                                                   goldenWithHaskellDoc,
@@ -61,13 +61,13 @@ main :: IO ()
 main = defaultTestRunner $ testGroup "Qualify Imported Names"
   [
     testCase "No CodeAction when not at import" $
-      runSessionWithServer pluginDescriptor testDataDir $ do
+      runSessionWithServer def pluginDescriptor testDataDir $ do
         let point = makePoint 1 1
         document <- openDoc "NoImport.hs" "haskell"
         actions <- getCodeActions document $ pointToRange point
         liftIO $ assertBool (makeCodeActionFoundAtString point) (isEmpty actions)
   , testCase "No CodeAction when import is qualified" $
-      runSessionWithServer pluginDescriptor testDataDir $ do
+      runSessionWithServer def pluginDescriptor testDataDir $ do
         let point = makePoint 3 1
         document <- openDoc "QualifiedImport.hs" "haskell"
         actions <- getCodeActions document $ pointToRange point
@@ -139,7 +139,7 @@ getCodeActionTitle commandOrCodeAction
 
 goldenWithQualifyImportedNames :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithQualifyImportedNames testName path =
-  goldenWithHaskellDoc pluginDescriptor testName testDataDir path "expected" "hs"
+  goldenWithHaskellDoc def pluginDescriptor testName testDataDir path "expected" "hs"
 
 pointToRange :: Point -> Range
 pointToRange Point {..}

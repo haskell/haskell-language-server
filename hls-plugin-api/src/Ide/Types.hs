@@ -179,14 +179,12 @@ data Config =
 
 instance ToJSON Config where
   toJSON Config{..} =
-      object [ "haskell" .= r ]
-    where
-      r = object [ "checkParents"                .= checkParents
-                 , "checkProject"                .= checkProject
-                 , "formattingProvider"          .= formattingProvider
-                 , "maxCompletions"              .= maxCompletions
-                 , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
-                 ]
+    object [ "checkParents"                .= checkParents
+           , "checkProject"                .= checkProject
+           , "formattingProvider"          .= formattingProvider
+           , "maxCompletions"              .= maxCompletions
+           , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
+           ]
 
 instance Default Config where
   def = Config

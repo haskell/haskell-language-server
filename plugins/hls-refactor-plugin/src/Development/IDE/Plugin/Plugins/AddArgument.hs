@@ -38,7 +38,6 @@ import           Language.Haskell.GHC.ExactPrint           (TransformT (..),
                                                             noAnnSrcSpanDP1,
                                                             runTransformT)
 import           Language.Haskell.GHC.ExactPrint.Transform (d1)
-import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 #endif
 

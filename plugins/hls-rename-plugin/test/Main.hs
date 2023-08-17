@@ -69,11 +69,7 @@ tests = testGroup "Rename"
 
 goldenWithRename :: TestName-> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithRename title path act =
-    goldenWithHaskellDoc renamePlugin title testDataDir path "expected" "hs" $ \doc -> do
-        sendConfigurationChanged $ toJSON $
-            def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] }
-        act doc
-
+    goldenWithHaskellDoc (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] }) renamePlugin title testDataDir path "expected" "hs" act
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

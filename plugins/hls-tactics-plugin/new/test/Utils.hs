@@ -65,7 +65,7 @@ runSessionForTactics =
   runSessionWithServer'
     (IdePlugins [plugin])
     def
-    (def { messageTimeout = 20 } )
+    (def { messageTimeout = 20, ignoreLogNotifications = False } )
     fullCaps
     tacticPath
 

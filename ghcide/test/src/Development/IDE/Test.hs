@@ -50,7 +50,7 @@ import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult,
                                                   ideResultSuccess)
 import           Development.IDE.Test.Diagnostic
-import           GHC.TypeLits                    ( symbolVal )
+import           GHC.TypeLits                    (symbolVal)
 import           Ide.Plugin.Config               (CheckParents, checkProject)
 import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
@@ -241,10 +241,7 @@ waitForGC = waitForCustomMessage "ghcide/GC" $ \v ->
         _           -> Nothing
 
 configureCheckProject :: Bool -> Session ()
-configureCheckProject overrideCheckProject =
-    sendNotification SMethod_WorkspaceDidChangeConfiguration
-        (DidChangeConfigurationParams $ toJSON
-            def{checkProject = overrideCheckProject})
+configureCheckProject overrideCheckProject = setConfigSection "haskell" (toJSON $ def{checkProject = overrideCheckProject})
 
 -- | Pattern match a message from ghcide indicating that a file has been indexed
 isReferenceReady :: FilePath -> Session ()

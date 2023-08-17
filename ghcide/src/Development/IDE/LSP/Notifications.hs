@@ -32,12 +32,10 @@ import           Development.IDE.Core.FileStore        (registerFileWatches,
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest       hiding (Log, LogShake)
-import           Development.IDE.Core.RuleTypes        (GetClientSettings (..))
 import           Development.IDE.Core.Service          hiding (Log, LogShake)
 import           Development.IDE.Core.Shake            hiding (Log, Priority)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Shake           (toKey)
 import           Ide.Logger
 import           Ide.Types
 import           Numeric.Natural
@@ -119,12 +117,9 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
           $ add       (foldMap (S.singleton . parseWorkspaceFolder) (_added   events))
           . substract (foldMap (S.singleton . parseWorkspaceFolder) (_removed events))
 
-  , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeConfiguration $
-      \ide vfs _ (DidChangeConfigurationParams cfg) -> liftIO $ do
-        let msg = Text.pack $ show cfg
-        logDebug (ideLogger ide) $ "Configuration changed: " <> msg
-        modifyClientSettings ide (const $ Just cfg)
-        setSomethingModified (VFSModified vfs) ide [toKey GetClientSettings emptyFilePath] "config change"
+  -- Nothing additional to do here beyond what `lsp` does for us, but this prevents
+  -- complaints about there being no handler defined
+  , mkPluginNotificationHandler LSP.SMethod_WorkspaceDidChangeConfiguration mempty
 
   , mkPluginNotificationHandler LSP.SMethod_Initialized $ \ide _ _ _ -> do
       --------- Initialize Shake session --------------------------------------------------------------------

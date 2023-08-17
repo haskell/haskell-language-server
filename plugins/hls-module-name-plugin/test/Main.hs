@@ -38,7 +38,7 @@ tests =
       executeCommand c
       void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
   , testCase "Should not show code lens if the module name is correct" $
-      runSessionWithServer moduleNamePlugin testDataDir $ do
+      runSessionWithServer def moduleNamePlugin testDataDir $ do
         doc <- openDoc "CorrectName.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ lenses @?= []
@@ -49,7 +49,7 @@ tests =
       executeCommand c
       void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
   , testCase "Keep stale lens even if parse failed" $ do
-      runSessionWithServer moduleNamePlugin testDataDir $ do
+      runSessionWithServer def moduleNamePlugin testDataDir $ do
         doc <- openDoc "Stale.hs" "haskell"
         oldLens <- getCodeLenses doc
         let edit = TextEdit (mkRange 1 0 1 0) "f ="
@@ -61,7 +61,7 @@ tests =
   ]
 
 goldenWithModuleName :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithModuleName title path = goldenWithHaskellDoc moduleNamePlugin title testDataDir path "expected" "hs"
+goldenWithModuleName title path = goldenWithHaskellDoc def moduleNamePlugin title testDataDir path "expected" "hs"
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

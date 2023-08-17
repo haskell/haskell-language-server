@@ -36,7 +36,7 @@ library
     , hls-plugin-api         == 2.1.0.0
     , hls-refactor-plugin
     , lens
-    , lsp                    >=2.1.0.0
+    , lsp                    >=2.2.0.0
     , mtl
     , text
     , transformers

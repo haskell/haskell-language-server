@@ -80,13 +80,10 @@ codeActionTitle _                         = Nothing
 
 goldenWithRetrie :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithRetrie title path act =
-    goldenWithHaskellDoc testPlugins title testDataDir path "expected" "hs" $ \doc -> do
-        sendConfigurationChanged $ toJSON $
-            def { plugins = M.fromList [("retrie", def)] }
-        act doc
+    goldenWithHaskellDoc (def { plugins = M.fromList [("retrie", def)] }) testPlugins title testDataDir path "expected" "hs" act
 
 runWithRetrie :: Session a -> IO a
-runWithRetrie = runSessionWithServer testPlugins testDataDir
+runWithRetrie = runSessionWithServer def testPlugins testDataDir
 
 testPlugins :: PluginTestDescriptor Development.IDE.GHC.ExactPrint.Log
 testPlugins =

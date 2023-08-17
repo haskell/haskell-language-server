@@ -13,12 +13,16 @@ module Development.IDE.Main
 ) where
 
 import           Control.Concurrent.Extra                 (withNumCapabilities)
+import           Control.Concurrent.MVar                  (newEmptyMVar,
+                                                           putMVar, tryReadMVar)
 import           Control.Concurrent.STM.Stats             (dumpSTMStats)
 import           Control.Exception.Safe                   (SomeException,
                                                            catchAny,
                                                            displayException)
 import           Control.Monad.Extra                      (concatMapM, unless,
                                                            when)
+import           Control.Monad.IO.Class                   (liftIO)
+import qualified Data.Aeson                               as J
 import           Data.Coerce                              (coerce)
 import           Data.Default                             (Default (def))
 import           Data.Foldable                            (traverse_)
@@ -31,11 +35,14 @@ import           Data.Maybe                               (catMaybes, isJust)
 import qualified Data.Text                                as T
 import           Development.IDE                          (Action,
                                                            Priority (Debug, Error),
-                                                           Rules, hDuplicateTo')
+                                                           Rules, emptyFilePath,
+                                                           hDuplicateTo')
 import           Development.IDE.Core.Debouncer           (Debouncer,
                                                            newAsyncDebouncer)
-import           Development.IDE.Core.FileStore           (isWatchSupported)
+import           Development.IDE.Core.FileStore           (isWatchSupported,
+                                                           setSomethingModified)
 import           Development.IDE.Core.IdeConfiguration    (IdeConfiguration (..),
+                                                           modifyClientSettings,
                                                            registerIdeConfiguration)
 import           Development.IDE.Core.OfInterest          (FileOfInterestStatus (OnDisk),
                                                            kick,
@@ -83,7 +90,7 @@ import           Development.IDE.Types.Options            (IdeGhcSession,
                                                            defaultIdeOptions,
                                                            optModifyDynFlags,
                                                            optTesting)
-import           Development.IDE.Types.Shake              (WithHieDb)
+import           Development.IDE.Types.Shake              (WithHieDb, toKey)
 import           GHC.Conc                                 (getNumProcessors)
 import           GHC.IO.Encoding                          (setLocaleEncoding)
 import           GHC.IO.Handle                            (hDuplicate)
@@ -95,8 +102,8 @@ import           Ide.Logger                               (Logger,
                                                            Recorder,
                                                            WithPriority,
                                                            cmapWithPrio,
-                                                           logWith, nest, vsep,
-                                                           (<+>))
+                                                           logDebug, logWith,
+                                                           nest, vsep, (<+>))
 import           Ide.Plugin.Config                        (CheckParents (NeverCheck),
                                                            Config, checkParents,
                                                            checkProject,
@@ -289,7 +296,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.optExecuteCommandCommands = LSP.optExecuteCommandCommands argsLspOptions <> Just hlsCommands }
-        argsOnConfigChange = getConfigFromNotification argsHlsPlugins
+        argsParseConfig = getConfigFromNotification argsHlsPlugins
         rules = argsRules >> pluginRules plugins
 
     debouncer <- argsDebouncer
@@ -304,6 +311,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
             ioT <- offsetTime
             logWith recorder Info $ LogLspStart (pluginId <$> ipMap argsHlsPlugins)
 
+            ideStateVar <- newEmptyMVar
             let getIdeState :: LSP.LanguageContextEnv Config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState
                 getIdeState env rootPath withHieDb hieChan = do
                   traverse_ IO.setCurrentDirectory rootPath
@@ -334,7 +342,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                               }
                       caps = LSP.resClientCapabilities env
                   monitoring <- argsMonitoring
-                  initialise
+                  ide <- initialise
                       (cmapWithPrio LogService recorder)
                       argsDefaultHlsConfig
                       argsHlsPlugins
@@ -346,10 +354,24 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                       withHieDb
                       hieChan
                       monitoring
+                  putMVar ideStateVar ide
+                  pure ide
 
             let setup = setupLSP (cmapWithPrio LogLanguageServer recorder) argsGetHieDbLoc (pluginHandlers plugins) getIdeState
+                -- See Note [Client configuration in Rules]
+                onConfigChange cfg = do
+                  -- TODO: this is nuts, we're converting back to JSON just to get a fingerprint
+                  let cfgObj = J.toJSON cfg
+                  mide <- liftIO $ tryReadMVar ideStateVar
+                  case mide of
+                    Nothing -> pure ()
+                    Just ide -> liftIO $ do
+                        let msg = T.pack $ show cfg
+                        logDebug (Shake.ideLogger ide) $ "Configuration changed: " <> msg
+                        modifyClientSettings ide (const $ Just cfgObj)
+                        setSomethingModified Shake.VFSUnmodified ide [toKey Rules.GetClientSettings emptyFilePath] "config change"
 
-            runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsOnConfigChange setup
+            runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsDefaultHlsConfig argsParseConfig onConfigChange setup
             dumpSTMStats
         Check argFiles -> do
           dir <- maybe IO.getCurrentDirectory return argsProjectRoot

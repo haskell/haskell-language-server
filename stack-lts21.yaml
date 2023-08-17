@@ -53,9 +53,9 @@ extra-deps:
 - algebraic-graphs-0.6.1
 - retrie-1.2.2
 - stylish-haskell-0.14.4.0
-- lsp-2.1.0.0@sha256:ef6fc28eac6dc27672cd8471c9f83f14de646a9c1fcaf993a451d2ae4de274e8,3533
-- lsp-test-0.15.0.1@sha256:31e3a9969706dbdf6713c2dec4cad02efd9a3d75bf9b26c95cb442535aeaf998,3822
-- lsp-types-2.0.1.0@sha256:70a822473de72c165495c2eed00f4c2a728f7fe1e6d7d8b4709d474a41860940,29317
+- lsp-2.2.0.0
+- lsp-test-0.16.0.0
+- lsp-types-2.0.2.0
 
 
 configure-options:

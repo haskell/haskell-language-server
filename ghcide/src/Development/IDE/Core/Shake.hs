@@ -325,6 +325,7 @@ getShakeExtrasRules = do
       -- This will actually crash HLS
       Nothing -> liftIO $ fail "missing ShakeExtras"
 
+-- See Note [Client configuration in Rules]
 -- | Returns the client configuration, creating a build dependency.
 --   You should always use this function when accessing client configuration
 --   from build rules.
