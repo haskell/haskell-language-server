@@ -8,7 +8,6 @@ import qualified Data.Text                         as T
 import           Ide.Plugin.Cabal                  (descriptor)
 import qualified Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Types
-import           System.Directory                  (getCurrentDirectory)
 import           System.FilePath
 import           Test.Hls
 
@@ -37,15 +36,8 @@ simpleCabalPrefixInfoFromFp prefix fp =
         , completionFileName = "test"
         }
 
-getTestDir :: IO FilePath
-getTestDir = do
-    cwd <- getCurrentDirectory
-    pure $ addTrailingPathSeparator $ cwd </> "test" </> "testdata"
-
-getFilePathComplTestDir :: IO FilePath
-getFilePathComplTestDir = do
-    testDir <- getTestDir
-    pure $ addTrailingPathSeparator $ testDir </> "filepath-completions"
+filePathComplTestDir :: FilePath
+filePathComplTestDir = addTrailingPathSeparator $ testDataDir </> "filepath-completions"
 
 runCabalTestCaseSession :: TestName -> FilePath -> Session () -> TestTree
 runCabalTestCaseSession title subdir = testCase title . runCabalSession subdir
