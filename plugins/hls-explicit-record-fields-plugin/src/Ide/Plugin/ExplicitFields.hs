@@ -40,7 +40,6 @@ import           Development.IDE.Core.RuleTypes   (TcModuleResult (..),
                                                    TypeCheck (..))
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       (HsConDetails (RecCon),
-                                                   HsExpr (XExpr),
                                                    HsRecFields (..), LPat,
                                                    Outputable, getLoc,
                                                    recDotDot, unLoc)
@@ -87,7 +86,8 @@ import           Language.LSP.Protocol.Types      (CodeAction (..),
                                                    type (|?) (InL, InR))
 
 #if MIN_VERSION_ghc(9,0,0)
-import           Development.IDE.GHC.Compat       (HsExpansion (HsExpanded))
+import           Development.IDE.GHC.Compat       (HsExpansion (HsExpanded),
+                                                   HsExpr (XExpr))
 #endif
 
 data Log
