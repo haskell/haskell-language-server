@@ -69,6 +69,10 @@ Plugins have a generic config to control their behaviour. The schema of such con
     - `haskell.plugin.ghcide-type-lenses.config.mode`, default `always`: Control how type lenses are shown. One of `always`, `exported`, `diagnostics`.
   - `hlint`:
     - `haskell.plugin.hlint.config.flags`, default empty: List of flags used by hlint.
+  - `ormolu`:
+    - `haskell.plugin.ormolu.config.external`, default `false`: Use an external `ormolu` executable rather than the one packaged with HLS.
+  - `fourmolu`:
+    - `haskell.plugin.fourmolu.config.external`, default `false`: Use an external `fourmolu` executable rather than the one packaged with HLS.
 This reference of configuration can be outdated at any time but we can query the `haskell-server-executable` about what configuration is effectively used:
 - `haskell-language-server generate-default-config`: will print the json configuration with all default values. It can be used as template to modify it.
 - `haskell-language-server vscode-extension-schema`: will print a json schema used to setup the haskell vscode extension. But it is useful to see what range of values can an option take and a description about it.
