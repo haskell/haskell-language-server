@@ -141,7 +141,7 @@ codeGutsToCoreFile
 codeGutsToCoreFile hash CgGuts{..} = CoreFile (map (toIfaceTopBind1 cg_module) cg_binds) hash
 #else
 codeGutsToCoreFile hash CgGuts{..} = CoreFile (map (toIfaceTopBind1 cg_module) $ filter isNotImplictBind cg_binds) hash
-#endif
+
 -- | Implicit binds can be generated from the interface and are not tidied,
 -- so we must filter them out
 isNotImplictBind :: CoreBind -> Bool
@@ -150,6 +150,7 @@ isNotImplictBind bind = any (not . isImplicitId) $ bindBindings bind
 bindBindings :: CoreBind -> [Var]
 bindBindings (NonRec b _) = [b]
 bindBindings (Rec bnds)   = map fst bnds
+#endif
 
 getImplicitBinds :: TyCon -> [CoreBind]
 getImplicitBinds tc = cls_binds ++ getTyConImplicitBinds tc

@@ -1634,15 +1634,15 @@ coreFileToCgGuts session iface details core_file = do
         })
   core_binds <- initIfaceCheck (text "l") hsc_env' $ typecheckCoreFile this_mod types_var core_file
       -- Implicit binds aren't saved, so we need to regenerate them ourselves.
-  let implicit_binds = concatMap getImplicitBinds tyCons
+  let _implicit_binds = concatMap getImplicitBinds tyCons -- only used if GHC < 9.6
       tyCons = typeEnvTyCons (md_types details)
 #if MIN_VERSION_ghc(9,5,0)
   -- In GHC 9.6, the implicit binds are tidied and part of core_binds
   pure $ CgGuts this_mod tyCons core_binds [] NoStubs [] mempty (emptyHpcInfo False) Nothing []
 #elif MIN_VERSION_ghc(9,3,0)
-  pure $ CgGuts this_mod tyCons (implicit_binds ++ core_binds) [] NoStubs [] mempty (emptyHpcInfo False) Nothing []
+  pure $ CgGuts this_mod tyCons (_implicit_binds ++ core_binds) [] NoStubs [] mempty (emptyHpcInfo False) Nothing []
 #else
-  pure $ CgGuts this_mod tyCons (implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
+  pure $ CgGuts this_mod tyCons (_implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
 #endif
 
 coreFileToLinkable :: LinkableType -> HscEnv -> ModSummary -> ModIface -> ModDetails -> CoreFile -> UTCTime -> IO ([FileDiagnostic], Maybe HomeModInfo)
