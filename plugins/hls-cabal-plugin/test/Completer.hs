@@ -3,15 +3,18 @@
 
 module Completer where
 
-import           Control.Lens                                   ((^.))
+import           Control.Lens                                   ((^.), (^?))
+import           Control.Lens.Prism
 import qualified Data.ByteString                                as ByteString
+import           Data.Maybe                                     (mapMaybe)
 import qualified Data.Text                                      as T
 import           Distribution.PackageDescription.Parsec         (parseGenericPackageDescriptionMaybe)
 import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
 import           Ide.Plugin.Cabal.Completion.Completer.Types    (CompleterData (..))
 import           Ide.Plugin.Cabal.Completion.Completions
-import           Ide.Plugin.Cabal.Completion.Types
+import           Ide.Plugin.Cabal.Completion.Types              (CabalPrefixInfo (..),
+                                                                 StanzaName)
 import           Ide.Plugin.Cabal.Parse                         (GenericPackageDescription)
 import qualified Language.LSP.Protocol.Lens                     as L
 import qualified Language.LSP.VFS                               as VFS
@@ -23,12 +26,30 @@ completerTests :: TestTree
 completerTests =
   testGroup
     "Completer Tests"
-    [ fileCompleterTests,
+    [ basicCompleterTests,
+      fileCompleterTests,
       filePathCompletionContextTests,
       directoryCompleterTests,
       completionHelperTests,
       filePathExposedModulesTests,
       exposedModuleCompleterTests
+    ]
+
+basicCompleterTests :: TestTree
+basicCompleterTests =
+  testGroup
+    "Basic Completer Tests"
+    [ runCabalTestCaseSession "In stanza context - stanza should not be suggested" "" $ do
+        doc <- openDoc "completer.cabal" "cabal"
+        compls <- getCompletions doc (Position 11 7)
+        let complTexts = mapMaybe (^? L.textEdit . _Just . _L . L.newText) compls
+        liftIO $ assertBool "does not suggest library" $ "library" `notElem` complTexts
+        liftIO $ assertBool "suggests library keyword" $ "extra-libraries:" `elem` complTexts
+    , runCabalTestCaseSession "In top level context - stanza should be suggested" "" $ do
+        doc <- openDoc "completer.cabal" "cabal"
+        compls <- getCompletions doc (Position 8 2)
+        let complTexts = mapMaybe (^? L.textEdit . _Just . _L . L.newText) compls
+        liftIO $ assertBool "suggests benchmark" $ "benchmark" `elem` complTexts
     ]
 
 fileCompleterTests :: TestTree
