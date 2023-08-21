@@ -4,17 +4,17 @@
 
 module Context where
 
-import           Control.Monad.Trans.Maybe                      (runMaybeT)
-import qualified Data.Text                                      as T
-import qualified Data.Text.Utf16.Rope                           as Rope
+import           Control.Monad.Trans.Maybe                   (runMaybeT)
+import qualified Data.Text                                   as T
+import qualified Data.Text.Utf16.Rope                        as Rope
 import           Ide.Plugin.Cabal
-import           Ide.Plugin.Cabal.Completion.Completer.FilePath
+import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completions
-import           Ide.Plugin.Cabal.Completion.Types              (Context,
-                                                                 FieldContext (KeyWord, None),
-                                                                 StanzaContext (Stanza, TopLevel))
+import           Ide.Plugin.Cabal.Completion.Types           (Context,
+                                                              FieldContext (KeyWord, None),
+                                                              StanzaContext (Stanza, TopLevel))
 import           Test.Hls
-import           Utils                                          as T
+import           Utils                                       as T
 
 cabalPlugin :: PluginTestDescriptor Ide.Plugin.Cabal.Log
 cabalPlugin = mkPluginTestDescriptor descriptor "cabal context"
@@ -32,31 +32,25 @@ pathCompletionInfoFromCompletionContextTests =
     testGroup
         "Completion Info to Completion Context Tests"
         [ testCase "Current Directory" $ do
-            testDir <- getTestDir
-            let complInfo = pathCompletionInfoFromCabalPrefixInfo $ simpleCabalPrefixInfoFromFp "" testDir
+            let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "" testDataDir
             queryDirectory complInfo @?= "./"
         , testCase "Current Directory - partly written next" $ do
-            testDir <- getTestDir
-            let complInfo = pathCompletionInfoFromCabalPrefixInfo $ simpleCabalPrefixInfoFromFp "di" testDir
+            let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "di" testDataDir
             queryDirectory complInfo @?= "./"
             pathSegment complInfo @?= "di"
         , testCase "Current Directory - alternative writing" $ do
-            testDir <- getTestDir
-            let complInfo = pathCompletionInfoFromCabalPrefixInfo $ simpleCabalPrefixInfoFromFp "./" testDir
+            let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "./" testDataDir
             queryDirectory complInfo @?= "./"
         , testCase "Subdirectory" $ do
-            testDir <- getTestDir
-            let complInfo = pathCompletionInfoFromCabalPrefixInfo $ simpleCabalPrefixInfoFromFp "dir1/" testDir
+            let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "dir1/" testDataDir
             queryDirectory complInfo @?= "dir1/"
             pathSegment complInfo @?= ""
         , testCase "Subdirectory - partly written next" $ do
-            testDir <- getTestDir
-            let complInfo = pathCompletionInfoFromCabalPrefixInfo $ simpleCabalPrefixInfoFromFp "dir1/d" testDir
+            let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "dir1/d" testDataDir
             queryDirectory complInfo @?= "dir1/"
             pathSegment complInfo @?= "d"
         , testCase "Subdirectory - partly written next" $ do
-            testDir <- getTestDir
-            let complInfo = pathCompletionInfoFromCabalPrefixInfo $ simpleCabalPrefixInfoFromFp "dir1/dir2/d" testDir
+            let complInfo = pathCompletionInfoFromCabalPrefixInfo "" $ simpleCabalPrefixInfoFromFp "dir1/dir2/d" testDataDir
             queryDirectory complInfo @?= "dir1/dir2/"
             pathSegment complInfo @?= "d"
         ]
@@ -172,6 +166,7 @@ getContextTests =
 -- ------------------------------------------------------------------------
 -- Test Data
 -- ------------------------------------------------------------------------
+
 libraryStanzaData :: [T.Text]
 libraryStanzaData =
     [ "cabal-version:      3.0"

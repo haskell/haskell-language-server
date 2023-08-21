@@ -6,26 +6,16 @@ import           Control.Monad                                  (filterM)
 import           Control.Monad.Extra                            (concatForM,
                                                                  forM)
 import           Data.List                                      (stripPrefix)
-import qualified Data.List                                      as List
 import           Data.Maybe                                     (fromMaybe)
 import qualified Data.Text                                      as T
-import           Distribution.PackageDescription                (Benchmark (..),
-                                                                 BuildInfo (..),
-                                                                 CondTree (condTreeData),
-                                                                 Executable (..),
-                                                                 GenericPackageDescription (..),
-                                                                 Library (..),
-                                                                 UnqualComponentName,
-                                                                 mkUnqualComponentName,
-                                                                 testBuildInfo)
-import           Distribution.Utils.Path                        (getSymbolicPath)
+import           Distribution.PackageDescription                (GenericPackageDescription)
 import           Ide.Logger                                     (Priority (..),
                                                                  Recorder,
                                                                  WithPriority,
                                                                  logWith)
-import           Ide.Plugin.Cabal.Completion.Completer.FilePath (PathCompletionInfo (..),
-                                                                 listFileCompletions,
+import           Ide.Plugin.Cabal.Completion.Completer.FilePath (listFileCompletions,
                                                                  mkCompletionDirectory)
+import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Types
 import           Ide.Plugin.Cabal.Completion.Types
@@ -53,56 +43,6 @@ modulesCompleter extractionFunction recorder cData = do
     sName = stanzaName cData
     prefInfo = cabalPrefixInfo cData
 
--- | Extracts the source directories of the library stanza.
-sourceDirsExtractionLibrary :: Maybe StanzaName -> GenericPackageDescription -> [FilePath]
-sourceDirsExtractionLibrary Nothing gpd =
-  -- we use condLibrary to get the information contained in the library stanza
-  -- since the library in PackageDescription is not populated by us
-  case libM of
-    Just lib -> do
-      map getSymbolicPath $ hsSourceDirs $ libBuildInfo $ condTreeData lib
-    Nothing -> []
-  where
-    libM = condLibrary gpd
-sourceDirsExtractionLibrary name gpd = extractRelativeDirsFromStanza name gpd condSubLibraries libBuildInfo
-
--- | Extracts the source directories of the executable stanza with the given name.
-sourceDirsExtractionExecutable :: Maybe StanzaName -> GenericPackageDescription -> [FilePath]
-sourceDirsExtractionExecutable name gpd = extractRelativeDirsFromStanza name gpd condExecutables buildInfo
-
--- | Extracts the source directories of the test suite stanza with the given name.
-sourceDirsExtractionTestSuite :: Maybe StanzaName -> GenericPackageDescription -> [FilePath]
-sourceDirsExtractionTestSuite name gpd = extractRelativeDirsFromStanza name gpd condTestSuites testBuildInfo
-
--- | Extracts the source directories of benchmark stanza with the given name.
-sourceDirsExtractionBenchmark :: Maybe StanzaName -> GenericPackageDescription -> [FilePath]
-sourceDirsExtractionBenchmark name gpd = extractRelativeDirsFromStanza name gpd condBenchmarks benchmarkBuildInfo
-
--- | Takes a possible stanza name, a GenericPackageDescription,
---  a function to access the stanza information we are interested in
---  and a function to access the build info from the specific stanza.
---
---  Returns a list of relative source directory paths specified for the extracted stanza.
-extractRelativeDirsFromStanza ::
-  Maybe StanzaName ->
-  GenericPackageDescription ->
-  (GenericPackageDescription -> [(UnqualComponentName, CondTree b c a)]) ->
-  (a -> BuildInfo) ->
-  [FilePath]
-extractRelativeDirsFromStanza Nothing _ _ _ = []
-extractRelativeDirsFromStanza (Just name) gpd getStanza getBuildInfo
-  | Just stanza <- stanzaM = map getSymbolicPath $ hsSourceDirs $ getBuildInfo stanza
-  | otherwise = []
-  where
-    stanzaM = fmap (condTreeData . snd) res
-    allStanzasM = getStanza gpd
-    res =
-      List.find
-        ( \(n, _) ->
-            n == mkUnqualComponentName (T.unpack name)
-        )
-        allStanzasM
-
 -- | Takes a list of source directories and returns a list of path completions
 --  relative to any of the passed source directories which fit the passed prefix info.
 filePathsForExposedModules :: Recorder (WithPriority Log) -> [FilePath] -> CabalPrefixInfo -> IO [T.Text]
@@ -111,34 +51,36 @@ filePathsForExposedModules recorder srcDirs prefInfo = do
     srcDirs
     ( \dir' -> do
         let dir = FP.normalise dir'
-        let pInfo =
-              PathCompletionInfo
-                { isStringNotationPath = Nothing,
-                  pathSegment = T.pack $ FP.takeFileName prefix,
-                  queryDirectory = FP.addTrailingPathSeparator $ FP.takeDirectory prefix,
-                  workingDirectory = completionWorkingDir prefInfo FP.</> dir
-                }
-        completions <- listFileCompletions recorder pInfo
-        validExposedCompletions <- filterM (isValidExposedModulePath pInfo) completions
-        let toMatch = pathSegment pInfo
-            scored = Fuzzy.simpleFilter Fuzzy.defChunkSize Fuzzy.defMaxResults toMatch (map T.pack validExposedCompletions)
+            pathInfo = pathCompletionInfoFromCabalPrefixInfo dir modPrefInfo
+        completions <- listFileCompletions recorder pathInfo
+        validExposedCompletions <- filterM (isValidExposedModulePath pathInfo) completions
+        let toMatch = pathSegment pathInfo
+            scored = Fuzzy.simpleFilter
+              Fuzzy.defChunkSize
+              Fuzzy.defMaxResults
+              toMatch
+              (map T.pack validExposedCompletions)
         forM
           scored
           ( \compl' -> do
               let compl = Fuzzy.original compl'
-              fullFilePath <- mkExposedModulePathCompletion pInfo $ T.unpack compl
+              fullFilePath <- mkExposedModulePathCompletion pathInfo $ T.unpack compl
               pure fullFilePath
           )
     )
   where
     prefix =
-      exposedModulePathToFp $
+      T.pack $ exposedModulePathToFp $
         completionPrefix prefInfo
-    -- \| Takes a PathCompletionInfo and a path segment and checks whether
+    -- build completion info relative to the source dir,
+    -- we overwrite the prefix written in the cabal file with its translation
+    -- to filepath syntax, since it is in exposed module syntax
+    modPrefInfo = prefInfo{completionPrefix=prefix}
+
+    --    Takes a PathCompletionInfo and a path segment and checks whether
     --    the path segment can be completed for an exposed module.
     --
     --    This is the case if the segment represents either a directory or a Haskell file.
-    --
     isValidExposedModulePath :: PathCompletionInfo -> FilePath -> IO Bool
     isValidExposedModulePath pInfo path = do
       let dir = mkCompletionDirectory pInfo
