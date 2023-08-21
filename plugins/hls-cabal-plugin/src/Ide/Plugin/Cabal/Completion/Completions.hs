@@ -49,7 +49,7 @@ contextToCompleter (TopLevel, KeyWord kw) =
 contextToCompleter (Stanza s _, None) =
   case Map.lookup s stanzaKeywordMap of
     Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
-    Just l  -> constantCompleter $ Map.keys l ++ Map.keys stanzaKeywordMap
+    Just l  -> constantCompleter $ Map.keys l
 -- if we are in a stanza's keyword's context we can complete possible values of that keyword
 contextToCompleter (Stanza s _, KeyWord kw) =
   case Map.lookup s stanzaKeywordMap of
