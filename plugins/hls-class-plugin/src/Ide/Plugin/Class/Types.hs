@@ -71,12 +71,18 @@ instance NFData InstanceBindTypeSigsResult where
 
 type instance RuleResult GetInstanceBindTypeSigs = InstanceBindTypeSigsResult
 
+data InstanceBindLensCommand = InstanceBindLensCommand
+    { commandUri :: Uri
+    , commandUid :: Int}
+    deriving (Generic, FromJSON, ToJSON)
+
 data GetInstanceBindLens = GetInstanceBindLens
     deriving (Generic, Show, Eq, Ord, Hashable, NFData)
 
 data InstanceBindLens = InstanceBindLens
-    { lensRange    :: [(Range, Int)]
-    , lensRendered :: IntMap.IntMap TextEdit
+    { lensRange             :: [(Range, Int)]
+    , lensRendered          :: IntMap.IntMap TextEdit
+    , lensEnabledExtensions :: [Extension]
     }
 
 newtype InstanceBindLensResult =
@@ -112,7 +118,7 @@ data BindInfo = BindInfo
 getInstanceBindLensRule :: Recorder (WithPriority Log) -> Rules ()
 getInstanceBindLensRule recorder = do
     defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetInstanceBindLens nfp -> runMaybeT $ do
-        (tmrRenamed ->  (hs_tyclds -> tycls, _, _, _)) <- useMT TypeCheck nfp
+        tmr@(tmrRenamed ->  (hs_tyclds -> tycls, _, _, _)) <- useMT TypeCheck nfp
         (InstanceBindTypeSigsResult allBinds) <- useMT GetInstanceBindTypeSigs nfp
 
         let -- declared instance methods without signatures
@@ -126,6 +132,7 @@ getInstanceBindLensRule recorder = do
         rangeIntText <- liftIO $ mapMaybeM getRangeWithSig targetSigs
         let lensRange = (\(range, int, _) -> (range, int)) <$> rangeIntText
             lensRendered = IntMap.fromList $ (\(range, int, text) -> (int, TextEdit range text)) <$> rangeIntText
+            lensEnabledExtensions = getExtensions $ tmrParsed tmr
         pure $ InstanceBindLensResult $ InstanceBindLens{..}
     where
         -- Match Binds with their signatures

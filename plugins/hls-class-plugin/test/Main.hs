@@ -10,8 +10,8 @@ module Main
   ( main
   ) where
 
-import           Control.Lens                  (Prism', prism', (^.), (^..),
-                                                (^?))
+import           Control.Lens                  (Prism', prism', view, (^.),
+                                                (^..), (^?))
 import           Control.Monad                 (void)
 import           Data.Maybe
 import           Data.Row                      ((.==))
@@ -111,7 +111,7 @@ codeLensTests = testGroup
     [ testCase "Has code lens" $ do
         runSessionWithServer classPlugin testDataDir $ do
             doc <- openDoc "CodeLensSimple.hs" "haskell"
-            lens <- getCodeLenses doc
+            lens <- getAndResolveCodeLenses doc
             let titles = map (^. L.title) $ mapMaybe (^. L.command) lens
             liftIO $ titles @?=
                 [ "(==) :: B -> B -> Bool"
@@ -120,7 +120,7 @@ codeLensTests = testGroup
     , testCase "No lens for TH" $ do
         runSessionWithServer classPlugin testDataDir $ do
             doc <- openDoc "TH.hs" "haskell"
-            lens <- getCodeLenses doc
+            lens <- getAndResolveCodeLenses doc
             liftIO $ length lens @?= 0
     , goldenCodeLens "Apply code lens" "CodeLensSimple" 1
     , goldenCodeLens "Apply code lens for local class" "LocalClassDefine" 0
@@ -133,11 +133,11 @@ codeLensTests = testGroup
     , testCase "keep stale lens" $ do
         runSessionWithServer classPlugin testDataDir $ do
             doc <- openDoc "Stale.hs" "haskell"
-            oldLens <- getCodeLenses doc
+            oldLens <- getAndResolveCodeLenses doc
             let edit = TextEdit (mkRange 4 11 4 12) "" -- Remove the `_`
             _ <- applyEdit doc edit
-            newLens <- getCodeLenses doc
-            liftIO $ newLens @?= oldLens
+            newLens <- getAndResolveCodeLenses doc
+            liftIO $ (view L.command <$> newLens ) @?= (view L.command <$> oldLens)
     ]
 
 _CACodeAction :: Prism' (Command |? CodeAction) CodeAction
@@ -148,7 +148,7 @@ _CACodeAction = prism' InR $ \case
 goldenCodeLens :: TestName -> FilePath -> Int -> TestTree
 goldenCodeLens title path idx =
     goldenWithHaskellDoc classPlugin title testDataDir path "expected" "hs" $ \doc -> do
-        lens <- getCodeLenses doc
+        lens <- getAndResolveCodeLenses doc
         executeCommand $ fromJust $ (lens !! idx) ^. L.command
         void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
