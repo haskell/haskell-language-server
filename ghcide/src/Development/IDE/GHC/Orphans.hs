@@ -18,6 +18,8 @@ import           Data.Hashable
 import           Data.String                (IsString (fromString))
 import           Data.Text                  (unpack)
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,0,0)
 import           Bag
 import           ByteCodeTypes
@@ -247,7 +249,7 @@ instance NFData HomeModLinkable where
   rnf = rwhnf
 #endif
 
-instance NFData (HsExpr (GhcPass 'Renamed)) where
+instance NFData (HsExpr (GhcPass Renamed)) where
     rnf = rwhnf
 
 instance NFData Extension where

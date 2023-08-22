@@ -110,6 +110,8 @@ import           HieDb.Utils
 import qualified System.Random                        as Random
 import           System.Random                        (RandomGen)
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,4,0)
 import           Data.IORef
 #endif

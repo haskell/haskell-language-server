@@ -48,6 +48,8 @@ module Development.IDE.GHC.Compat.Parser (
 import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Util
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,0,0)
 import qualified ApiAnnotation                   as Anno
 import qualified HscTypes                        as GHC

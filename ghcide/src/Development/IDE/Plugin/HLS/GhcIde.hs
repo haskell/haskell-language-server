@@ -59,7 +59,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 -- ---------------------------------------------------------------------
 
-hover' :: PluginMethodHandler IdeState 'Method_TextDocumentHover
+hover' :: PluginMethodHandler IdeState Method_TextDocumentHover
 hover' ideState _ HoverParams{..} = do
     liftIO $ logDebug (ideLogger ideState) "GhcIde.hover entered (ideLogger)" -- AZ
     hover ideState TextDocumentPositionParams{..}

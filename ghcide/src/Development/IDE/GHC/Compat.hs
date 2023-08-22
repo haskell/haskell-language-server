@@ -168,6 +168,8 @@ import           Data.List                             (foldl')
 import qualified Data.Map                              as Map
 import qualified Data.Set                              as S
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,0,0)
 import           Annotations                           (AnnTarget (ModuleTarget),
                                                         Annotation (..),

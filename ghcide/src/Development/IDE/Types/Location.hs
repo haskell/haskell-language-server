@@ -36,6 +36,8 @@ import           Language.LSP.Protocol.Types  (Location (..), Position (..),
 import qualified Language.LSP.Protocol.Types  as LSP
 import           Text.ParserCombinators.ReadP as ReadP
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,0,0)
 import           FastString
 import           SrcLoc                       as GHC

@@ -25,6 +25,8 @@ import           Ide.Plugin.Properties
 import           Language.LSP.Protocol.Types  (CompletionItemKind (..), Uri)
 import qualified Language.LSP.Protocol.Types  as J
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,0,0)
 import qualified OccName                      as Occ
 #endif
@@ -58,8 +60,8 @@ extendImportCommandId :: Text
 extendImportCommandId = "extendImport"
 
 properties :: Properties
-  '[ 'PropertyKey "autoExtendOn" 'TBoolean,
-     'PropertyKey "snippetsOn" 'TBoolean]
+  '[ 'PropertyKey "autoExtendOn" TBoolean,
+     'PropertyKey "snippetsOn" TBoolean]
 properties = emptyProperties
   & defineBooleanProperty #snippetsOn
     "Inserts snippets when using code completions"

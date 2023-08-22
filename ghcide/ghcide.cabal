@@ -227,12 +227,16 @@ library
     ghc-options:
                 -Wall
                 -Wincomplete-uni-patterns
+                -Wno-unticked-promoted-constructors
                 -fno-ignore-asserts
 
     if flag(ghc-patched-unboxed-bytecode)
       cpp-options: -DGHC_PATCHED_UNBOXED_BYTECODE
 
     if flag(pedantic)
+        -- We eventually want to build with Werror fully, but we haven't
+        -- finished purging the warnings, so some are set to not be errors
+        -- for now
         ghc-options: -Werror 
                      -Wwarn=unused-packages
                      -Wwarn=unrecognised-pragmas
@@ -244,6 +248,9 @@ library
                      -Wwarn=overlapping-patterns
                      -Wwarn=incomplete-record-updates
     
+    -- ambiguous-fields is only understood by GHC >= 9.2, so we only disable it
+    -- then. The above comment goes for here too -- this should be understood to
+    -- be temporary until we can remove these warnings.
     if impl(ghc >= 9.2) && flag(pedantic)
         ghc-options: -Wwarn=ambiguous-fields
 

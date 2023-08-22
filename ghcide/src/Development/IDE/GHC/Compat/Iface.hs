@@ -10,6 +10,8 @@ import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Outputable
 import           GHC
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,0,0)
 import           Finder                                (FindResult)
 import qualified Finder

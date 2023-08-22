@@ -31,6 +31,8 @@ import qualified GHC.LanguageExtensions            as LangExt
 import           System.FilePath
 import           System.IO.Extra
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Utils.Logger                  (LogFlags (..))
 #endif

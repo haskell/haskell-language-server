@@ -23,6 +23,8 @@ import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env        (hscSetFlags, hsc_dflags)
 import           Development.IDE.GHC.Compat.Parser     as Parser
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,0,0)
 import qualified DynamicLoading                        as Loader
 import           Plugins

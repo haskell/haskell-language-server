@@ -19,6 +19,8 @@ import           Development.IDE.GHC.Compat      as Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if MIN_VERSION_ghc (8,10,0) && !MIN_VERSION_ghc(9,0,0)
 import qualified DriverPipeline                  as Pipeline
 import           ToolSettings

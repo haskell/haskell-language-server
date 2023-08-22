@@ -27,6 +27,8 @@ import           Data.List                         (isSuffixOf)
 import           Data.Maybe
 import           System.FilePath
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,3,0)
 import           Development.IDE.GHC.Compat.Util
 #endif

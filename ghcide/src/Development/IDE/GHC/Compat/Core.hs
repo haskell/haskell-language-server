@@ -507,6 +507,8 @@ import GHC.LanguageExtensions.Type hiding (Cpp)
 
 import           GHC.Hs.Binds
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,0,0)
 import qualified Avail
 import           BasicTypes                   hiding (Version)

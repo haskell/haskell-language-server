@@ -30,7 +30,7 @@ newtype ServerM c a = ServerM { unServerM :: ReaderT (ReactorChan, IdeState) (Ls
   deriving (Functor, Applicative, Monad, MonadReader (ReactorChan, IdeState), MonadIO, MonadUnliftIO, LSP.MonadLsp c)
 
 requestHandler
-  :: forall m c. PluginMethod 'Request m =>
+  :: forall m c. PluginMethod Request m =>
      SMethod m
   -> (IdeState -> MessageParams m -> LspM c (Either ResponseError (MessageResult m)))
   -> Handlers (ServerM c)
@@ -45,7 +45,7 @@ requestHandler m k = LSP.requestHandler m $ \TRequestMessage{_method,_id,_params
   writeChan chan $ ReactorRequest (SomeLspId _id) (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
 
 notificationHandler
-  :: forall m c. PluginMethod 'Notification m =>
+  :: forall m c. PluginMethod Notification m =>
      SMethod m
   -> (IdeState -> VFS -> MessageParams m -> LspM c ())
   -> Handlers (ServerM c)

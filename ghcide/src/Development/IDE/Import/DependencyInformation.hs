@@ -57,6 +57,8 @@ import           Development.IDE.Types.Location
 
 import           Development.IDE.GHC.Compat
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,3,0)
 import           GHC
 #endif

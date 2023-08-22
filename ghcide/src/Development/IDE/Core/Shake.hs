@@ -177,6 +177,8 @@ import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,3,0)
 import           Data.IORef
 import           Development.IDE.GHC.Compat             (mkSplitUniqSupply,

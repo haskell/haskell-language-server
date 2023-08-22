@@ -1,6 +1,5 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Development.IDE.Core.FileStore(
@@ -73,10 +72,6 @@ import           System.FilePath
 import           System.IO.Error
 import           System.IO.Unsafe
 
-#ifdef mingw32_HOST_OS
-import qualified System.Directory                             as Dir
-#else
-#endif
 
 data Log
   = LogCouldNotIdentifyReverseDeps !NormalizedFilePath

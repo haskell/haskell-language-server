@@ -62,6 +62,8 @@ import           GHC.IO.Handle.Types
 import           Ide.PluginUtils                   (unescape)
 import           System.FilePath
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,2,0)
 import           Development.IDE.GHC.Compat.Util
 #endif

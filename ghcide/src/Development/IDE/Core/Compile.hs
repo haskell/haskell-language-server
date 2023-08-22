@@ -106,6 +106,7 @@ import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,0,1)
 import           HscTypes
@@ -1745,3 +1746,32 @@ pathToModuleName = mkModuleName . map rep
       rep c | isPathSeparator c = '_'
       rep ':' = '_'
       rep c = c
+
+{- Note [Guidelines For Using CPP In GHCIDE Import Statements]
+  GHCIDE's interface with GHC is extensive, and unfortunately, because we have
+  to work with multiple versions of GHC, we have several files that need to use
+  a lot of CPP. In order to simplify the CPP in the import section of every file
+  we have a few specific guidelines for using CPP in these sections.
+
+  - We don't want to nest CPP clauses, nor do we want to use else clauses. Both
+  nesting and else clauses end up drastically complicating the code, and require
+  significant mental stack to unwind.
+
+  - CPP clauses should be placed at the end of the imports section. The clauses
+  should be ordered by the GHC version they target from earlier to later versions,
+  with negative if clauses coming before positive if clauses of the same 
+  version. (If you think about which GHC version a clause activates for this 
+  should make sense `!MIN_VERSION_GHC(9,0,0)` refers to 8.10 and lower which is
+  a earlier version than `MIN_VERSION_GHC(9,0,0)` which refers to versions 9.0 
+  and later). In addition there should be a space before and after each CPP
+  clause.
+
+  - In if clauses that use `&&` and depend on more than one statement, the 
+  positive statement should come before the negative statement. In addition the
+  clause should come after the single positive clause for that GHC version.
+
+  - There shouldn't be multiple identical CPP statements. The use of odd or even 
+  GHC numbers is identical, with the only preference being to use what is
+  already there. (i.e. (`MIN_VERSION_GHC(9,2,0)` and `MIN_VERSION_GHC(9,1,0)` 
+  are functionally equivalent)
+-}

@@ -31,16 +31,16 @@ import qualified Language.LSP.Server            as LSP
 
 import qualified Data.Text                      as T
 
-gotoDefinition :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) (MessageResult 'Method_TextDocumentDefinition)
+gotoDefinition :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) (MessageResult Method_TextDocumentDefinition)
 hover          :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) (Hover |? Null)
-gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) (MessageResult 'Method_TextDocumentTypeDefinition)
+gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) (MessageResult Method_TextDocumentTypeDefinition)
 documentHighlight :: IdeState -> TextDocumentPositionParams -> ExceptT PluginError (LSP.LspM c) ([DocumentHighlight] |? Null)
 gotoDefinition = request "Definition" getDefinition (InR $ InR Null) (InL . Definition. InR)
 gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InR Null) (InL . Definition. InR)
 hover          = request "Hover"      getAtPoint     (InR Null)     foundHover
 documentHighlight = request "DocumentHighlight" highlightAtPoint (InR Null) InL
 
-references :: PluginMethodHandler IdeState 'Method_TextDocumentReferences
+references :: PluginMethodHandler IdeState Method_TextDocumentReferences
 references ide _ (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = do
   nfp <- getNormalizedFilePathE uri
   liftIO $ logDebug (ideLogger ide) $
@@ -48,7 +48,7 @@ references ide _ (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = do
         " in file: " <> T.pack (show nfp)
   InL <$> (liftIO $ runAction "references" ide $ refsAtPoint nfp pos)
 
-wsSymbols :: PluginMethodHandler IdeState 'Method_WorkspaceSymbol
+wsSymbols :: PluginMethodHandler IdeState Method_WorkspaceSymbol
 wsSymbols ide _ (WorkspaceSymbolParams _ _ query) = liftIO $ do
   logDebug (ideLogger ide) $ "Workspace symbols request: " <> query
   runIdeAction "WorkspaceSymbols" (shakeExtras ide) $ InL . fromMaybe [] <$> workspaceSymbols query

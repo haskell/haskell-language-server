@@ -49,17 +49,7 @@ module Development.IDE.GHC.Compat.Outputable (
     textDoc,
     ) where
 
-#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Session
-import           GHC.Driver.Types                as HscTypes
-import           GHC.Types.Name.Reader           (GlobalRdrEnv)
-import           GHC.Types.SrcLoc
-import           GHC.Utils.Error                 as Err hiding (mkWarnMsg)
-import qualified GHC.Utils.Error                 as Err
-import           GHC.Utils.Outputable            as Out hiding
-                                                        (defaultUserStyle)
-import qualified GHC.Utils.Outputable            as Out
-#endif
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,0,0)
 import           Development.IDE.GHC.Compat.Core (GlobalRdrEnv)
@@ -71,6 +61,18 @@ import           Outputable                      as Out hiding
                                                         (defaultUserStyle)
 import qualified Outputable                      as Out
 import           SrcLoc
+#endif
+
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Session
+import           GHC.Driver.Types                as HscTypes
+import           GHC.Types.Name.Reader           (GlobalRdrEnv)
+import           GHC.Types.SrcLoc
+import           GHC.Utils.Error                 as Err hiding (mkWarnMsg)
+import qualified GHC.Utils.Error                 as Err
+import           GHC.Utils.Outputable            as Out hiding
+                                                        (defaultUserStyle)
+import qualified GHC.Utils.Outputable            as Out
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -224,20 +226,18 @@ type ErrMsg  = MsgEnvelope DecoratedSDoc
 type WarnMsg  = MsgEnvelope DecoratedSDoc
 #endif
 
-#if MIN_VERSION_ghc(9,5,0)
 mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
+#if MIN_VERSION_ghc(9,5,0)
 mkPrintUnqualifiedDefault env =
   mkNamePprCtx ptc (hsc_unit_env env)
     where
       ptc = initPromotionTickContext (hsc_dflags env)
 #elif MIN_VERSION_ghc(9,2,0)
-mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
 mkPrintUnqualifiedDefault env =
   -- GHC 9.2 version
   -- mkPrintUnqualified :: UnitEnv -> GlobalRdrEnv -> PrintUnqualified
   mkPrintUnqualified (hsc_unit_env env)
 #else
-mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
 mkPrintUnqualifiedDefault env =
   HscTypes.mkPrintUnqualified (hsc_dflags env)
 #endif

@@ -28,6 +28,8 @@ import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
                                                  type (|?) (InL, InR), uriToFilePath)
 import          Language.LSP.Protocol.Message
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if MIN_VERSION_ghc(9,2,0)
 import           Data.List.NonEmpty             (nonEmpty)
 import           Data.Foldable                  (toList)
@@ -38,7 +40,7 @@ import qualified Data.Text                      as T
 #endif
 
 moduleOutline
-  :: PluginMethodHandler IdeState 'Method_TextDocumentDocumentSymbol
+  :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
 moduleOutline ideState _ DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
   = liftIO $ case uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do

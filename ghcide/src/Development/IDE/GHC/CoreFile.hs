@@ -25,6 +25,8 @@ import qualified Development.IDE.GHC.Compat.Util as Util
 import           GHC.Fingerprint
 import           Prelude                         hiding (mod)
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,0,0)
 import           Binary
 import           BinFingerprint                  (fingerprintBinMem)

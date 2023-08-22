@@ -13,6 +13,8 @@ import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env        as Env
 import           Development.IDE.GHC.Compat.Outputable
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if !MIN_VERSION_ghc(9,0,0)
 import           DynFlags
 import           Outputable                            (queryQual)

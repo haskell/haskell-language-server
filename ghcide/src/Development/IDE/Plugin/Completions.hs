@@ -57,6 +57,8 @@ import           Development.IDE.Core.Rules               (usePropertyAction)
 
 import qualified Ide.Plugin.Config                        as Config
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.LanguageExtensions                   as LangExt
 #endif
@@ -127,7 +129,7 @@ dropListFromImportDecl iDecl = let
     f x = x
     in f <$> iDecl
 
-resolveCompletion :: ResolveFunction IdeState CompletionResolveData 'Method_CompletionItemResolve
+resolveCompletion :: ResolveFunction IdeState CompletionResolveData Method_CompletionItemResolve
 resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} uri (CompletionResolveData _ needType (NameDetails mod occ)) =
   do
     file <- getNormalizedFilePathE uri
@@ -166,7 +168,7 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
       (_,res) -> res
 
 -- | Generate code actions.
-getCompletionsLSP :: PluginMethodHandler IdeState 'Method_TextDocumentCompletion
+getCompletionsLSP :: PluginMethodHandler IdeState Method_TextDocumentCompletion
 getCompletionsLSP ide plId
   CompletionParams{_textDocument=TextDocumentIdentifier uri
                   ,_position=position

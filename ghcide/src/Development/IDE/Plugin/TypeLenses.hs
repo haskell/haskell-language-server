@@ -102,7 +102,7 @@ descriptor recorder plId =
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
 
-properties :: Properties '[ 'PropertyKey "mode" ('TEnum Mode)]
+properties :: Properties '[ 'PropertyKey "mode" (TEnum Mode)]
 properties = emptyProperties
   & defineEnumProperty #mode "Control how type lenses are shown"
     [ (Always, "Always displays type lenses of global bindings")
@@ -110,7 +110,7 @@ properties = emptyProperties
     , (Diagnostics, "Follows error messages produced by GHC about missing signatures")
     ] Always
 
-codeLensProvider :: PluginMethodHandler IdeState 'Method_TextDocumentCodeLens
+codeLensProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeLens
 codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
     mode <- liftIO $ runAction "codeLens.config" ideState $ usePropertyAction #mode pId properties
     nfp <- getNormalizedFilePathE uri
@@ -162,7 +162,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
         let allDiags = diags <> hDiags
         pure $ InL $ generateLensFromGlobalDiags allDiags
 
-codeLensResolveProvider :: ResolveFunction IdeState TypeLensesResolve 'Method_CodeLensResolve
+codeLensResolveProvider :: ResolveFunction IdeState TypeLensesResolve Method_CodeLensResolve
 codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve = do
   nfp <- getNormalizedFilePathE uri
   (gblSigs@(GlobalBindingTypeSigsResult _), pm) <-
