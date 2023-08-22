@@ -39,14 +39,15 @@ module Development.IDE.Core.Compile
   , shareUsages
   ) where
 
+import           Prelude                           hiding (mod)
 import           Control.Monad.IO.Class
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats      hiding (orElse)
-import           Control.DeepSeq                   (NFData (..), force, liftRnf,
-                                                    rnf, rwhnf)
+import           Control.DeepSeq                   (NFData (..), force,
+                                                    rnf)
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe
-import           Control.Lens                      hiding (List, (<.>))
+import           Control.Lens                      hiding (List, (<.>), pre)
 import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Control.Monad.Trans.Except
@@ -62,13 +63,10 @@ import           Data.Generics.Aliases
 import           Data.Generics.Schemes
 import qualified Data.HashMap.Strict               as HashMap
 import           Data.IntMap                       (IntMap)
-import qualified Data.IntMap.Strict                as IntMap
 import           Data.IORef
 import           Data.List.Extra
-import           Data.Map                          (Map)
 import qualified Data.Map.Strict                   as Map
 import           Data.Proxy                        (Proxy(Proxy))
-import qualified Data.Set                          as Set
 import           Data.Maybe
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime (..))
@@ -96,11 +94,10 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC                               (ForeignHValue,
                                                     GetDocsFailure (..),
-                                                    GhcException (..),
                                                     parsedSource)
 import qualified GHC.LanguageExtensions            as LangExt
 import           GHC.Serialized
-import           HieDb
+import           HieDb                             hiding (withHieDb)
 import qualified Language.LSP.Server               as LSP
 import           Language.LSP.Protocol.Types                (DiagnosticTag (..))
 import qualified Language.LSP.Protocol.Types                as LSP
@@ -108,44 +105,56 @@ import qualified Language.LSP.Protocol.Message            as LSP
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
-import           Unsafe.Coerce
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if !MIN_VERSION_ghc(9,0,1)
+import           HscTypes
+import           TcSplice
+#endif
 
 #if MIN_VERSION_ghc(9,0,1)
 import           GHC.Tc.Gen.Splice
+#endif
+
+#if MIN_VERSION_ghc(9,0,1) && !MIN_VERSION_ghc(9,2,1)
+import           GHC.Driver.Types
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+import qualified Data.IntMap.Strict                as IntMap
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+import qualified GHC                               as G
+#endif
+
+#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+import           GHC                               (ModuleGraph)
+#endif
 
 #if MIN_VERSION_ghc(9,2,1)
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
-#else
-import           GHC.Driver.Types
 #endif
 
-#else
-import           HscTypes
-import           TcSplice
+#if !MIN_VERSION_ghc(9,3,0)
+import           Data.Map                          (Map)
+import           GHC                               (GhcException (..))
+import           Unsafe.Coerce
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC                               (Anchor (anchor),
-                                                    EpaComment (EpaComment),
-                                                    EpaCommentTok (EpaBlockComment, EpaLineComment),
-                                                    ModuleGraph, epAnnComments,
-                                                    mgLookupModule,
-                                                    mgModSummaries,
-                                                    priorComments)
-import qualified GHC                               as G
-import           GHC.Hs                            (LEpaComment)
-import qualified GHC.Types.Error                   as Error
-import Development.IDE.Import.DependencyInformation
+#if MIN_VERSION_ghc(9,3,0)
+import qualified Data.Set                          as Set
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
-import GHC.Driver.Config.CoreToStg.Prep
-import GHC.Core.Lint.Interactive
+import           GHC.Driver.Config.CoreToStg.Prep
+import           GHC.Core.Lint.Interactive
 #endif
 
---Simple constansts to make sure the source is consistently named
+--Simple constants to make sure the source is consistently named
 sourceTypecheck :: T.Text
 sourceTypecheck = "typecheck"
 sourceParser :: T.Text
@@ -178,7 +187,7 @@ computePackageDeps env pkg = do
 
 newtype TypecheckHelpers
   = TypecheckHelpers
-  { getLinkables       :: ([NormalizedFilePath] -> IO [LinkableResult]) -- ^ hls-graph action to get linkables for files
+  { getLinkables       :: [NormalizedFilePath] -> IO [LinkableResult] -- ^ hls-graph action to get linkables for files
   }
 
 typecheckModule :: IdeDefer
@@ -193,14 +202,14 @@ typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
                                       (initPlugins hsc modSummary)
         case initialized of
           Left errs -> return (errs, Nothing)
-          Right (modSummary', hsc) -> do
+          Right (modSummary', hscEnv) -> do
             (warnings, etcm) <- withWarnings sourceTypecheck $ \tweak ->
                 let
-                  session = tweak (hscSetFlags dflags hsc)
+                  session = tweak (hscSetFlags dflags hscEnv)
                    -- TODO: maybe settings ms_hspp_opts is unnecessary?
                   mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
                 in
-                  catchSrcErrors (hsc_dflags hsc) sourceTypecheck $ do
+                  catchSrcErrors (hsc_dflags hscEnv) sourceTypecheck $ do
                     tcRnModule session tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
             let errorPipeline = unDefer . hideDiag dflags . tagDiag
                 diags = map errorPipeline warnings
@@ -335,8 +344,8 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
            ; moduleLocs <- readIORef (hsc_FC hsc_env)
 #endif
            ; lbs <- getLinkables [toNormalizedFilePath' file
-                                 | mod <- mods_transitive_list
-                                 , let ifr = fromJust $ lookupInstalledModuleEnv moduleLocs mod
+                                 | installedMod <- mods_transitive_list
+                                 , let ifr = fromJust $ lookupInstalledModuleEnv moduleLocs installedMod
                                        file = case ifr of
                                          InstalledFound loc _ ->
                                            fromJust $ ml_hs_file loc
@@ -366,8 +375,8 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
     -- We shouldn't get boot files here, but to be safe, never map them to an installed module
     -- because boot files don't have linkables we can load, and we will fail if we try to look
     -- for them
-    nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB mod IsBoot) uid)) = Nothing
-    nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB mod _) uid)) = Just $ mkModule uid mod
+    nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB _ IsBoot) _)) = Nothing
+    nodeKeyToInstalledModule (NodeKey_Module (ModNodeKeyWithUid (GWIB moduleName _) uid)) = Just $ mkModule uid moduleName
     nodeKeyToInstalledModule _ = Nothing
     moduleToNodeKey :: Module -> NodeKey
     moduleToNodeKey mod = NodeKey_Module $ ModNodeKeyWithUid (GWIB (moduleName mod) NotBoot) (moduleUnitId mod)
@@ -434,8 +443,8 @@ tcRnModule hsc_env tc_helpers pmod = do
       hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) hsc_env
 
   ((tc_gbl_env', mrn_info), splices, mod_env)
-      <- captureSplicesAndDeps tc_helpers hsc_env_tmp $ \hsc_env_tmp ->
-             do  hscTypecheckRename hsc_env_tmp ms $
+      <- captureSplicesAndDeps tc_helpers hsc_env_tmp $ \hscEnvTmp ->
+             do  hscTypecheckRename hscEnvTmp ms $
                           HsParsedModule { hpm_module = parsedSource pmod,
                                            hpm_src_files = pm_extra_src_files pmod,
                                            hpm_annotations = pm_annotations pmod }
@@ -508,7 +517,6 @@ mkHiFileResultCompile
 mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
   let session = hscSetFlags (ms_hspp_opts ms) session'
       ms = pm_mod_summary $ tmrParsed tcm
-      tcGblEnv = tmrTypechecked tcm
 
   (details, guts) <- do
         -- write core file
@@ -553,9 +561,9 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
         -- The serialized file however is much more compact and only requires a few
         -- hundred megabytes of memory total even in a large project with 1000s of
         -- modules
-        (core_file, !core_hash2) <- readBinCoreFile (mkUpdater $ hsc_NC session) core_fp
+        (coreFile, !core_hash2) <- readBinCoreFile (mkUpdater $ hsc_NC session) core_fp
         pure $ assert (core_hash1 == core_hash2)
-             $ Just (core_file, fingerprintToBS core_hash2)
+             $ Just (coreFile, fingerprintToBS core_hash2)
 
   -- Verify core file by roundtrip testing and comparison
   IdeOptions{optVerifyCoreFile} <- getIdeOptionsIO se
@@ -594,8 +602,8 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
       (prepd_binds', _)
 #endif
         <- corePrep unprep_binds' data_tycons
-      let binds  = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds
-          binds' = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds'
+      let binds  = noUnfoldings $ (map flattenBinds . (:[])) prepd_binds
+          binds' = noUnfoldings $ (map flattenBinds . (:[])) prepd_binds'
 
           -- diffBinds is unreliable, sometimes it goes down the wrong track.
           -- This fixes the order of the bindings so that it is less likely to do so.
@@ -849,9 +857,9 @@ generateHieAsts hscEnv tcm =
   where
     dflags = hsc_dflags hscEnv
 #if MIN_VERSION_ghc(9,0,0)
-    run ts =
+    run _ts = -- ts is only used in GHC 9.2
 #if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
-        fmap (join . snd) . liftIO . initDs hscEnv ts
+        fmap (join . snd) . liftIO . initDs hscEnv _ts
 #else
         id
 #endif
@@ -910,8 +918,8 @@ indexHieFile se mod_summary srcPath !hash hf = do
         -- We are now in the worker thread
         -- Check if a newer index of this file has been scheduled, and if so skip this one
         newerScheduled <- atomically $ do
-          pending <- readTVar indexPending
-          pure $ case HashMap.lookup srcPath pending of
+          pendingOps <- readTVar indexPending
+          pure $ case HashMap.lookup srcPath pendingOps of
             Nothing          -> False
             -- If the hash in the pending list doesn't match the current hash, then skip
             Just pendingHash -> pendingHash /= hash
@@ -957,8 +965,8 @@ indexHieFile se mod_summary srcPath !hash hf = do
         progressPct :: LSP.UInt
         progressPct = floor $ 100 * progressFrac
 
-      whenJust (lspEnv se) $ \env -> whenJust tok $ \tok -> LSP.runLspT env $
-        LSP.sendNotification LSP.SMethod_Progress $ LSP.ProgressParams tok $
+      whenJust (lspEnv se) $ \env -> whenJust tok $ \token -> LSP.runLspT env $
+        LSP.sendNotification LSP.SMethod_Progress $ LSP.ProgressParams token $
           toJSON $
             case style of
                 Percentage -> LSP.WorkDoneProgressReport
@@ -998,8 +1006,8 @@ indexHieFile se mod_summary srcPath !hash hf = do
       whenJust mdone $ \done ->
         modifyVar_ indexProgressToken $ \tok -> do
           whenJust (lspEnv se) $ \env -> LSP.runLspT env $
-            whenJust tok $ \tok ->
-              LSP.sendNotification LSP.SMethod_Progress  $ LSP.ProgressParams tok $
+            whenJust tok $ \token ->
+              LSP.sendNotification LSP.SMethod_Progress  $ LSP.ProgressParams token $
                 toJSON $
                 LSP.WorkDoneProgressEnd
                   { _kind = LSP.AString @"end"
@@ -1079,7 +1087,7 @@ mergeEnvs env mg ms extraMods envs = do
         -- Prefer non-boot files over non-boot files
         -- otherwise we can get errors like https://gitlab.haskell.org/ghc/ghc/-/issues/19816
         -- if a boot file shadows over a non-boot file
-        combineModuleLocations a@(InstalledFound ml m) b | Just fp <- ml_hs_file ml, not ("boot" `isSuffixOf` fp) = a
+        combineModuleLocations a@(InstalledFound ml _) _ | Just fp <- ml_hs_file ml, not ("boot" `isSuffixOf` fp) = a
         combineModuleLocations _ b = b
 
         concatFC :: FinderCacheState -> [FinderCache] -> IO FinderCache
@@ -1128,11 +1136,12 @@ getModSummaryFromImports
   -> UTCTime
   -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
-getModSummaryFromImports env fp modTime contents = do
+-- modTime is only used in GHC < 9.4
+getModSummaryFromImports env fp _modTime mContents = do
+-- src_hash is only used in GHC >= 9.4
+    (contents, opts, ppEnv, _src_hash) <- preprocessor env fp mContents
 
-    (contents, opts, env, src_hash) <- preprocessor env fp contents
-
-    let dflags = hsc_dflags env
+    let dflags = hsc_dflags ppEnv
 
     -- The warns will hopefully be reported when we actually parse the module
     (_warns, L main_loc hsmod) <- parseHeader dflags fp contents
@@ -1146,7 +1155,8 @@ getModSummaryFromImports env fp modTime contents = do
         (src_idecls, ord_idecls) = partition ((== IsBoot) . ideclSource.unLoc) imps
 
         -- GHC.Prim doesn't exist physically, so don't go looking for it.
-        (ordinary_imps, ghc_prim_imports)
+        -- ghc_prim_imports is only used in GHC >= 9.4
+        (ordinary_imps, _ghc_prim_imports)
           = partition ((/= moduleName gHC_PRIM) . unLoc
                       . ideclName . unLoc)
                       ord_idecls
@@ -1166,11 +1176,11 @@ getModSummaryFromImports env fp modTime contents = do
         msrImports = implicit_imports ++ imps
 
 #if MIN_VERSION_ghc (9,3,0)
-        rn_pkg_qual = renameRawPkgQual (hsc_unit_env env)
+        rn_pkg_qual = renameRawPkgQual (hsc_unit_env ppEnv)
         rn_imps = fmap (\(pk, lmn@(L _ mn)) -> (rn_pkg_qual mn pk, lmn))
         srcImports = rn_imps $ map convImport src_idecls
         textualImports = rn_imps $ map convImport (implicit_imports ++ ordinary_imps)
-        ghc_prim_import = not (null ghc_prim_imports)
+        ghc_prim_import = not (null _ghc_prim_imports)
 #else
         srcImports = map convImport src_idecls
         textualImports = map convImport (implicit_imports ++ ordinary_imps)
@@ -1188,7 +1198,7 @@ getModSummaryFromImports env fp modTime contents = do
         then mkHomeModLocation dflags (pathToModuleName fp) fp
         else mkHomeModLocation dflags mod fp
 
-    let modl = mkHomeModule (hscHomeUnit env) mod
+    let modl = mkHomeModule (hscHomeUnit ppEnv) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
         msrModSummary2 =
             ModSummary
@@ -1197,10 +1207,10 @@ getModSummaryFromImports env fp modTime contents = do
 #if MIN_VERSION_ghc(9,3,0)
                 , ms_dyn_obj_date    = Nothing
                 , ms_ghc_prim_import = ghc_prim_import
-                , ms_hs_hash      = src_hash
+                , ms_hs_hash      = _src_hash
 
 #else
-                , ms_hs_date      = modTime
+                , ms_hs_date      = _modTime
 #endif
                 , ms_hsc_src      = sourceType
                 -- The contents are used by the GetModSummary rule
@@ -1216,7 +1226,7 @@ getModSummaryFromImports env fp modTime contents = do
                 }
 
     msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary2
-    (msrModSummary, msrHscEnv) <- liftIO $ initPlugins env msrModSummary2
+    (msrModSummary, msrHscEnv) <- liftIO $ initPlugins ppEnv msrModSummary2
     return ModSummaryResult{..}
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
@@ -1304,7 +1314,7 @@ parseFileContents env customPreprocessor filename ms = do
 
                let preproc_warnings = diagFromStrings sourceParser DiagnosticSeverity_Warning preproc_warns
                (parsed', msgs) <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed psMessages
-               let (warns, errs) = renderMessages msgs
+               let (warns, errors) = renderMessages msgs
 
                -- Just because we got a `POk`, it doesn't mean there
                -- weren't errors! To clarify, the GHC parser
@@ -1315,8 +1325,8 @@ parseFileContents env customPreprocessor filename ms = do
                -- further errors/warnings can be collected). Fatal
                -- errors are those from which a parse tree just can't
                -- be produced.
-               unless (null errs) $
-                 throwE $ diagFromErrMsgs sourceParser dflags errs
+               unless (null errors) $
+                 throwE $ diagFromErrMsgs sourceParser dflags errors
 
 
                -- To get the list of extra source files, we take the list
@@ -1468,19 +1478,21 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
 
     -- The source is modified if it is newer than the destination (iface file)
     -- A more precise check for the core file is performed later
-    let sourceMod = case mb_dest_version of
+    let _sourceMod = case mb_dest_version of -- sourceMod is only used in GHC < 9.4
           Nothing -> SourceModified -- destination file doesn't exist, assume modified source
           Just dest_version
             | source_version <= dest_version -> SourceUnmodified
             | otherwise -> SourceModified
 
-    old_iface <- case mb_old_iface of
+    -- old_iface is only used in GHC >= 9.4
+    _old_iface <- case mb_old_iface of
       Just iface -> pure (Just iface)
       Nothing -> do
-        let ncu = hsc_NC sessionWithMsDynFlags
-            read_dflags = hsc_dflags sessionWithMsDynFlags
+        -- ncu and read_dflags are only used in GHC >= 9.4
+        let _ncu = hsc_NC sessionWithMsDynFlags
+            _read_dflags = hsc_dflags sessionWithMsDynFlags
 #if MIN_VERSION_ghc(9,3,0)
-        read_result <- liftIO $ readIface read_dflags ncu mod iface_file
+        read_result <- liftIO $ readIface _read_dflags _ncu mod iface_file
 #else
         read_result <- liftIO $ initIfaceCheck (text "readIface") sessionWithMsDynFlags
                               $ readIface mod iface_file
@@ -1495,11 +1507,11 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
     -- given that the source is unmodified
     (recomp_iface_reqd, mb_checked_iface)
 #if MIN_VERSION_ghc(9,3,0)
-      <- liftIO $ checkOldIface sessionWithMsDynFlags ms old_iface >>= \case
+      <- liftIO $ checkOldIface sessionWithMsDynFlags ms _old_iface >>= \case
         UpToDateItem x -> pure (UpToDate, Just x)
         OutOfDateItem reason x -> pure (NeedsRecompile reason, x)
 #else
-      <- liftIO $ checkOldIface sessionWithMsDynFlags ms sourceMod mb_old_iface
+      <- liftIO $ checkOldIface sessionWithMsDynFlags ms _sourceMod mb_old_iface
 #endif
 
     let do_regenerate _reason = withTrace "regenerate interface" $ \setTag -> do
@@ -1521,10 +1533,10 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
                Just msg -> do_regenerate msg
                Nothing
                  | isJust linkableNeeded -> handleErrs $ do
-                   (core_file@CoreFile{cf_iface_hash}, core_hash) <- liftIO $
+                   (coreFile@CoreFile{cf_iface_hash}, core_hash) <- liftIO $
                      readBinCoreFile (mkUpdater $ hsc_NC session) core_file
                    if cf_iface_hash == getModuleHash iface
-                   then return ([], Just $ mkHiFileResult ms iface details runtime_deps (Just (core_file, fingerprintToBS core_hash)))
+                   then return ([], Just $ mkHiFileResult ms iface details runtime_deps (Just (coreFile, fingerprintToBS core_hash)))
                    else do_regenerate (recompBecause "Core file out of date (doesn't match iface hash)")
                  | otherwise -> return ([], Just $ mkHiFileResult ms iface details runtime_deps Nothing)
                  where handleErrs = flip catches
@@ -1578,6 +1590,7 @@ checkLinkableDependencies hsc_env get_linkable_hashes runtime_deps = do
         _ -> pure $ Just $ recompBecause
               $ "out of date runtime dependencies: " ++ intercalate ", " (map show out_of_date)
 
+recompBecause :: String -> RecompileRequired
 recompBecause =
 #if MIN_VERSION_ghc(9,3,0)
                 NeedsRecompile .
@@ -1622,15 +1635,15 @@ coreFileToCgGuts session iface details core_file = do
         })
   core_binds <- initIfaceCheck (text "l") hsc_env' $ typecheckCoreFile this_mod types_var core_file
       -- Implicit binds aren't saved, so we need to regenerate them ourselves.
-  let implicit_binds = concatMap getImplicitBinds tyCons
+  let _implicit_binds = concatMap getImplicitBinds tyCons -- only used if GHC < 9.6
       tyCons = typeEnvTyCons (md_types details)
 #if MIN_VERSION_ghc(9,5,0)
   -- In GHC 9.6, the implicit binds are tidied and part of core_binds
   pure $ CgGuts this_mod tyCons core_binds [] NoStubs [] mempty (emptyHpcInfo False) Nothing []
 #elif MIN_VERSION_ghc(9,3,0)
-  pure $ CgGuts this_mod tyCons (implicit_binds ++ core_binds) [] NoStubs [] mempty (emptyHpcInfo False) Nothing []
+  pure $ CgGuts this_mod tyCons (_implicit_binds ++ core_binds) [] NoStubs [] mempty (emptyHpcInfo False) Nothing []
 #else
-  pure $ CgGuts this_mod tyCons (implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
+  pure $ CgGuts this_mod tyCons (_implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
 #endif
 
 coreFileToLinkable :: LinkableType -> HscEnv -> ModSummary -> ModIface -> ModDetails -> CoreFile -> UTCTime -> IO ([FileDiagnostic], Maybe HomeModInfo)
@@ -1689,8 +1702,7 @@ getDocsBatch hsc_env _names = do
 #else
                                   Map.findWithDefault mempty name amap))
 #endif
-    return $ map (first $ T.unpack . printOutputable)
-           $ res
+    return $ map (first $ T.unpack . printOutputable) res
   where
     compiled n =
       -- TODO: Find a more direct indicator.
@@ -1706,7 +1718,7 @@ lookupName :: HscEnv
            -> IO (Maybe TyThing)
 lookupName _ name
   | Nothing <- nameModule_maybe name = pure Nothing
-lookupName hsc_env name = handle $ do
+lookupName hsc_env name = exceptionHandle $ do
 #if MIN_VERSION_ghc(9,2,0)
   mb_thing <- liftIO $ lookupType hsc_env name
 #else
@@ -1726,7 +1738,7 @@ lookupName hsc_env name = handle $ do
           Util.Succeeded x -> return (Just x)
           _ -> return Nothing
   where
-    handle x = x `catch` \(_ :: IOEnvFailure) -> pure Nothing
+    exceptionHandle x = x `catch` \(_ :: IOEnvFailure) -> pure Nothing
 
 pathToModuleName :: FilePath -> ModuleName
 pathToModuleName = mkModuleName . map rep
@@ -1734,3 +1746,32 @@ pathToModuleName = mkModuleName . map rep
       rep c | isPathSeparator c = '_'
       rep ':' = '_'
       rep c = c
+
+{- Note [Guidelines For Using CPP In GHCIDE Import Statements]
+  GHCIDE's interface with GHC is extensive, and unfortunately, because we have
+  to work with multiple versions of GHC, we have several files that need to use
+  a lot of CPP. In order to simplify the CPP in the import section of every file
+  we have a few specific guidelines for using CPP in these sections.
+
+  - We don't want to nest CPP clauses, nor do we want to use else clauses. Both
+  nesting and else clauses end up drastically complicating the code, and require
+  significant mental stack to unwind.
+
+  - CPP clauses should be placed at the end of the imports section. The clauses
+  should be ordered by the GHC version they target from earlier to later versions,
+  with negative if clauses coming before positive if clauses of the same 
+  version. (If you think about which GHC version a clause activates for this 
+  should make sense `!MIN_VERSION_GHC(9,0,0)` refers to 8.10 and lower which is
+  a earlier version than `MIN_VERSION_GHC(9,0,0)` which refers to versions 9.0 
+  and later). In addition there should be a space before and after each CPP
+  clause.
+
+  - In if clauses that use `&&` and depend on more than one statement, the 
+  positive statement should come before the negative statement. In addition the
+  clause should come after the single positive clause for that GHC version.
+
+  - There shouldn't be multiple identical CPP statements. The use of odd or even 
+  GHC numbers is identical, with the only preference being to use what is
+  already there. (i.e. (`MIN_VERSION_GHC(9,2,0)` and `MIN_VERSION_GHC(9,1,0)` 
+  are functionally equivalent)
+-}

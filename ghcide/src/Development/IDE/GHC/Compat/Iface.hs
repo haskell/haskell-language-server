@@ -6,25 +6,32 @@ module Development.IDE.GHC.Compat.Iface (
     cannotFindModule,
     ) where
 
+import           Development.IDE.GHC.Compat.Env
+import           Development.IDE.GHC.Compat.Outputable
 import           GHC
-#if MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Session                    (targetProfile)
-#endif
-#if MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Iface.Load                        as Iface
-import           GHC.Unit.Finder.Types                 (FindResult)
-#elif MIN_VERSION_ghc(9,0,0)
-import qualified GHC.Driver.Finder                     as Finder
-import           GHC.Driver.Types                      (FindResult)
-import qualified GHC.Iface.Load                        as Iface
-#else
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if !MIN_VERSION_ghc(9,0,0)
 import           Finder                                (FindResult)
 import qualified Finder
 import qualified MkIface
 #endif
 
-import           Development.IDE.GHC.Compat.Env
-import           Development.IDE.GHC.Compat.Outputable
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+import qualified GHC.Driver.Finder                     as Finder
+import           GHC.Driver.Types                      (FindResult)
+import qualified GHC.Iface.Load                        as Iface
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+import qualified GHC.Iface.Load                        as Iface
+import           GHC.Unit.Finder.Types                 (FindResult)
+#endif
+
+#if MIN_VERSION_ghc(9,3,0)
+import           GHC.Driver.Session                    (targetProfile)
+#endif
 
 writeIfaceFile :: HscEnv -> FilePath -> ModIface -> IO ()
 #if MIN_VERSION_ghc(9,3,0)

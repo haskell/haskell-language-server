@@ -2,8 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 -- | Options
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE RankNTypes       #-}
+{-# LANGUAGE RankNTypes #-}
 module Development.IDE.Types.Options
   ( IdeOptions(..)
   , IdePreprocessedSource(..)
@@ -19,6 +18,7 @@ module Development.IDE.Types.Options
   , OptHaddockParse(..)
   , ProgressReportingStyle(..)
   ) where
+
 import           Control.Lens
 import qualified Data.Text                         as T
 import           Data.Typeable
@@ -30,6 +30,7 @@ import           Ide.Plugin.Config
 import           Ide.Types                         (DynFlagsModifications)
 import qualified Language.LSP.Protocol.Lens        as L
 import qualified Language.LSP.Protocol.Types       as LSP
+
 data IdeOptions = IdeOptions
   { optPreprocessor       :: GHC.ParsedSource -> IdePreprocessedSource
     -- ^ Preprocessor to run over all parsed source trees, generating a list of warnings

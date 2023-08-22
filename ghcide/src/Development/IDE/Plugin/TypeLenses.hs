@@ -24,8 +24,7 @@ import           Data.Aeson.Types                     (toJSON)
 import qualified Data.Aeson.Types                     as A
 import           Data.List                            (find)
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (catMaybes, fromMaybe,
-                                                       maybeToList)
+import           Data.Maybe                           (catMaybes, maybeToList)
 import qualified Data.Text                            as T
 import           Development.IDE                      (GhcSession (..),
                                                        HscEnvEq (hscEnv),
@@ -87,7 +86,7 @@ data Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogShake log -> pretty log
+    LogShake msg -> pretty msg
 
 
 typeLensCommandId :: T.Text
@@ -103,7 +102,7 @@ descriptor recorder plId =
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
 
-properties :: Properties '[ 'PropertyKey "mode" ('TEnum Mode)]
+properties :: Properties '[ 'PropertyKey "mode" (TEnum Mode)]
 properties = emptyProperties
   & defineEnumProperty #mode "Control how type lenses are shown"
     [ (Always, "Always displays type lenses of global bindings")
@@ -314,11 +313,11 @@ gblBindingType (Just hsc) (Just gblEnv) = do
       showDoc = showDocRdrEnv hsc rdrEnv
       hasSig :: (Monad m) => Name -> m a -> m (Maybe a)
       hasSig name f = whenMaybe (name `elemNameSet` sigs) f
-      bindToSig id = do
-        let name = idName id
+      bindToSig identifier = do
+        let name = idName identifier
         hasSig name $ do
           env <- tcInitTidyEnv
-          let (_, ty) = tidyOpenType env (idType id)
+          let (_, ty) = tidyOpenType env (idType identifier)
           pure $ GlobalBindingTypeSig name (printName name <> " :: " <> showDoc (pprSigmaType ty)) (name `elemNameSet` exports)
       patToSig p = do
         let name = patSynName p

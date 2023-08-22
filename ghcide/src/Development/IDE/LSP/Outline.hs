@@ -11,10 +11,8 @@ where
 
 import           Control.Monad.IO.Class
 import           Data.Functor
-import           Data.Foldable                  (toList)
 import           Data.Generics                  hiding (Prefix)
 import           Data.Maybe
-import qualified Data.Text                      as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
@@ -29,12 +27,20 @@ import           Language.LSP.Protocol.Types             (DocumentSymbol (..),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
                                                  type (|?) (InL, InR), uriToFilePath)
 import          Language.LSP.Protocol.Message
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if MIN_VERSION_ghc(9,2,0)
-import Data.List.NonEmpty (nonEmpty)
+import           Data.List.NonEmpty             (nonEmpty)
+import           Data.Foldable                  (toList)
+#endif
+
+#if !MIN_VERSION_ghc(9,3,0)
+import qualified Data.Text                      as T
 #endif
 
 moduleOutline
-  :: PluginMethodHandler IdeState 'Method_TextDocumentDocumentSymbol
+  :: PluginMethodHandler IdeState Method_TextDocumentDocumentSymbol
 moduleOutline ideState _ DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
   = liftIO $ case uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do
@@ -89,13 +95,13 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ ClassDecl { tcdLNa
     , _detail   = Just "class"
     , _children =
       Just $
-        [ (defDocumentSymbol l :: DocumentSymbol)
+        [ (defDocumentSymbol l' :: DocumentSymbol)
             { _name           = printOutputable n
             , _kind           = SymbolKind_Method
-            , _selectionRange = realSrcSpanToRange l'
+            , _selectionRange = realSrcSpanToRange l''
             }
-        | L (locA -> (RealSrcSpan l _))  (ClassOpSig _ False names _) <- tcdSigs
-        , L (locA -> (RealSrcSpan l' _)) n                            <- names
+        | L (locA -> (RealSrcSpan l' _))  (ClassOpSig _ False names _) <- tcdSigs
+        , L (locA -> (RealSrcSpan l'' _)) n                            <- names
         ]
     }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLName = L _ name, tcdDataDefn = HsDataDefn { dd_cons } }))
@@ -104,28 +110,28 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
     , _kind     = SymbolKind_Struct
     , _children =
       Just $
-        [ (defDocumentSymbol l :: DocumentSymbol)
+#if MIN_VERSION_ghc(9,2,0)
+          [ (defDocumentSymbol l'' :: DocumentSymbol)
             { _name           = printOutputable n
             , _kind           = SymbolKind_Constructor
             , _selectionRange = realSrcSpanToRange l'
-#if MIN_VERSION_ghc(9,2,0)
             , _children       = toList <$> nonEmpty childs
             }
         | con <- extract_cons dd_cons
         , let (cs, flds) = hsConDeclsBinders con
         , let childs = mapMaybe cvtFld flds
         , L (locA -> RealSrcSpan l' _) n <- cs
-        , let l = case con of
-                L (locA -> RealSrcSpan l _) _ -> l
+        , let l'' = case con of
+                L (locA -> RealSrcSpan l''' _) _ -> l'''
                 _ -> l'
         ]
     }
   where
     cvtFld :: LFieldOcc GhcPs -> Maybe DocumentSymbol
 #if MIN_VERSION_ghc(9,3,0)
-    cvtFld (L (locA -> RealSrcSpan l _) n) = Just $ (defDocumentSymbol l :: DocumentSymbol)
+    cvtFld (L (locA -> RealSrcSpan l' _) n) = Just $ (defDocumentSymbol l' :: DocumentSymbol)
 #else
-    cvtFld (L (RealSrcSpan l _) n) = Just $ (defDocumentSymbol l :: DocumentSymbol)
+    cvtFld (L (RealSrcSpan l' _) n) = Just $ (defDocumentSymbol l' :: DocumentSymbol)
 #endif
 #if MIN_VERSION_ghc(9,3,0)
                 { _name = printOutputable (unLoc (foLabel n))
@@ -136,21 +142,25 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
                 }
     cvtFld _  = Nothing
 #else
+          [ (defDocumentSymbol l'' :: DocumentSymbol)
+            { _name           = printOutputable n
+            , _kind           = SymbolKind_Constructor
+            , _selectionRange = realSrcSpanToRange l'
            , _children       = conArgRecordFields (con_args x)
             }
-        | L (locA -> (RealSrcSpan l _ )) x <- dd_cons
+        | L (locA -> (RealSrcSpan l'' _ )) x <- dd_cons
         , L (locA -> (RealSrcSpan l' _)) n <- getConNames' x
         ]
     }
   where
     -- | Extract the record fields of a constructor
     conArgRecordFields (RecCon (L _ lcdfs)) = Just
-      [ (defDocumentSymbol l :: DocumentSymbol)
+      [ (defDocumentSymbol l' :: DocumentSymbol)
           { _name = printOutputable n
           , _kind = SymbolKind_Field
           }
       | L _ cdf <- lcdfs
-      , L (locA -> (RealSrcSpan l _)) n <- rdrNameFieldOcc . unLoc <$> cd_fld_names cdf
+      , L (locA -> (RealSrcSpan l' _)) n <- rdrNameFieldOcc . unLoc <$> cd_fld_names cdf
       ]
     conArgRecordFields _ = Nothing
 #endif

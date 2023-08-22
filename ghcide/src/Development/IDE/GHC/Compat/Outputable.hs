@@ -49,17 +49,36 @@ module Development.IDE.GHC.Compat.Outputable (
     textDoc,
     ) where
 
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if !MIN_VERSION_ghc(9,0,0)
+import           Development.IDE.GHC.Compat.Core (GlobalRdrEnv)
+import           DynFlags
+import           ErrUtils                        hiding (mkWarnMsg)
+import qualified ErrUtils                        as Err
+import           HscTypes
+import           Outputable                      as Out hiding
+                                                        (defaultUserStyle)
+import qualified Outputable                      as Out
+import           SrcLoc
+#endif
+
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Session
+import           GHC.Driver.Types                as HscTypes
+import           GHC.Types.Name.Reader           (GlobalRdrEnv)
+import           GHC.Types.SrcLoc
+import           GHC.Utils.Error                 as Err hiding (mkWarnMsg)
+import qualified GHC.Utils.Error                 as Err
+import           GHC.Utils.Outputable            as Out hiding
+                                                        (defaultUserStyle)
+import qualified GHC.Utils.Outputable            as Out
+#endif
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Env
 import           GHC.Driver.Ppr
 import           GHC.Driver.Session
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Parser.Errors
-#else
-import           GHC.Parser.Errors.Types
-#endif
-import qualified GHC.Parser.Errors.Ppr           as Ppr
 import qualified GHC.Types.Error                 as Error
 import           GHC.Types.Name.Ppr
 import           GHC.Types.Name.Reader
@@ -71,34 +90,21 @@ import           GHC.Utils.Outputable            as Out hiding
                                                         (defaultUserStyle)
 import qualified GHC.Utils.Outputable            as Out
 import           GHC.Utils.Panic
-#elif MIN_VERSION_ghc(9,0,0)
-import           GHC.Driver.Session
-import           GHC.Driver.Types                as HscTypes
-import           GHC.Types.Name.Reader           (GlobalRdrEnv)
-import           GHC.Types.SrcLoc
-import           GHC.Utils.Error                 as Err hiding (mkWarnMsg)
-import qualified GHC.Utils.Error                 as Err
-import           GHC.Utils.Outputable            as Out hiding
-                                                        (defaultUserStyle)
-import qualified GHC.Utils.Outputable            as Out
-#else
-import           Development.IDE.GHC.Compat.Core (GlobalRdrEnv)
-import           DynFlags
-import           ErrUtils                        hiding (mkWarnMsg)
-import qualified ErrUtils                        as Err
-import           HscTypes
-import           Outputable                      as Out hiding
-                                                        (defaultUserStyle)
-import qualified Outputable                      as Out
-import           SrcLoc
 #endif
-#if MIN_VERSION_ghc(9,5,0)
-import           GHC.Driver.Errors.Types         (GhcMessage)
+
+#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+import           GHC.Parser.Errors
+import qualified GHC.Parser.Errors.Ppr           as Ppr
 #endif
+
 #if MIN_VERSION_ghc(9,3,0)
 import           Data.Maybe
 import           GHC.Driver.Config.Diagnostic
-import           GHC.Utils.Logger
+import           GHC.Parser.Errors.Types
+#endif
+
+#if MIN_VERSION_ghc(9,5,0)
+import           GHC.Driver.Errors.Types         (GhcMessage)
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
@@ -221,16 +227,18 @@ type WarnMsg  = MsgEnvelope DecoratedSDoc
 #endif
 
 mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
-mkPrintUnqualifiedDefault env =
 #if MIN_VERSION_ghc(9,5,0)
+mkPrintUnqualifiedDefault env =
   mkNamePprCtx ptc (hsc_unit_env env)
     where
       ptc = initPromotionTickContext (hsc_dflags env)
 #elif MIN_VERSION_ghc(9,2,0)
+mkPrintUnqualifiedDefault env =
   -- GHC 9.2 version
   -- mkPrintUnqualified :: UnitEnv -> GlobalRdrEnv -> PrintUnqualified
   mkPrintUnqualified (hsc_unit_env env)
 #else
+mkPrintUnqualifiedDefault env =
   HscTypes.mkPrintUnqualified (hsc_dflags env)
 #endif
 
