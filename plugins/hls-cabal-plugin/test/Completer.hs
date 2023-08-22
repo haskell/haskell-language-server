@@ -3,15 +3,19 @@
 
 module Completer where
 
-import           Control.Lens                                   ((^.))
+import           Control.Lens                                   ((^.), (^?))
+import           Control.Lens.Prism
 import qualified Data.ByteString                                as ByteString
+import           Data.Maybe                                     (mapMaybe)
 import qualified Data.Text                                      as T
 import           Distribution.PackageDescription.Parsec         (parseGenericPackageDescriptionMaybe)
 import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
+import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Types    (CompleterData (..))
 import           Ide.Plugin.Cabal.Completion.Completions
-import           Ide.Plugin.Cabal.Completion.Types
+import           Ide.Plugin.Cabal.Completion.Types              (CabalPrefixInfo (..),
+                                                                 StanzaName)
 import           Ide.Plugin.Cabal.Parse                         (GenericPackageDescription)
 import qualified Language.LSP.Protocol.Lens                     as L
 import qualified Language.LSP.VFS                               as VFS
@@ -23,7 +27,8 @@ completerTests :: TestTree
 completerTests =
   testGroup
     "Completer Tests"
-    [ fileCompleterTests,
+    [ basicCompleterTests,
+      fileCompleterTests,
       filePathCompletionContextTests,
       directoryCompleterTests,
       completionHelperTests,
@@ -31,41 +36,59 @@ completerTests =
       exposedModuleCompleterTests
     ]
 
+basicCompleterTests :: TestTree
+basicCompleterTests =
+  testGroup
+    "Basic Completer Tests"
+    [ runCabalTestCaseSession "In stanza context - stanza should not be suggested" "" $ do
+        doc <- openDoc "completer.cabal" "cabal"
+        compls <- getCompletions doc (Position 11 7)
+        let complTexts = getTextEditTexts compls
+        liftIO $ assertBool "does not suggest library" $ "library" `notElem` complTexts
+        liftIO $ assertBool "suggests library keyword" $ "extra-libraries:" `elem` complTexts
+    , runCabalTestCaseSession "In top level context - stanza should be suggested" "" $ do
+        doc <- openDoc "completer.cabal" "cabal"
+        compls <- getCompletions doc (Position 8 2)
+        let complTexts = getTextEditTexts compls
+        liftIO $ assertBool "suggests benchmark" $ "benchmark" `elem` complTexts
+    , runCabalTestCaseSession "Main-is completions should be relative to hs-source-dirs of same stanza" "filepath-completions" $ do
+        doc <- openDoc "main-is.cabal" "cabal"
+        compls <- getCompletions doc (Position 10 12)
+        let complTexts = getTextEditTexts compls
+        liftIO $ assertBool "suggests f2" $ "./f2.hs" `elem` complTexts
+        liftIO $ assertBool "does not suggest" $ "./Content.hs" `notElem` complTexts
+    ]
+    where
+      getTextEditTexts :: [CompletionItem] -> [T.Text]
+      getTextEditTexts compls = mapMaybe (^? L.textEdit . _Just . _L . L.newText) compls
+
 fileCompleterTests :: TestTree
 fileCompleterTests =
   testGroup
     "File Completer Tests"
     [ testCase "Current Directory" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeFilePath "" testDir
-        completions @?== ["./.hidden", "./Content.hs", "./dir1/", "./dir2/", "./textfile.txt"],
+        completions <- completeFilePath "" filePathComplTestDir
+        completions @?== ["./.hidden", "./Content.hs", "./dir1/", "./dir2/", "./textfile.txt", "./main-is.cabal"],
       testCase "Current Directory - alternative writing" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeFilePath "./" testDir
-        completions @?== ["./.hidden", "./Content.hs", "./dir1/", "./dir2/", "./textfile.txt"],
+        completions <- completeFilePath "./" filePathComplTestDir
+        completions @?== ["./.hidden", "./Content.hs", "./dir1/", "./dir2/", "./textfile.txt", "./main-is.cabal"],
       testCase "Current Directory - hidden file start" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeFilePath "." testDir
-        completions @?== ["./Content.hs", "./.hidden", "./textfile.txt"],
+        completions <- completeFilePath "." filePathComplTestDir
+        completions @?== ["./Content.hs", "./.hidden", "./textfile.txt", "./main-is.cabal"],
       testCase "Current Directory - incomplete directory path written" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeFilePath "di" testDir
+        completions <- completeFilePath "di" filePathComplTestDir
         completions @?== ["./dir1/", "./dir2/"],
       testCase "Current Directory - incomplete filepath written" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeFilePath "te" testDir
+        completions <- completeFilePath "te" filePathComplTestDir
         completions @?== ["./Content.hs", "./textfile.txt"],
       testCase "Subdirectory" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeFilePath "dir1/" testDir
+        completions <- completeFilePath "dir1/" filePathComplTestDir
         completions @?== ["dir1/f1.txt", "dir1/f2.hs"],
       testCase "Subdirectory - incomplete filepath written" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeFilePath "dir2/dir3/MA" testDir
+        completions <- completeFilePath "dir2/dir3/MA" filePathComplTestDir
         completions @?== ["dir2/dir3/MARKDOWN.md"],
       testCase "Nonexistent directory" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeFilePath "dir2/dir4/" testDir
+        completions <- completeFilePath "dir2/dir4/" filePathComplTestDir
         completions @?== []
     ]
   where
@@ -106,7 +129,6 @@ filePathCompletionContextTests =
         let complContext = getCabalPrefixInfo "" (simplePosPrefixInfo "\"fp.txt\" \"src fp2.txt" 0 13)
         completionPrefix complContext @?= "src",
       testCase "Current Directory" $ do
-        testDir <- getFilePathComplTestDir
         compls <-
           listFileCompletions
             mempty
@@ -114,11 +136,10 @@ filePathCompletionContextTests =
               { isStringNotationPath = Nothing,
                 pathSegment = "",
                 queryDirectory = "",
-                workingDirectory = testDir
+                workingDirectory = filePathComplTestDir
               }
-        compls @?== [".hidden", "Content.hs", "dir1/", "dir2/", "textfile.txt"],
+        compls @?== [".hidden", "Content.hs", "dir1/", "dir2/", "textfile.txt", "main-is.cabal"],
       testCase "In directory" $ do
-        testDir <- getFilePathComplTestDir
         compls <-
           listFileCompletions
             mempty
@@ -126,7 +147,7 @@ filePathCompletionContextTests =
               { isStringNotationPath = Nothing,
                 pathSegment = "",
                 queryDirectory = "dir1/",
-                workingDirectory = testDir
+                workingDirectory = filePathComplTestDir
               }
         compls @?== ["f1.txt", "f2.hs"]
     ]
@@ -145,32 +166,25 @@ directoryCompleterTests =
   testGroup
     "Directory Completer Tests"
     [ testCase "Current Directory" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeDirectory "" testDir
+        completions <- completeDirectory "" filePathComplTestDir
         completions @?== ["./dir1/", "./dir2/"],
       testCase "Current Directory - alternative writing" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeDirectory "./" testDir
+        completions <- completeDirectory "./" filePathComplTestDir
         completions @?== ["./dir1/", "./dir2/"],
       testCase "Current Directory - incomplete directory path written" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeDirectory "di" testDir
+        completions <- completeDirectory "di" filePathComplTestDir
         completions @?== ["./dir1/", "./dir2/"],
       testCase "Current Directory - incomplete filepath written" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeDirectory "te" testDir
+        completions <- completeDirectory "te" filePathComplTestDir
         completions @?== [],
       testCase "Subdirectory - no more directories found" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeDirectory "dir1/" testDir
+        completions <- completeDirectory "dir1/" filePathComplTestDir
         completions @?== [],
       testCase "Subdirectory - available subdirectory" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeDirectory "dir2/" testDir
+        completions <- completeDirectory "dir2/" filePathComplTestDir
         completions @?== ["dir2/dir3/"],
       testCase "Nonexistent directory" $ do
-        testDir <- getFilePathComplTestDir
-        completions <- completeDirectory "dir2/dir4/" testDir
+        completions <- completeDirectory "dir2/dir4/" filePathComplTestDir
         completions @?== []
     ]
   where
@@ -241,8 +255,7 @@ filePathExposedModulesTests =
   where
     callFilePathsForExposedModules :: [FilePath] -> IO [T.Text]
     callFilePathsForExposedModules srcDirs = do
-      cwd <- getExposedTestDir
-      let prefInfo = simpleCabalPrefixInfoFromFp "" cwd
+      let prefInfo = simpleCabalPrefixInfoFromFp "" exposedTestDir
       filePathsForExposedModules mempty srcDirs prefInfo
 
 exposedModuleCompleterTests :: TestTree
@@ -277,25 +290,21 @@ exposedModuleCompleterTests =
       CompleterData
         { cabalPrefixInfo = simpleExposedCabalPrefixInfo pref dir,
           getLatestGPD = do
-            testDir <- getTestDir
-            cabalContents <- ByteString.readFile $ testDir </> "exposed.cabal"
+            cabalContents <- ByteString.readFile $ testDataDir </> "exposed.cabal"
             pure $ parseGenericPackageDescriptionMaybe cabalContents,
           stanzaName = sName
         }
     callModulesCompleter :: Maybe StanzaName -> (Maybe StanzaName -> GenericPackageDescription -> [FilePath]) -> T.Text -> IO [T.Text]
     callModulesCompleter sName func prefix = do
-      cwd <- getTestDir
-      let cData = simpleCompleterData sName cwd prefix
+      let cData = simpleCompleterData sName testDataDir prefix
       completer <- modulesCompleter func mempty cData
       pure $ fmap extract completer
 
 mkCompleterData :: CabalPrefixInfo -> CompleterData
 mkCompleterData prefInfo = CompleterData {getLatestGPD = undefined, cabalPrefixInfo = prefInfo, stanzaName = Nothing}
 
-getExposedTestDir :: IO FilePath
-getExposedTestDir = do
-  testDir <- getTestDir
-  pure $ addTrailingPathSeparator $ testDir </> "src-modules"
+exposedTestDir :: FilePath
+exposedTestDir = addTrailingPathSeparator $ testDataDir </> "src-modules"
 
 simpleExposedCabalPrefixInfo :: T.Text -> FilePath -> CabalPrefixInfo
 simpleExposedCabalPrefixInfo prefix fp =
