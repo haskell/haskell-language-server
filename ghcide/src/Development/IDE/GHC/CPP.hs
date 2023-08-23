@@ -15,25 +15,31 @@
 module Development.IDE.GHC.CPP(doCpp, addOptP)
 where
 
-import           Control.Monad
 import           Development.IDE.GHC.Compat      as Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC
 
-#if MIN_VERSION_ghc(9,0,0)
-import qualified GHC.Driver.Pipeline             as Pipeline
-import           GHC.Settings
-#elif MIN_VERSION_ghc (8,10,0)
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if MIN_VERSION_ghc (8,10,0) && !MIN_VERSION_ghc(9,0,0)
 import qualified DriverPipeline                  as Pipeline
 import           ToolSettings
 #endif
 
-#if MIN_VERSION_ghc(9,5,0)
-import qualified GHC.SysTools.Cpp                as Pipeline
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Settings
 #endif
 
-#if MIN_VERSION_ghc(9,3,0)
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,3,0)
+import qualified GHC.Driver.Pipeline             as Pipeline
+#endif
+
+#if MIN_VERSION_ghc(9,3,0) && !MIN_VERSION_ghc(9,5,0)
 import qualified GHC.Driver.Pipeline.Execute     as Pipeline
+#endif
+
+#if MIN_VERSION_ghc(9,5,0)
+import qualified GHC.SysTools.Cpp                as Pipeline
 #endif
 
 addOptP :: String -> DynFlags -> DynFlags
@@ -43,7 +49,7 @@ addOptP f = alterToolSettings $ \s -> s
           }
   where
     fingerprintStrings ss = fingerprintFingerprints $ map fingerprintString ss
-    alterToolSettings f dynFlags = dynFlags { toolSettings = f (toolSettings dynFlags) }
+    alterToolSettings g dynFlags = dynFlags { toolSettings = g (toolSettings dynFlags) }
 
 doCpp :: HscEnv -> FilePath -> FilePath -> IO ()
 doCpp env input_fn output_fn =

@@ -531,6 +531,9 @@ instance PluginMethod Request Method_CallHierarchyOutgoingCalls where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'
   pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
 
+instance PluginMethod Request Method_WorkspaceExecuteCommand where
+  pluginEnabled _ _ _ _= True
+
 instance PluginMethod Request (Method_CustomMethod m) where
   pluginEnabled _ _ _ _ = True
 

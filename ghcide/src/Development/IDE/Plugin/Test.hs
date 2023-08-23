@@ -46,7 +46,6 @@ import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq       (HscEnvEq (hscEnv))
 import           Development.IDE.Types.Location       (fromUri)
 import           GHC.Generics                         (Generic)
-import           Ide.Plugin.Config                    (CheckParents)
 import           Ide.Plugin.Error
 import           Ide.Types
 import           Language.LSP.Protocol.Message

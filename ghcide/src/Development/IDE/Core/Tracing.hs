@@ -1,7 +1,3 @@
-{-# LANGUAGE CPP             #-}
-{-# LANGUAGE PackageImports  #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# HLINT ignore #-}
 
 module Development.IDE.Core.Tracing
     ( otTracedHandler

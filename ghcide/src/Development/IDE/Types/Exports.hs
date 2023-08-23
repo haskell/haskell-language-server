@@ -23,21 +23,18 @@ module Development.IDE.Types.Exports
 
 import           Control.DeepSeq             (NFData (..), force, ($!!))
 import           Control.Monad
-import           Data.Bifunctor              (Bifunctor (second))
 import           Data.Char                   (isUpper)
 import           Data.Hashable               (Hashable)
-import           Data.HashMap.Strict         (HashMap, elems)
-import qualified Data.HashMap.Strict         as Map
 import           Data.HashSet                (HashSet)
 import qualified Data.HashSet                as Set
-import           Data.List                   (foldl', isSuffixOf)
+import           Data.List                   (isSuffixOf)
 import           Data.Text                   (Text, uncons)
 import           Data.Text.Encoding          (decodeUtf8, encodeUtf8)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
-import           Development.IDE.GHC.Util
 import           GHC.Generics                (Generic)
-import           HieDb
+import           HieDb                       hiding (withHieDb)
+import           Prelude                     hiding (mod)
 
 
 data ExportsMap = ExportsMap
@@ -46,7 +43,7 @@ data ExportsMap = ExportsMap
     }
 
 instance NFData ExportsMap where
-  rnf (ExportsMap a b) = foldOccEnv (\a b -> rnf a `seq` b) (seqEltsUFM rnf b) a
+  rnf (ExportsMap a b) = foldOccEnv (\c d -> rnf c `seq` d) (seqEltsUFM rnf b) a
 
 instance Show ExportsMap where
   show (ExportsMap occs mods) =
@@ -63,13 +60,13 @@ instance Show ExportsMap where
 updateExportsMap :: ExportsMap -> ExportsMap -> ExportsMap
 updateExportsMap old new = ExportsMap
   { getExportsMap = delListFromOccEnv (getExportsMap old) old_occs `plusOccEnv` getExportsMap new -- plusOccEnv is right biased
-  , getModuleExportsMap = (getModuleExportsMap old) `plusUFM` (getModuleExportsMap new) -- plusUFM is right biased
+  , getModuleExportsMap = getModuleExportsMap old `plusUFM` getModuleExportsMap new -- plusUFM is right biased
   }
   where old_occs = concat [map name $ Set.toList (lookupWithDefaultUFM_Directly (getModuleExportsMap old) mempty m_uniq)
                           | m_uniq <- nonDetKeysUFM (getModuleExportsMap new)]
 
 size :: ExportsMap -> Int
-size = sum . map (Set.size) . nonDetOccEnvElts . getExportsMap
+size = sum . map Set.size . nonDetOccEnvElts . getExportsMap
 
 mkVarOrDataOcc :: Text -> OccName
 mkVarOrDataOcc t = mkOcc $ mkFastStringByteString $ encodeUtf8 t
@@ -144,8 +141,8 @@ mkIdentInfos mod (AvailFL fl) =
 mkIdentInfos mod (AvailTC parent (n:nn) flds)
     -- Following the GHC convention that parent == n if parent is exported
     | n == parent
-    = [ IdentInfo (nameOccName n) (Just $! nameOccName parent) mod
-        | n <- nn ++ map flSelector flds
+    = [ IdentInfo (nameOccName name) (Just $! nameOccName parent) mod
+        | name <- nn ++ map flSelector flds
       ] ++
       [ IdentInfo (nameOccName n) Nothing mod]
 
@@ -162,7 +159,7 @@ createExportsMap modIface = do
   where
     doOne modIFace = do
       let getModDetails = unpackAvail $ moduleName $ mi_module modIFace
-      concatMap (getModDetails) (mi_exports modIFace)
+      concatMap getModDetails (mi_exports modIFace)
 
 createExportsMapMg :: [ModGuts] -> ExportsMap
 createExportsMapMg modGuts = do
@@ -202,7 +199,7 @@ unpackAvail mn
   | nonInternalModules mn = map f . mkIdentInfos mn
   | otherwise = const []
   where
-    f id@IdentInfo {..} = (name, mn, Set.singleton id)
+    f identInfo@IdentInfo {..} = (name, mn, Set.singleton identInfo)
 
 
 identInfoToKeyVal :: IdentInfo -> (ModuleName, IdentInfo)

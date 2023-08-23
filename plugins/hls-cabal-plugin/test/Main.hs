@@ -17,15 +17,12 @@ import           Data.Either                     (isRight)
 import           Data.Row
 import qualified Data.Text                       as T
 import qualified Data.Text                       as Text
-import           Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.LicenseSuggest (licenseErrorSuggestion)
 import qualified Ide.Plugin.Cabal.Parse          as Lib
 import qualified Language.LSP.Protocol.Lens      as L
 import           System.FilePath
 import           Test.Hls
-
-cabalPlugin :: PluginTestDescriptor Ide.Plugin.Cabal.Log
-cabalPlugin = mkPluginTestDescriptor descriptor "cabal"
+import           Utils
 
 main :: IO ()
 main = do
@@ -195,17 +192,3 @@ pluginTests =
         InR action@CodeAction{_title} <- codeActions
         guard (_title == "Replace with " <> license)
         pure action
-
--- ------------------------------------------------------------------------
--- Runner utils
--- ------------------------------------------------------------------------
-
-runCabalTestCaseSession :: TestName -> FilePath -> Session () -> TestTree
-runCabalTestCaseSession title subdir = testCase title . runCabalSession subdir
-
-runCabalSession :: FilePath -> Session a -> IO a
-runCabalSession subdir =
-    failIfSessionTimeout . runSessionWithServer cabalPlugin (testDataDir </> subdir)
-
-testDataDir :: FilePath
-testDataDir = "test" </> "testdata"

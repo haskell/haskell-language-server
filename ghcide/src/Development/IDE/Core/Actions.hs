@@ -67,7 +67,7 @@ getAtPoint file pos = runMaybeT $ do
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
   MaybeT $ liftIO $ fmap (first (toCurrentRange mapping =<<)) <$> AtPoint.atPoint opts hf dkMap env pos'
 
--- | For each Loacation, determine if we have the PositionMapping
+-- | For each Location, determine if we have the PositionMapping
 -- for the correct file. If not, get the correct position mapping
 -- and then apply the position mapping to the location.
 toCurrentLocations

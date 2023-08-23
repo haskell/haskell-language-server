@@ -1,4 +1,3 @@
-{-# LANGUAGE DuplicateRecordFields #-}
 module Development.IDE.Core.IdeConfiguration
   ( IdeConfiguration(..)
   , registerIdeConfiguration
@@ -13,13 +12,13 @@ module Development.IDE.Core.IdeConfiguration
 where
 
 import           Control.Concurrent.Strict
-import           Control.Lens                   ((^.))
+
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Aeson.Types               (Value)
 import           Data.Hashable                  (Hashed, hashed, unhashed)
 import           Data.HashSet                   (HashSet, singleton)
-import           Data.Text                      (Text, isPrefixOf)
+import           Data.Text                      (isPrefixOf)
 import           Development.IDE.Core.Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
