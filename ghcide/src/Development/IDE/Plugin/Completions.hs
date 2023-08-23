@@ -11,11 +11,10 @@ module Development.IDE.Plugin.Completions
 
 import           Control.Concurrent.Async                 (concurrently)
 import           Control.Concurrent.STM.Stats             (readTVarIO)
-import           Control.Lens                             ((&), (.~))
+import           Control.Lens                             ((&), (.~), (?~))
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except               (ExceptT (ExceptT),
                                                            withExceptT)
-import           Data.Aeson
 import qualified Data.HashMap.Strict                      as Map
 import qualified Data.HashSet                             as Set
 import           Data.Maybe
@@ -25,7 +24,8 @@ import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service             hiding (Log, LogShake)
-import           Development.IDE.Core.Shake               hiding (Log)
+import           Development.IDE.Core.Shake               hiding (Log,
+                                                           knownTargets)
 import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
@@ -50,17 +50,24 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server                      as LSP
 import           Numeric.Natural
+import           Prelude                                  hiding (mod)
 import           Text.Fuzzy.Parallel                      (Scored (..))
 
 import           Development.IDE.Core.Rules               (usePropertyAction)
-import qualified GHC.LanguageExtensions                   as LangExt
+
 import qualified Ide.Plugin.Config                        as Config
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if MIN_VERSION_ghc(9,2,0)
+import qualified GHC.LanguageExtensions                   as LangExt
+#endif
 
 data Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogShake log -> pretty log
+    LogShake msg -> pretty msg
 
 ghcideCompletionsPluginPriority :: Natural
 ghcideCompletionsPluginPriority = defaultPluginPriority
@@ -79,8 +86,8 @@ produceCompletions :: Recorder (WithPriority Log) -> Rules ()
 produceCompletions recorder = do
     define (cmapWithPrio LogShake recorder) $ \LocalCompletions file -> do
         let uri = fromNormalizedUri $ normalizedFilePathToUri file
-        pm <- useWithStale GetParsedModule file
-        case pm of
+        mbPm <- useWithStale GetParsedModule file
+        case mbPm of
             Just (pm, _) -> do
                 let cdata = localCompletionsForParsedModule uri pm
                 return ([], Just cdata)
@@ -90,9 +97,9 @@ produceCompletions recorder = do
         -- synthesizing a fake module with an empty body from the buffer
         -- in the ModSummary, which preserves all the imports
         ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
-        sess <- fmap fst <$> useWithStale GhcSessionDeps file
+        mbSess <- fmap fst <$> useWithStale GhcSessionDeps file
 
-        case (ms, sess) of
+        case (ms, mbSess) of
             (Just ModSummaryResult{..}, Just sess) -> do
               let env = hscEnv sess
               -- We do this to be able to provide completions of items that are not restricted to the explicit list
@@ -122,7 +129,7 @@ dropListFromImportDecl iDecl = let
     f x = x
     in f <$> iDecl
 
-resolveCompletion :: ResolveFunction IdeState CompletionResolveData 'Method_CompletionItemResolve
+resolveCompletion :: ResolveFunction IdeState CompletionResolveData Method_CompletionItemResolve
 resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} uri (CompletionResolveData _ needType (NameDetails mod occ)) =
   do
     file <- getNormalizedFilePathE uri
@@ -137,8 +144,8 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
 #endif
     mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap file
     let (dm,km) = case mdkm of
-          Just (DKMap dm km, _) -> (dm,km)
-          Nothing               -> (mempty, mempty)
+          Just (DKMap docMap kindMap, _) -> (docMap,kindMap)
+          Nothing                        -> (mempty, mempty)
     doc <- case lookupNameEnv dm name of
       Just doc -> pure $ spanDocToMarkdown doc
       Nothing -> liftIO $ spanDocToMarkdown <$> getDocumentationTryGhc (hscEnv sess) name
@@ -155,13 +162,13 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
             InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator (old:doc)
           _ -> InR $ MarkupContent MarkupKind_Markdown $ T.intercalate sectionSeparator doc
     pure  (comp & L.detail .~ (det1 <> _detail)
-                & L.documentation .~ Just doc1)
+                & L.documentation ?~ doc1)
   where
     stripForall ty = case splitForAllTyCoVars ty of
       (_,res) -> res
 
 -- | Generate code actions.
-getCompletionsLSP :: PluginMethodHandler IdeState 'Method_TextDocumentCompletion
+getCompletionsLSP :: PluginMethodHandler IdeState Method_TextDocumentCompletion
 getCompletionsLSP ide plId
   CompletionParams{_textDocument=TextDocumentIdentifier uri
                   ,_position=position
@@ -207,7 +214,7 @@ getCompletionsLSP ide plId
           Just (cci', parsedMod, bindMap) -> do
             let pfix = getCompletionPrefix position cnts
             case (pfix, completionContext) of
-              ((PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
+              (PosPrefixInfo _ "" _ _, Just CompletionContext { _triggerCharacter = Just "."})
                 -> return (InL [])
               (_, _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide

@@ -15,9 +15,9 @@ monitoring :: IO Monitoring
 monitoring
   | userTracingEnabled = do
     actions <- newIORef []
-    let registerCounter name read = do
+    let registerCounter name readA = do
             observer <- mkValueObserver (encodeUtf8 name)
-            let update = observe observer . fromIntegral =<< read
+            let update = observe observer . fromIntegral =<< readA
             atomicModifyIORef'_ actions (update :)
         registerGauge = registerCounter
     let start = do

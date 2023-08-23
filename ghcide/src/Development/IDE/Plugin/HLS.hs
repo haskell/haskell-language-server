@@ -91,7 +91,7 @@ noPluginEnabled recorder m fs' = do
         pluginNotEnabled method availPlugins =
             "No plugin enabled for " <> T.pack (show method) <> ", potentially available: "
                 <> (T.intercalate ", " $ map (\(PluginId plid) -> plid) availPlugins)
-  
+
 pluginDoesntExist :: PluginId -> Text
 pluginDoesntExist (PluginId pid) = "Plugin " <> pid <> " doesn't exist"
 
@@ -232,9 +232,9 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
 -- ---------------------------------------------------------------------
 
 extensiblePlugins ::  Recorder (WithPriority Log) -> [(PluginId, PluginDescriptor IdeState)] -> Plugin Config
-extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
+extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
   where
-    IdeHandlers handlers' = foldMap bakePluginId xs
+    IdeHandlers handlers' = foldMap bakePluginId plugins
     bakePluginId :: (PluginId, PluginDescriptor IdeState) -> IdeHandlers
     bakePluginId (pid,pluginDesc) = IdeHandlers $ DMap.map
       (\(PluginHandler f) -> IdeHandler [(pid,pluginDesc,f pid)])
@@ -250,11 +250,11 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
         -- Clients generally don't display ResponseErrors so instead we log any that we come across
         case nonEmpty fs of
           Nothing -> liftIO $ noPluginEnabled recorder m ((\(x, _, _) -> x) <$> fs')
-          Just fs -> do
-            let  handlers = fmap (\(plid,_,handler) -> (plid,handler)) fs
-            es <- runConcurrently exceptionInPlugin m handlers ide params
+          Just neFs -> do
+            let  plidsAndHandlers = fmap (\(plid,_,handler) -> (plid,handler)) neFs
+            es <- runConcurrently exceptionInPlugin m plidsAndHandlers ide params
             caps <- LSP.getClientCapabilities
-            let (errs,succs) = partitionEithers $ toList $ join $ NE.zipWith (\(pId,_) -> fmap (first (pId,))) handlers es
+            let (errs,succs) = partitionEithers $ toList $ join $ NE.zipWith (\(pId,_) -> fmap (first (pId,))) plidsAndHandlers es
             liftIO $ unless (null errs) $ logErrors recorder errs
             case nonEmpty succs of
               Nothing -> do
@@ -288,12 +288,12 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
         case nonEmpty fs of
           Nothing -> do
             logWith recorder Warning (LogNoPluginForMethod $ Some m)
-          Just fs -> do
+          Just neFs -> do
             -- We run the notifications in order, so the core ghcide provider
             -- (which restarts the shake process) hopefully comes last
             mapM_ (\(pid,_,f) -> otTracedProvider pid (fromString $ show m) $ f ide vfs params
                                     `catchAny` -- See Note [Exception handling in plugins]
-                                    (\e -> logWith recorder Warning (ExceptionInPlugin pid (Some m) e))) fs
+                                    (\e -> logWith recorder Warning (ExceptionInPlugin pid (Some m) e))) neFs
 
 
 -- ---------------------------------------------------------------------
@@ -344,14 +344,14 @@ newtype IdeNotificationHandlers = IdeNotificationHandlers (DMap IdeNotification 
 instance Semigroup IdeHandlers where
   (IdeHandlers a) <> (IdeHandlers b) = IdeHandlers $ DMap.unionWithKey go a b
     where
-      go _ (IdeHandler a) (IdeHandler b) = IdeHandler (a <> b)
+      go _ (IdeHandler c) (IdeHandler d) = IdeHandler (c <> d)
 instance Monoid IdeHandlers where
   mempty = IdeHandlers mempty
 
 instance Semigroup IdeNotificationHandlers where
   (IdeNotificationHandlers a) <> (IdeNotificationHandlers b) = IdeNotificationHandlers $ DMap.unionWithKey go a b
     where
-      go _ (IdeNotificationHandler a) (IdeNotificationHandler b) = IdeNotificationHandler (a <> b)
+      go _ (IdeNotificationHandler c) (IdeNotificationHandler d) = IdeNotificationHandler (c <> d)
 instance Monoid IdeNotificationHandlers where
   mempty = IdeNotificationHandlers mempty
 

@@ -30,9 +30,11 @@ import           Development.IDE.Types.Location
 import qualified GHC.LanguageExtensions            as LangExt
 import           System.FilePath
 import           System.IO.Extra
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Utils.Logger                  (LogFlags (..))
-import           GHC.Utils.Outputable              (renderWithContext)
 #endif
 
 -- | Given a file and some contents, apply any necessary preprocessors,
@@ -54,17 +56,17 @@ preprocessor env filename mbContents = do
     !src_hash <- liftIO $ Util.fingerprintFromStringBuffer contents
 
     -- Perform cpp
-    (opts, env) <- ExceptT $ parsePragmasIntoHscEnv env filename contents
-    let dflags = hsc_dflags env
-    let logger = hsc_logger env
-    (isOnDisk, contents, opts, env) <-
+    (opts, pEnv) <- ExceptT $ parsePragmasIntoHscEnv env filename contents
+    let dflags = hsc_dflags pEnv
+    let logger = hsc_logger pEnv
+    (newIsOnDisk, newContents, newOpts, newEnv) <-
         if not $ xopt LangExt.Cpp dflags then
-            return (isOnDisk, contents, opts, env)
+            return (isOnDisk, contents, opts, pEnv)
         else do
             cppLogs <- liftIO $ newIORef []
             let newLogger = pushLogHook (const (logActionCompat $ logAction cppLogs)) logger
-            contents <- ExceptT
-                        $ (Right <$> (runCpp (putLogHook newLogger env) filename
+            con <- ExceptT
+                        $ (Right <$> (runCpp (putLogHook newLogger pEnv) filename
                                        $ if isOnDisk then Nothing else Just contents))
                             `catch`
                             ( \(e :: Util.GhcException) -> do
@@ -73,25 +75,25 @@ preprocessor env filename mbContents = do
                                   []    -> throw e
                                   diags -> return $ Left diags
                             )
-            (opts, env) <- ExceptT $ parsePragmasIntoHscEnv env filename contents
-            return (False, contents, opts, env)
+            (options, hscEnv) <- ExceptT $ parsePragmasIntoHscEnv pEnv filename con
+            return (False, con, options, hscEnv)
 
     -- Perform preprocessor
     if not $ gopt Opt_Pp dflags then
-        return (contents, opts, env, src_hash)
+        return (newContents, newOpts, newEnv, src_hash)
     else do
-        contents <- liftIO $ runPreprocessor env filename $ if isOnDisk then Nothing else Just contents
-        (opts, env) <- ExceptT $ parsePragmasIntoHscEnv env filename contents
-        return (contents, opts, env, src_hash)
+        con <- liftIO $ runPreprocessor newEnv filename $ if newIsOnDisk then Nothing else Just newContents
+        (options, hscEnv) <- ExceptT $ parsePragmasIntoHscEnv newEnv filename con
+        return (con, options, hscEnv, src_hash)
   where
     logAction :: IORef [CPPLog] -> LogActionCompat
     logAction cppLogs dflags _reason severity srcSpan _style msg = do
 #if MIN_VERSION_ghc(9,3,0)
-      let log = CPPLog (fromMaybe SevWarning severity) srcSpan $ T.pack $ renderWithContext (log_default_user_context dflags) msg
+      let cppLog = CPPLog (fromMaybe SevWarning severity) srcSpan $ T.pack $ renderWithContext (log_default_user_context dflags) msg
 #else
-      let log = CPPLog severity srcSpan $ T.pack $ showSDoc dflags msg
+      let cppLog = CPPLog severity srcSpan $ T.pack $ showSDoc dflags msg
 #endif
-      modifyIORef cppLogs (log :)
+      modifyIORef cppLogs (cppLog :)
 
 
 
@@ -118,12 +120,12 @@ diagsFromCPPLogs filename logs =
     -- informational log messages and attaches them to the initial log message.
     go :: [CPPDiag] -> [CPPLog] -> [CPPDiag]
     go acc [] = reverse $ map (\d -> d {cdMessage = reverse $ cdMessage d}) acc
-    go acc (CPPLog sev (RealSrcSpan span _) msg : logs) =
-      let diag = CPPDiag (realSrcSpanToRange span) (toDSeverity sev) [msg]
-       in go (diag : acc) logs
-    go (diag : diags) (CPPLog _sev (UnhelpfulSpan _) msg : logs) =
-      go (diag {cdMessage = msg : cdMessage diag} : diags) logs
-    go [] (CPPLog _sev (UnhelpfulSpan _) _msg : logs) = go [] logs
+    go acc (CPPLog sev (RealSrcSpan rSpan _) msg : gLogs) =
+      let diag = CPPDiag (realSrcSpanToRange rSpan) (toDSeverity sev) [msg]
+       in go (diag : acc) gLogs
+    go (diag : diags) (CPPLog _sev (UnhelpfulSpan _) msg : gLogs) =
+      go (diag {cdMessage = msg : cdMessage diag} : diags) gLogs
+    go [] (CPPLog _sev (UnhelpfulSpan _) _msg : gLogs) = go [] gLogs
     cppDiagToDiagnostic :: CPPDiag -> Diagnostic
     cppDiagToDiagnostic d =
       Diagnostic
@@ -196,12 +198,12 @@ runLhs env filename contents = withTempDir $ \dir -> do
 
 -- | Run CPP on a file
 runCpp :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> IO Util.StringBuffer
-runCpp env0 filename contents = withTempDir $ \dir -> do
+runCpp env0 filename mbContents = withTempDir $ \dir -> do
     let out = dir </> takeFileName filename <.> "out"
     let dflags1 = addOptP "-D__GHCIDE__" (hsc_dflags env0)
     let env1 = hscSetFlags dflags1 env0
 
-    case contents of
+    case mbContents of
         Nothing -> do
             -- Happy case, file is not modified, so run CPP on it in-place
             -- which also makes things like relative #include files work
@@ -225,21 +227,21 @@ runCpp env0 filename contents = withTempDir $ \dir -> do
             -- Fix up the filename in lines like:
             -- # 1 "C:/Temp/extra-dir-914611385186/___GHCIDE_MAGIC___"
             let tweak x
-                    | Just x <- stripPrefix "# " x
-                    , "___GHCIDE_MAGIC___" `isInfixOf` x
-                    , let num = takeWhile (not . isSpace) x
+                    | Just y <- stripPrefix "# " x
+                    , "___GHCIDE_MAGIC___" `isInfixOf` y
+                    , let num = takeWhile (not . isSpace) y
                     -- important to use /, and never \ for paths, even on Windows, since then C escapes them
                     -- and GHC gets all confused
-                        = "# " <> num <> " \"" <> map (\x -> if isPathSeparator x then '/' else x) filename <> "\""
+                        = "# " <> num <> " \"" <> map (\z -> if isPathSeparator z then '/' else z) filename <> "\""
                     | otherwise = x
             Util.stringToStringBuffer . unlines . map tweak . lines <$> readFileUTF8' out
 
 
 -- | Run a preprocessor on a file
 runPreprocessor :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> IO Util.StringBuffer
-runPreprocessor env filename contents = withTempDir $ \dir -> do
+runPreprocessor env filename mbContents = withTempDir $ \dir -> do
     let out = dir </> takeFileName filename <.> "out"
-    inp <- case contents of
+    inp <- case mbContents of
         Nothing -> return filename
         Just contents -> do
             let inp = dir </> takeFileName filename <.> "hs"

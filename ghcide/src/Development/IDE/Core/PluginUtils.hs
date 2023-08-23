@@ -1,5 +1,29 @@
 {-# LANGUAGE GADTs #-}
-module Development.IDE.Core.PluginUtils where
+module Development.IDE.Core.PluginUtils
+(-- Wrapped Action functions
+  runActionE
+, runActionMT
+, useE
+, useMT
+, usesE
+, usesMT
+, useWithStaleE
+, useWithStaleMT
+-- Wrapped IdeAction functions
+, runIdeActionE
+, runIdeActionMT
+, useWithStaleFastE
+, useWithStaleFastMT
+, uriToFilePathE
+-- Wrapped PositionMapping functions
+, toCurrentPositionE
+, toCurrentPositionMT
+, fromCurrentPositionE
+, fromCurrentPositionMT
+, toCurrentRangeE
+, toCurrentRangeMT
+, fromCurrentRangeE
+, fromCurrentRangeMT) where
 
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class

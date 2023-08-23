@@ -95,8 +95,8 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogFileStore log -> pretty log
-    LogShake log     -> pretty log
+    LogFileStore msg -> pretty msg
+    LogShake msg     -> pretty msg
 
 -- | Grab the current global value of 'FileExistsMap' without acquiring a dependency
 getFileExistsMapUntracked :: Action FileExistsMap

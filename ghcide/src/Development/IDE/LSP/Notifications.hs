@@ -49,8 +49,8 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogShake log     -> pretty log
-    LogFileStore log -> pretty log
+    LogShake msg     -> pretty msg
+    LogFileStore msg -> pretty msg
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
