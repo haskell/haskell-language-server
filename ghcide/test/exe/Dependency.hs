@@ -11,7 +11,7 @@ import           Data.Bool                       (bool)
 import           Data.List                       (isSuffixOf)
 import           Data.Maybe                      (fromMaybe)
 import           Data.Proxy                      (Proxy (..))
-import           Development.IDE.GHC.Compat      (GhcVersion (..))
+import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
 import           Language.LSP.Protocol.Message   (TCustomMessage (NotMess),
                                                   TNotificationMessage (..))
 import           Language.LSP.Protocol.Types     (Definition (..),
@@ -138,7 +138,9 @@ transitiveDependencyTest = testSessionWithExtraFiles "dependency" "goto transiti
         hashableDefs <- getDefinitions asyncDoc (Position 246 11)
         -- The location of the definition of Hashable in
         -- Data.Hashable.Class
-        let expRange = Range (Position 198 14) (Position 198 22)
+        let expRange = if ghcVersion >= GHC90
+                       then Range (Position 198 14) (Position 198 22)
+                       else Range (Position 198 0) (Position 235 31)
         case hashableDefs of
             InL (Definition (InR [Location uri actualRange])) ->
                 liftIO $ do
