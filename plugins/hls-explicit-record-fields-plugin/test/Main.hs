@@ -26,8 +26,8 @@ test = testGroup "explicit-fields"
   , mkTest "WithExplicitBind" "WithExplicitBind" 12 10 12 32
   , mkTest "Mixed" "Mixed" 14 10 14 37
   , mkTest "Construction" "Construction" 16 5 16 15
-  , knownBrokenForGhcVersions [GHC810, GHC90] "Neither version supports overloaded record dot" $ mkTest "HsExpanded1" "HsExpanded1" 16 5 16 15
-  , knownBrokenForGhcVersions [GHC810, GHC90] "Neither version supports overloaded record dot" $mkTest "HsExpanded2" "HsExpanded2" 32 7 32 18
+  , knownBrokenForGhcVersions [GHC810] "HsExpansion is new as of 9.0" $ mkTest "HsExpanded1" "HsExpanded1" 17 10 17 20
+  , knownBrokenForGhcVersions [GHC810] "HsExpansion is now as of 9.0" $ mkTest "HsExpanded2" "HsExpanded2" 23 10 23 22
   , mkTestNoAction "ExplicitBinds" "ExplicitBinds" 11 10 11 52
   , mkTestNoAction "Puns" "Puns" 12 10 12 31
   , mkTestNoAction "Infix" "Infix" 11 11 11 31

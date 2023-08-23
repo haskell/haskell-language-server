@@ -1,34 +1,25 @@
-{-# LANGUAGE Haskell2010 #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE RebindableSyntax #-}
+{-# LANGUAGE NamedFieldPuns #-}
+
 module HsExpanded2 where
+import Prelude
+
+ifThenElse :: Int -> Int -> Int ->  Int
+ifThenElse x y z = x + y + z
 
 data MyRec = MyRec
-  { foo :: Int
-  , bar :: Int
-  , baz :: Char
-  }
+  { foo :: Int }
 
 data YourRec = YourRec
-  { foo2 :: MyRec
-  , bar2 :: Int
-  , baz2 :: Char
-  }
+  { bar :: Int }
 
-myRecExample = MyRec {..}
-  where
-    foo = 5
-    bar = 6
-    baz = 'a'
+myRecExample = MyRec 5
 
-yourRecExample = YourRec {..}
-    where
-        foo2 = myRecExample
-        bar2 = 5
-        baz2 = 'a'
+yourRecExample = YourRec 3
 
-convertMe :: () -> Int
-convertMe _ =
-  (let MyRec{..} = myRecExample
-       YourRec{..} = yourRecExample
-    in foo2).foo
+convertMe :: Int
+convertMe =
+  if (let MyRec {..} = myRecExample
+          YourRec {..} = yourRecExample
+      in bar) then 1 else 2
