@@ -27,6 +27,42 @@ import           Language.LSP.Server            (resRootPath)
 import           System.Directory               (doesDirectoryExist)
 import           System.FilePath                ((<.>), (</>))
 
+{- Note [Going to definitions in dependencies]
+ - There are two main components of the functionality that enables gotoDefinition for
+ - third party dependencies:
+ -  + the changes to the lookupMod function in ghcide/src/Development/IDE/Core/Actions.hs,
+ -    which are triggered on calls to gotoDefinition.
+ -  + the code that indexes dependencies in the hiedb, which can be found in this module.
+ -    This gets run asynchronously, triggering every time newHscEnvEqWithImportPaths gets called.
+ -
+ - The gotoDefinition code was originally written in such a way that it was
+ - expecting that we would eventually be able to go to dependency definitions.
+ - Before the funtionality was implemented, lookupMod was a no-op stub intended to
+ - be where functionality would eventually go for dependencies. You can see the
+ - code that eventually ends up calling lookupMod in the function nameToLocation in
+ - ghcide/src/Development/IDE/Spans/AtPoint.hs. To summarize, gotoDefinition will look
+ - for a file in the project, and look in the hiedb if it can't find it. In this sense,
+ - the name lookupMod might be a little misleading, because by the time it gets called,
+ - the HIE file has already been looked up in the database and we have the FilePath
+ - of its location. A more appropriate name might be something like loadModule,
+ - since what it does is load the module source code from an HIE file and write it out to
+ - .hls/dependencies. The way nameToLocation works, if we have already opened a
+ - dependency file once, lookupMod won't get called. In addition to loading the
+ - dependency source and writing it out, lookupMod handles indexing the source file
+ - that we wrote out, which can't happen in the initial indexing since the
+ - source file doesn't exist at that point. To summarize, for gotoDefinition to work
+ - for a dependency we need to have already indexed the HIE file for that dependency module.
+ -
+ - The indexing process gets the packages and modules for dependencies from the HscEnv.
+ - It filters them for packages we know are direct or transitive dependencies, using the
+ - function calculateTransitiveDependencies. indexDependencyHieFiles attempts to load an
+ - HIE file for each module, checking for it in the extra-compilation-artifacts directory,
+ - found in the package lib directory. This fails for the packages that ship with GHC,
+ - because it doesn't yet generate HIE files. If it is able to load the HIE file,
+ - it indexes it in hiedb using indexHieFile, which is the same function used to
+ - index project HIE files.
+ -}
+
 newtype Package = Package GHC.UnitInfo deriving Eq
 instance Ord Package where
   compare (Package u1) (Package u2) = compare (GHC.unitId u1) (GHC.unitId u2)
