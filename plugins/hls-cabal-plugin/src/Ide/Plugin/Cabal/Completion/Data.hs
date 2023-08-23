@@ -14,6 +14,7 @@ import           Distribution.CabalSpecVersion                  (CabalSpecVersio
                                                                  showCabalSpecVersion)
 import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
+import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Types    (Completer)
 import           Ide.Plugin.Cabal.Completion.Types
@@ -92,16 +93,16 @@ libraryFields =
 executableFields :: Map KeyWordName Completer
 executableFields =
   Map.fromList
-    [ ("main-is:", filePathCompleter),
+    [ ("main-is:", mainIsCompleter sourceDirsExtractionExecutable),
       ("scope:", constantCompleter ["public", "private"]),
-      ("other-modules:", modulesCompleter (sourceDirsExtractionExecutable))
+      ("other-modules:", modulesCompleter sourceDirsExtractionExecutable)
     ]
 
 testSuiteFields :: Map KeyWordName Completer
 testSuiteFields =
   Map.fromList
     [ ("type:", constantCompleter ["exitcode-stdio-1.0", "detailed-0.9"]),
-      ("main-is:", filePathCompleter),
+      ("main-is:", mainIsCompleter sourceDirsExtractionTestSuite),
       ("other-modules:", modulesCompleter sourceDirsExtractionTestSuite)
     ]
 
@@ -109,8 +110,8 @@ benchmarkFields :: Map KeyWordName Completer
 benchmarkFields =
   Map.fromList
     [ ("type:", noopCompleter),
-      ("main-is:", filePathCompleter),
-      ("other-modules:", modulesCompleter (sourceDirsExtractionBenchmark))
+      ("main-is:", mainIsCompleter sourceDirsExtractionBenchmark),
+      ("other-modules:", modulesCompleter sourceDirsExtractionBenchmark)
     ]
 
 foreignLibraryFields :: Map KeyWordName Completer

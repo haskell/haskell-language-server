@@ -29,6 +29,7 @@ library
     Ide.Plugin.Cabal.Diagnostics
     Ide.Plugin.Cabal.Completion.Completer.FilePath
     Ide.Plugin.Cabal.Completion.Completer.Module
+    Ide.Plugin.Cabal.Completion.Completer.Paths
     Ide.Plugin.Cabal.Completion.Completer.Simple
     Ide.Plugin.Cabal.Completion.Completer.Snippet
     Ide.Plugin.Cabal.Completion.Completer.Types
