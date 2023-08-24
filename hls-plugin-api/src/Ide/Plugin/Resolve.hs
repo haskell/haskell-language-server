@@ -6,6 +6,18 @@
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE RankNTypes               #-}
 {-# LANGUAGE ScopedTypeVariables      #-}
+{-| This module currently includes helper functions to provide fallback support
+to code actions that use resolve in HLS. The difference between the two
+functions for code actions that don't support resolve is that
+mkCodeActionHandlerWithResolve will immediately resolve your code action before
+sending it on to the client, while  mkCodeActionWithResolveAndCommand will turn
+your resolve into a command.
+
+General support for resolve in HLS can be used with mkResolveHandler from
+Ide.Types. Resolve theoretically should allow us to delay computation of parts
+of the request till the client needs it, allowing us to answer requests faster
+and with less resource usage.
+-}
 module Ide.Plugin.Resolve
 (mkCodeActionHandlerWithResolve,
 mkCodeActionWithResolveAndCommand) where

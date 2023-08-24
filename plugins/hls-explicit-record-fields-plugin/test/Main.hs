@@ -11,7 +11,6 @@ import qualified Ide.Plugin.ExplicitFields as ExplicitFields
 import           System.FilePath           ((<.>), (</>))
 import           Test.Hls
 
-
 main :: IO ()
 main = defaultTestRunner test
 
@@ -27,6 +26,8 @@ test = testGroup "explicit-fields"
   , mkTest "WithExplicitBind" "WithExplicitBind" 12 10 12 32
   , mkTest "Mixed" "Mixed" 14 10 14 37
   , mkTest "Construction" "Construction" 16 5 16 15
+  , mkTest "HsExpanded1" "HsExpanded1" 17 10 17 20
+  , mkTest "HsExpanded2" "HsExpanded2" 23 10 23 22
   , mkTestNoAction "ExplicitBinds" "ExplicitBinds" 11 10 11 52
   , mkTestNoAction "Puns" "Puns" 12 10 12 31
   , mkTestNoAction "Infix" "Infix" 11 11 11 31
@@ -41,18 +42,22 @@ mkTestNoAction title fp x1 y1 x2 y2 =
       actions <- getExplicitFieldsActions doc x1 y1 x2 y2
       liftIO $ actions @?= []
 
-mkTest :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
-mkTest title fp x1 y1 x2 y2 =
-  goldenWithHaskellDoc plugin title testDataDir fp "expected" "hs" $ \doc -> do
-    (act:_) <- getExplicitFieldsActions doc x1 y1 x2 y2
+mkTestWithCount :: Int -> TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
+mkTestWithCount cnt title fp x1 y1 x2 y2 =
+  goldenWithHaskellAndCaps codeActionResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
+    acts@(act:_) <- getExplicitFieldsActions doc x1 y1 x2 y2
+    liftIO $ length acts @?= cnt
     executeCodeAction act
+
+mkTest :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
+mkTest = mkTestWithCount 1
 
 getExplicitFieldsActions
   :: TextDocumentIdentifier
   -> UInt -> UInt -> UInt -> UInt
   -> Session [CodeAction]
 getExplicitFieldsActions doc x1 y1 x2 y2 =
-  findExplicitFieldsAction <$> getCodeActions doc range
+  findExplicitFieldsAction <$> getAndResolveCodeActions doc range
   where
     range = Range (Position x1 y1) (Position x2 y2)
 
