@@ -29,7 +29,6 @@ import           Unique                     (getKey)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC                        (ModuleGraph)
 import           GHC.ByteCode.Types
 import           GHC.Data.Bag
 import           GHC.Data.FastString
