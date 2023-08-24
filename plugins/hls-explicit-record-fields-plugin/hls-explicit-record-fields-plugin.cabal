@@ -52,6 +52,7 @@ library
 
   if flag(pedantic)
     ghc-options: -Werror
+                 -Wwarn=incomplete-record-updates
     
 test-suite tests
     import:           warnings
