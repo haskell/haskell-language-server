@@ -96,10 +96,8 @@ In turn, `hie-bios` needs some configuration to identify all files, GHC options,
 There are several ways to provide this configuration to `hie-bios`, detailed below.
 
 ### Implicit configuration
-If no `hie.yaml` file is present, `haskell-language-server` automatically detects your `hie-bios` configuration.
+If no `hie.yaml` file is present, `haskell-language-server` automatically detects your `hie-bios` configuration using [implicit-hie](https://github.com/Avi-D-coder/implicit-hie).
 **For most cases, this works just fine, and is the recommended way.**
-
-See [the hie-bios documentation](https://github.com/haskell/hie-bios#implicit-configuration) for more information on implicit configuration.
 
 ### Explicit, generated configuration
 Maybe using the implicit configuration does not suit you.
