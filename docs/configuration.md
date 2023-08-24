@@ -216,12 +216,6 @@ dependencies:
   - someDep
 ```
 
-### Common problems
-
-#### Multi Cradle: No prefixes matched
-The error message `Multi Cradle: No prefixes matched` usually means that implicit configuration failed.
-In that case, you must use explicit configuration.
-
 ### How to show local documentation on hover
 
 Haskell Language Server can display Haddock documentation on hover and completions if the project and
