@@ -15,7 +15,7 @@ import           Test.Hls                       (CodeAction (..), Command,
                                                  Range (Range), Session,
                                                  TestName, TestTree,
                                                  TextDocumentIdentifier,
-                                                 assertFailure,
+                                                 assertFailure, def,
                                                  defaultTestRunner,
                                                  executeCodeAction,
                                                  getCodeActions,
@@ -91,7 +91,7 @@ testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
 
 goldenChangeSignature :: FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenChangeSignature fp = goldenWithHaskellDoc changeTypeSignaturePlugin (fp <> " (golden)") testDataDir fp "expected" "hs"
+goldenChangeSignature fp = goldenWithHaskellDoc def changeTypeSignaturePlugin (fp <> " (golden)") testDataDir fp "expected" "hs"
 
 codeActionTest :: FilePath -> Int -> Int -> TestTree
 codeActionTest fp line col = goldenChangeSignature fp $ \doc -> do
@@ -104,7 +104,7 @@ codeActionTest fp line col = goldenChangeSignature fp $ \doc -> do
 
 codeActionProperties :: TestName -> [(Int, Int)] -> ([CodeAction] -> Session ()) -> TestTree
 codeActionProperties fp locs assertions = testCase fp $ do
-    runSessionWithServer changeTypeSignaturePlugin testDataDir $ do
+    runSessionWithServer def changeTypeSignaturePlugin testDataDir $ do
         openDoc (fp <.> ".hs") "haskell" >>= codeActionsFromLocs >>= findChangeTypeActions >>= assertions
     where
         codeActionsFromLocs doc = concat <$> mapM (getCodeActions doc . uncurry pointRange) locs

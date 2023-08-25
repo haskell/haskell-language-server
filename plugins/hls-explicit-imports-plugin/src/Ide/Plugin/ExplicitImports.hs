@@ -73,7 +73,7 @@ data Log
 instance Pretty Log where
   pretty = \case
     LogShake logMsg -> pretty logMsg
-    LogWAEResponseError rspErr -> "RequestWorkspaceApplyEdit Failed with " <+> viaShow rspErr
+    LogWAEResponseError rspErr -> "RequestWorkspaceApplyEdit Failed with " <+> pretty rspErr
     LogResolve msg -> pretty msg
 
 -- | The "main" function of a plugin

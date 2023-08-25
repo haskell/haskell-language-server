@@ -7,7 +7,6 @@ module Config (tests) where
 
 import           Control.DeepSeq
 import           Control.Monad
-import           Data.Aeson
 import           Data.Hashable
 import qualified Data.HashMap.Strict  as HM
 import qualified Data.Map             as Map
@@ -43,26 +42,26 @@ genericConfigTests = testGroup "generic plugin config"
    ,    testCase "custom defaults and user config on some other plugin" $ runConfigSession "diagnostics" $ do
             _doc <- createDoc "Foo.hs" "haskell" "module Foo where\nfoo = False"
             -- test that the user config doesn't accidentally override the initial config
-            sendConfigurationChanged $ toJSON (changeConfig "someplugin" def{plcHoverOn = False})
+            setHlsConfig $ changeConfig "someplugin" def{plcHoverOn = False}
             -- getting only the expected diagnostics means the plugin wasn't enabled
             expectDiagnostics standardDiagnostics
     ,   expectFailBecause "partial config is not supported" $
         testCase "custom defaults and non overlapping user config" $ runConfigSession "diagnostics" $ do
             _doc <- createDoc "Foo.hs" "haskell" "module Foo where\nfoo = False"
             -- test that the user config doesn't accidentally override the initial config
-            sendConfigurationChanged $ toJSON (changeConfig testPluginId def{plcHoverOn = False})
+            setHlsConfig $ changeConfig testPluginId def{plcHoverOn = False}
             -- getting only the expected diagnostics means the plugin wasn't enabled
             expectDiagnostics standardDiagnostics
     ,   testCase "custom defaults and overlapping user plugin config" $ runConfigSession "diagnostics" $ do
             _doc <- createDoc "Foo.hs" "haskell" "module Foo where\nfoo = False"
             -- test that the user config overrides the default initial config
-            sendConfigurationChanged $ toJSON (changeConfig testPluginId def{plcGlobalOn = True})
+            setHlsConfig $ changeConfig testPluginId def{plcGlobalOn = True}
             -- getting only the expected diagnostics means the plugin wasn't enabled
             expectDiagnostics testPluginDiagnostics
     ,   testCase "custom defaults and non plugin user config" $ runConfigSession "diagnostics" $ do
             _doc <- createDoc "Foo.hs" "haskell" "module Foo where\nfoo = False"
             -- test that the user config doesn't accidentally override the initial config
-            sendConfigurationChanged $ toJSON (def {formattingProvider = "foo"})
+            setHlsConfig $ def {formattingProvider = "foo"}
             -- getting only the expected diagnostics means the plugin wasn't enabled
             expectDiagnostics standardDiagnostics
     ]
@@ -70,12 +69,13 @@ genericConfigTests = testGroup "generic plugin config"
         standardDiagnostics = [("Foo.hs", [(DiagnosticSeverity_Warning, (1,0), "Top-level binding")])]
         testPluginDiagnostics = [("Foo.hs", [(DiagnosticSeverity_Error, (0,0), "testplugin")])]
 
-        runConfigSession subdir =
-            failIfSessionTimeout . runSessionWithServer @() plugin ("test/testdata" </> subdir)
+        runConfigSession subdir session = do
+          recorder <- pluginTestRecorder
+          failIfSessionTimeout $ runSessionWithServer' @() (plugin recorder) def (def {ignoreConfigurationRequests=False}) fullCaps ("test/testdata" </> subdir) session
 
         testPluginId = "testplugin"
         -- A disabled-by-default plugin that creates diagnostics
-        plugin = mkPluginTestDescriptor' pd testPluginId
+        plugin = mkPluginTestDescriptor' @() pd testPluginId
         pd plId = (defaultPluginDescriptor plId)
           {
             pluginConfigDescriptor = configDisabled
@@ -95,7 +95,7 @@ genericConfigTests = testGroup "generic plugin config"
         }
         changeConfig :: PluginId -> PluginConfig -> Config
         changeConfig plugin conf =
-            def{plugins = Map.fromList [(plugin, conf)]}
+            def{plugins = Map.insert plugin conf (plugins def)}
 
 
 data GetTestDiagnostics = GetTestDiagnostics

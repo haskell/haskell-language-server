@@ -37,7 +37,7 @@ library
     , hiedb
     , hls-plugin-api        == 2.1.0.0
     , lens
-    , lsp                    >=2.1.0.0
+    , lsp                    >=2.2.0.0
     , sqlite-simple
     , text
     , unordered-containers

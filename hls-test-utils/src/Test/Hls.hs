@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs                    #-}
 {-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE NamedFieldPuns           #-}
+{-# LANGUAGE OverloadedLists          #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE PolyKinds                #-}
 {-# LANGUAGE RankNTypes               #-}
@@ -28,8 +29,6 @@ module Test.Hls
     -- * Running HLS for integration tests
     runSessionWithServer,
     runSessionWithServerAndCaps,
-    runSessionWithServerFormatter,
-    runSessionWithCabalServerFormatter,
     runSessionWithServer',
     -- * Helpful re-exports
     PluginDescriptor,
@@ -40,7 +39,8 @@ module Test.Hls
     waitForBuildQueue,
     waitForTypecheck,
     waitForAction,
-    sendConfigurationChanged,
+    hlsConfigToClientConfig,
+    setHlsConfig,
     getLastBuildKeys,
     waitForKickDone,
     waitForKickStart,
@@ -134,7 +134,8 @@ goldenGitDiff name = goldenVsStringDiff name gitDiff
 
 goldenWithHaskellDoc
   :: Pretty b
-  => PluginTestDescriptor b
+  => Config
+  -> PluginTestDescriptor b
   -> TestName
   -> FilePath
   -> FilePath
@@ -146,7 +147,8 @@ goldenWithHaskellDoc = goldenWithDoc "haskell"
 
 goldenWithHaskellAndCaps
   :: Pretty b
-  => ClientCapabilities
+  => Config
+  -> ClientCapabilities
   -> PluginTestDescriptor b
   -> TestName
   -> FilePath
@@ -155,9 +157,9 @@ goldenWithHaskellAndCaps
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithHaskellAndCaps clientCaps plugin title testDataDir path desc ext act =
+goldenWithHaskellAndCaps config clientCaps plugin title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
-  $ runSessionWithServerAndCaps plugin clientCaps testDataDir
+  $ runSessionWithServerAndCaps config plugin clientCaps testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"
@@ -167,7 +169,8 @@ goldenWithHaskellAndCaps clientCaps plugin title testDataDir path desc ext act =
 
 goldenWithCabalDoc
   :: Pretty b
-  => PluginTestDescriptor b
+  => Config
+  -> PluginTestDescriptor b
   -> TestName
   -> FilePath
   -> FilePath
@@ -180,6 +183,7 @@ goldenWithCabalDoc = goldenWithDoc "cabal"
 goldenWithDoc
   :: Pretty b
   => T.Text
+  -> Config
   -> PluginTestDescriptor b
   -> TestName
   -> FilePath
@@ -188,9 +192,9 @@ goldenWithDoc
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithDoc fileType plugin title testDataDir path desc ext act =
+goldenWithDoc fileType config plugin title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
-  $ runSessionWithServer plugin testDataDir
+  $ runSessionWithServer config plugin testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) fileType
@@ -284,33 +288,20 @@ initialiseTestRecorder envVars = do
 -- Run an HLS server testing a specific plugin
 -- ------------------------------------------------------------
 
-runSessionWithServer :: Pretty b => PluginTestDescriptor b -> FilePath -> Session a -> IO a
-runSessionWithServer plugin fp act = do
+runSessionWithServer :: Pretty b => Config -> PluginTestDescriptor b -> FilePath -> Session a -> IO a
+runSessionWithServer config plugin fp act = do
   recorder <- pluginTestRecorder
-  runSessionWithServer' (plugin recorder) def def fullCaps fp act
+  runSessionWithServer' (plugin recorder) config def fullCaps fp act
 
-runSessionWithServerAndCaps :: Pretty b => PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
-runSessionWithServerAndCaps plugin caps fp act = do
+runSessionWithServerAndCaps :: Pretty b => Config -> PluginTestDescriptor b -> ClientCapabilities -> FilePath -> Session a -> IO a
+runSessionWithServerAndCaps config plugin caps fp act = do
   recorder <- pluginTestRecorder
-  runSessionWithServer' (plugin recorder) def def caps fp act
-
-runSessionWithServerFormatter :: Pretty b => PluginTestDescriptor b -> String -> PluginConfig -> FilePath -> Session a -> IO a
-runSessionWithServerFormatter plugin formatter conf fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer'
-    (plugin recorder)
-    def
-      { formattingProvider = T.pack formatter
-      , plugins = M.singleton (PluginId $ T.pack formatter) conf
-      }
-    def
-    fullCaps
-    fp
-    act
+  runSessionWithServer' (plugin recorder) config def caps fp act
 
 goldenWithHaskellDocFormatter
   :: Pretty b
-  => PluginTestDescriptor b -- ^ Formatter plugin to be used
+  => Config
+  -> PluginTestDescriptor b -- ^ Formatter plugin to be used
   -> String -- ^ Name of the formatter to be used
   -> PluginConfig
   -> TestName -- ^ Title of the test
@@ -320,9 +311,10 @@ goldenWithHaskellDocFormatter
   -> FilePath -- ^ Extension of the output file
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithHaskellDocFormatter plugin formatter conf title testDataDir path desc ext act =
-  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
-  $ runSessionWithServerFormatter plugin formatter conf testDataDir
+goldenWithHaskellDocFormatter config plugin formatter conf title testDataDir path desc ext act =
+  let config' = config { formattingProvider = T.pack formatter , plugins = M.singleton (PluginId $ T.pack formatter) conf }
+  in goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServer config' plugin testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"
@@ -332,7 +324,8 @@ goldenWithHaskellDocFormatter plugin formatter conf title testDataDir path desc 
 
 goldenWithCabalDocFormatter
   :: Pretty b
-  => PluginTestDescriptor b -- ^ Formatter plugin to be used
+  => Config
+  -> PluginTestDescriptor b -- ^ Formatter plugin to be used
   -> String -- ^ Name of the formatter to be used
   -> PluginConfig
   -> TestName -- ^ Title of the test
@@ -342,28 +335,16 @@ goldenWithCabalDocFormatter
   -> FilePath -- ^ Extension of the output file
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithCabalDocFormatter plugin formatter conf title testDataDir path desc ext act =
-  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
-  $ runSessionWithCabalServerFormatter plugin formatter conf testDataDir
+goldenWithCabalDocFormatter config plugin formatter conf title testDataDir path desc ext act =
+  let config' = config { cabalFormattingProvider = T.pack formatter , plugins = M.singleton (PluginId $ T.pack formatter) conf }
+  in goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServer config' plugin testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "cabal"
     void waitForBuildQueue
     act doc
     documentContents doc
-
-runSessionWithCabalServerFormatter :: Pretty b => PluginTestDescriptor b -> String -> PluginConfig -> FilePath -> Session a -> IO a
-runSessionWithCabalServerFormatter plugin formatter conf fp act = do
-  recorder <- pluginTestRecorder
-  runSessionWithServer'
-    (plugin recorder)
-    def
-      { cabalFormattingProvider = T.pack formatter
-      , plugins = M.singleton (PluginId $ T.pack formatter) conf
-      }
-    def
-    fullCaps
-    fp act
 
 -- | Restore cwd after running an action
 keepCurrentDirectory :: IO a -> IO a
@@ -404,6 +385,7 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
       ["LSP_TEST_LOG_STDERR", "HLS_TEST_SERVER_LOG_STDERR", "HLS_TEST_LOG_STDERR"]
 
     let
+        sconf' = sconf { lspConfig = hlsConfigToClientConfig conf }
         -- exists until old logging style is phased out
         logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
 
@@ -429,7 +411,7 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
                 , argsIdeOptions = ideOptions
                 }
 
-    x <- runSessionWithHandles inW outR sconf caps root s
+    x <- runSessionWithHandles inW outR sconf' caps root s
     hClose inW
     timeout 3 (wait server) >>= \case
         Just () -> pure ()
@@ -489,9 +471,19 @@ waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
 getLastBuildKeys :: Session (Either ResponseError [T.Text])
 getLastBuildKeys = callTestPlugin GetBuildKeysBuilt
 
-sendConfigurationChanged :: Value -> Session ()
-sendConfigurationChanged config =
-  sendNotification SMethod_WorkspaceDidChangeConfiguration (DidChangeConfigurationParams config)
+hlsConfigToClientConfig :: Config -> A.Object
+hlsConfigToClientConfig config = [("haskell", toJSON config)]
+
+-- | Set the HLS client configuration, and wait for the server to update to use it.
+-- Note that this will only work if we are not ignoring configuration requests, you
+-- may need to call @setIgnoringConfigurationRequests False@ first.
+setHlsConfig :: Config -> Session ()
+setHlsConfig config = do
+  setConfig $ hlsConfigToClientConfig config
+  -- wait until we get the workspace/configuration request from the server, so
+  -- we know things are settling. This only works if we're not skipping config
+  -- requests!
+  skipManyTill anyMessage (void configurationRequest)
 
 waitForKickDone :: Session ()
 waitForKickDone = void $ skipManyTill anyMessage nonTrivialKickDone

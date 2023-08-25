@@ -42,12 +42,12 @@ main = defaultTestRunner $ testGroup "import-actions"
     , codeActionBreakFile "ExplicitBreakFile" 4 0
     , codeActionStaleAction "ExplicitStaleAction" 4 0
     , testCase "No CodeAction when exported" $
-      runSessionWithServer explicitImportsPlugin testDataDir $ do
+      runSessionWithServer def explicitImportsPlugin testDataDir $ do
         doc <- openDoc "ExplicitExported.hs" "haskell"
         action <- getCodeActions doc (pointRange 3 0)
         liftIO $ action @?= []
     , testCase "No CodeLens when exported" $
-      runSessionWithServer explicitImportsPlugin testDataDir $ do
+      runSessionWithServer def explicitImportsPlugin testDataDir $ do
         doc <- openDoc "ExplicitExported.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ lenses @?= []
@@ -106,7 +106,7 @@ codeActionStaleAction fp l c = goldenWithImportActions " code action" fp codeAct
   case find ((== Just "Make this import explicit") . caTitle) actions of
     Just (InR x) ->
       maybeResolveCodeAction x >>=
-        \case Just _ -> liftIO $ assertFailure "Code action still valid"
+        \case Just _  -> liftIO $ assertFailure "Code action still valid"
               Nothing -> pure ()
     _            -> liftIO $ assertFailure "Unable to find CodeAction"
   where edit = TextDocumentContentChangeEvent $ InL $ #range .== Range (Position 6 0) (Position 6 0)
@@ -169,7 +169,7 @@ executeCmd cmd = do
 -- helpers
 
 goldenWithImportActions :: String -> FilePath -> ClientCapabilities -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithImportActions title fp caps = goldenWithHaskellAndCaps caps explicitImportsPlugin (fp <> title <> " (golden)") testDataDir fp "expected" "hs"
+goldenWithImportActions title fp caps = goldenWithHaskellAndCaps def caps explicitImportsPlugin (fp <> title <> " (golden)") testDataDir fp "expected" "hs"
 
 testDataDir :: String
 testDataDir = "test" </> "testdata"

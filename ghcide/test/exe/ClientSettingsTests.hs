@@ -4,8 +4,9 @@ module ClientSettingsTests (tests) where
 import           Control.Applicative.Combinators
 import           Control.Monad
 import           Data.Aeson                      (toJSON)
-import qualified Data.Aeson                      as A
+import           Data.Default
 import qualified Data.Text                       as T
+import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types     hiding
                                                  (SemanticTokenAbsolute (..),
@@ -19,11 +20,11 @@ import           TestUtils
 tests :: TestTree
 tests = testGroup "client settings handling"
     [ testSession "ghcide restarts shake session on config changes" $ do
+            setIgnoringLogNotifications False
             void $ skipManyTill anyMessage $ message SMethod_ClientRegisterCapability
             void $ createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
-            sendNotification SMethod_WorkspaceDidChangeConfiguration
-                (DidChangeConfigurationParams (toJSON (mempty :: A.Object)))
+            setConfigSection "haskell" $ toJSON (def :: Config)
             skipManyTill anyMessage restartingBuildSession
 
     ]

@@ -29,7 +29,7 @@ tests = testGroup "ormolu"
   ]
 
 goldenWithOrmolu :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithOrmolu title path desc = goldenWithHaskellDocFormatter ormoluPlugin "ormolu" def title testDataDir path desc "hs"
+goldenWithOrmolu title path desc = goldenWithHaskellDocFormatter def ormoluPlugin "ormolu" def title testDataDir path desc "hs"
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

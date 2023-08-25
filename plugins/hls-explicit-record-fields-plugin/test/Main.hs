@@ -37,14 +37,14 @@ test = testGroup "explicit-fields"
 mkTestNoAction :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
 mkTestNoAction title fp x1 y1 x2 y2 =
   testCase title $
-    runSessionWithServer plugin (testDataDir </> "noop") $ do
+    runSessionWithServer def plugin (testDataDir </> "noop") $ do
       doc <- openDoc (fp <.> "hs") "haskell"
       actions <- getExplicitFieldsActions doc x1 y1 x2 y2
       liftIO $ actions @?= []
 
 mkTestWithCount :: Int -> TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
 mkTestWithCount cnt title fp x1 y1 x2 y2 =
-  goldenWithHaskellAndCaps codeActionResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
+  goldenWithHaskellAndCaps def codeActionResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
     acts@(act:_) <- getExplicitFieldsActions doc x1 y1 x2 y2
     liftIO $ length acts @?= cnt
     executeCodeAction act

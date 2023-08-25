@@ -407,7 +407,7 @@ library
     , ghc
     , ghcide                == 2.1.0.0
     , githash               >=0.1.6.1
-    , lsp                   >= 2.1.0.0
+    , lsp                   >= 2.2.0.0
     , hie-bios
     , hiedb
     , hls-plugin-api        == 2.1.0.0

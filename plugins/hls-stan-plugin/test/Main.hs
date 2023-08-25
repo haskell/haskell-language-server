@@ -3,13 +3,13 @@ module Main
   )
 where
 
-import           Control.Lens            ((^.))
-import           Control.Monad           (void)
-import           Data.List               (find)
-import           Data.Text               (Text)
-import qualified Data.Text               as T
-import qualified Data.Text.IO            as T
-import qualified Ide.Plugin.Stan         as Stan
+import           Control.Lens               ((^.))
+import           Control.Monad              (void)
+import           Data.List                  (find)
+import           Data.Text                  (Text)
+import qualified Data.Text                  as T
+import qualified Data.Text.IO               as T
+import qualified Ide.Plugin.Stan            as Stan
 import qualified Language.LSP.Protocol.Lens as L
 import           System.FilePath
 import           Test.Hls
@@ -43,4 +43,4 @@ stanPlugin = mkPluginTestDescriptor Stan.descriptor "stan"
 
 runStanSession :: FilePath -> Session a -> IO a
 runStanSession subdir =
-  failIfSessionTimeout . runSessionWithServer stanPlugin (testDir </> subdir)
+  failIfSessionTimeout . runSessionWithServer def stanPlugin (testDir </> subdir)

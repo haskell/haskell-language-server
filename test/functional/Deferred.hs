@@ -106,7 +106,7 @@ tests = testGroup "deferred responses" [
     --     cwd <- liftIO getCurrentDirectory
     --     let testUri = filePathToUri $ cwd </> "test/testdata/FuncTest.hs"
 
-    --     diags <- skipManyTill loggingNotification publishDiagnosticsNotification
+    --     diags <- publishDiagnosticsNotification
     --     liftIO $ diags ^? params @?= (Just $ PublishDiagnosticsParams
     --                 { _uri         = testUri
     --                 , _diagnostics = List

@@ -1095,6 +1095,7 @@ writeCoreFileIfNeeded se hsc (Just _) getGuts tmr = do
       (diags', !res) <- liftIO $ mkHiFileResultCompile se hsc tmr guts
       pure (diags++diags', res)
 
+-- See Note [Client configuration in Rules]
 getClientSettingsRule :: Recorder (WithPriority Log) -> Rules ()
 getClientSettingsRule recorder = defineEarlyCutOffNoFile (cmapWithPrio LogShake recorder) $ \GetClientSettings -> do
   alwaysRerun

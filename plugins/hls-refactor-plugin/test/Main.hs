@@ -273,7 +273,6 @@ completionCommandTest name src pos wanted expected = testSession name $ do
       executeCommand c
       if src /= expected
           then do
-            void $ skipManyTill anyMessage loggingNotification
             modifiedCode <- skipManyTill anyMessage (getDocumentEdit docId)
             liftIO $ modifiedCode @?= T.unlines expected
           else do

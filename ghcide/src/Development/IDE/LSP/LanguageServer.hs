@@ -90,12 +90,13 @@ runLanguageServer
     -> Handle -- output
     -> config
     -> (config -> Value -> Either T.Text config)
+    -> (config -> m config ())
     -> (MVar ()
         -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv config, a)),
                LSP.Handlers (m config),
                (LanguageContextEnv config, a) -> m config <~> IO))
     -> IO ()
-runLanguageServer recorder options inH outH defaultConfig onConfigurationChange setup = do
+runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigChange setup = do
     -- This MVar becomes full when the server thread exits or we receive exit message from client.
     -- LSP server will be canceled when it's full.
     clientMsgVar <- newEmptyMVar
@@ -103,8 +104,11 @@ runLanguageServer recorder options inH outH defaultConfig onConfigurationChange 
     (doInitialize, staticHandlers, interpretHandler) <- setup clientMsgVar
 
     let serverDefinition = LSP.ServerDefinition
-            { LSP.onConfigurationChange = onConfigurationChange
+            { LSP.parseConfig = parseConfig
+            , LSP.onConfigChange = onConfigChange
             , LSP.defaultConfig = defaultConfig
+            -- TODO: magic string
+            , LSP.configSection = "haskell"
             , LSP.doInitialize = doInitialize
             , LSP.staticHandlers = (const staticHandlers)
             , LSP.interpretHandler = interpretHandler
@@ -112,10 +116,7 @@ runLanguageServer recorder options inH outH defaultConfig onConfigurationChange 
             }
 
     let lspCologAction :: MonadIO m2 => Colog.LogAction m2 (Colog.WithSeverity LspServerLog)
-        lspCologAction = toCologActionWithPrio $ cfilter
-            -- filter out bad logs in lsp, see: https://github.com/haskell/lsp/issues/447
-            (\msg -> priority msg >= Info)
-            (cmapWithPrio LogLspServer recorder)
+        lspCologAction = toCologActionWithPrio (cmapWithPrio LogLspServer recorder)
 
     void $ untilMVar clientMsgVar $
           void $ LSP.runServerWithHandles

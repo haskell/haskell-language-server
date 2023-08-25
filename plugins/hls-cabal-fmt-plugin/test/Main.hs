@@ -52,7 +52,7 @@ cabalFmtGolden NotFound title _ _ _ =
   testCase title $
     assertFailure $  "Couldn't find cabal-fmt on PATH or this is not an isolated run. "
                   <> "Use cabal flag 'isolateTests' to make it isolated or install cabal-fmt locally."
-cabalFmtGolden Found title path desc act = goldenWithCabalDocFormatter cabalFmtPlugin "cabal-fmt" conf title testDataDir path desc "cabal" act
+cabalFmtGolden Found title path desc act = goldenWithCabalDocFormatter def cabalFmtPlugin "cabal-fmt" conf title testDataDir path desc "cabal" act
   where
     conf = def
 

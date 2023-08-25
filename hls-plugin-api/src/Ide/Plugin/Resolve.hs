@@ -53,7 +53,7 @@ instance Pretty Log where
         DoesNotSupportResolve fallback->
             "Client does not support resolve," <+> pretty fallback
         ApplyWorkspaceEditFailed err ->
-            "ApplyWorkspaceEditFailed:" <+> viaShow err
+            "ApplyWorkspaceEditFailed:" <+> pretty err
 
 -- |When provided with both a codeAction provider and an affiliated codeAction
 -- resolve provider, this function creates a handler that automatically uses

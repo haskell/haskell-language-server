@@ -39,7 +39,7 @@ tests =
 
 goldenWithHaddockComments :: FilePath -> GenCommentsType -> UInt -> UInt -> TestTree
 goldenWithHaddockComments fp (toTitle -> expectedTitle) l c =
-  goldenWithHaskellDoc haddockCommentsPlugin (fp <> " (golden)") testDataDir fp "expected" "hs" $ \doc -> do
+  goldenWithHaskellDoc def haddockCommentsPlugin (fp <> " (golden)") testDataDir fp "expected" "hs" $ \doc -> do
     actions <- getCodeActions doc (Range (Position l c) (Position l $ succ c))
     case find ((== Just expectedTitle) . caTitle) actions of
       Just (InR x) -> executeCodeAction x
@@ -47,7 +47,7 @@ goldenWithHaddockComments fp (toTitle -> expectedTitle) l c =
 
 expectedNothing :: FilePath -> GenCommentsType -> UInt -> UInt -> TestTree
 expectedNothing fp (toTitle -> expectedTitle) l c = testCase fp $
-  runSessionWithServer haddockCommentsPlugin testDataDir $ do
+  runSessionWithServer def haddockCommentsPlugin testDataDir $ do
     doc <- openDoc (fp <.> "hs") "haskell"
     titles <- mapMaybe caTitle <$> getCodeActions doc (Range (Position l c) (Position l $ succ c))
     liftIO $ expectedTitle `notElem` titles @? "Unexpected CodeAction"

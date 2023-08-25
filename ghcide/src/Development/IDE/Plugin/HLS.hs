@@ -11,7 +11,6 @@ module Development.IDE.Plugin.HLS
     ) where
 
 import           Control.Exception             (SomeException)
-import           Control.Lens                  ((^.))
 import           Control.Monad
 import           Control.Monad.Trans.Except    (runExceptT)
 import qualified Data.Aeson                    as A
@@ -39,7 +38,6 @@ import           Ide.Plugin.Config
 import           Ide.Plugin.Error
 import           Ide.PluginUtils               (getClientConfig)
 import           Ide.Types                     as HLS
-import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import qualified Language.LSP.Server           as LSP
@@ -65,21 +63,14 @@ instance Pretty Log where
     LogPluginError (PluginId pId) err ->
       pretty pId <> ":" <+> pretty err
     LogResponseError (PluginId pId) err ->
-      pretty pId <> ":" <+> prettyResponseError err
+      pretty pId <> ":" <+> pretty err
     LogNoPluginForMethod (Some method) ->
-        "No plugin enabled for " <> pretty (show method)
+        "No plugin enabled for " <> pretty method
     LogInvalidCommandIdentifier-> "Invalid command identifier"
     ExceptionInPlugin plId (Some method) exception ->
         "Exception in plugin " <> viaShow plId <> " while processing "
-          <> viaShow method <> ": " <> viaShow exception
+          <> pretty method <> ": " <> viaShow exception
 instance Show Log where show = renderString . layoutCompact . pretty
-
--- various error message specific builders
-prettyResponseError :: ResponseError -> Doc a
-prettyResponseError err = errorCode <> ":" <+> errorBody
-    where
-        errorCode = pretty $ show $ err ^. L.code
-        errorBody = pretty $ err ^. L.message
 
 noPluginEnabled :: Recorder (WithPriority Log) -> SMethod m -> [PluginId] -> IO (Either ResponseError c)
 noPluginEnabled recorder m fs' = do
