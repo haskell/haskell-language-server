@@ -148,6 +148,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
     allPlugins =
 #if hls_cabal
       let pId = "cabal" in Cabal.descriptor (pluginRecorder pId) pId :
+      let caId = "add-module" in Cabal.hsDescriptor (pluginRecorder caId) caId :
 #endif
 #if hls_pragmas
       Pragmas.suggestPragmaDescriptor  "pragmas-suggest" :

@@ -20,8 +20,9 @@ import qualified System.FilePath                              as FP
 import qualified System.FilePath.Posix                        as Posix
 import qualified Text.Fuzzy.Parallel                          as Fuzzy
 
--- | Completer to be used when a file path can be completed for a field.
---  Completes file paths as well as directories.
+{- | Completer to be used when a file path can be completed for a field.
+ Completes file paths as well as directories.
+-}
 filePathCompleter :: Completer
 filePathCompleter recorder cData = do
   let prefInfo = cabalPrefixInfo cData
@@ -72,9 +73,9 @@ mainIsCompleter extractionFunction recorder cData = do
     sName = stanzaName cData
     prefInfo = cabalPrefixInfo cData
 
-
--- | Completer to be used when a directory can be completed for the field.
---  Only completes directories.
+{- | Completer to be used when a directory can be completed for the field.
+ Only completes directories.
+-}
 directoryCompleter :: Completer
 directoryCompleter recorder cData = do
   let prefInfo = cabalPrefixInfo cData
@@ -107,13 +108,14 @@ directoryCompleter recorder cData = do
   be used for file path completions to be written to the cabal file.
 -}
 
--- | Takes a PathCompletionInfo and returns the list of files and directories
---  in the directory which match the path completion info in posix style.
---
---  The directories end with a posix trailing path separator.
---  Since this is used for completions to be written to the cabal file,
---  we use posix separators here.
---  See Note [Using correct file path separators].
+{- | Takes a PathCompletionInfo and returns the list of files and directories
+  in the directory which match the path completion info in posix style.
+
+  The directories end with a posix trailing path separator.
+  Since this is used for completions to be written to the cabal file,
+  we use posix separators here.
+  See Note [Using correct file path separators].
+-}
 listFileCompletions :: Recorder (WithPriority Log) -> PathCompletionInfo -> IO [FilePath]
 listFileCompletions recorder complInfo = do
   let complDir = mkCompletionDirectory complInfo
@@ -126,60 +128,65 @@ listFileCompletions recorder complInfo = do
       logWith recorder Warning $ LogFilePathCompleterIOError complDir err
       pure []
 
--- | Returns a list of all (and only) directories in the
---  directory described by path completion info.
+{- | Returns a list of all (and only) directories in the
+  directory described by path completion info.
+-}
 listDirectoryCompletions :: Recorder (WithPriority Log) -> PathCompletionInfo -> IO [FilePath]
 listDirectoryCompletions recorder complInfo = do
   filepaths <- listFileCompletions recorder complInfo
   filterM (doesDirectoryExist . mkDirFromCWD complInfo) filepaths
 
--- | Returns the directory where files and directories can be queried from
---  for the passed PathCompletionInfo.
---
---  Returns the full path to the directory pointed to by the path prefix
---  by combining it with the working directory.
---
---  Since this is used for querying paths we use platform
---  compatible separators here.
---  See Note [Using correct file path separators].
+{- | Returns the directory where files and directories can be queried from
+ for the passed PathCompletionInfo.
+
+ Returns the full path to the directory pointed to by the path prefix
+ by combining it with the working directory.
+
+ Since this is used for querying paths we use platform
+ compatible separators here.
+ See Note [Using correct file path separators].
+-}
 mkCompletionDirectory :: PathCompletionInfo -> FilePath
 mkCompletionDirectory complInfo =
   FP.addTrailingPathSeparator $
     workingDirectory complInfo FP.</> (FP.normalise $ queryDirectory complInfo)
 
--- | Returns the full path for the given path segment
---  by combining the working directory with the path prefix
---  and the path segment.
---
---  Since this is used for querying paths we use platform
---  compatible separators here.
---  See Note [Using correct file path separators].
+{- | Returns the full path for the given path segment
+ by combining the working directory with the path prefix
+ and the path segment.
+
+ Since this is used for querying paths we use platform
+ compatible separators here.
+ See Note [Using correct file path separators].
+-}
 mkDirFromCWD :: PathCompletionInfo -> FilePath -> FilePath
 mkDirFromCWD complInfo fp =
   FP.addTrailingPathSeparator $
     mkCompletionDirectory complInfo FP.</> FP.normalise fp
 
--- | Takes a PathCompletionInfo and a directory and
---  returns the complete cabal path to be written on completion action
---  by combining the previously written path prefix and the completed
---  path segment.
---
---  Since this is used for completions we use posix separators here.
---  See Note [Using correct file path separators].
+{- | Takes a PathCompletionInfo and a directory and
+ returns the complete cabal path to be written on completion action
+ by combining the previously written path prefix and the completed
+ path segment.
+
+ Since this is used for completions we use posix separators here.
+ See Note [Using correct file path separators].
+-}
 mkPathCompletionDir :: PathCompletionInfo -> T.Text -> T.Text
 mkPathCompletionDir complInfo completion =
   T.pack $
     queryDirectory complInfo Posix.</> T.unpack completion
 
--- | Takes a PathCompletionInfo and a completed path segment and
---  generates the whole filepath to be completed.
---
---  The returned text combines the completion with a relative path
---  generated from a possible previously written path prefix and
---  is relative to the cabal file location.
---
---  If the completion results in a filepath, we know this is a
---  completed path and can thus apply wrapping of apostrophes if needed.
+{- | Takes a PathCompletionInfo and a completed path segment and
+ generates the whole filepath to be completed.
+
+ The returned text combines the completion with a relative path
+ generated from a possible previously written path prefix and
+ is relative to the cabal file location.
+
+ If the completion results in a filepath, we know this is a
+ completed path and can thus apply wrapping of apostrophes if needed.
+-}
 mkFilePathCompletion :: PathCompletionInfo -> T.Text -> IO T.Text
 mkFilePathCompletion complInfo completion = do
   let combinedPath = mkPathCompletionDir complInfo completion

@@ -1,0 +1,8 @@
+cabal-version:      3.0
+name:               simple-cabal
+executable exeName
+    default-language: Haskell2010
+    hs-source-dirs: test/preprocessor
+    other-modules:
+        MyLib
+        NewModule

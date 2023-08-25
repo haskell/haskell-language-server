@@ -14,6 +14,7 @@ import qualified Data.Text                                     as T
 import           Data.Text.Utf16.Rope                          (Rope)
 import qualified Data.Text.Utf16.Rope                          as Rope
 import           Development.IDE                               as D
+import           Ide.Plugin.Cabal.Cabal
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Snippet
 import           Ide.Plugin.Cabal.Completion.Completer.Types   (Completer)
@@ -28,15 +29,16 @@ import           System.FilePath                               (takeBaseName)
 -- Public API for Completions
 -- ----------------------------------------------------------------
 
--- | Takes information about the completion context within the file
---  and finds the correct completer to be applied.
+{- | Takes information about the completion context within the file
+  and finds the correct completer to be applied.
+-}
 contextToCompleter :: Context -> Completer
 -- if we are in the top level of the cabal file and not in a keyword context,
 -- we can write any top level keywords or a stanza declaration
 contextToCompleter (TopLevel, None) =
   snippetCompleter
     <> ( constantCompleter $
-           Map.keys (cabalVersionKeyword <> cabalKeywords) ++ Map.keys stanzaKeywordMap
+          Map.keys (cabalVersionKeyword <> cabalKeywords) ++ Map.keys stanzaKeywordMap
        )
 -- if we are in a keyword context in the top level,
 -- we look up that keyword in the top level context and can complete its possible values
@@ -47,23 +49,24 @@ contextToCompleter (TopLevel, KeyWord kw) =
 -- if we are in a stanza and not in a keyword context,
 -- we can write any of the stanza's keywords or a stanza declaration
 contextToCompleter (Stanza s _, None) =
-  case Map.lookup s stanzaKeywordMap of
+  case stanzaMapFrom s of
     Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
     Just l  -> constantCompleter $ Map.keys l
 -- if we are in a stanza's keyword's context we can complete possible values of that keyword
 contextToCompleter (Stanza s _, KeyWord kw) =
-  case Map.lookup s stanzaKeywordMap of
+  case stanzaMapFrom s of
     Nothing -> errorNoopCompleter (LogUnknownStanzaNameInContextError s)
     Just m -> case Map.lookup kw m of
       Nothing -> errorNoopCompleter (LogUnknownKeyWordInContextError kw)
       Just l  -> l
 
--- | Takes prefix info about the previously written text
---  and a rope (representing a file), returns the corresponding context.
---
---  Can return Nothing if an error occurs.
---
---  TODO: first line can only have cabal-version: keyword
+{- | Takes prefix info about the previously written text
+  and a rope (representing a file), returns the corresponding context.
+
+  Can return Nothing if an error occurs.
+
+  TODO: first line can only have cabal-version: keyword
+-}
 getContext :: (MonadIO m) => Recorder (WithPriority Log) -> CabalPrefixInfo -> Rope -> MaybeT m Context
 getContext recorder prefInfo ls =
   case prevLinesM of
@@ -87,73 +90,75 @@ getContext recorder prefInfo ls =
       logWith recorder Warning $ LogFileSplitError pos
       -- basically returns nothing
       fail "Abort computation"
-  where
-    pos = completionCursorPosition prefInfo
-    prevLinesM = splitAtPosition pos ls
+ where
+  pos = completionCursorPosition prefInfo
+  prevLinesM = splitAtPosition pos ls
 
--- | Takes information about the current file's file path,
---  and the cursor position in the file; and builds a CabalPrefixInfo
---  with the prefix up to that cursor position.
---  Checks whether a suffix needs to be completed
---  and calculates the range in the document
---  where the completion action should be applied.
+{- | Takes information about the current file's file path,
+  and the cursor position in the file; and builds a CabalPrefixInfo
+  with the prefix up to that cursor position.
+  Checks whether a suffix needs to be completed
+  and calculates the range in the document
+  where the completion action should be applied.
+-}
 getCabalPrefixInfo :: FilePath -> VFS.PosPrefixInfo -> CabalPrefixInfo
 getCabalPrefixInfo fp prefixInfo =
   CabalPrefixInfo
-    { completionPrefix = completionPrefix',
-      isStringNotation = mkIsStringNotation separator afterCursorText,
-      completionCursorPosition = VFS.cursorPos prefixInfo,
-      completionRange = Range completionStart completionEnd,
-      completionWorkingDir = FP.takeDirectory fp,
-      completionFileName = T.pack $ takeBaseName fp
+    { completionPrefix = completionPrefix'
+    , isStringNotation = mkIsStringNotation separator afterCursorText
+    , completionCursorPosition = VFS.cursorPos prefixInfo
+    , completionRange = Range completionStart completionEnd
+    , completionWorkingDir = FP.takeDirectory fp
+    , completionFileName = T.pack $ takeBaseName fp
     }
-  where
-    completionEnd = VFS.cursorPos prefixInfo
-    completionStart =
-      Position
-        (_line completionEnd)
-        (_character completionEnd - (fromIntegral $ T.length completionPrefix'))
-    (beforeCursorText, afterCursorText) = T.splitAt cursorColumn $ VFS.fullLine prefixInfo
-    completionPrefix' = T.takeWhileEnd (not . (`elem` stopConditionChars)) beforeCursorText
-    separator =
-      -- if there is an opening apostrophe before the cursor in the line somewhere,
-      -- everything after that apostrophe is the completion prefix
-      if odd $ T.count "\"" beforeCursorText
-        then '\"'
-        else ' '
-    cursorColumn = fromIntegral $ VFS.cursorPos prefixInfo ^. JL.character
-    stopConditionChars = separator : [',', ':']
+ where
+  completionEnd = VFS.cursorPos prefixInfo
+  completionStart =
+    Position
+      (_line completionEnd)
+      (_character completionEnd - (fromIntegral $ T.length completionPrefix'))
+  (beforeCursorText, afterCursorText) = T.splitAt cursorColumn $ VFS.fullLine prefixInfo
+  completionPrefix' = T.takeWhileEnd (not . (`elem` stopConditionChars)) beforeCursorText
+  separator =
+    -- if there is an opening apostrophe before the cursor in the line somewhere,
+    -- everything after that apostrophe is the completion prefix
+    if odd $ T.count "\"" beforeCursorText
+      then '\"'
+      else ' '
+  cursorColumn = fromIntegral $ VFS.cursorPos prefixInfo ^. JL.character
+  stopConditionChars = separator : [',', ':']
 
-    -- \| Takes the character occurring exactly before,
-    --  and the text occurring after the item to be completed and
-    --  returns whether the item is already surrounded by apostrophes.
-    --
-    --  Example: (@|@ indicates the cursor position)
-    --
-    --  @"./src|@ would call @'\"'@ @""@ and result in Just LeftSide
-    --
-    --  @"./src|"@ would call @'\"'@ @'\"'@ and result in Just Surrounded
-    --
-    mkIsStringNotation :: Char -> T.Text -> Maybe Apostrophe
-    mkIsStringNotation '\"' restLine
-      | Just ('\"', _) <- T.uncons restLine = Just Surrounded
-      | otherwise = Just LeftSide
-    mkIsStringNotation _ _ = Nothing
+  --  Takes the character occurring exactly before,
+  --  and the text occurring after the item to be completed and
+  --  returns whether the item is already surrounded by apostrophes.
+  --
+  --  Example: (@|@ indicates the cursor position)
+  --
+  --  @"./src|@ would call @'\"'@ @""@ and result in Just LeftSide
+  --
+  --  @"./src|"@ would call @'\"'@ @'\"'@ and result in Just Surrounded
+  --
+  mkIsStringNotation :: Char -> T.Text -> Maybe Apostrophe
+  mkIsStringNotation '\"' restLine
+    | Just ('\"', _) <- T.uncons restLine = Just Surrounded
+    | otherwise = Just LeftSide
+  mkIsStringNotation _ _ = Nothing
 
 -- ----------------------------------------------------------------
 -- Implementation Details
 -- ----------------------------------------------------------------
 
--- | Takes prefix info about the previously written text,
---  a list of lines (representing a file) and a map of
---  keywords and returns a keyword context if the
---  previously written keyword matches one in the map.
---
---  From a cursor position, we traverse the cabal file upwards to
---  find the latest written keyword if there is any.
---  Values may be written on subsequent lines,
---  in order to allow for this we take the indentation of the current
---  word to be completed into account to find the correct keyword context.
+{- | Takes prefix info about the previously written text,
+  a list of lines (representing a file) and a map of
+  keywords and returns a keyword context if the
+  previously written keyword matches one in the map.
+
+  From a cursor position, we traverse the cabal file upwards to
+  find the latest written keyword if there is any.
+  Values may be written on subsequent lines,
+  in order to allow for this we take the indentation of the current
+  word to be completed into account to find the correct keyword context.
+-}
 getKeyWordContext :: CabalPrefixInfo -> [T.Text] -> Map KeyWordName a -> Maybe FieldContext
 getKeyWordContext prefInfo ls keywords = do
   case lastNonEmptyLineM of
@@ -170,58 +175,61 @@ getKeyWordContext prefInfo ls keywords = do
           Nothing -> Just None
           Just kw -> Just $ KeyWord kw
         else Just None
-  where
-    lastNonEmptyLineM :: Maybe T.Text
-    lastNonEmptyLineM = do
-      (curLine, rest) <- List.uncons ls
-      -- represents the current line while disregarding the
-      -- currently written text we want to complete
-      let cur = stripPartiallyWritten curLine
-      List.find (not . T.null . T.stripEnd) $
-        cur : rest
+ where
+  lastNonEmptyLineM :: Maybe T.Text
+  lastNonEmptyLineM = do
+    (curLine, rest) <- List.uncons ls
+    -- represents the current line while disregarding the
+    -- currently written text we want to complete
+    let cur = stripPartiallyWritten curLine
+    List.find (not . T.null . T.stripEnd) $
+      cur : rest
 
--- | Traverse the given lines (starting before current cursor position
---  up to the start of the file) to find the nearest stanza declaration,
---  if none is found we are in the top level context.
---
---  TODO: this could be merged with getKeyWordContext in order to increase
---  performance by reducing the number of times we have to traverse the cabal file.
+{- | Traverse the given lines (starting before current cursor position
+  up to the start of the file) to find the nearest stanza declaration,
+  if none is found we are in the top level context.
+
+  TODO: this could be merged with getKeyWordContext in order to increase
+  performance by reducing the number of times we have to traverse the cabal file.
+-}
 currentLevel :: [T.Text] -> StanzaContext
 currentLevel [] = TopLevel
 currentLevel (cur : xs)
   | Just (s, n) <- stanza = Stanza s n
   | otherwise = currentLevel xs
-  where
-    stanza = asum $ map checkStanza (Map.keys stanzaKeywordMap)
-    checkStanza :: StanzaType -> Maybe (StanzaType, Maybe StanzaName)
-    checkStanza t =
-      case T.stripPrefix t (T.strip cur) of
-        Just n
-          | T.null n -> Just (t, Nothing)
-          | otherwise -> Just (t, Just $ T.strip n)
-        Nothing -> Nothing
+ where
+  stanza = asum $ map checkStanza (Map.keys stanzaKeywordMap)
+  checkStanza :: StanzaType -> Maybe (StanzaType, Maybe StanzaName)
+  checkStanza t =
+    case T.stripPrefix t (T.strip cur) of
+      Just n
+        | T.null n -> Just (t, Nothing)
+        | otherwise -> Just (t, Just $ T.strip n)
+      Nothing -> Nothing
 
--- | Get all lines before the given cursor position in the given file
---  and reverse their order to traverse backwards starting from the given position.
+{- | Get all lines before the given cursor position in the given file
+ and reverse their order to traverse backwards starting from the given position.
+-}
 splitAtPosition :: Position -> Rope -> Maybe [T.Text]
 splitAtPosition pos ls = do
   split <- splitFile
   pure $ reverse $ Rope.lines $ fst split
-  where
-    splitFile = Rope.splitAtPosition ropePos ls
-    ropePos =
-      Rope.Position
-        { Rope.posLine = fromIntegral $ pos ^. JL.line,
-          Rope.posColumn = fromIntegral $ pos ^. JL.character
-        }
+ where
+  splitFile = Rope.splitAtPosition ropePos ls
+  ropePos =
+    Rope.Position
+      { Rope.posLine = fromIntegral $ pos ^. JL.line
+      , Rope.posColumn = fromIntegral $ pos ^. JL.character
+      }
 
--- | Takes a line of text and removes the last partially
--- written word to be completed.
+{- | Takes a line of text and removes the last partially
+written word to be completed.
+-}
 stripPartiallyWritten :: T.Text -> T.Text
 stripPartiallyWritten = T.dropWhileEnd (\y -> (y /= ' ') && (y /= ':'))
 
 -- | Calculates how many spaces the currently completed item is indented.
 completionIndentation :: CabalPrefixInfo -> Int
 completionIndentation prefInfo = fromIntegral (pos ^. JL.character) - (T.length $ completionPrefix prefInfo)
-  where
-    pos = completionCursorPosition prefInfo
+ where
+  pos = completionCursorPosition prefInfo

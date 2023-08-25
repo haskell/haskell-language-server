@@ -36,7 +36,7 @@ data PathCompletionInfo = PathCompletionInfo
   { pathSegment          :: T.Text,
     -- ^ Partly written segment of the next part of the path.
     queryDirectory       :: FilePath,
-    -- ^ Written part of path, in posix format.
+  -- ^ written part of path, platform dependent.
     workingDirectory     :: FilePath,
     -- ^ Directory relative to which relative paths are interpreted, platform dependent.
     isStringNotationPath :: Maybe Apostrophe

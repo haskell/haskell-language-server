@@ -9,40 +9,52 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Ide.Plugin.Cabal (descriptor, Log (..)) where
+module Ide.Plugin.Cabal (descriptor, hsDescriptor, Log (..)) where
 
 import           Control.Concurrent.STM
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Lens                                ((^.))
-import           Control.Monad.Extra
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class                   (lift)
+import           Control.Monad.Except                        (MonadError (throwError),
+                                                              MonadIO (liftIO),
+                                                              MonadTrans (lift),
+                                                              join, void, when)
+import           Control.Monad.Extra                         (whenJust)
 import           Control.Monad.Trans.Maybe                   (runMaybeT)
+import qualified Data.Aeson                                  as Aeson
 import qualified Data.ByteString                             as BS
+import           Data.Foldable
 import           Data.Hashable
 import           Data.HashMap.Strict                         (HashMap)
 import qualified Data.HashMap.Strict                         as HashMap
 import qualified Data.List.NonEmpty                          as NE
+import qualified Data.Text                                   as T
 import qualified Data.Text.Encoding                          as Encoding
 import           Data.Typeable
 import           Development.IDE                             as D
+import           Development.IDE.Core.PluginUtils            (runActionE)
+import           Development.IDE.Core.Rules                  (getSourceFileSource)
 import           Development.IDE.Core.Shake                  (restartShakeSession)
 import qualified Development.IDE.Core.Shake                  as Shake
 import           Development.IDE.Graph                       (alwaysRerun)
 import           GHC.Generics
+import qualified Ide.Plugin.Cabal.CodeActions                as CA
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types as CompleterTypes
 import qualified Ide.Plugin.Cabal.Completion.Completions     as Completions
 import qualified Ide.Plugin.Cabal.Completion.Types           as Types
 import qualified Ide.Plugin.Cabal.Diagnostics                as Diagnostics
 import qualified Ide.Plugin.Cabal.LicenseSuggest             as LicenseSuggest
 import qualified Ide.Plugin.Cabal.Parse                      as Parse
+import           Ide.Plugin.Error                            (PluginError (..))
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens                  as JL
 import qualified Language.LSP.Protocol.Message               as LSP
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server                         (getVirtualFile)
 import qualified Language.LSP.VFS                            as VFS
+import           Text.Cabal.Parser                           (parseCabalFile)
+import           Text.Cabal.Types                            (ErrorBundle)
+import           Text.Megaparsec                             (errorBundlePretty)
 
 data Log
   = LogModificationTime NormalizedFilePath FileVersion
@@ -54,6 +66,8 @@ data Log
   | LogFOI (HashMap NormalizedFilePath FileOfInterestStatus)
   | LogCompletionContext Types.Context Position
   | LogCompletions Types.Log
+  | LogCabalParserError ErrorBundle
+  | LogCodeAction CA.Log
   deriving (Show)
 
 instance Pretty Log where
@@ -77,6 +91,20 @@ instance Pretty Log where
         <+> "for cursor position:"
         <+> viaShow position
     LogCompletions logs -> pretty logs
+    LogCodeAction logs -> pretty logs
+    LogCabalParserError errorBundle -> "Parsing cabal file failed with error:" <+> pretty (errorBundlePretty errorBundle)
+
+
+hsDescriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+hsDescriptor recorder plId =
+  (defaultPluginDescriptor plId)
+    { pluginHandlers =
+        mconcat
+          [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction $ addModuleCodeAction recorder
+          ]
+    , pluginRules = pure ()
+    , pluginNotificationHandlers = mempty
+    }
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
@@ -189,8 +217,49 @@ kick = do
 -- Code Actions
 -- ----------------------------------------------------------------
 
+addModuleCodeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
+addModuleCodeAction recorder ideState _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics = diags}) = do
+  diag <- case find (\diag -> T.isInfixOf "Error: cabal: Failed extracting script block:" (diag ^. JL.message)) diags of
+    Nothing -> throwError $ PluginRequestRefused "Not an unknown module diagnostic"
+    Just diag -> pure diag
+
+  cabalFiles <- case diag ^. JL.data_ of
+    Just (Aeson.Array val) -> pure val
+    _ -> throwError $ PluginRequestRefused "Missing cradle dependencies"
+
+  cabalFP <- case findCabalFile $ toList cabalFiles of
+    Nothing -> throwError $ PluginRequestRefused "No .cabal file found in cradle dependencies"
+    Just cabalFP ->
+      pure cabalFP
+
+  fileContent <- runActionE "cabal-plugin.readFileContent" ideState $ lift $ do
+    sources <- getSourceFileSource $ toNormalizedFilePath cabalFP
+    pure $ Encoding.decodeUtf8 sources
+
+  let cabalAST = parseCabalFile cabalFP fileContent -- todo read the cabal file
+  case cabalAST of
+    Right ast -> do
+      codeActions <- CA.collectModuleInsertionOptions (cmapWithPrio LogCodeAction recorder) cabalFP uri ast
+      pure $ InL (fmap InR codeActions)
+    Left errorBundle -> do
+      logWith recorder Debug $ LogCabalParserError errorBundle
+      pure $ InL []
+  where
+    findCabalFile :: [Aeson.Value] -> Maybe FilePath
+    findCabalFile vals =
+      asum $ map
+        (\case
+            Aeson.String val -> do
+              if T.isSuffixOf ".cabal" val
+                then Just $ T.unpack val
+                else Nothing
+            _ -> Nothing
+        )
+      vals
+
+
 licenseSuggestCodeAction :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCodeAction
-licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=diags}) =
+licenseSuggestCodeAction _ _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics = diags}) =
   pure $ InL $ diags >>= (fmap InR . LicenseSuggest.licenseErrorAction uri)
 
 -- ----------------------------------------------------------------
@@ -290,16 +359,17 @@ completion recorder ide _ complParams = do
       Just ctx -> do
         logWith recorder Debug $ LogCompletionContext ctx pos
         let completer = Completions.contextToCompleter ctx
-        let completerData = CompleterTypes.CompleterData
-              { getLatestGPD = do
-                mGPD <- runIdeAction "cabal-plugin.modulesCompleter.gpd" (shakeExtras ide) $ useWithStaleFast Types.ParseCabal $ toNormalizedFilePath fp
-                pure $ fmap fst mGPD
-              , cabalPrefixInfo = prefInfo
-              , stanzaName =
-                case fst ctx of
-                  Types.Stanza _ name -> name
-                  _                   -> Nothing
-              }
+        let completerData =
+              CompleterTypes.CompleterData
+                { getLatestGPD = do
+                    mGPD <- runIdeAction "cabal-plugin.modulesCompleter.gpd" (shakeExtras ide) $ useWithStaleFast Types.ParseCabal $ toNormalizedFilePath fp
+                    pure $ fmap fst mGPD
+                , cabalPrefixInfo = prefInfo
+                , stanzaName =
+                    case fst ctx of
+                      Types.Stanza _ name -> name
+                      _                   -> Nothing
+                }
         completions <- completer completerRecorder completerData
         pure completions
    where

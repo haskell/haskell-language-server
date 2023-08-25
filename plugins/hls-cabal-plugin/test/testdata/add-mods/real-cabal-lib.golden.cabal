@@ -26,27 +26,29 @@ library
   import:           warnings
   exposed-modules:
     Ide.Plugin.Cabal
+    Ide.Plugin.Cabal.Diagnostics
     Ide.Plugin.Cabal.Cabal
     Ide.Plugin.Cabal.CodeActions
     Ide.Plugin.Cabal.Completion.Completer.FilePath
     Ide.Plugin.Cabal.Completion.Completer.Module
-    Ide.Plugin.Cabal.Completion.Completer.Paths
     Ide.Plugin.Cabal.Completion.Completer.Simple
     Ide.Plugin.Cabal.Completion.Completer.Snippet
     Ide.Plugin.Cabal.Completion.Completer.Types
     Ide.Plugin.Cabal.Completion.Completions
     Ide.Plugin.Cabal.Completion.Data
     Ide.Plugin.Cabal.Completion.Types
-    Ide.Plugin.Cabal.Diagnostics
     Ide.Plugin.Cabal.LicenseSuggest
+    Ide.Plugin.Cabal.Parser.CabalParser
+    Ide.Plugin.Cabal.Parser.Data
+    Ide.Plugin.Cabal.Parser.Types
+    Ide.Plugin.Cabal.Parser.ValueParser
     Ide.Plugin.Cabal.Parse
+    NewModule
 
   build-depends:
-    , aeson
     , base                  >=4.12     && <5
     , bytestring
     , Cabal-syntax          >= 3.7
-    , cabal-parser
     , containers
     , deepseq
     , directory
@@ -57,10 +59,9 @@ library
     , hls-plugin-api        == 2.1.0.0
     , hls-graph             == 2.1.0.0
     , lens
-    , lsp
-    , lsp-types
+    , lsp                   ^>=2.0.0.0
+    , lsp-types             ^>=2.0.0.1
     , megaparsec
-    , mtl
     , regex-tdfa            ^>=1.3.1
     , safe
     , stm
@@ -68,6 +69,7 @@ library
     , text-rope
     , transformers
     , unordered-containers  >=0.2.10.0
+    , containers
 
   hs-source-dirs:   src
   default-language: Haskell2010
@@ -83,12 +85,10 @@ test-suite tests
     Completer
     Context
     Utils
-
   build-depends:
     , base
     , bytestring
     , Cabal-syntax          >= 3.7
-    , cabal-parser
     , containers
     , directory
     , filepath
@@ -98,7 +98,6 @@ test-suite tests
     , lens
     , lsp
     , lsp-types
-    , megaparsec
     , tasty-hunit
     , text
     , text-rope

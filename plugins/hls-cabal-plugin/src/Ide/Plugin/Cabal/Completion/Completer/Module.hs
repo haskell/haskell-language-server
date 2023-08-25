@@ -5,6 +5,7 @@ module Ide.Plugin.Cabal.Completion.Completer.Module where
 import           Control.Monad                                  (filterM)
 import           Control.Monad.Extra                            (concatForM,
                                                                  forM)
+import           Data.Char                                      (isUpper)
 import           Data.List                                      (stripPrefix)
 import           Data.Maybe                                     (fromMaybe)
 import qualified Data.Text                                      as T
@@ -19,14 +20,16 @@ import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Types
 import           Ide.Plugin.Cabal.Completion.Types
+import           Safe                                           (headMay)
 import           System.Directory                               (doesFileExist)
 import qualified System.FilePath                                as FP
 import qualified Text.Fuzzy.Parallel                            as Fuzzy
 
--- | Completer to be used when module paths can be completed for the field.
---
--- Takes an extraction function which extracts the source directories
--- to be used by the completer.
+{- | Completer to be used when module paths can be completed for the field.
+
+Takes an extraction function which extracts the source directories
+to be used by the completer.
+-}
 modulesCompleter :: (Maybe StanzaName -> GenericPackageDescription -> [FilePath]) -> Completer
 modulesCompleter extractionFunction recorder cData = do
   mGPD <- getLatestGPD cData
@@ -39,9 +42,9 @@ modulesCompleter extractionFunction recorder cData = do
     Nothing -> do
       logWith recorder Debug LogUseWithStaleFastNoResult
       pure []
-  where
-    sName = stanzaName cData
-    prefInfo = cabalPrefixInfo cData
+ where
+  sName = stanzaName cData
+  prefInfo = cabalPrefixInfo cData
 
 -- | Takes a list of source directories and returns a list of path completions
 --  relative to any of the passed source directories which fit the passed prefix info.
@@ -53,7 +56,7 @@ filePathsForExposedModules recorder srcDirs prefInfo = do
         let dir = FP.normalise dir'
             pathInfo = pathCompletionInfoFromCabalPrefixInfo dir modPrefInfo
         completions <- listFileCompletions recorder pathInfo
-        validExposedCompletions <- filterM (isValidExposedModulePath pathInfo) completions
+        validExposedCompletions <- filterM (isValidExposedModulePath (mkCompletionDirectory pathInfo)) completions
         let toMatch = pathSegment pathInfo
             scored = Fuzzy.simpleFilter
               Fuzzy.defChunkSize
@@ -77,28 +80,37 @@ filePathsForExposedModules recorder srcDirs prefInfo = do
     -- to filepath syntax, since it is in exposed module syntax
     modPrefInfo = prefInfo{completionPrefix=prefix}
 
-    --    Takes a PathCompletionInfo and a path segment and checks whether
-    --    the path segment can be completed for an exposed module.
-    --
-    --    This is the case if the segment represents either a directory or a Haskell file.
-    isValidExposedModulePath :: PathCompletionInfo -> FilePath -> IO Bool
-    isValidExposedModulePath pInfo path = do
-      let dir = mkCompletionDirectory pInfo
-      fileExists <- doesFileExist (dir FP.</> path)
-      pure $ not fileExists || FP.takeExtension path `elem` [".hs", ".lhs"]
+{- | Takes a PathCompletionInfo and a path segment and checks whether
+  the path segment can be completed for an exposed module.
 
--- | Takes a pathCompletionInfo and a path segment and generates the whole
---  filepath to be written on completion including a possibly already written prefix;
---  using the cabal syntax for exposed modules.
---
---  Examples:
---  When the partial directory path `Dir.Dir2.` is stored in the PathCompletionInfo
---  and the completed file `HaskellFile.hs` is passed along with that PathCompletionInfo,
---  the result would be `Dir1.Dir2.HaskellFile`
---
---  When the partial directory path `Dir.` is stored in the PathCompletionInfo
---  and the completed directory `Dir2` is passed along with that PathCompletionInfo,
---  the result would be `Dir1.Dir2.`
+  This is the case if the segment represents either a directory or a Haskell
+  file and all directories in the path and the possible filename must start
+  with uppercase letters.
+-}
+isValidExposedModulePath :: FilePath -> FilePath -> IO Bool
+isValidExposedModulePath dir path = do
+  let fpM = dir FP.</> path
+      allCapitalised = all isCapitalised (FP.splitDirectories path)
+  fileExists <- doesFileExist fpM
+  pure $ allCapitalised && (not fileExists || FP.takeExtension path `elem` [".hs", ".lhs"])
+  where
+    -- Returns whether the given string starts with an uppercase letter
+    isCapitalised :: String -> Bool
+    isCapitalised x = maybe False isUpper (headMay x)
+
+{- | Takes a PathCompletionInfo and a path segment and generates the whole
+ filepath to be written on completion including a possibly already written prefix;
+ using the cabal syntax for exposed modules.
+
+ Examples:
+ When the partial directory path @Dir.Dir2.@ is stored in the PathCompletionInfo
+ and the completed file @HaskellFile.hs@ is passed along with that PathCompletionInfo,
+ the result would be @Dir1.Dir2.HaskellFile@
+
+ When the partial directory path @Dir.@ is stored in the PathCompletionInfo
+ and the completed directory @Dir2@ is passed along with that PathCompletionInfo,
+ the result would be @Dir1.Dir2.@.
+-}
 mkExposedModulePathCompletion :: PathCompletionInfo -> FilePath -> IO T.Text
 mkExposedModulePathCompletion complInfo completion = do
   let combinedPath = queryDirectory complInfo FP.</> completion
@@ -107,17 +119,19 @@ mkExposedModulePathCompletion complInfo completion = do
   let exposedPath = FP.makeRelative "." combinedPath
   pure $ addTrailingDot $ fpToExposedModulePath "" exposedPath
 
--- | Takes a source directory path and a module path and returns
---  the module path relative to the source directory
---  in exposed module syntax where the separators are '.'
---  and the file ending is removed.
---
--- Synopsis: @'fpToExposedModulePath' sourceDir modPath@.
+{- | Takes a source directory path and a module path and returns
+ the module path relative to the source directory
+ in exposed module syntax where the separators are '.'
+ and the file ending is removed if the path is a valid module path,
+ i.e. all directories start with capital letters.
+
+Synopsis: @'fpToExposedModulePath' sourceDir modPath@.
+-}
 fpToExposedModulePath :: FilePath -> FilePath -> T.Text
 fpToExposedModulePath sourceDir modPath =
   T.intercalate "." $ fmap T.pack $ FP.splitDirectories $ FP.dropExtension fp
-  where
-    fp = fromMaybe modPath $ stripPrefix sourceDir modPath
+ where
+  fp = fromMaybe modPath $ stripPrefix sourceDir modPath
 
 -- | Takes a path in the exposed module syntax and translates it to a platform-compatible file path.
 exposedModulePathToFp :: T.Text -> FilePath

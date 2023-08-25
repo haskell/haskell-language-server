@@ -1,0 +1,5 @@
+cabal-version:      3.0
+name:               simple-cabal
+test-suite testiebestie
+    hs-source-dirs: ./src
+    other-modules: M1, M2

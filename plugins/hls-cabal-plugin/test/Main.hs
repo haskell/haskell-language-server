@@ -8,6 +8,7 @@ module Main (
     main,
 ) where
 
+import           CodeActions                     (moduleCodeActionTests)
 import           Completer                       (completerTests)
 import           Context                         (contextTests)
 import           Control.Lens                    ((^.))
@@ -24,6 +25,7 @@ import           System.FilePath
 import           Test.Hls
 import           Utils
 
+
 main :: IO ()
 main = do
     defaultTestRunner $
@@ -33,6 +35,7 @@ main = do
             , pluginTests
             , completerTests
             , contextTests
+            , moduleCodeActionTests
             ]
 
 -- ------------------------------------------------------------------------

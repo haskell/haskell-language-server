@@ -1,0 +1,6 @@
+cabal-version:      3.0
+name:               simple-cabal
+library
+    hs-source-dirs: ./src
+    other-modules:
+      NewModule
