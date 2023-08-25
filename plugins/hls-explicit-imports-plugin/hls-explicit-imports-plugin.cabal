@@ -1,6 +1,6 @@
 cabal-version:      2.2
 name:               hls-explicit-imports-plugin
-version:            2.1.0.0
+version:            2.2.0.0
 synopsis:           Explicit imports plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -38,9 +38,9 @@ library
     , containers
     , deepseq
     , ghc
-    , ghcide                == 2.1.0.0
+    , ghcide                == 2.2.0.0
     , hls-graph
-    , hls-plugin-api        == 2.1.0.0
+    , hls-plugin-api        == 2.2.0.0
     , lens
     , lsp
     , mtl

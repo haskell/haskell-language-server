@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.2", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
+        ghc: ["9.6.2", "9.4.7", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
         platform: [ { image: "debian:9"
                     , installCmd: "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
                     , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
@@ -163,6 +163,15 @@ jobs:
               , ARTIFACT: "x86_64-linux-unknown"
               , ADD_CABAL_ARGS: "--enable-split-sections"
               }
+          - ghc: 9.4.7
+            platform:
+              { image: "fedora:27"
+              , installCmd: "dnf install -y"
+              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
+              , DISTRO: "Unknown"
+              , ARTIFACT: "x86_64-linux-unknown"
+              , ADD_CABAL_ARGS: "--enable-split-sections"
+              }
           - ghc: 9.6.2
             platform:
               { image: "rockylinux:8"
@@ -231,7 +240,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.6.2", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
+        ghc: ["9.6.2", "9.4.7", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
@@ -291,7 +300,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.2", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
+        ghc: ["9.6.2", "9.4.7", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -336,7 +345,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.2", "9.4.6", "9.4.5", "9.2.8", "8.10.7"]
+        ghc: ["9.6.2", "9.4.7", "9.4.6", "9.4.5", "9.2.8", "8.10.7"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -390,7 +399,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.2", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
+        ghc: ["9.6.2", "9.4.7", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
     steps:
       - name: install windows deps
         shell: pwsh
