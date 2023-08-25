@@ -39,7 +39,7 @@ tests found = testGroup "cabal-fmt"
     cabalFmtGolden found "formats a simple document" "simple_testdata" "formatted_document" $ \doc -> do
       formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
 
-  , knownBrokenOnWindows "expand:src comment bug in cabal-fmt on windows" $
+  , expectFailBecause "cabal-fmt can't expand modules if .cabal file is read from stdin. Tracking issue: https://github.com/phadej/cabal-fmt/pull/82" $
     cabalFmtGolden found "formats a document with expand:src comment" "commented_testdata" "formatted_document" $ \doc -> do
       formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
 

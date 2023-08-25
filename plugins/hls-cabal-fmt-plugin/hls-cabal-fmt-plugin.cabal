@@ -38,7 +38,7 @@ library
     , lens
     , lsp-types
     , mtl
-    , process
+    , process-extras
     , text
     , transformers
 
