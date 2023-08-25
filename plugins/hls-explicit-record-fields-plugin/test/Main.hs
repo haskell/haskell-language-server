@@ -47,6 +47,7 @@ mkTestWithCount cnt title fp x1 y1 x2 y2 =
   goldenWithHaskellAndCaps def codeActionResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
     acts@(act:_) <- getExplicitFieldsActions doc x1 y1 x2 y2
     liftIO $ length acts @?= cnt
+    executeCodeAction act
 
 mkTest :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
 mkTest = mkTestWithCount 1
