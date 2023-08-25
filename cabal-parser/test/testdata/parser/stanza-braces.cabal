@@ -1,0 +1,8 @@
+library {
+    hs-source-dirs:
+      exe, filepath, dir
+  build-depends:
+      dep1
+      dep2
+}
+

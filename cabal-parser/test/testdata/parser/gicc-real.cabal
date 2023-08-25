@@ -1,0 +1,31 @@
+Name:           gi-cairo-connector
+Version:        0.1.1
+License:        LGPL-2.1
+License-file:   LICENSE
+Copyright:      (c) 2018 Kilian Kilger, Iñaki García Etxebarria
+Author:         Iñaki García Etxebarria,
+                Kilian Kilger
+Maintainer:     Kilian Kilger (kkilger@gmail.com)
+Build-Type:     Simple
+Cabal-Version:  2.0
+Stability:      experimental
+homepage:       https://github.com/cohomology/gi-cairo-render
+bug-reports:    https://github.com/cohomology/gi-cairo-render/issues
+Synopsis:       GI friendly Binding to the Cairo library.
+Description:    This library contains glue code used to interconnect Haskell GI and Cairo
+Category:       Graphics
+Tested-With:    GHC == 8.10.2, GHC == 8.6.2
+extra-source-files: ChangeLog.md
+
+Source-Repository head
+  type:         git
+  location:     https://github.com/cohomology/gi-cairo-render
+  subdir:       gi-cairo-connector
+
+Library
+        build-depends:    base >= 4 && < 5, mtl >= 2.2 && <2.4,
+                          haskell-gi-base >=0.24.0 && <0.27,
+                          gi-cairo >= 1.0 && <2,
+                          gi-cairo-render == 0.1.*
+        exposed-modules:  GI.Cairo.Render.Connector
+        default-language: Haskell2010

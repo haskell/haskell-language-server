@@ -36,6 +36,7 @@ packages:
          ./plugins/hls-explicit-record-fields-plugin
          ./plugins/hls-refactor-plugin
          ./plugins/hls-overloaded-record-dot-plugin
+         ./cabal-parser
 
 -- Standard location for temporary packages needed for particular environments
 -- For example it is used in the project gitlab mirror to help in the MAcOS M1 build script

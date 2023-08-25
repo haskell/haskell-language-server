@@ -1,0 +1,16 @@
+library
+  hs-source-dirs:
+    { exe, filepath
+, dir }
+  build-depends:
+                 --commmmmment
+    { dep1
+    -- comment
+      dep2
+    }
+  import:
+
+
+
+
+  ghc-options:

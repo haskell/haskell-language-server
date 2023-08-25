@@ -1,0 +1,668 @@
+cabal-version:      3.0
+category:           Development
+name:               haskell-language-server
+version:            2.1.0.0
+synopsis:           LSP server for GHC
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
+homepage:           https://github.com/haskell/haskell-language-server#readme
+bug-reports:        https://github.com/haskell/haskell-language-server/issues
+author:             The Haskell IDE Team
+maintainer:         alan.zimm@gmail.com
+copyright:          The Haskell IDE Team
+license:            Apache-2.0
+license-file:       LICENSE
+build-type:         Simple
+tested-with:        GHC == 8.10.7 || == 9.0.2 || ==9.2.5
+extra-source-files:
+  README.md
+  ChangeLog.md
+  test/testdata/**/*.project
+  test/testdata/**/*.cabal
+  test/testdata/**/*.yaml
+  test/testdata/**/*.hs
+  bindist/wrapper.in
+
+flag pedantic
+  description: Enable -Werror
+  default:     False
+  manual:      True
+
+source-repository head
+  type:     git
+  location: https://github.com/haskell/haskell-language-server
+
+common common-deps
+  build-depends:
+    , base       >=4.12 && <5
+    , directory
+    , extra
+    , filepath
+    , text
+    , prettyprinter >= 1.7
+
+-- Default warnings in HLS
+common warnings
+  ghc-options: -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
+
+-- Allow compiling in pedantic mode
+common pedantic
+  if flag(pedantic)
+    ghc-options: -Werror
+
+-- Plugin flags are designed for 'cabal install haskell-language-server':
+-- - Bulk flags should be default:False
+-- - Individual flags should be default:True
+
+-- The intent of this flag is being able to keep the ghc condition for hackage
+-- but skip it via flags in cabal.project as plugins for new ghcs usually
+-- are buildable using cabal.project tweaks
+flag ignore-plugins-ghc-bounds
+  description: Force the inclusion of plugins even if they are not buildable by default with a specific ghc version
+  default:     False
+  manual:      True
+
+
+flag cabal
+  description: Enable cabal plugin
+  default:     True
+  manual:      True
+
+flag class
+  description: Enable class plugin
+  default:     True
+  manual:      True
+
+flag callHierarchy
+  description: Enable call hierarchy plugin
+  default:     True
+  manual:      True
+
+flag haddockComments
+  description: Enable haddockComments plugin
+  default:     True
+  manual:      True
+
+flag eval
+  description: Enable eval plugin
+  default:     True
+  manual:      True
+
+flag importLens
+  description: Enable importLens plugin
+  default:     True
+  manual:      True
+
+flag refineImports
+  description: Enable refineImports plugin
+  default:     True
+  manual:      True
+
+flag rename
+  description: Enable rename plugin
+  default:     True
+  manual:      True
+
+flag retrie
+  description: Enable retrie plugin
+  default:     True
+  manual:      True
+
+flag tactic
+  description: Enable tactic plugin
+  default:     True
+  manual:      True
+
+flag hlint
+  description: Enable hlint plugin
+  default:     True
+  manual:      True
+
+flag stan
+  description: Enable stan plugin
+  default:     True
+  manual:      True
+
+flag moduleName
+  description: Enable moduleName plugin
+  default:     True
+  manual:      True
+
+flag pragmas
+  description: Enable pragmas plugin
+  default:     True
+  manual:      True
+
+flag splice
+  description: Enable splice plugin
+  default:     True
+  manual:      True
+
+flag alternateNumberFormat
+  description: Enable Alternate Number Format plugin
+  default:     True
+  manual:      True
+
+flag qualifyImportedNames
+  description: Enable qualifyImportedNames plugin
+  default:     True
+  manual:      True
+
+flag codeRange
+  description: Enable Code Range plugin
+  default:     True
+  manual:      True
+
+flag changeTypeSignature
+  description: Enable changeTypeSignature plugin
+  default:     True
+  manual:      True
+
+flag gadt
+  description: Enable gadt plugin
+  default:     True
+  manual:      True
+
+flag explicitFixity
+  description: Enable explicitFixity plugin
+  default:     True
+  manual:      True
+
+flag explicitFields
+  description: Enable explicitFields plugin
+  default:     True
+  manual:      True
+
+flag overloadedRecordDot
+  description: Enable overloadedRecordDot plugin
+  default:     True
+  manual:      True
+
+-- formatters
+
+flag floskell
+  description: Enable floskell plugin
+  default:     True
+  manual:      True
+
+flag fourmolu
+  description: Enable fourmolu plugin
+  default:     True
+  manual:      True
+
+flag ormolu
+  description: Enable ormolu plugin
+  default:     True
+  manual:      True
+
+flag stylishHaskell
+  description: Enable stylishHaskell plugin
+  default:     True
+  manual:      True
+
+flag refactor
+  description: Enable refactor plugin
+  default:     True
+  manual:      True
+
+flag dynamic
+  description: Build with the dyn rts
+  default:     True
+  manual:      True
+
+flag cabalfmt
+  description: Enable cabal-fmt plugin
+  default:     True
+  manual:      True
+
+common cabalfmt
+  if flag(cabalfmt)
+    build-depends: hls-cabal-fmt-plugin == 2.1.0.0
+    cpp-options: -Dhls_cabalfmt
+
+common cabal
+  if flag(cabal)
+    build-depends: hls-cabal-plugin == 2.1.0.0
+    cpp-options: -Dhls_cabal
+
+common class
+  if flag(class)
+    build-depends: hls-class-plugin == 2.1.0.0
+    cpp-options: -Dhls_class
+
+common callHierarchy
+  if flag(callHierarchy)
+    build-depends: hls-call-hierarchy-plugin == 2.1.0.0
+    cpp-options: -Dhls_callHierarchy
+
+common haddockComments
+  if flag(haddockComments) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+    build-depends: hls-haddock-comments-plugin == 2.1.0.0
+    cpp-options: -Dhls_haddockComments
+
+common eval
+  if flag(eval)
+    build-depends: hls-eval-plugin == 2.1.0.0
+    cpp-options: -Dhls_eval
+
+common importLens
+  if flag(importLens)
+    build-depends: hls-explicit-imports-plugin == 2.1.0.0
+    cpp-options: -Dhls_importLens
+
+common refineImports
+  if flag(refineImports)
+    build-depends: hls-refine-imports-plugin == 2.1.0.0
+    cpp-options: -Dhls_refineImports
+
+common rename
+  if flag(rename)
+    build-depends: hls-rename-plugin == 2.1.0.0
+    cpp-options: -Dhls_rename
+
+common retrie
+  if flag(retrie)
+    build-depends: hls-retrie-plugin == 2.1.0.0
+    cpp-options: -Dhls_retrie
+
+common tactic
+  if flag(tactic) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+    build-depends: hls-tactics-plugin == 2.1.0.0
+    cpp-options: -Dhls_tactic
+
+common hlint
+  if flag(hlint) && impl(ghc < 9.5)
+    build-depends: hls-hlint-plugin == 2.1.0.0
+    cpp-options: -Dhls_hlint
+
+common stan
+  if flag(stan) && (impl(ghc >= 8.10) && impl(ghc < 9.0))
+    build-depends: hls-stan-plugin == 2.1.0.0
+    cpp-options: -Dhls_stan
+
+common moduleName
+  if flag(moduleName)
+    build-depends: hls-module-name-plugin == 2.1.0.0
+    cpp-options: -Dhls_moduleName
+
+common pragmas
+  if flag(pragmas)
+    build-depends: hls-pragmas-plugin == 2.1.0.0
+    cpp-options: -Dhls_pragmas
+
+common splice
+  if flag(splice)
+    build-depends: hls-splice-plugin == 2.1.0.0
+    cpp-options: -Dhls_splice
+
+common alternateNumberFormat
+  if flag(alternateNumberFormat)
+    build-depends: hls-alternate-number-format-plugin == 2.1.0.0
+    cpp-options: -Dhls_alternateNumberFormat
+
+common qualifyImportedNames
+  if flag(qualifyImportedNames)
+    build-depends: hls-qualify-imported-names-plugin == 2.1.0.0
+    cpp-options: -Dhls_qualifyImportedNames
+
+common codeRange
+  if flag(codeRange)
+    build-depends: hls-code-range-plugin == 2.1.0.0
+    cpp-options: -Dhls_codeRange
+
+common changeTypeSignature
+  if flag(changeTypeSignature)
+    build-depends: hls-change-type-signature-plugin == 2.1.0.0
+    cpp-options: -Dhls_changeTypeSignature
+
+common gadt
+  if flag(gadt)
+    build-depends: hls-gadt-plugin == 2.1.0.0
+    cpp-options: -Dhls_gadt
+
+common explicitFixity
+  if flag(explicitFixity)
+    build-depends: hls-explicit-fixity-plugin == 2.1.0.0
+    cpp-options: -DexplicitFixity
+
+common explicitFields
+  if flag(explicitFields)
+    build-depends: hls-explicit-record-fields-plugin == 2.1.0.0
+    cpp-options: -DexplicitFields
+
+common overloadedRecordDot
+  if flag(overloadedRecordDot) && (impl(ghc >= 9.2.0) || flag(ignore-plugins-ghc-bounds))
+    build-depends: hls-overloaded-record-dot-plugin == 2.1.0.0
+    cpp-options: -Dhls_overloaded_record_dot
+
+-- formatters
+
+common floskell
+  if flag(floskell) && impl(ghc < 9.5)
+    build-depends: hls-floskell-plugin == 2.1.0.0
+    cpp-options: -Dhls_floskell
+
+common fourmolu
+  if flag(fourmolu)
+    build-depends: hls-fourmolu-plugin == 2.1.0.0
+    cpp-options: -Dhls_fourmolu
+
+common ormolu
+  if flag(ormolu) && impl(ghc < 9.5)
+    build-depends: hls-ormolu-plugin == 2.1.0.0
+    cpp-options: -Dhls_ormolu
+
+common stylishHaskell
+  if flag(stylishHaskell) && impl(ghc < 9.5)
+    build-depends: hls-stylish-haskell-plugin == 2.1.0.0
+    cpp-options: -Dhls_stylishHaskell
+
+common refactor
+  if flag(refactor)
+    build-depends: hls-refactor-plugin == 2.1.0.0
+    cpp-options: -Dhls_refactor
+
+library
+  import:           common-deps
+                    -- configuration
+                  , warnings
+                  , pedantic
+                  -- plugins
+                  , cabal
+                  , callHierarchy
+                  , cabalfmt
+                  , changeTypeSignature
+                  , class
+                  , haddockComments
+                  , eval
+                  , importLens
+                  , refineImports
+                  , rename
+                  , retrie
+                  , tactic
+                  , hlint
+                  , stan
+                  , moduleName
+                  , pragmas
+                  , splice
+                  , alternateNumberFormat
+                  , qualifyImportedNames
+                  , codeRange
+                  , gadt
+                  , explicitFixity
+                  , explicitFields
+                  , floskell
+                  , fourmolu
+                  , ormolu
+                  , stylishHaskell
+                  , refactor
+                  , overloadedRecordDot
+
+  exposed-modules:
+    Ide.Arguments
+    Ide.Main
+    Ide.Version
+    HlsPlugins
+
+  other-modules:    Paths_haskell_language_server
+  autogen-modules:  Paths_haskell_language_server
+  hs-source-dirs:   src
+  build-depends:
+    , async
+    , base16-bytestring
+    , bytestring
+    , containers
+    , cryptohash-sha1
+    , data-default
+    , ghc
+    , ghcide                == 2.1.0.0
+    , githash               >=0.1.6.1
+    , lsp                   >= 2.0.0.0
+    , hie-bios
+    , hiedb
+    , hls-plugin-api        == 2.1.0.0
+    , optparse-applicative
+    , optparse-simple
+    , process
+    , hls-graph
+    , safe-exceptions
+    , sqlite-simple
+    , unordered-containers
+    , aeson-pretty
+
+  default-language: Haskell2010
+  default-extensions: DataKinds, TypeOperators
+
+executable haskell-language-server
+  import:           common-deps
+                    -- configuration
+                  , warnings
+                  , pedantic
+  main-is:          Main.hs
+  hs-source-dirs:   exe
+
+  ghc-options:
+    -threaded
+    -- allow user RTS overrides
+    -rtsopts
+    -- disable idle GC
+    -- increase nursery size
+    -- Enable collection of heap statistics
+    "-with-rtsopts=-I0 -A128M -T"
+    -Wno-unticked-promoted-constructors
+  if flag(pedantic)
+    ghc-options: -Werror
+  if !os(windows) && flag(dynamic)
+  -- We want to link against the dyn rts just like official GHC binaries do;
+  --   the linked rts determines how external libs are loaded dynamically by TH.
+  -- The standard way of doing this is via the --enable-dynamic-executables Cabal option
+  -- Unfortunately it doesnt' work, see https://github.com/haskell/haskell-language-server/issues/2659
+  -- One can use --ghc-options=-dynamic but this gets applied to the dependencies as well,
+  -- which results in massive rebuilds and incompatibilities with profiling.
+  -- So instead we set the -dynamic flag diretly here.
+    ghc-options: -dynamic
+
+  build-depends:
+    , aeson
+    , async
+    , base16-bytestring
+    , binary
+    , bytestring
+    , containers
+    , cryptohash-sha1
+    , deepseq
+    , ghc
+    , ghc-boot-th
+    , ghcide
+    , hashable
+    , haskell-language-server
+    , lsp
+    , hie-bios
+    , hiedb
+    , lens
+    , regex-tdfa
+    , optparse-applicative
+    , hls-plugin-api
+    , lens
+    , mtl
+    , regex-tdfa
+    , safe-exceptions
+    , hls-graph
+    , sqlite-simple
+    , stm
+    , temporary
+    , transformers
+    , unordered-containers
+
+  default-language: Haskell2010
+  default-extensions: DataKinds, TypeOperators
+
+executable haskell-language-server-wrapper
+  import:           common-deps
+                  , warnings
+                  , pedantic
+  main-is:          Wrapper.hs
+  hs-source-dirs:   exe
+  other-modules:    Paths_haskell_language_server
+  autogen-modules:  Paths_haskell_language_server
+  ghc-options:
+    -threaded
+    -- allow user RTS overrides
+    -rtsopts
+    -- disable idle GC
+    -- increase nursery size
+    "-with-rtsopts=-I0 -A128M"
+
+  build-depends:
+    , data-default
+    , ghc
+    , ghc-paths
+    , ghcide
+    , gitrev
+    , haskell-language-server
+    , hie-bios
+    , hls-plugin-api
+    , lsp
+    , lsp-types
+    , mtl
+    , optparse-applicative
+    , optparse-simple
+    , process
+    , transformers
+    , unliftio-core
+  if !os(windows)
+      build-depends:
+          unix
+        , containers
+
+  default-language: Haskell2010
+
+
+test-suite func-test
+  import:             common-deps
+                    , warnings
+                    , pedantic
+                    , refactor
+  type:               exitcode-stdio-1.0
+  default-language:   Haskell2010
+  build-tool-depends:
+    haskell-language-server:haskell-language-server -any,
+    ghcide:ghcide-test-preprocessor -any
+
+  build-depends:
+    , bytestring
+    , data-default
+    , deepseq
+    , hashable
+    , hspec-expectations
+    , lens
+    , lens-aeson
+    , ghcide
+    , ghcide-test-utils
+    , hls-test-utils == 2.1.0.0
+    , lsp-types
+    , aeson
+    , hls-plugin-api
+    , lsp-test
+    , containers
+    , unordered-containers
+    , row-types
+
+  hs-source-dirs:     test/functional test/utils
+
+  main-is:            Main.hs
+  other-modules:
+    Command
+    Completion
+    Config
+    Deferred
+    Definition
+    Diagnostic
+    Format
+    FunctionalBadProject
+    FunctionalCodeAction
+    HieBios
+    Highlight
+    Progress
+    Reference
+    Symbol
+    TypeDefinition
+    Test.Hls.Command
+    Test.Hls.Flags
+
+  default-extensions: OverloadedStrings
+  ghc-options:
+    -threaded -rtsopts -with-rtsopts=-N
+
+-- Duplicating inclusion plugin conditions until tests are moved to their own packages
+  if flag(eval)
+    cpp-options: -Dhls_eval
+-- formatters
+  if flag(floskell) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+    cpp-options: -Dhls_floskell
+  if flag(fourmolu)
+    cpp-options: -Dhls_fourmolu
+  if flag(ormolu)
+    cpp-options: -Dhls_ormolu
+
+test-suite wrapper-test
+  import:             common-deps
+                    , warnings
+                    , pedantic
+  type:               exitcode-stdio-1.0
+  build-tool-depends:
+    haskell-language-server:haskell-language-server-wrapper -any,
+    haskell-language-server:haskell-language-server -any
+
+  default-language:   Haskell2010
+  build-depends:
+      process
+    , hls-test-utils
+
+  hs-source-dirs:     test/wrapper
+  main-is:            Main.hs
+
+benchmark benchmark
+    type: exitcode-stdio-1.0
+    default-language: Haskell2010
+    ghc-options: -Wall -Wno-name-shadowing -threaded
+    main-is: Main.hs
+    hs-source-dirs: bench
+    build-tool-depends:
+        ghcide-bench:ghcide-bench,
+        hp2pretty:hp2pretty,
+        implicit-hie:gen-hie
+    default-extensions:
+        BangPatterns
+        DeriveFunctor
+        DeriveGeneric
+        FlexibleContexts
+        GeneralizedNewtypeDeriving
+        LambdaCase
+        NamedFieldPuns
+        RecordWildCards
+        ScopedTypeVariables
+        StandaloneDeriving
+        TupleSections
+        TypeApplications
+        ViewPatterns
+
+    build-depends:
+        aeson,
+        base == 4.*,
+        containers,
+        data-default,
+        directory,
+        extra,
+        filepath,
+        ghcide-bench,
+        haskell-language-server,
+        hls-plugin-api,
+        lens,
+        lens-aeson,
+        optparse-applicative,
+        shake,
+        shake-bench == 0.2.*,
+        text,
+        yaml

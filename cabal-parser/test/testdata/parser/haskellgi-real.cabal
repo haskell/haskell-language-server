@@ -1,0 +1,127 @@
+name:                haskell-gi
+version:             0.26.7
+synopsis:            Generate Haskell bindings for GObject Introspection capable libraries
+description:         Generate Haskell bindings for GObject Introspection capable libraries. This includes most notably
+                     Gtk+, but many other libraries in the GObject ecosystem provide introspection data too.
+homepage:            https://github.com/haskell-gi/haskell-gi
+license:             LGPL-2.1
+                     -- or above
+license-file:        LICENSE
+author:              Will Thompson and Iñaki García Etxebarria
+maintainer:          Iñaki García Etxebarria (github@the.blueleaf.cc)
+stability:           Experimental
+category:            Development
+build-type:          Custom
+tested-with:         GHC == 8.4.1, GHC == 8.6.1, GHC == 8.8.1, GHC == 8.10.1, GHC == 9.0.1, GHC == 9.2.1
+cabal-version:       2.0
+
+extra-source-files: ChangeLog.md
+
+custom-setup
+ setup-depends:
+   base >= 4 && <5,
+   Cabal >= 1.24 && < 4,
+   cabal-doctest >= 1
+
+source-repository head
+  type: git
+  location: git://github.com/haskell-gi/haskell-gi.git
+
+Library
+  default-language:    Haskell2010
+  pkgconfig-depends:   gobject-introspection-1.0 >= 1.32, gobject-2.0 >= 2.32
+  build-depends:       base >= 4.11 && < 5,
+                       haskell-gi-base >= 0.26.4 && <0.27,
+                       Cabal >= 1.24,
+                       attoparsec >= 0.13,
+                       containers,
+                       directory,
+                       filepath,
+                       mtl >= 2.2,
+                       transformers >= 0.3,
+                       pretty-show,
+                       ansi-terminal >= 0.10,
+                       process,
+                       safe,
+                       bytestring,
+                       xdg-basedir,
+                       xml-conduit >= 1.3,
+                       regex-tdfa >= 1.2,
+                       text >= 1.0
+
+  default-extensions: CPP, ForeignFunctionInterface, DoAndIfThenElse, LambdaCase, RankNTypes, OverloadedStrings
+  ghc-options:         -Wall -fwarn-incomplete-patterns -fno-warn-name-shadowing -Wcompat
+
+  c-sources:           lib/c/enumStorage.c
+  build-tool-depends:  hsc2hs:hsc2hs
+
+  hs-source-dirs:      lib
+  exposed-modules:     Data.GI.GIR.Alias,
+                       Data.GI.GIR.Allocation,
+                       Data.GI.GIR.Arg,
+                       Data.GI.GIR.BasicTypes,
+                       Data.GI.GIR.Callable,
+                       Data.GI.GIR.Callback,
+                       Data.GI.GIR.Constant,
+                       Data.GI.GIR.Deprecation,
+                       Data.GI.GIR.Documentation,
+                       Data.GI.GIR.Enum,
+                       Data.GI.GIR.Field,
+                       Data.GI.GIR.Flags,
+                       Data.GI.GIR.Function,
+                       Data.GI.GIR.Interface,
+                       Data.GI.GIR.Method,
+                       Data.GI.GIR.Object,
+                       Data.GI.GIR.Parser,
+                       Data.GI.GIR.Property,
+                       Data.GI.GIR.Repository,
+                       Data.GI.GIR.Signal,
+                       Data.GI.GIR.Struct,
+                       Data.GI.GIR.Type,
+                       Data.GI.GIR.Union,
+                       Data.GI.GIR.XMLUtils,
+                       Data.GI.CodeGen.API,
+                       Data.GI.CodeGen.Cabal,
+                       Data.GI.CodeGen.CabalHooks,
+                       Data.GI.CodeGen.Callable,
+                       Data.GI.CodeGen.Code,
+                       Data.GI.CodeGen.CodeGen,
+                       Data.GI.CodeGen.Config,
+                       Data.GI.CodeGen.Constant,
+                       Data.GI.CodeGen.Conversions,
+                       Data.GI.CodeGen.CtoHaskellMap,
+                       Data.GI.CodeGen.EnumFlags,
+                       Data.GI.CodeGen.Fixups,
+                       Data.GI.CodeGen.GObject,
+                       Data.GI.CodeGen.GtkDoc,
+                       Data.GI.CodeGen.GType,
+                       Data.GI.CodeGen.Haddock,
+                       Data.GI.CodeGen.Inheritance,
+                       Data.GI.CodeGen.LibGIRepository,
+                       Data.GI.CodeGen.ModulePath,
+                       Data.GI.CodeGen.OverloadedSignals,
+                       Data.GI.CodeGen.OverloadedMethods,
+                       Data.GI.CodeGen.Overrides,
+                       Data.GI.CodeGen.PkgConfig,
+                       Data.GI.CodeGen.ProjectInfo,
+                       Data.GI.CodeGen.Properties,
+                       Data.GI.CodeGen.Signal,
+                       Data.GI.CodeGen.Struct,
+                       Data.GI.CodeGen.SymbolNaming,
+                       Data.GI.CodeGen.Transfer,
+                       Data.GI.CodeGen.Type,
+                       Data.GI.CodeGen.Util
+
+  other-modules:       Paths_haskell_gi
+
+  autogen-modules:     Paths_haskell_gi
+
+test-suite doctests
+  type:          exitcode-stdio-1.0
+  default-language: Haskell2010
+  ghc-options:   -threaded -Wall
+  main-is:       DocTests.hs
+  build-depends: base
+               , process
+               , doctest >= 0.8
+               , haskell-gi

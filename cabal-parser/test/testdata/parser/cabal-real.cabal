@@ -1,0 +1,379 @@
+cabal-version: 2.2
+name:          Cabal
+version:       3.11.0.0
+copyright:     2003-2023, Cabal Development Team (see AUTHORS file)
+license:       BSD-3-Clause
+license-file:  LICENSE
+author:        Cabal Development Team <cabal-devel@haskell.org>
+maintainer:    cabal-devel@haskell.org
+homepage:      http://www.haskell.org/cabal/
+bug-reports:   https://github.com/haskell/cabal/issues
+synopsis:      A framework for packaging Haskell software
+description:
+  The Haskell Common Architecture for Building Applications and
+  Libraries: a framework defining a common interface for authors to more
+  easily build their Haskell applications in a portable way.
+  .
+  The Haskell Cabal is part of a larger infrastructure for distributing,
+  organizing, and cataloging Haskell libraries and tools.
+category:       Distribution
+build-type:     Simple
+-- If we use a new Cabal feature, this needs to be changed to Custom so
+-- we can bootstrap.
+
+extra-source-files:
+  README.md ChangeLog.md
+
+source-repository head
+  type:     git
+  location: https://github.com/haskell/cabal/
+  subdir:   Cabal
+
+library
+  default-language: Haskell2010
+  hs-source-dirs: src
+
+  build-depends:
+    Cabal-syntax ^>= 3.11,
+    array      >= 0.4.0.1  && < 0.6,
+    base       >= 4.9      && < 5,
+    bytestring >= 0.10.0.0 && < 0.12,
+    containers >= 0.5.0.0  && < 0.7,
+    deepseq    >= 1.3.0.1  && < 1.6,
+    directory  >= 1.2      && < 1.4,
+    filepath   >= 1.3.0.1  && < 1.5,
+    pretty     >= 1.1.1    && < 1.2,
+    process    >= 1.2.1.0  && < 1.7,
+    time       >= 1.4.0.1  && < 1.13
+
+  if os(windows)
+    build-depends: Win32 >= 2.3.0.0 && < 2.14
+  else
+    build-depends: unix  >= 2.6.0.0 && < 2.9
+
+  ghc-options: -Wall -fno-ignore-asserts -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates
+
+  if impl(ghc >= 8.0)
+    ghc-options: -Wcompat -Wnoncanonical-monad-instances
+
+  if impl(ghc >= 8.0) && impl(ghc < 8.8)
+    ghc-options: -Wnoncanonical-monadfail-instances
+
+  exposed-modules:
+    Distribution.Backpack.Configure
+    Distribution.Backpack.ComponentsGraph
+    Distribution.Backpack.ConfiguredComponent
+    Distribution.Backpack.DescribeUnitId
+    Distribution.Backpack.FullUnitId
+    Distribution.Backpack.LinkedComponent
+    Distribution.Backpack.ModSubst
+    Distribution.Backpack.ModuleShape
+    Distribution.Backpack.PreModuleShape
+    Distribution.Utils.IOData
+    Distribution.Utils.LogProgress
+    Distribution.Utils.MapAccum
+    Distribution.Compat.CreatePipe
+    Distribution.Compat.Directory
+    Distribution.Compat.Environment
+    Distribution.Compat.FilePath
+    Distribution.Compat.Internal.TempFile
+    Distribution.Compat.ResponseFile
+    Distribution.Compat.Prelude.Internal
+    Distribution.Compat.Process
+    Distribution.Compat.Stack
+    Distribution.Compat.Time
+    Distribution.Make
+    Distribution.PackageDescription.Check
+    Distribution.ReadE
+    Distribution.Simple
+    Distribution.Simple.Bench
+    Distribution.Simple.Build
+    Distribution.Simple.Build.Macros
+    Distribution.Simple.Build.PackageInfoModule
+    Distribution.Simple.Build.PathsModule
+    Distribution.Simple.BuildPaths
+    Distribution.Simple.BuildTarget
+    Distribution.Simple.BuildToolDepends
+    Distribution.Simple.CCompiler
+    Distribution.Simple.Command
+    Distribution.Simple.Compiler
+    Distribution.Simple.Configure
+    Distribution.Simple.Errors
+    Distribution.Simple.Flag
+    Distribution.Simple.GHC
+    Distribution.Simple.GHCJS
+    Distribution.Simple.Haddock
+    Distribution.Simple.Glob
+    Distribution.Simple.HaskellSuite
+    Distribution.Simple.Hpc
+    Distribution.Simple.Install
+    Distribution.Simple.InstallDirs
+    Distribution.Simple.InstallDirs.Internal
+    Distribution.Simple.LocalBuildInfo
+    Distribution.Simple.PackageDescription
+    Distribution.Simple.PackageIndex
+    Distribution.Simple.PreProcess
+    Distribution.Simple.PreProcess.Unlit
+    Distribution.Simple.Program
+    Distribution.Simple.Program.Ar
+    Distribution.Simple.Program.Builtin
+    Distribution.Simple.Program.Db
+    Distribution.Simple.Program.Find
+    Distribution.Simple.Program.GHC
+    Distribution.Simple.Program.HcPkg
+    Distribution.Simple.Program.Hpc
+    Distribution.Simple.Program.Internal
+    Distribution.Simple.Program.Ld
+    Distribution.Simple.Program.ResponseFile
+    Distribution.Simple.Program.Run
+    Distribution.Simple.Program.Script
+    Distribution.Simple.Program.Strip
+    Distribution.Simple.Program.Types
+    Distribution.Simple.Register
+    Distribution.Simple.Setup
+    Distribution.Simple.ShowBuildInfo
+    Distribution.Simple.SrcDist
+    Distribution.Simple.Test
+    Distribution.Simple.Test.ExeV10
+    Distribution.Simple.Test.LibV09
+    Distribution.Simple.Test.Log
+    Distribution.Simple.UHC
+    Distribution.Simple.UserHooks
+    Distribution.Simple.Utils
+    Distribution.TestSuite
+    Distribution.Types.AnnotatedId
+    Distribution.Types.ComponentInclude
+    Distribution.Types.DumpBuildInfo
+    Distribution.Types.PackageName.Magic
+    Distribution.Types.ComponentLocalBuildInfo
+    Distribution.Types.LocalBuildInfo
+    Distribution.Types.TargetInfo
+    Distribution.Types.GivenComponent
+    Distribution.Types.ParStrat
+    Distribution.Utils.Json
+    Distribution.Utils.NubList
+    Distribution.Utils.Progress
+    Distribution.Utils.TempTestDir
+    Distribution.Verbosity
+    Distribution.Verbosity.Internal
+
+  -- We reexport all of Cabal-syntax to aid in compatibility for downstream
+  -- users. In the future we may opt to deprecate some or all of these exports.
+  -- See haskell/Cabal#7974.
+  reexported-modules:
+    Distribution.Backpack,
+    Distribution.CabalSpecVersion,
+    Distribution.Compat.Binary,
+    Distribution.Compat.CharParsing,
+    Distribution.Compat.DList,
+    Distribution.Compat.Exception,
+    Distribution.Compat.Graph,
+    Distribution.Compat.Lens,
+    Distribution.Compat.MonadFail,
+    Distribution.Compat.Newtype,
+    Distribution.Compat.NonEmptySet,
+    Distribution.Compat.Parsing,
+    Distribution.Compat.Prelude,
+    Distribution.Compat.Semigroup,
+    Distribution.Compat.Typeable,
+    Distribution.Compiler,
+    Distribution.FieldGrammar,
+    Distribution.FieldGrammar.Class,
+    Distribution.FieldGrammar.FieldDescrs,
+    Distribution.FieldGrammar.Newtypes,
+    Distribution.FieldGrammar.Parsec,
+    Distribution.FieldGrammar.Pretty,
+    Distribution.Fields,
+    Distribution.Fields.ConfVar,
+    Distribution.Fields.Field,
+    Distribution.Fields.Lexer,
+    Distribution.Fields.LexerMonad,
+    Distribution.Fields.ParseResult,
+    Distribution.Fields.Parser,
+    Distribution.Fields.Pretty,
+    Distribution.InstalledPackageInfo,
+    Distribution.License,
+    Distribution.ModuleName,
+    Distribution.Package,
+    Distribution.PackageDescription,
+    Distribution.PackageDescription.Configuration,
+    Distribution.PackageDescription.FieldGrammar,
+    Distribution.PackageDescription.Parsec,
+    Distribution.PackageDescription.PrettyPrint,
+    Distribution.PackageDescription.Quirks,
+    Distribution.PackageDescription.Utils,
+    Distribution.Parsec,
+    Distribution.Parsec.Error,
+    Distribution.Parsec.FieldLineStream,
+    Distribution.Parsec.Position,
+    Distribution.Parsec.Warning,
+    Distribution.Pretty,
+    Distribution.SPDX,
+    Distribution.SPDX.License,
+    Distribution.SPDX.LicenseExceptionId,
+    Distribution.SPDX.LicenseExpression,
+    Distribution.SPDX.LicenseId,
+    Distribution.SPDX.LicenseListVersion,
+    Distribution.SPDX.LicenseReference,
+    Distribution.System,
+    Distribution.Text,
+    Distribution.Types.AbiDependency,
+    Distribution.Types.AbiHash,
+    Distribution.Types.Benchmark,
+    Distribution.Types.Benchmark.Lens,
+    Distribution.Types.BenchmarkInterface,
+    Distribution.Types.BenchmarkType,
+    Distribution.Types.BuildInfo,
+    Distribution.Types.BuildInfo.Lens,
+    Distribution.Types.BuildType,
+    Distribution.Types.Component,
+    Distribution.Types.ComponentId,
+    Distribution.Types.ComponentName,
+    Distribution.Types.ComponentRequestedSpec,
+    Distribution.Types.CondTree,
+    Distribution.Types.Condition,
+    Distribution.Types.ConfVar,
+    Distribution.Types.Dependency,
+    Distribution.Types.DependencyMap,
+    Distribution.Types.ExeDependency,
+    Distribution.Types.Executable,
+    Distribution.Types.Executable.Lens,
+    Distribution.Types.ExecutableScope,
+    Distribution.Types.ExposedModule,
+    Distribution.Types.Flag,
+    Distribution.Types.ForeignLib,
+    Distribution.Types.ForeignLib.Lens,
+    Distribution.Types.ForeignLibOption,
+    Distribution.Types.ForeignLibType,
+    Distribution.Types.GenericPackageDescription,
+    Distribution.Types.GenericPackageDescription.Lens,
+    Distribution.Types.HookedBuildInfo,
+    Distribution.Types.IncludeRenaming,
+    Distribution.Types.InstalledPackageInfo,
+    Distribution.Types.InstalledPackageInfo.Lens,
+    Distribution.Types.InstalledPackageInfo.FieldGrammar,
+    Distribution.Types.LegacyExeDependency,
+    Distribution.Types.Lens,
+    Distribution.Types.Library,
+    Distribution.Types.Library.Lens,
+    Distribution.Types.LibraryName,
+    Distribution.Types.LibraryVisibility,
+    Distribution.Types.Mixin,
+    Distribution.Types.Module,
+    Distribution.Types.ModuleReexport,
+    Distribution.Types.ModuleRenaming,
+    Distribution.Types.MungedPackageId,
+    Distribution.Types.MungedPackageName,
+    Distribution.Types.PackageDescription,
+    Distribution.Types.PackageDescription.Lens,
+    Distribution.Types.PackageId,
+    Distribution.Types.PackageId.Lens,
+    Distribution.Types.PackageName,
+    Distribution.Types.PackageVersionConstraint,
+    Distribution.Types.PkgconfigDependency,
+    Distribution.Types.PkgconfigName,
+    Distribution.Types.PkgconfigVersion,
+    Distribution.Types.PkgconfigVersionRange,
+    Distribution.Types.SetupBuildInfo,
+    Distribution.Types.SetupBuildInfo.Lens,
+    Distribution.Types.SourceRepo,
+    Distribution.Types.SourceRepo.Lens,
+    Distribution.Types.TestSuite,
+    Distribution.Types.TestSuite.Lens,
+    Distribution.Types.TestSuiteInterface,
+    Distribution.Types.TestType,
+    Distribution.Types.UnitId,
+    Distribution.Types.UnqualComponentName,
+    Distribution.Types.Version,
+    Distribution.Types.VersionInterval,
+    Distribution.Types.VersionInterval.Legacy,
+    Distribution.Types.VersionRange,
+    Distribution.Types.VersionRange.Internal,
+    Distribution.Utils.Base62,
+    Distribution.Utils.Generic,
+    Distribution.Utils.MD5,
+    Distribution.Utils.Path,
+    Distribution.Utils.ShortText,
+    Distribution.Utils.String,
+    Distribution.Utils.Structured,
+    Distribution.Version,
+    Language.Haskell.Extension
+
+  -- Parsec parser-related modules
+  build-depends:
+    -- transformers-0.4.0.0 doesn't have record syntax e.g. for Identity
+    -- See also https://github.com/ekmett/transformers-compat/issues/35
+    transformers (>= 0.3      && < 0.4) || (>=0.4.1.0 && <0.7),
+    mtl           >= 2.1      && < 2.4,
+    text         (>= 1.2.3.0  && < 1.3) || (>= 2.0 && < 2.1),
+    parsec        >= 3.1.13.0 && < 3.2
+
+  other-modules:
+    Distribution.Backpack.PreExistingComponent
+    Distribution.Backpack.ReadyComponent
+    Distribution.Backpack.MixLink
+    Distribution.Backpack.ModuleScope
+    Distribution.Backpack.UnifyM
+    Distribution.Backpack.Id
+    Distribution.Utils.UnionFind
+    Distribution.Compat.Async
+    Distribution.Compat.CopyFile
+    Distribution.Compat.GetShortPathName
+    Distribution.Compat.SnocList
+    Distribution.GetOpt
+    Distribution.Lex
+    Distribution.Simple.Build.Macros.Z
+    Distribution.Simple.Build.PackageInfoModule.Z
+    Distribution.Simple.Build.PathsModule.Z
+    Distribution.Simple.GHC.EnvironmentParser
+    Distribution.Simple.GHC.Internal
+    Distribution.Simple.GHC.ImplInfo
+    Distribution.Simple.ConfigureScript
+    Distribution.Simple.Setup.Benchmark
+    Distribution.Simple.Setup.Build
+    Distribution.Simple.Setup.Clean
+    Distribution.Simple.Setup.Common
+    Distribution.Simple.Setup.Config
+    Distribution.Simple.Setup.Copy
+    Distribution.Simple.Setup.Global
+    Distribution.Simple.Setup.Haddock
+    Distribution.Simple.Setup.Hscolour
+    Distribution.Simple.Setup.Install
+    Distribution.Simple.Setup.Register
+    Distribution.Simple.Setup.Repl
+    Distribution.Simple.Setup.SDist
+    Distribution.Simple.Setup.Test
+    Distribution.ZinzaPrelude
+    Paths_Cabal
+
+  autogen-modules:
+    Paths_Cabal
+
+  other-extensions:
+    BangPatterns
+    CPP
+    DefaultSignatures
+    DeriveDataTypeable
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveTraversable
+    ExistentialQuantification
+    FlexibleContexts
+    FlexibleInstances
+    GeneralizedNewtypeDeriving
+    ImplicitParams
+    KindSignatures
+    LambdaCase
+    NondecreasingIndentation
+    OverloadedStrings
+    PatternSynonyms
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    StandaloneDeriving
+    Trustworthy
+    TypeFamilies
+    TypeOperators
+    TypeSynonymInstances
+    UndecidableInstances

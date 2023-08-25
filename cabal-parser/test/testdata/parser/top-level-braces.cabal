@@ -1,0 +1,18 @@
+cabal-version   : 1.0
+description:
+                        {
+    Hello my description is dark and
+     twisted.
+    Who dares call my name?!?!?!?
+
+    }
+
+library
+    hs-source-dirs:
+        { exe, filepath, dir }
+    exposed-modules:
+        Dep1
+        Dep2
+    build-depends:
+        dep1
+        dep2
