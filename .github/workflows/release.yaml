@@ -358,6 +358,8 @@ jobs:
             export CC="$HOME/.brew/opt/llvm@11/bin/clang"
             export CXX="$HOME/.brew/opt/llvm@11/bin/clang++"
             export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
+            export LLC="$HOME/.brew/opt/llvm@11/bin/llc"
+            export OPT="$HOME/.brew/opt/llvm@11/bin/opt"
             export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
           else
             bash .github/scripts/brew.sh git coreutils autoconf automake tree
