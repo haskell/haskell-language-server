@@ -57,5 +57,9 @@
 - [ ] upload hackage packages
   - requires credentials
 - [ ] update https://haskell-language-server.readthedocs.io/en/latest/support/ghc-version-support.html#current-ghc-version-support-status
+- [ ] Supported tools table needs to be updated:
+  - https://www.haskell.org/ghcup/install/#supported-platforms
+  - https://github.com/haskell/ghcup-hs/blob/master/docs/install.md#supported-platforms
+  - https://github.com/haskell/ghcup-metadata/blob/44c6e2b5d0fcae15abeffff03e87544edf76dd7a/ghcup-gen/Main.hs#L67
 - [ ] post release on discourse and reddit
 - [ ] merge release PR to master or forward port relevant changes
