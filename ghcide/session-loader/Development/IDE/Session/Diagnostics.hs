@@ -1,18 +1,27 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric  #-}
+
 module Development.IDE.Session.Diagnostics where
+import           Control.Applicative
 import           Control.Monad
 import qualified Data.Aeson                        as Aeson
-import           Data.Char                         (isLower)
 import           Data.List
-import           Data.List.Extra                   (dropPrefix, split)
+import           Data.List.Extra                   (split)
 import           Data.Maybe
 import qualified Data.Text                         as T
-import qualified Data.Vector                       as Vector
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
+import           GHC.Generics
 import qualified HIE.Bios.Cradle                   as HieBios
 import           HIE.Bios.Types                    hiding (Log)
 import           System.FilePath
-import Control.Applicative
+
+data CradleErrorDetails =
+  CradleErrorDetails
+    { cabalProjectFiles :: [FilePath]
+    -- ^ files related to the cradle error
+    -- i.e. .cabal, cabal.project, etc.
+    } deriving (Show, Eq, Ord, Read, Generic, Aeson.ToJSON, Aeson.FromJSON)
 
 {- | Takes a cradle error, the corresponding cradle and the file path where
   the cradle error occurred (of the file we attempted to load).
@@ -22,7 +31,7 @@ renderCradleError :: CradleError -> Cradle a -> NormalizedFilePath -> FileDiagno
 renderCradleError (CradleError deps _ec ms) cradle nfp
   | HieBios.isCabalCradle cradle =
       let (fp, showDiag, diag) = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp $ T.unlines $ map T.pack userFriendlyMessage in
-        (fp, showDiag, diag{_data_ = Just (Aeson.Array $ Vector.fromList $ map (Aeson.String . T.pack) absDeps)})
+        (fp, showDiag, diag{_data_ = Just $ Aeson.toJSON CradleErrorDetails{cabalProjectFiles=absDeps}})
   | otherwise = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp $ T.unlines $ map T.pack userFriendlyMessage
   where
     absDeps = fmap (cradleRootDir cradle </>) deps
@@ -33,7 +42,7 @@ renderCradleError (CradleError deps _ec ms) cradle nfp
 
     mkUnknownModuleMessage :: Maybe [String]
     mkUnknownModuleMessage
-      | any (isInfixOf "Error: cabal: Failed extracting script block:") ms = Just $ unknownModuleMessage (fromNormalizedFilePath nfp) Nothing
+      | any (isInfixOf "Error: cabal: Failed extracting script block:") ms = Just $ unknownModuleMessage (fromNormalizedFilePath nfp)
       | otherwise = Nothing
 
     fileMissingMessage :: Maybe [String]
@@ -79,20 +88,18 @@ parseMultiCradleErr ms = do
 
 multiCradleErrMessage :: MultiCradleErr -> [String]
 multiCradleErrMessage e =
-    unknownModuleMessage moduleFileName (Just moduleName)
+    unknownModuleMessage (mcFilePath e)
     <> [""]
     <> map prefix (mcPrefixes e)
   where
-    localFilePath f = dropWhile (==pathSeparator) $ dropPrefix (mcPwd e) f
-    moduleFileName = localFilePath $ mcFilePath e
-    moduleName = intercalate "." $ map dropExtension $ dropWhile isSourceFolder $ splitDirectories moduleFileName
-    isSourceFolder p = all isLower $ take 1 p
     prefix (f, r) = f <> " - " <> r
 
-unknownModuleMessage :: String -> Maybe String -> [String]
-unknownModuleMessage moduleFileName moduleNameM =
+unknownModuleMessage :: String -> [String]
+unknownModuleMessage moduleFileName =
   [ "Loading the module '" <> moduleFileName <> "' failed."
+  , ""
   , "It may not be listed in your .cabal file!"
-  , "Perhaps you need to add `"<> fromMaybe (takeFileName moduleFileName) moduleNameM <> "` to other-modules or exposed-modules."
+  , "Perhaps you need to add `"<> dropExtension (takeFileName moduleFileName) <> "` to other-modules or exposed-modules."
+  , ""
   , "For more information, visit: https://cabal.readthedocs.io/en/3.4/developing-packages.html#modules-included-in-the-package"
   ]
