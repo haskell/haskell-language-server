@@ -12,6 +12,7 @@ import           Development.IDE.Types.Location
 import qualified HIE.Bios.Cradle                   as HieBios
 import           HIE.Bios.Types                    hiding (Log)
 import           System.FilePath
+import Control.Applicative
 
 {- | Takes a cradle error, the corresponding cradle and the file path where
   the cradle error occurred (of the file we attempted to load).
@@ -19,7 +20,7 @@ import           System.FilePath
 -}
 renderCradleError :: CradleError -> Cradle a -> NormalizedFilePath -> FileDiagnostic
 renderCradleError (CradleError deps _ec ms) cradle nfp
-  | HieBios.isCabalCradle cradle && any (isInfixOf "Error: cabal: Failed extracting script block:") ms =
+  | HieBios.isCabalCradle cradle =
       let (fp, showDiag, diag) = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp $ T.unlines $ map T.pack userFriendlyMessage in
         (fp, showDiag, diag{_data_ = Just (Aeson.Array $ Vector.fromList $ map (Aeson.String . T.pack) absDeps)})
   | otherwise = ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) nfp $ T.unlines $ map T.pack userFriendlyMessage
@@ -27,8 +28,13 @@ renderCradleError (CradleError deps _ec ms) cradle nfp
     absDeps = fmap (cradleRootDir cradle </>) deps
     userFriendlyMessage :: [String]
     userFriendlyMessage
-      | HieBios.isCabalCradle cradle = fromMaybe ms fileMissingMessage
+      | HieBios.isCabalCradle cradle = fromMaybe ms $ fileMissingMessage <|> mkUnknownModuleMessage
       | otherwise = ms
+
+    mkUnknownModuleMessage :: Maybe [String]
+    mkUnknownModuleMessage
+      | any (isInfixOf "Error: cabal: Failed extracting script block:") ms = Just $ unknownModuleMessage (fromNormalizedFilePath nfp) Nothing
+      | otherwise = Nothing
 
     fileMissingMessage :: Maybe [String]
     fileMissingMessage =
@@ -73,14 +79,20 @@ parseMultiCradleErr ms = do
 
 multiCradleErrMessage :: MultiCradleErr -> [String]
 multiCradleErrMessage e =
-    [ "Loading the module '" <> moduleFileName <> "' failed. It may not be listed in your .cabal file!"
-    , "Perhaps you need to add `"<> moduleName <> "` to other-modules or exposed-modules."
-    , "For more information, visit: https://cabal.readthedocs.io/en/3.4/developing-packages.html#modules-included-in-the-package"
-    , ""
-    ] <> map prefix (mcPrefixes e)
+    unknownModuleMessage moduleFileName (Just moduleName)
+    <> [""]
+    <> map prefix (mcPrefixes e)
   where
     localFilePath f = dropWhile (==pathSeparator) $ dropPrefix (mcPwd e) f
     moduleFileName = localFilePath $ mcFilePath e
     moduleName = intercalate "." $ map dropExtension $ dropWhile isSourceFolder $ splitDirectories moduleFileName
     isSourceFolder p = all isLower $ take 1 p
     prefix (f, r) = f <> " - " <> r
+
+unknownModuleMessage :: String -> Maybe String -> [String]
+unknownModuleMessage moduleFileName moduleNameM =
+  [ "Loading the module '" <> moduleFileName <> "' failed."
+  , "It may not be listed in your .cabal file!"
+  , "Perhaps you need to add `"<> fromMaybe (takeFileName moduleFileName) moduleNameM <> "` to other-modules or exposed-modules."
+  , "For more information, visit: https://cabal.readthedocs.io/en/3.4/developing-packages.html#modules-included-in-the-package"
+  ]
