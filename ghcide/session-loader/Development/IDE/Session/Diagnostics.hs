@@ -42,7 +42,8 @@ renderCradleError (CradleError deps _ec ms) cradle nfp
 
     mkUnknownModuleMessage :: Maybe [String]
     mkUnknownModuleMessage
-      | any (isInfixOf "Error: cabal: Failed extracting script block:") ms = Just $ unknownModuleMessage (fromNormalizedFilePath nfp)
+      | any (isInfixOf "Failed extracting script block:") ms =
+          Just $ unknownModuleMessage (fromNormalizedFilePath nfp)
       | otherwise = Nothing
 
     fileMissingMessage :: Maybe [String]
