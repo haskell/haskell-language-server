@@ -929,29 +929,29 @@ checkHieFile recorder se@ShakeExtras{withHieDb} tag hieFileLocation = do
     -- Log that the HIE file does not exist where we expect that it should.
     logHieFileMissing :: IO HieFileCheck
     logHieFileMissing = do
-      let log :: Log
-          log = LogMissingHieFile hieFileLocation
-      logWith recorder Logger.Debug log
+      let logMissing :: Log
+          logMissing = LogMissingHieFile hieFileLocation
+      logWith recorder Logger.Debug logMissing
       pure HieFileMissing
     -- When we know that the HIE file exists, check that it has not already
     -- been indexed. If it hasn't, try to load it.
     checkExistingHieFile :: IO HieFileCheck
     checkExistingHieFile = do
-      hash <- Util.getFileHash $ fromNormalizedFilePath hieFileLocation
-      mrow <- withHieDb (\hieDb -> HieDb.lookupHieFileFromHash hieDb hash)
+      hieFileHash <- Util.getFileHash $ fromNormalizedFilePath hieFileLocation
+      mrow <- withHieDb (\hieDb -> HieDb.lookupHieFileFromHash hieDb hieFileHash)
       dbHieFileLocation <- traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
-      bool (tryLoadingHieFile hash) (pure HieAlreadyIndexed) $
+      bool (tryLoadingHieFile hieFileHash) (pure HieAlreadyIndexed) $
         Just hieFileLocation == fmap toNormalizedFilePath' dbHieFileLocation
     -- Attempt to load the HIE file, logging on failure (logging happens
     -- in readHieFileFromDisk). If the file loads successfully, return
     -- the data necessary for indexing it in the HieDb database.
     tryLoadingHieFile :: Util.Fingerprint -> IO HieFileCheck
-    tryLoadingHieFile hash = do
+    tryLoadingHieFile hieFileHash = do
       ehf <- runIdeAction tag se $ runExceptT $
         readHieFileFromDisk recorder hieFileLocation
       pure $ case ehf of
         Left err -> CouldNotLoadHie err
-        Right hf -> DoIndexing hash hf
+        Right hf -> DoIndexing hieFileHash hf
 
 -- | Check state of hiedb after loading an iface from disk - have we indexed the corresponding `.hie` file?
 -- This function is responsible for ensuring database consistency
@@ -966,7 +966,7 @@ getModIfaceFromDiskAndIndexRule recorder =
   -- doesn't need early cutoff since all its dependencies already have it
   defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \GetModIfaceFromDiskAndIndex f -> do
   x <- use_ GetModIfaceFromDisk f
-  se@ShakeExtras{withHieDb} <- getShakeExtras
+  se <- getShakeExtras
 
   -- GetModIfaceFromDisk should have written a `.hie` file, must check if it matches version in db
   let ms = hirModSummary x
@@ -985,9 +985,9 @@ getModIfaceFromDiskAndIndexRule recorder =
     -- Uh oh, we failed to read the file for some reason, need to regenerate it
     CouldNotLoadHie err -> hieFailure $ Just err
     -- can just re-index the file we read from disk
-    DoIndexing hash hf -> liftIO $ do
+    DoIndexing hieFileHash hf -> liftIO $ do
       logWith recorder Logger.Debug $ LogReindexingHieFile f
-      indexHieFile se hie_loc (HieDb.RealFile $ fromNormalizedFilePath f) hash hf
+      indexHieFile se hie_loc (HieDb.RealFile $ fromNormalizedFilePath f) hieFileHash hf
   return (Just x)
 
 newtype DisplayTHWarning = DisplayTHWarning (IO())

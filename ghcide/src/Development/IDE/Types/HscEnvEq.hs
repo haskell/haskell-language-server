@@ -25,7 +25,7 @@ import qualified Data.Unique                       as Unique
 import           Development.IDE.Core.Dependencies (indexDependencyHieFiles)
 import           Development.IDE.Core.Rules        (Log)
 import           Development.IDE.Core.Shake        (ShakeExtras)
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat        hiding (newUnique)
 import qualified Development.IDE.GHC.Compat.Util   as Maybes
 import           Development.IDE.GHC.Error         (catchSrcErrors)
 import           Development.IDE.GHC.Util          (lookupPackageConfig)

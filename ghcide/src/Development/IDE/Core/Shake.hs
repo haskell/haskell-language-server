@@ -1248,9 +1248,7 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
     isSafeDependencyRule
-        :: forall k v
-         . IdeRule k v
-        => k
+        :: k
         -> Bool
     isSafeDependencyRule _k
         -- The only Rules that are safe for dependencies.
