@@ -8,7 +8,6 @@ import           Control.Lens                 hiding (List)
 import           Control.Monad
 import           Data.Aeson.Lens              (_Object)
 import           Data.List
-import qualified Data.Map                     as M
 import           Data.Maybe
 import qualified Data.Text                    as T
 import           Development.IDE.Core.Compile (sourceTypecheck)
