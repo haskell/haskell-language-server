@@ -214,6 +214,5 @@ configurations:
 # - rename
 # - retrie
 # - splice
-# - stan
 # # - stylish-haskell
 # - tactics
