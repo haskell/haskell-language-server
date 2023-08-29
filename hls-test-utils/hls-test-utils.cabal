@@ -28,6 +28,7 @@ library
   exposed-modules:
     Test.Hls
     Test.Hls.Util
+    Test.Hls.FileSystem
 
   hs-source-dirs:   src
   build-depends:

@@ -27,8 +27,9 @@ import           Ide.Types                     (IdePlugins (IdePlugins))
 import           Language.LSP.Protocol.Lens    (arguments, command, range,
                                                 title)
 import           Language.LSP.Protocol.Message hiding (error)
-import           System.FilePath               ((</>))
+import           System.FilePath               ((<.>), (</>))
 import           Test.Hls
+import qualified Test.Hls.FileSystem           as FS
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -40,27 +41,27 @@ tests :: TestTree
 tests =
   testGroup "eval"
   [ testCase "Produces Evaluate code lenses" $
-      runSessionWithServer def evalPlugin testDataDir $ do
+      runSessionWithServerInTmpDir def evalPlugin (mkFs $ FS.directProject "T1.hs") $ do
         doc <- openDoc "T1.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Evaluate..."]
   , testCase "Produces Refresh code lenses" $
-      runSessionWithServer def evalPlugin testDataDir $ do
+      runSessionWithServerInTmpDir def evalPlugin (mkFs $ FS.directProject "T2.hs") $ do
         doc <- openDoc "T2.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Refresh..."]
   , testCase "Code lenses have ranges" $
-      runSessionWithServer def evalPlugin testDataDir $ do
+      runSessionWithServerInTmpDir def evalPlugin (mkFs $ FS.directProject "T1.hs") $ do
         doc <- openDoc "T1.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
   , testCase "Multi-line expressions have a multi-line range" $ do
-      runSessionWithServer def evalPlugin testDataDir $ do
+      runSessionWithServerInTmpDir def evalPlugin (mkFs $ FS.directProject "T3.hs") $ do
         doc <- openDoc "T3.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (view range) lenses @?= [Range (Position 3 0) (Position 5 0)]
   , testCase "Executed expressions range covers only the expression" $ do
-      runSessionWithServer def evalPlugin testDataDir $ do
+      runSessionWithServerInTmpDir def evalPlugin (mkFs $ FS.directProject "T2.hs") $ do
         doc <- openDoc "T2.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
@@ -122,15 +123,15 @@ tests =
       ]
   , goldenWithEval ":kind! treats a multilined result properly" "T24" "hs"
   , goldenWithEval ":kind treats a multilined result properly" "T25" "hs"
-  , goldenWithEval "local imports" "T26" "hs"
+  , goldenWithEvalAndFs "local imports" (FS.directProjectMulti ["T26.hs", "Util.hs"]) "T26" "hs"
   , goldenWithEval "Preserves one empty comment line after prompt" "T27" "hs"
   , goldenWithEval "Multi line comments" "TMulti" "hs"
   , goldenWithEval "Multi line comments, with the last test line ends without newline" "TEndingMulti" "hs"
   , goldenWithEval "Evaluate expressions in Plain comments in both single line and multi line format" "TPlainComment" "hs"
   , goldenWithEval "Evaluate expressions in Haddock comments in both single line and multi line format" "THaddock" "hs"
   , goldenWithEval "Compare results (for Haddock tests only)" "TCompare" "hs"
-  , goldenWithEval "Local Modules imports are accessible in a test" "TLocalImport" "hs"
-  , goldenWithEval "Transitive local dependency" "TTransitive" "hs"
+  , goldenWithEvalAndFs "Local Modules imports are accessible in a test" (FS.directProjectMulti ["TLocalImport.hs", "Util.hs"]) "TLocalImport" "hs"
+  , goldenWithEvalAndFs "Transitive local dependency"  (FS.directProjectMulti ["TTransitive.hs", "TLocalImport.hs", "Util.hs"]) "TTransitive" "hs"
   -- , goldenWithEval "Local Modules can be imported in a test" "TLocalImportInTest" "hs"
   , goldenWithEval "Setting language option TupleSections" "TLanguageOptionsTupleSections" "hs"
   , goldenWithEval' ":set accepts ghci flags" "TFlags" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
@@ -142,8 +143,8 @@ tests =
            else "-- id :: forall {a}. a -> a")
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
-  , goldenWithEval "Property checking" "TProperty" "hs"
-  , goldenWithEval' "Property checking with exception" "TPropertyError" "hs" (
+  , goldenWithEvalAndFs "Property checking" cabalProjectFS "TProperty" "hs"
+  , goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" (
         if ghcVersion >= GHC96 then
           "ghc96.expected"
         else if ghcVersion >= GHC94 && hostOS == Windows then
@@ -212,7 +213,7 @@ tests =
         not ("Baz Foo" `isInfixOf` output)          @? "Output includes instance Baz Foo"
     ]
   , testCase "Interfaces are reused after Eval" $ do
-      runSessionWithServer def evalPlugin testDataDir $ do
+      runSessionWithServerInTmpDir def evalPlugin (mkFs $ FS.directProjectMulti ["TLocalImport.hs", "Util.hs"]) $ do
         doc <- openDoc "TLocalImport.hs" "haskell"
         waitForTypecheck doc
         lenses <- getCodeLenses doc
@@ -231,13 +232,22 @@ tests =
 
 goldenWithEval :: TestName -> FilePath -> FilePath -> TestTree
 goldenWithEval title path ext =
-  goldenWithHaskellDoc def evalPlugin title testDataDir path "expected" ext executeLensesBackwards
+  goldenWithHaskellDocInTmpDir def evalPlugin title (mkFs $ FS.directProject (path <.> ext)) path "expected" ext executeLensesBackwards
+
+goldenWithEvalAndFs :: TestName -> [FS.FileTree] -> FilePath -> FilePath -> TestTree
+goldenWithEvalAndFs title tree path ext =
+  goldenWithHaskellDocInTmpDir def evalPlugin title (mkFs tree) path  "expected" ext executeLensesBackwards
 
 -- | Similar function as 'goldenWithEval' with an alternate reference file
 -- naming. Useful when reference file may change because of GHC version.
 goldenWithEval' :: TestName -> FilePath -> FilePath -> FilePath -> TestTree
 goldenWithEval' title path ext expected =
-  goldenWithHaskellDoc def evalPlugin title testDataDir path expected ext executeLensesBackwards
+  goldenWithHaskellDocInTmpDir def evalPlugin title (mkFs $ FS.directProject (path <.> ext)) path expected ext executeLensesBackwards
+
+goldenWithEvalAndFs' :: TestName -> [FS.FileTree] ->  FilePath -> FilePath -> FilePath -> TestTree
+goldenWithEvalAndFs' title tree path ext expected =
+  goldenWithHaskellDocInTmpDir def evalPlugin title (mkFs tree) path expected ext executeLensesBackwards
+
 
 -- | Execute lenses backwards, to avoid affecting their position in the source file
 executeLensesBackwards :: TextDocumentIdentifier -> Session ()
@@ -264,7 +274,7 @@ executeCmd cmd = do
   pure ()
 
 evalLenses :: FilePath -> IO [CodeLens]
-evalLenses path = runSessionWithServer def evalPlugin testDataDir $ do
+evalLenses path = runSessionWithServerInTmpDir def evalPlugin (mkFs cabalProjectFS) $ do
   doc <- openDoc path "haskell"
   executeLensesBackwards doc
   getCodeLenses doc
@@ -298,10 +308,11 @@ exceptionConfig exCfg = changeConfig ["exception" .= exCfg]
 
 goldenWithEvalConfig' :: TestName -> FilePath -> FilePath -> FilePath -> Config -> TestTree
 goldenWithEvalConfig' title path ext expected cfg =
-    goldenWithHaskellDoc cfg evalPlugin title testDataDir path expected ext executeLensesBackwards
+  goldenWithHaskellDocInTmpDir cfg evalPlugin title (mkFs $ FS.directProject $ path <.> ext) path expected ext $ \doc -> do
+    executeLensesBackwards doc
 
 evalInFile :: HasCallStack => FilePath -> T.Text -> T.Text -> IO ()
-evalInFile fp e expected = runSessionWithServer def evalPlugin testDataDir $ do
+evalInFile fp e expected = runSessionWithServerInTmpDir def evalPlugin (mkFs $ FS.directProject fp) $ do
   doc <- openDoc fp "haskell"
   origin <- documentContents doc
   let withEval = origin <> e
@@ -309,3 +320,30 @@ evalInFile fp e expected = runSessionWithServer def evalPlugin testDataDir $ do
   executeLensesBackwards doc
   result <- fmap T.strip . T.stripPrefix withEval <$> documentContents doc
   liftIO $ result @?= Just (T.strip expected)
+
+-- ----------------------------------------------------------------------------
+-- File system definitions
+-- Used for declaring a test file tree
+-- ----------------------------------------------------------------------------
+
+mkFs :: [FS.FileTree] -> FS.VirtualFileTree
+mkFs = FS.mkVirtualFileTree testDataDir
+
+cabalProjectFS :: [FS.FileTree]
+cabalProjectFS = FS.simpleCabalProject'
+  [ FS.copy "test.cabal"
+  , FS.file "cabal.project"
+      (FS.text "packages: ./info-util .\n"
+      )
+  , FS.copy "TProperty.hs"
+  , FS.copy "TPropertyError.hs"
+  , FS.copy "TI_Info.hs"
+  , FS.copy "TInfo.hs"
+  , FS.copy "TInfoBang.hs"
+  , FS.copy "TInfoBangMany.hs"
+  , FS.copy "TInfoMany.hs"
+  , FS.directory "info-util"
+    [ FS.copy "info-util/info-util.cabal"
+    , FS.copy "info-util/InfoUtil.hs"
+    ]
+  ]
