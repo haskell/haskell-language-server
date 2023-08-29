@@ -8,7 +8,7 @@ module Main (main) where
 
 import           Control.Lens               (set, (^.))
 import           Control.Monad.Extra
-import           Data.Aeson
+import qualified Data.Aeson                 as Aeson
 import           Data.Functor               ((<&>))
 import           Data.List                  (sort, tails)
 import qualified Data.Map                   as M
@@ -527,9 +527,9 @@ mkCallHierarchyItem' prefix name kind range selRange uri c@(CallHierarchyItem na
     assertHierarchyItem selRange selRange'
     case xdata' of
       Nothing -> assertFailure ("In " ++ show c ++ ", got Nothing for data but wanted " ++ show xdata)
-      Just v -> case fromJSON v of
-        Success v -> assertBool ("In " ++ show c ++ " wanted data prefix: " ++ show xdata) (xdata `T.isPrefixOf` v)
-        Error err -> assertFailure ("In " ++ show c ++ " wanted data prefix: " ++ show xdata ++ " but json parsing failed with " ++ show err)
+      Just v -> case Aeson.fromJSON v of
+        Aeson.Success v -> assertBool ("In " ++ show c ++ " wanted data prefix: " ++ show xdata) (xdata `T.isPrefixOf` v)
+        Aeson.Error err -> assertFailure ("In " ++ show c ++ " wanted data prefix: " ++ show xdata ++ " but json parsing failed with " ++ show err)
   where
     tags = Nothing
     detail = Just "Main"

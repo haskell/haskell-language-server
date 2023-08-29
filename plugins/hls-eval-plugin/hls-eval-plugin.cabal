@@ -20,8 +20,8 @@ extra-source-files:
   LICENSE
   README.md
   test/cabal.project
-  test/info-util/*.cabal
-  test/info-util/*.hs
+  test/testdata/info-util/*.cabal
+  test/testdata/info-util/*.hs
   test/testdata/*.cabal
   test/testdata/*.hs
   test/testdata/*.lhs
