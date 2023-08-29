@@ -79,11 +79,6 @@ flag callHierarchy
   default:     True
   manual:      True
 
-flag haddockComments
-  description: Enable haddockComments plugin
-  default:     True
-  manual:      True
-
 flag eval
   description: Enable eval plugin
   default:     True
@@ -231,11 +226,6 @@ common callHierarchy
     build-depends: hls-call-hierarchy-plugin == 2.2.0.0
     cpp-options: -Dhls_callHierarchy
 
-common haddockComments
-  if flag(haddockComments) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-haddock-comments-plugin == 2.2.0.0
-    cpp-options: -Dhls_haddockComments
-
 common eval
   if flag(eval)
     build-depends: hls-eval-plugin == 2.2.0.0
@@ -364,7 +354,6 @@ library
                   , cabalfmt
                   , changeTypeSignature
                   , class
-                  , haddockComments
                   , eval
                   , importLens
                   , rename

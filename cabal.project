@@ -19,7 +19,6 @@ packages:
          ./plugins/hls-hlint-plugin
          ./plugins/hls-rename-plugin
          ./plugins/hls-retrie-plugin
-         ./plugins/hls-haddock-comments-plugin
          ./plugins/hls-splice-plugin
          ./plugins/hls-floskell-plugin
          ./plugins/hls-pragmas-plugin

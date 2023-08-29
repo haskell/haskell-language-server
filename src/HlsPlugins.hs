@@ -28,10 +28,6 @@ import qualified Ide.Plugin.Cabal                  as Cabal
 import qualified Ide.Plugin.Class                  as Class
 #endif
 
-#if hls_haddockComments
-import qualified Ide.Plugin.HaddockComments        as HaddockComments
-#endif
-
 #if hls_eval
 import qualified Ide.Plugin.Eval                   as Eval
 #endif
@@ -185,9 +181,6 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_class
       let pId = "class" in Class.descriptor (pluginRecorder pId) pId:
-#endif
-#if hls_haddockComments
-      let pId = "haddockComments" in HaddockComments.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_eval
       let pId = "eval" in Eval.descriptor (pluginRecorder pId) pId:

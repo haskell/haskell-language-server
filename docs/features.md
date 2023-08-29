@@ -244,14 +244,6 @@ Converts numeric literals to different formats.
 
 ![Alternate Number Format Demo](../plugins/hls-alternate-number-format-plugin/HLSAll.gif)
 
-### Add Haddock comments
-
-Provided by: `hls-haddock-comments-plugin`
-
-Code action kind: `quickfix`
-
-Adds Haddock comments for function arguments.
-
 ### Wingman
 
 Status: Not supported on GHC 9.2
