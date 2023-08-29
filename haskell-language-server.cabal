@@ -99,11 +99,6 @@ flag retrie
   default:     True
   manual:      True
 
-flag tactic
-  description: Enable tactic plugin
-  default:     True
-  manual:      True
-
 flag hlint
   description: Enable hlint plugin
   default:     True
@@ -241,11 +236,6 @@ common retrie
     build-depends: hls-retrie-plugin == 2.2.0.0
     cpp-options: -Dhls_retrie
 
-common tactic
-  if flag(tactic) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-tactics-plugin == 2.2.0.0
-    cpp-options: -Dhls_tactic
-
 common hlint
   if flag(hlint)
     build-depends: hls-hlint-plugin == 2.2.0.0
@@ -348,7 +338,6 @@ library
                   , importLens
                   , rename
                   , retrie
-                  , tactic
                   , hlint
                   , moduleName
                   , pragmas

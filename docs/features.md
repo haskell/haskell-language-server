@@ -238,16 +238,6 @@ Converts numeric literals to different formats.
 
 ![Alternate Number Format Demo](../plugins/hls-alternate-number-format-plugin/HLSAll.gif)
 
-### Wingman
-
-Status: Not supported on GHC 9.2
-
-Provided by: `hls-tactics-plugin`
-
-Provides a variety of code actions for interactive code development, see <https://haskellwingman.dev/> for more details.
-
-![Wingman Demo](https://user-images.githubusercontent.com/307223/92657198-3d4be400-f2a9-11ea-8ad3-f541c8eea891.gif)
-
 ### Change Type Signature
 
 Provided by: `hls-change-type-signature-plugin`

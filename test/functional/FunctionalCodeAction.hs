@@ -433,7 +433,6 @@ unusedTermTests = testGroup "unused term code actions" [
 testConfig :: Config
 testConfig = def {
   formattingProvider = "none"
-  , plugins = M.insert "tactics" (def { plcGlobalOn = False }) (plugins def)
   }
 
 

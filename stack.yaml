@@ -34,7 +34,6 @@ packages:
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-stylish-haskell-plugin
-  # - ./plugins/hls-tactics-plugin
 
 ghc-options:
   "$everything": -haddock
