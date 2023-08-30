@@ -10,7 +10,6 @@ import           TestUtils
 
 tests :: TestTree
 tests =
-  ignoreInWindowsForGHC810 $
   ignoreForGHC92Plus "No need for this plugin anymore!" $
   testSessionWithExtraFiles "plugin-recorddot" "parsedResultAction plugin" $ \dir -> do
     _ <- openDoc (dir</> "RecordDot.hs") "haskell"

@@ -280,11 +280,6 @@ defDocumentSymbol l = DocumentSymbol { .. } where
 getConNames' :: ConDecl GhcPs -> [Located (IdP GhcPs)]
 getConNames' ConDeclH98  {con_name  = name}  = [name]
 getConNames' ConDeclGADT {con_names = names} = names
-#if !MIN_VERSION_ghc(8,10,0)
-getConNames' (XConDecl NoExt)                = []
-#elif !MIN_VERSION_ghc(9,0,0)
-getConNames' (XConDecl x)                    = noExtCon x
-#endif
 #else
 hsConDeclsBinders :: LConDecl GhcPs
                   -> ([LIdP GhcPs], [LFieldOcc GhcPs])

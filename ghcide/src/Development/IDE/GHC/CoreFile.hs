@@ -27,19 +27,6 @@ import           Prelude                         hiding (mod)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,0,0)
-import           Binary
-import           BinFingerprint                  (fingerprintBinMem)
-import           BinIface
-import           CoreSyn
-import           HscTypes
-import           IfaceEnv
-import           MkId
-import           TcIface
-import           ToIface
-#endif
-
-#if MIN_VERSION_ghc(9,0,0)
 import           GHC.Core
 import           GHC.CoreToIface
 import           GHC.Iface.Binary
@@ -48,9 +35,8 @@ import           GHC.Iface.Recomp.Binary         (fingerprintBinMem)
 import           GHC.IfaceToCore
 import           GHC.Types.Id.Make
 import           GHC.Utils.Binary
-#endif
 
-#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+#if !MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Types
 #endif
 

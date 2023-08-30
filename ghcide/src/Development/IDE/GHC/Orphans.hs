@@ -20,24 +20,13 @@ import           Data.Text                  (unpack)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,0,0)
-import           Bag
-import           ByteCodeTypes
-import           GhcPlugins                 hiding (UniqFM)
-import qualified StringBuffer               as SB
-import           Unique                     (getKey)
-#endif
-
-#if MIN_VERSION_ghc(9,0,0)
 import           GHC.ByteCode.Types
 import           GHC.Data.Bag
 import           GHC.Data.FastString
 import qualified GHC.Data.StringBuffer      as SB
 import           GHC.Types.SrcLoc
 
-#endif
-
-#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,3,0)
+#if !MIN_VERSION_ghc(9,3,0)
 import           GHC                        (ModuleGraph)
 import           GHC.Types.Unique           (getKey)
 #endif
@@ -78,22 +67,9 @@ instance Show PackageFlag where show = unpack . printOutputable
 instance Show InteractiveImport where show = unpack . printOutputable
 instance Show PackageName  where show = unpack . printOutputable
 
-#if !MIN_VERSION_ghc(9,0,1)
-instance Show ComponentId  where show = unpack . printOutputable
-instance Show SourcePackageId  where show = unpack . printOutputable
-
-instance Show GhcPlugins.InstalledUnitId where
-    show = installedUnitIdString
-
-instance NFData GhcPlugins.InstalledUnitId where rnf = rwhnf . installedUnitIdFS
-
-instance Hashable GhcPlugins.InstalledUnitId where
-  hashWithSalt salt = hashWithSalt salt . installedUnitIdString
-#else
 instance Show UnitId where show = unpack . printOutputable
 deriving instance Ord SrcSpan
 deriving instance Ord UnhelpfulSpanReason
-#endif
 
 instance NFData SB.StringBuffer where rnf = rwhnf
 
@@ -213,10 +189,8 @@ instance NFData (ImportDecl GhcPs) where
 
 #if MIN_VERSION_ghc(9,5,0)
 instance (NFData (HsModule a)) where
-#elif MIN_VERSION_ghc(9,0,1)
-instance (NFData HsModule) where
 #else
-instance (NFData (HsModule a)) where
+instance (NFData HsModule) where
 #endif
   rnf = rwhnf
 

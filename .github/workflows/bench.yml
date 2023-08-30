@@ -47,8 +47,8 @@ jobs:
       fail-fast: false
       matrix:
         ghc:
-          - '8.10'
           - '9.2'
+          - '9.4'
         os:
           - ubuntu-latest
 
@@ -115,7 +115,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10', '9.2']
+        ghc: ['9.2', '9.4']
         os: [ubuntu-latest]
         cabal: ['3.10']
         example: ['cabal', 'lsp-types']

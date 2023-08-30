@@ -377,4 +377,4 @@ compls `shouldNotContainCompl` lbl =
     @? "Should not contain completion: " ++ show lbl
 
 expectFailIfBeforeGhc92 :: String -> TestTree -> TestTree
-expectFailIfBeforeGhc92 = knownBrokenForGhcVersions [GHC810, GHC90]
+expectFailIfBeforeGhc92 = knownBrokenForGhcVersions [GHC90]

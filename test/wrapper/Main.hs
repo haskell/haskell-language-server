@@ -9,7 +9,7 @@ main = defaultTestRunner $ testGroup "haskell-language-server-wrapper" [projectG
 
 projectGhcVersionTests :: TestTree
 projectGhcVersionTests = testGroup "--project-ghc-version"
-  [ stackTest "8.10.7"
+  [ stackTest "9.2.5"
   , testCase "cabal with global ghc" $ do
       ghcVer <- trimEnd <$> readProcess "ghc" ["--numeric-version"] ""
       testDir "test/wrapper/testdata/cabal-cur-ver" ghcVer

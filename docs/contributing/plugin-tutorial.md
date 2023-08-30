@@ -34,7 +34,7 @@ And here is the gist of the algorithm:
 
 ## Setup
 
-To get started, let’s fetch the HLS repo and build it. You need at least GHC 8.10 for this:
+To get started, let’s fetch the HLS repo and build it. You need at least GHC 9.0 for this:
 
 ```
 git clone --recursive http://github.com/haskell/haskell-language-server hls
