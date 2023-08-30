@@ -70,7 +70,6 @@ import           GHC.Driver.Types                    (HscEnv,
                                                       setInteractivePrintName)
 import qualified GHC.Driver.Types                    as Env
 import           GHC.Driver.Ways
-import qualified GHC.Driver.Ways                     as Ways
 import           GHC.Unit.Types                      (Unit, mkModule)
 #endif
 
@@ -87,7 +86,6 @@ import           GHC.Driver.Backend                  as Backend
 import qualified GHC.Driver.Env                      as Env
 import qualified GHC.Driver.Session                  as Session
 import           GHC.Platform.Ways
-import qualified GHC.Platform.Ways                   as Ways
 import           GHC.Runtime.Context
 import           GHC.Unit.Env                        (UnitEnv)
 import           GHC.Unit.Home                       as Home
