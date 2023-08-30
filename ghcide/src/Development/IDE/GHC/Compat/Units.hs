@@ -51,7 +51,6 @@ module Development.IDE.GHC.Compat.Units (
     ) where
 
 import           Data.Either
-import           Data.Version
 import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Outputable
