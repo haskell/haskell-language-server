@@ -79,11 +79,6 @@ flag callHierarchy
   default:     True
   manual:      True
 
-flag haddockComments
-  description: Enable haddockComments plugin
-  default:     True
-  manual:      True
-
 flag eval
   description: Enable eval plugin
   default:     True
@@ -104,18 +99,8 @@ flag retrie
   default:     True
   manual:      True
 
-flag tactic
-  description: Enable tactic plugin
-  default:     True
-  manual:      True
-
 flag hlint
   description: Enable hlint plugin
-  default:     True
-  manual:      True
-
-flag stan
-  description: Enable stan plugin
   default:     True
   manual:      True
 
@@ -231,11 +216,6 @@ common callHierarchy
     build-depends: hls-call-hierarchy-plugin == 2.2.0.0
     cpp-options: -Dhls_callHierarchy
 
-common haddockComments
-  if flag(haddockComments) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-haddock-comments-plugin == 2.2.0.0
-    cpp-options: -Dhls_haddockComments
-
 common eval
   if flag(eval)
     build-depends: hls-eval-plugin == 2.2.0.0
@@ -256,20 +236,10 @@ common retrie
     build-depends: hls-retrie-plugin == 2.2.0.0
     cpp-options: -Dhls_retrie
 
-common tactic
-  if flag(tactic) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-tactics-plugin == 2.2.0.0
-    cpp-options: -Dhls_tactic
-
 common hlint
   if flag(hlint)
     build-depends: hls-hlint-plugin == 2.2.0.0
     cpp-options: -Dhls_hlint
-
-common stan
-  if flag(stan) && (impl(ghc >= 8.10) && impl(ghc < 9.0))
-    build-depends: hls-stan-plugin == 2.2.0.0
-    cpp-options: -Dhls_stan
 
 common moduleName
   if flag(moduleName)
@@ -364,14 +334,11 @@ library
                   , cabalfmt
                   , changeTypeSignature
                   , class
-                  , haddockComments
                   , eval
                   , importLens
                   , rename
                   , retrie
-                  , tactic
                   , hlint
-                  , stan
                   , moduleName
                   , pragmas
                   , splice

@@ -38,12 +38,6 @@ Provided by: `hls-hlint-plugin`
 
 Provides hlint hints as diagnostics.
 
-### Stan hints
-
-Provided by: `hls-stan-plugin`
-
-Provides Stan hints as diagnostics.
-
 ### Cabal parse errors and warnings
 
 Provided by: `hls-cabal-plugin`
@@ -243,24 +237,6 @@ Code action kind: `quickfix.literals.style`
 Converts numeric literals to different formats.
 
 ![Alternate Number Format Demo](../plugins/hls-alternate-number-format-plugin/HLSAll.gif)
-
-### Add Haddock comments
-
-Provided by: `hls-haddock-comments-plugin`
-
-Code action kind: `quickfix`
-
-Adds Haddock comments for function arguments.
-
-### Wingman
-
-Status: Not supported on GHC 9.2
-
-Provided by: `hls-tactics-plugin`
-
-Provides a variety of code actions for interactive code development, see <https://haskellwingman.dev/> for more details.
-
-![Wingman Demo](https://user-images.githubusercontent.com/307223/92657198-3d4be400-f2a9-11ea-8ad3-f541c8eea891.gif)
 
 ### Change Type Signature
 
