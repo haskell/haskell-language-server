@@ -167,12 +167,8 @@ documentHighlight
   -> MaybeT m [DocumentHighlight]
 documentHighlight hf rf pos = pure highlights
   where
-#if MIN_VERSION_ghc(9,0,1)
     -- We don't want to show document highlights for evidence variables, which are supposed to be invisible
     notEvidence = not . any isEvidenceContext . identInfo
-#else
-    notEvidence = const True
-#endif
     ns = concat $ pointCommand hf pos (rights . M.keys . M.filter notEvidence . getNodeIds)
     highlights = do
       n <- ns
@@ -245,12 +241,8 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
 
         -- Check for evidence bindings
         isInternal :: (Identifier, IdentifierDetails a) -> Bool
-        isInternal (Right _, _dets) = -- dets is only used in GHC >= 9.0.1
-#if MIN_VERSION_ghc(9,0,1)
-          any isEvidenceContext $ identInfo _dets
-#else
-          False
-#endif
+        isInternal (Right _, dets) =
+          any isEvidenceContext $ identInfo dets
         isInternal (Left _, _) = False
 
         filteredNames :: [(Identifier, IdentifierDetails hietype)]
@@ -338,11 +330,7 @@ typeLocationsAtPoint withHieDb lookupModule _ideOptions pos (HAR _ ast _ _ hieKi
             HAppTy a (HieArgs xs) -> getTypes' (a : map snd xs)
             HTyConApp tc (HieArgs xs) -> ifaceTyConName tc : getTypes' (map snd xs)
             HForAllTy _ a -> getTypes' [a]
-#if MIN_VERSION_ghc(9,0,1)
             HFunTy a b c -> getTypes' [a,b,c]
-#else
-            HFunTy a b -> getTypes' [a,b]
-#endif
             HQualTy a b -> getTypes' [a,b]
             HCastTy a -> getTypes' [a]
             _ -> []

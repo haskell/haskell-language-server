@@ -50,19 +50,13 @@ tests = testGroup "highlight"
         _ <- waitForDiagnostics
         highlights <- getHighlights doc (Position 4 15)
         liftIO $ highlights @?=
-          -- Span is just the .. on 8.10, but Rec{..} before
-          [ if ghcVersion >= GHC810
-            then DocumentHighlight (R 4 8 4 10) (Just DocumentHighlightKind_Write)
-            else DocumentHighlight (R 4 4 4 11) (Just DocumentHighlightKind_Write)
+          [ DocumentHighlight (R 4 8 4 10) (Just DocumentHighlightKind_Write)
           , DocumentHighlight (R 4 14 4 20) (Just DocumentHighlightKind_Read)
           ]
         highlights <- getHighlights doc (Position 3 17)
         liftIO $ highlights @?=
           [ DocumentHighlight (R 3 17 3 23) (Just DocumentHighlightKind_Write)
-          -- Span is just the .. on 8.10, but Rec{..} before
-          , if ghcVersion >= GHC810
-              then DocumentHighlight (R 4 8 4 10) (Just DocumentHighlightKind_Read)
-              else DocumentHighlight (R 4 4 4 11) (Just DocumentHighlightKind_Read)
+          , DocumentHighlight (R 4 8 4 10) (Just DocumentHighlightKind_Read)
           ]
   ]
   where

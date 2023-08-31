@@ -8,7 +8,6 @@ import           Control.Lens                 hiding (List)
 import           Control.Monad
 import           Data.Aeson.Lens              (_Object)
 import           Data.List
-import qualified Data.Map                     as M
 import           Data.Maybe
 import qualified Data.Text                    as T
 import           Development.IDE.Core.Compile (sourceTypecheck)
@@ -307,16 +306,6 @@ typedHoleTests = testGroup "typed hole code actions" [
                     , "foo x = maxBound"
                     ]
 
-      , knownBrokenForGhcVersions [GHC92, GHC94, GHC96] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
-          testCase "doesn't work when wingman is active" $
-          runSession hlsCommand fullCaps "test/testdata" $ do
-              doc <- openDoc "TypedHoles.hs" "haskell"
-              _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
-              cas <- getAllCodeActions doc
-              liftIO $ do
-                  dontExpectCodeAction cas ["replace _ with minBound"]
-                  dontExpectCodeAction cas ["replace _ with foo _"]
-
       , testCase "shows more suggestions" $
             runSessionWithConfig (def {lspConfig = hlsConfigToClientConfig testConfig}) hlsCommand fullCaps "test/testdata" $ do
                 doc <- openDoc "TypedHoles2.hs" "haskell"
@@ -340,17 +329,6 @@ typedHoleTests = testGroup "typed hole code actions" [
                         , "  where"
                         , "    stuff (A a) = A (a + 1)"
                         ]
-
-      , knownBrokenForGhcVersions [GHC92, GHC94, GHC96] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
-          testCase "doesnt show more suggestions when wingman is active" $
-            runSession hlsCommand fullCaps "test/testdata" $ do
-                doc <- openDoc "TypedHoles2.hs" "haskell"
-                _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
-                cas <- getAllCodeActions doc
-
-                liftIO $ do
-                    dontExpectCodeAction cas ["replace _ with foo2 _"]
-                    dontExpectCodeAction cas ["replace _ with A _"]
     ]
 
 signatureTests :: TestTree
@@ -433,7 +411,6 @@ unusedTermTests = testGroup "unused term code actions" [
 testConfig :: Config
 testConfig = def {
   formattingProvider = "none"
-  , plugins = M.insert "tactics" (def { plcGlobalOn = False }) (plugins def)
   }
 
 

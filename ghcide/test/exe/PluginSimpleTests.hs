@@ -15,7 +15,6 @@ import           TestUtils
 
 tests :: TestTree
 tests =
-  ignoreInWindowsForGHC810 $
   -- Build profile: -w ghc-9.4.2 -O1
   -- In order, the following will be built (use -v for more details):
   -- - ghc-typelits-natnormalise-0.7.7 (lib) (requires build)

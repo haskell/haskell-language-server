@@ -17,7 +17,6 @@
 /plugins/hls-floskell-plugin @Ailrun
 /plugins/hls-fourmolu-plugin @georgefst
 /plugins/hls-gadt-plugin @July541
-/plugins/hls-haddock-comments-plugin @berberman @kokobd
 /plugins/hls-hlint-plugin @eddiemundo
 /plugins/hls-module-name-plugin
 /plugins/hls-ormolu-plugin @georgefst
@@ -29,8 +28,6 @@
 /plugins/hls-code-range-plugin @kokobd
 /plugins/hls-splice-plugin @konn
 /plugins/hls-stylish-haskell-plugin @Ailrun
-/plugins/hls-tactics-plugin
-/plugins/hls-stan-plugin @uhbif19
 /plugins/hls-explicit-record-fields-plugin @ozkutuk
 /plugins/hls-overloaded-record-dot-plugin @joyfulmantis
 
