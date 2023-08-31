@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-gadt-plugin
-version:            2.1.0.0
+version:            2.2.0.0
 synopsis:           Convert to GADT syntax plugin
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-gadt-plugin#readme>
@@ -30,13 +30,13 @@ library
     , containers
     , extra
     , ghc
-    , ghcide                 == 2.1.0.0
+    , ghcide                 == 2.2.0.0
     , ghc-boot-th
     , ghc-exactprint
-    , hls-plugin-api         == 2.1.0.0
+    , hls-plugin-api         == 2.2.0.0
     , hls-refactor-plugin
     , lens
-    , lsp                    >=2.1.0.0
+    , lsp                    >=2.2.0.0
     , mtl
     , text
     , transformers
@@ -59,7 +59,7 @@ test-suite tests
     , base
     , filepath
     , hls-gadt-plugin
-    , hls-test-utils              == 2.1.0.0
+    , hls-test-utils              == 2.2.0.0
     , lens
     , lsp
     , lsp-test

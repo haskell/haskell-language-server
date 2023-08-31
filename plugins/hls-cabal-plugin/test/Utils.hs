@@ -44,7 +44,7 @@ runCabalTestCaseSession title subdir = testCase title . runCabalSession subdir
 
 runCabalSession :: FilePath -> Session a -> IO a
 runCabalSession subdir =
-    failIfSessionTimeout . runSessionWithServer cabalPlugin (testDataDir </> subdir)
+    failIfSessionTimeout . runSessionWithServer def cabalPlugin (testDataDir </> subdir)
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

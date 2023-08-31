@@ -81,7 +81,7 @@ codeActionTests = testGroup
       [ "Add placeholders for 'f','g'"
       , "Add placeholders for 'f','g' with signature(s)"
       ]
-  , testCase "Update text document version" $ runSessionWithServer classPlugin testDataDir $ do
+  , testCase "Update text document version" $ runSessionWithServer def classPlugin testDataDir $ do
     doc <- createDoc "Version.hs" "haskell" "module Version where"
     ver1 <- (^. L.version) <$> getVersionedDoc doc
     liftIO $ ver1 @?= 0
@@ -109,7 +109,7 @@ codeLensTests :: TestTree
 codeLensTests = testGroup
     "code lens"
     [ testCase "Has code lens" $ do
-        runSessionWithServer classPlugin testDataDir $ do
+        runSessionWithServer def classPlugin testDataDir $ do
             doc <- openDoc "CodeLensSimple.hs" "haskell"
             lens <- getAndResolveCodeLenses doc
             let titles = map (^. L.title) $ mapMaybe (^. L.command) lens
@@ -118,7 +118,7 @@ codeLensTests = testGroup
                 , "(==) :: A -> A -> Bool"
                 ]
     , testCase "No lens for TH" $ do
-        runSessionWithServer classPlugin testDataDir $ do
+        runSessionWithServer def classPlugin testDataDir $ do
             doc <- openDoc "TH.hs" "haskell"
             lens <- getAndResolveCodeLenses doc
             liftIO $ length lens @?= 0
@@ -131,7 +131,7 @@ codeLensTests = testGroup
     , goldenCodeLens "Qualified name" "Qualified" 0
     , goldenCodeLens "Type family" "TypeFamily" 0
     , testCase "keep stale lens" $ do
-        runSessionWithServer classPlugin testDataDir $ do
+        runSessionWithServer def classPlugin testDataDir $ do
             doc <- openDoc "Stale.hs" "haskell"
             oldLens <- getAndResolveCodeLenses doc
             let edit = TextEdit (mkRange 4 11 4 12) "" -- Remove the `_`
@@ -147,14 +147,14 @@ _CACodeAction = prism' InR $ \case
 
 goldenCodeLens :: TestName -> FilePath -> Int -> TestTree
 goldenCodeLens title path idx =
-    goldenWithHaskellDoc classPlugin title testDataDir path "expected" "hs" $ \doc -> do
+    goldenWithHaskellDoc def classPlugin title testDataDir path "expected" "hs" $ \doc -> do
         lens <- getAndResolveCodeLenses doc
         executeCommand $ fromJust $ (lens !! idx) ^. L.command
         void $ skipManyTill anyMessage (message SMethod_WorkspaceApplyEdit)
 
 goldenWithClass ::TestName -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 goldenWithClass title path desc act =
-  goldenWithHaskellDoc classPlugin title testDataDir path (desc <.> "expected") "hs" $ \doc -> do
+  goldenWithHaskellDoc def classPlugin title testDataDir path (desc <.> "expected") "hs" $ \doc -> do
     _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
     actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
     act actions
@@ -163,7 +163,7 @@ goldenWithClass title path desc act =
 expectCodeActionsAvailable :: TestName -> FilePath -> [T.Text] -> TestTree
 expectCodeActionsAvailable title path actionTitles =
   testCase title $ do
-    runSessionWithServer classPlugin testDataDir $ do
+    runSessionWithServer def classPlugin testDataDir $ do
       doc <- openDoc (path <.> "hs") "haskell"
       _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
       caResults <- getAllCodeActions doc

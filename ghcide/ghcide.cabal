@@ -2,7 +2,7 @@ cabal-version:      3.0
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            2.1.0.0
+version:            2.2.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -70,12 +70,12 @@ library
         haddock-library >= 1.8 && < 1.12,
         hashable,
         hie-compat ^>= 0.3.0.0,
-        hls-plugin-api == 2.1.0.0,
+        hls-plugin-api == 2.2.0.0,
         lens,
         list-t,
         hiedb == 0.4.3.*,
-        lsp-types ^>= 2.0.1.0,
-        lsp ^>= 2.1.0.0 ,
+        lsp-types ^>= 2.0.2.0,
+        lsp ^>= 2.2.0.0 ,
         mtl,
         optparse-applicative,
         parallel,
@@ -86,7 +86,7 @@ library
         row-types,
         text-rope,
         safe-exceptions,
-        hls-graph == 2.1.0.0,
+        hls-graph == 2.2.0.0,
         sorted-list,
         sqlite-simple,
         stm,
@@ -371,7 +371,7 @@ test-suite ghcide-tests
         hls-plugin-api,
         lens,
         list-t,
-        lsp-test ^>= 0.15.0.1,
+        lsp-test ^>= 0.16.0.0,
         mtl,
         monoid-subclasses,
         network-uri,

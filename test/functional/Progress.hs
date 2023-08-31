@@ -10,11 +10,12 @@ module Progress (tests) where
 
 import           Control.Exception                  (throw)
 import           Control.Lens                       hiding ((.=))
-import           Data.Aeson                         (Value, decode, encode,
-                                                     object, (.=))
+import           Data.Aeson                         (decode, encode)
+import           Data.Functor                       (void)
 import           Data.List                          (delete)
 import           Data.Maybe                         (fromJust)
 import           Data.Text                          (Text, pack)
+import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Lens         as L
 import           System.FilePath                    ((</>))
@@ -57,23 +58,25 @@ tests =
                       expectProgressMessages ["Evaluating"] activeProgressTokens
                   _ -> error $ "Unexpected response result: " ++ show response
         , requiresOrmoluPlugin $ testCase "ormolu plugin sends progress notifications" $ do
-            runSession hlsCommand progressCaps "test/testdata/format" $ do
-                sendConfigurationChanged (formatLspConfig "ormolu")
+            runSessionWithConfig (def { ignoreConfigurationRequests = False }) hlsCommand progressCaps "test/testdata/format" $ do
+                void configurationRequest
+                setHlsConfig (formatLspConfig "ormolu")
                 doc <- openDoc "Format.hs" "haskell"
                 expectProgressMessages ["Setting up testdata (for Format.hs)", "Processing", "Indexing"] []
                 _ <- sendRequest SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressMessages ["Formatting Format.hs"] []
         , requiresFourmoluPlugin $ testCase "fourmolu plugin sends progress notifications" $ do
-            runSession hlsCommand progressCaps "test/testdata/format" $ do
-                sendConfigurationChanged (formatLspConfig "fourmolu")
+            runSessionWithConfig (def { ignoreConfigurationRequests = False }) hlsCommand progressCaps "test/testdata/format" $ do
+                void configurationRequest
+                setHlsConfig (formatLspConfig "fourmolu")
                 doc <- openDoc "Format.hs" "haskell"
                 expectProgressMessages ["Setting up testdata (for Format.hs)", "Processing", "Indexing"] []
                 _ <- sendRequest SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressMessages ["Formatting Format.hs"] []
         ]
 
-formatLspConfig :: Value -> Value
-formatLspConfig provider = object ["haskell" .= object ["formattingProvider" .= (provider :: Value)]]
+formatLspConfig :: Text -> Config
+formatLspConfig provider = def { formattingProvider = provider }
 
 progressCaps :: ClientCapabilities
 progressCaps = fullCaps{_window = Just (WindowClientCapabilities (Just True) Nothing Nothing)}

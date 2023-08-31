@@ -23,7 +23,7 @@ import           Data.Text                  (unpack)
 #if !MIN_VERSION_ghc(9,0,0)
 import           Bag
 import           ByteCodeTypes
-import           GhcPlugins
+import           GhcPlugins                 hiding (UniqFM)
 import qualified StringBuffer               as SB
 import           Unique                     (getKey)
 #endif
@@ -252,5 +252,11 @@ instance NFData HomeModLinkable where
 instance NFData (HsExpr (GhcPass Renamed)) where
     rnf = rwhnf
 
+instance NFData (Pat (GhcPass Renamed)) where
+    rnf = rwhnf
+
 instance NFData Extension where
   rnf = rwhnf
+
+instance NFData (UniqFM Name [Name]) where
+  rnf (ufmToIntMap -> m) = rnf m

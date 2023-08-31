@@ -475,7 +475,8 @@ data GetModSummary = GetModSummary
 instance Hashable GetModSummary
 instance NFData   GetModSummary
 
--- | Get the vscode client settings stored in the ide state
+-- See Note [Client configuration in Rules]
+-- | Get the client config stored in the ide state
 data GetClientSettings = GetClientSettings
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetClientSettings
@@ -510,3 +511,33 @@ instance NFData   GhcSessionIO
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
     ''Splices
+
+{- Note [Client configuration in Rules]
+The LSP client configuration is stored by `lsp` for us, and is accesible in
+handlers through the LspT monad.
+
+This is all well and good, but what if we want to write a Rule that depends
+on the configuration? For example, we might have a plugin that provides
+diagnostics - if the configuration changes to turn off that plugin, then
+we need to invalidate the Rule producing the diagnostics so that they go
+away. More broadly, any time we define a Rule that really depends on the
+configuration, such that the dependency needs to be tracked and the Rule
+invalidated when the configuration changes, we have a problem.
+
+The solution is that we have to mirror the configuration into the state
+that our build system knows about. That means that:
+- We have a parallel record of the state in 'IdeConfiguration'
+- We install a callback so that when the config changes we can update the
+'IdeConfiguration' and mark the rule as dirty.
+
+Then we can define a Rule that gets the configuration, and build Actions
+on top of that that behave properly. However, these should really only
+be used if you need the dependency tracking - for normal usage in handlers
+the config can simply be accessed directly from LspT.
+
+TODO(michaelpj): this is me writing down what I think the logic is, but
+it doesn't make much sense to me. In particular, we *can* get the LspT
+in an Action. So I don't know why we need to store it twice. We would
+still need to invalidate the Rule otherwise we won't know it's changed,
+though. See https://github.com/haskell/ghcide/pull/731 for some context.
+-}

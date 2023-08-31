@@ -11,17 +11,16 @@ module Ide.Plugin.Config
     , CheckParents(..)
     ) where
 
-import           Control.Applicative
-import           Control.Lens        (preview)
-import           Data.Aeson          hiding (Error)
-import qualified Data.Aeson          as A
-import           Data.Aeson.Lens     (_String)
-import qualified Data.Aeson.Types    as A
+import           Control.Lens     (preview)
+import           Data.Aeson       hiding (Error)
+import qualified Data.Aeson       as A
+import           Data.Aeson.Lens  (_String)
+import qualified Data.Aeson.Types as A
 import           Data.Default
-import qualified Data.Map.Strict     as Map
-import           Data.Maybe          (fromMaybe)
-import qualified Data.Text           as T
-import           GHC.Exts            (toList)
+import qualified Data.Map.Strict  as Map
+import           Data.Maybe       (fromMaybe)
+import qualified Data.Text        as T
+import           GHC.Exts         (toList)
 import           Ide.Types
 
 -- ---------------------------------------------------------------------
@@ -37,19 +36,14 @@ getConfigFromNotification plugins defaultValue p =
 -- ---------------------------------------------------------------------
 
 parseConfig :: IdePlugins s -> Config -> Value -> A.Parser Config
-parseConfig idePlugins defValue = A.withObject "Config" $ \v -> do
-    -- Officially, we use "haskell" as the section name but for
-    -- backwards compatibility we also accept "languageServerHaskell"
-    c <- v .: "haskell" <|> v .:? "languageServerHaskell"
-    case c of
-      Nothing -> return defValue
-      Just s -> flip (A.withObject "Config.settings") s $ \o -> Config
-        <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents defValue
-        <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject defValue
-        <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
-        <*> o .:? "cabalFormattingProvider"                 .!= cabalFormattingProvider defValue
-        <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
-        <*> A.explicitParseFieldMaybe (parsePlugins idePlugins) o "plugin" .!= plugins defValue
+parseConfig idePlugins defValue = A.withObject "settings" $ \o ->
+  Config
+    <$> o .:? "checkParents"                            .!= checkParents defValue
+    <*> o .:? "checkProject"                            .!= checkProject defValue
+    <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
+    <*> o .:? "cabalFormattingProvider"                 .!= cabalFormattingProvider defValue
+    <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
+    <*> A.explicitParseFieldMaybe (parsePlugins idePlugins) o "plugin" .!= plugins defValue
 
 -- | Parse the 'PluginConfig'.
 --   Since we need to fall back to default values if we do not find one in the input,

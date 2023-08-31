@@ -5,7 +5,7 @@
 
 module Ide.Plugin.ConfigUtils where
 
-import           Control.Lens                  (at, ix, (&), (?~))
+import           Control.Lens                  (at, (&), (?~))
 import qualified Data.Aeson                    as A
 import           Data.Aeson.Lens               (_Object)
 import qualified Data.Aeson.Types              as A
@@ -29,10 +29,9 @@ import           Language.LSP.Protocol.Message
 -- | Generates a default 'Config', but remains only effective items
 pluginsToDefaultConfig :: IdePlugins a -> A.Value
 pluginsToDefaultConfig IdePlugins {..} =
-  -- Use 'ix' to look at all the "haskell" keys in the outer value (since we're not
-  -- setting it if missing), then we use '_Object' and 'at' to get at the "plugin" key
+  -- Use '_Object' and 'at' to get at the "plugin" key
   -- and actually set it.
-  A.toJSON defaultConfig & ix "haskell" . _Object . at "plugin" ?~ elems
+  A.toJSON defaultConfig & _Object . at "plugin" ?~ elems
   where
     defaultConfig@Config {} = def
     elems = A.object $ mconcat $ singlePlugin <$> ipMap

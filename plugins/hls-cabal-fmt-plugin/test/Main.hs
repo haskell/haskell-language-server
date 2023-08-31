@@ -39,7 +39,7 @@ tests found = testGroup "cabal-fmt"
     cabalFmtGolden found "formats a simple document" "simple_testdata" "formatted_document" $ \doc -> do
       formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
 
-  , knownBrokenOnWindows "expand:src comment bug in cabal-fmt on windows" $
+  , expectFailBecause "cabal-fmt can't expand modules if .cabal file is read from stdin. Tracking issue: https://github.com/phadej/cabal-fmt/pull/82" $
     cabalFmtGolden found "formats a document with expand:src comment" "commented_testdata" "formatted_document" $ \doc -> do
       formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
 
@@ -52,7 +52,7 @@ cabalFmtGolden NotFound title _ _ _ =
   testCase title $
     assertFailure $  "Couldn't find cabal-fmt on PATH or this is not an isolated run. "
                   <> "Use cabal flag 'isolateTests' to make it isolated or install cabal-fmt locally."
-cabalFmtGolden Found title path desc act = goldenWithCabalDocFormatter cabalFmtPlugin "cabal-fmt" conf title testDataDir path desc "cabal" act
+cabalFmtGolden Found title path desc act = goldenWithCabalDocFormatter def cabalFmtPlugin "cabal-fmt" conf title testDataDir path desc "cabal" act
   where
     conf = def
 

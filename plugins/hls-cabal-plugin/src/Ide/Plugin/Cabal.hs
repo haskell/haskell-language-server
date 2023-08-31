@@ -75,7 +75,7 @@ instance Pretty Log where
       "Determined completion context:"
         <+> viaShow context
         <+> "for cursor position:"
-        <+> viaShow position
+        <+> pretty position
     LogCompletions logs -> pretty logs
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState

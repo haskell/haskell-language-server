@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections      #-}
 
@@ -8,7 +8,7 @@ module Main (main) where
 
 import           Control.Lens               (set, (^.))
 import           Control.Monad.Extra
-import           Data.Aeson
+import qualified Data.Aeson                 as Aeson
 import           Data.Functor               ((<&>))
 import           Data.List                  (sort, tails)
 import qualified Data.Map                   as M
@@ -198,7 +198,7 @@ incomingCallsTests =
   [ testGroup "single file"
     [
       testCase "xdata unavailable" $
-        runSessionWithServer plugin testDataDir $ do
+        runSessionWithServer def plugin testDataDir $ do
           doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
           waitForIndex (testDataDir </> "A.hs")
           [item] <- Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0)
@@ -323,7 +323,7 @@ outgoingCallsTests =
   [ testGroup "single file"
     [
       testCase "xdata unavailable" $ withCanonicalTempDir $ \dir ->
-        runSessionWithServer plugin dir $ do
+        runSessionWithServer def plugin dir $ do
           doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
           waitForIndex (dir </> "A.hs")
           [item] <- Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 1)
@@ -425,7 +425,7 @@ outgoingCallsTests =
 
 incomingCallTestCase :: T.Text -> Int -> Int -> [(Int, Int)] -> [Range] -> Assertion
 incomingCallTestCase contents queryX queryY positions ranges = withCanonicalTempDir $ \dir ->
-  runSessionWithServer plugin dir $ do
+  runSessionWithServer def plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
     waitForIndex (dir </> "A.hs")
     items <- concatMapM (\((x, y), range) ->
@@ -445,7 +445,7 @@ incomingCallTestCase contents queryX queryY positions ranges = withCanonicalTemp
 
 incomingCallMultiFileTestCase :: FilePath -> Int -> Int -> M.Map FilePath [((Int, Int), Range)] -> Assertion
 incomingCallMultiFileTestCase filepath queryX queryY mp =
-  runSessionWithServer plugin testDataDir $ do
+  runSessionWithServer def plugin testDataDir $ do
     doc <- openDoc filepath "haskell"
     waitForIndex (testDataDir </> filepath)
     items <- fmap concat $ sequence $ M.elems $ M.mapWithKey (\fp pr -> do
@@ -467,7 +467,7 @@ incomingCallMultiFileTestCase filepath queryX queryY mp =
 
 outgoingCallTestCase :: T.Text -> Int -> Int -> [(Int, Int)] -> [Range] -> Assertion
 outgoingCallTestCase contents queryX queryY positions ranges = withCanonicalTempDir $ \dir ->
-  runSessionWithServer plugin dir $ do
+  runSessionWithServer def plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
     waitForIndex (dir </> "A.hs")
     items <- concatMapM (\((x, y), range) ->
@@ -486,7 +486,7 @@ outgoingCallTestCase contents queryX queryY positions ranges = withCanonicalTemp
 
 outgoingCallMultiFileTestCase :: FilePath -> Int -> Int -> M.Map FilePath [((Int, Int), Range)] -> Assertion
 outgoingCallMultiFileTestCase filepath queryX queryY mp =
-  runSessionWithServer plugin testDataDir $ do
+  runSessionWithServer def plugin testDataDir $ do
     doc <- openDoc filepath "haskell"
     waitForIndex (testDataDir </> filepath)
     items <- fmap concat $ sequence $ M.elems $ M.mapWithKey (\fp pr -> do
@@ -507,7 +507,7 @@ outgoingCallMultiFileTestCase filepath queryX queryY mp =
 
 oneCaseWithCreate :: T.Text -> Int -> Int -> (Uri -> CallHierarchyItem -> Assertion) -> Assertion
 oneCaseWithCreate contents queryX queryY expected = withCanonicalTempDir $ \dir ->
-  runSessionWithServer plugin dir $ do
+  runSessionWithServer def plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
     waitForIndex (dir </> "A.hs")
     Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
@@ -527,9 +527,9 @@ mkCallHierarchyItem' prefix name kind range selRange uri c@(CallHierarchyItem na
     assertHierarchyItem selRange selRange'
     case xdata' of
       Nothing -> assertFailure ("In " ++ show c ++ ", got Nothing for data but wanted " ++ show xdata)
-      Just v -> case fromJSON v of
-        Success v -> assertBool ("In " ++ show c ++ " wanted data prefix: " ++ show xdata) (xdata `T.isPrefixOf` v)
-        Error err -> assertFailure ("In " ++ show c ++ " wanted data prefix: " ++ show xdata ++ " but json parsing failed with " ++ show err)
+      Just v -> case Aeson.fromJSON v of
+        Aeson.Success v -> assertBool ("In " ++ show c ++ " wanted data prefix: " ++ show xdata) (xdata `T.isPrefixOf` v)
+        Aeson.Error err -> assertFailure ("In " ++ show c ++ " wanted data prefix: " ++ show xdata ++ " but json parsing failed with " ++ show err)
   where
     tags = Nothing
     detail = Just "Main"

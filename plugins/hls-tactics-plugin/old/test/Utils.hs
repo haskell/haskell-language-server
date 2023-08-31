@@ -67,7 +67,7 @@ runSessionForTactics act = do
   runSessionWithServer'
     (plugin recorder)
     def
-    (def { messageTimeout = 20 } )
+    (def { ignoreLogNotifications = False })
     fullCaps
     tacticPath
     act

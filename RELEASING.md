@@ -8,18 +8,18 @@
   - Look for `TODO:` to find locations that require extra care for GHC versions.
 - [ ] check all plugins still work if release includes code changes
 - [ ] bump package versions in all `*.cabal` files (same version as hls)
-  - HLS uses a lockstep versioning. The core packages and all plugins use the same version number, and only support exactly the this version.
+  - HLS uses lockstep versioning. The core packages and all plugins use the same version number, and only support exactly this version.
     - Exceptions:
       - `hie-compat` requires no automatic version bump.
       - `shake-bench` is an internal testing tool, not exposed to the outside world. Thus, no version bump required for releases.
   - For updating cabal files, the following script can be used:
     - ```sh
       # Update all `version:` fields
-      sed -ri "s/^version:( +)2.1.0.0/version:\12.2.0.0/" **/*.cabal
+      sed -ri "s/^version:( +)2.2.0.0/version:\12.3.0.0/" **/*.cabal
       # Update all constraints expected to be in the form `== <version>`.
       # We usually don't force an exact version, so this is relatively unambiguous.
       # We could introduce some more ad-hoc parsing, if there is still ambiguity.
-      sed -ri "s/== 2.1.0.0/== 2.2.0.0/" **/*.cabal
+      sed -ri "s/== 2.2.0.0/== 2.3.0.0/" **/*.cabal
       ```
     - It still requires manual verification and review
 - [ ] generate and update changelog

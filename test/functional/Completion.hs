@@ -1,14 +1,17 @@
 {-# LANGUAGE OverloadedLabels    #-}
+{-# LANGUAGE OverloadedLists     #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Completion(tests) where
 
 import           Control.Lens               hiding ((.=))
-import           Data.Aeson                 (object, (.=))
+import           Data.Aeson                 (toJSON)
 import           Data.Foldable              (find)
+import           Data.Functor               (void)
+import qualified Data.Map                   as Map
 import           Data.Row.Records           (focus)
 import qualified Data.Text                  as T
-import           Ide.Plugin.Config          (maxCompletions)
+import           Ide.Plugin.Config          (maxCompletions, plcConfig, plugins)
 import           Language.LSP.Protocol.Lens hiding (applyEdit, length)
 import           Test.Hls
 import           Test.Hls.Command
@@ -282,12 +285,13 @@ snippetTests = testGroup "snippets" [
             item ^. insertTextFormat @?= Just InsertTextFormat_PlainText
             item ^. insertText @?= Nothing
 
-    , testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+    , testCase "respects lsp configuration" $ runSessionWithConfig (def {ignoreConfigurationRequests=False}) hlsCommand fullCaps "test/testdata/completion" $ do
+        void configurationRequest
         doc <- openDoc "Completion.hs" "haskell"
 
-        let config = object ["haskell" .= object ["plugin" .= object ["ghcide-completions" .= object ["config" .= object ["snippetsOn" .= False]]]]]
+        let config = def { plugins = Map.insert "ghcide-completions" (def { plcConfig = [("snippetsOn", (toJSON False))]}) (plugins def) }
 
-        sendConfigurationChanged config
+        setHlsConfig config
 
         checkNoSnippets doc
 

@@ -54,7 +54,7 @@ test = testGroup "alternateNumberFormat" [
 
 codeActionProperties :: TestName -> [(Int, Int)] -> ([CodeAction] -> Session ()) -> TestTree
 codeActionProperties fp locs assertions = testCase fp $ do
-    runSessionWithServer alternateNumberFormatPlugin testDataDir $ do
+    runSessionWithServer def alternateNumberFormatPlugin testDataDir $ do
         openDoc (fp <.> ".hs") "haskell" >>= codeActionsFromLocs >>= findAlternateNumberActions >>= assertions
     where
         -- similar to codeActionTest
@@ -75,7 +75,7 @@ testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
 
 goldenAlternateFormat :: FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenAlternateFormat fp = goldenWithHaskellDoc alternateNumberFormatPlugin (fp <> " (golden)") testDataDir fp "expected" "hs"
+goldenAlternateFormat fp = goldenWithHaskellDoc def alternateNumberFormatPlugin (fp <> " (golden)") testDataDir fp "expected" "hs"
 
 codeActionTest :: (Maybe Text -> Bool) -> FilePath -> Int -> Int -> TestTree
 codeActionTest filter' fp line col = goldenAlternateFormat fp $ \doc -> do

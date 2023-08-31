@@ -134,37 +134,37 @@
     "lsp": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-H0qJbQQufOOWovqqdJv6GUaL49o7tET8yTkdLKH1qoE=",
+        "narHash": "sha256-Uq9OLBZFJvg8BM383++3o3s54Trho6gaYor+6EELV38=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-2.0.0.0/lsp-2.0.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-2.1.0.0/lsp-2.1.0.0.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-2.0.0.0/lsp-2.0.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-2.1.0.0/lsp-2.1.0.0.tar.gz"
       }
     },
     "lsp-test": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-ac9G/i9JfFKfX7gI57fVirBgW+Np+GDlZ3/4Eb8r6Gc=",
+        "narHash": "sha256-48gVUVsDPR+RYl+K0ZN15N9EIdTQP8ma5nGPvzE6uoQ=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-test-0.15.0.0/lsp-test-0.15.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-test-0.15.0.1/lsp-test-0.15.0.1.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-test-0.15.0.0/lsp-test-0.15.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-test-0.15.0.1/lsp-test-0.15.0.1.tar.gz"
       }
     },
     "lsp-types": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-ISvkr2CQWWbxcGm62IK+NIVfq6CEzXQhov47f9YdHW4=",
+        "narHash": "sha256-irO9uob1L10l1BoRC8F2lABqAzR5Z7mydyCZagMZZ2M=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-types-2.0.0.1/lsp-types-2.0.0.1.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-types-2.0.1.0/lsp-types-2.0.1.0.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-types-2.0.0.1/lsp-types-2.0.0.1.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-types-2.0.1.0/lsp-types-2.0.1.0.tar.gz"
       }
     },
     "nixpkgs": {

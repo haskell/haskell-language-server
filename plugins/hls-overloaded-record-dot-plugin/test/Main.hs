@@ -36,13 +36,13 @@ mkTest title fp selectorName x1 y1 x2 y2 =
 
 mkNoResolveTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> TestTree
 mkNoResolveTest title fp selectorName x1 y1 x2 y2 =
-  goldenWithHaskellAndCaps codeActionNoResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
+  goldenWithHaskellAndCaps def codeActionNoResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
     (act:_) <- getExplicitFieldsActions doc selectorName x1 y1 x2 y2
     executeCodeAction act
 
 mkResolveTest :: TestName -> FilePath -> T.Text -> UInt -> UInt -> UInt -> UInt -> TestTree
 mkResolveTest title fp selectorName x1 y1 x2 y2 =
-  goldenWithHaskellAndCaps codeActionResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
+  goldenWithHaskellAndCaps def codeActionResolveCaps plugin title testDataDir fp "expected" "hs" $ \doc -> do
     (act:_) <- getAndResolveExplicitFieldsActions doc selectorName x1 y1 x2 y2
     executeCodeAction act
 
