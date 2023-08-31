@@ -25,9 +25,9 @@ import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (toJSON)
-import           Data.Char                            (isLower)
+import           Data.Char                            (isLower, isUpper)
 import           Data.List                            (intercalate, minimumBy,
-                                                       stripPrefix)
+                                                       stripPrefix, uncons)
 import qualified Data.List.NonEmpty                   as NE
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (mapMaybe)
@@ -161,6 +161,9 @@ pathModuleNames recorder state normFilePath filePath
     moduleNameFrom =
       T.pack
         . intercalate "."
+        -- Do not suggest names whose components start from a lower-case char,
+        -- they are guaranteed to be malformed.
+        . filter (maybe False (isUpper . fst) . uncons)
         . splitDirectories
         . dropExtension
 
