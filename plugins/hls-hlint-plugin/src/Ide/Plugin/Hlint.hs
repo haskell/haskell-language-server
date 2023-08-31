@@ -234,7 +234,7 @@ rules recorder plugin = do
     liftIO $ argsSettings flags
 
   action $ do
-    files <- getFilesOfInterestUntracked
+    files <- filterResponsibleFOI (descriptor recorder plugin) <$> getFilesOfInterestUntracked
     void $ uses GetHlintDiagnostics $ Map.keys files
 
   where

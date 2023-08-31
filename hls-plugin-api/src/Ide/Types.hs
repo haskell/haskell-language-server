@@ -25,6 +25,7 @@
 module Ide.Types
 ( PluginDescriptor(..), defaultPluginDescriptor, defaultCabalPluginDescriptor
 , defaultPluginPriority, defaultPluginFileExtensions
+, defaultPluginFOIStatus
 , IdeCommand(..)
 , IdeMethod(..)
 , IdeNotification(..)
@@ -34,6 +35,7 @@ module Ide.Types
 , ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin, pluginEnabledConfig
 , CustomConfig(..), mkCustomConfig
 , FallbackCodeActionParams(..)
+, FileOfInterestStatus(..)
 , FormattingType(..), FormattingMethod, FormattingHandler, mkFormattingHandlers
 , HasTracing(..)
 , PluginCommand(..), CommandId(..), CommandFunction, mkLspCommand, mkLspCmdId
@@ -55,6 +57,7 @@ module Ide.Types
 , lookupCommandProvider
 , ResolveFunction
 , mkResolveHandler
+, filterResponsibleFOI
 )
     where
 
@@ -71,6 +74,7 @@ import           System.Posix.Signals
 
 import           Control.Applicative           ((<|>))
 import           Control.Arrow                 ((&&&))
+import           Control.DeepSeq               (NFData)
 import           Control.Lens                  (_Just, (.~), (?~), (^.), (^?))
 import           Control.Monad                 (void)
 import           Control.Monad.Error.Class     (MonadError (throwError))
@@ -96,6 +100,7 @@ import           Data.Semigroup
 import           Data.String
 import qualified Data.Text                     as T
 import           Data.Text.Encoding            (encodeUtf8)
+import           Data.Typeable                 (Typeable)
 import           Development.IDE.Graph
 import           GHC                           (DynFlags)
 import           GHC.Generics
@@ -286,6 +291,11 @@ data PluginDescriptor (ideState :: Type) =
                    --   The plugin is only allowed to handle files with these extensions.
                    --   When writing handlers, etc. for this plugin it can be assumed that all handled files are of this type.
                    --   The file extension must have a leading '.'.
+                   , pluginFOIStatus      :: [FileOfInterestStatus]
+                   -- ^ For plugins that have rules that run on files of interest,
+                   --   we specify which FileOfInterestStatus are relevant for the
+                   --   plugin. By default, ReadOnly files of interest are
+                   --   excluded.
                    }
 
 -- | A description of the types of files that the plugin
@@ -334,6 +344,22 @@ pluginResponsible uri pluginDesc
         getExtension = T.pack . takeExtension . fromNormalizedFilePath
         mfp :: Maybe NormalizedFilePath
         mfp = uriToNormalizedFilePath $ toNormalizedUri uri
+
+data FileOfInterestStatus
+  = OnDisk
+  | ReadOnly
+  | Modified { firstOpen :: !Bool -- ^ was this file just opened
+             }
+  deriving (Eq, Show, Typeable, Generic)
+instance Hashable FileOfInterestStatus
+instance NFData   FileOfInterestStatus
+
+filterResponsibleFOI
+  :: PluginDescriptor c
+  -> HashMap NormalizedFilePath FileOfInterestStatus
+  -> HashMap NormalizedFilePath FileOfInterestStatus
+filterResponsibleFOI pluginDesc =
+  HashMap.filter (\foiStatus -> foiStatus `elem` pluginFOIStatus pluginDesc)
 
 -- | An existential wrapper of 'Properties'
 data CustomConfig = forall r. CustomConfig (Properties r)
@@ -905,9 +931,13 @@ defaultPluginDescriptor plId =
     mempty
     Nothing
     (PluginFileType [FromProject] defaultPluginFileExtensions)
+    defaultPluginFOIStatus
 
 defaultPluginFileExtensions :: [T.Text]
 defaultPluginFileExtensions = [".hs", ".lhs", ".hs-boot"]
+
+defaultPluginFOIStatus :: [FileOfInterestStatus]
+defaultPluginFOIStatus = [OnDisk, Modified True, Modified False]
 
 -- | Set up a plugin descriptor, initialized with default values.
 -- This plugin descriptor is prepared for @.cabal@ files and as such,
@@ -928,6 +958,7 @@ defaultCabalPluginDescriptor plId =
     mempty
     Nothing
     (PluginFileType [FromProject] [".cabal"])
+    defaultPluginFOIStatus
 
 newtype CommandId = CommandId T.Text
   deriving (Show, Read, Eq, Ord)

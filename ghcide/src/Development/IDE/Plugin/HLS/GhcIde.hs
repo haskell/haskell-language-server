@@ -56,6 +56,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 
   , pluginConfigDescriptor = defaultConfigDescriptor
   , pluginFileType = PluginFileType [FromProject, FromDependency] defaultPluginFileExtensions
+  , pluginFOIStatus = ReadOnly : defaultPluginFOIStatus
   }
 
 -- ---------------------------------------------------------------------

@@ -154,6 +154,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
     -- (which restart the Shake build) run after everything else
         pluginPriority = ghcideNotificationsPluginPriority
     ,   pluginFileType = PluginFileType [FromProject, FromDependency] defaultPluginFileExtensions
+    ,   pluginFOIStatus = ReadOnly : defaultPluginFOIStatus
     }
 
 ghcideNotificationsPluginPriority :: Natural

@@ -51,6 +51,7 @@ library
     , co-log-core
     , containers
     , data-default
+    , deepseq
     , dependent-map
     , dependent-sum         >=0.7
     , Diff                  ^>=0.4.0

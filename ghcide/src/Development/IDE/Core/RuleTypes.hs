@@ -12,6 +12,7 @@
 --   using the "Shaker" abstraction layer for in-memory use.
 --
 module Development.IDE.Core.RuleTypes(
+    FileOfInterestStatus(..),
     GhcSessionDeps(.., GhcSessionDeps),
     module Development.IDE.Core.RuleTypes
     ) where
@@ -42,6 +43,7 @@ import                          Development.IDE.Spans.Common
 import                          Development.IDE.Spans.LocalBindings
 import                          Development.IDE.Types.Diagnostics
 import                          GHC.Serialized                               (Serialized)
+import                          Ide.Types                                    (FileOfInterestStatus (..))
 import                          Language.LSP.Protocol.Types                  (Int32,
                                                                               NormalizedFilePath)
 
@@ -332,15 +334,6 @@ data GetFileExists = GetFileExists
 
 instance NFData   GetFileExists
 instance Hashable GetFileExists
-
-data FileOfInterestStatus
-  = OnDisk
-  | ReadOnly
-  | Modified { firstOpen :: !Bool -- ^ was this file just opened
-             }
-  deriving (Eq, Show, Typeable, Generic)
-instance Hashable FileOfInterestStatus
-instance NFData   FileOfInterestStatus
 
 data IsFileOfInterestResult = NotFOI | IsFOI FileOfInterestStatus
   deriving (Eq, Show, Typeable, Generic)
