@@ -77,7 +77,7 @@ data InstanceBindLensCommand = InstanceBindLensCommand
     { -- |The URI needed to run actions in the command
       commandUri  :: Uri
       -- |The specific TextEdit we want to apply. This does not include the
-      -- pragma edit which is computed in the rule
+      -- pragma edit which is computed in the command
     , commandEdit :: TextEdit }
     deriving (Generic, FromJSON, ToJSON)
 
