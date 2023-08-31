@@ -14,7 +14,6 @@ import           Control.Concurrent.MVar              (MVar, newEmptyMVar,
                                                        putMVar, readMVar)
 import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue        (unGetTQueue)
-import           Control.Monad                        (unless)
 import           Control.Monad.Extra                  (mapMaybeM)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
@@ -89,7 +88,7 @@ lookupMod HieDbWriter{indexQueue} hieFile moduleName uid _boot = MaybeT $ do
     writeAndIndexSource projectRoot completionToken = do
       fileExists <- liftIO $ doesFileExist writeOutPath
       -- No need to write out the file if it already exists.
-      unless fileExists $ do
+      if fileExists then pure () else do
         nc <- asks ideNc
         liftIO $ do
           -- Create the directory where we will put the source.
