@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs           #-}
 {-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE OverloadedLists #-}
-
+{-# LANGUAGE ViewPatterns    #-}
 module Ide.Plugin.Class.CodeLens where
 
 import           Control.Lens                         ((&), (?~), (^.))
@@ -17,6 +17,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.Pragmas        (getFirstPragma,
                                                        insertNewPragma)
 import           Ide.Plugin.Class.Types
+import           Ide.Plugin.Class.Utils
 import           Ide.Plugin.Error
 import           Ide.PluginUtils
 import           Ide.Types
@@ -44,47 +45,18 @@ codeLens state _plId clp = do
 codeLensResolve:: ResolveFunction IdeState Int Method_CodeLensResolve
 codeLensResolve state plId cl uri uniqueID = do
     nfp <-  getNormalizedFilePathE uri
-    (InstanceBindLensResult (InstanceBindLens{lensRendered}), _)
+    (InstanceBindLensResult (InstanceBindLens{lensDetails}), pm)
         <- runActionE "classplugin.GetInstanceBindLens" state
             $ useWithStaleE GetInstanceBindLens nfp
-    resolveData <- handleMaybe PluginStaleResolve
-                    $ IntMap.lookup uniqueID lensRendered
-    let makeCommand (TextEdit _ title) =
-            mkLspCommand plId typeLensCommandId title (Just [toJSON $ InstanceBindLensCommand uri uniqueID])
-    pure $ cl & L.command ?~ makeCommand resolveData
-
--- Finally the command actually generates and applies the workspace edit for the
--- specified unique id.
-codeLensCommandHandler :: PluginId -> CommandFunction IdeState InstanceBindLensCommand
-codeLensCommandHandler plId state InstanceBindLensCommand{commandUri, commandUid} = do
-    nfp <-  getNormalizedFilePathE commandUri
-    (InstanceBindLensResult (InstanceBindLens{lensRendered, lensEnabledExtensions}), pm)
-        <- runActionE "classplugin.GetInstanceBindLens" state
-            $ useWithStaleE GetInstanceBindLens nfp
-    -- We are only interested in the pragma information if the user does not
-    -- have the InstanceSigs extension enabled
-    mbPragma <- if InstanceSigs `elem` lensEnabledExtensions
-                then pure Nothing
-                else Just <$> getFirstPragma plId state nfp
-    resolveData <- handleMaybe PluginStaleResolve
-                    $ IntMap.lookup commandUid lensRendered
-    let -- By mapping over our Maybe NextPragmaInfo value, we only compute this
-        -- edit if we actually need to.
-        pragmaInsertion =
-            maybeToList $ flip insertNewPragma InstanceSigs <$> mbPragma
-        makeWEdit (TextEdit range title) =
-            workspaceEdit pragmaInsertion . pure <$> makeEdit range title pm
-    wEdit <- handleMaybe (PluginInvalidUserState "toCurrentRange")
-                $ makeWEdit resolveData
-    _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wEdit) (\_ -> pure ())
-    pure $ InR Null
+    (tmrTypechecked -> gblEnv, _) <- runActionE "classplugin.codeAction.TypeCheck" state $ useWithStaleE TypeCheck nfp
+    (hscEnv -> hsc, _) <- runActionE "classplugin.codeAction.GhcSession" state $ useWithStaleE GhcSession nfp
+    (range, name, typ) <- handleMaybe PluginStaleResolve
+                    $ IntMap.lookup uniqueID lensDetails
+    let title = prettyBindingNameString (printOutputable name) <> " :: " <> T.pack (showDoc hsc gblEnv typ)
+    edit <- handleMaybe (PluginInvalidUserState "toCurrentRange") $ makeEdit range title pm
+    let command = mkLspCommand plId typeLensCommandId title (Just [toJSON $ InstanceBindLensCommand uri edit])
+    pure $ cl & L.command ?~ command
     where
-        workspaceEdit pragmaInsertion edits =
-            WorkspaceEdit
-                (pure [(commandUri, edits ++ pragmaInsertion)])
-                Nothing
-                Nothing
-
         makeEdit :: Range -> T.Text -> PositionMapping -> Maybe TextEdit
         makeEdit range bind mp =
             let startPos = range ^. L.start
@@ -93,5 +65,34 @@ codeLensCommandHandler plId state InstanceBindLensCommand{commandUri, commandUid
             in case toCurrentRange mp insertRange of
                 Just rg -> Just $ TextEdit rg (bind <> "\n" <> T.replicate (fromIntegral insertChar) " ")
                 Nothing -> Nothing
+
+-- Finally the command actually generates and applies the workspace edit for the
+-- specified unique id.
+codeLensCommandHandler :: PluginId -> CommandFunction IdeState InstanceBindLensCommand
+codeLensCommandHandler plId state InstanceBindLensCommand{commandUri, commandEdit} = do
+    nfp <-  getNormalizedFilePathE commandUri
+    (InstanceBindLensResult (InstanceBindLens{lensEnabledExtensions}), _)
+        <- runActionE "classplugin.GetInstanceBindLens" state
+            $ useWithStaleE GetInstanceBindLens nfp
+    -- We are only interested in the pragma information if the user does not
+    -- have the InstanceSigs extension enabled
+    mbPragma <- if InstanceSigs `elem` lensEnabledExtensions
+                then pure Nothing
+                else Just <$> getFirstPragma plId state nfp
+    let -- By mapping over our Maybe NextPragmaInfo value, we only compute this
+        -- edit if we actually need to.
+        pragmaInsertion =
+            maybeToList $ flip insertNewPragma InstanceSigs <$> mbPragma
+        wEdit = workspaceEdit pragmaInsertion
+    _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wEdit) (\_ -> pure ())
+    pure $ InR Null
+    where
+        workspaceEdit pragmaInsertion=
+            WorkspaceEdit
+                (pure [(commandUri, commandEdit : pragmaInsertion)])
+                Nothing
+                Nothing
+
+
 
 

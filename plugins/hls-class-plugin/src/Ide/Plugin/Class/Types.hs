@@ -11,10 +11,10 @@ module Ide.Plugin.Class.Types where
 import           Control.DeepSeq                  (rwhnf)
 import           Control.Monad.Extra              (mapMaybeM, whenMaybe)
 import           Control.Monad.IO.Class           (liftIO)
-import           Control.Monad.Trans.Maybe        (MaybeT (runMaybeT),
-                                                   hoistMaybe)
+import           Control.Monad.Trans.Maybe        (MaybeT (MaybeT, runMaybeT))
 import           Data.Aeson
 import qualified Data.IntMap                      as IntMap
+import           Data.List.Extra                  (firstJust)
 import           Data.Maybe                       (catMaybes, mapMaybe,
                                                    maybeToList)
 import qualified Data.Text                        as T
@@ -28,7 +28,7 @@ import           Development.IDE.Graph.Classes
 import           GHC.Generics
 import           Ide.Plugin.Class.Utils
 import           Ide.Types
-import           Language.LSP.Protocol.Types      (TextEdit (TextEdit),
+import           Language.LSP.Protocol.Types      (TextEdit,
                                                    VersionedTextDocumentIdentifier)
 
 typeLensCommandId :: CommandId
@@ -50,14 +50,15 @@ data AddMinimalMethodsParams = AddMinimalMethodsParams
     }
     deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
+-- |The InstanceBindTypeSigs Rule collects the instance bindings type
+-- signatures (both name and type). It is used by both the code actions and the
+-- code lenses
 data GetInstanceBindTypeSigs = GetInstanceBindTypeSigs
     deriving (Generic, Show, Eq, Ord, Hashable, NFData)
 
 data InstanceBindTypeSig = InstanceBindTypeSig
-    { bindName     :: Name
-    , bindRendered :: !T.Text
-    , bindDefSpan  :: Maybe SrcSpan
-    -- ^SrcSpan for the bind definition
+    { bindName :: Name
+    , bindType :: Type
     }
 
 newtype InstanceBindTypeSigsResult =
@@ -71,17 +72,32 @@ instance NFData InstanceBindTypeSigsResult where
 
 type instance RuleResult GetInstanceBindTypeSigs = InstanceBindTypeSigsResult
 
+-- |The necessary data to execute our code lens
 data InstanceBindLensCommand = InstanceBindLensCommand
-    { commandUri :: Uri
-    , commandUid :: Int}
+    { -- |The URI needed to run actions in the command
+      commandUri  :: Uri
+      -- |The specific TextEdit we want to apply. This does not include the
+      -- pragma edit which is computed in the rule
+    , commandEdit :: TextEdit }
     deriving (Generic, FromJSON, ToJSON)
 
+-- | The InstanceBindLens rule is specifically for code lenses. It  relies on
+-- the InstanceBindTypeSigs rule, filters out irrelevant matches and signatures
+-- that can't be matched to a source span. It provides all the signatures linked
+-- to a unique ID to aid in resolving. It also provides a list of enabled
+-- extensions.
 data GetInstanceBindLens = GetInstanceBindLens
     deriving (Generic, Show, Eq, Ord, Hashable, NFData)
 
 data InstanceBindLens = InstanceBindLens
-    { lensRange             :: [(Range, Int)]
-    , lensRendered          :: IntMap.IntMap TextEdit
+    { -- |What we need to provide the code lens. The range linked with
+      -- a unique ID that will allow us to resolve the rest of the data later
+      lensRange             :: [(Range, Int)]
+      -- |Provides the necessary data to allow us to display the
+      -- title of the lens and compute a TextEdit for it.
+    , lensDetails           :: IntMap.IntMap (Range, Name, Type)
+    -- |Provides currently enabled extensions, allowing us to conditionally
+    -- insert needed extensions.
     , lensEnabledExtensions :: [Extension]
     }
 
@@ -129,32 +145,25 @@ getInstanceBindLensRule recorder = do
                         , bind <- getBindSpanWithoutSig inst
                         ]
             targetSigs = matchBind bindInfos allBinds
-        rangeIntText <- liftIO $ mapMaybeM getRangeWithSig targetSigs
-        let lensRange = (\(range, int, _) -> (range, int)) <$> rangeIntText
-            lensRendered = IntMap.fromList $ (\(range, int, text) -> (int, TextEdit range text)) <$> rangeIntText
+        rangeIntNameType <- liftIO $ mapMaybeM getRangeWithSig targetSigs
+        let lensRange = (\(range, int, _, _) -> (range, int)) <$> rangeIntNameType
+            lensDetails = IntMap.fromList $ (\(range, int, name, typ) -> (int, (range, name, typ))) <$> rangeIntNameType
             lensEnabledExtensions = getExtensions $ tmrParsed tmr
         pure $ InstanceBindLensResult $ InstanceBindLens{..}
     where
         -- Match Binds with their signatures
         -- We try to give every `InstanceBindTypeSig` a `SrcSpan`,
         -- hence we can display signatures for `InstanceBindTypeSig` with span later.
-        matchBind :: [BindInfo] -> [InstanceBindTypeSig] -> [InstanceBindTypeSig]
+        matchBind :: [BindInfo] -> [InstanceBindTypeSig] -> [Maybe (InstanceBindTypeSig, SrcSpan)]
         matchBind existedBinds allBindWithSigs =
-            [foldl go bindSig existedBinds | bindSig <- allBindWithSigs]
+            [firstJust (go bindSig) existedBinds | bindSig <- allBindWithSigs]
             where
-                -- | The `bindDefSpan` of the bind is `Nothing` before,
-                -- we update it with the span where binding occurs.
-                -- Hence, we can infer the place to display the signature later.
-                update :: InstanceBindTypeSig -> SrcSpan -> InstanceBindTypeSig
-                update bind sp = bind {bindDefSpan = Just sp}
-
-                go :: InstanceBindTypeSig -> BindInfo -> InstanceBindTypeSig
-                go bindSig bind = case (srcSpanToRange . bindNameSpan) bind of
-                    Nothing -> bindSig
-                    Just range ->
-                        if inRange range (getSrcSpan $ bindName bindSig)
-                            then update bindSig (bindSpan bind)
-                            else bindSig
+                go :: InstanceBindTypeSig -> BindInfo -> Maybe (InstanceBindTypeSig,  SrcSpan)
+                go bindSig bind = do
+                    range <- (srcSpanToRange . bindNameSpan) bind
+                    if inRange range (getSrcSpan $ bindName bindSig)
+                    then Just (bindSig, bindSpan bind)
+                    else Nothing
 
         getClsInstD (ClsInstD _ d) = Just d
         getClsInstD _              = Nothing
@@ -184,13 +193,12 @@ getInstanceBindLensRule recorder = do
         getBindSpanWithoutSig _ = []
 
         -- Get bind definition range with its rendered signature text
-        getRangeWithSig :: InstanceBindTypeSig -> IO (Maybe (Range, Int, T.Text))
-        getRangeWithSig bind = runMaybeT $ do
-            span <- hoistMaybe $ bindDefSpan bind
-            range <- hoistMaybe $ srcSpanToRange span
+        getRangeWithSig :: Maybe (InstanceBindTypeSig, SrcSpan) -> IO (Maybe (Range, Int, Name, Type))
+        getRangeWithSig (Just (bind, span)) = runMaybeT $ do
+            range <- MaybeT . pure $ srcSpanToRange span
             uniqueID <- liftIO $ hashUnique <$> newUnique
-            pure (range, uniqueID, bindRendered bind)
-
+            pure (range, uniqueID, bindName bind, bindType bind)
+        getRangeWithSig Nothing = pure Nothing
 
 
 getInstanceBindTypeSigsRule :: Recorder (WithPriority Log) -> Rules ()
@@ -200,16 +208,12 @@ getInstanceBindTypeSigsRule recorder = do
         (hscEnv -> hsc) <- useMT GhcSession nfp
         let binds = collectHsBindsBinders $ tcg_binds gblEnv
         (_, maybe [] catMaybes -> instanceBinds) <- liftIO $
-            initTcWithGbl hsc gblEnv ghostSpan $ traverse (bindToSig hsc gblEnv) binds
+            initTcWithGbl hsc gblEnv ghostSpan $ traverse bindToSig binds
         pure $ InstanceBindTypeSigsResult instanceBinds
     where
-        rdrEnv gblEnv= tcg_rdr_env gblEnv
-        showDoc hsc gblEnv ty = showSDocForUser' hsc (mkPrintUnqualifiedDefault hsc (rdrEnv gblEnv)) (pprSigmaType ty)
-        bindToSig hsc gblEnv id = do
+        bindToSig id = do
             let name = idName id
             whenMaybe (isBindingName name) $ do
                 env <- tcInitTidyEnv
                 let (_, ty) = tidyOpenType env (idType id)
-                pure $ InstanceBindTypeSig name
-                        (prettyBindingNameString (printOutputable name) <> " :: " <> T.pack (showDoc hsc gblEnv ty))
-                        Nothing
+                pure $ InstanceBindTypeSig name ty
