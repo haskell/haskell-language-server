@@ -25,7 +25,7 @@ module Ide.Plugin.Eval.CodeLens (
 
 import           Control.Applicative                          (Alternative ((<|>)))
 import           Control.Arrow                                (second, (>>>))
-import           Control.Exception                            (try, bracket_)
+import           Control.Exception                            (bracket_, try)
 import qualified Control.Exception                            as E
 import           Control.Lens                                 (_1, _3, ix, (%~),
                                                                (<&>), (^.))
@@ -53,7 +53,8 @@ import           Development.IDE.Core.RuleTypes               (LinkableResult (l
                                                                NeedsCompilation (NeedsCompilation),
                                                                TypeCheck (..),
                                                                tmrTypechecked)
-import           Development.IDE.Core.Shake                   (useWithStale_, useNoFile_,
+import           Development.IDE.Core.Shake                   (useNoFile_,
+                                                               useWithStale_,
                                                                use_, uses_)
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
@@ -62,7 +63,8 @@ import           Development.IDE.GHC.Compat.Util              (GhcException,
 import           Development.IDE.GHC.Util                     (evalGhcEnv,
                                                                modifyDynFlags,
                                                                printOutputable)
-import           Development.IDE.Import.DependencyInformation (transitiveDeps, transitiveModuleDeps)
+import           Development.IDE.Import.DependencyInformation (transitiveDeps,
+                                                               transitiveModuleDeps)
 import           Development.IDE.Types.Location               (toNormalizedFilePath',
                                                                uriToFilePath')
 import           GHC                                          (ClsInst,
@@ -82,9 +84,9 @@ import           GHC                                          (ClsInst,
                                                                typeKind)
 
 
-import           Development.IDE.Core.RuleTypes               (GetModuleGraph (GetModuleGraph),
-                                                               GetLinkable (GetLinkable),
+import           Development.IDE.Core.RuleTypes               (GetLinkable (GetLinkable),
                                                                GetModSummary (GetModSummary),
+                                                               GetModuleGraph (GetModuleGraph),
                                                                GhcSessionDeps (GhcSessionDeps),
                                                                ModSummaryResult (msrModSummary))
 import           Development.IDE.Core.Shake                   (VFSModified (VFSUnmodified))
@@ -99,9 +101,7 @@ import qualified GHC.LanguageExtensions.Type                  as LangExt (Extens
 import           Development.IDE.Core.FileStore               (setSomethingModified)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Types.Shake                  (toKey)
-#if MIN_VERSION_ghc(9,0,0)
 import           GHC.Types.SrcLoc                             (UnhelpfulSpanReason (UnhelpfulInteractive))
-#endif
 import           Ide.Plugin.Error                             (PluginError (PluginInternalError),
                                                                handleMaybe,
                                                                handleMaybeM)
@@ -120,7 +120,8 @@ import           Ide.Plugin.Eval.GHC                          (addImport,
                                                                showDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments               (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option                 (parseSetFlags)
-import           Ide.Plugin.Eval.Rules                        (queueForEvaluation, unqueueForEvaluation)
+import           Ide.Plugin.Eval.Rules                        (queueForEvaluation,
+                                                               unqueueForEvaluation)
 import           Ide.Plugin.Eval.Types
 import           Ide.Plugin.Eval.Util                         (gStrictTry,
                                                                isLiterate,
@@ -491,11 +492,7 @@ evals mark_exception (st, fp) df stmts = do
                 void $ runDecls stmt
                 return Nothing
     pf = initParserOpts df
-#if !MIN_VERSION_ghc(9,0,0)
-    unhelpfulReason = "<interactive>"
-#else
     unhelpfulReason = UnhelpfulInteractive
-#endif
     exec stmt l =
         let opts = execOptions{execSourceFile = fp, execLineNumber = l}
          in myExecStmt stmt opts

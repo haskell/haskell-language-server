@@ -34,7 +34,7 @@ And here is the gist of the algorithm:
 
 ## Setup
 
-To get started, let’s fetch the HLS repo and build it. You need at least GHC 8.10 for this:
+To get started, let’s fetch the HLS repo and build it. You need at least GHC 9.0 for this:
 
 ```
 git clone --recursive http://github.com/haskell/haskell-language-server hls
@@ -381,7 +381,7 @@ generateLens pId uri minImports (L src imp)
 ## Wrapping up
 
 There's only one haskell code change left to do at this point: "link" the plugin in the `HlsPlugins` HLS module.
-However integrating the plugin in haskell-language-server itself will need some changes in config files. The best way is looking for the id (f.e. `hls-tactics-plugin`) of an existing plugin:
+However integrating the plugin in haskell-language-server itself will need some changes in config files. The best way is looking for the id (f.e. `hls-class-plugin`) of an existing plugin:
 - `./cabal*.project` and `./stack*.yaml`: add the plugin package in the `packages` field
 - `./haskell-language-server.cabal`: add a conditional block with the plugin package dependency
 - `./.github/workflows/test.yml`: add a block to run the test suite of the plugin

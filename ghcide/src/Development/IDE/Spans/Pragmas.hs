@@ -303,11 +303,7 @@ updateParserState token range prevParserState
 lexUntilNextLineIncl :: P (Located Token)
 lexUntilNextLineIncl = do
   PState{ last_loc } <- getPState
-#if MIN_VERSION_ghc(9,0,0)
   let PsSpan{ psRealSpan = lastRealSrcSpan } = last_loc
-#else
-  let lastRealSrcSpan = last_loc
-#endif
   let prevEndLine = lastRealSrcSpan & realSrcSpanEnd & srcLocLine
   locatedToken@(L srcSpan _token) <- lexer False pure
   if | RealSrcLoc currEndRealSrcLoc _ <- srcSpan & srcSpanEnd

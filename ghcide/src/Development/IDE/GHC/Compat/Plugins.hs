@@ -25,21 +25,14 @@ import           Development.IDE.GHC.Compat.Parser     as Parser
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,0,0)
-import qualified DynamicLoading                        as Loader
-import           Plugins
-#endif
-
-#if MIN_VERSION_ghc(9,0,0)
 import           GHC.Driver.Plugins                    (Plugin (..),
                                                         PluginWithArgs (..),
                                                         StaticPlugin (..),
                                                         defaultPlugin,
                                                         withPlugins)
 import qualified GHC.Runtime.Loader                    as Loader
-#endif
 
-#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,3,0)
+#if !MIN_VERSION_ghc(9,3,0)
 import           Development.IDE.GHC.Compat.Outputable as Out
 #endif
 

@@ -205,7 +205,6 @@ configurations:
 # # - ghcide-core                    # implicitly included in all configurations
 # # - ghcide-hover-and-symbols       # implicitly included in all configurations
 # - ghcide-type-lenses
-# - haddockComments
 # - hlint
 # - importLens
 # - moduleName
@@ -215,6 +214,4 @@ configurations:
 # - rename
 # - retrie
 # - splice
-# - stan
 # # - stylish-haskell
-# - tactics
