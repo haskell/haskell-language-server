@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 8.10.7 || == 9.0.2 || ==9.2.5
+tested-with:        GHC == 9.0.2 || ==9.2.5
 extra-source-files:
   README.md
   ChangeLog.md

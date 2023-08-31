@@ -85,10 +85,8 @@ import           Language.LSP.Protocol.Types      (CodeAction (..),
                                                    WorkspaceEdit (WorkspaceEdit),
                                                    type (|?) (InL, InR))
 
-#if MIN_VERSION_ghc(9,0,0)
 import           Development.IDE.GHC.Compat       (HsExpansion (HsExpanded),
                                                    HsExpr (XExpr))
-#endif
 
 data Log
   = LogShake Shake.Log
@@ -364,10 +362,7 @@ getRecCons :: LHsExpr (GhcPass 'Renamed) -> ([RecordInfo], Bool)
 -- because there is a possibility that there were be more than one result per
 -- branch
 
-#if MIN_VERSION_ghc(9,0,0)
 getRecCons (unLoc -> XExpr (HsExpanded a _)) = (collectRecords a, True)
-#endif
-
 getRecCons e@(unLoc -> RecordCon _ _ flds)
   | isJust (rec_dotdot flds) = (mkRecInfo e, False)
   where

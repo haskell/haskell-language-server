@@ -1,2 +1,2 @@
 # specific version does not matter
-resolver: ghc-8.10.7
+resolver: ghc-9.2.5

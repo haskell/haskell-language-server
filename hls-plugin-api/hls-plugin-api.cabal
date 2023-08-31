@@ -86,11 +86,10 @@ library
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing
     -Wno-unticked-promoted-constructors
+    -Wunused-packages
 
   if flag(pedantic)
     ghc-options: -Werror
-  if impl(ghc >= 9)
-    ghc-options: -Wunused-packages
 
   if flag(use-fingertree)
     cpp-options: -DUSE_FINGERTREE

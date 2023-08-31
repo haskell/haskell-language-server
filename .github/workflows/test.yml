@@ -220,7 +220,7 @@ jobs:
         run: cabal test hls-explicit-record-fields-plugin --test-options="$TEST_OPTS" || cabal test hls-explicit-record-fields-plugin --test-options="$TEST_OPTS"
 
       ## version needs to be limited since the tests depend on cabal-fmt which only builds using specific ghc versions
-      - if: matrix.test && matrix.ghc == '8.10'
+      - if: matrix.test && matrix.ghc == '9.2'
         name: Test hls-cabal-fmt-plugin test suite
         run: cabal test hls-cabal-fmt-plugin --flag=isolateTests --test-options="$TEST_OPTS" || cabal test hls-cabal-fmt-plugin --flag=isolateTests --test-options="$TEST_OPTS"
 
@@ -232,7 +232,7 @@ jobs:
         name: Test hls-retrie-plugin test suite
         run: cabal test hls-retrie-plugin --test-options="$TEST_OPTS" || cabal test hls-retrie-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '8.10' && matrix.ghc != '9.0'
+      - if: matrix.test && matrix.ghc != '9.0'
         name: Test hls-overloaded-record-dot-plugin test suite
         run: cabal test hls-overloaded-record-dot-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-overloaded-record-dot-plugin --test-options="$TEST_OPTS"
 

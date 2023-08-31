@@ -108,16 +108,9 @@ import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,0,1)
-import           HscTypes
-import           TcSplice
-#endif
-
-#if MIN_VERSION_ghc(9,0,1)
 import           GHC.Tc.Gen.Splice
-#endif
 
-#if MIN_VERSION_ghc(9,0,1) && !MIN_VERSION_ghc(9,2,1)
+#if !MIN_VERSION_ghc(9,2,1)
 import           GHC.Driver.Types
 #endif
 
@@ -525,7 +518,6 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
         (guts, details) <- tidyProgram tidy_opts simplified_guts
         pure (details, guts)
 
-#if MIN_VERSION_ghc(9,0,1)
   let !partial_iface = force $ mkPartialIface session
 #if MIN_VERSION_ghc(9,5,0)
                                               (cg_binds guts)
@@ -539,11 +531,6 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
   final_iface' <- mkFullIface session partial_iface Nothing
 #if MIN_VERSION_ghc(9,4,2)
                     Nothing
-#endif
-
-#else
-  let !partial_iface = force (mkPartialIface session details simplified_guts)
-  final_iface' <- mkFullIface session partial_iface
 #endif
   let final_iface = final_iface' {mi_globals = Nothing, mi_usages = filterUsages (mi_usages final_iface')} -- See Note [Clearing mi_globals after generating an iface]
 
@@ -693,10 +680,8 @@ generateObjectCode session summary guts = do
                           session' = hscSetFlags newFlags session
 #if MIN_VERSION_ghc(9,4,2)
                       (outputFilename, _mStub, _foreign_files, _cinfos, _stgcinfos) <- hscGenHardCode session' guts
-#elif MIN_VERSION_ghc(9,0,1)
-                      (outputFilename, _mStub, _foreign_files, _cinfos) <- hscGenHardCode session' guts
 #else
-                      (outputFilename, _mStub, _foreign_files) <- hscGenHardCode session' guts
+                      (outputFilename, _mStub, _foreign_files, _cinfos) <- hscGenHardCode session' guts
 #endif
                                 (ms_location summary)
                                 fp
@@ -839,7 +824,6 @@ generateHieAsts hscEnv tcm =
     -- don't export an interface which allows for additional information to be added to hie files.
     let fake_splice_binds = Util.listToBag (map (mkVarBind unitDataConId) (spliceExpressions $ tmrTopLevelSplices tcm))
         real_binds = tcg_binds $ tmrTypechecked tcm
-#if MIN_VERSION_ghc(9,0,1)
         ts = tmrTypechecked tcm :: TcGblEnv
         top_ev_binds = tcg_ev_binds ts :: Util.Bag EvBind
         insts = tcg_insts ts :: [ClsInst]
@@ -851,18 +835,13 @@ generateHieAsts hscEnv tcm =
       Just <$>
 #endif
           GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm) top_ev_binds insts tcs
-#else
-    Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm)
-#endif
   where
     dflags = hsc_dflags hscEnv
-#if MIN_VERSION_ghc(9,0,0)
     run _ts = -- ts is only used in GHC 9.2
 #if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
         fmap (join . snd) . liftIO . initDs hscEnv _ts
 #else
         id
-#endif
 #endif
 
 spliceExpressions :: Splices -> [LHsExpr GhcTc]
@@ -1258,10 +1237,8 @@ parseHeader
        -> Util.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
 #if MIN_VERSION_ghc(9,5,0)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule GhcPs))
-#elif MIN_VERSION_ghc(9,0,1)
-       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule))
 #else
-       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule GhcPs))
+       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule))
 #endif
 parseHeader dflags filename contents = do
    let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
