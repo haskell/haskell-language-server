@@ -10,9 +10,10 @@ import           Language.LSP.Protocol.Message
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginCommands = commands plId
-    , pluginRules = rules recorder
+    , pluginRules = getInstanceBindTypeSigsRule recorder >> getInstanceBindLensRule recorder
     , pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction (codeAction recorder)
         <> mkPluginHandler SMethod_TextDocumentCodeLens codeLens
+        <> mkResolveHandler SMethod_CodeLensResolve codeLensResolve
     }
 
 commands :: PluginId -> [PluginCommand IdeState]
@@ -20,5 +21,5 @@ commands plId
   = [ PluginCommand codeActionCommandId
         "add placeholders for minimal methods" (addMethodPlaceholders plId)
     , PluginCommand typeLensCommandId
-        "add type signatures for instance methods" codeLensCommandHandler
+        "add type signatures for instance methods" (codeLensCommandHandler plId)
     ]
