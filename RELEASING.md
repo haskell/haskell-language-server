@@ -34,12 +34,11 @@
   - this creates a draft release
   - `git push <remote> <version>`
 - [ ] run `sh scripts/release/download-gh-artifacts.sh <version> <your-gpg-email>`
-  - downloads artifacts to `gh-release-artifacts/<version>/`
+  - downloads artifacts to `gh-release-artifacts/haskell-language-server-<version>/`
   - also downloads FreeBSD bindist from circle CI
   - adds signatures
-- [ ] upload artifacts to downloads.haskell.org manually from `gh-release-artifacts/<version>/`
+- [ ] upload artifacts to downloads.haskell.org from `gh-release-artifacts/haskell-language-server-<version>/`
   - You require sftp access, contact wz1000, bgamari or chreekat
-  - For uploading, rename `gh-release-artifacts/<version>` to `gh-release-artifacts/haskell-language-server-<version>`
   - `cd gh-release-artifacts/haskell-language-server-<version>`
   - `SIGNING_KEY=... ../../release/upload.sh upload`
     - Your SIGNING_KEY can be obtained with `gpg --list-secret-keys --keyid-format=long`
