@@ -126,6 +126,13 @@ versions:
 - HEAD
 
 # A list of plugin configurations to analyze
+# WARNING: Currently bench versions later than e4234a3a5e347db249fccefb8e3fb36f89e8eafb
+# will be unable to send plugin configurations to earlier HLS versions. This causes
+# all plugins in those versions to always be enabled.
+# In addition bench proactively disables all plugins it knows about besides the 
+# ones in the following list. However because it can only disable plugins it
+# knows about, any plugins that are in old versions but were removed from HLS
+# before the current bench will not be disabled.
 configurations:
 # A configuration contains one or more plugins:
 # - ConfigurationName:
