@@ -51,15 +51,15 @@
 
     # not sure if this is the correct way to get lsp* packages in
     lsp = {
-      url = "https://hackage.haskell.org/package/lsp-2.1.0.0/lsp-2.1.0.0.tar.gz";
+      url = "https://hackage.haskell.org/package/lsp-2.2.0.0/lsp-2.2.0.0.tar.gz";
       flake = false;
     };
     lsp-types = {
-      url = "https://hackage.haskell.org/package/lsp-types-2.0.1.0/lsp-types-2.0.1.0.tar.gz";
+      url = "https://hackage.haskell.org/package/lsp-types-2.0.2.0/lsp-types-2.0.2.0.tar.gz";
       flake = false;
     };
     lsp-test = {
-      url = "https://hackage.haskell.org/package/lsp-test-0.15.0.1/lsp-test-0.15.0.1.tar.gz";
+      url = "https://hackage.haskell.org/package/lsp-test-0.16.0.0/lsp-test-0.16.0.0.tar.gz";
       flake = false;
     };
 
@@ -244,8 +244,7 @@
           # Theses programs are tools, used as binary, independently of the
           # version of GHC.
           # The drawback of this approach is that our shell may pull two GHC
-          # version in scope (the default one, and the one defined in
-          # `hpkgs`.)
+          # version in scope (the default one, an
           # The advantage is that we won't have to rebuild theses tools (and
           # dependencies) with a recent GHC which may not be supported by
           # them.
