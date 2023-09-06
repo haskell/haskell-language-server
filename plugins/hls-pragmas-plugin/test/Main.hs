@@ -178,7 +178,7 @@ mkEdit (startLine, startCol) (endLine, endCol) newText =
 
 completionTest :: String -> FilePath -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> [UInt] -> TestTree
 completionTest testComment fileName replacementText expectedLabel expectedFormat expectedInsertText detail [delFromLine, delFromCol, delToLine, delToCol, completeAtLine, completeAtCol] =
-  testCase testComment $ runSessionWithServer pragmasCompletionPlugin testDataDir $ do
+  testCase testComment $ runSessionWithServer def pragmasCompletionPlugin testDataDir $ do
     doc <- openDoc fileName "haskell"
     _ <- waitForDiagnostics
     let te = TextEdit (Range (Position delFromLine delFromCol) (Position delToLine delToCol)) replacementText
@@ -198,10 +198,10 @@ provideNoCompletionsTest testComment fileName mTextEdit pos =
 
 provideNoUndesiredCompletionsTest :: String -> FilePath -> Maybe T.Text -> Maybe TextEdit -> Position -> TestTree
 provideNoUndesiredCompletionsTest testComment fileName mUndesiredLabel mTextEdit pos =
-  testCase testComment $ runSessionWithServer pragmasCompletionPlugin testDataDir $ do
+  testCase testComment $ runSessionWithServer def pragmasCompletionPlugin testDataDir $ do
+    setConfigSection "haskell" disableGhcideCompletions
     doc <- openDoc fileName "haskell"
     _ <- waitForDiagnostics
-    _ <- sendConfigurationChanged disableGhcideCompletions
     mapM_ (applyEdit doc) mTextEdit
     compls <- getCompletions doc pos
     liftIO $ case mUndesiredLabel of
@@ -214,10 +214,10 @@ provideNoUndesiredCompletionsTest testComment fileName mUndesiredLabel mTextEdit
                 Nothing -> pure ()
 
 disableGhcideCompletions :: Value
-disableGhcideCompletions = object [ "haskell" .= object ["plugin" .= object [ "ghcide-completions" .= object ["globalOn" .= False]]] ]
+disableGhcideCompletions = object [ "plugin" .= object [ "ghcide-completions" .= object ["globalOn" .= False]]]
 
 goldenWithPragmas :: PluginTestDescriptor () -> TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithPragmas descriptor title path = goldenWithHaskellDoc descriptor title testDataDir path "expected" "hs"
+goldenWithPragmas descriptor title path = goldenWithHaskellDoc def descriptor title testDataDir path "expected" "hs"
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

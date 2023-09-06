@@ -283,7 +283,8 @@ launchErrorLSP recorder errorMsg = do
 
   outH <- Main.argsHandleOut defaultArguments
 
-  let onConfigurationChange cfg _ = Right cfg
+  let parseConfig cfg _ = Right cfg
+      onConfigChange _ = pure ()
 
   let setup clientMsgVar = do
         -- Forcefully exit
@@ -311,7 +312,8 @@ launchErrorLSP recorder errorMsg = do
     inH
     outH
     (Main.argsDefaultHlsConfig defaultArguments)
-    onConfigurationChange
+    parseConfig
+    onConfigChange
     setup
 
 exitHandler :: IO () -> LSP.Handlers (ErrorLSPM c)

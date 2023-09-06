@@ -30,11 +30,10 @@ import           GHC.Parser.Annotation                   (AddEpAnn (..),
                                                           EpAnnComments (EpaComments),
                                                           EpaLocation (EpaDelta),
                                                           SrcSpanAnn' (SrcSpanAnn),
-                                                          spanAsAnchor,
+                                                          spanAsAnchor)
 #if MIN_VERSION_ghc(9,5,0)
-                                                          TokenLocation(..)
+import           GHC.Parser.Annotation                   (TokenLocation (..))
 #endif
-                                                          )
 import           Language.Haskell.GHC.ExactPrint         (showAst)
 #else
 import qualified Data.Map.Lazy                           as Map
@@ -311,18 +310,11 @@ mapX = fmap
 noUsed = noExtField
 #endif
 
-#if MIN_VERSION_ghc(9,0,1)
 pattern UserTyVar' :: LIdP pass -> HsTyVarBndr flag pass
 pattern UserTyVar' s <- UserTyVar _ _ s
-#else
-pattern UserTyVar' :: LIdP pass -> HsTyVarBndr pass
-pattern UserTyVar' s <- UserTyVar _ s
-#endif
 
 #if MIN_VERSION_ghc(9,2,1)
 implicitTyVars = (wrapXRec @GP mkHsOuterImplicit)
-#elif MIN_VERSION_ghc(9,0,1)
-implicitTyVars = []
 #else
-implicitTyVars = HsQTvs noExtField []
+implicitTyVars = []
 #endif

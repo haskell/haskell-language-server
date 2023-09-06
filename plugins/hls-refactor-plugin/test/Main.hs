@@ -273,7 +273,6 @@ completionCommandTest name src pos wanted expected = testSession name $ do
       executeCommand c
       if src /= expected
           then do
-            void $ skipManyTill anyMessage loggingNotification
             modifiedCode <- skipManyTill anyMessage (getDocumentEdit docId)
             liftIO $ modifiedCode @?= T.unlines expected
           else do
@@ -1732,7 +1731,7 @@ suggestImportTests = testGroup "suggest import actions"
 suggestAddRecordFieldImportTests :: TestTree
 suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields when using OverloadedRecordDot"
   [ testGroup "The field is suggested when an instance resolution failure occurs"
-    [ ignoreFor (BrokenForGHC [GHC810, GHC90, GHC94, GHC96]) "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
+    [ ignoreFor (BrokenForGHC [GHC90, GHC94, GHC96]) "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
     ]
   ]
   where

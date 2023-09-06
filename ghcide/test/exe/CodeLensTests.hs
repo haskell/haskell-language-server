@@ -45,11 +45,11 @@ addSigLensesTests =
         T.unlines $ [pragmas | enableGHCWarnings] <> [moduleH exported, def] <> others
       after' enableGHCWarnings exported (def, sig) others =
         T.unlines $ [pragmas | enableGHCWarnings] <> [moduleH exported] <> maybe [] pure sig <> [def] <> others
-      createConfig mode = A.object ["haskell" A..= A.object ["plugin" A..= A.object ["ghcide-type-lenses" A..= A.object ["config" A..= A.object ["mode" A..= A.String mode]]]]]
+      createConfig mode = A.object ["plugin" A..= A.object ["ghcide-type-lenses" A..= A.object ["config" A..= A.object ["mode" A..= A.String mode]]]]
       sigSession testName enableGHCWarnings waitForDiags mode exported def others = testSession testName $ do
         let originalCode = before enableGHCWarnings exported def others
         let expectedCode = after' enableGHCWarnings exported def others
-        sendNotification SMethod_WorkspaceDidChangeConfiguration $ DidChangeConfigurationParams $ createConfig mode
+        setConfigSection "haskell" (createConfig mode)
         doc <- createDoc "Sigs.hs" "haskell" originalCode
         -- Because the diagnostics mode is really relying only on diagnostics now
         -- to generate the code lens we need to make sure we wait till the file

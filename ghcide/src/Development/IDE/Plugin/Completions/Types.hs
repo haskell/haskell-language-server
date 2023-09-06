@@ -19,16 +19,15 @@ import           Data.Text                    (Text)
 import           Data.Typeable                (Typeable)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph        (RuleResult)
-import           Development.IDE.Spans.Common
+import           Development.IDE.Spans.Common ()
 import           GHC.Generics                 (Generic)
 import           Ide.Plugin.Properties
 import           Language.LSP.Protocol.Types  (CompletionItemKind (..), Uri)
 import qualified Language.LSP.Protocol.Types  as J
-#if MIN_VERSION_ghc(9,0,0)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 import qualified GHC.Types.Name.Occurrence    as Occ
-#else
-import qualified OccName                      as Occ
-#endif
 
 -- | Produce completions info for a file
 type instance RuleResult LocalCompletions = CachedCompletions
@@ -53,8 +52,8 @@ extendImportCommandId :: Text
 extendImportCommandId = "extendImport"
 
 properties :: Properties
-  '[ 'PropertyKey "autoExtendOn" 'TBoolean,
-     'PropertyKey "snippetsOn" 'TBoolean]
+  '[ 'PropertyKey "autoExtendOn" TBoolean,
+     'PropertyKey "snippetsOn" TBoolean]
 properties = emptyProperties
   & defineBooleanProperty #snippetsOn
     "Inserts snippets when using code completions"
@@ -200,7 +199,7 @@ instance ToJSON NameDetails where
 instance Show NameDetails where
   show = show . toJSON
 
--- | The data that is acutally sent for resolve support
+-- | The data that is actually sent for resolve support
 -- We need the URI to be able to reconstruct the GHC environment
 -- in the file the completion was triggered in.
 data CompletionResolveData = CompletionResolveData

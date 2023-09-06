@@ -73,7 +73,7 @@ data Log
 instance Pretty Log where
   pretty = \case
     LogShake logMsg -> pretty logMsg
-    LogWAEResponseError rspErr -> "RequestWorkspaceApplyEdit Failed with " <+> viaShow rspErr
+    LogWAEResponseError rspErr -> "RequestWorkspaceApplyEdit Failed with " <+> pretty rspErr
     LogResolve msg -> pretty msg
 
 -- | The "main" function of a plugin
@@ -398,9 +398,6 @@ extractMinimalImports hsc TcModuleResult {..} = runMaybeT $ do
       notExported []  _ = True
       notExported exports (L _ ImportDecl{ideclName = L _ name}) =
           not $ any (\e -> ("module " ++ moduleNameString name) == e) exports
-#if !MIN_VERSION_ghc (9,0,0)
-      notExported _ _ = True
-#endif
 
 isExplicitImport :: ImportDecl GhcRn -> Bool
 #if MIN_VERSION_ghc (9,5,0)

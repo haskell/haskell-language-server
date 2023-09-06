@@ -121,7 +121,7 @@ suggestionsTests =
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo x = x\n"
 
-    , testCase "falls back to pre 3.8 code actions" $ runSessionWithServerAndCaps hlintPlugin noLiteralCaps "test/testdata" $ do
+    , testCase "falls back to pre 3.8 code actions" $ runSessionWithServerAndCaps def hlintPlugin noLiteralCaps "test/testdata" $ do
         doc <- openDoc "Base.hs" "haskell"
 
         _ <- waitForDiagnosticsFromSource doc "hlint"
@@ -303,6 +303,7 @@ configTests :: TestTree
 configTests = testGroup "hlint plugin config" [
 
     testCase "changing hlint plugin configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
+        setIgnoringConfigurationRequests False
         enableHlint
 
         doc <- openDoc "Base.hs" "haskell"
@@ -315,19 +316,21 @@ configTests = testGroup "hlint plugin config" [
         liftIO $ noHlintDiagnostics diags'
 
     , testCase "adding hlint flags to plugin configuration removes hlint diagnostics" $ runHlintSession "" $ do
+        setIgnoringConfigurationRequests False
         enableHlint
 
         doc <- openDoc "Base.hs" "haskell"
         testHlintDiagnostics doc
 
         let config' = hlintConfigWithFlags ["--ignore=Redundant id", "--hint=test-hlint-config.yaml"]
-        sendConfigurationChanged (toJSON config')
+        setHlsConfig config'
 
         diags' <- waitForDiagnosticsFrom doc
 
         liftIO $ noHlintDiagnostics diags'
 
     , testCase "adding hlint flags to plugin configuration adds hlint diagnostics" $ runHlintSession "" $ do
+        setIgnoringConfigurationRequests False
         enableHlint
 
         doc <- openDoc "Generalise.hs" "haskell"
@@ -335,7 +338,7 @@ configTests = testGroup "hlint plugin config" [
         expectNoMoreDiagnostics 3 doc "hlint"
 
         let config' = hlintConfigWithFlags ["--with-group=generalise"]
-        sendConfigurationChanged (toJSON config')
+        setHlsConfig config'
 
         diags' <- waitForDiagnosticsFromSource doc "hlint"
         d <- liftIO $ inspectDiagnostic diags' ["Use <>"]
@@ -350,8 +353,7 @@ testDir :: FilePath
 testDir = "test/testdata"
 
 runHlintSession :: FilePath -> Session a -> IO a
-runHlintSession subdir  =
-    failIfSessionTimeout . runSessionWithServerAndCaps hlintPlugin codeActionNoResolveCaps (testDir </> subdir)
+runHlintSession subdir = failIfSessionTimeout . runSessionWithServerAndCaps def hlintPlugin codeActionNoResolveCaps (testDir </> subdir)
 
 noHlintDiagnostics :: [Diagnostic] -> Assertion
 noHlintDiagnostics diags =
@@ -373,10 +375,10 @@ hlintConfigWithFlags flags =
     unObject _            = undefined
 
 enableHlint :: Session ()
-enableHlint = sendConfigurationChanged $ toJSON $ def { Plugin.plugins = Map.fromList [ ("hlint", def { Plugin.plcGlobalOn = True }) ] }
+enableHlint = setHlsConfig $ def { Plugin.plugins = Map.fromList [ ("hlint", def { Plugin.plcGlobalOn = True }) ] }
 
 disableHlint :: Session ()
-disableHlint = sendConfigurationChanged $ toJSON $ def { Plugin.plugins = Map.fromList [ ("hlint", def { Plugin.plcGlobalOn = False }) ] }
+disableHlint = setHlsConfig $ def { Plugin.plugins = Map.fromList [ ("hlint", def { Plugin.plcGlobalOn = False }) ] }
 
 -- We have two main code paths in the plugin depending on how hlint interacts with ghc:
 -- * One when hlint uses ghc-lib (all ghc versions but the last version supported by hlint)
@@ -439,7 +441,7 @@ goldenTest testCaseName goldenFilename point hintText =
 
 setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintTest testName path =
-  goldenWithHaskellAndCaps codeActionNoResolveCaps hlintPlugin testName testDir path "expected" "hs"
+  goldenWithHaskellAndCaps def codeActionNoResolveCaps hlintPlugin testName testDir path "expected" "hs"
 
 ignoreHintGoldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 ignoreHintGoldenResolveTest testCaseName goldenFilename point hintName =
@@ -460,4 +462,4 @@ goldenResolveTest testCaseName goldenFilename point hintText =
 
 setupGoldenHlintResolveTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 setupGoldenHlintResolveTest testName path =
-  goldenWithHaskellAndCaps codeActionResolveCaps hlintPlugin testName testDir path "expected" "hs"
+  goldenWithHaskellAndCaps def codeActionResolveCaps hlintPlugin testName testDir path "expected" "hs"

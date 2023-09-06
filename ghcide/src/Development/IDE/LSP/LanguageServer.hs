@@ -43,7 +43,6 @@ import           Development.IDE.Core.Tracing
 import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Shake           (WithHieDb)
 import           Ide.Logger
-import qualified Ide.Logger                            as Logger
 import           Language.LSP.Server                   (LanguageContextEnv,
                                                         LspServerLog,
                                                         type (<~>))
@@ -77,8 +76,8 @@ instance Pretty Log where
       "Reactor thread stopped"
     LogCancelledRequest requestId ->
       "Cancelled request" <+> viaShow requestId
-    LogSession log -> pretty log
-    LogLspServer log -> pretty log
+    LogSession msg -> pretty msg
+    LogLspServer msg -> pretty msg
 
 -- used to smuggle RankNType WithHieDb through dbMVar
 newtype WithHieDbShield = WithHieDbShield WithHieDb
@@ -91,12 +90,13 @@ runLanguageServer
     -> Handle -- output
     -> config
     -> (config -> Value -> Either T.Text config)
+    -> (config -> m config ())
     -> (MVar ()
         -> IO (LSP.LanguageContextEnv config -> TRequestMessage Method_Initialize -> IO (Either ResponseError (LSP.LanguageContextEnv config, a)),
                LSP.Handlers (m config),
                (LanguageContextEnv config, a) -> m config <~> IO))
     -> IO ()
-runLanguageServer recorder options inH outH defaultConfig onConfigurationChange setup = do
+runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigChange setup = do
     -- This MVar becomes full when the server thread exits or we receive exit message from client.
     -- LSP server will be canceled when it's full.
     clientMsgVar <- newEmptyMVar
@@ -104,8 +104,11 @@ runLanguageServer recorder options inH outH defaultConfig onConfigurationChange 
     (doInitialize, staticHandlers, interpretHandler) <- setup clientMsgVar
 
     let serverDefinition = LSP.ServerDefinition
-            { LSP.onConfigurationChange = onConfigurationChange
+            { LSP.parseConfig = parseConfig
+            , LSP.onConfigChange = onConfigChange
             , LSP.defaultConfig = defaultConfig
+            -- TODO: magic string
+            , LSP.configSection = "haskell"
             , LSP.doInitialize = doInitialize
             , LSP.staticHandlers = (const staticHandlers)
             , LSP.interpretHandler = interpretHandler
@@ -113,10 +116,7 @@ runLanguageServer recorder options inH outH defaultConfig onConfigurationChange 
             }
 
     let lspCologAction :: MonadIO m2 => Colog.LogAction m2 (Colog.WithSeverity LspServerLog)
-        lspCologAction = toCologActionWithPrio $ cfilter
-            -- filter out bad logs in lsp, see: https://github.com/haskell/lsp/issues/447
-            (\msg -> priority msg >= Info)
-            (cmapWithPrio LogLspServer recorder)
+        lspCologAction = toCologActionWithPrio (cmapWithPrio LogLspServer recorder)
 
     void $ untilMVar clientMsgVar $
           void $ LSP.runServerWithHandles
@@ -211,16 +211,16 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
 
     let initConfig = parseConfiguration params
 
-    log Info $ LogRegisteringIdeConfig initConfig
+    logWith recorder Info $ LogRegisteringIdeConfig initConfig
     registerIdeConfiguration (shakeExtras ide) initConfig
 
     let handleServerException (Left e) = do
-            log Error $ LogReactorThreadException e
+            logWith recorder Error $ LogReactorThreadException e
             exitClientMsg
         handleServerException (Right _) = pure ()
 
         exceptionInHandler e = do
-            log Error $ LogReactorMessageActionException e
+            logWith recorder Error $ LogReactorMessageActionException e
 
         checkCancelled _id act k =
             flip finally (clearReqId _id) $
@@ -232,15 +232,15 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                     cancelOrRes <- race (waitForCancel _id) act
                     case cancelOrRes of
                         Left () -> do
-                            log Debug $ LogCancelledRequest _id
+                            logWith recorder Debug $ LogCancelledRequest _id
                             k $ ResponseError (InL LSPErrorCodes_RequestCancelled) "" Nothing
                         Right res -> pure res
                 ) $ \(e :: SomeException) -> do
                     exceptionInHandler e
                     k $ ResponseError (InR ErrorCodes_InternalError) (T.pack $ show e) Nothing
     _ <- flip forkFinally handleServerException $ do
-        untilMVar lifetime $ runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb hieChan -> do
-            putMVar dbMVar (WithHieDbShield withHieDb,hieChan)
+        untilMVar lifetime $ runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb' hieChan' -> do
+            putMVar dbMVar (WithHieDbShield withHieDb',hieChan')
             forever $ do
                 msg <- readChan clientMsgChan
                 -- We dispatch notifications synchronously and requests asynchronously
@@ -248,12 +248,8 @@ handleInit recorder getHieDbLoc getIdeState lifetime exitClientMsg clearReqId wa
                 case msg of
                     ReactorNotification act -> handle exceptionInHandler act
                     ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
-        log Info LogReactorThreadStopped
+        logWith recorder Info LogReactorThreadStopped
     pure $ Right (env,ide)
-
-    where
-      log :: Logger.Priority -> Log -> IO ()
-      log = logWith recorder
 
 
 -- | Runs the action until it ends or until the given MVar is put.

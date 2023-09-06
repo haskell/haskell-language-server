@@ -19,12 +19,14 @@ import           Data.Foldable
 import           Data.IORef
 import           Data.List                       (isPrefixOf)
 import           Data.Maybe
-import qualified Data.Text as T
-import           GHC.Fingerprint
-
+import qualified Data.Text                       as T
 import           Development.IDE.GHC.Compat
+import qualified Development.IDE.GHC.Compat.Util as Util
+import           GHC.Fingerprint
+import           Prelude                         hiding (mod)
 
-#if MIN_VERSION_ghc(9,0,0)
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 import           GHC.Core
 import           GHC.CoreToIface
 import           GHC.Iface.Binary
@@ -34,28 +36,14 @@ import           GHC.IfaceToCore
 import           GHC.Types.Id.Make
 import           GHC.Utils.Binary
 
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Types.TypeEnv
-#else
+#if !MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Types
 #endif
 
-#else
-import           Binary
-import           BinFingerprint                  (fingerprintBinMem)
-import           BinIface
-import           CoreSyn
-import           HscTypes
-import           IdInfo
-import           IfaceEnv
-import           MkId
-import           TcIface
-import           ToIface
-import           Unique
-import           Var
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Types.TypeEnv
 #endif
 
-import qualified Development.IDE.GHC.Compat.Util as Util
 
 -- | Initial ram buffer to allocate for writing interface files
 initBinMemSize :: Int
@@ -118,7 +106,7 @@ writeBinCoreFile core_path fat_iface = do
 #if MIN_VERSION_ghc(9,2,0)
           QuietBinIFace
 #else
-          (const $ pure ())
+          const $ pure ()
 #endif
 
     putWithUserData quietTrace bh fat_iface
@@ -141,7 +129,7 @@ codeGutsToCoreFile
 codeGutsToCoreFile hash CgGuts{..} = CoreFile (map (toIfaceTopBind1 cg_module) cg_binds) hash
 #else
 codeGutsToCoreFile hash CgGuts{..} = CoreFile (map (toIfaceTopBind1 cg_module) $ filter isNotImplictBind cg_binds) hash
-#endif
+
 -- | Implicit binds can be generated from the interface and are not tidied,
 -- so we must filter them out
 isNotImplictBind :: CoreBind -> Bool
@@ -150,6 +138,7 @@ isNotImplictBind bind = any (not . isImplicitId) $ bindBindings bind
 bindBindings :: CoreBind -> [Var]
 bindBindings (NonRec b _) = [b]
 bindBindings (Rec bnds)   = map fst bnds
+#endif
 
 getImplicitBinds :: TyCon -> [CoreBind]
 getImplicitBinds tc = cls_binds ++ getTyConImplicitBinds tc
@@ -167,14 +156,14 @@ getClassImplicitBinds cls
     | (op, val_index) <- classAllSelIds cls `zip` [0..] ]
 
 get_defn :: Id -> CoreBind
-get_defn id = NonRec id (unfoldingTemplate (realIdUnfolding id))
+get_defn identifier = NonRec identifier (unfoldingTemplate (realIdUnfolding identifier))
 
 toIfaceTopBndr1 :: Module -> Id -> IfaceId
-toIfaceTopBndr1 mod id
-  = IfaceId (mangleDeclName mod $ getName id)
-            (toIfaceType (idType id))
-            (toIfaceIdDetails (idDetails id))
-            (toIfaceIdInfo (idInfo id))
+toIfaceTopBndr1 mod identifier
+  = IfaceId (mangleDeclName mod $ getName identifier)
+            (toIfaceType (idType identifier))
+            (toIfaceIdDetails (idDetails identifier))
+            (toIfaceIdInfo (idInfo identifier))
 
 toIfaceTopBind1 :: Module -> Bind Id -> TopIfaceBinding IfaceId
 toIfaceTopBind1 mod (NonRec b r) = TopIfaceNonRec (toIfaceTopBndr1 mod b) (toIfaceExpr r)
@@ -224,8 +213,8 @@ tcIfaceId = fmap getIfaceId . tcIfaceDecl False <=< unmangle_decl_name
         pure $ ifid{ ifName = name' }
       | otherwise = pure ifid
     -- invariant: 'IfaceId' is always a 'IfaceId' constructor
-    getIfaceId (AnId id) = id
-    getIfaceId _         = error "tcIfaceId: got non Id"
+    getIfaceId (AnId identifier) = identifier
+    getIfaceId _                 = error "tcIfaceId: got non Id"
 
 tc_iface_bindings :: TopIfaceBinding Id -> IfL CoreBind
 tc_iface_bindings (TopIfaceNonRec v e) = do

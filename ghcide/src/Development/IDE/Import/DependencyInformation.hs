@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP #-}
 
 module Development.IDE.Import.DependencyInformation
   ( DependencyInformation(..)
@@ -33,7 +34,7 @@ import           Control.DeepSeq
 import           Data.Bifunctor
 import           Data.Coerce
 import           Data.Either
-import           Data.Graph
+import           Data.Graph                         hiding (edges, path)
 import           Data.HashMap.Strict                (HashMap)
 import qualified Data.HashMap.Strict                as HMS
 import           Data.IntMap                        (IntMap)
@@ -48,13 +49,19 @@ import           Data.Maybe
 import           Data.Tuple.Extra                   hiding (first, second)
 import           Development.IDE.GHC.Orphans        ()
 import           GHC.Generics                       (Generic)
+import           Prelude                            hiding (mod)
 
 import           Development.IDE.Import.FindImports (ArtifactsLocation (..))
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 
+import           Development.IDE.GHC.Compat
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if !MIN_VERSION_ghc(9,3,0)
 import           GHC
-import Development.IDE.GHC.Compat
+#endif
 
 -- | The imports for a given module.
 newtype ModuleImports = ModuleImports
@@ -92,14 +99,14 @@ getPathId path m@PathIdMap{..} =
     case HMS.lookup (artifactFilePath path) pathToIdMap of
         Nothing ->
             let !newId = FilePathId nextFreshId
-            in (newId, insertPathId path newId m)
-        Just id -> (id, m)
+            in (newId, insertPathId newId )
+        Just fileId -> (fileId, m)
   where
-    insertPathId :: ArtifactsLocation -> FilePathId -> PathIdMap -> PathIdMap
-    insertPathId path id PathIdMap{..} =
+    insertPathId :: FilePathId ->  PathIdMap
+    insertPathId fileId =
         PathIdMap
-            (IntMap.insert (getFilePathId id) path idToPathMap)
-            (HMS.insert (artifactFilePath path) id pathToIdMap)
+            (IntMap.insert (getFilePathId fileId) path idToPathMap)
+            (HMS.insert (artifactFilePath path) fileId pathToIdMap)
             (succ nextFreshId)
 
 insertImport :: FilePathId -> Either ModuleParseError ModuleImports -> RawDependencyInformation -> RawDependencyInformation
@@ -115,7 +122,7 @@ idToPath :: PathIdMap -> FilePathId -> NormalizedFilePath
 idToPath pathIdMap filePathId = artifactFilePath $ idToModLocation pathIdMap filePathId
 
 idToModLocation :: PathIdMap -> FilePathId -> ArtifactsLocation
-idToModLocation PathIdMap{idToPathMap} (FilePathId id) = idToPathMap IntMap.! id
+idToModLocation PathIdMap{idToPathMap} (FilePathId i) = idToPathMap IntMap.! i
 
 type BootIdMap = FilePathIdMap FilePathId
 
@@ -137,7 +144,7 @@ data DependencyInformation =
   DependencyInformation
     { depErrorNodes        :: !(FilePathIdMap (NonEmpty NodeError))
     -- ^ Nodes that cannot be processed correctly.
-    , depModules       :: !(FilePathIdMap ShowableModule)
+    , depModules           :: !(FilePathIdMap ShowableModule)
     , depModuleDeps        :: !(FilePathIdMap FilePathIdSet)
     -- ^ For a non-error node, this contains the set of module immediate dependencies
     -- in the same package.
@@ -273,9 +280,9 @@ buildResultGraph g = propagatedErrors
         errorsForCycle files =
           IntMap.fromListWith (<>) $ coerce $ concatMap (cycleErrorsForFile files) files
         cycleErrorsForFile :: [FilePathId] -> FilePathId -> [(FilePathId,NodeResult)]
-        cycleErrorsForFile cycle f =
-          let entryPoints = mapMaybe (findImport f) cycle
-          in map (\imp -> (f, ErrorNode (PartOfCycle imp cycle :| []))) entryPoints
+        cycleErrorsForFile cycles' f =
+          let entryPoints = mapMaybe (findImport f) cycles'
+          in map (\imp -> (f, ErrorNode (PartOfCycle imp cycles' :| []))) entryPoints
         otherErrors = IntMap.map otherErrorsForFile g
         otherErrorsForFile :: Either ModuleParseError ModuleImports -> NodeResult
         otherErrorsForFile (Left err) = ErrorNode (ParseError err :| [])

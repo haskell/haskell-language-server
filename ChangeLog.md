@@ -1,5 +1,27 @@
 # Changelog for haskell-language-server
 
+## 2.2.0.0
+
+* Binaries for GHC 9.4.7
+* Forward compatibility with latest VSCode client changes
+
+### Pull Requests
+
+-  hls-cabal-fmt-plugin: Use the file contents of the LSP request
+  ([#3776](https://github.com/haskell/haskell-language-server/pull/3776)) by @fendor
+- Adapt to lsp changes for workspace/configuration
+  ([#3773](https://github.com/haskell/haskell-language-server/pull/3773)) by @michaelpj
+- Rework "Configuration" and "Manually testing HLS" documentations
+  ([#3772](https://github.com/haskell/haskell-language-server/pull/3772)) by @sir4ur0n
+- Fix `main-is` completion suggestions not being relative to `hs-source-dirs`
+  ([#3766](https://github.com/haskell/haskell-language-server/pull/3766)) by @VeryMilkyJoe
+- Remove suggestion of stanzas inside of stanza context
+  ([#3761](https://github.com/haskell/haskell-language-server/pull/3761)) by @VeryMilkyJoe
+- Pedantic ghcide
+  ([#3751](https://github.com/haskell/haskell-language-server/pull/3751)) by @joyfulmantis
+- Fix #3574 and support resolve in explicit records
+  ([#3750](https://github.com/haskell/haskell-language-server/pull/3750)) by @joyfulmantis
+
 ## 2.1.0.0
 
 * Binaries for GHC 9.4.6

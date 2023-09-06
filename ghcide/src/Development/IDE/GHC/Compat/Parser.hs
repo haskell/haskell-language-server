@@ -6,7 +6,7 @@
 module Development.IDE.GHC.Compat.Parser (
     initParserOpts,
     initParserState,
-#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+#if !MIN_VERSION_ghc(9,2,0)
     -- in GHC == 9.2 the type doesn't exist
     -- In GHC == 9.0 it is a data-type
     -- and GHC < 9.0 it is type-def
@@ -16,9 +16,7 @@ module Development.IDE.GHC.Compat.Parser (
 #else
     ApiAnns,
 #endif
-#if MIN_VERSION_ghc(9,0,0)
     PsSpan(..),
-#endif
 #if MIN_VERSION_ghc(9,2,0)
     pattern HsParsedModule,
     type GHC.HsParsedModule,
@@ -45,49 +43,43 @@ module Development.IDE.GHC.Compat.Parser (
     pattern EpaBlockComment
     ) where
 
-#if MIN_VERSION_ghc(9,0,0)
-#if !MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Driver.Types                as GHC
-#endif
+import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat.Util
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 import qualified GHC.Parser.Annotation           as Anno
 import qualified GHC.Parser.Lexer                as Lexer
 import           GHC.Types.SrcLoc                (PsSpan (..))
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC                             (Anchor (anchor),
-                                                  EpAnnComments (priorComments),
-                                                  EpaComment (EpaComment),
-                                                  EpaCommentTok (..),
-                                                  epAnnComments,
-                                                  pm_extra_src_files,
-                                                  pm_mod_summary,
-                                                  pm_parsed_source)
-import qualified GHC
-#if MIN_VERSION_ghc(9,3,0)
-import qualified GHC.Driver.Config.Parser        as Config
-#else
-import qualified GHC.Driver.Config               as Config
+
+#if !MIN_VERSION_ghc(9,2,0)
+import qualified GHC.Driver.Types                as GHC
 #endif
-import           GHC.Hs                          (LEpaComment, hpm_module,
-                                                  hpm_src_files)
-import           GHC.Parser.Lexer                hiding (initParserState)
-#endif
-#else
-import qualified ApiAnnotation                   as Anno
-import qualified HscTypes                        as GHC
-import           Lexer
-import qualified SrcLoc
-#endif
-import           Development.IDE.GHC.Compat.Core
-import           Development.IDE.GHC.Compat.Util
 
 #if !MIN_VERSION_ghc(9,2,0)
 import qualified Data.Map                        as Map
 import qualified GHC
 #endif
 
-#if !MIN_VERSION_ghc(9,0,0)
-type ParserOpts = DynFlags
-#elif !MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC                             (EpaCommentTok (..),
+                                                  pm_extra_src_files,
+                                                  pm_mod_summary,
+                                                  pm_parsed_source)
+import qualified GHC
+import           GHC.Hs                          (hpm_module, hpm_src_files)
+#endif
+
+#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+import qualified GHC.Driver.Config               as Config
+#endif
+
+#if MIN_VERSION_ghc(9,3,0)
+import qualified GHC.Driver.Config.Parser        as Config
+#endif
+
+
+#if !MIN_VERSION_ghc(9,2,0)
 type ParserOpts = Lexer.ParserFlags
 #endif
 
@@ -95,20 +87,16 @@ initParserOpts :: DynFlags -> ParserOpts
 initParserOpts =
 #if MIN_VERSION_ghc(9,2,0)
   Config.initParserOpts
-#elif MIN_VERSION_ghc(9,0,0)
-  Lexer.mkParserFlags
 #else
-  id
+  Lexer.mkParserFlags
 #endif
 
 initParserState :: ParserOpts -> StringBuffer -> RealSrcLoc -> PState
 initParserState =
 #if MIN_VERSION_ghc(9,2,0)
   Lexer.initParserState
-#elif MIN_VERSION_ghc(9,0,0)
-  Lexer.mkPStatePure
 #else
-  Lexer.mkPState
+  Lexer.mkPStatePure
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -131,7 +119,7 @@ pattern HsParsedModule
     , hpm_annotations
     } <- ( (,()) -> (GHC.HsParsedModule{..}, hpm_annotations))
     where
-        HsParsedModule hpm_module hpm_src_files hpm_annotations =
+        HsParsedModule hpm_module hpm_src_files _hpm_annotations =
             GHC.HsParsedModule hpm_module hpm_src_files
 #endif
 
@@ -159,7 +147,6 @@ mkApiAnns :: PState -> ApiAnns
 mkApiAnns = const ()
 #else
 mkApiAnns pst =
-#if MIN_VERSION_ghc(9,0,1)
     -- Copied from GHC.Driver.Main
     Anno.ApiAnns {
             apiAnnItems = Map.fromListWith (++) $ annotations pst,
@@ -167,11 +154,6 @@ mkApiAnns pst =
             apiAnnComments = Map.fromList (annotations_comments pst),
             apiAnnRogueComments = comment_q pst
         }
-#else
-    (Map.fromListWith (++) $ annotations pst,
-     Map.fromList ((SrcLoc.noSrcSpan,comment_q pst)
-                  :annotations_comments pst))
-#endif
 #endif
 
 #if !MIN_VERSION_ghc(9,2,0)

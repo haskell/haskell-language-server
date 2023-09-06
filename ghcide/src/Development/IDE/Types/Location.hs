@@ -31,18 +31,15 @@ import           Control.Monad
 import           Data.Hashable                (Hashable (hash))
 import           Data.Maybe                   (fromMaybe)
 import           Data.String
-
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC.Data.FastString
-import           GHC.Types.SrcLoc             as GHC
-#else
-import           FastString
-import           SrcLoc                       as GHC
-#endif
 import           Language.LSP.Protocol.Types  (Location (..), Position (..),
                                                Range (..))
 import qualified Language.LSP.Protocol.Types  as LSP
 import           Text.ParserCombinators.ReadP as ReadP
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+import           GHC.Data.FastString
+import           GHC.Types.SrcLoc             as GHC
 
 toNormalizedFilePath' :: FilePath -> LSP.NormalizedFilePath
 -- We want to keep empty paths instead of normalising them to "."

@@ -50,19 +50,13 @@ Here is a list of the additional settings currently supported by `haskell-langua
 Plugins have a generic config to control their behaviour. The schema of such config is:
 
 - `haskell.plugin.${pluginName}.globalOn`: usually with default true. Whether the plugin is enabled at runtime or it is not. That is the option you might use if you want to disable completely a plugin.
-  - Actual plugin names are: `ghcide-code-actions-fill-holes`, `ghcide-completions`, `ghcide-hover-and-symbols`, `ghcide-type-lenses`, `ghcide-code-actions-type-signatures`, `ghcide-code-actions-bindings`, `ghcide-code-actions-imports-exports`, `eval`, `moduleName`, `pragmas`, `importLens`, `class`, `tactics` (aka wingman), `hlint`, `haddockComments`, `retrie`, `rename`, `splice`, `stan`.
+  - Actual plugin names are: `ghcide-code-actions-fill-holes`, `ghcide-completions`, `ghcide-hover-and-symbols`, `ghcide-type-lenses`, `ghcide-code-actions-type-signatures`, `ghcide-code-actions-bindings`, `ghcide-code-actions-imports-exports`, `eval`, `moduleName`, `pragmas`, `importLens`, `class`, `hlint`, `retrie`, `rename`, `splice`.
   - So to disable the import lens with an explicit list of module definitions you could set `haskell.plugin.importLens.globalOn: false`
 - `haskell.plugin.${pluginName}.${lspCapability}On`: usually with default true. Whether a concrete plugin capability is enabled.
   - Capabilities are the different ways a lsp server can interact with the editor. The current available capabilities of the server are: `callHierarchy`, `codeActions`, `codeLens`, `diagnostics`, `hover`, `symbols`, `completion`, `rename`.
   - Note that usually plugins don't provide all capabilities but some of them or even only one.
   - So to disable code changes suggestions from the `hlint` plugin (but no diagnostics) you could set `haskell.plugin.hlint.codeActionsOn: false`
 - Plugin specific configuration:
-  - `tactic` (aka wingman):
-    - `haskell.plugin.tactics.config.auto_gas`, default 4: The depth of the search tree when performing "Attempt to fill hole". Bigger values will be able to derive more solutions, but will take exponentially more time.
-    - `haskell.plugin.tactics.config.timeout_duration`, default 2: The timeout for Wingman actions, in seconds.
-    - `haskell.plugin.tactics.config.hole_severity`, default empty: The severity to use when showing hole diagnostics. These are noisy, but some editors don't allow jumping to all severities. One of `error`, `warning`, `info`, `hint`, `none`.
-    - `haskell.plugin.tactics.config.max_use_ctor_actions`, default 5: Maximum number of `Use constructor <x>` code actions that can appear.
-    - `haskell.plugin.tactics.config.proofstate_styling`, default true: Should Wingman emit styling markup when showing metaprogram proof states?
   - `eval`:
     - `haskell.plugin.eval.config.diff`, default true: When reloading haddock test results in changes, mark it with WAS/NOW.
     - `haskell.plugin.eval.config.exception`, default false: When the command results in an exception, mark it with `*** Exception:`.
@@ -90,25 +84,46 @@ Settings like this are typically be provided by the language-specific LSP client
 ## Configuring your project build
 
 `haskell-language-server` has to compile your project in order to give you diagnostics, which means that it needs to know how to do so.
-This is handled by the [hie-bios](https://github.com/mpickering/hie-bios) project.
+This is handled under the hood by the [hie-bios](https://github.com/mpickering/hie-bios) application.
+In turn, `hie-bios` needs some configuration to identify all files, GHC options, etc., needed to compile a project.
 
-**For a full explanation of how `hie-bios` determines the project build configuration, and how to configure it manually, refer to the [hie-bios README](https://github.com/mpickering/hie-bios/blob/master/README.md).**
+There are several ways to provide this configuration to `hie-bios`, detailed below.
 
-At the moment, `haskell-language-server` has support to automatically detect your project build configuration to handle most use cases.
+### Implicit configuration
+If no `hie.yaml` file is present, `haskell-language-server` automatically detects your `hie-bios` configuration using [implicit-hie](https://github.com/Avi-D-coder/implicit-hie).
+**For most cases, this works just fine, and is the recommended way.**
 
-*So using a explicit `hie.yaml` file will not likely fix your ide setup*. It will do it almost only if you see an error like `Multi Cradle: No prefixes matched`
+### Explicit, generated configuration
+Maybe using the implicit configuration does not suit you.
+E.g., it does not work, or you prefer to have explicit configuration in your project.
+In that case, you can automatically generate a `hie.yaml` file, using [implicit-hie](https://github.com/Avi-D-coder/implicit-hie):
 
-If the automatic detection fails with that error you can configure `hie-bios` using a `hie.yaml` file in the root of the workspace.
-A `hie.yaml` file **explicitly** describes how to setup the environment to compile the various parts of your project.
-For that you need to know what *components* your project has, and the path associated with each one.
-So you will need some knowledge about
-[stack](https://docs.haskellstack.org/en/stable/build_command/#components) or [cabal](https://cabal.readthedocs.io/en/latest/cabal-commands.html?#cabal-v2-build) components.
+```shell
+gen-hie > hie.yaml  # In the root directory of your project
+```
 
-You also can use [implicit-hie](https://github.com/Avi-D-coder/implicit-hie) to automatically generate `hie.yaml` files for
-the most common stack and cabal configurations
+### Explicit, manual configuration
+Maybe using the generated `hie.yaml` file does not suit you.
+E.g., it still does not work, or you want to fine-tune the configuration.
 
-For example, to state that you want to use `stack` then the configuration file
-would look like:
+In that case, refer to the [hie-bios explicit configuration documentation](https://github.com/haskell/hie-bios#explicit-configuration).
+Keep in mind that you can start from the `hie.yaml` file generated by `implicit-hie` (see previous section) and modify it to your liking.
+
+#### Examples of explicit `hie-yaml` configurations
+
+##### Basic Stack
+```yaml
+cradle:
+  stack:
+```
+
+##### Basic Cabal
+```yaml
+cradle:
+  cabal:
+```
+
+##### Single Stack component
 
 ```yaml
 cradle:
@@ -116,8 +131,7 @@ cradle:
     component: "haskell-language-server:lib"
 ```
 
-If you use `cabal` then you probably need to specify which component you want
-to use.
+##### Single Cabal component
 
 ```yaml
 cradle:
@@ -125,8 +139,26 @@ cradle:
     component: "lib:haskell-language-server"
 ```
 
-If you have a project with multiple components, you can use a cabal-multi
+##### Multiple Stack components
+
+```yaml
 cradle:
+  stack:
+    - path: "./test/functional/"
+      component: "haskell-language-server:func-test"
+    - path: "./exe/Main.hs"
+      component: "haskell-language-server:exe:haskell-language-server"
+    - path: "./exe/Wrapper.hs"
+      component: "haskell-language-server:exe:haskell-language-server-wrapper"
+    - path: "./src"
+      component: "haskell-language-server:lib"
+    - path: "./ghcide/src"
+      component: "ghcide:lib:ghcide"
+    - path: "./ghcide/exe"
+      component: "ghcide:exe:ghcide"
+```
+
+##### Multiple Cabal components
 
 ```yaml
 cradle:
@@ -147,26 +179,8 @@ cradle:
       component: "ghcide:exe:ghcide"
 ```
 
-Equivalently, you can use stack:
-
-```yaml
-cradle:
-  stack:
-    - path: "./test/functional/"
-      component: "haskell-language-server:func-test"
-    - path: "./exe/Main.hs"
-      component: "haskell-language-server:exe:haskell-language-server"
-    - path: "./exe/Wrapper.hs"
-      component: "haskell-language-server:exe:haskell-language-server-wrapper"
-    - path: "./src"
-      component: "haskell-language-server:lib"
-    - path: "./ghcide/src"
-      component: "ghcide:lib:ghcide"
-    - path: "./ghcide/exe"
-      component: "ghcide:exe:ghcide"
-```
-
-Or you can explicitly state the program which should be used to collect
+##### Custom program
+You can explicitly state the program which should be used to collect
 the options by supplying the path to the program. It is interpreted
 relative to the current working directory if it is not an absolute path.
 

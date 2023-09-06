@@ -13,17 +13,19 @@ import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env        as Env
 import           Development.IDE.GHC.Compat.Outputable
 
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC.Driver.Session                    as DynFlags
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 import           GHC.Utils.Outputable
+
+#if !MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Session                    as DynFlags
+#endif
+
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Env                        (hsc_logger)
 import           GHC.Utils.Logger                      as Logger
 #endif
-#else
-import           DynFlags
-import           Outputable                            (queryQual)
-#endif
+
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.Error
 #endif
@@ -57,17 +59,10 @@ logActionCompat logAction logFlags (MCDiagnostic severity wr) loc = logAction lo
 logActionCompat logAction logFlags _cls loc = logAction logFlags Nothing Nothing loc alwaysQualify
 
 #else
-#if MIN_VERSION_ghc(9,0,0)
 type LogActionCompat = DynFlags -> WarnReason -> Severity -> SrcSpan -> PrintUnqualified -> SDoc -> IO ()
 
 -- alwaysQualify seems to still do the right thing here, according to the "unqualified warnings" test.
 logActionCompat :: LogActionCompat -> LogAction
 logActionCompat logAction dynFlags wr severity loc = logAction dynFlags wr severity loc alwaysQualify
 
-#else
-type LogActionCompat = DynFlags -> WarnReason -> Severity -> SrcSpan -> PrintUnqualified -> SDoc -> IO ()
-
-logActionCompat :: LogActionCompat -> LogAction
-logActionCompat logAction dynFlags wr severity loc style = logAction dynFlags wr severity loc (queryQual style)
-#endif
 #endif

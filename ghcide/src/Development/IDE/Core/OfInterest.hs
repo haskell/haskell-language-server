@@ -55,7 +55,7 @@ data Log = LogShake Shake.Log
 
 instance Pretty Log where
   pretty = \case
-    LogShake log -> pretty log
+    LogShake msg -> pretty msg
 
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
 

@@ -41,7 +41,7 @@ main = do
 
 selectionRangeGoldenTest :: TestName -> [(UInt, UInt)] -> TestTree
 selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
-    res <- runSessionWithServer plugin testDataDir $ do
+    res <- runSessionWithServer def plugin testDataDir $ do
         doc <- openDoc (testName <.> "hs") "haskell"
         resp <- request SMethod_TextDocumentSelectionRange $ SelectionRangeParams Nothing Nothing doc
             $ fmap (uncurry Position . (\(x, y) -> (x-1, y-1))) positions
@@ -71,7 +71,7 @@ selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDi
 
 foldingRangeGoldenTest :: TestName -> TestTree
 foldingRangeGoldenTest testName = goldenGitDiff  testName (testDataDir </> testName <.> "golden" <.> "txt") $ do
-    res <- runSessionWithServer plugin testDataDir $ do
+    res <- runSessionWithServer def plugin testDataDir $ do
         doc <- openDoc (testName <.> "hs") "haskell"
         resp <- request SMethod_TextDocumentFoldingRange $ FoldingRangeParams Nothing Nothing doc
         let res = resp ^. result

@@ -69,7 +69,8 @@ module Development.IDE.GHC.Compat.Util (
     atEnd,
     ) where
 
-#if MIN_VERSION_ghc(9,0,0)
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 import           Control.Exception.Safe  (MonadCatch, catch, try)
 import           GHC.Data.Bag
 import           GHC.Data.BooleanFormula
@@ -82,38 +83,14 @@ import           GHC.Data.StringBuffer
 import           GHC.Types.Unique
 import           GHC.Types.Unique.DFM
 import           GHC.Utils.Fingerprint
-import           GHC.Utils.Misc
 import           GHC.Utils.Outputable    (pprHsString)
 import           GHC.Utils.Panic         hiding (try)
-#else
-import           Bag
-import           BooleanFormula
-import           EnumSet
-import qualified Exception
-import           FastString
-import           Fingerprint
-import           Maybes
-import           Outputable              (pprHsString)
-import           Pair
-import           Panic                   hiding (try)
-import           StringBuffer
-import           UniqDFM
-import           Unique
-import           Util
+
+#if !MIN_VERSION_ghc(9,3,0)
+import           GHC.Utils.Misc
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Data.Bool
 #endif
 
-
-#if !MIN_VERSION_ghc(9,0,0)
-type MonadCatch = Exception.ExceptionMonad
-
--- We are using Safe here, which is not equivalent, but probably what we want.
-catch :: (Exception.ExceptionMonad m, Exception e) => m a -> (e -> m a) -> m a
-catch = Exception.gcatch
-
-try :: (Exception.ExceptionMonad m, Exception e) => m a -> m (Either e a)
-try = Exception.gtry
-#endif

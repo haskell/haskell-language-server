@@ -10,7 +10,6 @@ packages:
          ./hls-test-utils
          ./plugins/hls-cabal-plugin
          ./plugins/hls-cabal-fmt-plugin
-         ./plugins/hls-tactics-plugin
          ./plugins/hls-stylish-haskell-plugin
          ./plugins/hls-fourmolu-plugin
          ./plugins/hls-class-plugin
@@ -19,7 +18,6 @@ packages:
          ./plugins/hls-hlint-plugin
          ./plugins/hls-rename-plugin
          ./plugins/hls-retrie-plugin
-         ./plugins/hls-haddock-comments-plugin
          ./plugins/hls-splice-plugin
          ./plugins/hls-floskell-plugin
          ./plugins/hls-pragmas-plugin
@@ -30,7 +28,6 @@ packages:
          ./plugins/hls-qualify-imported-names-plugin
          ./plugins/hls-code-range-plugin
          ./plugins/hls-change-type-signature-plugin
-         ./plugins/hls-stan-plugin
          ./plugins/hls-gadt-plugin
          ./plugins/hls-explicit-fixity-plugin
          ./plugins/hls-explicit-record-fields-plugin
@@ -55,7 +52,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2023-08-09T10:37:15Z
+index-state: 2023-08-25T00:00:00Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
@@ -76,7 +73,12 @@ constraints:
   happy == 1.20.1.1,
   filepath installed,
   -- for ghc 8.10, stm-hamt 1.2.0.10 doesn't build
-  stm-hamt < 1.2.0.10
+  stm-hamt < 1.2.0.10,
+  -- Centos 7 comes with an old gcc version that doesn't know about
+  -- the flag '-fopen-simd', which blocked the release 2.2.0.0.
+  -- We want to be able to benefit from the performance optimisations
+  -- in the future, thus: TODO: remove this flag.
+  bitvec -simd
 
 -- This is benign and won't affect our ability to release to Hackage,
 -- because we only depend on `ekg-json` when a non-default flag
@@ -101,4 +103,3 @@ if impl(ghc >= 9.5)
     -- ghc-9.6
     ekg-core:ghc-prim,
     stm-hamt:transformers,
-

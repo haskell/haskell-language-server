@@ -22,7 +22,7 @@ import           Data.Set                        (Set)
 import qualified Data.Set                        as Set
 import           Data.Unique                     (Unique)
 import qualified Data.Unique                     as Unique
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat      hiding (newUnique)
 import qualified Development.IDE.GHC.Compat.Util as Maybes
 import           Development.IDE.GHC.Error       (catchSrcErrors)
 import           Development.IDE.GHC.Util        (lookupPackageConfig)
@@ -91,7 +91,7 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
                         -- When module is re-exported from another package,
                         -- the origin module is represented by value in Just
                         Just otherPkgMod -> otherPkgMod
-                        Nothing          -> mkModule (unitInfoId pkg) modName
+                        Nothing          -> mkModule (mkUnit pkg) modName
                 ]
 
             doOne m = do

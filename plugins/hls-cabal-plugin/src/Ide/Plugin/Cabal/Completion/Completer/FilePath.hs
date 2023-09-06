@@ -5,9 +5,11 @@ module Ide.Plugin.Cabal.Completion.Completer.FilePath where
 
 import           Control.Exception                            (evaluate, try)
 import           Control.Monad                                (filterM)
-import           Control.Monad.Extra                          (forM)
+import           Control.Monad.Extra                          (concatForM, forM)
 import qualified Data.Text                                    as T
+import           Distribution.PackageDescription              (GenericPackageDescription)
 import           Ide.Logger
+import           Ide.Plugin.Cabal.Completion.Completer.Paths
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Types
 import           Ide.Plugin.Cabal.Completion.Types
@@ -23,7 +25,7 @@ import qualified Text.Fuzzy.Parallel                          as Fuzzy
 filePathCompleter :: Completer
 filePathCompleter recorder cData = do
   let prefInfo = cabalPrefixInfo cData
-      complInfo = pathCompletionInfoFromCabalPrefixInfo prefInfo
+      complInfo = pathCompletionInfoFromCabalPrefixInfo "" prefInfo
   filePathCompletions <- listFileCompletions recorder complInfo
   let scored =
         Fuzzy.simpleFilter
@@ -39,12 +41,44 @@ filePathCompleter recorder cData = do
         pure $ mkCompletionItem (completionRange prefInfo) fullFilePath fullFilePath
     )
 
+mainIsCompleter :: (Maybe StanzaName -> GenericPackageDescription -> [FilePath]) -> Completer
+mainIsCompleter extractionFunction recorder cData = do
+  mGPD <- getLatestGPD cData
+  case mGPD of
+    Just gpd -> do
+      let srcDirs = extractionFunction sName gpd
+      concatForM srcDirs
+        (\dir' -> do
+        let dir = FP.normalise dir'
+        let pathInfo = pathCompletionInfoFromCabalPrefixInfo dir prefInfo
+        completions <- listFileCompletions recorder pathInfo
+        let scored = Fuzzy.simpleFilter
+              Fuzzy.defChunkSize
+              Fuzzy.defMaxResults
+              (pathSegment pathInfo)
+              (map T.pack completions)
+        forM
+          scored
+          ( \compl' -> do
+              let compl = Fuzzy.original compl'
+              fullFilePath <- mkFilePathCompletion pathInfo compl
+              pure $ mkCompletionItem (completionRange prefInfo) fullFilePath fullFilePath
+          )
+        )
+    Nothing -> do
+      logWith recorder Debug LogUseWithStaleFastNoResult
+      pure []
+  where
+    sName = stanzaName cData
+    prefInfo = cabalPrefixInfo cData
+
+
 -- | Completer to be used when a directory can be completed for the field.
 --  Only completes directories.
 directoryCompleter :: Completer
 directoryCompleter recorder cData = do
   let prefInfo = cabalPrefixInfo cData
-      complInfo = pathCompletionInfoFromCabalPrefixInfo prefInfo
+      complInfo = pathCompletionInfoFromCabalPrefixInfo "" prefInfo
   directoryCompletions <- listDirectoryCompletions recorder complInfo
   let scored =
         Fuzzy.simpleFilter
@@ -73,33 +107,6 @@ directoryCompleter recorder cData = do
   be used for file path completions to be written to the cabal file.
 -}
 
--- | Information used to query and build path completions.
---
---  Note that pathSegment  combined with queryDirectory  results in
---  the original prefix.
---
---  Example:
---  When given the written prefix, @dir1\/dir2\/fi@, the
---  resulting PathCompletionInfo would be:
---
---  @
---    pathSegment = "fi"
---    queryDirectory  = "dir1\/dir2\/fi"
---    ...
---  @
-data PathCompletionInfo = PathCompletionInfo
-  { -- | partly written segment of the next part of the path
-    pathSegment          :: T.Text,
-    -- | written part of path, platform dependent
-    queryDirectory       :: FilePath,
-    -- | directory relative to which relative paths are interpreted, platform dependent
-    workingDirectory     :: FilePath,
-    -- | Did the completion happen in the context of a string notation,
-    -- if yes, contains the state of the string notation
-    isStringNotationPath :: Maybe Apostrophe
-  }
-  deriving (Eq, Show)
-
 -- | Takes a PathCompletionInfo and returns the list of files and directories
 --  in the directory which match the path completion info in posix style.
 --
@@ -125,18 +132,6 @@ listDirectoryCompletions :: Recorder (WithPriority Log) -> PathCompletionInfo ->
 listDirectoryCompletions recorder complInfo = do
   filepaths <- listFileCompletions recorder complInfo
   filterM (doesDirectoryExist . mkDirFromCWD complInfo) filepaths
-
-pathCompletionInfoFromCabalPrefixInfo :: CabalPrefixInfo -> PathCompletionInfo
-pathCompletionInfoFromCabalPrefixInfo ctx =
-  PathCompletionInfo
-    { pathSegment = T.pack pathSegment',
-      queryDirectory = queryDirectory',
-      workingDirectory = completionWorkingDir ctx,
-      isStringNotationPath = isStringNotation ctx
-    }
-  where
-    prefix = T.unpack $ completionPrefix ctx
-    (queryDirectory', pathSegment') = Posix.splitFileName prefix
 
 -- | Returns the directory where files and directories can be queried from
 --  for the passed PathCompletionInfo.

@@ -9,8 +9,8 @@ module Development.IDE.Spans.Pragmas
   , insertNewPragma
   , getFirstPragma ) where
 
+import           Control.Lens                    ((&), (.~))
 import           Data.Bits                       (Bits (setBit))
-import           Data.Function                   ((&))
 import qualified Data.List                       as List
 import qualified Data.Maybe                      as Maybe
 import           Data.Text                       (Text, pack)
@@ -18,17 +18,18 @@ import qualified Data.Text                       as Text
 import           Development.IDE                 (srcSpanToRange, IdeState, NormalizedFilePath, GhcSession (..), getFileContents, hscEnv, runAction)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import qualified Language.LSP.Protocol.Types              as LSP
-import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.Except (ExceptT)
-import Ide.Plugin.Error (PluginError)
-import Ide.Types (PluginId(..))
-import qualified Data.Text as T
-import  Development.IDE.Core.PluginUtils
+import qualified Language.LSP.Protocol.Types    as LSP
+import           Control.Monad.IO.Class         (MonadIO (..))
+import           Control.Monad.Trans.Except     (ExceptT)
+import           Ide.Plugin.Error               (PluginError)
+import           Ide.Types                      (PluginId(..))
+import qualified Data.Text                      as T
+import           Development.IDE.Core.PluginUtils
+import qualified Language.LSP.Protocol.Lens     as L
 
 getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
-getNextPragmaInfo dynFlags sourceText =
-  if | Just sourceText <- sourceText
+getNextPragmaInfo dynFlags mbSourceText =
+  if | Just sourceText <- mbSourceText
      , let sourceStringBuffer = stringToStringBuffer (Text.unpack sourceText)
      , POk _ parserState <- parsePreDecl dynFlags sourceStringBuffer
      -> case parserState of
@@ -46,7 +47,7 @@ showExtension NamedFieldPuns = "NamedFieldPuns"
 showExtension ext = pack (show ext)
 
 insertNewPragma :: NextPragmaInfo -> Extension -> LSP.TextEdit
-insertNewPragma (NextPragmaInfo _ (Just (LineSplitTextEdits ins _))) newPragma = ins { LSP._newText = "{-# LANGUAGE " <> showExtension newPragma <> " #-}\n" } :: LSP.TextEdit
+insertNewPragma (NextPragmaInfo _ (Just (LineSplitTextEdits ins _))) newPragma = ins & L.newText .~ "{-# LANGUAGE " <> showExtension newPragma <> " #-}\n" :: LSP.TextEdit
 insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit pragmaInsertRange $ "{-# LANGUAGE " <> showExtension newPragma <> " #-}\n"
     where
         pragmaInsertPosition = LSP.Position (fromIntegral nextPragmaLine) 0
@@ -98,8 +99,8 @@ isDownwardLineHaddock = List.isPrefixOf "-- |"
 -- need to merge tokens that are deleted/inserted into one TextEdit each
 -- to work around some weird TextEdits applied in reversed order issue
 updateLineSplitTextEdits :: LSP.Range -> String -> Maybe LineSplitTextEdits -> LineSplitTextEdits
-updateLineSplitTextEdits tokenRange tokenString prevLineSplitTextEdits
-  | Just prevLineSplitTextEdits <- prevLineSplitTextEdits
+updateLineSplitTextEdits tokenRange tokenString mbPrevLineSplitTextEdits
+  | Just prevLineSplitTextEdits <- mbPrevLineSplitTextEdits
   , let LineSplitTextEdits
           { lineSplitInsertTextEdit = prevInsertTextEdit
           , lineSplitDeleteTextEdit = prevDeleteTextEdit } = prevLineSplitTextEdits
@@ -290,8 +291,8 @@ updateParserState token range prevParserState
   | otherwise = prevParserState
   where
     hasDeleteStartedOnSameLine :: Int -> Maybe LineSplitTextEdits -> Bool
-    hasDeleteStartedOnSameLine line lineSplitTextEdits
-      | Just lineSplitTextEdits <- lineSplitTextEdits
+    hasDeleteStartedOnSameLine line mbLineSplitTextEdits
+      | Just lineSplitTextEdits <- mbLineSplitTextEdits
       , let LineSplitTextEdits{ lineSplitDeleteTextEdit } = lineSplitTextEdits
       , let LSP.TextEdit deleteRange _ = lineSplitDeleteTextEdit
       , let LSP.Range _ deleteEndPosition = deleteRange
@@ -302,11 +303,7 @@ updateParserState token range prevParserState
 lexUntilNextLineIncl :: P (Located Token)
 lexUntilNextLineIncl = do
   PState{ last_loc } <- getPState
-#if MIN_VERSION_ghc(9,0,0)
   let PsSpan{ psRealSpan = lastRealSrcSpan } = last_loc
-#else
-  let lastRealSrcSpan = last_loc
-#endif
   let prevEndLine = lastRealSrcSpan & realSrcSpanEnd & srcLocLine
   locatedToken@(L srcSpan _token) <- lexer False pure
   if | RealSrcLoc currEndRealSrcLoc _ <- srcSpan & srcSpanEnd

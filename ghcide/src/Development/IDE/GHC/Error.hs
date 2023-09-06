@@ -175,12 +175,12 @@ realSpan = \case
 -- diagnostics
 catchSrcErrors :: DynFlags -> T.Text -> IO a -> IO (Either [FileDiagnostic] a)
 catchSrcErrors dflags fromWhere ghcM = do
-    Compat.handleGhcException (ghcExceptionToDiagnostics dflags) $
-      handleSourceError (sourceErrorToDiagnostics dflags) $
+    Compat.handleGhcException ghcExceptionToDiagnostics $
+      handleSourceError sourceErrorToDiagnostics $
       Right <$> ghcM
     where
-        ghcExceptionToDiagnostics dflags = return . Left . diagFromGhcException fromWhere dflags
-        sourceErrorToDiagnostics dflags = return . Left . diagFromErrMsgs fromWhere dflags
+        ghcExceptionToDiagnostics = return . Left . diagFromGhcException fromWhere dflags
+        sourceErrorToDiagnostics = return . Left . diagFromErrMsgs fromWhere dflags
 #if MIN_VERSION_ghc(9,3,0)
                                         . fmap (fmap Compat.renderDiagnosticMessageWithHints) . Compat.getMessages
 #endif

@@ -261,7 +261,7 @@ nonLocalCompletionTests =
       []
   ]
   where
-    brokenForWinGhc = knownBrokenFor (BrokenSpecific Windows [GHC810, GHC90, GHC92, GHC94, GHC96]) "Windows has strange things in scope for some reason"
+    brokenForWinGhc = knownBrokenFor (BrokenSpecific Windows [GHC90, GHC92, GHC94, GHC96]) "Windows has strange things in scope for some reason"
 
 otherCompletionTests :: [TestTree]
 otherCompletionTests = [

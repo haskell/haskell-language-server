@@ -19,7 +19,7 @@ data Log
   deriving Show
 
 instance Pretty Log where
-  pretty log = case log of
+  pretty = \case
     LogHeapStatsPeriod period ->
       "Logging heap statistics every" <+> pretty (toFormattedSeconds period)
     LogHeapStatsDisabled ->

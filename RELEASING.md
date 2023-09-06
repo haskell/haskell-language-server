@@ -8,18 +8,18 @@
   - Look for `TODO:` to find locations that require extra care for GHC versions.
 - [ ] check all plugins still work if release includes code changes
 - [ ] bump package versions in all `*.cabal` files (same version as hls)
-  - HLS uses a lockstep versioning. The core packages and all plugins use the same version number, and only support exactly the this version.
+  - HLS uses lockstep versioning. The core packages and all plugins use the same version number, and only support exactly this version.
     - Exceptions:
       - `hie-compat` requires no automatic version bump.
       - `shake-bench` is an internal testing tool, not exposed to the outside world. Thus, no version bump required for releases.
   - For updating cabal files, the following script can be used:
     - ```sh
       # Update all `version:` fields
-      sed -ri "s/^version:( +)2.1.0.0/version:\12.2.0.0/" **/*.cabal
+      sed -ri "s/^version:( +)2.2.0.0/version:\12.3.0.0/" **/*.cabal
       # Update all constraints expected to be in the form `== <version>`.
       # We usually don't force an exact version, so this is relatively unambiguous.
       # We could introduce some more ad-hoc parsing, if there is still ambiguity.
-      sed -ri "s/== 2.1.0.0/== 2.2.0.0/" **/*.cabal
+      sed -ri "s/== 2.2.0.0/== 2.3.0.0/" **/*.cabal
       ```
     - It still requires manual verification and review
 - [ ] generate and update changelog
@@ -34,12 +34,11 @@
   - this creates a draft release
   - `git push <remote> <version>`
 - [ ] run `sh scripts/release/download-gh-artifacts.sh <version> <your-gpg-email>`
-  - downloads artifacts to `gh-release-artifacts/<version>/`
+  - downloads artifacts to `gh-release-artifacts/haskell-language-server-<version>/`
   - also downloads FreeBSD bindist from circle CI
   - adds signatures
-- [ ] upload artifacts to downloads.haskell.org manually from `gh-release-artifacts/<version>/`
+- [ ] upload artifacts to downloads.haskell.org from `gh-release-artifacts/haskell-language-server-<version>/`
   - You require sftp access, contact wz1000, bgamari or chreekat
-  - For uploading, rename `gh-release-artifacts/<version>` to `gh-release-artifacts/haskell-language-server-<version>`
   - `cd gh-release-artifacts/haskell-language-server-<version>`
   - `SIGNING_KEY=... ../../release/upload.sh upload`
     - Your SIGNING_KEY can be obtained with `gpg --list-secret-keys --keyid-format=long`
@@ -57,5 +56,9 @@
 - [ ] upload hackage packages
   - requires credentials
 - [ ] update https://haskell-language-server.readthedocs.io/en/latest/support/ghc-version-support.html#current-ghc-version-support-status
+- [ ] Supported tools table needs to be updated:
+  - https://www.haskell.org/ghcup/install/#supported-platforms
+  - https://github.com/haskell/ghcup-hs/blob/master/docs/install.md#supported-platforms
+  - https://github.com/haskell/ghcup-metadata/blob/44c6e2b5d0fcae15abeffff03e87544edf76dd7a/ghcup-gen/Main.hs#L67
 - [ ] post release on discourse and reddit
 - [ ] merge release PR to master or forward port relevant changes

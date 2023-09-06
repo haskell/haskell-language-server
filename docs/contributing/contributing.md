@@ -108,79 +108,73 @@ $ cabal run haskell-language-server:func-test -- -p "hlint enables"
 
 ## Using HLS on HLS code
 
-Project source code should load without `hie.yaml` setup.
+Refer to the [HLS project configuration guidelines](../configuration.md#configuring-your-project-build) as they also apply to the HLS project itself.
 
-In other cases:
-
-1. Check if `hie.yaml` (& `hie.yml`) files left from previous configurations.
-
-2. If the main project needs special configuration, note that other internal subprojects probably also would need configuration.
-
-To create an explicit configuration for all projects - use [implicit-hie](https://github.com/Avi-D-coder/implicit-hie) generator directly:
-
-```shell
-gen-hie > hie.yaml  # into the main HLS directory
-```
-
-that configuration should help.
-
-3. Inspect & tune configuration explicitly.
-
-[Configuring project build](../configuration.md#configuring-your-project-build) applies to HLS project source code loading just as to any other.
-
-Note: HLS may implicitly detect codebase as a Stack project (see [hie-bios implicit configuration documentation](https://github.com/haskell/hie-bios/blob/master/README.md#implicit-configuration)). To use Cabal, try creating an `hie.yaml` file:
+Note: HLS implicitly detects the HLS codebase as a Stack project (since there is a `stack.yaml` file).
+If you want HLS to use Cabal, create this `hie.yaml` file at the root of the project:
 
 ```yaml
 cradle:
   cabal:
 ```
 
-### Manually testing your hacked HLS
-If you want to test HLS while hacking on it, follow the steps below.
+## Manually testing your hacked HLS
+If you want to test HLS while hacking on it (you can even test it on HLS codebase itself, see previous section), you need to:
+
+1. (Once) Find the path to the hacked HLS you build
+2. (Once) Configure your editor to use it
+3. (Every time you change the HLS code) Rebuild HLS
+4. (Every time you change the HLS code) Restart the LSP workspace
+
+### Find the path to the hacked HLS you build
+Note that unless you change the GHC version or the HLS version between builds, the path should remain the same, this is why you need to set it only once.
 
 #### Using Cabal
-
-- Whenever you want to build HLS, call `cabal install exe:haskell-language-server --overwrite-policy=always`. 
-  At the end of the output you will find the path the HLS executable was installed to, i.e.:
-
-  ```
-  ...
-  Resolving dependencies...
-  Symlinking 'haskell-language-server' to
-  '/home/user/.cabal/bin/haskell-language-server'
-  Symlinking 'haskell-language-server-wrapper' to
-  '/home/user/.cabal/bin/haskell-language-server-wrapper'
-  ```
-
-  In this example output, the path would be `/home/user/.cabal/bin/haskell-language-server`.
-
-- Open some codebase on which you want to test your local HLS in your favorite editor (it can also be the HLS codebase itself: see previous section for configuration)
-  - Configure this editor to use your custom HLS executable by using the path you obtained previously.
-- Restart HLS in your project:
-  - With VS Code: Press `CTRL + Shift + P` and type `Haskell: Restart Haskell LSP Server`
-  - With Emacs: `lsp-workspace-restart`
-
-##### VS Code
-
-When using VS Code you can set up a test project to use a specific HLS executable:
-
-- If it doesn't already exist in your project directory, create a directory called `.vscode`.
-- In the `.vscode` directory create a file called `settings.json` with the below contents. The path used here is the one obtained by using the `cabal` install command.
-
-```json
-{
-    "haskell.serverExecutablePath": "/home/user/.cabal/bin/haskell-language-server"
-}
+Run:
+```shell
+$ cabal build exe:haskell-language-server && cabal list-bin exe:haskell-language-server
+[..]
+<some long path>/haskell-language-server
 ```
 
 #### Using Stack
+Run:
+```shell
+$ echo $(pwd)/$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server
+[..]
+<some long path>/haskell-language-server
+```
 
-- Open some codebase on which you want to test your local HLS in your favorite editor (it can also be the HLS codebase itself: see previous section for configuration)
-- Configure this editor to use your custom HLS executable
-  - To obtain the path to your local HLS executable: `$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server`
+### Configure your editor to use it
 
-- Build HLS
-  - `stack build haskell-language-server:exe:haskell-language-server`
+#### VS Code
+When using VS Code you can set up each project to use a specific HLS executable:
+
+- If it doesn't already exist in your project directory, create a directory called `.vscode`.
+- In the `.vscode` directory create a file called `settings.json` with the below contents.
+```json
+{
+    "haskell.serverExecutablePath": "/path/to/your/hacked/haskell-language-server"
+}
+```
+
+#### Emacs
+There are several ways to configure the HLS server path:
+- `M-x customize-group<RET>lsp-haskell<RET>Lsp Haskell Server Path`
+- Evaluate `(setq lsp-haskell-server-path "/path/to/your/hacked/haskell-language-server")`
+- Create a file `.dir-locals.el` with the following content:
+```lisp
+((haskell-mode . ((lsp-haskell-server-path . "/path/to/your/hacked/haskell-language-server"))))
+```
+
+### Rebuild HLS
+- With Stack: `stack build haskell-language-server:exe:haskell-language-server`
+- With Cabal: `cabal build exe:haskell-language-server`
+
+### Restart the LSP workspace
+
+- With VS Code: Press `Ctrl + Shift + p` and type `Haskell: Restart Haskell LSP Server`
+- With Emacs: `M-x lsp-workspace-restart`
 
 ## Style guidelines
 
@@ -204,7 +198,6 @@ pre-commit install
 
 - `test/testdata` and `test/data` are there as we want to test formatting plugins.
 - `hie-compat` is there as we want to keep its code as close to GHC as possible.
-- `hls-tactics-plugin` is there as the main contributor of the plugin (@isovector) does not want auto-formatting.
 
 ## Introduction tutorial
 

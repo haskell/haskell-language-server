@@ -6,10 +6,8 @@ module FunctionalCodeAction (tests) where
 
 import           Control.Lens                 hiding (List)
 import           Control.Monad
-import           Data.Aeson
 import           Data.Aeson.Lens              (_Object)
 import           Data.List
-import qualified Data.Map                     as M
 import           Data.Maybe
 import qualified Data.Text                    as T
 import           Development.IDE.Core.Compile (sourceTypecheck)
@@ -48,7 +46,7 @@ renameTests = testGroup "rename suggestions" [
         cars <- getAllCodeActions doc
         replaceButStrLn <- liftIO $ inspectCommand cars ["Replace with", "putStrLn"]
         executeCommand replaceButStrLn
-        _ <- skipManyTill loggingNotification anyRequest
+        _ <- anyRequest
 
         x:_ <- T.lines <$> documentContents doc
         liftIO $ x @?= "main = putStrLn \"hello\""
@@ -71,7 +69,7 @@ renameTests = testGroup "rename suggestions" [
                 _ -> error $ "Unexpected arguments: " ++ show mbArgs
 
             executeCommand cmd
-            _ <- skipManyTill loggingNotification anyRequest
+            _ <- anyRequest
 
             x1:x2:_ <- T.lines <$> documentContents doc
             liftIO $
@@ -82,11 +80,8 @@ renameTests = testGroup "rename suggestions" [
 
 importTests :: TestTree
 importTests = testGroup "import suggestions" [
-    testCase "import works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    testCase "import works with 3.8 code action kinds" $ runSessionWithConfig (def {lspConfig = hlsConfigToClientConfig testConfig}) hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "CodeActionImport.hs" "haskell"
-        -- No Formatting:
-        let config = def { formattingProvider = "none" }
-        sendConfigurationChanged (toJSON config)
 
         (diag:_) <- waitForDiagnosticsFrom doc
         liftIO $ diag ^. L.message @?= "Variable not in scope: when :: Bool -> IO () -> IO ()"
@@ -107,12 +102,8 @@ importTests = testGroup "import suggestions" [
 
 importQualifiedTests :: TestTree
 importQualifiedTests = testGroup "import qualified prefix suggestions" [
-    testCase "qualified import works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    testCase "qualified import works with 3.8 code action kinds" $ runSessionWithConfig (def {lspConfig = hlsConfigToClientConfig testConfig}) hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "CodeActionImportQualified.hs" "haskell"
-        -- No Formatting:
-        let config = def { formattingProvider = "none" }
-        sendConfigurationChanged (toJSON config)
-
         (diag:_) <- waitForDiagnosticsFrom doc
         liftIO $ diag ^. L.message @?=
            if ghcVersion >= GHC96
@@ -136,12 +127,8 @@ importQualifiedTests = testGroup "import qualified prefix suggestions" [
 
 importQualifiedPostTests :: TestTree
 importQualifiedPostTests = testGroup "import qualified postfix suggestions" [
-    testCase "qualified import in postfix position works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    testCase "qualified import in postfix position works with 3.8 code action kinds" $ runSessionWithConfig (def {lspConfig = hlsConfigToClientConfig testConfig}) hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "CodeActionImportPostQualified.hs" "haskell"
-        -- No Formatting:
-        let config = def { formattingProvider = "none" }
-        sendConfigurationChanged (toJSON config)
-
         (diag:_) <- waitForDiagnosticsFrom doc
         liftIO $ diag ^. L.message @?=
            if ghcVersion >= GHC96
@@ -285,7 +272,7 @@ redundantImportTests = testGroup "redundant import code actions" [
         cas <- getAllCodeActions doc
         cmd <- liftIO $ inspectCommand cas ["redundant import"]
         executeCommand cmd
-        _ <- skipManyTill loggingNotification anyRequest
+        _ <- anyRequest
         contents <- documentContents doc
         liftIO $ T.lines contents @?=
                 [ "{-# OPTIONS_GHC -Wunused-imports #-}"
@@ -300,8 +287,7 @@ redundantImportTests = testGroup "redundant import code actions" [
 typedHoleTests :: TestTree
 typedHoleTests = testGroup "typed hole code actions" [
     testCase "works" $
-        runSession hlsCommand fullCaps "test/testdata" $ do
-            disableWingman
+        runSessionWithConfig (def {lspConfig = hlsConfigToClientConfig testConfig}) hlsCommand fullCaps "test/testdata" $ do
             doc <- openDoc "TypedHoles.hs" "haskell"
             _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
             cas <- getAllCodeActions doc
@@ -320,19 +306,8 @@ typedHoleTests = testGroup "typed hole code actions" [
                     , "foo x = maxBound"
                     ]
 
-      , knownBrokenForGhcVersions [GHC92, GHC94, GHC96] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
-          testCase "doesn't work when wingman is active" $
-          runSession hlsCommand fullCaps "test/testdata" $ do
-              doc <- openDoc "TypedHoles.hs" "haskell"
-              _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
-              cas <- getAllCodeActions doc
-              liftIO $ do
-                  dontExpectCodeAction cas ["replace _ with minBound"]
-                  dontExpectCodeAction cas ["replace _ with foo _"]
-
       , testCase "shows more suggestions" $
-            runSession hlsCommand fullCaps "test/testdata" $ do
-                disableWingman
+            runSessionWithConfig (def {lspConfig = hlsConfigToClientConfig testConfig}) hlsCommand fullCaps "test/testdata" $ do
                 doc <- openDoc "TypedHoles2.hs" "haskell"
                 _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
                 cas <- getAllCodeActions doc
@@ -354,17 +329,6 @@ typedHoleTests = testGroup "typed hole code actions" [
                         , "  where"
                         , "    stuff (A a) = A (a + 1)"
                         ]
-
-      , knownBrokenForGhcVersions [GHC92, GHC94, GHC96] "The wingman plugin doesn't yet compile in GHC92/GHC94" $
-          testCase "doesnt show more suggestions when wingman is active" $
-            runSession hlsCommand fullCaps "test/testdata" $ do
-                doc <- openDoc "TypedHoles2.hs" "haskell"
-                _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
-                cas <- getAllCodeActions doc
-
-                liftIO $ do
-                    dontExpectCodeAction cas ["replace _ with foo2 _"]
-                    dontExpectCodeAction cas ["replace _ with A _"]
     ]
 
 signatureTests :: TestTree
@@ -444,8 +408,9 @@ unusedTermTests = testGroup "unused term code actions" [
               $ Just CodeActionKind_QuickFix `notElem` kinds
     ]
 
-disableWingman :: Session ()
-disableWingman =
-  sendConfigurationChanged $ toJSON $ def
-    { plugins = M.fromList [ ("tactics", def { plcGlobalOn = False }) ]
-    }
+testConfig :: Config
+testConfig = def {
+  formattingProvider = "none"
+  }
+
+

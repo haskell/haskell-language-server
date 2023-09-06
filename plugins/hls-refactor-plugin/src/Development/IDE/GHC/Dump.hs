@@ -11,11 +11,7 @@ import           Development.IDE.GHC.Compat.Util
 import           Generics.SYB                          (ext1Q, ext2Q, extQ)
 import           GHC.Hs                                hiding (AnnLet)
 #endif
-#if MIN_VERSION_ghc(9,0,1)
 import           GHC.Plugins                           hiding (AnnLet)
-#else
-import           GhcPlugins
-#endif
 import           Prelude                               hiding ((<>))
 
 -- | Show a GHC syntax tree in HTML.

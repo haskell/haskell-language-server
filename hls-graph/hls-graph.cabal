@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name:          hls-graph
-version:       2.1.0.0
+version:       2.2.0.0
 synopsis:      Haskell Language Server internal graph API
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/hls-graph#readme>
@@ -93,12 +93,11 @@ library
             template-haskell
   if flag(stm-stats)
         cpp-options: -DSTM_STATS
-  if impl(ghc >= 9)
-        ghc-options: -Wunused-packages
 
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing
     -Wno-unticked-promoted-constructors
+    -Wunused-packages
 
   if flag(pedantic)
     ghc-options: -Werror
@@ -121,7 +120,7 @@ test-suite tests
     RulesSpec
     Spec
 
-  ghc-options:      -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts -Wunused-packages
   build-depends:
     , base
     , containers
@@ -139,5 +138,3 @@ test-suite tests
     , text
     , unordered-containers
   build-tool-depends: hspec-discover:hspec-discover -any
-  if impl(ghc >= 9)
-        ghc-options: -Wunused-packages

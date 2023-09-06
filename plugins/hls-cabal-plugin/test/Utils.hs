@@ -5,11 +5,14 @@ module Utils where
 
 import           Data.List                         (sort)
 import qualified Data.Text                         as T
+import           Ide.Plugin.Cabal                  (descriptor)
+import qualified Ide.Plugin.Cabal
 import           Ide.Plugin.Cabal.Completion.Types
-import           System.Directory                  (getCurrentDirectory)
 import           System.FilePath
 import           Test.Hls
 
+cabalPlugin :: PluginTestDescriptor Ide.Plugin.Cabal.Log
+cabalPlugin = mkPluginTestDescriptor descriptor "cabal"
 
 simpleCabalPrefixInfoFromPos :: Position -> T.Text -> CabalPrefixInfo
 simpleCabalPrefixInfoFromPos pos prefix =
@@ -33,15 +36,18 @@ simpleCabalPrefixInfoFromFp prefix fp =
         , completionFileName = "test"
         }
 
-getTestDir :: IO FilePath
-getTestDir = do
-    cwd <- getCurrentDirectory
-    pure $ addTrailingPathSeparator $ cwd </> "test" </> "testdata"
+filePathComplTestDir :: FilePath
+filePathComplTestDir = addTrailingPathSeparator $ testDataDir </> "filepath-completions"
 
-getFilePathComplTestDir :: IO FilePath
-getFilePathComplTestDir = do
-    testDir <- getTestDir
-    pure $ addTrailingPathSeparator $ testDir </> "filepath-completions"
+runCabalTestCaseSession :: TestName -> FilePath -> Session () -> TestTree
+runCabalTestCaseSession title subdir = testCase title . runCabalSession subdir
+
+runCabalSession :: FilePath -> Session a -> IO a
+runCabalSession subdir =
+    failIfSessionTimeout . runSessionWithServer def cabalPlugin (testDataDir </> subdir)
+
+testDataDir :: FilePath
+testDataDir = "test" </> "testdata"
 
 -- | list comparison where the order in the list is irrelevant
 (@?==) :: (HasCallStack, Ord a, Show a) => [a] -> [a] -> Assertion

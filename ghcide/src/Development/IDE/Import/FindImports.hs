@@ -15,7 +15,6 @@ module Development.IDE.Import.FindImports
 
 import           Control.DeepSeq
 import           Development.IDE.GHC.Compat        as Compat
-import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics
@@ -27,6 +26,13 @@ import           Control.Monad.IO.Class
 import           Data.List                         (isSuffixOf)
 import           Data.Maybe
 import           System.FilePath
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
+#if !MIN_VERSION_ghc(9,3,0)
+import           Development.IDE.GHC.Compat.Util
+#endif
+
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
 import           GHC.Unit.State
@@ -55,14 +61,14 @@ instance NFData Import where
   rnf PackageImport  = ()
 
 modSummaryToArtifactsLocation :: NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
-modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source mod
+modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source mbMod
   where
     isSource HsSrcFile = True
     isSource _         = False
     source = case ms of
-      Nothing -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
-      Just ms -> isSource (ms_hsc_src ms)
-    mod = ms_mod <$> ms
+      Nothing     -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
+      Just modSum -> isSource (ms_hsc_src modSum)
+    mbMod = ms_mod <$> ms
 
 -- | locate a module in the file system. Where we go from *daml to Haskell
 locateModuleFile :: MonadIO m
@@ -89,7 +95,7 @@ locateModuleFile import_dirss exts targetFor isSource modName = do
 -- as they can never be imported into another package.
 #if MIN_VERSION_ghc(9,3,0)
 mkImportDirs :: HscEnv -> (UnitId, DynFlags) -> Maybe (UnitId, [FilePath])
-mkImportDirs env (i, flags) = Just (i, importPaths flags)
+mkImportDirs _env (i, flags) = Just (i, importPaths flags)
 #else
 mkImportDirs :: HscEnv -> (UnitId, DynFlags) -> Maybe (PackageName, (UnitId, [FilePath]))
 mkImportDirs env (i, flags) = (, (i, importPaths flags)) <$> getUnitName env i
@@ -130,7 +136,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
       | Just (uid, dirs) <- lookup (PackageName pkgName) import_paths
           -> lookupLocal uid dirs
 #endif
-      | otherwise -> lookupInPackageDB env
+      | otherwise -> lookupInPackageDB
 #if MIN_VERSION_ghc(9,3,0)
     NoPkgQual -> do
 #else
@@ -139,7 +145,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
 
       mbFile <- locateModuleFile ((homeUnitId_ dflags, importPaths dflags) : other_imports) exts targetFor isSource $ unLoc modName
       case mbFile of
-        Nothing          -> lookupInPackageDB env
+        Nothing          -> lookupInPackageDB
         Just (uid, file) -> toModLocation uid file
   where
     dflags = hsc_dflags env
@@ -160,7 +166,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
     hpt_deps :: [UnitId]
     hpt_deps = homeUnitDepends units
 #else
-      import_paths'
+      _import_paths'
 #endif
 
       -- first try to find the module as a file. If we can't find it try to find it in the package
@@ -168,7 +174,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
       -- Here the importPaths for the current modules are added to the front of the import paths from the other components.
       -- This is particularly important for Paths_* modules which get generated for every component but unless you use it in
       -- each component will end up being found in the wrong place and cause a multi-cradle match failure.
-    import_paths' =
+    _import_paths' = -- import_paths' is only used in GHC < 9.4
 #if MIN_VERSION_ghc(9,3,0)
             import_paths
 #else
@@ -177,20 +183,16 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
 
     toModLocation uid file = liftIO $ do
         loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
-#if MIN_VERSION_ghc(9,0,0)
-        let mod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
-#else
-        let mod = mkModule uid (unLoc modName)
-#endif
-        return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just mod)
+        let genMod = mkModule (RealUnit $ Definite uid) (unLoc modName)  -- TODO support backpack holes
+        return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource) (Just genMod)
 
     lookupLocal uid dirs = do
       mbFile <- locateModuleFile [(uid, dirs)] exts targetFor isSource $ unLoc modName
       case mbFile of
         Nothing   -> return $ Left $ notFoundErr env modName $ LookupNotFound []
-        Just (uid, file) -> toModLocation uid file
+        Just (uid', file) -> toModLocation uid' file
 
-    lookupInPackageDB env = do
+    lookupInPackageDB = do
       case Compat.lookupModuleWithSuggestions env (unLoc modName) mbPkgName of
         LookupFound _m _pkgConfig -> return $ Right PackageImport
         reason -> return $ Left $ notFoundErr env modName reason

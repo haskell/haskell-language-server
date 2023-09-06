@@ -29,13 +29,11 @@ import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util        (printOutputable)
 import           Development.IDE.Spans.Common
+import           Language.LSP.Protocol.Types     (filePathToUri, getUri)
+import           Prelude                         hiding (mod)
 import           System.Directory
 import           System.FilePath
 
-import           Language.LSP.Protocol.Types     (filePathToUri, getUri)
-#if MIN_VERSION_ghc(9,3,0)
-import           GHC.Types.Unique.Map
-#endif
 
 mkDocMap
   :: HscEnv
@@ -59,17 +57,17 @@ mkDocMap env rm this_mod =
      k <- foldrM getType (tcg_type_env this_mod) names
      pure $ DKMap d k
   where
-    getDocs n map
-      | maybe True (mod ==) $ nameModule_maybe n = pure map -- we already have the docs in this_docs, or they do not exist
+    getDocs n nameMap
+      | maybe True (mod ==) $ nameModule_maybe n = pure nameMap -- we already have the docs in this_docs, or they do not exist
       | otherwise = do
       doc <- getDocumentationTryGhc env n
-      pure $ extendNameEnv map n doc
-    getType n map
+      pure $ extendNameEnv nameMap n doc
+    getType n nameMap
       | isTcOcc $ occName n
-      , Nothing <- lookupNameEnv map n
+      , Nothing <- lookupNameEnv nameMap n
       = do kind <- lookupKind env n
-           pure $ maybe map (extendNameEnv map n) kind
-      | otherwise = pure map
+           pure $ maybe nameMap (extendNameEnv nameMap n) kind
+      | otherwise = pure nameMap
     names = rights $ S.toList idents
     idents = M.keysSet rm
     mod = tcg_mod this_mod
@@ -85,8 +83,8 @@ getDocumentationTryGhc env n =
 
 getDocumentationsTryGhc :: HscEnv -> [Name] -> IO [SpanDoc]
 getDocumentationsTryGhc env names = do
-  res <- catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env names
-  case res of
+  resOr <- catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env names
+  case resOr of
       Left _    -> return []
       Right res -> zipWithM unwrap res names
   where
@@ -123,6 +121,9 @@ getDocumentation
  => [ParsedModule] -- ^ All of the possible modules it could be defined in.
  ->  name -- ^ The name you want documentation for.
  -> [T.Text]
+#if MIN_VERSION_ghc(9,2,0)
+getDocumentation _sources _targetName = []
+#else
 -- This finds any documentation between the name you want
 -- documentation for and the one before it. This is only an
 -- approximately correct algorithm and there are easily constructed
@@ -133,10 +134,7 @@ getDocumentation
 -- TODO : Implement this for GHC 9.2 with in-tree annotations
 --        (alternatively, just remove it and rely solely on GHC's parsing)
 getDocumentation sources targetName = fromMaybe [] $ do
-#if MIN_VERSION_ghc(9,2,0)
-  Nothing
-#else
-  -- Find the module the target is defined in.
+    -- Find the module the target is defined in.
   targetNameSpan <- realSpan $ getLoc targetName
   tc <-
     find ((==) (Just $ srcSpanFile targetNameSpan) . annotationFileName)
@@ -174,13 +172,7 @@ getDocumentation sources targetName = fromMaybe [] $ do
     sortedNameSpans :: [Located RdrName] -> [RealSrcSpan]
     sortedNameSpans ls = nubSort (mapMaybe (realSpan . getLoc) ls)
     isBetween target before after = before <= target && target <= after
-#if MIN_VERSION_ghc(9,0,0)
     ann = apiAnnComments . pm_annotations
-#else
-    ann = fmap filterReal . snd . pm_annotations
-    filterReal :: [Located a] -> [RealLocated a]
-    filterReal = mapMaybe (\(L l v) -> (`L`v) <$> realSpan l)
-#endif
     annotationFileName :: ParsedModule -> Maybe FastString
     annotationFileName = fmap srcSpanFile . listToMaybe . map getRealSrcSpan . fold . ann
 

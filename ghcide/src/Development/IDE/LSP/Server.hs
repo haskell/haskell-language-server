@@ -14,7 +14,7 @@ import           Control.Monad.IO.Unlift       (MonadUnliftIO)
 import           Control.Monad.Reader
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing
-import           Ide.Types                     (HasTracing, traceWithSpan)
+import           Ide.Types
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Server           (Handlers, LspM)
 import qualified Language.LSP.Server           as LSP
@@ -30,7 +30,7 @@ newtype ServerM c a = ServerM { unServerM :: ReaderT (ReactorChan, IdeState) (Ls
   deriving (Functor, Applicative, Monad, MonadReader (ReactorChan, IdeState), MonadIO, MonadUnliftIO, LSP.MonadLsp c)
 
 requestHandler
-  :: forall (m :: Method ClientToServer Request) c. (HasTracing (MessageParams m)) =>
+  :: forall m c. PluginMethod Request m =>
      SMethod m
   -> (IdeState -> MessageParams m -> LspM c (Either ResponseError (MessageResult m)))
   -> Handlers (ServerM c)
@@ -45,7 +45,7 @@ requestHandler m k = LSP.requestHandler m $ \TRequestMessage{_method,_id,_params
   writeChan chan $ ReactorRequest (SomeLspId _id) (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
 
 notificationHandler
-  :: forall (m :: Method ClientToServer Notification) c. (HasTracing (MessageParams m)) =>
+  :: forall m c. PluginMethod Notification m =>
      SMethod m
   -> (IdeState -> VFS -> MessageParams m -> LspM c ())
   -> Handlers (ServerM c)

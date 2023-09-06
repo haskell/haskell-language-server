@@ -8,48 +8,45 @@
 -- | Orphan instances for GHC.
 --   Note that the 'NFData' instances may not be law abiding.
 module Development.IDE.GHC.Orphans() where
-
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Parser.Annotation
-#endif
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC.Data.Bag
-import           GHC.Data.FastString
-import qualified GHC.Data.StringBuffer      as SB
-import           GHC.Types.Name.Occurrence
-import           GHC.Types.SrcLoc
-import           GHC.Types.Unique           (getKey)
-import           GHC.Unit.Info
-import           GHC.Utils.Outputable
-#else
-import           Bag
-import           GhcPlugins
-import qualified StringBuffer               as SB
-import           Unique                     (getKey)
-#endif
-
-
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 
 import           Control.DeepSeq
+import           Control.Monad.Trans.Reader (ReaderT (..))
 import           Data.Aeson
-import           Data.Bifunctor             (Bifunctor (..))
 import           Data.Hashable
 import           Data.String                (IsString (fromString))
 import           Data.Text                  (unpack)
-#if MIN_VERSION_ghc(9,0,0)
+
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
+
 import           GHC.ByteCode.Types
-import GHC (ModuleGraph)
-#else
-import           ByteCodeTypes
+import           GHC.Data.Bag
+import           GHC.Data.FastString
+import qualified GHC.Data.StringBuffer      as SB
+import           GHC.Types.SrcLoc
+
+#if !MIN_VERSION_ghc(9,3,0)
+import           GHC                        (ModuleGraph)
+import           GHC.Types.Unique           (getKey)
 #endif
+
+#if MIN_VERSION_ghc(9,2,0)
+import           Data.Bifunctor             (Bifunctor (..))
+import           GHC.Parser.Annotation
+#endif
+
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
 #endif
+
 #if MIN_VERSION_ghc(9,5,0)
 import           GHC.Unit.Home.ModInfo
 #endif
+
+-- Orphan instance for Shake.hs
+-- https://hub.darcs.net/ross/transformers/issue/86
+deriving instance (Semigroup (m a)) => Semigroup (ReaderT r m a)
 
 -- Orphan instances for types from the GHC API.
 instance Show CoreModule where show = unpack . printOutputable
@@ -70,22 +67,9 @@ instance Show PackageFlag where show = unpack . printOutputable
 instance Show InteractiveImport where show = unpack . printOutputable
 instance Show PackageName  where show = unpack . printOutputable
 
-#if !MIN_VERSION_ghc(9,0,1)
-instance Show ComponentId  where show = unpack . printOutputable
-instance Show SourcePackageId  where show = unpack . printOutputable
-
-instance Show GhcPlugins.InstalledUnitId where
-    show = installedUnitIdString
-
-instance NFData GhcPlugins.InstalledUnitId where rnf = rwhnf . installedUnitIdFS
-
-instance Hashable GhcPlugins.InstalledUnitId where
-  hashWithSalt salt = hashWithSalt salt . installedUnitIdString
-#else
 instance Show UnitId where show = unpack . printOutputable
 deriving instance Ord SrcSpan
 deriving instance Ord UnhelpfulSpanReason
-#endif
 
 instance NFData SB.StringBuffer where rnf = rwhnf
 
@@ -205,10 +189,8 @@ instance NFData (ImportDecl GhcPs) where
 
 #if MIN_VERSION_ghc(9,5,0)
 instance (NFData (HsModule a)) where
-#elif MIN_VERSION_ghc(9,0,1)
-instance (NFData HsModule) where
 #else
-instance (NFData (HsModule a)) where
+instance (NFData HsModule) where
 #endif
   rnf = rwhnf
 
@@ -241,8 +223,14 @@ instance NFData HomeModLinkable where
   rnf = rwhnf
 #endif
 
-instance NFData (HsExpr (GhcPass 'Renamed)) where
+instance NFData (HsExpr (GhcPass Renamed)) where
+    rnf = rwhnf
+
+instance NFData (Pat (GhcPass Renamed)) where
     rnf = rwhnf
 
 instance NFData Extension where
   rnf = rwhnf
+
+instance NFData (UniqFM Name [Name]) where
+  rnf (ufmToIntMap -> m) = rnf m

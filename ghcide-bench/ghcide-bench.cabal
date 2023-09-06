@@ -2,7 +2,7 @@ cabal-version:      3.0
 build-type:         Simple
 category:           Development
 name:               ghcide-bench
-version:            2.1.0.0
+version:            2.2.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             The Haskell IDE team
@@ -12,7 +12,7 @@ synopsis:           An LSP client for running performance experiments on HLS
 description:        An LSP client for running performance experiments on HLS
 homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC == 8.10.7 || == 9.0.2 || == 9.2.5
+tested-with:        GHC == 9.0.2 || == 9.2.5
 
 source-repository head
     type:     git
@@ -119,7 +119,7 @@ test-suite test
         base,
         extra,
         ghcide-bench,
-        lsp-test ^>= 0.15.0.1,
+        lsp-test ^>= 0.16,
         tasty,
         tasty-hunit >= 0.10,
         tasty-rerun,

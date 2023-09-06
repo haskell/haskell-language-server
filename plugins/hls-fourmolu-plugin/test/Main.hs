@@ -31,7 +31,7 @@ tests =
         ]
 
 goldenWithFourmolu :: Bool -> TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithFourmolu cli title path desc = goldenWithHaskellDocFormatter fourmoluPlugin "fourmolu" conf title testDataDir path desc "hs"
+goldenWithFourmolu cli title path desc = goldenWithHaskellDocFormatter def fourmoluPlugin "fourmolu" conf title testDataDir path desc "hs"
  where
   conf = def{plcConfig = (\(Object obj) -> obj) $ object ["external" .= cli]}
 

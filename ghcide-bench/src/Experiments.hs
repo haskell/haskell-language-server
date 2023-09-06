@@ -363,8 +363,8 @@ runBenchmarksFun dir allBenchmarks = do
       createDirectoryIfMissing True eventlogDir
 
   lspConfig <- if Experiments.Types.lspConfig ?config
-    then either error Just . eitherDecodeStrict' <$> BS.getContents
-    else return Nothing
+    then either error id . eitherDecodeStrict' <$> BS.getContents
+    else return mempty
 
   let conf = defaultConfig
         { logStdErr = verbose ?config,
@@ -512,7 +512,7 @@ waitForProgressStart :: Session ()
 waitForProgressStart = void $ do
     skipManyTill anyMessage $ satisfy $ \case
       FromServerMess SMethod_WindowWorkDoneProgressCreate _ -> True
-      _                                              -> False
+      _                                                     -> False
 
 -- | Wait for all progress to be done
 -- Needs at least one progress done notification to return

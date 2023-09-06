@@ -2,7 +2,7 @@ cabal-version:      3.0
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            2.1.0.0
+version:            2.2.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -13,7 +13,7 @@ description:
     A library for building Haskell IDE's on top of the GHC API.
 homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC == 8.10.7 || == 9.0.2 || == 9.2.5
+tested-with:        GHC == 9.0.2 || == 9.2.5
 extra-source-files: README.md CHANGELOG.md
                     test/data/**/*.project
                     test/data/**/*.cabal
@@ -35,11 +35,15 @@ flag ekg
     default:     False
     manual:      True
 
+flag pedantic
+    description: Enable -Werror
+    default:     False
+    manual:      True
+
 library
     default-language:   Haskell2010
     build-depends:
         aeson,
-        aeson-pretty,
         array,
         async,
         base == 4.*,
@@ -65,12 +69,12 @@ library
         haddock-library >= 1.8 && < 1.12,
         hashable,
         hie-compat ^>= 0.3.0.0,
-        hls-plugin-api == 2.1.0.0,
+        hls-plugin-api == 2.2.0.0,
         lens,
         list-t,
         hiedb == 0.4.3.*,
-        lsp-types ^>= 2.0.1.0,
-        lsp ^>= 2.1.0.0 ,
+        lsp-types ^>= 2.0.2.0,
+        lsp ^>= 2.2.0.0 ,
         mtl,
         optparse-applicative,
         parallel,
@@ -81,7 +85,7 @@ library
         row-types,
         text-rope,
         safe-exceptions,
-        hls-graph == 2.1.0.0,
+        hls-graph == 2.2.0.0,
         sorted-list,
         sqlite-simple,
         stm,
@@ -99,7 +103,7 @@ library
         unliftio-core,
         ghc-boot-th,
         ghc-boot,
-        ghc >= 8.10,
+        ghc >= 9.0,
         ghc-check >=0.5.0.8,
         ghc-paths,
         cryptohash-sha1 >=0.11.100 && <0.12,
@@ -221,16 +225,34 @@ library
 
     ghc-options:
                 -Wall
-                -Wno-name-shadowing
                 -Wincomplete-uni-patterns
                 -Wno-unticked-promoted-constructors
+                -Wunused-packages
                 -fno-ignore-asserts
 
     if flag(ghc-patched-unboxed-bytecode)
       cpp-options: -DGHC_PATCHED_UNBOXED_BYTECODE
 
-    if impl(ghc >= 9)
-        ghc-options: -Wunused-packages
+    if flag(pedantic)
+        -- We eventually want to build with Werror fully, but we haven't
+        -- finished purging the warnings, so some are set to not be errors
+        -- for now
+        ghc-options: -Werror 
+                     -Wwarn=unused-packages
+                     -Wwarn=unrecognised-pragmas
+                     -Wwarn=dodgy-imports
+                     -Wwarn=missing-signatures
+                     -Wwarn=duplicate-exports
+                     -Wwarn=dodgy-exports
+                     -Wwarn=incomplete-patterns
+                     -Wwarn=overlapping-patterns
+                     -Wwarn=incomplete-record-updates
+    
+    -- ambiguous-fields is only understood by GHC >= 9.2, so we only disable it
+    -- then. The above comment goes for here too -- this should be understood to
+    -- be temporary until we can remove these warnings.
+    if impl(ghc >= 9.2) && flag(pedantic)
+        ghc-options: -Wwarn=ambiguous-fields
 
     if flag(ekg)
         build-depends:
@@ -346,7 +368,7 @@ test-suite ghcide-tests
         hls-plugin-api,
         lens,
         list-t,
-        lsp-test ^>= 0.15.0.1,
+        lsp-test ^>= 0.16.0.0,
         mtl,
         monoid-subclasses,
         network-uri,
@@ -372,10 +394,8 @@ test-suite ghcide-tests
           record-hasfield
     if impl(ghc < 9.3)
        build-depends:  ghc-typelits-knownnat
-    if impl(ghc >= 9)
-        ghc-options: -Wunused-packages
     hs-source-dirs: test/cabal test/exe test/src
-    ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors
+    ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors -Wunused-packages
     main-is: Main.hs
     other-modules:
         Development.IDE.Test.Runfiles
