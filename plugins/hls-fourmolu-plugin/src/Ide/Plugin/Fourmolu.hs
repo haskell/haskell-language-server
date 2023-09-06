@@ -34,7 +34,6 @@ import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
 import           Ide.Plugin.Error
-import           Ide.Plugin.Fourmolu.Shim
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                 (makeDiffTextEdit)
 import           Ide.Types
@@ -43,6 +42,7 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Ormolu
+import           Ormolu.Config
 import           System.Exit
 import           System.FilePath
 import           System.Process.Run              (cwd, proc)
@@ -87,9 +87,9 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                   where
                     printerOpts = cfgFilePrinterOpts fourmoluConfig
                     config =
-                        addFixityOverrides (cfgFileFixities fourmoluConfig) $
                         defaultConfig
                             { cfgDynOptions = map DynOption fileOpts
+                            , cfgFixityOverrides = cfgFileFixities fourmoluConfig
                             , cfgRegion = region
                             , cfgDebug = False
                             , cfgPrinterOpts =
@@ -112,7 +112,7 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                                 }
                         throwError $ PluginInternalError errorMessage
                       where
-                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (showParseError err)
+                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')

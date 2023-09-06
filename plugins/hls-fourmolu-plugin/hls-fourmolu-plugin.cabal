@@ -26,13 +26,11 @@ library
   buildable: True
   exposed-modules:
       Ide.Plugin.Fourmolu
-    , Ide.Plugin.Fourmolu.Shim
   hs-source-dirs:   src
   ghc-options:      -Wall
   build-depends:
     , base            >=4.12 && <5
     , filepath
-    , fourmolu        ^>=0.3 || ^>=0.4 || ^>= 0.6 || ^>= 0.7 || ^>= 0.8 || ^>= 0.9 || ^>= 0.10 || ^>= 0.11 || ^>= 0.12 || ^>= 0.13
     , ghc
     , ghc-boot-th
     , ghcide          == 2.2.0.0
@@ -43,6 +41,15 @@ library
     , process-extras  >= 0.7.1
     , text
     , transformers
+
+  if impl(ghc >= 8.10) && impl(ghc < 9.0)
+    build-depends: fourmolu ^>= 0.9
+  elif impl(ghc >= 9.0) && impl(ghc < 9.2)
+    build-depends: fourmolu ^>= 0.11
+  elif impl(ghc >= 9.2) && impl(ghc < 9.8)
+    build-depends: fourmolu ^>= 0.13
+  else
+    buildable: false
 
   -- fourmolu 0.9.0 fails to build on Windows CI for reasons unknown
   if impl(ghc >= 9.2) && os(windows) && impl(ghc < 9.4)

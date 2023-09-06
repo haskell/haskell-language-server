@@ -46,7 +46,6 @@ extra-deps:
 - hiedb-0.4.3.0
 - implicit-hie-0.1.2.7
 - implicit-hie-cradle-0.5.0.1
-- fourmolu-0.12.0.0
 - algebraic-graphs-0.6.1
 - retrie-1.2.2
 - hw-fingertree-0.1.2.1
