@@ -5,6 +5,7 @@
 {-# LANGUAGE NamedFieldPuns           #-}
 {-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
+{-# LANGUAGE RecordWildCards          #-}
 {-# LANGUAGE TypeApplications         #-}
 {-# LANGUAGE TypeOperators            #-}
 
@@ -77,20 +78,7 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
              $ runExceptT $ cliHandler fileOpts
         else do
             logWith recorder Debug $ LogCompiledInVersion VERSION_fourmolu
-            let format fourmoluConfig = ExceptT $
-                    bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
-                        <$> try @OrmoluException (ormolu config fp' contents)
-                  where
-                    printerOpts = cfgFilePrinterOpts fourmoluConfig
-                    config =
-                        defaultConfig
-                            { cfgDynOptions = map DynOption fileOpts
-                            , cfgFixityOverrides = cfgFileFixities fourmoluConfig
-                            , cfgRegion = region
-                            , cfgDebug = False
-                            , cfgPrinterOpts = resolvePrinterOpts [lspPrinterOpts, printerOpts]
-                            }
-            cfg <-
+            FourmoluConfig{..} <-
                 liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> do
                         logWith recorder Info $ ConfigPath file
@@ -108,7 +96,17 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                       where
                         errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
 
-            mapExceptT liftIO $ format cfg
+            let config =
+                    defaultConfig
+                        { cfgDynOptions = map DynOption fileOpts
+                        , cfgFixityOverrides = cfgFileFixities
+                        , cfgRegion = region
+                        , cfgDebug = False
+                        , cfgPrinterOpts = resolvePrinterOpts [lspPrinterOpts, cfgFilePrinterOpts]
+                        }
+            mapExceptT liftIO $ ExceptT $
+                bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
+                    <$> try @OrmoluException (ormolu config fp' contents)
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
