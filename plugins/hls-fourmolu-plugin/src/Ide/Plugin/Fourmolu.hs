@@ -72,10 +72,9 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
             <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
     useCLI <- liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #external plId properties
     if useCLI
-        then mapExceptT liftIO $ ExceptT
-             $ handle @IOException
-            (pure . Left . PluginInternalError . T.pack . show)
-             $ runExceptT $ cliHandler fileOpts
+        then ExceptT . liftIO $
+                handle @IOException (pure . Left . PluginInternalError . T.pack . show) $
+                    runExceptT (cliHandler fileOpts)
         else do
             logWith recorder Debug $ LogCompiledInVersion VERSION_fourmolu
             FourmoluConfig{..} <-
@@ -104,7 +103,7 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                         , cfgDebug = False
                         , cfgPrinterOpts = resolvePrinterOpts [lspPrinterOpts, cfgFilePrinterOpts]
                         }
-            mapExceptT liftIO $ ExceptT $
+            ExceptT . liftIO $
                 bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
                     <$> try @OrmoluException (ormolu config fp' contents)
   where
