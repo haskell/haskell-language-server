@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
@@ -87,10 +88,7 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                             , cfgFixityOverrides = cfgFileFixities fourmoluConfig
                             , cfgRegion = region
                             , cfgDebug = False
-                            , cfgPrinterOpts =
-                                fillMissingPrinterOpts
-                                    (printerOpts <> lspPrinterOpts)
-                                    defaultPrinterOpts
+                            , cfgPrinterOpts = resolvePrinterOpts [lspPrinterOpts, printerOpts]
                             }
              in liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> do
@@ -195,3 +193,8 @@ newtype CLIVersionInfo = CLIVersionInfo
 
 mwhen :: Monoid a => Bool -> a -> a
 mwhen b x = if b then x else mempty
+
+#if !MIN_VERSION_fourmolu(0,14,0)
+resolvePrinterOpts :: [PrinterOptsPartial] -> PrinterOptsTotal
+resolvePrinterOpts = foldr fillMissingPrinterOpts defaultPrinterOpts
+#endif
