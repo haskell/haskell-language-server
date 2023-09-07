@@ -90,13 +90,14 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                             , cfgDebug = False
                             , cfgPrinterOpts = resolvePrinterOpts [lspPrinterOpts, printerOpts]
                             }
-             in liftIO (loadConfigFile fp') >>= \case
+            cfg <-
+                liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> do
                         logWith recorder Info $ ConfigPath file
-                        mapExceptT liftIO $ format opts
+                        pure opts
                     ConfigNotFound searchDirs -> do
                         logWith recorder Info $ NoConfigPath searchDirs
-                        mapExceptT liftIO $ format emptyConfig
+                        pure emptyConfig
                     ConfigParseError f err -> do
                         lift $ sendNotification SMethod_WindowShowMessage $
                             ShowMessageParams
@@ -106,6 +107,8 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                         throwError $ PluginInternalError errorMessage
                       where
                         errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
+
+            mapExceptT liftIO $ format cfg
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
