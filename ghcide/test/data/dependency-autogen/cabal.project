@@ -1,3 +1,7 @@
 packages: .
 package *
   ghc-options: -fwrite-ide-info
+source-repository-package
+  type:git
+  location: https://github.com/nlander/minimal-autogen.git
+  tag: 1c6a440fa213185a34ebd5a0b1870e5e73f03c10

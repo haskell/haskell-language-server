@@ -156,50 +156,28 @@ transitiveDependencyTest = testSessionWithExtraFiles "dependency" "goto transiti
                         ++ show wrongLocation
 
 -- Testing that we can go to a definition in an autogen module of a
--- dependency. Stylish haskell is a package that has an autogen module,
--- but it doesn't seem to build with ghc 9.0 or earlier. Suggestions on
--- another package we could use for this test are welcome! This test
--- doesn't go directly to the fuction in the autogen module because
--- it is a hidden module, so we can't import that function directly
--- in our project. However, hidden modules are also indexed, so we
--- can go to a definition in a module that imports the autogen module
--- and goto the autogen module from there.
+-- dependency. We use the repository https://github.com/nlander/minimal-autogen.git
+-- as the dependency. It is a minimal package with an autogen module,
+-- allowing us to avoid building a larger dependency in CI just for
+-- this test.
 autogenDependencyTest :: TestTree
-autogenDependencyTest = knownBrokenForGhcVersions [GHC810, GHC90] "stylish-haskell does not build with older GHC versions" $
-    testSessionWithExtraFiles "dependency-autogen" "goto autogen module in dependency" $
+autogenDependencyTest = testSessionWithExtraFiles "dependency-autogen" "goto autogen module in dependency" $
         \dir -> do
             localDoc <- openDoc (dir </> "Dependency" <.> "hs") "haskell"
-            _hieFile <- fileDoneIndexing ["Paths_stylish_haskell.hie"]
-            stylishDefs <- getDefinitions localDoc (Position 5 5)
-            stylishFile <- case stylishDefs of
-                InL (Definition (InR [Location uri _actualRange])) ->
-                    liftIO $ do
-                        let fp :: FilePath
-                            fp = fromMaybe "" $ uriToFilePath uri
-                            locationDirectories :: [String]
-                            locationDirectories = splitDirectories fp
-                        assertBool "tags found in a module that is not Language.Haskell.Stylish"
-                            $ ["Language", "Haskell", "Stylish.hs"]
-                                `isSuffixOf` locationDirectories
-                        pure fp
-                wrongLocation ->
-                    liftIO $
-                        assertFailure $ "Wrong location for AsyncCancelled: "
-                            ++ show wrongLocation
-            stylishDoc <- openDoc stylishFile "haskell"
-            pathsDefs <- getDefinitions stylishDoc (Position 19 8)
+            _hieFile <- fileDoneIndexing ["Paths_minimal_autogen.hie"]
+            defs <- getDefinitions localDoc (Position 6 5)
             -- The location of the definition of version in
-            -- Paths_stylish_haskell
+            -- Paths_minimal_autogen
             let expRange = Range (Position 35 0) (Position 35 7)
-            case pathsDefs of
+            case defs of
                 InL (Definition (InR [Location uri actualRange])) ->
                     liftIO $ do
                         let locationDirectories :: [String]
                             locationDirectories =
                                 maybe [] splitDirectories $
                                     uriToFilePath uri
-                        assertBool "version found in a module that is not Paths_stylish_haskell"
-                            $ ["Paths_stylish_haskell.hs"]
+                        assertBool "version found in a module that is not Paths_minimal_autogen"
+                            $ ["Paths_minimal_autogen.hs"]
                                 `isSuffixOf` locationDirectories
                         actualRange @?= expRange
                 wrongLocation ->

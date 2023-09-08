@@ -1,6 +1,7 @@
 module Dependency where
 
-import           Language.Haskell.Stylish (Step, tabs)
+import Data.Version          (Version)
+import Paths_minimal_autogen (version)
 
-t :: Int -> Step
-t = tabs
+v :: Version
+v = version
