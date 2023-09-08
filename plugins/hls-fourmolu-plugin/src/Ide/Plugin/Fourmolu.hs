@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
@@ -79,11 +78,7 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
             logWith recorder Debug $ LogCompiledInVersion VERSION_fourmolu
             let format fourmoluConfig = ExceptT $
                     bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
-#if MIN_VERSION_fourmolu(0,11,0)
                         <$> try @OrmoluException (ormolu config fp' contents)
-#else
-                        <$> try @OrmoluException (ormolu config fp' (T.unpack contents))
-#endif
                   where
                     printerOpts = cfgFilePrinterOpts fourmoluConfig
                     config =
