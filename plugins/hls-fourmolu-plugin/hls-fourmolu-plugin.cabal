@@ -47,7 +47,7 @@ library
   elif impl(ghc >= 9.0) && impl(ghc < 9.2)
     build-depends: fourmolu ^>= 0.11
   elif impl(ghc >= 9.2) && impl(ghc < 9.8)
-    build-depends: fourmolu ^>= 0.13
+    build-depends: fourmolu ^>= 0.11
   else
     buildable: false
 
