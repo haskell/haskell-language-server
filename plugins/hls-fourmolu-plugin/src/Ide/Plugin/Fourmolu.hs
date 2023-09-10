@@ -5,6 +5,7 @@
 {-# LANGUAGE NamedFieldPuns           #-}
 {-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
+{-# LANGUAGE RecordWildCards          #-}
 {-# LANGUAGE TypeApplications         #-}
 {-# LANGUAGE TypeOperators            #-}
 
@@ -71,39 +72,19 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
             <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
     useCLI <- liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #external plId properties
     if useCLI
-        then mapExceptT liftIO $ ExceptT
-             $ handle @IOException
-            (pure . Left . PluginInternalError . T.pack . show)
-             $ runExceptT $ cliHandler fileOpts
+        then ExceptT . liftIO $
+                handle @IOException (pure . Left . PluginInternalError . T.pack . show) $
+                    runExceptT (cliHandler fileOpts)
         else do
             logWith recorder Debug $ LogCompiledInVersion VERSION_fourmolu
-            let format fourmoluConfig = ExceptT $
-                    bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
-#if MIN_VERSION_fourmolu(0,11,0)
-                        <$> try @OrmoluException (ormolu config fp' contents)
-#else
-                        <$> try @OrmoluException (ormolu config fp' (T.unpack contents))
-#endif
-                  where
-                    printerOpts = cfgFilePrinterOpts fourmoluConfig
-                    config =
-                        defaultConfig
-                            { cfgDynOptions = map DynOption fileOpts
-                            , cfgFixityOverrides = cfgFileFixities fourmoluConfig
-                            , cfgRegion = region
-                            , cfgDebug = False
-                            , cfgPrinterOpts =
-                                fillMissingPrinterOpts
-                                    (printerOpts <> lspPrinterOpts)
-                                    defaultPrinterOpts
-                            }
-             in liftIO (loadConfigFile fp') >>= \case
+            FourmoluConfig{..} <-
+                liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> do
                         logWith recorder Info $ ConfigPath file
-                        mapExceptT liftIO $ format opts
+                        pure opts
                     ConfigNotFound searchDirs -> do
                         logWith recorder Info $ NoConfigPath searchDirs
-                        mapExceptT liftIO $ format emptyConfig
+                        pure emptyConfig
                     ConfigParseError f err -> do
                         lift $ sendNotification SMethod_WindowShowMessage $
                             ShowMessageParams
@@ -113,6 +94,18 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                         throwError $ PluginInternalError errorMessage
                       where
                         errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
+
+            let config =
+                    defaultConfig
+                        { cfgDynOptions = map DynOption fileOpts
+                        , cfgFixityOverrides = cfgFileFixities
+                        , cfgRegion = region
+                        , cfgDebug = False
+                        , cfgPrinterOpts = resolvePrinterOpts [lspPrinterOpts, cfgFilePrinterOpts]
+                        }
+            ExceptT . liftIO $
+                bimap (PluginInternalError . T.pack . show) (InL . makeDiffTextEdit contents)
+                    <$> try @OrmoluException (ormolu config fp' contents)
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
@@ -200,3 +193,8 @@ newtype CLIVersionInfo = CLIVersionInfo
 
 mwhen :: Monoid a => Bool -> a -> a
 mwhen b x = if b then x else mempty
+
+#if !MIN_VERSION_fourmolu(0,14,0)
+resolvePrinterOpts :: [PrinterOptsPartial] -> PrinterOptsTotal
+resolvePrinterOpts = foldr fillMissingPrinterOpts defaultPrinterOpts
+#endif
