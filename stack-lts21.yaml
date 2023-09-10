@@ -23,7 +23,6 @@ packages:
   - ./plugins/hls-floskell-plugin
   - ./plugins/hls-fourmolu-plugin
   - ./plugins/hls-gadt-plugin
-  # - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-module-name-plugin
   - ./plugins/hls-ormolu-plugin
@@ -34,9 +33,7 @@ packages:
   - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
-  # - ./plugins/hls-stan-plugin
   - ./plugins/hls-stylish-haskell-plugin
-  # - ./plugins/hls-tactics-plugin
 
 ghc-options:
   "$everything": -haddock

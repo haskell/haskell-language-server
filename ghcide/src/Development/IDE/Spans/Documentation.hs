@@ -172,13 +172,7 @@ getDocumentation sources targetName = fromMaybe [] $ do
     sortedNameSpans :: [Located RdrName] -> [RealSrcSpan]
     sortedNameSpans ls = nubSort (mapMaybe (realSpan . getLoc) ls)
     isBetween target before after = before <= target && target <= after
-#if MIN_VERSION_ghc(9,0,0)
     ann = apiAnnComments . pm_annotations
-#else
-    ann = fmap filterReal . snd . pm_annotations
-    filterReal :: [Located a] -> [RealLocated a]
-    filterReal = mapMaybe (\(L l v) -> (`L`v) <$> realSpan l)
-#endif
     annotationFileName :: ParsedModule -> Maybe FastString
     annotationFileName = fmap srcSpanFile . listToMaybe . map getRealSrcSpan . fold . ann
 

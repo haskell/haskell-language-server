@@ -57,20 +57,11 @@ import           GHC                                 (setInteractiveDynFlags)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,0,0)
-import           DynFlags
-import           Hooks
-import           HscTypes                            as Env
-import           Module
-#endif
-
-#if MIN_VERSION_ghc(9,0,0)
 import           GHC.Driver.Hooks                    (Hooks)
 import           GHC.Driver.Session                  hiding (mkHomeModule)
 import           GHC.Unit.Types                      (Module, UnitId)
-#endif
 
-#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+#if !MIN_VERSION_ghc(9,2,0)
 import qualified Data.Set                            as Set
 import qualified GHC.Driver.Session                  as DynFlags
 import           GHC.Driver.Types                    (HscEnv,
@@ -78,12 +69,11 @@ import           GHC.Driver.Types                    (HscEnv,
                                                       hsc_EPS,
                                                       setInteractivePrintName)
 import qualified GHC.Driver.Types                    as Env
-import           GHC.Driver.Ways                     hiding (hostFullWays)
-import qualified GHC.Driver.Ways                     as Ways
+import           GHC.Driver.Ways
 import           GHC.Unit.Types                      (Unit, mkModule)
 #endif
 
-#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,5,0)
+#if !MIN_VERSION_ghc(9,5,0)
 import           GHC.Unit.Module.Name
 #endif
 
@@ -95,8 +85,7 @@ import           Data.IORef
 import           GHC.Driver.Backend                  as Backend
 import qualified GHC.Driver.Env                      as Env
 import qualified GHC.Driver.Session                  as Session
-import           GHC.Platform.Ways                   hiding (hostFullWays)
-import qualified GHC.Platform.Ways                   as Ways
+import           GHC.Platform.Ways
 import           GHC.Runtime.Context
 import           GHC.Unit.Env                        (UnitEnv)
 import           GHC.Unit.Home                       as Home
@@ -130,10 +119,8 @@ type TmpFs = ()
 setHomeUnitId_ :: UnitId -> DynFlags -> DynFlags
 #if MIN_VERSION_ghc(9,2,0)
 setHomeUnitId_ uid df = df { Session.homeUnitId_ = uid }
-#elif MIN_VERSION_ghc(9,0,0)
-setHomeUnitId_ uid df = df { homeUnitId = uid }
 #else
-setHomeUnitId_ uid df = df { thisInstalledUnitId = toInstalledUnitId uid }
+setHomeUnitId_ uid df = df { homeUnitId = uid }
 #endif
 
 hscSetFlags :: DynFlags -> HscEnv -> HscEnv
@@ -202,10 +189,8 @@ homeUnitId_ :: DynFlags -> UnitId
 homeUnitId_ =
 #if MIN_VERSION_ghc(9,2,0)
   Session.homeUnitId_
-#elif MIN_VERSION_ghc(9,0,0)
-  homeUnitId
 #else
-  thisPackage
+  homeUnitId
 #endif
 
 safeImportsOn :: DynFlags -> Bool
@@ -216,20 +201,16 @@ safeImportsOn =
   DynFlags.safeImportsOn
 #endif
 
-#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+#if !MIN_VERSION_ghc(9,2,0)
 type HomeUnit = Unit
-#elif !MIN_VERSION_ghc(9,0,0)
-type HomeUnit = UnitId
 #endif
 
 hscHomeUnit :: HscEnv -> HomeUnit
 hscHomeUnit =
 #if MIN_VERSION_ghc(9,2,0)
   Env.hsc_home_unit
-#elif MIN_VERSION_ghc(9,0,0)
-  homeUnit . Env.hsc_dflags
 #else
-  homeUnitId_ . hsc_dflags
+  homeUnit . Env.hsc_dflags
 #endif
 
 mkHomeModule :: HomeUnit -> ModuleName -> Module
@@ -273,28 +254,16 @@ setInterpreterLinkerOptions df = df {
 -- Ways helpers
 -- -------------------------------------------------------
 
-#if !MIN_VERSION_ghc(9,2,0) && MIN_VERSION_ghc(9,0,0)
+#if !MIN_VERSION_ghc(9,2,0)
 type Ways = Set.Set Way
-#elif !MIN_VERSION_ghc(9,0,0)
-type Ways = [Way]
-#endif
-
-hostFullWays :: Ways
-hostFullWays =
-#if MIN_VERSION_ghc(9,0,0)
-  Ways.hostFullWays
-#else
-  interpWays
 #endif
 
 setWays :: Ways -> DynFlags -> DynFlags
 setWays newWays flags =
 #if MIN_VERSION_ghc(9,2,0)
   flags { Session.targetWays_ = newWays}
-#elif MIN_VERSION_ghc(9,0,0)
-  flags {ways = newWays}
 #else
-  updateWays $ flags {ways = newWays}
+  flags {ways = newWays}
 #endif
 
 -- -------------------------------------------------------

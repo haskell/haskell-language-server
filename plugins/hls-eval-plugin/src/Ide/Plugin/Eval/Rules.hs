@@ -102,18 +102,12 @@ apiAnnComments' pm = do
 
 pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
 pattern RealSrcSpanAlready x = x
-#elif MIN_VERSION_ghc(9,0,0)
+#else
 apiAnnComments' :: ParsedModule -> [SrcLoc.RealLocated AnnotationComment]
 apiAnnComments' = apiAnnRogueComments . pm_annotations
 
 pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
 pattern RealSrcSpanAlready x = x
-#else
-apiAnnComments' :: ParsedModule -> [SrcLoc.Located AnnotationComment]
-apiAnnComments' = concat . Map.elems . snd . pm_annotations
-
-pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcSpan
-pattern RealSrcSpanAlready x = SrcLoc.RealSrcSpan x Nothing
 #endif
 
 evalParsedModuleRule :: Recorder (WithPriority Log) -> Rules ()

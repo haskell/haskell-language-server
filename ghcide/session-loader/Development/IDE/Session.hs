@@ -768,7 +768,6 @@ emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 #endif
 emptyHscEnv nc libDir = do
     env <- runGhc (Just libDir) getSession
-    initDynLinker env
     pure $ setNameCache nc (hscSetFlags ((hsc_dflags env){useUnicode = True }) env)
 
 data TargetDetails = TargetDetails

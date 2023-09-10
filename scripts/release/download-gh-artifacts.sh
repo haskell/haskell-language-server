@@ -13,11 +13,11 @@ for com in gh gpg curl sha256sum ; do
 	command -V ${com} >/dev/null 2>&1
 done
 
-[ ! -e "gh-release-artifacts/${RELEASE}" ]
+[ ! -e "gh-release-artifacts/haskell-language-server-${RELEASE}" ]
 
-mkdir -p "gh-release-artifacts/${RELEASE}"
+mkdir -p "gh-release-artifacts/haskell-language-server-${RELEASE}"
 
-cd "gh-release-artifacts/${RELEASE}"
+cd "gh-release-artifacts/haskell-language-server-${RELEASE}"
 
 # github
 gh release download "$RELEASE"

@@ -39,6 +39,10 @@ prettyBindingNameString name
         toMethodName $ T.drop (T.length bindingPrefix) name
     | otherwise = name
 
+showDoc :: HscEnv -> TcGblEnv -> Type -> String
+showDoc hsc gblEnv ty = showSDocForUser' hsc (mkPrintUnqualifiedDefault hsc (rdrEnv gblEnv)) (pprSigmaType ty)
+    where rdrEnv gblEnv = tcg_rdr_env gblEnv
+
 -- | Paren the name for pretty display if necessary
 toMethodName :: T.Text -> T.Text
 toMethodName n

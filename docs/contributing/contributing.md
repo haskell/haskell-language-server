@@ -198,7 +198,6 @@ pre-commit install
 
 - `test/testdata` and `test/data` are there as we want to test formatting plugins.
 - `hie-compat` is there as we want to keep its code as close to GHC as possible.
-- `hls-tactics-plugin` is there as the main contributor of the plugin (@isovector) does not want auto-formatting.
 
 ## Introduction tutorial
 
