@@ -15,9 +15,13 @@ let
     } // (builtins.mapAttrs (_: drv: disableLibraryProfiling drv) {
       apply-refact = hsuper.apply-refact_0_13_0_0;
 
-      fourmolu = dontCheck (hself.callCabal2nix "fourmolu" inputs.fourmolu-011 {});
-
-      stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell "-fghc-lib";
+      fourmolu = dontCheck (hself.callCabal2nix "fourmolu" inputs.fourmolu-013 {});
+      Cabal-syntax = hsuper.Cabal-syntax_3_10_1_0;
+      Cabal = hsuper.Cabal_3_10_1_0;
+      ghc-lib-parser-ex = hsuper.ghc-lib-parser-ex_9_6_0_1;
+      ormolu = hsuper.ormolu_0_7_1_0;
+      ghc-lib-parser = hsuper.ghc-lib-parser_9_6_2_20230523;
+      stylish-haskell = appendConfigureFlag  hsuper.stylish-haskell_0_14_5_0 "-fghc-lib";
 
       lsp = hself.callCabal2nix "lsp" inputs.lsp {};
       lsp-types = hself.callCabal2nix "lsp-types" inputs.lsp-types {};

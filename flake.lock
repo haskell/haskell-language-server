@@ -58,6 +58,30 @@
         "url": "https://hackage.haskell.org/package/fourmolu-0.12.0.0/fourmolu-0.12.0.0.tar.gz"
       }
     },
+    "fourmolu-013": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-F2j2aKp7XB0OOeRHdRO4I1UiNmt907W/qOvYYRFesew=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/fourmolu-0.13.0.0/fourmolu-0.13.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/fourmolu-0.13.0.0/fourmolu-0.13.0.0.tar.gz"
+      }
+    },
+    "fourmolu-014": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-s4ucw2kSwna2SpWB2jxsRRa/cnyqHSYEFoPBdKTpDq4=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/fourmolu-0.14.0.0/fourmolu-0.14.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/fourmolu-0.14.0.0/fourmolu-0.14.0.0.tar.gz"
+      }
+    },
     "gitignore": {
       "flake": false,
       "locked": {
@@ -213,6 +237,8 @@
         "flake-utils": "flake-utils",
         "fourmolu-011": "fourmolu-011",
         "fourmolu-012": "fourmolu-012",
+        "fourmolu-013": "fourmolu-013",
+        "fourmolu-014": "fourmolu-014",
         "gitignore": "gitignore",
         "haskell-hie-bios": "haskell-hie-bios",
         "haskell-implicit-hie-cradle": "haskell-implicit-hie-cradle",

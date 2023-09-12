@@ -36,6 +36,14 @@
       url = "https://hackage.haskell.org/package/fourmolu-0.12.0.0/fourmolu-0.12.0.0.tar.gz";
       flake = false;
     };
+    fourmolu-013 = {
+      url = "https://hackage.haskell.org/package/fourmolu-0.13.0.0/fourmolu-0.13.0.0.tar.gz";
+      flake = false;
+    };
+    fourmolu-014 = {
+      url = "https://hackage.haskell.org/package/fourmolu-0.14.0.0/fourmolu-0.14.0.0.tar.gz";
+      flake = false;
+    };
     ormolu-052 = {
       url = "https://hackage.haskell.org/package/ormolu-0.5.2.0/ormolu-0.5.2.0.tar.gz";
       flake = false;
@@ -337,6 +345,10 @@
               '';
             }))).overrideAttrs(old: {
               pname = old.pname + "-ghc${hpkgs.ghc.version}";
+
+              buildInputs = [
+                pkgs.pkg-config
+              ];
             });
       in with pkgs; rec {
         # Developement shell with only compiler
