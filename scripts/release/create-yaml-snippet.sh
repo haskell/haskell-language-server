@@ -5,7 +5,7 @@ set -o pipefail
 
 RELEASE=$1
 
-cd "gh-release-artifacts/${RELEASE}"
+cd "gh-release-artifacts/haskell-language-server-${RELEASE}"
 
 cat <<EOF > /dev/stdout
     $RELEASE:
