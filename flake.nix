@@ -345,10 +345,6 @@
               '';
             }))).overrideAttrs(old: {
               pname = old.pname + "-ghc${hpkgs.ghc.version}";
-
-              buildInputs = [
-                pkgs.pkg-config
-              ];
             });
       in with pkgs; rec {
         # Developement shell with only compiler
