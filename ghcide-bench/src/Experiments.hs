@@ -29,7 +29,7 @@ import           Control.Applicative.Combinators    (skipManyTill)
 import           Control.Concurrent.Async           (withAsync)
 import           Control.Exception.Safe             (IOException, handleAny,
                                                      try)
-import           Control.Lens                       ((^.))
+import           Control.Lens                       (_Just, (&), (.~), (^.))
 import           Control.Lens.Extras                (is)
 import           Control.Monad.Extra                (allM, forM, forM_, forever,
                                                      unless, void, when,
@@ -108,6 +108,22 @@ experiments =
       bench "hover" $ allWithIdentifierPos $ \DocumentPositions{..} ->
         isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
+      bench "hover after edit" $ \docs -> do
+        forM_ docs $ \DocumentPositions{..} ->
+          changeDoc doc [charEdit stringLiteralP]
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          isJust <$> getHover doc (fromJust identifierP),
+      ---------------------------------------------------------------------------------------
+      bench
+        "hover after cradle edit"
+        (\docs -> do
+            hieYamlUri <- getDocUri "hie.yaml"
+            liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
+            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+             [ FileEvent hieYamlUri FileChangeType_Changed ]
+            flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
+        ),
+      ---------------------------------------------------------------------------------------
       bench "edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} -> do
           changeDoc doc [charEdit stringLiteralP]
@@ -127,12 +143,6 @@ experiments =
         output "edit: waitForProgressDone"
         waitForProgressDone
         return True,
-      ---------------------------------------------------------------------------------------
-      bench "hover after edit" $ \docs -> do
-        forM_ docs $ \DocumentPositions{..} ->
-          changeDoc doc [charEdit stringLiteralP]
-        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
-          isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "getDefinition" $ allWithIdentifierPos $ \DocumentPositions{..} ->
         hasDefinitions <$> getDefinitions doc (fromJust identifierP),
@@ -162,30 +172,21 @@ experiments =
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           not . null <$> getCompletions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      benchWithSetup
+      bench
         "code actions"
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
-            forM_ docs $ \DocumentPositions{..} -> do
-                forM_ identifierP $ \p -> changeDoc doc [charEdit p]
-                waitForProgressStart
-            waitForProgressDone
-        )
-        ( \docs -> not . null . catMaybes <$> forM docs (\DocumentPositions{..} ->
-            forM identifierP $ \p ->
-              getCodeActions doc (Range p p))
+            not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
+              forM identifierP $ \p ->
+                getCodeActions doc (Range p p))
         ),
       ---------------------------------------------------------------------------------------
-      benchWithSetup
+      bench
         "code actions after edit"
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
-            forM_ docs $ \DocumentPositions{..} ->
-                forM_ identifierP $ \p -> changeDoc doc [charEdit p]
-        )
-        ( \docs -> do
             forM_ docs $ \DocumentPositions{..} -> do
               changeDoc doc [charEdit stringLiteralP]
               waitForProgressStart
@@ -195,15 +196,8 @@ experiments =
                 getCodeActions doc (Range p p))
         ),
       ---------------------------------------------------------------------------------------
-      benchWithSetup
+      bench
         "code actions after cradle edit"
-        ( \docs -> do
-            forM_ docs $ \DocumentPositions{..} -> do
-                forM identifierP $ \p -> do
-                    changeDoc doc [charEdit p]
-                    waitForProgressStart
-            void waitForBuildQueue
-        )
         ( \docs -> do
             hieYamlUri <- getDocUri "hie.yaml"
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
@@ -219,13 +213,20 @@ experiments =
         ),
       ---------------------------------------------------------------------------------------
       bench
-        "hover after cradle edit"
-        (\docs -> do
-            hieYamlUri <- getDocUri "hie.yaml"
-            liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
-            sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-             [ FileEvent hieYamlUri FileChangeType_Changed ]
-            flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
+        "code lens"
+        ( \docs -> not . null <$> forM docs (\DocumentPositions{..} ->
+            getCodeLenses doc)
+        ),
+      ---------------------------------------------------------------------------------------
+      bench
+        "code lens after edit"
+        ( \docs -> do
+            forM_ docs $ \DocumentPositions{..} -> do
+              changeDoc doc [charEdit stringLiteralP]
+              waitForProgressStart
+            waitForProgressDone
+            not . null <$> forM docs (\DocumentPositions{..} -> do
+              getCodeLenses doc)
         ),
       ---------------------------------------------------------------------------------------
       benchWithSetup
@@ -483,7 +484,10 @@ runBenchmarksFun dir allBenchmarks = do
             ]
           ++ ["--ot-memory-profiling" | Just _ <- [otMemoryProfiling ?config]]
     lspTestCaps =
-      fullCaps {_window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
+      fullCaps
+        & (L.window . _Just) .~ WindowClientCapabilities (Just True) Nothing Nothing
+        & (L.textDocument . _Just . L.codeAction . _Just . L.resolveSupport . _Just) .~ (#properties .== ["edit"])
+        & (L.textDocument . _Just . L.codeAction . _Just . L.dataSupport . _Just) .~ True
 
 showMs :: Seconds -> String
 showMs = printf "%.2f"
@@ -512,7 +516,7 @@ waitForProgressStart :: Session ()
 waitForProgressStart = void $ do
     skipManyTill anyMessage $ satisfy $ \case
       FromServerMess SMethod_WindowWorkDoneProgressCreate _ -> True
-      _                                                     -> False
+      _                                              -> False
 
 -- | Wait for all progress to be done
 -- Needs at least one progress done notification to return
@@ -542,11 +546,9 @@ runBench ::
   (Session BenchRun -> IO BenchRun) ->
   Bench ->
   IO BenchRun
-runBench runSess b = handleAny (\e -> print e >> return badRun)
+runBench runSess Bench{..} = handleAny (\e -> print e >> return badRun)
   $ runSess
   $ do
-    case b of
-     Bench{..} -> do
       (startup, docs) <- duration $ do
         (d, docs) <- duration $ setupDocumentContents ?config
         output $ "Setting up document contents took " <> showDuration d

@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.2", "9.4.7", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
+        ghc: ["9.6.2", "9.4.7", "9.2.8", "9.0.2"]
         platform: [ { image: "debian:9"
                     , installCmd: "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
                     , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
@@ -118,15 +118,6 @@ jobs:
         # Perhaps we can migrate *all* unknown linux builds to a uniform
         # image.
         include:
-          - ghc: 8.10.7
-            platform:
-              { image: "rockylinux:8"
-              , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
-              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
-              , DISTRO: "Unknown"
-              , ARTIFACT: "x86_64-linux-unknown"
-              , ADD_CABAL_ARGS: "--enable-split-sections"
-              }
           - ghc: 9.0.2
             platform:
               { image: "rockylinux:8"
@@ -140,24 +131,6 @@ jobs:
             platform:
               { image: "rockylinux:8"
               , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
-              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
-              , DISTRO: "Unknown"
-              , ARTIFACT: "x86_64-linux-unknown"
-              , ADD_CABAL_ARGS: "--enable-split-sections"
-              }
-          - ghc: 9.4.5
-            platform:
-              { image: "fedora:27"
-              , installCmd: "dnf install -y"
-              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
-              , DISTRO: "Unknown"
-              , ARTIFACT: "x86_64-linux-unknown"
-              , ADD_CABAL_ARGS: "--enable-split-sections"
-              }
-          - ghc: 9.4.6
-            platform:
-              { image: "fedora:27"
-              , installCmd: "dnf install -y"
               , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
               , DISTRO: "Unknown"
               , ARTIFACT: "x86_64-linux-unknown"
@@ -195,7 +168,7 @@ jobs:
           echo "ID=linux" >> /etc/os-release
           echo "PRETTY_NAME=Linux" >> /etc/os-release
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Run build
         run: |
@@ -240,7 +213,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.6.2", "9.4.7", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
+        ghc: ["9.6.2", "9.4.7", "9.2.8", "9.0.2"]
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
@@ -253,7 +226,7 @@ jobs:
         shell: bash
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
         name: Run build (aarch64 linux)
@@ -300,10 +273,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.2", "9.4.7", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
+        ghc: ["9.6.2", "9.4.7", "9.2.8", "9.0.2"]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run build
         run: |
@@ -345,26 +318,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.2", "9.4.7", "9.4.6", "9.4.5", "9.2.8", "8.10.7"]
+        ghc: ["9.6.2", "9.4.7", "9.2.8"]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run build
         run: |
-          if test "${GHC_VERSION}" = "8.10.7"; then
-            bash .github/scripts/brew.sh git coreutils llvm@11 autoconf automake tree
-            export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@11/bin:$PATH"
-            export CC="$HOME/.brew/opt/llvm@11/bin/clang"
-            export CXX="$HOME/.brew/opt/llvm@11/bin/clang++"
-            export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
-            export LLC="$HOME/.brew/opt/llvm@11/bin/llc"
-            export OPT="$HOME/.brew/opt/llvm@11/bin/opt"
-            export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
-          else
-            bash .github/scripts/brew.sh git coreutils autoconf automake tree
-            export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$PATH"
-          fi
+          bash .github/scripts/brew.sh git coreutils autoconf automake tree
+          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$PATH"
           export LD=ld
           bash .github/scripts/build.sh
           tar cf out-${ARTIFACT}-${GHC_VERSION}.tar out/ store/
@@ -401,7 +363,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.2", "9.4.7", "9.4.6", "9.4.5", "9.2.8", "9.0.2", "8.10.7"]
+        ghc: ["9.6.2", "9.4.7", "9.2.8", "9.0.2"]
     steps:
       - name: install windows deps
         shell: pwsh
@@ -412,7 +374,7 @@ jobs:
           taskkill /F /FI "MODULES eq msys-2.0.dll"
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run build (windows)
         run: |
@@ -521,7 +483,7 @@ jobs:
           echo "ID=linux" >> /etc/os-release
           echo "PRETTY_NAME=Linux" >> /etc/os-release
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -573,7 +535,7 @@ jobs:
           git config --global --get-all safe.directory | grep '^\*$' || git config --global --add safe.directory "*"
         shell: bash
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -612,7 +574,7 @@ jobs:
       ARCH: 64
       ARTIFACT: "x86_64-apple-darwin"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -650,7 +612,7 @@ jobs:
       ARCH: ARM64
       ARTIFACT: "aarch64-apple-darwin"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -702,7 +664,7 @@ jobs:
           C:\msys64\usr\bin\bash -lc "pacman --disable-download-timeout --noconfirm -S unzip zip git"
           taskkill /F /FI "MODULES eq msys-2.0.dll"
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -816,7 +778,7 @@ jobs:
           echo "ID=linux" >> /etc/os-release
           echo "PRETTY_NAME=Linux" >> /etc/os-release
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -852,7 +814,7 @@ jobs:
         shell: bash
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -876,7 +838,7 @@ jobs:
       DISTRO: na
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -901,7 +863,7 @@ jobs:
       HOMEBREW_CHANGE_ARCH_TO_ARM: 1
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -940,7 +902,7 @@ jobs:
           taskkill /F /FI "MODULES eq msys-2.0.dll"
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -961,7 +923,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
