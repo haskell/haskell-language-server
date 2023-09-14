@@ -25,11 +25,12 @@ import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (toJSON)
-import           Data.Char                            (isLower)
-import           Data.List                            (intercalate, isPrefixOf,
-                                                       minimumBy)
+import           Data.Char                            (isLower, isUpper)
+import           Data.List                            (intercalate, minimumBy,
+                                                       stripPrefix, uncons)
 import qualified Data.List.NonEmpty                   as NE
 import qualified Data.Map                             as Map
+import           Data.Maybe                           (mapMaybe)
 import           Data.Ord                             (comparing)
 import           Data.String                          (IsString)
 import qualified Data.Text                            as T
@@ -154,15 +155,17 @@ pathModuleNames recorder state normFilePath filePath
       mdlPath <- liftIO $ makeAbsolute filePath
       logWith recorder Debug (AbsoluteFilePath mdlPath)
 
-      let prefixes = filter (`isPrefixOf` mdlPath) paths
-      pure (map (moduleNameFrom mdlPath) prefixes)
+      let suffixes = mapMaybe (`stripPrefix` mdlPath) paths
+      pure (map moduleNameFrom suffixes)
   where
-    moduleNameFrom mdlPath prefix =
+    moduleNameFrom =
       T.pack
         . intercalate "."
+        -- Do not suggest names whose components start from a lower-case char,
+        -- they are guaranteed to be malformed.
+        . filter (maybe False (isUpper . fst) . uncons)
         . splitDirectories
-        . drop (length prefix)
-        $ dropExtension mdlPath
+        . dropExtension
 
 -- | The module name, as stated in the module
 codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))

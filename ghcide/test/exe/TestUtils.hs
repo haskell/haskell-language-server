@@ -166,10 +166,6 @@ xfail = flip expectFailBecause
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause = ignoreFor (BrokenForOS Windows)
 
-ignoreInWindowsForGHC810 :: TestTree -> TestTree
-ignoreInWindowsForGHC810 =
-    ignoreFor (BrokenSpecific Windows [GHC810]) "tests are unreliable in windows for ghc 8.10"
-
 ignoreForGHC92Plus :: String -> TestTree -> TestTree
 ignoreForGHC92Plus = ignoreFor (BrokenForGHC [GHC92, GHC94, GHC96])
 

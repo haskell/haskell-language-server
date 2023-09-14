@@ -205,10 +205,7 @@ tests = let
   , test  yes    yes    lclL33     lcb           "listcomp lookup"
   , test  yes    yes    mclL36     mcl           "top-level fn 1st clause"
   , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #1030"
-  , if ghcVersion >= GHC810 then
-        test  yes    yes    spaceL37   space         "top-level fn on space           #1002"
-    else
-        test  yes    broken spaceL37   space         "top-level fn on space           #1002"
+  , test  yes    yes    spaceL37   space         "top-level fn on space           #1002"
   , test  no     yes    docL41     doc           "documentation                   #1129"
   , test  no     yes    eitL40     kindE         "kind of Either                  #1017"
   , test  no     yes    intL40     kindI         "kind of Int                     #1017"

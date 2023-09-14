@@ -23,7 +23,7 @@ jobs:
       ghcs: ${{ steps.ghcs.outputs.ghcs }}
     steps:
       # Need the repo checked out in order to read the file
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - id: ghcs
         run: echo "ghcs=$(cat ./.github/workflows/supported-ghc-versions.json)" >> $GITHUB_OUTPUT
       - id: skip_check
@@ -83,7 +83,7 @@ jobs:
              test: true
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup-build
         with:
@@ -155,10 +155,6 @@ jobs:
         name: Test hls-eval-plugin
         run: cabal test hls-eval-plugin --test-options="$TEST_OPTS" || cabal test hls-eval-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2' && matrix.ghc != '9.4' && matrix.ghc != '9.6'
-        name: Test hls-haddock-comments-plugin
-        run: cabal test hls-haddock-comments-plugin --test-options="$TEST_OPTS" || cabal test hls-haddock-comments-plugin --test-options="$TEST_OPTS"
-
       - if: matrix.test
         name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin --test-options="$TEST_OPTS" || cabal test hls-splice-plugin --test-options="$TEST_OPTS"
@@ -175,10 +171,6 @@ jobs:
         name: Test hls-fourmolu-plugin
         run: cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS" || cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2' && matrix.ghc != '9.4' && matrix.ghc != '9.6'
-        name: Test hls-tactics-plugin test suite
-        run: cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || cabal test hls-tactics-plugin --test-options="$TEST_OPTS"
-
       - if: matrix.test
         name: Test hls-explicit-imports-plugin test suite
         run: cabal test hls-explicit-imports-plugin --test-options="$TEST_OPTS" || cabal test hls-explicit-imports-plugin --test-options="$TEST_OPTS"
@@ -194,10 +186,6 @@ jobs:
       - if: matrix.test
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin --test-options="$TEST_OPTS" || cabal test hls-hlint-plugin --test-options="$TEST_OPTS"
-
-      - if: matrix.test && matrix.ghc != '9.0' && matrix.ghc != '9.2' && matrix.ghc != '9.4' && matrix.ghc != '9.6'
-        name: Test hls-stan-plugin test suite
-        run: cabal test hls-stan-plugin --test-options="$TEST_OPTS" || cabal test hls-stan-plugin --test-options="$TEST_OPTS"
 
       - if: matrix.test
         name: Test hls-module-name-plugin test suite
@@ -232,7 +220,7 @@ jobs:
         run: cabal test hls-explicit-record-fields-plugin --test-options="$TEST_OPTS" || cabal test hls-explicit-record-fields-plugin --test-options="$TEST_OPTS"
 
       ## version needs to be limited since the tests depend on cabal-fmt which only builds using specific ghc versions
-      - if: matrix.test && matrix.ghc == '8.10'
+      - if: matrix.test && matrix.ghc == '9.2'
         name: Test hls-cabal-fmt-plugin test suite
         run: cabal test hls-cabal-fmt-plugin --flag=isolateTests --test-options="$TEST_OPTS" || cabal test hls-cabal-fmt-plugin --flag=isolateTests --test-options="$TEST_OPTS"
 
@@ -244,7 +232,7 @@ jobs:
         name: Test hls-retrie-plugin test suite
         run: cabal test hls-retrie-plugin --test-options="$TEST_OPTS" || cabal test hls-retrie-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '8.10' && matrix.ghc != '9.0'
+      - if: matrix.test && matrix.ghc != '9.0'
         name: Test hls-overloaded-record-dot-plugin test suite
         run: cabal test hls-overloaded-record-dot-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-overloaded-record-dot-plugin --test-options="$TEST_OPTS"
 

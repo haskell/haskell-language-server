@@ -27,15 +27,7 @@ import qualified Language.LSP.Protocol.Types  as J
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if !MIN_VERSION_ghc(9,0,0)
-import qualified OccName                      as Occ
-#endif
-
-#if MIN_VERSION_ghc(9,0,0)
 import qualified GHC.Types.Name.Occurrence    as Occ
-#endif
-
-
 
 -- | Produce completions info for a file
 type instance RuleResult LocalCompletions = CachedCompletions

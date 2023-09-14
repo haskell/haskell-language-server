@@ -28,10 +28,6 @@ import qualified Ide.Plugin.Cabal                  as Cabal
 import qualified Ide.Plugin.Class                  as Class
 #endif
 
-#if hls_haddockComments
-import qualified Ide.Plugin.HaddockComments        as HaddockComments
-#endif
-
 #if hls_eval
 import qualified Ide.Plugin.Eval                   as Eval
 #endif
@@ -50,16 +46,8 @@ import qualified Ide.Plugin.Rename                 as Rename
 import qualified Ide.Plugin.Retrie                 as Retrie
 #endif
 
-#if hls_tactic
-import qualified Ide.Plugin.Tactic                 as Tactic
-#endif
-
 #if hls_hlint
 import qualified Ide.Plugin.Hlint                  as Hlint
-#endif
-
-#if hls_stan
-import qualified Ide.Plugin.Stan                   as Stan
 #endif
 
 #if hls_moduleName
@@ -165,9 +153,6 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       -- cabalFormattingProvider in the Default Config
       let pId = "cabal-fmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
 #endif
-#if hls_tactic
-      let pId = "tactics" in Tactic.descriptor (pluginRecorder pId) pId:
-#endif
 #if hls_ormolu
       let pId = "ormolu" in Ormolu.descriptor (pluginRecorder pId) pId :
 #endif
@@ -186,9 +171,6 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #if hls_class
       let pId = "class" in Class.descriptor (pluginRecorder pId) pId:
 #endif
-#if hls_haddockComments
-      let pId = "haddockComments" in HaddockComments.descriptor (pluginRecorder pId) pId:
-#endif
 #if hls_eval
       let pId = "eval" in Eval.descriptor (pluginRecorder pId) pId:
 #endif
@@ -203,9 +185,6 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_hlint
       let pId = "hlint" in Hlint.descriptor (pluginRecorder pId) pId:
-#endif
-#if hls_stan
-      let pId = "stan" in Stan.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_splice
       Splice.descriptor "splice" :

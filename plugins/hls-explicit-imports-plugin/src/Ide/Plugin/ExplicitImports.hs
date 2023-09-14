@@ -398,9 +398,6 @@ extractMinimalImports hsc TcModuleResult {..} = runMaybeT $ do
       notExported []  _ = True
       notExported exports (L _ ImportDecl{ideclName = L _ name}) =
           not $ any (\e -> ("module " ++ moduleNameString name) == e) exports
-#if !MIN_VERSION_ghc (9,0,0)
-      notExported _ _ = True
-#endif
 
 isExplicitImport :: ImportDecl GhcRn -> Bool
 #if MIN_VERSION_ghc (9,5,0)

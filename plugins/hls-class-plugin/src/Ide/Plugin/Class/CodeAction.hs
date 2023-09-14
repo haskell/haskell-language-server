@@ -106,6 +106,8 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
             cls <- findClassFromIdentifier docPath ident
             InstanceBindTypeSigsResult sigs <- runActionE "classplugin.codeAction.GetInstanceBindTypeSigs" state
                 $ useE GetInstanceBindTypeSigs docPath
+            (tmrTypechecked -> gblEnv ) <- runActionE "classplugin.codeAction.TypeCheck" state $ useE TypeCheck docPath
+            (hscEnv -> hsc) <- runActionE "classplugin.codeAction.GhcSession" state $ useE GhcSession docPath
             implemented <- findImplementedMethods ast instancePosition
             logWith recorder Info (LogImplementedMethods cls implemented)
             pure
@@ -113,15 +115,15 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
                 $ nubOrdOn snd
                 $ filter ((/=) mempty . snd)
                 $ fmap (second (filter (\(bind, _) -> bind `notElem` implemented)))
-                $ mkMethodGroups range sigs cls
+                $ mkMethodGroups hsc gblEnv range sigs cls
             where
                 range = diag ^. L.range
 
-                mkMethodGroups :: Range -> [InstanceBindTypeSig] -> Class -> [MethodGroup]
-                mkMethodGroups range sigs cls = minimalDef <> [allClassMethods]
+                mkMethodGroups :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> Class -> [MethodGroup]
+                mkMethodGroups hsc gblEnv range sigs cls = minimalDef <> [allClassMethods]
                     where
-                        minimalDef = minDefToMethodGroups range sigs $ classMinimalDef cls
-                        allClassMethods = ("all missing methods", makeMethodDefinitions range sigs)
+                        minimalDef = minDefToMethodGroups hsc gblEnv range sigs $ classMinimalDef cls
+                        allClassMethods = ("all missing methods", makeMethodDefinitions hsc gblEnv range sigs)
 
                 mkAction :: MethodGroup -> [Command |? CodeAction]
                 mkAction (name, methods)
@@ -211,15 +213,15 @@ type MethodName = T.Text
 type MethodDefinition = (MethodName, MethodSignature)
 type MethodGroup = (T.Text, [MethodDefinition])
 
-makeMethodDefinition :: InstanceBindTypeSig -> MethodDefinition
-makeMethodDefinition sig = (name, signature)
+makeMethodDefinition :: HscEnv -> TcGblEnv -> InstanceBindTypeSig -> MethodDefinition
+makeMethodDefinition hsc gblEnv sig = (name, signature)
     where
         name = T.drop (T.length bindingPrefix) (printOutputable  (bindName sig))
-        signature = bindRendered sig
+        signature = prettyBindingNameString (printOutputable (bindName sig)) <> " :: " <> T.pack (showDoc hsc gblEnv (bindType sig))
 
-makeMethodDefinitions :: Range -> [InstanceBindTypeSig] -> [MethodDefinition]
-makeMethodDefinitions range sigs =
-    [ makeMethodDefinition sig
+makeMethodDefinitions :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> [MethodDefinition]
+makeMethodDefinitions hsc gblEnv range sigs =
+    [ makeMethodDefinition hsc gblEnv sig
     | sig <- sigs
     , inRange range (getSrcSpan $ bindName sig)
     ]
@@ -228,14 +230,14 @@ signatureToName :: InstanceBindTypeSig -> T.Text
 signatureToName sig = T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
 
 -- Return [groupName text, [(methodName text, signature text)]]
-minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [MethodGroup]
-minDefToMethodGroups range sigs minDef = makeMethodGroup <$> go minDef
+minDefToMethodGroups :: HscEnv -> TcGblEnv -> Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [MethodGroup]
+minDefToMethodGroups hsc gblEnv range sigs minDef = makeMethodGroup <$> go minDef
     where
         makeMethodGroup methodDefinitions =
             let name = mconcat $ intersperse "," $ (\x -> "'" <> x <> "'") . fst <$> methodDefinitions
             in  (name, methodDefinitions)
 
-        go (Var mn)   = pure $ makeMethodDefinitions range $ filter ((==) (printOutputable mn) . signatureToName) sigs
+        go (Var mn)   = pure $ makeMethodDefinitions hsc gblEnv range $ filter ((==) (printOutputable mn) . signatureToName) sigs
         go (Or ms)    = concatMap (go . unLoc) ms
         go (And ms)   = foldr (liftA2 (<>)) [[]] (fmap (go . unLoc) ms)
         go (Parens m) = go (unLoc m)
