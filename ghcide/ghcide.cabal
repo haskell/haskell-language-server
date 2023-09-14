@@ -192,6 +192,7 @@ library
         Development.IDE.LSP.Outline
         Development.IDE.LSP.Server
         Development.IDE.Session
+        Development.IDE.Session.Diagnostics
         Development.IDE.Spans.Common
         Development.IDE.Spans.Documentation
         Development.IDE.Spans.AtPoint

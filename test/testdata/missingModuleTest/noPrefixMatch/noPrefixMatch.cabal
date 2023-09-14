@@ -1,0 +1,9 @@
+cabal-version: 3.4
+name:          noPrefixMatch
+version:       0.1.0.0
+build-type:    Simple
+
+executable testExe
+  main-is:        Main.hs
+  hs-source-dirs: app
+  build-depends:  base
