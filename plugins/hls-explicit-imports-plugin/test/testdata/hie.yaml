@@ -1,4 +1,3 @@
-
 cradle:
   direct:
     arguments:
@@ -9,6 +8,7 @@ cradle:
     - ExplicitA.hs
     - ExplicitB.hs
     - RefineUsualCase.hs
+    - RefineQualified.hs
     - RefineWithOverride.hs
     - RefineA.hs
     - RefineB.hs

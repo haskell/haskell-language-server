@@ -479,16 +479,20 @@ filterByImport _ _ = Nothing
 
 constructImport :: LImportDecl GhcRn -> (ModuleName, [AvailInfo]) -> LImportDecl GhcRn
 #if MIN_VERSION_ghc(9,5,0)
-constructImport (L lim imd@ImportDecl {ideclName = L _ _, ideclImportList = Just (hiding, L _ names)})
+constructImport (L lim imd@ImportDecl {ideclName = L _ _, ideclQualified = qualified, ideclImportList = Just (hiding, L _ names)})
 #else
-constructImport (L lim imd@ImportDecl{ideclName = L _ _, ideclHiding = Just (hiding, L _ names)})
+constructImport (L lim imd@ImportDecl{ideclName = L _ _, ideclQualified = qualified, ideclHiding = Just (hiding, L _ names)})
 #endif
   (newModuleName, avails) = L lim imd
     { ideclName = noLocA newModuleName
 #if MIN_VERSION_ghc(9,5,0)
-    , ideclImportList = Just (hiding, noLocA newNames)
+    , ideclImportList = if hiding == Exactly && qualified /= NotQualified
+                        then Nothing
+                        else Just (hiding, noLocA newNames)
 #else
-    , ideclHiding = Just (hiding, noLocA newNames)
+    , ideclHiding = if hiding == Exactly && qualified /= NotQualified
+                        then Nothing
+                        else Just (hiding, noLocA newNames)
 #endif
     }
     where newNames = filter (\n -> any (n `containsAvail`) avails) names
