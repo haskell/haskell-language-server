@@ -10,7 +10,11 @@ author:             Pepe Iborra
 maintainer:         pepeiborra@gmail.com
 category:           Development
 build-type:         Simple
-extra-source-files: LICENSE
+extra-source-files:
+  LICENSE
+  test/Main.hs
+  test/testdata/*.hs
+  test/testdata/*.yaml
 
 source-repository head
     type:     git
