@@ -316,42 +316,32 @@ minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogSha
         return $ mi_exports $ hirModIface imp_hir
 
   -- Use the GHC api to extract the "minimal" imports
-  (imports, mbMinImports) <- MaybeT $ liftIO $ extractMinimalImports hsc tmr
+  locationImportWithMinimal <- MaybeT $ liftIO $ extractMinimalImports hsc tmr
 
-  let importsMap =
-        Map.fromList
-          [ (realSrcSpanStart l, printOutputable i)
-            | L (locA -> RealSrcSpan l _) i <- mbMinImports
-          ]
-      minimalImportsResult =
-        [ (range, (minImport, ExplicitImport))
-          | imp@(L _ impDecl) <- imports
+  let minimalImportsResult =
+        [ (range, (printOutputable minImport, ExplicitImport))
+          | (location, impDecl, minImport) <- locationImportWithMinimal
           , not (isQualifiedImport impDecl)
           , not (isExplicitImport impDecl)
           , let L _ moduleName = ideclName impDecl
           , modFilter moduleName
-          , RealSrcSpan location _ <- [getLoc imp]
-          , let range = realSrcSpanToRange location
-          , Just minImport <- [Map.lookup (realSrcSpanStart location) importsMap]
-        ]
+          , let range = realSrcSpanToRange location]
+
       refineImportsResult =
         [ (range, (T.intercalate "\n"
-                . map (printOutputable . constructImport i)
+                . map (printOutputable . constructImport origImport minImport)
                 . Map.toList
                 $ filteredInnerImports, RefineImport))
         -- for every minimal imports
-        | minImports <- [mbMinImports]
-        , i@(L _ ImportDecl{ideclName = L _ mn}) <- minImports
+        | (location, origImport, minImport@(ImportDecl{ideclName = L _ mn})) <- locationImportWithMinimal
         -- (almost) no one wants to see an refine import list for Prelude
         , mn /= moduleName pRELUDE
         -- we check for the inner imports
         , Just innerImports <- [Map.lookup mn import2Map]
         -- and only get those symbols used
-        , Just filteredInnerImports <- [filterByImport i innerImports]
+        , Just filteredInnerImports <- [filterByImport minImport innerImports]
         -- if no symbols from this modules then don't need to generate new import
         , not $ null filteredInnerImports
-        -- get the location
-        , RealSrcSpan location _ <- [getLoc i]
         -- and then convert that to a Range
         , let range = realSrcSpanToRange location
         ]
@@ -370,7 +360,7 @@ minimalImportsRule recorder modFilter = defineNoDiagnostics (cmapWithPrio LogSha
 extractMinimalImports ::
   HscEnvEq ->
   TcModuleResult ->
-  IO (Maybe ([LImportDecl GhcRn], [LImportDecl GhcRn]))
+  IO (Maybe [(RealSrcSpan, ImportDecl GhcRn, ImportDecl GhcRn)])
 extractMinimalImports hsc TcModuleResult {..} = runMaybeT $ do
   -- extract the original imports and the typechecking environment
   let tcEnv = tmrTypechecked
@@ -391,8 +381,17 @@ extractMinimalImports hsc TcModuleResult {..} = runMaybeT $ do
   (_, Just minimalImports) <- liftIO $
     initTcWithGbl (hscEnv hsc) tcEnv srcSpan $ getMinimalImports usage
 
+  let minimalImportsMap =
+        Map.fromList
+          [ (realSrcSpanStart l, impDecl)
+            | L (locA -> RealSrcSpan l _) impDecl <- minimalImports
+          ]
+      results =
+          [ (location, imp, minImport)
+          | L (locA -> RealSrcSpan location _) imp <- imports
+          , Just minImport <- [Map.lookup (realSrcSpanStart location) minimalImportsMap]]
   -- return both the original imports and the computed minimal ones
-  return (imports, minimalImports)
+  return results
   where
       notExported :: [String] -> LImportDecl GhcRn -> Bool
       notExported []  _ = True
@@ -451,11 +450,11 @@ abbreviateImportTitle input =
 --------------------------------------------------------------------------------
 
 
-filterByImport :: LImportDecl GhcRn -> Map.Map ModuleName [AvailInfo] -> Maybe (Map.Map ModuleName [AvailInfo])
+filterByImport :: ImportDecl GhcRn -> Map.Map ModuleName [AvailInfo] -> Maybe (Map.Map ModuleName [AvailInfo])
 #if MIN_VERSION_ghc(9,5,0)
-filterByImport (L _ ImportDecl{ideclImportList = Just (_, L _ names)})
+filterByImport (ImportDecl{ideclImportList = Just (_, L _ names)})
 #else
-filterByImport (L _ ImportDecl{ideclHiding = Just (_, L _ names)})
+filterByImport (ImportDecl{ideclHiding = Just (_, L _ names)})
 #endif
   avails =
       -- if there is a function defined in the current module and is used
@@ -474,20 +473,20 @@ filterByImport (L _ ImportDecl{ideclHiding = Just (_, L _ names)})
           $ Map.elems res
 filterByImport _ _ = Nothing
 
-constructImport :: LImportDecl GhcRn -> (ModuleName, [AvailInfo]) -> LImportDecl GhcRn
+constructImport :: ImportDecl GhcRn -> ImportDecl GhcRn -> (ModuleName, [AvailInfo]) -> ImportDecl GhcRn
 #if MIN_VERSION_ghc(9,5,0)
-constructImport (L lim imd@ImportDecl {ideclName = L _ _, ideclQualified = qualified, ideclImportList = Just (hiding, L _ names)})
+constructImport ImportDecl{ideclQualified = qualified, ideclHiding = origHiding} imd@ImportDecl{ideclImportList = Just (hiding, L _ names)}
 #else
-constructImport (L lim imd@ImportDecl{ideclName = L _ _, ideclQualified = qualified, ideclHiding = Just (hiding, L _ names)})
+constructImport ImportDecl{ideclQualified = qualified, ideclHiding = origHiding} imd@ImportDecl{ideclHiding = Just (hiding, L _ names)}
 #endif
-  (newModuleName, avails) = L lim imd
+  (newModuleName, avails) = imd
     { ideclName = noLocA newModuleName
 #if MIN_VERSION_ghc(9,5,0)
-    , ideclImportList = if hiding == Exactly && qualified /= NotQualified
+    , ideclImportList = if noExplicitList origHiding && qualified /= NotQualified
                         then Nothing
                         else Just (hiding, noLocA newNames)
 #else
-    , ideclHiding = if hiding == Exactly && qualified /= NotQualified
+    , ideclHiding = if noExplicitList origHiding && qualified /= NotQualified
                         then Nothing
                         else Just (hiding, noLocA newNames)
 #endif
@@ -498,5 +497,7 @@ constructImport (L lim imd@ImportDecl{ideclName = L _ _, ideclQualified = qualif
           containsAvail name avail =
             any (\an -> printOutputable an == (printOutputable . ieName . unLoc $ name))
               $ availNamesWithSelectors avail
-
-constructImport lim _ = lim
+          noExplicitList mList = case mList of
+                                      Nothing      -> True
+                                      Just (_, xs) -> not $ null xs
+constructImport _ lim _ = lim
