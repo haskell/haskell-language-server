@@ -9,6 +9,7 @@ cradle:
     - ExplicitB.hs
     - RefineUsualCase.hs
     - RefineQualified.hs
+    - RefineQualifiedExplicit.hs
     - RefineWithOverride.hs
     - RefineA.hs
     - RefineB.hs
