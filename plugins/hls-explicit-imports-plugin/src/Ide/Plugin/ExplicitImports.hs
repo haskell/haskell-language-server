@@ -29,7 +29,7 @@ import qualified Data.IntMap                          as IM (IntMap, elems,
                                                              fromList, (!?))
 import           Data.IORef                           (readIORef)
 import qualified Data.Map.Strict                      as Map
-import           Data.Maybe                           (mapMaybe)
+import           Data.Maybe                           (isNothing, mapMaybe)
 import qualified Data.Set                             as S
 import           Data.String                          (fromString)
 import qualified Data.Text                            as T
@@ -482,11 +482,11 @@ constructImport ImportDecl{ideclQualified = qualified, ideclHiding = origHiding}
   (newModuleName, avails) = imd
     { ideclName = noLocA newModuleName
 #if MIN_VERSION_ghc(9,5,0)
-    , ideclImportList = if noExplicitList origHiding && qualified /= NotQualified
+    , ideclImportList = if isNothing origHiding && qualified /= NotQualified
                         then Nothing
                         else Just (hiding, noLocA newNames)
 #else
-    , ideclHiding = if noExplicitList origHiding && qualified /= NotQualified
+    , ideclHiding = if isNothing origHiding && qualified /= NotQualified
                         then Nothing
                         else Just (hiding, noLocA newNames)
 #endif
@@ -497,7 +497,5 @@ constructImport ImportDecl{ideclQualified = qualified, ideclHiding = origHiding}
           containsAvail name avail =
             any (\an -> printOutputable an == (printOutputable . ieName . unLoc $ name))
               $ availNamesWithSelectors avail
-          noExplicitList mList = case mList of
-                                      Nothing      -> True
-                                      Just (_, xs) -> not $ null xs
+
 constructImport _ lim _ = lim
