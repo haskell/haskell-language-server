@@ -475,7 +475,7 @@ filterByImport _ _ = Nothing
 
 constructImport :: ImportDecl GhcRn -> ImportDecl GhcRn -> (ModuleName, [AvailInfo]) -> ImportDecl GhcRn
 #if MIN_VERSION_ghc(9,5,0)
-constructImport ImportDecl{ideclQualified = qualified, ideclHiding = origHiding} imd@ImportDecl{ideclImportList = Just (hiding, L _ names)}
+constructImport ImportDecl{ideclQualified = qualified, ideclImportList = origHiding} imd@ImportDecl{ideclImportList = Just (hiding, L _ names)}
 #else
 constructImport ImportDecl{ideclQualified = qualified, ideclHiding = origHiding} imd@ImportDecl{ideclHiding = Just (hiding, L _ names)}
 #endif
