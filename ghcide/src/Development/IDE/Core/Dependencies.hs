@@ -63,6 +63,11 @@ import           System.FilePath                ((<.>), (</>))
  - index project HIE files.
  -}
 
+-- | We make this newtype only so that we can have an Ord
+-- instance. This gives us the convenience of being able
+-- to use a Package as the key in the Map packagesWithModules,
+-- and process the packages and their modules using the
+-- Map.traverseWithKey function.
 newtype Package = Package GHC.UnitInfo deriving Eq
 instance Ord Package where
   compare (Package u1) (Package u2) = compare (GHC.unitId u1) (GHC.unitId u2)
