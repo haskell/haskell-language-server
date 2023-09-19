@@ -72,7 +72,7 @@ lookupMod HieDbWriter{indexQueue} hieFile moduleName uid _boot = MaybeT $ do
     Just projectRoot -> do
       -- Database writes happen asynchronously. We use an MVar to mark
       -- completion of the database update.
-      completionToken <- liftIO $ newEmptyMVar
+      completionToken <- liftIO newEmptyMVar
       -- Write out the contents of the dependency source to the
       -- .hls/dependencies directory, generate a URI for that
       -- location, and update the HieDb database with the source
@@ -111,7 +111,7 @@ lookupMod HieDbWriter{indexQueue} hieFile moduleName uid _boot = MaybeT $ do
             HieDb.addSrcFile db hieFile writeOutPath False
           -- Mark completion of the database update.
           putMVar completionToken ()
-      pure $ moduleUri
+      pure moduleUri
       where
         -- The source will be written out in a directory from the
         -- name and hash of the package the dependency module is
