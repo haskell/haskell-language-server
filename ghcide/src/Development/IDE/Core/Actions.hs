@@ -146,7 +146,10 @@ getAtPoint file pos = runMaybeT $ do
   (hf, mapping) <- useWithStaleFastMT GetHieAst file
   -- The HscEnv and DKMap are not strictly necessary for hover
   -- to work, so we only calculate them for project files, not
-  -- for dependency files.
+  -- for dependency files. They provide information that will
+  -- not be displayed in dependency files. See the atPoint
+  -- function in ghcide/src/Development/IDE/Spans/AtPoint.hs
+  -- for the specifics of how they are used.
   (mEnv, mDkMap) <- case getSourceFileOrigin file of
     FromDependency -> pure (Nothing, Nothing)
     FromProject -> do
