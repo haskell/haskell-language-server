@@ -217,6 +217,19 @@ data HieAstResult
   -- ^ Is this hie file loaded from the disk, or freshly computed?
   }
 
+-- | Make an HieAstResult from a loaded HieFile
+makeHieAstResult :: HieFile -> HieAstResult
+makeHieAstResult hieFile =
+    HAR
+        (hie_module hieFile)
+        hieAsts
+        (generateReferencesMap $ M.elems $ getAsts hieAsts)
+        mempty
+        (HieFromDisk hieFile)
+    where
+        hieAsts :: HieASTs TypeIndex
+        hieAsts = hie_asts hieFile
+
 data HieKind a where
   HieFromDisk :: !HieFile -> HieKind TypeIndex
   HieFresh :: HieKind Type
