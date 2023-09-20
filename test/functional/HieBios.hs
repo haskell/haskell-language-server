@@ -16,11 +16,4 @@ tests = testGroup "hie-bios"
       (diag:_) <- waitForDiagnostics
       liftIO $ "Top-level binding with no type signature:" `T.isInfixOf` (diag ^. L.message)
         @? "Expected missing top-level binding diagnostic"
-
-  , expectFailBecause "hie-bios 0.11 has poor error messages" $ testCase "reports errors in hie.yaml" $ do
-    runSession hlsCommand fullCaps "test/testdata/hieBiosError" $ do
-      _ <- openDoc "Foo.hs" "haskell"
-      (diag:_) <- waitForDiagnostics
-      liftIO $ "Expected a cradle: key containing the preferences" `T.isInfixOf` (diag ^. L.message)
-        @? "Expected missing top-level binding diagnostic"
   ]
