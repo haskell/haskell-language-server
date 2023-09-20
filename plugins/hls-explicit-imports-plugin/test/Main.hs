@@ -31,6 +31,8 @@ main = defaultTestRunner $ testGroup "import-actions"
     "Refine Imports"
     [ codeActionGoldenTest "RefineWithOverride" 3 1
     , codeLensGoldenTest isRefineImports "RefineUsualCase" 1
+    , codeLensGoldenTest isRefineImports "RefineQualified" 0
+    , codeLensGoldenTest isRefineImports "RefineQualifiedExplicit" 0
     ],
   testGroup
     "Make imports explicit"
