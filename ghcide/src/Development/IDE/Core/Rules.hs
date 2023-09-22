@@ -891,7 +891,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
           let !fp = Just $! hiFileFingerPrint x
           return (fp, (diags, Just x))
 
--- The result of checkHieFile, which returns a reason why an
+-- | The result of checkHieFile, which returns a reason why an
 -- HIE file should not be indexed, or the data necessary for
 -- indexing in the HieDb database.
 data HieFileCheck
@@ -900,7 +900,7 @@ data HieFileCheck
   | CouldNotLoadHie SomeException
   | DoIndexing Util.Fingerprint HieFile
 
--- checkHieFile verifies that an HIE file exists, that it has not already
+-- | checkHieFile verifies that an HIE file exists, that it has not already
 -- been indexed, and attempts to load it. This is intended to happen before
 -- any indexing of HIE files in the HieDb database. In addition to returning
 -- a HieFileCheck, this function also handles logging.

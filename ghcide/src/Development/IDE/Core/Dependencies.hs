@@ -72,7 +72,7 @@ newtype Package = Package GHC.UnitInfo deriving Eq
 instance Ord Package where
   compare (Package u1) (Package u2) = compare (GHC.unitId u1) (GHC.unitId u2)
 
--- indexDependencyHieFiles gets all of the direct and transitive dependencies
+-- | indexDependencyHieFiles gets all of the direct and transitive dependencies
 -- from the HscEnv and indexes their HIE files in the HieDb.
 indexDependencyHieFiles :: Recorder (WithPriority Log) -> ShakeExtras -> GHC.HscEnv -> IO ()
 indexDependencyHieFiles recorder se hscEnv = do
@@ -162,7 +162,7 @@ indexDependencyHieFiles recorder se hscEnv = do
                     $ GHC.explicitUnits
                     $ GHC.unitState hscEnv
 
--- calculateTransitiveDependencies finds the UnitId keys in the UnitInfoMap
+-- | calculateTransitiveDependencies finds the UnitId keys in the UnitInfoMap
 -- that are dependencies or transitive dependencies.
 calculateTransitiveDependencies :: GHC.UnitInfoMap -> Set GHC.UnitId -> Set GHC.UnitId -> Set GHC.UnitId
 calculateTransitiveDependencies unitInfoMap allDependencies newDepencencies

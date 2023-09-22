@@ -58,7 +58,7 @@ fileDoneIndexing fpSuffix =
                         fpSuffix `isSuffixOf` fpDirs
                 other -> error $ "Failed to parse ghcide/reference/ready file: " <> show other
 
--- Tests that we can go to the definition of a term in a dependency.
+-- | Tests that we can go to the definition of a term in a dependency.
 -- In this case, we are getting the definition of the data
 -- constructor AsyncCancelled.
 dependencyTermTest :: TestTree
@@ -84,7 +84,7 @@ dependencyTermTest = testSessionWithExtraFiles "dependency" "gotoDefinition term
                     assertFailure $ "Wrong location for AsyncCancelled: "
                         ++ show wrongLocation
 
--- Tests that we can go to the definition of a type in a dependency.
+-- | Tests that we can go to the definition of a type in a dependency.
 -- In this case, we are getting the definition of the type AsyncCancelled.
 dependencyTypeTest :: TestTree
 dependencyTypeTest = testSessionWithExtraFiles "dependency" "gotoDefinition type in async" $
@@ -109,7 +109,7 @@ dependencyTypeTest = testSessionWithExtraFiles "dependency" "gotoDefinition type
                     assertFailure $ "Wrong location for AsyncCancelled: "
                         ++ show wrongLocation
 
--- Tests that we can go to the definition of a dependency, and then
+-- | Tests that we can go to the definition of a dependency, and then
 -- from the dependency file we can use gotoDefinition to see a
 -- tranisive dependency.
 transitiveDependencyTest :: TestTree
@@ -155,7 +155,7 @@ transitiveDependencyTest = testSessionWithExtraFiles "dependency" "goto transiti
                     assertFailure $ "Wrong location for Hashable: "
                         ++ show wrongLocation
 
--- Testing that we can go to a definition in an autogen module of a
+-- | Testing that we can go to a definition in an autogen module of a
 -- dependency. We use the repository https://github.com/nlander/minimal-autogen.git
 -- as the dependency. It is a minimal package with an autogen module,
 -- allowing us to avoid building a larger dependency in CI just for
@@ -185,7 +185,7 @@ autogenDependencyTest = testSessionWithExtraFiles "dependency-autogen" "goto aut
                         assertFailure $ "Wrong location for version: "
                             ++ show wrongLocation
 
--- Tests that we can go to a definition in a boot library, that is,
+-- | Tests that we can go to a definition in a boot library, that is,
 -- one of the libraries that ships with GHC. In this case we are
 -- going to a definition in containers. This does not currently work
 -- for available GHC versions but hopefully will for later versions
@@ -217,7 +217,7 @@ bootDependencyTest = knownBrokenForGhcVersions [GHC810, GHC90, GHC92, GHC94, GHC
                         assertFailure $ "Wrong location for empty: "
                             ++ show wrongLocation
 
--- Testing that we can go to a definition in a where clause in a dependency.
+-- | Testing that we can go to a definition in a where clause in a dependency.
 -- This currently fails, but it is unclear why.
 whereClauseDependencyTest :: TestTree
 whereClauseDependencyTest = expectFailBecause "TODO: figure out why where clauses in dependencies are not indexed" $
