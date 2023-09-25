@@ -108,7 +108,7 @@ indexDependencyHieFiles recorder se hscEnv = do
                 -- extra-compilation-artifacts directory, provided
                 -- it is compiled with the -fwrite-ide-info ghc option.
                 hieDir :: FilePath
-                hieDir = pkgLibDir </> "extra-compilation-artifacts"
+                hieDir = pkgLibDir </> "extra-compilation-artifacts" </> "hie"
                 unit :: GHC.Unit
                 unit = GHC.RealUnit $ GHC.Definite $ GHC.unitId package
             -- Check if we have already indexed this package.
