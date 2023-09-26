@@ -22,7 +22,7 @@
 [hackage]: https://hackage.haskell.org/package/haskell-language-server
 [badge-codetriage]: https://www.codetriage.com/haskell/haskell-language-server/badges/users.svg
 [codetriage]:https://www.codetriage.com/haskell/haskell-language-server
-[badge-matrix]:https://img.shields.io/matrix/:roomAlias
+[badge-matrix]:https://img.shields.io/badge/chat-on%20matrix-brightgreen.svg
 [matrix]:https://matrix.to/#/#haskell-language-server:matrix.org
 [github-release]:https://github.com/haskell/haskell-language-server/releases/latest
 
