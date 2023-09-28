@@ -106,7 +106,7 @@ jobs:
                     , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
                     , DISTRO: "CentOS"
                     , ARTIFACT: "x86_64-linux-centos7"
-                    , ADD_CABAL_ARGS: "--enable-split-sections"
+                    , ADD_CABAL_ARGS: "--enable-split-sections --constraint='text -simdutf'" # centos7 gcc is too old to build text +simdutf
                     }
                   ]
         # TODO: rm
