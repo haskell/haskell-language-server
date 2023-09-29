@@ -47,7 +47,7 @@ library
   elif impl(ghc >= 9.2) && impl(ghc < 9.8)
     build-depends: fourmolu ^>= 0.14
   else
-    buildable: false
+    buildable: False
 
   -- fourmolu 0.9.0 fails to build on Windows CI for reasons unknown
   if impl(ghc >= 9.2) && os(windows) && impl(ghc < 9.4)
@@ -64,7 +64,7 @@ test-suite tests
   build-tool-depends:
     fourmolu:fourmolu
   build-depends:
-    , base
+    , base            >=4.12 && <5
     , aeson
     , containers
     , filepath
