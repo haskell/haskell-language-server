@@ -32,8 +32,8 @@
       url = "https://hackage.haskell.org/package/fourmolu-0.11.0.0/fourmolu-0.11.0.0.tar.gz";
       flake = false;
     };
-    fourmolu-012 = {
-      url = "https://hackage.haskell.org/package/fourmolu-0.12.0.0/fourmolu-0.12.0.0.tar.gz";
+    fourmolu-014 = {
+      url = "https://hackage.haskell.org/package/fourmolu-0.14.0.0/fourmolu-0.14.0.0.tar.gz";
       flake = false;
     };
     ormolu-052 = {

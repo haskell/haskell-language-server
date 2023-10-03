@@ -36,7 +36,7 @@ let
       hlint = hself.callCabal2nix "hlint" inputs.hlint-36 {};
       implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.haskell-implicit-hie-cradle { };
 
-      fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu-012 {};
+      fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu-014 {};
 
       ghc-lib-parser-ex = hsuper.ghc-lib-parser-ex_9_6_0_0;
 
