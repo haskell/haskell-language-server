@@ -5,23 +5,33 @@ module Dependency where
 
 import qualified Control.Applicative             as Applicative
 import           Control.Applicative.Combinators (skipManyTill)
+import           Control.Lens                    (preview, (^.))
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
 import           Data.Bool                       (bool)
 import           Data.List                       (isSuffixOf)
 import           Data.Maybe                      (fromMaybe)
 import           Data.Proxy                      (Proxy (..))
+import           Data.Text                       (isPrefixOf)
 import           Development.IDE.GHC.Compat      (GhcVersion (..))
-import           Language.LSP.Protocol.Message   (TCustomMessage (NotMess),
+import qualified Language.LSP.Protocol.Lens      as L
+import           Language.LSP.Protocol.Message   (FromServerMessage' (FromServerMess),
+                                                  SMethod (SMethod_Progress, SMethod_TextDocumentPublishDiagnostics),
+                                                  TCustomMessage (NotMess),
                                                   TNotificationMessage (..))
-import           Language.LSP.Protocol.Types     (Definition (..),
+import           Language.LSP.Protocol.Types     (Definition (..), Diagnostic,
                                                   Location (..), Position (..),
+                                                  ProgressParams (..),
                                                   Range (..),
+                                                  WorkDoneProgressEnd (..),
+                                                  _workDoneProgressEnd,
                                                   type (|?) (InL, InR),
                                                   uriToFilePath)
 import           Language.LSP.Test               (Session, anyMessage,
                                                   customNotification,
-                                                  getDefinitions, openDoc)
+                                                  getDefinitions, message,
+                                                  openDoc, satisfyMaybe,
+                                                  waitForDiagnostics)
 import           System.FilePath                 (splitDirectories, (<.>),
                                                   (</>))
 import           Test.Tasty                      (TestTree, testGroup)
@@ -58,6 +68,27 @@ fileDoneIndexing fpSuffix =
                         fpSuffix `isSuffixOf` fpDirs
                 other -> error $ "Failed to parse ghcide/reference/ready file: " <> show other
 
+waitForDiagnosticsOrDoneIndexing :: Session [Diagnostic]
+waitForDiagnosticsOrDoneIndexing =
+    skipManyTill anyMessage (diagnosticsMessage Applicative.<|> doneIndexing)
+    where
+        diagnosticsMessage :: Session [Diagnostic]
+        diagnosticsMessage = do
+            diagnosticsNotification <- message SMethod_TextDocumentPublishDiagnostics
+            let diagnosticss = diagnosticsNotification ^. L.params . L.diagnostics
+            return diagnosticss
+        doneIndexing :: Session [Diagnostic]
+        doneIndexing = satisfyMaybe $ \case
+            FromServerMess SMethod_Progress (TNotificationMessage _ _ (ProgressParams t (preview _workDoneProgressEnd -> Just params))) ->
+                case params of
+                    (WorkDoneProgressEnd _ m) ->
+                        case m of
+                            Just message -> bool Nothing (Just []) $
+                                "Finished indexing" `isPrefixOf` message
+                            _ -> Nothing
+                    _ -> Nothing
+            _ -> Nothing
+
 -- | Tests that we can go to the definition of a term in a dependency.
 -- In this case, we are getting the definition of the data
 -- constructor AsyncCancelled.
@@ -68,6 +99,7 @@ dependencyTermTest = testSessionWithExtraFiles "dependency" "gotoDefinition term
         _hieFile <- fileDoneIndexing ["Control", "Concurrent", "Async.hie"]
         defs <- getDefinitions doc (Position 5 20)
         let expRange = Range (Position 430 22) (Position 430 36)
+        diagnostics <- waitForDiagnosticsOrDoneIndexing
         case defs of
             InL (Definition (InR [Location fp actualRange])) ->
                 liftIO $ do
@@ -78,6 +110,7 @@ dependencyTermTest = testSessionWithExtraFiles "dependency" "gotoDefinition term
                     assertBool "AsyncCancelled found in a module that is not Control.Concurrent Async"
                         $ ["Control", "Concurrent", "Async.hs"]
                             `isSuffixOf` locationDirectories
+                    diagnostics @?= []
                     actualRange @?= expRange
             wrongLocation ->
                 liftIO $
