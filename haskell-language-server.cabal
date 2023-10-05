@@ -529,21 +529,12 @@ test-suite func-test
 
   main-is:            Main.hs
   other-modules:
-    Command
-    Completion
     Config
-    Deferred
-    Definition
-    Diagnostic
     Format
     FunctionalBadProject
     FunctionalCodeAction
     HieBios
-    Highlight
     Progress
-    Reference
-    Symbol
-    TypeDefinition
     Test.Hls.Command
     Test.Hls.Flags
 

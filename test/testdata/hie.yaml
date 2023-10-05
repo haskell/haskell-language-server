@@ -3,10 +3,5 @@ cradle:
     arguments:
       - "-Wmissing-signatures"
       - "CodeActionImport"
-      - "CodeActionOnly"
-      - "CodeActionRename"
-      - "Highlight"
-      - "Symbols"
-      - "TopLevelSignature"
-      - "TypedHoles"
-      - "TypedHoles2"
+      - "CodeActionImportPostQualified"
+      - "CodeActionImportQualified"
