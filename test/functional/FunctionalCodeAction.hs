@@ -26,7 +26,7 @@ tests = testGroup "code actions"
 -- TODO: move these tests to hls-refactor-plugin
 importQualifiedTests :: TestTree
 importQualifiedTests = testGroup "import qualified prefix suggestions" [
-    testCase "qualified import works with 3.8 code action kinds" $ runSessionWithConfig (def {lspConfig = hlsConfigToClientConfig testConfig}) hlsCommand fullCaps "test/testdata" $ do
+    testCase "qualified import works with 3.8 code action kinds" $ runSessionWithConfig def hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "CodeActionImportQualified.hs" "haskell"
         (diag:_) <- waitForDiagnosticsFrom doc
         liftIO $ diag ^. L.message @?=
@@ -52,7 +52,7 @@ importQualifiedTests = testGroup "import qualified prefix suggestions" [
 -- TODO: move these tests to ghcide, or the plugin that provides this code action.
 importQualifiedPostTests :: TestTree
 importQualifiedPostTests = testGroup "import qualified postfix suggestions" [
-    testCase "qualified import in postfix position works with 3.8 code action kinds" $ runSessionWithConfig (def {lspConfig = hlsConfigToClientConfig testConfig}) hlsCommand fullCaps "test/testdata" $ do
+    testCase "qualified import in postfix position works with 3.8 code action kinds" $ runSessionWithConfig def hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "CodeActionImportPostQualified.hs" "haskell"
         (diag:_) <- waitForDiagnosticsFrom doc
         liftIO $ diag ^. L.message @?=
