@@ -528,21 +528,43 @@ insertImportTests = testGroup "insert import"
       "ModuleDeclAndImports.hs"
       "ModuleDeclAndImports.expected.hs"
       "import Data.Monoid"
+  , importQualifiedTests
+  ]
+
+importQualifiedTests :: TestTree
+importQualifiedTests = testGroup "import qualified prefix suggestions"
+  [ checkImport'
+      "qualified import works with 3.8 code action kinds"
+      "ImportQualified.hs"
+      "ImportQualified.expected.hs"
+      "import qualified Control.Monad as Control"
+      ["import Control.Monad (when)"]
+  , checkImport'
+      "qualified import in postfix position works with 3.8 code action kinds"
+      "ImportPostQualified.hs"
+      "ImportPostQualified.expected.hs"
+      "import Control.Monad qualified as Control"
+      ["import qualified Control.Monad as Control", "import Control.Monad (when)"]
   ]
 
 checkImport :: String -> FilePath -> FilePath -> T.Text -> TestTree
 checkImport testComment originalPath expectedPath action =
+  checkImport' testComment originalPath expectedPath action []
+
+checkImport' :: String -> FilePath -> FilePath -> T.Text -> [T.Text] -> TestTree
+checkImport' testComment originalPath expectedPath action excludedActions =
   testSessionWithExtraFiles "import-placement" testComment $ \dir ->
     check (dir </> originalPath) (dir </> expectedPath) action
   where
     check :: FilePath -> FilePath -> T.Text -> Session ()
     check originalPath expectedPath action = do
       oSrc <- liftIO $ readFileUtf8 originalPath
-      eSrc <- liftIO $  readFileUtf8 expectedPath
+      eSrc <- liftIO $ readFileUtf8 expectedPath
       originalDoc <- createDoc originalPath "haskell" oSrc
       _ <- waitForDiagnostics
       shouldBeDoc <- createDoc expectedPath "haskell" eSrc
       actionsOrCommands <- getAllCodeActions originalDoc
+      for_ excludedActions (\a -> liftIO $ assertNoActionWithTitle a actionsOrCommands)
       chosenAction <- liftIO $ pickActionWithTitle action actionsOrCommands
       executeCodeAction chosenAction
       originalDocAfterAction <- documentContents originalDoc
@@ -3723,6 +3745,21 @@ pickActionWithTitle :: T.Text -> [Command |? CodeAction] -> IO CodeAction
 pickActionWithTitle title actions = do
   assertBool ("Found no matching actions for " <> show title <> " in " <> show titles) (not $ null matches)
   return $ head matches
+  where
+    titles =
+        [ actionTitle
+        | InR CodeAction { _title = actionTitle } <- actions
+        ]
+    matches =
+        [ action
+        | InR action@CodeAction { _title = actionTitle } <- actions
+        , title == actionTitle
+        ]
+
+assertNoActionWithTitle :: T.Text -> [Command |? CodeAction] -> IO ()
+assertNoActionWithTitle title actions = do
+  assertBool ("Unexpected code action " <> show title <> " in " <> show titles) (null matches)
+  pure ()
   where
     titles =
         [ actionTitle

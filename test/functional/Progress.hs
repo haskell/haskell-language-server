@@ -18,7 +18,6 @@ import           Data.Text                          (Text, pack)
 import           Ide.Types
 import           Language.LSP.Protocol.Capabilities
 import qualified Language.LSP.Protocol.Lens         as L
-import           System.FilePath                    ((</>))
 import           Test.Hls
 import           Test.Hls.Command
 import           Test.Hls.Flags
@@ -29,10 +28,10 @@ tests =
     testGroup
         "window/workDoneProgress"
         [ testCase "sends indefinite progress notifications" $
-            runSession hlsCommand progressCaps "test/testdata" $ do
-                let path = "diagnostics" </> "Foo.hs"
+            runSession hlsCommand progressCaps "test/testdata/diagnostics" $ do
+                let path = "Foo.hs"
                 _ <- openDoc path "haskell"
-                expectProgressMessages [pack ("Setting up testdata (for " ++ path ++ ")"), "Processing", "Indexing"] []
+                expectProgressMessages [pack ("Setting up diagnostics (for " ++ path ++ ")"), "Processing", "Indexing"] []
         , requiresEvalPlugin $ testCase "eval plugin sends progress reports" $
             runSession hlsCommand progressCaps "plugins/hls-eval-plugin/test/testdata" $ do
               doc <- openDoc "T1.hs" "haskell"

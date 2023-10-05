@@ -532,7 +532,6 @@ test-suite func-test
     Config
     Format
     FunctionalBadProject
-    FunctionalCodeAction
     HieBios
     Progress
     Test.Hls.Command
