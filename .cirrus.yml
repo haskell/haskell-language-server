@@ -17,7 +17,7 @@ build_task:
     ARTIFACT: "x86_64-freebsd"
     DISTRO: "na"
     RUNNER_OS: "FreeBSD"
-    ADD_CABAL_ARGS: "--enable-split-sections"
+    ADD_CABAL_ARGS: "--enable-split-sections --constraint='text -simdutf'"
     GITHUB_WORKSPACE: ${CIRRUS_WORKING_DIR}
     CABAL_CACHE_NONFATAL: "yes"
   matrix:
