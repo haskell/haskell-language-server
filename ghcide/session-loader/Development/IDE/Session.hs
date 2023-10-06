@@ -266,7 +266,7 @@ loadWithImplicitCradle mHieYaml rootDir = do
 
 getInitialGhcLibDirDefault :: Recorder (WithPriority Log) -> FilePath -> IO (Maybe LibDir)
 getInitialGhcLibDirDefault recorder rootDir = do
-  hieYaml <- findCradle def rootDir
+  hieYaml <- findCradle def (rootDir </> "a")
   cradle <- loadCradle def hieYaml rootDir
   libDirRes <- getRuntimeGhcLibDir (toCologActionWithPrio (cmapWithPrio LogHieBios recorder)) cradle
   case libDirRes of

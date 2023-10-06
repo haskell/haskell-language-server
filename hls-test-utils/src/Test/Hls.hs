@@ -617,6 +617,7 @@ runSessionWithServer' plugins conf sconf caps root s =  withLock lock $ keepCurr
                 , argsDefaultHlsConfig = conf
                 , argsLogger = argsLogger
                 , argsIdeOptions = ideOptions
+                , argsProjectRoot = Just root
                 }
 
     x <- runSessionWithHandles inW outR sconf' caps root s
