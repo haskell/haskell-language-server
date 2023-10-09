@@ -1,18 +1,11 @@
 module Test.Hls.Command
-  ( hlsCommand,
-    hlsCommandExamplePlugin,
-    hlsCommandVomit,
-    logFilePath,
+  ( hlsCommand
   )
 where
 
 import           Data.Maybe         (fromMaybe)
 import           System.Environment (lookupEnv)
 import           System.IO.Unsafe   (unsafePerformIO)
-import           Test.Hls
-
-logFilePath :: String
-logFilePath = "hls-" ++ show ghcVersion ++ ".log"
 
 -- | The command to execute the version of hls for the current compiler.
 --
@@ -24,9 +17,3 @@ hlsCommand :: String
 hlsCommand = unsafePerformIO $ do
   testExe <- fromMaybe "haskell-language-server" <$> lookupEnv "HLS_TEST_EXE"
   pure $ testExe ++ " --lsp -d -j4"
-
-hlsCommandVomit :: String
-hlsCommandVomit = hlsCommand ++ " --vomit"
-
-hlsCommandExamplePlugin :: String
-hlsCommandExamplePlugin = hlsCommand ++ " --example"

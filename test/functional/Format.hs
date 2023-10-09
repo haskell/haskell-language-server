@@ -4,10 +4,8 @@ module Format (tests) where
 
 import           Control.Lens                ((^.))
 import           Control.Monad.IO.Class
-import qualified Data.ByteString.Lazy        as BS
 import           Data.Functor                (void)
 import qualified Data.Text                   as T
-import qualified Data.Text.Encoding          as T
 import qualified Data.Text.IO                as T
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens  as L
@@ -19,34 +17,13 @@ import           Test.Hls.Flags              (requiresFloskellPlugin,
                                               requiresOrmoluPlugin)
 
 tests :: TestTree
-tests = testGroup "format document" [
-    requiresOrmoluPlugin $ goldenGitDiff "works" "test/testdata/format/Format.formatted_document.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-        doc <- openDoc "Format.hs" "haskell"
-        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
-        BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-    , requiresOrmoluPlugin $ goldenGitDiff "works with custom tab size" "test/testdata/format/Format.formatted_document_with_tabsize.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-        doc <- openDoc "Format.hs" "haskell"
-        formatDoc doc (FormattingOptions 5 True Nothing Nothing Nothing)
-        BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-    , rangeTests
-    , providerTests
-    ]
-
-rangeTests :: TestTree
-rangeTests = requiresOrmoluPlugin $ testGroup "format range" [
-    goldenGitDiff "works" "test/testdata/format/Format.formatted_range.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-        doc <- openDoc "Format.hs" "haskell"
-        formatRange doc (FormattingOptions 2 True Nothing Nothing Nothing) (Range (Position 5 0) (Position 7 10))
-        BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-    , goldenGitDiff "works with custom tab size" "test/testdata/format/Format.formatted_range_with_tabsize.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-        doc <- openDoc "Format.hs" "haskell"
-        formatRange doc (FormattingOptions 5 True Nothing Nothing Nothing) (Range (Position 8 0) (Position 11 19))
-        BS.fromStrict . T.encodeUtf8 <$> documentContents doc
+tests = testGroup "format document"
+    [ providerTests
     ]
 
 providerTests :: TestTree
-providerTests = testGroup "formatting provider" [
-    testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsCommand fullCaps "test/testdata/format" $ do
+providerTests = testGroup "lsp formatting provider"
+    [ testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsCommand fullCaps "test/testdata/format" $ do
         void configurationRequest
         doc <- openDoc "Format.hs" "haskell"
         resp <- request SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)

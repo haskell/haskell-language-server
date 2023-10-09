@@ -3,7 +3,8 @@
 /ghcide/session-loader @pepeiborra @fendor
 /hls-graph @pepeiborra
 /hls-plugin-api @berberman
-/hls-test-utils
+/hls-test-utils @fendor
+/test @fendor
 /hie-compat
 
 # Plugins

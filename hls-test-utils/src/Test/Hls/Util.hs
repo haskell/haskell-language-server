@@ -25,6 +25,7 @@ module Test.Hls.Util
     , knownBrokenOnWindows
     , knownBrokenForGhcVersions
     , knownBrokenInEnv
+    , knownBrokenInSpecificEnv
     , onlyWorkForGhcVersions
     -- * Extract code actions
     , fromAction
@@ -123,10 +124,16 @@ hostOS
     | isMac = MacOS
     | otherwise = Linux
 
--- | Mark as broken if /any/ of environmental spec mathces the current environment.
+-- | Mark as broken if /any/ of the environmental specs matches the current environment.
 knownBrokenInEnv :: [EnvSpec] -> String -> TestTree -> TestTree
 knownBrokenInEnv envSpecs reason
     | any matchesCurrentEnv envSpecs = expectFailBecause reason
+    | otherwise = id
+
+-- | Mark as broken if /all/ environmental specs match the current environment.
+knownBrokenInSpecificEnv :: [EnvSpec] -> String -> TestTree -> TestTree
+knownBrokenInSpecificEnv envSpecs reason
+    | all matchesCurrentEnv envSpecs = expectFailBecause reason
     | otherwise = id
 
 knownBrokenOnWindows :: String -> TestTree -> TestTree
