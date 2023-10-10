@@ -21,7 +21,8 @@ download_cabal_cache "$HOME/.local/bin/cabal-cache"
 # build
 ghcup install ghc "${GHC_VERSION}"
 ghcup set ghc "${GHC_VERSION}"
-(cd .. && ecabal update) # run cabal update outside project dir
+sed -i.bak -e '/DELETE MARKER FOR CI/,/END DELETE/d' cabal.project # see comment in cabal.project
+ecabal update
 ecabal user-config diff
 ecabal user-config init -f
 "ghc-${GHC_VERSION}" --info
@@ -56,7 +57,6 @@ case "$(uname)" in
 		cp "$(cabal list-bin -v0 ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/${ARTIFACT}/haskell-language-server-wrapper${ext}"
         ;;
 	*)
-		sed -i.bak -e '/DELETE MARKER FOR CI/,/END DELETE/d' cabal.project # see comment in cabal.project
 		emake --version
 		emake GHCUP=ghcup CABAL_CACHE_BIN=cabal-cache.sh S3_HOST="${S3_HOST}" S3_KEY="${ARTIFACT}" GHC_VERSION="${GHC_VERSION}" hls-ghc
         ;;
