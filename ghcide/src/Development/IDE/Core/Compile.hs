@@ -73,7 +73,7 @@ import           Data.Time                         (UTCTime (..))
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Debug.Trace
-import           Development.IDE.Core.FileStore    (resetInterfaceStore, shareFilePath)
+import           Development.IDE.Core.FileStore    (resetInterfaceStore)
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
@@ -150,6 +150,8 @@ import           GHC.Core.Lint.Interactive
 #if MIN_VERSION_ghc(9,7,0)
 import           Data.Foldable                     (toList)
 import           GHC.Unit.Module.Warnings
+#else
+import           Development.IDE.Core.FileStore    (shareFilePath)
 #endif
 
 --Simple constants to make sure the source is consistently named

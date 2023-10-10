@@ -176,14 +176,14 @@ pprNoLocMsgEnvelope :: Error.RenderableDiagnostic e => MsgEnvelope e -> SDoc
 #endif
 pprNoLocMsgEnvelope (MsgEnvelope { errMsgDiagnostic = e
                                  , errMsgContext   = unqual })
-  = sdocWithContext $ \ctx ->
+  = sdocWithContext $ \_ctx ->
     withErrStyle unqual $
 #if MIN_VERSION_ghc(9,7,0)
       (formatBulleted e)
 #elif MIN_VERSION_ghc(9,3,0)
-      (formatBulleted ctx $ e)
+      (formatBulleted _ctx $ e)
 #else
-      (formatBulleted ctx $ Error.renderDiagnostic e)
+      (formatBulleted _ctx $ Error.renderDiagnostic e)
 #endif
 
 #else
