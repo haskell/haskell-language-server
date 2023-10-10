@@ -1164,7 +1164,7 @@ defineEarlyCutoff'
     -> (Value v -> Action (Maybe BS.ByteString, IdeResult v))
     -> Action (RunResult (A (RuleResult k)))
 defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
-    ShakeExtras{state, progress, dirtyKeys} <- getShakeExtras
+    ShakeExtras{state, progress, dirtyKeys, logger} <- getShakeExtras
     options <- getIdeOptions
     (if optSkipProgress options key then id else inProgress progress file) $ do
         val <- case mbOld of
@@ -1203,10 +1203,12 @@ defineEarlyCutoff' doDiagnostics cmp key file mbOld mode action = do
                             -- Rule that is not on the whitelist defined by
                             -- isSafeDependencyRule should be disabled for dependency
                             -- files. If one is found, it should be changed.
-                            else error $
-                                "defineEarlyCutoff': Undefined action for dependency source files\n"
-                                ++ show file ++ "\n"
-                                ++ show key
+                            else do
+                                liftIO $ logError logger $ T.pack $
+                                    "defineEarlyCutoff': Undefined action for dependency source files\n"
+                                    ++ show file ++ "\n"
+                                    ++ show key
+                                doAction
                 ver <- estimateFileVersionUnsafely key mbRes file
                 (bs, res) <- case mbRes of
                     Nothing -> do
