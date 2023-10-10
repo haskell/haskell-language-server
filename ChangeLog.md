@@ -1,6 +1,26 @@
 # Changelog for haskell-language-server
 
-## 2.3.0.0.0
+## 2.4.0.0
+
+* Support for GHC 9.8.1
+* Fix broken Windows binaries (#3822)
+
+### Pull Requests
+
+- Remove constraint on stm-hamt
+  ([#3829](https://github.com/haskell/haskell-language-server/pull/3829)) by @iMichka
+- Cleanup func-test suite
+  ([#3828](https://github.com/haskell/haskell-language-server/pull/3828)) by @fendor
+- Bump haskell/actions from 2.4.6 to 2.4.7 in /.github/actions/setup-build
+  ([#3824](https://github.com/haskell/haskell-language-server/pull/3824)) by @dependabot[bot]
+- Bump haskell/actions from 2.4.6 to 2.4.7
+  ([#3823](https://github.com/haskell/haskell-language-server/pull/3823)) by @dependabot[bot]
+- Release 2.3.0.0
+  ([#3818](https://github.com/haskell/haskell-language-server/pull/3818)) by @wz1000
+- GHC 9.8 support
+  ([#3727](https://github.com/haskell/haskell-language-server/pull/3727)) by @wz1000
+
+## 2.3.0.0
 
 * Binaries for GHC 9.6.3
 * Drop support for GHC 8.10

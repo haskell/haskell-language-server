@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-pragmas-plugin
-version:            2.3.0.0
+version:            2.4.0.0
 synopsis:           Pragmas plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -29,8 +29,8 @@ library
     , extra
     , fuzzy
     , ghc
-    , ghcide                == 2.3.0.0
-    , hls-plugin-api        == 2.3.0.0
+    , ghcide                == 2.4.0.0
+    , hls-plugin-api        == 2.4.0.0
     , lens
     , lsp
     , text
@@ -51,7 +51,7 @@ test-suite tests
     , base
     , filepath
     , hls-pragmas-plugin
-    , hls-test-utils      == 2.3.0.0
+    , hls-test-utils      == 2.4.0.0
     , lens
     , lsp-types
     , text
