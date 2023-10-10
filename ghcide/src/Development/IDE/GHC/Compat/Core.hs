@@ -152,7 +152,9 @@ module Development.IDE.GHC.Compat.Core (
     pattern AvailTC,
     Avail.availName,
     Avail.availNames,
+#if !MIN_VERSION_ghc(9,7,0)
     Avail.availNamesWithSelectors,
+#endif
     Avail.availsToNameSet,
     -- * TcGblEnv
     TcGblEnv(..),
@@ -376,7 +378,9 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Name.Reader,
     module GHC.Utils.Error,
 #if MIN_VERSION_ghc(9,2,0)
+#if !MIN_VERSION_ghc(9,7,0)
     module GHC.Types.Avail,
+#endif
     module GHC.Types.SourceFile,
     module GHC.Types.SourceText,
     module GHC.Types.TyThing,
@@ -556,7 +560,9 @@ import           GHC.Parser.Lexer             hiding (initParserState, getPsMess
 import           GHC.Parser.Annotation        (EpAnn (..))
 import           GHC.Platform.Ways
 import           GHC.Runtime.Context          (InteractiveImport (..))
+#if !MIN_VERSION_ghc(9,7,0)
 import           GHC.Types.Avail              (greNamePrintableName)
+#endif
 import           GHC.Types.Fixity             (LexicalFixity (..), Fixity (..), defaultFixity)
 import           GHC.Types.Meta
 import           GHC.Types.Name.Set
@@ -631,7 +637,9 @@ pattern RealSrcLoc x y = SrcLoc.RealSrcLoc x y
 
 
 pattern AvailTC :: Name -> [Name] -> [FieldLabel] -> Avail.AvailInfo
-#if __GLASGOW_HASKELL__ >= 902
+#if __GLASGOW_HASKELL__ >= 907
+pattern AvailTC n names pieces <- Avail.AvailTC n ((,[]) -> (names,pieces))
+#elif __GLASGOW_HASKELL__ >= 902
 pattern AvailTC n names pieces <- Avail.AvailTC n ((\gres -> foldr (\gre (names, pieces) -> case gre of
       Avail.NormalGreName name -> (name: names, pieces)
       Avail.FieldGreName label -> (names, label:pieces)) ([], []) gres) -> (names, pieces))
@@ -640,14 +648,18 @@ pattern AvailTC n names pieces <- Avail.AvailTC n names pieces
 #endif
 
 pattern AvailName :: Name -> Avail.AvailInfo
-#if __GLASGOW_HASKELL__ >= 902
+#if __GLASGOW_HASKELL__ >= 907
+pattern AvailName n <- Avail.Avail n
+#elif __GLASGOW_HASKELL__ >= 902
 pattern AvailName n <- Avail.Avail (Avail.NormalGreName n)
 #else
 pattern AvailName n <- Avail.Avail n
 #endif
 
 pattern AvailFL :: FieldLabel -> Avail.AvailInfo
-#if __GLASGOW_HASKELL__ >= 902
+#if __GLASGOW_HASKELL__ >= 907
+pattern AvailFL fl <- (const Nothing -> Just fl) -- this pattern always fails as this field was removed in 9.7
+#elif __GLASGOW_HASKELL__ >= 902
 pattern AvailFL fl <- Avail.Avail (Avail.FieldGreName fl)
 #else
 -- pattern synonym that is never populated
@@ -835,7 +847,11 @@ pattern GRE :: Name -> Parent -> Bool -> [ImportSpec] -> RdrName.GlobalRdrElt
 {-# COMPLETE GRE #-}
 #if MIN_VERSION_ghc(9,2,0)
 pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} <- RdrName.GRE
+#if MIN_VERSION_ghc(9,7,0)
+    {gre_name = gre_name
+#else
     {gre_name = (greNamePrintableName -> gre_name)
+#endif
     ,gre_par, gre_lcl, gre_imp = (toList -> gre_imp)}
 #else
 pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} = RdrName.GRE{..}

@@ -195,7 +195,13 @@ instance (NFData HsModule) where
   rnf = rwhnf
 
 instance Show OccName where show = unpack . printOutputable
+
+
+#if MIN_VERSION_ghc(9,7,0)
+instance Hashable OccName where hashWithSalt s n = hashWithSalt s (getKey $ getUnique $ occNameFS n, getKey $ getUnique $ occNameSpace n)
+#else
 instance Hashable OccName where hashWithSalt s n = hashWithSalt s (getKey $ getUnique n)
+#endif
 
 instance Show HomeModInfo where show = show . mi_module . hm_iface
 

@@ -52,8 +52,12 @@ doCpp env input_fn output_fn =
 
 #if MIN_VERSION_ghc(9,5,0)
     let cpp_opts = Pipeline.CppOpts
-                 { cppUseCc = False
-                 , cppLinePragmas = True
+                 { cppLinePragmas = True
+# if MIN_VERSION_ghc(9,9,0)
+                 , useHsCpp = True
+# else
+                 , cppUseCc = False
+# endif
                  } in
 #else
     let cpp_opts = True in

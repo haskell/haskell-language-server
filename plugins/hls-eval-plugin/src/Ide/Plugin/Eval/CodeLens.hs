@@ -59,7 +59,8 @@ import           Development.IDE.Core.Shake                   (useNoFile_,
 import           Development.IDE.GHC.Compat                   hiding (typeKind,
                                                                unitState)
 import           Development.IDE.GHC.Compat.Util              (GhcException,
-                                                               OverridingBool (..))
+                                                               OverridingBool (..),
+                                                               bagToList)
 import           Development.IDE.GHC.Util                     (evalGhcEnv,
                                                                modifyDynFlags,
                                                                printOutputable)
@@ -266,7 +267,12 @@ initialiseSessionForEval needs_quickcheck st nfp = do
         addRdrEnv hmi
           | iface <- hm_iface hmi
           , ms_mod ms == mi_module iface
-          = hmi { hm_iface = iface { mi_globals = Just rdr_env } }
+          = hmi { hm_iface = iface { mi_globals = Just $!
+#if MIN_VERSION_ghc(9,8,0)
+                    forceGlobalRdrEnv
+#endif
+                      rdr_env
+                }}
           | otherwise = hmi
 
     return (ms, linkable_hsc)
@@ -446,15 +452,14 @@ evals mark_exception (st, fp) df stmts = do
                 parseDynamicFlagsCmdLine ndf
                 (map (L $ UnhelpfulSpan unhelpfulReason) flags)
             dbg "parsed flags" $ eans
-              <&> (_1 %~ showDynFlags >>> _3 %~ map warnMsg)
+              <&> (_1 %~ showDynFlags >>> _3 %~ prettyWarnings)
             case eans of
                 Left err -> pure $ Just $ errorLines $ show err
                 Right (df', ignoreds, warns) -> do
                     let warnings = do
                             guard $ not $ null warns
                             pure $ errorLines $
-                                unlines $
-                                map prettyWarn warns
+                                prettyWarnings warns
                         igns = do
                             guard $ not $ null ignoreds
                             pure
@@ -497,10 +502,18 @@ evals mark_exception (st, fp) df stmts = do
         let opts = execOptions{execSourceFile = fp, execLineNumber = l}
          in myExecStmt stmt opts
 
+#if MIN_VERSION_ghc(9,8,0)
+prettyWarnings :: Messages DriverMessage -> String
+prettyWarnings = printWithoutUniques . pprMessages (defaultDiagnosticOpts @DriverMessage)
+#else
+prettyWarnings :: [Warn] -> String
+prettyWarnings = unlines . map prettyWarn
+
 prettyWarn :: Warn -> String
 prettyWarn Warn{..} =
     T.unpack (printOutputable $ SrcLoc.getLoc warnMsg) <> ": warning:\n"
     <> "    " <> SrcLoc.unLoc warnMsg
+#endif
 
 needsQuickCheck :: [(Section, Test)] -> Bool
 needsQuickCheck = any (isProperty . snd)

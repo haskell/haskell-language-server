@@ -93,8 +93,8 @@ tests =
       )
   , goldenWithEval' "Shows a kind with :kind" "T12" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
   , goldenWithEval' "Reports an error for an incorrect type with :kind" "T13" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
-  , goldenWithEval "Returns a fully-instantiated type for :type" "T14" "hs"
-  , knownBrokenForGhcVersions [GHC92, GHC94, GHC96] "type +v does not work anymore with 9.2" $ goldenWithEval "Returns an uninstantiated type for :type +v, admitting multiple whitespaces around arguments" "T15" "hs"
+  , goldenWithEval' "Returns a fully-instantiated type for :type" "T14" "hs" (if ghcVersion >= GHC98 then "ghc98.expected" else "expected") -- See https://gitlab.haskell.org/ghc/ghc/-/issues/24069
+  , knownBrokenForGhcVersions [GHC92, GHC94, GHC96, GHC98] "type +v does not work anymore with 9.2" $ goldenWithEval "Returns an uninstantiated type for :type +v, admitting multiple whitespaces around arguments" "T15" "hs"
   , goldenWithEval "Returns defaulted type for :type +d, admitting multiple whitespaces around arguments" "T16" "hs"
   , goldenWithEval' ":type reports an error when given with unknown +x option" "T17" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
   , goldenWithEval "Reports an error when given with unknown command" "T18" "hs"
@@ -134,7 +134,7 @@ tests =
   , goldenWithEvalAndFs "Transitive local dependency"  (FS.directProjectMulti ["TTransitive.hs", "TLocalImport.hs", "Util.hs"]) "TTransitive" "hs"
   -- , goldenWithEval "Local Modules can be imported in a test" "TLocalImportInTest" "hs"
   , goldenWithEval "Setting language option TupleSections" "TLanguageOptionsTupleSections" "hs"
-  , goldenWithEval' ":set accepts ghci flags" "TFlags" "hs" (if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
+  , goldenWithEval' ":set accepts ghci flags" "TFlags" "hs" (if ghcVersion >= GHC92 then "ghc98.expected" else if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
   , testCase ":set -fprint-explicit-foralls works" $ do
       evalInFile "T8.hs" "-- >>> :t id" "-- id :: a -> a"
       evalInFile "T8.hs" "-- >>> :set -fprint-explicit-foralls\n-- >>> :t id"

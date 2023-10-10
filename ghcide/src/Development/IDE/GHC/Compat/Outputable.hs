@@ -19,6 +19,10 @@ module Development.IDE.GHC.Compat.Outputable (
 #if MIN_VERSION_ghc(9,5,0)
     defaultDiagnosticOpts,
     GhcMessage,
+    DriverMessage,
+    Messages,
+    initDiagOpts,
+    pprMessages,
 #endif
 #if MIN_VERSION_ghc(9,3,0)
     DiagnosticReason(..),
@@ -67,6 +71,9 @@ import           GHC.Driver.Env
 import           GHC.Driver.Ppr
 import           GHC.Driver.Session
 import qualified GHC.Types.Error              as Error
+#if MIN_VERSION_ghc(9,7,0)
+import           GHC.Types.Error                 (defaultDiagnosticOpts)
+#endif
 import           GHC.Types.Name.Ppr
 import           GHC.Types.Name.Reader
 import           GHC.Types.SourceError
@@ -89,7 +96,7 @@ import           GHC.Parser.Errors.Types
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
-import           GHC.Driver.Errors.Types      (GhcMessage)
+import           GHC.Driver.Errors.Types      (GhcMessage, DriverMessage)
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
@@ -169,12 +176,14 @@ pprNoLocMsgEnvelope :: Error.RenderableDiagnostic e => MsgEnvelope e -> SDoc
 #endif
 pprNoLocMsgEnvelope (MsgEnvelope { errMsgDiagnostic = e
                                  , errMsgContext   = unqual })
-  = sdocWithContext $ \ctx ->
+  = sdocWithContext $ \_ctx ->
     withErrStyle unqual $
-#if MIN_VERSION_ghc(9,3,0)
-      (formatBulleted ctx $ e)
+#if MIN_VERSION_ghc(9,7,0)
+      (formatBulleted e)
+#elif MIN_VERSION_ghc(9,3,0)
+      (formatBulleted _ctx $ e)
 #else
-      (formatBulleted ctx $ Error.renderDiagnostic e)
+      (formatBulleted _ctx $ Error.renderDiagnostic e)
 #endif
 
 #else

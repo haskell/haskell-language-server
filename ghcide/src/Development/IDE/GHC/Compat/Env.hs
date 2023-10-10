@@ -50,6 +50,7 @@ module Development.IDE.GHC.Compat.Env (
     -- * Backend, backwards compatible
     Backend,
     setBackend,
+    ghciBackend,
     Development.IDE.GHC.Compat.Env.platformDefaultBackend,
     ) where
 
@@ -272,6 +273,15 @@ setWays newWays flags =
 
 #if !MIN_VERSION_ghc(9,2,0)
 type Backend = HscTarget
+#endif
+
+ghciBackend  :: Backend
+#if MIN_VERSION_ghc(9,6,0)
+ghciBackend = interpreterBackend
+#elif MIN_VERSION_ghc(9,2,0)
+ghciBackend = Interpreter
+#else
+ghciBackend = HscInterpreted
 #endif
 
 platformDefaultBackend :: DynFlags -> Backend

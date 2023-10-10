@@ -52,7 +52,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2023-09-08T00:00:00Z
+index-state: 2023-10-06T06:12:29Z
 
 constraints:
   -- For GHC 9.4, older versions of entropy fail to build on Windows
@@ -101,3 +101,32 @@ if impl(ghc >= 9.5)
     -- ghc-9.6
     ekg-core:ghc-prim,
     stm-hamt:transformers,
+
+if impl(ghc >= 9.7)
+  allow-newer:
+    -- ghc-9.8
+    base,
+    template-haskell,
+    ghc,
+    ghc-prim,
+    integer-gmp,
+    ghc-bignum,
+    template-haskell,
+    text,
+    binary,
+    bytestring,
+    Cabal,
+    unix,
+    deepseq,
+
+if impl(ghc >= 9.7)
+  repository head.hackage.ghc.haskell.org
+     url: https://ghc.gitlab.haskell.org/head.hackage/
+     secure: True
+     key-threshold: 3
+     root-keys:
+         f76d08be13e9a61a377a85e2fb63f4c5435d40f8feb3e12eb05905edb8cdea89
+         26021a13b401500c8eb2761ca95c61f2d625bfef951b939a8124ed12ecf07329
+         7541f32a4ccca4f97aea3b22f5e593ba2c0267546016b992dfadcd2fe944e55d
+
+  active-repositories: hackage.haskell.org, head.hackage.ghc.haskell.org
