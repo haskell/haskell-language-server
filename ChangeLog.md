@@ -2,7 +2,7 @@
 
 ## 2.4.0.0
 
-* Support for GHC 9.8.1
+* Initial support for GHC 9.8.1, without plugins dependent on `ghc-exactprint`
 * Fix broken Windows binaries (#3822)
 
 ### Pull Requests
