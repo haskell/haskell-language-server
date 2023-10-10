@@ -55,6 +55,9 @@ write-ghc-environment-files: never
 index-state: 2023-10-06T06:12:29Z
 
 constraints:
+  -- C++ is hard to distribute, especially on older GHCs
+  -- See https://github.com/haskell/haskell-language-server/issues/3822
+  text -simdutf,
   -- For GHC 9.4, older versions of entropy fail to build on Windows
   entropy >= 0.4.1.10,
   -- For GHC 9.4
