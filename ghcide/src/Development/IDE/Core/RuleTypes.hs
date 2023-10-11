@@ -12,38 +12,40 @@
 --   using the "Shaker" abstraction layer for in-memory use.
 --
 module Development.IDE.Core.RuleTypes(
+    FileOfInterestStatus(..),
     GhcSessionDeps(.., GhcSessionDeps),
     module Development.IDE.Core.RuleTypes
     ) where
 
-import           Control.DeepSeq
-import           Control.Exception                            (assert)
-import           Control.Lens
-import           Data.Aeson.Types                             (Value)
-import           Data.Hashable
-import qualified Data.Map                                     as M
-import           Data.Time.Clock.POSIX
-import           Data.Typeable
-import           Development.IDE.GHC.Compat                   hiding
-                                                              (HieFileResult)
-import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.CoreFile
-import           Development.IDE.GHC.Util
-import           Development.IDE.Graph
-import           Development.IDE.Import.DependencyInformation
-import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
-import           Development.IDE.Types.KnownTargets
-import           GHC.Generics                                 (Generic)
+import                          Control.DeepSeq
+import                          Control.Exception                            (assert)
+import                          Control.Lens
+import                          Data.Aeson.Types                             (Value)
+import                          Data.Hashable
+import                qualified Data.Map                                     as M
+import                          Data.Time.Clock.POSIX
+import                          Data.Typeable
+import                          Development.IDE.GHC.Compat                   hiding
+                                                                             (HieFileResult)
+import                          Development.IDE.GHC.Compat.Util
+import                          Development.IDE.GHC.CoreFile
+import                          Development.IDE.GHC.Util
+import                          Development.IDE.Graph
+import                          Development.IDE.Import.DependencyInformation
+import {-# SOURCE #-}           Development.IDE.Types.HscEnvEq               (HscEnvEq)
+import                          Development.IDE.Types.KnownTargets
+import                          GHC.Generics                                 (Generic)
 
-import           Data.ByteString                              (ByteString)
-import           Data.Text                                    (Text)
-import           Development.IDE.Import.FindImports           (ArtifactsLocation)
-import           Development.IDE.Spans.Common
-import           Development.IDE.Spans.LocalBindings
-import           Development.IDE.Types.Diagnostics
-import           GHC.Serialized                               (Serialized)
-import           Language.LSP.Protocol.Types                  (Int32,
-                                                               NormalizedFilePath)
+import                          Data.ByteString                              (ByteString)
+import                          Data.Text                                    (Text)
+import                          Development.IDE.Import.FindImports           (ArtifactsLocation)
+import                          Development.IDE.Spans.Common
+import                          Development.IDE.Spans.LocalBindings
+import                          Development.IDE.Types.Diagnostics
+import                          GHC.Serialized                               (Serialized)
+import                          Ide.Types                                    (FileOfInterestStatus (..))
+import                          Language.LSP.Protocol.Types                  (Int32,
+                                                                              NormalizedFilePath)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)
@@ -215,6 +217,19 @@ data HieAstResult
   -- ^ Is this hie file loaded from the disk, or freshly computed?
   }
 
+-- | Make an HieAstResult from a loaded HieFile
+makeHieAstResult :: HieFile -> HieAstResult
+makeHieAstResult hieFile =
+    HAR
+        (hie_module hieFile)
+        hieAsts
+        (generateReferencesMap $ M.elems $ getAsts hieAsts)
+        mempty
+        (HieFromDisk hieFile)
+    where
+        hieAsts :: HieASTs TypeIndex
+        hieAsts = hie_asts hieFile
+
 data HieKind a where
   HieFromDisk :: !HieFile -> HieKind TypeIndex
   HieFresh :: HieKind Type
@@ -332,14 +347,6 @@ data GetFileExists = GetFileExists
 
 instance NFData   GetFileExists
 instance Hashable GetFileExists
-
-data FileOfInterestStatus
-  = OnDisk
-  | Modified { firstOpen :: !Bool -- ^ was this file just opened
-             }
-  deriving (Eq, Show, Typeable, Generic)
-instance Hashable FileOfInterestStatus
-instance NFData   FileOfInterestStatus
 
 data IsFileOfInterestResult = NotFOI | IsFOI FileOfInterestStatus
   deriving (Eq, Show, Typeable, Generic)

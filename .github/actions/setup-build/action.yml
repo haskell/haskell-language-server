@@ -7,7 +7,10 @@ inputs:
   cabal:
     description: "Cabal version"
     required: false
-    default: "3.8.1.0"
+      # TODO: We should change this to 3.11 or latest once version 3.11 is released.
+      # For now we need the functionality in cabal head that generates HIE files
+      # for dependencies.
+    default: "head"
   os:
     description: "Operating system: Linux, Windows or macOS"
     required: true
@@ -31,7 +34,7 @@ runs:
         sudo chown -R $USER /usr/local/.ghcup
       shell: bash
 
-    - uses: haskell/actions/setup@v2.4.7
+    - uses: haskell-actions/setup@v2.5.0
       id: HaskEnvSetup
       with:
         ghc-version  : ${{ inputs.ghc   }}

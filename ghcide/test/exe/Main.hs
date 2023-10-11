@@ -76,6 +76,7 @@ import ClientSettingsTests
 import ReferenceTests
 import GarbageCollectionTests
 import ExceptionTests
+import Dependency
 
 main :: IO ()
 main = do
@@ -124,4 +125,5 @@ main = do
     , GarbageCollectionTests.tests
     , HieDbRetry.tests
     , ExceptionTests.tests recorder logger
+    , Dependency.tests
     ]
