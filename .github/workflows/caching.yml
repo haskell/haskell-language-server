@@ -58,7 +58,7 @@ jobs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
       # Need the repo checked out in order to read the file
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - id: ghcs
         run: echo "ghcs=$(cat ./.github/workflows/supported-ghc-versions.json)" >> $GITHUB_OUTPUT
       - id: skip_check
@@ -91,7 +91,7 @@ jobs:
           - macOS-latest
           - windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup-build
         with:

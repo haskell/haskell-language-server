@@ -56,7 +56,7 @@ jobs:
     # change of the strategy may require changing the bootstrapping/run code
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
 
         # By default, the `pull_request` event has a `GITHUB_SHA` env variable
