@@ -16,6 +16,7 @@ source-repository head
     location: https://github.com/haskell/haskell-language-server.git
 
 library
+  -- Depends on Chart which is unbuildable after this point
   if impl(ghc >= 9.5)
     buildable: False
   exposed-modules:  Development.Benchmark.Rules

@@ -66,11 +66,6 @@ flags:
     pedantic: true
   retrie:
     BuildExecutable: false
-  # Stack doesn't support automatic flags.
-  hyphenation:
-    embed: true
-  stylish-haskell:
-    ghc-lib: true
 
 nix:
   packages: [ icu libcxx zlib ]

@@ -570,6 +570,9 @@ test-suite wrapper-test
   main-is:            Main.hs
 
 benchmark benchmark
+    -- Depends on shake-bench which is unbuildable after this point
+    if impl(ghc >= 9.5)
+      buildable: False
     type: exitcode-stdio-1.0
     default-language: Haskell2010
     ghc-options: -Wall -Wno-name-shadowing -threaded
