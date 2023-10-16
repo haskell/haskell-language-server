@@ -60,7 +60,7 @@ BINDIST_BASE_DIR := out/bindist/$(ARTIFACT)
 BINDIST_OUT_DIR  := $(BINDIST_BASE_DIR)/haskell-language-server-$(HLS_VERSION)
 
 CABAL_BASE_ARGS         ?= --store-dir=$(ROOT_DIR)/$(STORE_DIR)
-CABAL_ARGS              ?= --disable-tests --disable-profiling -O2
+CABAL_ARGS              ?= --disable-tests --disable-profiling -O2 $(ADD_CABAL_ARGS)
 CABAL_INSTALL_ARGS      ?= --overwrite-policy=always --install-method=copy
 CABAL_INSTALL           := $(CABAL) $(CABAL_BASE_ARGS) v2-install
 PROJECT_FILE            := cabal.project

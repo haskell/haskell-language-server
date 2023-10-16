@@ -1,5 +1,82 @@
 # Changelog for haskell-language-server
 
+## 2.4.0.0
+
+* Initial support for GHC 9.8.1, without plugins dependent on `ghc-exactprint`
+* Fix broken Windows binaries (#3822)
+
+### Pull Requests
+
+- Remove constraint on stm-hamt
+  ([#3829](https://github.com/haskell/haskell-language-server/pull/3829)) by @iMichka
+- Cleanup func-test suite
+  ([#3828](https://github.com/haskell/haskell-language-server/pull/3828)) by @fendor
+- Bump haskell/actions from 2.4.6 to 2.4.7 in /.github/actions/setup-build
+  ([#3824](https://github.com/haskell/haskell-language-server/pull/3824)) by @dependabot[bot]
+- Bump haskell/actions from 2.4.6 to 2.4.7
+  ([#3823](https://github.com/haskell/haskell-language-server/pull/3823)) by @dependabot[bot]
+- Release 2.3.0.0
+  ([#3818](https://github.com/haskell/haskell-language-server/pull/3818)) by @wz1000
+- GHC 9.8 support
+  ([#3727](https://github.com/haskell/haskell-language-server/pull/3727)) by @wz1000
+
+## 2.3.0.0
+
+* Binaries for GHC 9.6.3
+* Drop support for GHC 8.10
+* Remove `hls-haddock-comments-plugin`, `hls-stan-plugin`, and `hls-tactics-plugin`
+* Don't suggest bogus modules names in `hls-module-name-plugin` (#3784)
+* Add support for external Ormolu (#3771)
+* Improve refine imports behaviour for qualified imports (#3806)
+
+### Pull Requests
+
+- Switch chat room to matrix
+  ([#3817](https://github.com/haskell/haskell-language-server/pull/3817)) by @July541
+- Fix flaky hie bios test
+  ([#3814](https://github.com/haskell/haskell-language-server/pull/3814)) by @fendor
+- Revert "Bump actions/checkout from 3 to 4"
+  ([#3813](https://github.com/haskell/haskell-language-server/pull/3813)) by @wz1000
+- Add test directories to hls-retrie-plugin
+  ([#3808](https://github.com/haskell/haskell-language-server/pull/3808)) by @Vekhir
+- Change refine imports behaviour for qualified imports
+  ([#3806](https://github.com/haskell/haskell-language-server/pull/3806)) by @joyfulmantis
+- Update links to Nix documentation
+  ([#3805](https://github.com/haskell/haskell-language-server/pull/3805)) by @maralorn
+- Bump actions/checkout from 3 to 4
+  ([#3802](https://github.com/haskell/haskell-language-server/pull/3802)) by @dependabot[bot]
+- Bump cachix/install-nix-action from 22 to 23
+  ([#3801](https://github.com/haskell/haskell-language-server/pull/3801)) by @dependabot[bot]
+- Add support for Fourmolu 0.14.0.0
+  ([#3796](https://github.com/haskell/haskell-language-server/pull/3796)) by @brandonchinn178
+- Add code lens  and fix code actions experiments
+  ([#3791](https://github.com/haskell/haskell-language-server/pull/3791)) by @joyfulmantis
+- Bump lsp versions in flake
+  ([#3790](https://github.com/haskell/haskell-language-server/pull/3790)) by @colonelpanic8
+- Clean up Release CI
+  ([#3787](https://github.com/haskell/haskell-language-server/pull/3787)) by @fendor
+- Do not suggest bogus module names
+  ([#3784](https://github.com/haskell/haskell-language-server/pull/3784)) by @Bodigrim
+- Delete `hls-haddock-comments-plugin`, `hls-stan-plugin`, and `hls-tactics-plugin`
+  ([#3782](https://github.com/haskell/haskell-language-server/pull/3782)) by @michaelpj
+- Enhance/releasing checklist
+  ([#3781](https://github.com/haskell/haskell-language-server/pull/3781)) by @fendor
+- Add cradle dependencies to session loading errors
+  ([#3779](https://github.com/haskell/haskell-language-server/pull/3779)) by @VeryMilkyJoe
+- Prepare release 2.2.0.0
+  ([#3775](https://github.com/haskell/haskell-language-server/pull/3775)) by @fendor
+- Add support for external Ormolu
+  ([#3771](https://github.com/haskell/haskell-language-server/pull/3771)) by @sir4ur0n
+- Support for resolve for class-plugin lenses
+  ([#3769](https://github.com/haskell/haskell-language-server/pull/3769)) by @joyfulmantis
+- Introduce declarative test project definition for plugin tests
+  ([#3767](https://github.com/haskell/haskell-language-server/pull/3767)) by @fendor
+- Use latest version of fourmolu possible
+  ([#3764](https://github.com/haskell/haskell-language-server/pull/3764)) by @brandonchinn178
+- Drop support for GHC 8.10
+  ([#3434](https://github.com/haskell/haskell-language-server/pull/3434)) by @michaelpj
+
+
 ## 2.2.0.0
 
 * Binaries for GHC 9.4.7

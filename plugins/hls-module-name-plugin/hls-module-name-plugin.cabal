@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-module-name-plugin
-version:            2.2.0.0
+version:            2.4.0.0
 synopsis:           Module name plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -24,7 +24,6 @@ source-repository head
     location: https://github.com/haskell/haskell-language-server.git
 
 library
-  buildable: True
   exposed-modules:  Ide.Plugin.ModuleName
   hs-source-dirs:   src
   build-depends:
@@ -33,8 +32,8 @@ library
     , containers
     , directory
     , filepath
-    , ghcide                == 2.2.0.0
-    , hls-plugin-api        == 2.2.0.0
+    , ghcide                == 2.4.0.0
+    , hls-plugin-api        == 2.4.0.0
     , lsp
     , text
     , transformers
@@ -43,7 +42,6 @@ library
   default-language: Haskell2010
 
 test-suite tests
-  buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
@@ -53,4 +51,4 @@ test-suite tests
     , base
     , filepath
     , hls-module-name-plugin
-    , hls-test-utils          == 2.2.0.0
+    , hls-test-utils          == 2.4.0.0

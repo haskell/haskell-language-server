@@ -370,7 +370,11 @@ cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
       fieldMap = Map.fromListWith (++) $ flip mapMaybe rdrElts $ \elt -> do
 #if MIN_VERSION_ghc(9,2,0)
         par <- greParent_maybe elt
+#if MIN_VERSION_ghc(9,7,0)
+        flbl <- greFieldLabel_maybe elt
+#else
         flbl <- greFieldLabel elt
+#endif
         Just (par,[flLabel flbl])
 #else
         case gre_par elt of
@@ -402,7 +406,11 @@ cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
                 | is_qual spec = Map.singleton asMod compItem
                 | otherwise = Map.fromList [(asMod,compItem),(origMod,compItem)]
               asMod = showModName (is_as spec)
+#if MIN_VERSION_ghc(9,8,0)
+              origMod = showModName (moduleName $ is_mod spec)
+#else
               origMod = showModName (is_mod spec)
+#endif
           in (unqual,QualCompls qual)
 
       toCompItem :: Parent -> Module -> T.Text -> Name -> Maybe (LImportDecl GhcPs) -> [CompItem]

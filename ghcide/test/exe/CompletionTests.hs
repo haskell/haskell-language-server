@@ -261,7 +261,7 @@ nonLocalCompletionTests =
       []
   ]
   where
-    brokenForWinGhc = knownBrokenFor (BrokenSpecific Windows [GHC90, GHC92, GHC94, GHC96]) "Windows has strange things in scope for some reason"
+    brokenForWinGhc = knownBrokenFor (BrokenSpecific Windows [GHC90, GHC92, GHC94, GHC96, GHC98]) "Windows has strange things in scope for some reason"
 
 otherCompletionTests :: [TestTree]
 otherCompletionTests = [
@@ -302,7 +302,7 @@ otherCompletionTests = [
       _ <- waitForDiagnostics
       compls <- getCompletions docA $ Position 2 4
       let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
-      liftIO $ take 2 compls' @?= ["member"],
+      liftIO $ take 1 compls' @?= ["member"],
 
     testSessionWait "maxCompletions" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines

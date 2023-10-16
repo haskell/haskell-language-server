@@ -59,7 +59,9 @@ logWith state key val =
     logWithPos =
         let stk = toList callStack
             pr pos = concat [srcLocFile pos, ":", show . srcLocStartLine $ pos, ":", show . srcLocStartCol $ pos]
-         in if null stk then "" else pr . snd . head $ stk
+         in case stk of
+              [] -> ""
+              (x:_) -> pr $ snd x
 
     asT :: Show a => a -> T.Text
     asT = T.pack . show

@@ -51,7 +51,9 @@ type LogActionCompat = LogFlags -> Maybe DiagnosticReason -> Maybe Severity -> S
 
 -- alwaysQualify seems to still do the right thing here, according to the "unqualified warnings" test.
 logActionCompat :: LogActionCompat -> LogAction
-#if MIN_VERSION_ghc(9,5,0)
+#if MIN_VERSION_ghc(9,7,0)
+logActionCompat logAction logFlags (MCDiagnostic severity (ResolvedDiagnosticReason wr) _) loc = logAction logFlags (Just wr) (Just severity) loc alwaysQualify
+#elif MIN_VERSION_ghc(9,5,0)
 logActionCompat logAction logFlags (MCDiagnostic severity wr _) loc = logAction logFlags (Just wr) (Just severity) loc alwaysQualify
 #else
 logActionCompat logAction logFlags (MCDiagnostic severity wr) loc = logAction logFlags (Just wr) (Just severity) loc alwaysQualify

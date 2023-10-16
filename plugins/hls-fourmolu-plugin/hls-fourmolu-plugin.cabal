@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-fourmolu-plugin
-version:            2.2.0.0
+version:            2.4.0.0
 synopsis:           Integration with the Fourmolu code formatter
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -23,7 +23,11 @@ source-repository head
   location: git://github.com/haskell/haskell-language-server.git
 
 library
-  buildable: True
+  -- Plugins that need exactprint have not been updated for 9.8 yet
+  if impl(ghc >= 9.8)
+    buildable: False
+  else
+    buildable: True
   exposed-modules:
       Ide.Plugin.Fourmolu
   hs-source-dirs:   src
@@ -33,8 +37,8 @@ library
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide          == 2.2.0.0
-    , hls-plugin-api  == 2.2.0.0
+    , ghcide          == 2.4.0.0
+    , hls-plugin-api  == 2.4.0.0
     , lens
     , lsp
     , mtl
@@ -47,7 +51,7 @@ library
   elif impl(ghc >= 9.2) && impl(ghc < 9.8)
     build-depends: fourmolu ^>= 0.14
   else
-    buildable: false
+    buildable: False
 
   -- fourmolu 0.9.0 fails to build on Windows CI for reasons unknown
   if impl(ghc >= 9.2) && os(windows) && impl(ghc < 9.4)
@@ -55,7 +59,10 @@ library
   default-language: Haskell2010
 
 test-suite tests
-  buildable: True
+  if impl(ghc >= 9.8)
+    buildable: False
+  else
+    buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
@@ -64,11 +71,11 @@ test-suite tests
   build-tool-depends:
     fourmolu:fourmolu
   build-depends:
-    , base
+    , base            >=4.12 && <5
     , aeson
     , containers
     , filepath
     , hls-fourmolu-plugin
     , hls-plugin-api
-    , hls-test-utils       == 2.2.0.0
+    , hls-test-utils       == 2.4.0.0
     , lsp-test

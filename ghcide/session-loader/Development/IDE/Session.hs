@@ -40,6 +40,8 @@ import           Data.Function
 import           Data.Hashable                        hiding (hash)
 import qualified Data.HashMap.Strict                  as HM
 import           Data.List
+import qualified Data.List.NonEmpty                   as NE
+import           Data.List.NonEmpty                   (NonEmpty(..))
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe
 import           Data.Proxy
@@ -520,9 +522,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   -- information.
 
                   new_deps = RawComponentInfo (homeUnitId_ df) df targets cfp opts dep_info
-                                : maybe [] snd oldDeps
+                                :| maybe [] snd oldDeps
                   -- Get all the unit-ids for things in this component
-                  inplace = map rawComponentUnitId new_deps
+                  inplace = map rawComponentUnitId $ NE.toList new_deps
 
               new_deps' <- forM new_deps $ \RawComponentInfo{..} -> do
                   -- Remove all inplace dependencies from package flags for
@@ -572,7 +574,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
               -- . The information for the new component which caused this cache miss
               -- . The modified information (without -inplace flags) for
               --   existing packages
-              pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
+              pure (Map.insert hieYaml (newHscEnv, NE.toList new_deps) m, (newHscEnv, NE.head new_deps', NE.tail new_deps'))
 
 
     let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)

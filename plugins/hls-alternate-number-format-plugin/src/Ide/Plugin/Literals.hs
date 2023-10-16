@@ -14,6 +14,9 @@ module Ide.Plugin.Literals (
 import           Data.Maybe                    (maybeToList)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
+#if __GLASGOW_HASKELL__ >= 908
+import qualified Data.Text.Encoding            as T
+#endif
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
 import           Development.IDE.Graph.Classes (NFData (rnf))
 import           Generics.SYB                  (Data, Typeable, everything,
@@ -100,5 +103,9 @@ fromFractionalLit s fl@FL{fl_text} = fmap (\txt' -> FracLiteral (LiteralSrcSpan 
 
 fromSourceText :: SourceText -> Maybe Text
 fromSourceText = \case
+#if __GLASGOW_HASKELL__ >= 908
+  SourceText s -> Just $ T.decodeUtf8 $ bytesFS s
+#else
   SourceText s -> Just $ T.pack s
+#endif
   NoSourceText -> Nothing

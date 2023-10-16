@@ -466,9 +466,11 @@ filterByImport (ImportDecl{ideclHiding = Just (_, L _ names)})
   where importedNames = S.fromList $ map (ieName . unLoc) names
         res = flip Map.filter avails $ \a ->
                 any (`S.member` importedNames)
-                  $ concatMap availNamesWithSelectors a
+                  $ concatMap
+                      getAvailNames
+                      a
         allFilteredAvailsNames = S.fromList
-          $ concatMap availNamesWithSelectors
+          $ concatMap getAvailNames
           $ mconcat
           $ Map.elems res
 filterByImport _ _ = Nothing
@@ -496,6 +498,14 @@ constructImport ImportDecl{ideclQualified = qualified, ideclHiding = origHiding}
           containsAvail :: LIE GhcRn -> AvailInfo -> Bool
           containsAvail name avail =
             any (\an -> printOutputable an == (printOutputable . ieName . unLoc $ name))
-              $ availNamesWithSelectors avail
+              $ getAvailNames avail
 
 constructImport _ lim _ = lim
+
+getAvailNames :: AvailInfo -> [Name]
+getAvailNames =
+#if MIN_VERSION_ghc(9,7,0)
+  availNames
+#else
+  availNamesWithSelectors
+#endif
