@@ -1,5 +1,6 @@
 module Ide.Plugin.Stan (descriptor, Log) where
 
+import           Compat.HieTypes                (HieASTs, HieFile)
 import           Control.DeepSeq                (NFData)
 import           Control.Monad                  (void)
 import           Control.Monad.IO.Class         (liftIO)
@@ -27,7 +28,6 @@ import           Development.IDE.GHC.Compat     (HieASTs (HieASTs),
                                                  srcSpanStartLine, tcg_exports)
 import           Development.IDE.GHC.Error      (realSrcSpanToRange)
 import           GHC.Generics                   (Generic)
-import           HieTypes                       (HieASTs, HieFile)
 import           Ide.Plugin.Config
 import           Ide.Types                      (PluginDescriptor (..),
                                                  PluginId, configHasDiagnostics,

@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name:          hls-stan-plugin
-version:       2.2.0.0
+version:       2.4.0.0
 synopsis:      Stan integration plugin with Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -26,10 +26,10 @@ flag pedantic
   manual:      True
 
 library
-  if impl(ghc < 8.10) || impl(ghc >= 9.0)
-    buildable: False
-  else
+  if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.8.0))
     buildable: True
+  else
+    buildable: False
   exposed-modules:    Ide.Plugin.Stan
   hs-source-dirs:     src
   build-depends:
@@ -38,6 +38,7 @@ library
     , data-default
     , deepseq
     , hashable
+    , hie-compat
     , hls-plugin-api
     , ghc
     , ghcide
@@ -58,10 +59,10 @@ library
     OverloadedStrings
 
 test-suite test
-  if impl(ghc < 8.10) || impl(ghc >= 9.0)
-    buildable: False
-  else
+  if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.8.0))
     buildable: True
+  else
+    buildable: False
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
@@ -74,7 +75,7 @@ test-suite test
     , filepath
     , hls-stan-plugin
     , hls-plugin-api
-    , hls-test-utils      == 2.2.0.0
+    , hls-test-utils      == 2.4.0.0
     , lens
     , lsp-types
     , text

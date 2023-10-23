@@ -247,8 +247,8 @@ common hlint
     cpp-options: -Dhls_hlint
 
 common stan
-  if flag(stan) && (impl(ghc >= 8.10) && impl(ghc < 9.0))
-    build-depends: hls-stan-plugin == 2.2.0.0
+  if flag(stan) && (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.8.0))
+    build-depends: hls-stan-plugin == 2.4.0.0
     cpp-options: -Dhls_stan
 
 common moduleName
