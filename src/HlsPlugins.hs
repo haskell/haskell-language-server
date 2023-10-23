@@ -50,6 +50,10 @@ import qualified Ide.Plugin.Retrie                 as Retrie
 import qualified Ide.Plugin.Hlint                  as Hlint
 #endif
 
+#if hls_stan
+import qualified Ide.Plugin.Stan                   as Stan
+#endif
+
 #if hls_moduleName
 import qualified Ide.Plugin.ModuleName             as ModuleName
 #endif
@@ -185,6 +189,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_hlint
       let pId = "hlint" in Hlint.descriptor (pluginRecorder pId) pId:
+#endif
+#if hls_stan
+      let pId = "stan" in Stan.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_splice
       Splice.descriptor "splice" :

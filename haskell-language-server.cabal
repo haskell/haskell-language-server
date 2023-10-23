@@ -104,6 +104,11 @@ flag hlint
   default:     True
   manual:      True
 
+flag stan
+  description: Enable stan plugin
+  default:     True
+  manual:      True
+
 flag moduleName
   description: Enable moduleName plugin
   default:     True
@@ -241,6 +246,11 @@ common hlint
     build-depends: hls-hlint-plugin == 2.4.0.0
     cpp-options: -Dhls_hlint
 
+common stan
+  if flag(stan) && (impl(ghc >= 8.10) && impl(ghc < 9.0))
+    build-depends: hls-stan-plugin == 2.2.0.0
+    cpp-options: -Dhls_stan
+
 common moduleName
   if flag(moduleName)
     build-depends: hls-module-name-plugin == 2.4.0.0
@@ -339,6 +349,7 @@ library
                   , rename
                   , retrie
                   , hlint
+                  , stan
                   , moduleName
                   , pragmas
                   , splice

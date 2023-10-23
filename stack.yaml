@@ -33,6 +33,7 @@ packages:
   - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
+  # - ./plugins/hls-stan-plugin
   - ./plugins/hls-stylish-haskell-plugin
 
 ghc-options:
