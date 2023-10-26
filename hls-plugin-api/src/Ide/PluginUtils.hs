@@ -236,7 +236,13 @@ usePropertyLsp kn pId p = do
 extractTextInRange :: Range -> T.Text -> T.Text
 extractTextInRange (Range (Position sl sc) (Position el ec)) s = newS
   where
-    focusLines = take (fromIntegral $ el - sl + 1) $ drop (fromIntegral sl) $ T.lines s
+    -- NOTE: Always append an empty line to the end to ensure there are
+    -- sufficient lines to take from.
+    focusLines =
+      T.lines s
+        & (++ [""])
+        & drop (fromIntegral sl)
+        & take (fromIntegral $ el - sl + 1)
     -- NOTE: We have to trim the last line first to handle the single-line case
     newS =
       focusLines
