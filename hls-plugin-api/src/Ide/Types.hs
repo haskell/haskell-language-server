@@ -710,7 +710,7 @@ mergeDefinitions definitions1 definitions2 = case (definitions1, definitions2) o
         defToLinks (Definition (InR locations)) = map (DefinitionLink . locationToLocationLink) locations
 
         locationToLocationLink :: Location -> LocationLink
-        locationToLocationLink Location{_uri, _range} = LocationLink{_originSelectionRange = Just _range, _targetUri = _uri, _targetRange = _range, _targetSelectionRange = _range}
+        locationToLocationLink Location{_uri, _range} = LocationLink{_originSelectionRange = Nothing, _targetUri = _uri, _targetRange = _range, _targetSelectionRange = _range}
 -- ---------------------------------------------------------------------
 -- Plugin Notifications
 -- ---------------------------------------------------------------------
