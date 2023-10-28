@@ -90,7 +90,7 @@ defaultMain recorder args idePlugins = do
 
         BiosMode PrintCradleType -> do
             dir <- IO.getCurrentDirectory
-            hieYaml <- Session.findCradle def dir
+            hieYaml <- Session.findCradle def (dir </> "a")
             cradle <- Session.loadCradle def hieYaml dir
             print cradle
 
