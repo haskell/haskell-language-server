@@ -1,5 +1,6 @@
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE TypeOperators      #-}
+{-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE TypeOperators         #-}
 module Ide.TypesTests
     ( tests
     ) where
@@ -25,6 +26,7 @@ import           Language.LSP.Protocol.Types   (ClientCapabilities,
                                                 Range (Range),
                                                 TextDocumentClientCapabilities (TextDocumentClientCapabilities, _definition),
                                                 TextDocumentIdentifier (TextDocumentIdentifier),
+                                                TypeDefinitionParams (..),
                                                 Uri (Uri), filePathToUri,
                                                 type (|?) (..))
 import           Test.Tasty                    (TestTree, testGroup)
@@ -37,11 +39,18 @@ tests = testGroup "PluginTypes"
 combineResponsesTests :: TestTree
 combineResponsesTests = testGroup "combineResponses"
     [ combineResponsesTextDocumentDefinitionTests
+    , combineResponsesTextDocumentTypeDefinitionTests
     ]
 
 combineResponsesTextDocumentDefinitionTests :: TestTree
-combineResponsesTextDocumentDefinitionTests = testGroup "TextDocumentDefinition"
-    [ testCase "merges all single location responses into one response with all locations and upgrades them into links (with link support)" $ do
+combineResponsesTextDocumentDefinitionTests = testGroup "TextDocumentDefinition" $
+    defAndTypeDefSharedTests SMethod_TextDocumentDefinition definitionParams
+
+combineResponsesTextDocumentTypeDefinitionTests :: TestTree
+combineResponsesTextDocumentTypeDefinitionTests = testGroup "TextDocumentTypeDefinition" $
+    defAndTypeDefSharedTests SMethod_TextDocumentTypeDefinition typeDefinitionParams
+
+defAndTypeDefSharedTests message params = [ testCase "merges all single location responses into one response with all locations and upgrades them into links (with link support)" $ do
         let pluginResponses :: NonEmpty (Definition |? ([DefinitionLink] |? Null))
             pluginResponses =
                 (InL . Definition . InL . Location testFileUri $ range1) :|
@@ -49,7 +58,7 @@ combineResponsesTextDocumentDefinitionTests = testGroup "TextDocumentDefinition"
                 , InL . Definition . InL . Location testFileUri $ range3
                 ]
 
-            result = combineResponses SMethod_TextDocumentDefinition def supportsLinkInDefinitionCaps definitionParams pluginResponses
+            result = combineResponses message def supportsLinkInDefinitionCaps params pluginResponses
 
             expectedResult :: Definition |? ([DefinitionLink] |? Null)
             expectedResult = InR . InL $
@@ -69,7 +78,7 @@ combineResponsesTextDocumentDefinitionTests = testGroup "TextDocumentDefinition"
                     ]
                 ]
 
-            result = combineResponses SMethod_TextDocumentDefinition def supportsLinkInDefinitionCaps definitionParams pluginResponses
+            result = combineResponses message def supportsLinkInDefinitionCaps params pluginResponses
 
             expectedResult :: Definition |? ([DefinitionLink] |? Null)
             expectedResult = InR . InL $
@@ -87,7 +96,7 @@ combineResponsesTextDocumentDefinitionTests = testGroup "TextDocumentDefinition"
                 , InL . Definition . InR $ [Location testFileUri range3]
                 ]
 
-            result = combineResponses SMethod_TextDocumentDefinition def supportsLinkInDefinitionCaps definitionParams pluginResponses
+            result = combineResponses message def supportsLinkInDefinitionCaps params pluginResponses
 
             expectedResult :: Definition |? ([DefinitionLink] |? Null)
             expectedResult = InR . InL $
@@ -105,7 +114,7 @@ combineResponsesTextDocumentDefinitionTests = testGroup "TextDocumentDefinition"
                 , InL . Definition . InR $ [Location testFileUri range3]
                 ]
 
-            result = combineResponses SMethod_TextDocumentDefinition def supportsLinkInDefinitionCaps definitionParams pluginResponses
+            result = combineResponses message def supportsLinkInDefinitionCaps params pluginResponses
 
             expectedResult :: Definition |? ([DefinitionLink] |? Null)
             expectedResult = InR . InL $
@@ -122,7 +131,7 @@ combineResponsesTextDocumentDefinitionTests = testGroup "TextDocumentDefinition"
                 , InR . InR $ Null
                 ]
 
-            result = combineResponses SMethod_TextDocumentDefinition def supportsLinkInDefinitionCaps definitionParams pluginResponses
+            result = combineResponses message def supportsLinkInDefinitionCaps params pluginResponses
 
             expectedResult :: Definition |? ([DefinitionLink] |? Null)
             expectedResult = InR . InR $ Null
@@ -139,6 +148,14 @@ supportsLinkInDefinitionCaps = def & L.textDocument ?~ textDocumentCaps
 
 definitionParams :: DefinitionParams
 definitionParams = DefinitionParams
+    { _textDocument = TextDocumentIdentifier testFileUri
+    , _position = Position 5 4
+    , _workDoneToken = Nothing
+    , _partialResultToken = Nothing
+    }
+
+typeDefinitionParams :: TypeDefinitionParams
+typeDefinitionParams = TypeDefinitionParams
     { _textDocument = TextDocumentIdentifier testFileUri
     , _position = Position 5 4
     , _workDoneToken = Nothing
