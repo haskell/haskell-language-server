@@ -1,12 +1,12 @@
-{-# LANGUAGE CPP                      #-}
-{-# LANGUAGE DataKinds                #-}
-{-# LANGUAGE LambdaCase               #-}
-{-# LANGUAGE NamedFieldPuns           #-}
-{-# LANGUAGE OverloadedLabels         #-}
-{-# LANGUAGE OverloadedStrings        #-}
-{-# LANGUAGE RecordWildCards          #-}
-{-# LANGUAGE TypeApplications         #-}
-{-# LANGUAGE TypeOperators            #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedLabels  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE TypeOperators     #-}
 
 module Ide.Plugin.Fourmolu (
     descriptor,
@@ -18,9 +18,7 @@ import           Control.Exception               (IOException, handle)
 import           Control.Lens                    ((^.))
 import           Control.Monad                   (guard)
 import           Control.Monad.Error.Class       (MonadError (throwError))
-import           Control.Monad.Trans.Except      (ExceptT (..),
-                                                  runExceptT)
-
+import           Control.Monad.Trans.Except      (ExceptT (..), runExceptT)
 import           Control.Monad.IO.Class          (MonadIO (liftIO))
 import           Control.Monad.Trans.Class       (MonadTrans (lift))
 import           Data.Bifunctor                  (bimap)
