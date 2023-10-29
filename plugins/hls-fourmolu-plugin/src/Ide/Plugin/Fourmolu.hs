@@ -14,7 +14,7 @@ module Ide.Plugin.Fourmolu (
     LogEvent,
 ) where
 
-import           Control.Exception               (IOException, handle)
+import           Control.Exception
 import           Control.Lens                    ((^.))
 import           Control.Monad                   (guard)
 import           Control.Monad.Error.Class       (MonadError (throwError))
