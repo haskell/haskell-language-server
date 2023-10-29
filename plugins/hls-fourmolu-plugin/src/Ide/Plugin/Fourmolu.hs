@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DataKinds                #-}
-{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE NamedFieldPuns           #-}
 {-# LANGUAGE OverloadedLabels         #-}
@@ -15,11 +14,11 @@ module Ide.Plugin.Fourmolu (
     LogEvent,
 ) where
 
-import           Control.Exception               (IOException, handle, try)
+import           Control.Exception               (IOException, handle)
 import           Control.Lens                    ((^.))
 import           Control.Monad                   (guard)
 import           Control.Monad.Error.Class       (MonadError (throwError))
-import           Control.Monad.Trans.Except      (ExceptT (..), mapExceptT,
+import           Control.Monad.Trans.Except      (ExceptT (..),
                                                   runExceptT)
 
 import           Control.Monad.IO.Class          (MonadIO (liftIO))
