@@ -93,7 +93,10 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                         errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
 
             let config =
-                    refineConfig ModuleSource Nothing Nothing Nothing defaultConfig
+#if MIN_VERSION_fourmolu(0,13,0)
+                    refineConfig ModuleSource Nothing Nothing Nothing
+#endif
+                    defaultConfig
                         { cfgDynOptions = map DynOption fileOpts
                         , cfgFixityOverrides = cfgFileFixities
                         , cfgRegion = region
