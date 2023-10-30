@@ -702,6 +702,14 @@ nullToMaybe' (InR (InR _)) = Nothing
 
 type Definitions = (Definition |? ([DefinitionLink] |? Null))
 
+-- | Merges two definition responses (TextDocumentDefinition | TextDocumentTypeDefinition)
+-- into one preserving all locations and their order (including order of the responses).
+-- Upgrades Location(s) into LocationLink(s) when one of the responses is LocationLink(s). With following fields:
+--  * LocationLink.originSelectionRange = Nothing
+--  * LocationLink.targetUri = Location.Uri
+--  * LocationLink.targetRange = Location.Range
+--  * LocationLink.targetSelectionRange = Location.Range
+-- Ignores Null responses.
 mergeDefinitions :: Definitions -> Definitions -> Definitions
 mergeDefinitions definitions1 definitions2 = case (definitions1, definitions2) of
     (InR (InR Null), def2)               -> def2
@@ -712,11 +720,11 @@ mergeDefinitions definitions1 definitions2 = case (definitions1, definitions2) o
     (InR (InL links1), InR (InL links2)) -> InR $ InL (links1 ++ links2)
     where
         defToLinks :: Definition -> [DefinitionLink]
-        defToLinks (Definition (InL location)) = [DefinitionLink $ locationToLocationLink location]
-        defToLinks (Definition (InR locations)) = map (DefinitionLink . locationToLocationLink) locations
+        defToLinks (Definition (InL location)) = [locationToDefinitionLink location]
+        defToLinks (Definition (InR locations)) = map locationToDefinitionLink locations
 
-        locationToLocationLink :: Location -> LocationLink
-        locationToLocationLink Location{_uri, _range} = LocationLink{_originSelectionRange = Nothing, _targetUri = _uri, _targetRange = _range, _targetSelectionRange = _range}
+        locationToDefinitionLink :: Location -> DefinitionLink
+        locationToDefinitionLink Location{_uri, _range} = DefinitionLink LocationLink{_originSelectionRange = Nothing, _targetUri = _uri, _targetRange = _range, _targetSelectionRange = _range}
 
         mergeDefs :: Definition -> Definition -> Definition
         mergeDefs (Definition (InL loc1)) (Definition (InL loc2)) = Definition $ InR [loc1, loc2]
