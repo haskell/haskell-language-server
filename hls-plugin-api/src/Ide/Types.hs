@@ -6,6 +6,7 @@
 {-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE DuplicateRecordFields      #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
@@ -13,6 +14,7 @@
 {-# LANGUAGE MonadComprehensions        #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE OverloadedRecordDot        #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE PolyKinds                  #-}
@@ -569,10 +571,14 @@ instance PluginRequestMethod Method_CodeActionResolve where
     combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentDefinition where
-    combineResponses _ _ _ _ (x :| xs) = foldl' mergeDefinitions x xs
+    combineResponses _ _ caps _ (x :| xs)
+        | Just True <- caps._textDocument >>= (._definition) >>= (._linkSupport) = foldl' mergeDefinitions x xs
+        | otherwise = downgradeLinks $ foldl' mergeDefinitions x xs
 
 instance PluginRequestMethod Method_TextDocumentTypeDefinition where
-    combineResponses _ _ _ _ (x :| xs) = foldl' mergeDefinitions x xs
+    combineResponses _ _ caps _ (x :| xs)
+        | Just True <- caps._textDocument >>= (._typeDefinition) >>= (._linkSupport) = foldl' mergeDefinitions x xs
+        | otherwise = downgradeLinks $ foldl' mergeDefinitions x xs
 
 instance PluginRequestMethod Method_TextDocumentDocumentHighlight where
 
@@ -698,11 +704,11 @@ type Definitions = (Definition |? ([DefinitionLink] |? Null))
 
 mergeDefinitions :: Definitions -> Definitions -> Definitions
 mergeDefinitions definitions1 definitions2 = case (definitions1, definitions2) of
-    (InR (InR Null), def2) -> def2
-    (def1, InR (InR Null)) -> def1
-    (InL def1, InL def2) -> InR $ InL (defToLinks def1 ++ defToLinks def2)
-    (InL def1, InR (InL links)) -> InR $ InL (defToLinks def1 ++ links)
-    (InR (InL links), InL def2) -> InR $ InL (links ++ defToLinks def2)
+    (InR (InR Null), def2)               -> def2
+    (def1, InR (InR Null))               -> def1
+    (InL def1, InL def2)                 -> InL $ mergeDefs def1 def2
+    (InL def1, InR (InL links))          -> InR $ InL (defToLinks def1 ++ links)
+    (InR (InL links), InL def2)          -> InR $ InL (links ++ defToLinks def2)
     (InR (InL links1), InR (InL links2)) -> InR $ InL (links1 ++ links2)
     where
         defToLinks :: Definition -> [DefinitionLink]
@@ -711,6 +717,19 @@ mergeDefinitions definitions1 definitions2 = case (definitions1, definitions2) o
 
         locationToLocationLink :: Location -> LocationLink
         locationToLocationLink Location{_uri, _range} = LocationLink{_originSelectionRange = Nothing, _targetUri = _uri, _targetRange = _range, _targetSelectionRange = _range}
+
+        mergeDefs :: Definition -> Definition -> Definition
+        mergeDefs (Definition (InL loc1)) (Definition (InL loc2)) = Definition $ InR [loc1, loc2]
+        mergeDefs (Definition (InR locs1)) (Definition (InL loc2)) = Definition $ InR (locs1 ++ [loc2])
+        mergeDefs (Definition (InL loc1)) (Definition (InR locs2)) = Definition $ InR (loc1 : locs2)
+        mergeDefs (Definition (InR locs1)) (Definition (InR locs2)) = Definition $ InR (locs1 ++ locs2)
+
+downgradeLinks :: Definitions -> Definitions
+downgradeLinks (InR (InL links)) = InL . Definition . InR . map linkToLocation $ links
+    where
+        linkToLocation :: DefinitionLink -> Location
+        linkToLocation (DefinitionLink LocationLink{_targetUri, _targetRange}) = Location {_uri = _targetUri, _range = _targetRange}
+downgradeLinks defs = defs
 -- ---------------------------------------------------------------------
 -- Plugin Notifications
 -- ---------------------------------------------------------------------

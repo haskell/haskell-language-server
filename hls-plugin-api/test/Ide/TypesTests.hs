@@ -1,13 +1,17 @@
-{-# LANGUAGE DerivingStrategies    #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE DuplicateRecordFields      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeOperators              #-}
+
 module Ide.TypesTests
     ( tests
     ) where
-import           Control.Lens                  ((?~))
+import           Control.Lens                  (preview, (?~), (^?))
+import           Control.Monad                 ((>=>))
 import           Data.Default                  (Default (def))
 import           Data.Function                 ((&))
 import           Data.List.NonEmpty            (NonEmpty ((:|)), nonEmpty)
+import           Data.Maybe                    (isJust)
 import qualified Data.Text                     as Text
 import           Ide.Types                     (Config (Config),
                                                 PluginRequestMethod (combineResponses))
@@ -26,11 +30,19 @@ import           Language.LSP.Protocol.Types   (ClientCapabilities,
                                                 Range (Range),
                                                 TextDocumentClientCapabilities (TextDocumentClientCapabilities, _definition),
                                                 TextDocumentIdentifier (TextDocumentIdentifier),
+                                                TypeDefinitionClientCapabilities (TypeDefinitionClientCapabilities, _dynamicRegistration, _linkSupport),
                                                 TypeDefinitionParams (..),
-                                                Uri (Uri), filePathToUri,
+                                                Uri (Uri), _L, _R,
+                                                _typeDefinition, filePathToUri,
                                                 type (|?) (..))
 import           Test.Tasty                    (TestTree, testGroup)
 import           Test.Tasty.HUnit              (assertBool, testCase, (@=?))
+import           Test.Tasty.QuickCheck         (ASCIIString (ASCIIString),
+                                                Arbitrary (arbitrary), Gen,
+                                                NonEmptyList (NonEmpty),
+                                                arbitraryBoundedEnum, cover,
+                                                listOf1, oneof, testProperty,
+                                                (===))
 
 tests :: TestTree
 tests = testGroup "PluginTypes"
@@ -50,7 +62,8 @@ combineResponsesTextDocumentTypeDefinitionTests :: TestTree
 combineResponsesTextDocumentTypeDefinitionTests = testGroup "TextDocumentTypeDefinition" $
     defAndTypeDefSharedTests SMethod_TextDocumentTypeDefinition typeDefinitionParams
 
-defAndTypeDefSharedTests message params = [ testCase "merges all single location responses into one response with all locations and upgrades them into links (with link support)" $ do
+defAndTypeDefSharedTests message params =
+    [ testCase "merges all single location responses into one response with all locations (without upgrading to links)" $ do
         let pluginResponses :: NonEmpty (Definition |? ([DefinitionLink] |? Null))
             pluginResponses =
                 (InL . Definition . InL . Location testFileUri $ range1) :|
@@ -58,13 +71,13 @@ defAndTypeDefSharedTests message params = [ testCase "merges all single location
                 , InL . Definition . InL . Location testFileUri $ range3
                 ]
 
-            result = combineResponses message def supportsLinkInDefinitionCaps params pluginResponses
+            result = combineResponses message def supportsLinkInAllDefinitionCaps params pluginResponses
 
             expectedResult :: Definition |? ([DefinitionLink] |? Null)
-            expectedResult = InR . InL $
-                [ DefinitionLink $ LocationLink Nothing testFileUri range1 range1
-                , DefinitionLink $ LocationLink Nothing testFileUri range2 range2
-                , DefinitionLink $ LocationLink Nothing testFileUri range3 range3
+            expectedResult = InL . Definition . InR $
+                [ Location testFileUri range1
+                , Location testFileUri range2
+                , Location testFileUri range3
                 ]
         expectedResult @=? result
 
@@ -78,7 +91,7 @@ defAndTypeDefSharedTests message params = [ testCase "merges all single location
                     ]
                 ]
 
-            result = combineResponses message def supportsLinkInDefinitionCaps params pluginResponses
+            result = combineResponses message def supportsLinkInAllDefinitionCaps params pluginResponses
 
             expectedResult :: Definition |? ([DefinitionLink] |? Null)
             expectedResult = InR . InL $
@@ -96,7 +109,7 @@ defAndTypeDefSharedTests message params = [ testCase "merges all single location
                 , InL . Definition . InR $ [Location testFileUri range3]
                 ]
 
-            result = combineResponses message def supportsLinkInDefinitionCaps params pluginResponses
+            result = combineResponses message def supportsLinkInAllDefinitionCaps params pluginResponses
 
             expectedResult :: Definition |? ([DefinitionLink] |? Null)
             expectedResult = InR . InL $
@@ -111,10 +124,10 @@ defAndTypeDefSharedTests message params = [ testCase "merges all single location
             pluginResponses =
                 (InL . Definition . InL . Location testFileUri $ range1) :|
                 [ InR . InR $ Null
-                , InL . Definition . InR $ [Location testFileUri range3]
+                , InR . InL $ [DefinitionLink $ LocationLink Nothing testFileUri range3 range3]
                 ]
 
-            result = combineResponses message def supportsLinkInDefinitionCaps params pluginResponses
+            result = combineResponses message def supportsLinkInAllDefinitionCaps params pluginResponses
 
             expectedResult :: Definition |? ([DefinitionLink] |? Null)
             expectedResult = InR . InL $
@@ -131,20 +144,33 @@ defAndTypeDefSharedTests message params = [ testCase "merges all single location
                 , InR . InR $ Null
                 ]
 
-            result = combineResponses message def supportsLinkInDefinitionCaps params pluginResponses
+            result = combineResponses message def supportsLinkInAllDefinitionCaps params pluginResponses
 
             expectedResult :: Definition |? ([DefinitionLink] |? Null)
             expectedResult = InR . InR $ Null
         expectedResult @=? result
+
+    , testProperty "downgrades all locationLinks to locations when missing link support in capabilities" $ \(MkGeneratedNonEmpty responses) -> do
+        let pluginResponses = fmap (\(MkGeneratedDefinition definition) -> definition) responses
+
+            result = combineResponses message def def params pluginResponses
+
+        cover 70 (any (isJust . (>>= (^? _L)) . (^? _R)) pluginResponses) "Has at least one response with links" $
+            cover 10 (any (isJust . (^? _L)) pluginResponses) "Has at least one response with locations" $
+            cover 10 (any (isJust . (>>= (^? _R)) . (^? _R)) pluginResponses) "Has at least one response with Null" $
+            (isJust (result ^? _L) || isJust (result ^? _R >>= (^? _R))) === True
     ]
 
 (range1, range2, range3) = (Range (Position 3 0) $ Position 3 5, Range (Position 5 7) $ Position 5 13, Range (Position 24 30) $ Position 24 40)
 
-supportsLinkInDefinitionCaps :: ClientCapabilities
-supportsLinkInDefinitionCaps = def & L.textDocument ?~ textDocumentCaps
+supportsLinkInAllDefinitionCaps :: ClientCapabilities
+supportsLinkInAllDefinitionCaps = def & L.textDocument ?~ textDocumentCaps
     where
         textDocumentCaps :: TextDocumentClientCapabilities
-        textDocumentCaps = def { _definition = Just DefinitionClientCapabilities { _linkSupport = Just True, _dynamicRegistration = Nothing }}
+        textDocumentCaps = def
+            { _definition = Just DefinitionClientCapabilities { _linkSupport = Just True, _dynamicRegistration = Nothing }
+            , _typeDefinition = Just TypeDefinitionClientCapabilities { _linkSupport = Just True, _dynamicRegistration = Nothing }
+            }
 
 definitionParams :: DefinitionParams
 definitionParams = DefinitionParams
@@ -164,3 +190,40 @@ typeDefinitionParams = TypeDefinitionParams
 
 testFileUri :: Uri
 testFileUri = filePathToUri "file://tester/Test.hs"
+
+newtype GeneratedDefinition = MkGeneratedDefinition (Definition |? ([DefinitionLink] |? Null)) deriving newtype (Show)
+
+instance Arbitrary GeneratedDefinition where
+    arbitrary = MkGeneratedDefinition <$> oneof
+        [ InL . Definition . InL <$> generateLocation
+        , InL . Definition . InR <$> listOf1 generateLocation
+        , InR . InL . map DefinitionLink <$> listOf1 generateLocationLink
+        , pure . InR . InR $ Null
+        ]
+        where
+            generateLocation :: Gen Location
+            generateLocation = do
+                (LocationLink _ uri range _) <- generateLocationLink
+                pure $ Location uri range
+
+            generateLocationLink :: Gen LocationLink
+            generateLocationLink = LocationLink <$> generateMaybe generateRange <*> generateUri <*> generateRange <*> generateRange
+
+            generateMaybe :: Gen a -> Gen (Maybe a)
+            generateMaybe gen = oneof [Just <$> gen, pure Nothing]
+
+            generateUri :: Gen Uri
+            generateUri = do
+                (ASCIIString str) <- arbitrary
+                pure . Uri . Text.pack $ str
+
+            generateRange :: Gen Range
+            generateRange = Range <$> generatePosition <*> generatePosition
+
+            generatePosition :: Gen Position
+            generatePosition = Position <$> arbitraryBoundedEnum <*> arbitraryBoundedEnum
+
+newtype GeneratedNonEmpty a = MkGeneratedNonEmpty (NonEmpty a) deriving newtype (Show)
+
+instance Arbitrary a => Arbitrary (GeneratedNonEmpty a) where
+    arbitrary = MkGeneratedNonEmpty <$> ((:|) <$> arbitrary <*> arbitrary)
