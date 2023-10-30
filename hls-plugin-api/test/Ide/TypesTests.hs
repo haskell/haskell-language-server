@@ -119,6 +119,21 @@ defAndTypeDefSharedTests message params =
                 ]
         expectedResult @=? result
 
+    , testCase "preserves link-specific data when merging link and location responses (with link support)" $ do
+        let pluginResponses :: NonEmpty (Definition |? ([DefinitionLink] |? Null))
+            pluginResponses =
+                (InL . Definition . InL . Location testFileUri $ range1) :|
+                [ InR . InL $ [ DefinitionLink $ LocationLink (Just range1) testFileUri range2 range3 ] ]
+
+            result = combineResponses message def supportsLinkInAllDefinitionCaps params pluginResponses
+
+            expectedResult :: Definition |? ([DefinitionLink] |? Null)
+            expectedResult = InR . InL $
+                [ DefinitionLink $ LocationLink Nothing testFileUri range1 range1
+                , DefinitionLink $ LocationLink (Just range1) testFileUri range2 range3
+                ]
+        expectedResult @=? result
+
     , testCase "ignores Null responses when other responses are available" $ do
         let pluginResponses :: NonEmpty (Definition |? ([DefinitionLink] |? Null))
             pluginResponses =
