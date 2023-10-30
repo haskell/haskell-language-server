@@ -1,6 +1,7 @@
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE DuplicateRecordFields      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators              #-}
 
 module Ide.TypesTests
