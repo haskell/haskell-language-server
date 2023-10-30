@@ -14,7 +14,6 @@
 {-# LANGUAGE MonadComprehensions        #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE OverloadedRecordDot        #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE PolyKinds                  #-}
@@ -572,12 +571,12 @@ instance PluginRequestMethod Method_CodeActionResolve where
 
 instance PluginRequestMethod Method_TextDocumentDefinition where
     combineResponses _ _ caps _ (x :| xs)
-        | Just True <- caps._textDocument >>= (._definition) >>= (._linkSupport) = foldl' mergeDefinitions x xs
+        | Just (Just True) <- caps ^? (L.textDocument . _Just . L.definition . _Just . L.linkSupport) = foldl' mergeDefinitions x xs
         | otherwise = downgradeLinks $ foldl' mergeDefinitions x xs
 
 instance PluginRequestMethod Method_TextDocumentTypeDefinition where
     combineResponses _ _ caps _ (x :| xs)
-        | Just True <- caps._textDocument >>= (._typeDefinition) >>= (._linkSupport) = foldl' mergeDefinitions x xs
+        | Just (Just True) <- caps ^? (L.textDocument . _Just . L.typeDefinition . _Just . L.linkSupport) = foldl' mergeDefinitions x xs
         | otherwise = downgradeLinks $ foldl' mergeDefinitions x xs
 
 instance PluginRequestMethod Method_TextDocumentDocumentHighlight where
