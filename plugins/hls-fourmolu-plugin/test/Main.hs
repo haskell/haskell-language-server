@@ -29,6 +29,8 @@ tests =
             formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
         , goldenWithFourmolu cli "formats imports correctly" "Fourmolu2" "formatted" $ \doc -> do
             formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
+        , goldenWithFourmolu cli "uses correct operator fixities" "Fourmolu3" "formatted" $ \doc -> do
+            formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
         ]
 
 goldenWithFourmolu :: Bool -> TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
