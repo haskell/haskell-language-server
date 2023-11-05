@@ -59,7 +59,7 @@ properties =
     emptyProperties
         & defineBooleanProperty
             #external
-            "Call out to an external \"fourmolu\" executable, rather than using the bundled library"
+            "Call out to an external \"fourmolu\" executable, rather than using the bundled library."
             False
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
