@@ -1,13 +1,12 @@
-{-# LANGUAGE CPP                      #-}
-{-# LANGUAGE DataKinds                #-}
-{-# LANGUAGE DisambiguateRecordFields #-}
-{-# LANGUAGE LambdaCase               #-}
-{-# LANGUAGE NamedFieldPuns           #-}
-{-# LANGUAGE OverloadedLabels         #-}
-{-# LANGUAGE OverloadedStrings        #-}
-{-# LANGUAGE RecordWildCards          #-}
-{-# LANGUAGE TypeApplications         #-}
-{-# LANGUAGE TypeOperators            #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedLabels  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE TypeOperators     #-}
 
 module Ide.Plugin.Fourmolu (
     descriptor,
@@ -15,15 +14,13 @@ module Ide.Plugin.Fourmolu (
     LogEvent,
 ) where
 
-import           Control.Exception               (IOException, handle, try)
+import           Control.Exception
 import           Control.Lens                    ((^.))
 import           Control.Monad                   (guard)
 import           Control.Monad.Error.Class       (MonadError (throwError))
-import           Control.Monad.Trans.Except      (ExceptT (..), mapExceptT,
-                                                  runExceptT)
-
 import           Control.Monad.IO.Class          (MonadIO (liftIO))
 import           Control.Monad.Trans.Class       (MonadTrans (lift))
+import           Control.Monad.Trans.Except      (ExceptT (..), runExceptT)
 import           Data.Bifunctor                  (bimap)
 import           Data.List                       (intercalate)
 import           Data.Maybe                      (catMaybes)
@@ -96,6 +93,9 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                         errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
 
             let config =
+#if MIN_VERSION_fourmolu(0,13,0)
+                    refineConfig ModuleSource Nothing Nothing Nothing
+#endif
                     defaultConfig
                         { cfgDynOptions = map DynOption fileOpts
                         , cfgFixityOverrides = cfgFileFixities
