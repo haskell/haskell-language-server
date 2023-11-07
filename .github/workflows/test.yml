@@ -27,7 +27,7 @@ jobs:
       - id: ghcs
         run: echo "ghcs=$(cat ./.github/workflows/supported-ghc-versions.json)" >> $GITHUB_OUTPUT
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v5.3.0
+        uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
           cancel_others: false
           paths_ignore: '[ "**/docs/**"
@@ -45,7 +45,7 @@ jobs:
                          ]'
       # If we only change ghcide downstream packages we have not test ghcide itself
       - id: skip_ghcide_check
-        uses: fkirc/skip-duplicate-actions@v5.3.0
+        uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
           cancel_others: false
           paths_ignore: '[ "hls-test-utils/**"
