@@ -34,7 +34,7 @@ packages:
          ./plugins/hls-refactor-plugin
          ./plugins/hls-overloaded-record-dot-plugin
 
-index-state: 2023-10-06T06:12:29Z
+index-state: 2023-10-16T22:47:48Z
 
 tests: True
 test-show-details: direct
@@ -74,8 +74,8 @@ source-repository-package
 -- END DELETE
 
 if impl(ghc >= 9.1)
-  -- ekg packagess are old and unmaintained, but we 
-  -- don't rely on them for the mainline build, so 
+  -- ekg packagess are old and unmaintained, but we
+  -- don't rely on them for the mainline build, so
   -- this is okay
   allow-newer:
     ekg-json:base,
