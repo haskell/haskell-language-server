@@ -1,5 +1,9 @@
 # Changelog for haskell-language-server
 
+## 2.4.0.1
+
+* bindist support for 9.4.8
+
 ## 2.4.0.0
 
 * Initial support for GHC 9.8.1, without plugins dependent on `ghc-exactprint`

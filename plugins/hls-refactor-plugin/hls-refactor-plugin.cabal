@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               hls-refactor-plugin
-version:            2.4.0.0
+version:            2.4.0.1
 synopsis:           Exactprint refactorings for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -73,8 +73,8 @@ library
     , ghc-boot
     , regex-tdfa
     , text-rope
-    , ghcide                == 2.4.0.0
-    , hls-plugin-api        == 2.4.0.0
+    , ghcide                == 2.4.0.1
+    , hls-plugin-api        == 2.4.0.1
     , lsp
     , text
     , transformers
@@ -112,7 +112,7 @@ test-suite tests
     , base
     , filepath
     , hls-refactor-plugin
-    , hls-test-utils      == 2.4.0.0
+    , hls-test-utils      == 2.4.0.1
     , lens
     , lsp-types
     , text
