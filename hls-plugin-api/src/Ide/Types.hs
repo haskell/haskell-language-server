@@ -50,6 +50,8 @@ module Ide.Types
 , lookupCommandProvider
 , ResolveFunction
 , mkResolveHandler
+, DisabledReason (..)
+, PluginStatus (..)
 )
     where
 
@@ -285,11 +287,11 @@ data PluginDescriptor (ideState :: Type) =
 -- | Check whether the given plugin descriptor is responsible for the file with the given path.
 --   Compares the file extension of the file at the given path with the file extension
 --   the plugin is responsible for.
-pluginResponsible :: Uri -> PluginDescriptor c -> Bool
+pluginResponsible :: Uri -> PluginDescriptor c -> PluginStatus
 pluginResponsible uri pluginDesc
     | Just fp <- mfp
-    , T.pack (takeExtension fp) `elem` pluginFileType pluginDesc = True
-    | otherwise = False
+    , T.pack (takeExtension fp) `elem` pluginFileType pluginDesc = PluginEnabled
+    | otherwise = PluginDisabled $ DisabledByFileType (maybe "" takeExtension mfp)
     where
       mfp = uriToFilePath uri
 
@@ -333,6 +335,24 @@ defaultConfigDescriptor :: ConfigDescriptor
 defaultConfigDescriptor =
     ConfigDescriptor Data.Default.def False (mkCustomConfig emptyProperties)
 
+data DisabledReason = PluginRejected | NotResolveOwner String | DisabledByConfig | DisabledByFileType String
+  deriving (Eq)
+
+data PluginStatus = PluginEnabled | PluginDisabled DisabledReason
+  deriving (Eq)
+
+instance Show PluginStatus where
+  show PluginEnabled = "is enabled"
+  show (PluginDisabled PluginRejected) = "chose to reject this request"
+  show (PluginDisabled (NotResolveOwner s)) = "does not respond to resolve requests for " ++ s ++ ")"
+  show (PluginDisabled DisabledByConfig) = "is disabled from the config"
+  show (PluginDisabled (DisabledByFileType s)) = "does not respond to requests for " ++ s ++ " filetypes)"
+
+instance Semigroup PluginStatus where
+  PluginEnabled <> PluginEnabled = PluginEnabled
+  PluginDisabled r <> _          = PluginDisabled r
+  _ <> PluginDisabled r          = PluginDisabled r
+
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
 -- Only methods for which we know how to combine responses can be instances of 'PluginMethod'
@@ -372,15 +392,167 @@ class HasTracing (MessageParams m) => PluginMethod (k :: MessageKind) (m :: Meth
     -> Config
     -- ^ Generic config description, expected to contain 'PluginConfig' configuration
     -- for this plugin
-    -> Bool
+    -> PluginStatus
     -- ^ Is this plugin enabled and allowed to respond to the given request
     -- with the given parameters?
 
   default pluginEnabled :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
-                              => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> Bool
-  pluginEnabled _ params desc conf = pluginResponsible uri desc && plcGlobalOn (configForPlugin conf desc)
+                              => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> PluginStatus
+  pluginEnabled _ params desc conf =
+    pluginGlobalEnabled (configForPlugin conf desc) <> pluginResponsible uri desc
     where
         uri = params ^. L.textDocument . L.uri
+
+pluginEnabledOnlyFileType :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
+                              => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> PluginStatus
+pluginEnabledOnlyFileType  _ msgParams pluginDesc _ = pluginResponsible uri pluginDesc
+    where
+      uri = msgParams ^. L.textDocument . L.uri
+
+pluginEnabledOnlyGlobalOn :: SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> PluginStatus
+pluginEnabledOnlyGlobalOn _ _ desc conf = pluginGlobalEnabled (configForPlugin conf desc)
+
+pluginEnabledWithFeature :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
+                              => (PluginConfig -> Bool) -> SMethod m -> MessageParams m
+                              -> PluginDescriptor c -> Config -> PluginStatus
+pluginEnabledWithFeature feature _ msgParams pluginDesc config =
+  pluginEnabledConfig feature (configForPlugin config pluginDesc)
+    <> pluginResponsible uri pluginDesc
+    where
+      uri = msgParams ^. L.textDocument . L.uri
+
+pluginEnabledResolve :: L.HasData_ s (Maybe Value) => (PluginConfig -> Bool) -> p -> s -> PluginDescriptor c -> Config -> PluginStatus
+pluginEnabledResolve feature _ msgParams pluginDesc config =
+    pluginEnabledConfig feature (configForPlugin config pluginDesc)
+    <> pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
+
+instance PluginMethod Request Method_TextDocumentCodeAction where
+  pluginEnabled = pluginEnabledWithFeature plcCodeActionsOn
+
+instance PluginMethod Request Method_CodeActionResolve where
+  -- See Note [Resolve in PluginHandlers]
+  pluginEnabled = pluginEnabledResolve plcCodeActionsOn
+
+instance PluginMethod Request Method_TextDocumentDefinition where
+  pluginEnabled = pluginEnabledOnlyFileType
+
+instance PluginMethod Request Method_TextDocumentTypeDefinition where
+  pluginEnabled = pluginEnabledOnlyFileType
+
+
+instance PluginMethod Request Method_TextDocumentDocumentHighlight where
+  pluginEnabled = pluginEnabledOnlyFileType
+
+
+instance PluginMethod Request Method_TextDocumentReferences where
+  pluginEnabled = pluginEnabledOnlyFileType
+
+instance PluginMethod Request Method_WorkspaceSymbol where
+  -- Unconditionally enabled, but should it really be?
+  pluginEnabled _ _ _ _ = PluginEnabled
+
+instance PluginMethod Request Method_TextDocumentCodeLens where
+  pluginEnabled = pluginEnabledWithFeature plcCodeLensOn
+
+instance PluginMethod Request Method_CodeLensResolve where
+  -- See Note [Resolve in PluginHandlers]
+  pluginEnabled = pluginEnabledResolve plcCodeLensOn
+
+instance PluginMethod Request Method_TextDocumentRename where
+  pluginEnabled = pluginEnabledWithFeature plcRenameOn
+
+instance PluginMethod Request Method_TextDocumentHover where
+
+  pluginEnabled = pluginEnabledWithFeature plcHoverOn
+
+instance PluginMethod Request Method_TextDocumentDocumentSymbol where
+
+  pluginEnabled = pluginEnabledWithFeature plcSymbolsOn
+
+instance PluginMethod Request Method_CompletionItemResolve where
+  -- See Note [Resolve in PluginHandlers]
+  pluginEnabled _ (CompletionItem {_data_=Nothing}) (PluginDescriptor {pluginId=PluginId "ghcide-completions-bounce"}) _ = PluginEnabled
+  pluginEnabled method params desc conf = pluginEnabledResolve plcCompletionOn method params desc conf
+
+instance PluginMethod Request Method_TextDocumentCompletion where
+
+  pluginEnabled = pluginEnabledWithFeature plcCompletionOn
+
+instance PluginMethod Request Method_TextDocumentFormatting where
+  pluginEnabled SMethod_TextDocumentFormatting msgParams pluginDesc conf =
+    if PluginId (formattingProvider conf) == pid
+          || PluginId (cabalFormattingProvider conf) == pid
+        then PluginEnabled
+        else PluginDisabled DisabledByConfig
+    <> pluginResponsible uri pluginDesc
+    where
+      uri = msgParams ^. L.textDocument . L.uri
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request Method_TextDocumentRangeFormatting where
+  pluginEnabled _ msgParams pluginDesc conf =
+    if PluginId (formattingProvider conf) == pid
+          || PluginId (cabalFormattingProvider conf) == pid
+        then PluginEnabled
+        else PluginDisabled DisabledByConfig
+    <> pluginResponsible uri pluginDesc
+    where
+      uri = msgParams ^. L.textDocument . L.uri
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request Method_TextDocumentPrepareCallHierarchy where
+
+  pluginEnabled = pluginEnabledWithFeature plcCallHierarchyOn
+
+instance PluginMethod Request Method_TextDocumentSelectionRange where
+
+  pluginEnabled = pluginEnabledWithFeature plcSelectionRangeOn
+
+instance PluginMethod Request Method_TextDocumentFoldingRange where
+
+  pluginEnabled = pluginEnabledWithFeature plcFoldingRangeOn
+
+instance PluginMethod Request Method_CallHierarchyIncomingCalls where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'
+  pluginEnabled _ _ pluginDesc conf =
+    pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
+
+instance PluginMethod Request Method_CallHierarchyOutgoingCalls where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'
+  pluginEnabled _ _ pluginDesc conf =
+    pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
+instance PluginMethod Request Method_WorkspaceExecuteCommand where
+  pluginEnabled _ _ _ _= PluginEnabled
+
+instance PluginMethod Request (Method_CustomMethod m) where
+  pluginEnabled _ _ _ _ = PluginEnabled
+
+-- Plugin Notifications
+
+instance PluginMethod Notification Method_TextDocumentDidOpen where
+
+instance PluginMethod Notification Method_TextDocumentDidChange where
+
+instance PluginMethod Notification Method_TextDocumentDidSave where
+
+instance PluginMethod Notification Method_TextDocumentDidClose where
+
+instance PluginMethod Notification Method_WorkspaceDidChangeWatchedFiles where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
+  pluginEnabled = pluginEnabledOnlyGlobalOn
+
+instance PluginMethod Notification Method_WorkspaceDidChangeWorkspaceFolders where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
+  pluginEnabled = pluginEnabledOnlyGlobalOn
+
+instance PluginMethod Notification Method_WorkspaceDidChangeConfiguration where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
+  pluginEnabled = pluginEnabledOnlyGlobalOn
+
+instance PluginMethod Notification Method_Initialized where
+  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
+  pluginEnabled = pluginEnabledOnlyGlobalOn
+
 
 -- ---------------------------------------------------------------------
 -- Plugin Requests
@@ -408,132 +580,7 @@ class PluginMethod Request m => PluginRequestMethod (m :: Method ClientToServer 
     => SMethod m -> Config -> ClientCapabilities -> MessageParams m -> NonEmpty (MessageResult m) -> MessageResult m
   combineResponses _method _config _caps _params = sconcat
 
-instance PluginMethod Request Method_TextDocumentCodeAction where
-  pluginEnabled _ msgParams pluginDesc config =
-    pluginResponsible uri pluginDesc && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
-    where
-      uri = msgParams ^. L.textDocument . L.uri
 
-instance PluginMethod Request Method_CodeActionResolve where
-  -- See Note [Resolve in PluginHandlers]
-  pluginEnabled _ msgParams pluginDesc config =
-    pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
-    && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
-
-instance PluginMethod Request Method_TextDocumentDefinition where
-  pluginEnabled _ msgParams pluginDesc _ =
-    pluginResponsible uri pluginDesc
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_TextDocumentTypeDefinition where
-  pluginEnabled _ msgParams pluginDesc _ =
-    pluginResponsible uri pluginDesc
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_TextDocumentDocumentHighlight where
-  pluginEnabled _ msgParams pluginDesc _ =
-    pluginResponsible uri pluginDesc
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_TextDocumentReferences where
-  pluginEnabled _ msgParams pluginDesc _ =
-    pluginResponsible uri pluginDesc
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_WorkspaceSymbol where
-  -- Unconditionally enabled, but should it really be?
-  pluginEnabled _ _ _ _ = True
-
-instance PluginMethod Request Method_TextDocumentCodeLens where
-  pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcCodeLensOn (configForPlugin config pluginDesc)
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_CodeLensResolve where
-  -- See Note [Resolve in PluginHandlers]
-  pluginEnabled _ msgParams pluginDesc config =
-    pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
-    && pluginEnabledConfig plcCodeActionsOn (configForPlugin config pluginDesc)
-
-instance PluginMethod Request Method_TextDocumentRename where
-  pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcRenameOn (configForPlugin config pluginDesc)
-   where
-      uri = msgParams ^. L.textDocument . L.uri
-instance PluginMethod Request Method_TextDocumentHover where
-  pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcHoverOn (configForPlugin config pluginDesc)
-   where
-      uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_TextDocumentDocumentSymbol where
-  pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcSymbolsOn (configForPlugin config pluginDesc)
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_CompletionItemResolve where
-  -- See Note [Resolve in PluginHandlers]
-  pluginEnabled _ msgParams pluginDesc config = pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
-    && pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
-
-instance PluginMethod Request Method_TextDocumentCompletion where
-  pluginEnabled _ msgParams pluginDesc config = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcCompletionOn (configForPlugin config pluginDesc)
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_TextDocumentFormatting where
-  pluginEnabled SMethod_TextDocumentFormatting msgParams pluginDesc conf =
-    pluginResponsible uri pluginDesc
-      && (PluginId (formattingProvider conf) == pid || PluginId (cabalFormattingProvider conf) == pid)
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-      pid = pluginId pluginDesc
-
-instance PluginMethod Request Method_TextDocumentRangeFormatting where
-  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && (PluginId (formattingProvider conf) == pid || PluginId (cabalFormattingProvider conf) == pid)
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-      pid = pluginId pluginDesc
-
-instance PluginMethod Request Method_TextDocumentPrepareCallHierarchy where
-  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_TextDocumentSelectionRange where
-  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcSelectionRangeOn (configForPlugin conf pluginDesc)
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_TextDocumentFoldingRange where
-  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcFoldingRangeOn (configForPlugin conf pluginDesc)
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-
-instance PluginMethod Request Method_CallHierarchyIncomingCalls where
-  -- This method has no URI parameter, thus no call to 'pluginResponsible'
-  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
-
-instance PluginMethod Request Method_CallHierarchyOutgoingCalls where
-  -- This method has no URI parameter, thus no call to 'pluginResponsible'
-  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
-
-instance PluginMethod Request Method_WorkspaceExecuteCommand where
-  pluginEnabled _ _ _ _= True
-
-instance PluginMethod Request (Method_CustomMethod m) where
-  pluginEnabled _ _ _ _ = True
 
 ---
 instance PluginRequestMethod Method_TextDocumentCodeAction where
@@ -700,31 +747,6 @@ nullToMaybe' (InR (InR _)) = Nothing
 -- | Plugin Notification methods. No specific methods at the moment, but
 -- might contain more in the future.
 class PluginMethod Notification m => PluginNotificationMethod (m :: Method ClientToServer Notification)  where
-
-
-instance PluginMethod Notification Method_TextDocumentDidOpen where
-
-instance PluginMethod Notification Method_TextDocumentDidChange where
-
-instance PluginMethod Notification Method_TextDocumentDidSave where
-
-instance PluginMethod Notification Method_TextDocumentDidClose where
-
-instance PluginMethod Notification Method_WorkspaceDidChangeWatchedFiles where
-  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
-
-instance PluginMethod Notification Method_WorkspaceDidChangeWorkspaceFolders where
-  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
-
-instance PluginMethod Notification Method_WorkspaceDidChangeConfiguration where
-  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
-
-instance PluginMethod Notification Method_Initialized where
-  -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf desc
 
 
 instance PluginNotificationMethod Method_TextDocumentDidOpen where
@@ -972,10 +994,16 @@ configForPlugin :: Config -> PluginDescriptor c -> PluginConfig
 configForPlugin config PluginDescriptor{..}
     = Map.findWithDefault (configInitialGenericConfig pluginConfigDescriptor) pluginId (plugins config)
 
+pluginGlobalEnabled :: PluginConfig -> PluginStatus
+pluginGlobalEnabled pc = if plcGlobalOn pc
+                           then PluginEnabled
+                           else PluginDisabled DisabledByConfig
 -- | Checks that a given plugin is both enabled and the specific feature is
 -- enabled
-pluginEnabledConfig :: (PluginConfig -> Bool) -> PluginConfig -> Bool
-pluginEnabledConfig f pluginConfig = plcGlobalOn pluginConfig && f pluginConfig
+pluginEnabledConfig :: (PluginConfig -> Bool) -> PluginConfig -> PluginStatus
+pluginEnabledConfig f pluginConfig = if plcGlobalOn pluginConfig && f pluginConfig
+                                      then PluginEnabled
+                                      else PluginDisabled DisabledByConfig
 
 -- ---------------------------------------------------------------------
 
@@ -1102,11 +1130,13 @@ installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 
 -- |Determine whether this request should be routed to the plugin. Fails closed
 -- if we can't determine which plugin it should be routed to.
-pluginResolverResponsible :: Maybe Value -> PluginDescriptor c -> Bool
-pluginResolverResponsible (Just (fromJSON -> (Success (PluginResolveData o _ _)))) pluginDesc =
-  pluginId pluginDesc == o
+pluginResolverResponsible :: Maybe Value -> PluginDescriptor c -> PluginStatus
+pluginResolverResponsible (Just (fromJSON -> (Success (PluginResolveData o@(PluginId ot) _ _)))) pluginDesc =
+  if pluginId pluginDesc == o
+    then PluginEnabled
+    else PluginDisabled $ NotResolveOwner (T.unpack ot)
 -- We want to fail closed
-pluginResolverResponsible _ _ = False
+pluginResolverResponsible _ _ = PluginDisabled $ NotResolveOwner ""
 
 {- Note [Resolve in PluginHandlers]
   Resolve methods have a few guarantees that need to be made by HLS,

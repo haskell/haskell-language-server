@@ -35,6 +35,7 @@ descriptors :: Recorder (WithPriority Log) -> [PluginDescriptor IdeState]
 descriptors recorder =
   [ descriptor "ghcide-hover-and-symbols",
     Completions.descriptor (cmapWithPrio LogCompletions recorder) "ghcide-completions",
+    Completions.bounceDescriptor (cmapWithPrio LogCompletions recorder) "ghcide-completions-bounce",
     TypeLenses.descriptor (cmapWithPrio LogTypeLenses recorder) "ghcide-type-lenses",
     Notifications.descriptor (cmapWithPrio LogNotifications recorder) "ghcide-core"
   ]

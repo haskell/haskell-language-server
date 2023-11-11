@@ -4,7 +4,8 @@
 {-# LANGUAGE TypeFamilies     #-}
 
 module Development.IDE.Plugin.Completions
-    ( descriptor
+    ( bounceDescriptor
+    , descriptor
     , Log(..)
     , ghcideCompletionsPluginPriority
     ) where
@@ -40,9 +41,11 @@ import           Development.IDE.Types.HscEnvEq           (HscEnvEq (envPackageE
 import qualified Development.IDE.Types.KnownTargets       as KT
 import           Development.IDE.Types.Location
 import           Ide.Logger                               (Pretty (pretty),
+                                                           Priority (Debug),
                                                            Recorder,
                                                            WithPriority,
-                                                           cmapWithPrio)
+                                                           cmapWithPrio,
+                                                           logWith)
 import           Ide.Plugin.Error
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
@@ -63,11 +66,24 @@ import qualified Ide.Plugin.Config                        as Config
 import qualified GHC.LanguageExtensions                   as LangExt
 #endif
 
-data Log = LogShake Shake.Log deriving Show
+data Log = LogShake Shake.Log
+          | LogBouncedCompletionResolve deriving Show
 
 instance Pretty Log where
   pretty = \case
+    LogBouncedCompletionResolve -> "Bounced an extraneous completion resolve request"
     LogShake msg -> pretty msg
+
+bounceDescriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+bounceDescriptor recorder plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkPluginHandler SMethod_CompletionItemResolve (bounceEmptyResolve recorder)
+  }
+
+-- | Generate code actions.
+bounceEmptyResolve :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_CompletionItemResolve
+bounceEmptyResolve recorder _ _ ci = do
+  _ <- logWith recorder Debug LogBouncedCompletionResolve
+  pure ci
 
 ghcideCompletionsPluginPriority :: Natural
 ghcideCompletionsPluginPriority = defaultPluginPriority

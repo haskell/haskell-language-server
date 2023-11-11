@@ -72,16 +72,16 @@ instance Pretty Log where
           <> pretty method <> ": " <> viaShow exception
 instance Show Log where show = renderString . layoutCompact . pretty
 
-noPluginEnabled :: Recorder (WithPriority Log) -> SMethod m -> [PluginId] -> IO (Either ResponseError c)
+noPluginEnabled :: Recorder (WithPriority Log) -> SMethod m -> [(PluginId, PluginStatus)] -> IO (Either ResponseError c)
 noPluginEnabled recorder m fs' = do
   logWith recorder Warning (LogNoPluginForMethod $ Some m)
   let err = ResponseError (InR ErrorCodes_MethodNotFound) msg Nothing
       msg = pluginNotEnabled m fs'
   return $ Left err
-  where pluginNotEnabled :: SMethod m -> [PluginId] -> Text
+  where pluginNotEnabled :: SMethod m -> [(PluginId, PluginStatus)] -> Text
         pluginNotEnabled method availPlugins =
-            "No plugin enabled for " <> T.pack (show method) <> ", potentially available: "
-                <> (T.intercalate ", " $ map (\(PluginId plid) -> plid) availPlugins)
+            "No plugin enabled for this " <> T.pack (show method) <> " request.\n Plugins installed for this method, but not enabled for this request are:\n"
+                <> (T.intercalate "\n" $ map (\(PluginId plid, pluginStatus) -> plid <> " " <> T.pack (show pluginStatus)) availPlugins)
 
 pluginDoesntExist :: PluginId -> Text
 pluginDoesntExist (PluginId pid) = "Plugin " <> pid <> " doesn't exist"
@@ -214,7 +214,7 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
                 (\e -> pure $ Left $ PluginInternalError (exceptionInPlugin p SMethod_WorkspaceExecuteCommand e))
               case res of
                 (Left (PluginRequestRefused _)) ->
-                  liftIO $ noPluginEnabled recorder SMethod_WorkspaceExecuteCommand (fst <$> ecs)
+                  liftIO $ noPluginEnabled recorder SMethod_WorkspaceExecuteCommand ((,PluginDisabled PluginRejected) . fst <$> ecs)
                 (Left pluginErr) -> do
                   liftIO $ logErrors recorder [(p, pluginErr)]
                   pure $ Left $ toResponseError (p, pluginErr)
@@ -237,10 +237,10 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
       pure $ requestHandler m $ \ide params -> do
         config <- Ide.PluginUtils.getClientConfig
         -- Only run plugins that are allowed to run on this request
-        let fs = filter (\(_, desc, _) -> pluginEnabled m params desc config) fs'
+        let (fs, dfs) = List.partition (\(_, desc, _) -> pluginEnabled m params desc config == PluginEnabled) fs'
         -- Clients generally don't display ResponseErrors so instead we log any that we come across
         case nonEmpty fs of
-          Nothing -> liftIO $ noPluginEnabled recorder m ((\(x, _, _) -> x) <$> fs')
+          Nothing -> liftIO $ noPluginEnabled recorder m ((\(x, desc, _) -> (x, pluginEnabled m params desc config)) <$> dfs)
           Just neFs -> do
             let  plidsAndHandlers = fmap (\(plid,_,handler) -> (plid,handler)) neFs
             es <- runConcurrently exceptionInPlugin m plidsAndHandlers ide params
@@ -253,7 +253,7 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
                     noRefused (_, _)                      = True
                     filteredErrs = filter noRefused errs
                 case nonEmpty filteredErrs of
-                  Nothing -> liftIO $ noPluginEnabled recorder m ((\(x, _, _) -> x) <$> fs')
+                  Nothing -> liftIO $ noPluginEnabled recorder m  ((\(x, desc, _) -> (x, pluginEnabled m params desc config)) <$> fs')
                   Just xs -> pure $ Left $ combineErrors xs
               Just xs -> do
                 pure $ Right $ combineResponses m config caps params xs
@@ -275,7 +275,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
       pure $ notificationHandler m $ \ide vfs params -> do
         config <- Ide.PluginUtils.getClientConfig
         -- Only run plugins that are allowed to run on this request
-        let fs = filter (\(_, desc, _) -> pluginEnabled m params desc config) fs'
+        let fs = filter (\(_, desc, _) -> pluginEnabled m params desc config == PluginEnabled) fs'
         case nonEmpty fs of
           Nothing -> do
             logWith recorder Warning (LogNoPluginForMethod $ Some m)
