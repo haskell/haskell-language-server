@@ -85,13 +85,18 @@ if impl(ghc >= 9.1)
 if impl(ghc >= 9.7)
   allow-newer:
     ekg-core:text,
+    -- https://github.com/maoe/ghc-trace-events/issues/12
     ghc-trace-events:base,
     ghc-trace-events:bytestring,
     ghc-trace-events:text,
+    -- https://github.com/haskell-primitive/primitive-unlifted/issues/39
     primitive-unlifted:bytestring,
+    -- https://github.com/obsidiansystems/constraints-extras/issues/54
     constraints-extras:base,
     constraints-extras:template-haskell,
+    -- https://github.com/obsidiansystems/commutative-semigroups/issues/13
     commutative-semigroups:base,
     commutative-semigroups:template-haskell,
+    -- https://github.com/kcsongor/generic-lens/issues/158
     generic-lens:text,
     generic-lens-core:text,
