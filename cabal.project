@@ -39,7 +39,7 @@ packages:
 -- Setting the index-state for head.hackage can result in
 -- issues, e.g. https://github.com/haskell/haskell-language-server/issues/3861
 -- so we only set it for hackage.
-index-state: hackage.haskell.org 2023-10-06T06:12:29Z
+index-state: hackage.haskell.org 2023-11-13T00:00:00Z
 
 tests: True
 test-show-details: direct
