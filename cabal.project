@@ -34,7 +34,12 @@ packages:
          ./plugins/hls-refactor-plugin
          ./plugins/hls-overloaded-record-dot-plugin
 
-index-state: 2023-10-06T06:12:29Z
+-- head.hackage does not support index-state
+-- (https://gitlab.haskell.org/ghc/head.hackage/-/issues/53)
+-- Setting the index-state for head.hackage can result in
+-- issues, e.g. https://github.com/haskell/haskell-language-server/issues/3861
+-- so we only set it for hackage.
+index-state: hackage.haskell.org 2023-10-06T06:12:29Z
 
 tests: True
 test-show-details: direct
