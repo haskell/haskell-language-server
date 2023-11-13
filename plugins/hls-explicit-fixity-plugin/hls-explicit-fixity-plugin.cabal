@@ -32,7 +32,7 @@ library
     , ghcide                == 2.4.0.0
     , hashable
     , hls-plugin-api        == 2.4.0.0
-    , lsp                   >=2.2
+    , lsp                   >=2.3
     , text
     , transformers
 

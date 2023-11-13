@@ -31,7 +31,7 @@ library
     , floskell        ^>=0.10
     , ghcide          == 2.4.0.0
     , hls-plugin-api  == 2.4.0.0
-    , lsp-types       ^>=2.0.2.0
+    , lsp-types       ^>=2.1
     , mtl
     , text
     , transformers
