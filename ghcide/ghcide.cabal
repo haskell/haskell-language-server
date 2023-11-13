@@ -63,7 +63,7 @@ library
         enummapset,
         filepath,
         fingertree,
-        focus,
+        focus >= 1.0.3.2,
         ghc-trace-events,
         Glob,
         haddock-library >= 1.8 && < 1.12,
