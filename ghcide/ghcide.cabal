@@ -43,7 +43,7 @@ flag pedantic
 library
     default-language:   Haskell2010
     build-depends:
-        aeson,
+        aeson >= 2,
         array,
         async,
         base == 4.*,
