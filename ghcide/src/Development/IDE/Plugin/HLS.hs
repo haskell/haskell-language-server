@@ -23,6 +23,7 @@ import qualified Data.List                     as List
 import           Data.List.NonEmpty            (NonEmpty, nonEmpty, toList)
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map                      as Map
+import           Data.Maybe                    (mapMaybe)
 import           Data.Some
 import           Data.String
 import           Data.Text                     (Text)
@@ -79,9 +80,10 @@ noPluginEnabled recorder m fs' = do
       msg = pluginNotEnabled m fs'
   return $ Left err
   where pluginNotEnabled :: SMethod m -> [(PluginId, PluginStatus)] -> Text
+        pluginNotEnabled method [] = "No plugin installed for this " <> T.pack (show method) <> " request."
         pluginNotEnabled method availPlugins =
             "No plugin enabled for this " <> T.pack (show method) <> " request.\n Plugins installed for this method, but not enabled for this request are:\n"
-                <> (T.intercalate "\n" $ map (\(PluginId plid, pluginStatus) -> plid <> " " <> T.pack (show pluginStatus)) availPlugins)
+                <> (T.intercalate "\n" $ map (\(PluginId plid, pluginStatus) -> plid <> " " <> (renderStrict . layoutCompact . pretty) pluginStatus) availPlugins)
 
 pluginDoesntExist :: PluginId -> Text
 pluginDoesntExist (PluginId pid) = "Plugin " <> pid <> " doesn't exist"
@@ -213,8 +215,8 @@ executeCommandHandlers recorder ecs = requestHandler SMethod_WorkspaceExecuteCom
               res <- runExceptT (f ide a) `catchAny` -- See Note [Exception handling in plugins]
                 (\e -> pure $ Left $ PluginInternalError (exceptionInPlugin p SMethod_WorkspaceExecuteCommand e))
               case res of
-                (Left (PluginRequestRefused _)) ->
-                  liftIO $ noPluginEnabled recorder SMethod_WorkspaceExecuteCommand ((,PluginDisabled PluginRejected) . fst <$> ecs)
+                (Left (PluginRequestRefused r)) ->
+                  liftIO $ noPluginEnabled recorder SMethod_WorkspaceExecuteCommand [(p,PluginDisabled (PluginRejected r))]
                 (Left pluginErr) -> do
                   liftIO $ logErrors recorder [(p, pluginErr)]
                   pure $ Left $ toResponseError (p, pluginErr)
@@ -236,11 +238,13 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
       (IdeMethod m :=> IdeHandler fs') <- DMap.assocs handlers'
       pure $ requestHandler m $ \ide params -> do
         config <- Ide.PluginUtils.getClientConfig
-        -- Only run plugins that are allowed to run on this request
+        -- Only run plugins that are allowed to run on this request, save the
+        -- list of disabled plugins incase that's all we have
         let (fs, dfs) = List.partition (\(_, desc, _) -> pluginEnabled m params desc config == PluginEnabled) fs'
+        let disabledPluginsReason = (\(x, desc, _) -> (x, pluginEnabled m params desc config)) <$> dfs
         -- Clients generally don't display ResponseErrors so instead we log any that we come across
         case nonEmpty fs of
-          Nothing -> liftIO $ noPluginEnabled recorder m ((\(x, desc, _) -> (x, pluginEnabled m params desc config)) <$> dfs)
+          Nothing -> liftIO $ noPluginEnabled recorder m disabledPluginsReason
           Just neFs -> do
             let  plidsAndHandlers = fmap (\(plid,_,handler) -> (plid,handler)) neFs
             es <- runConcurrently exceptionInPlugin m plidsAndHandlers ide params
@@ -251,9 +255,12 @@ extensiblePlugins recorder plugins = mempty { P.pluginHandlers = handlers }
               Nothing -> do
                 let noRefused (_, PluginRequestRefused _) = False
                     noRefused (_, _)                      = True
-                    filteredErrs = filter noRefused errs
-                case nonEmpty filteredErrs of
-                  Nothing -> liftIO $ noPluginEnabled recorder m  ((\(x, desc, _) -> (x, pluginEnabled m params desc config)) <$> fs')
+                    (asErrors, asRefused) = List.partition noRefused errs
+                    convertPRR (pId, PluginRequestRefused r) = Just (pId, PluginDisabled (PluginRejected r))
+                    convertPRR _ = Nothing
+                    asRefusedReason = mapMaybe convertPRR asRefused
+                case nonEmpty asErrors of
+                  Nothing -> liftIO $ noPluginEnabled recorder m  (disabledPluginsReason <> asRefusedReason)
                   Just xs -> pure $ Left $ combineErrors xs
               Just xs -> do
                 pure $ Right $ combineResponses m config caps params xs
@@ -274,7 +281,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
       (IdeNotification m :=> IdeNotificationHandler fs') <- DMap.assocs handlers'
       pure $ notificationHandler m $ \ide vfs params -> do
         config <- Ide.PluginUtils.getClientConfig
-        -- Only run plugins that are allowed to run on this request
+        -- Only run plugins that are enabled for this request
         let fs = filter (\(_, desc, _) -> pluginEnabled m params desc config == PluginEnabled) fs'
         case nonEmpty fs of
           Nothing -> do

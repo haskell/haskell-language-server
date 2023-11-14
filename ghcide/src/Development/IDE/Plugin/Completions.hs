@@ -74,12 +74,12 @@ instance Pretty Log where
     LogBouncedCompletionResolve -> "Bounced an extraneous completion resolve request"
     LogShake msg -> pretty msg
 
+-- | Bounce empty completion resolve request. This is to fix https://github.com/haskell/haskell-language-server/issues/3842
 bounceDescriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 bounceDescriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginHandlers = mkPluginHandler SMethod_CompletionItemResolve (bounceEmptyResolve recorder)
   }
 
--- | Generate code actions.
 bounceEmptyResolve :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState Method_CompletionItemResolve
 bounceEmptyResolve recorder _ _ ci = do
   _ <- logWith recorder Debug LogBouncedCompletionResolve

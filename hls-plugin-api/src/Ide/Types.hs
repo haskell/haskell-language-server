@@ -105,6 +105,7 @@ import           Language.LSP.VFS
 import           Numeric.Natural
 import           OpenTelemetry.Eventlog
 import           Options.Applicative           (ParserInfo)
+import           Prettyprinter
 import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text          ()
@@ -291,7 +292,7 @@ pluginResponsible :: Uri -> PluginDescriptor c -> PluginStatus
 pluginResponsible uri pluginDesc
     | Just fp <- mfp
     , T.pack (takeExtension fp) `elem` pluginFileType pluginDesc = PluginEnabled
-    | otherwise = PluginDisabled $ DisabledByFileType (maybe "" takeExtension mfp)
+    | otherwise = PluginDisabled $ DisabledByFileType (maybe "" (T.pack . takeExtension) mfp)
     where
       mfp = uriToFilePath uri
 
@@ -335,19 +336,22 @@ defaultConfigDescriptor :: ConfigDescriptor
 defaultConfigDescriptor =
     ConfigDescriptor Data.Default.def False (mkCustomConfig emptyProperties)
 
-data DisabledReason = PluginRejected | NotResolveOwner String | DisabledByConfig | DisabledByFileType String
+-- | Reasons why a plugin could be disabled for a request
+data DisabledReason = PluginRejected T.Text | NotResolveOwner T.Text | DisabledByConfig | DisabledByFileType T.Text
   deriving (Eq)
 
+-- | Whether a plugin is enabled or not
 data PluginStatus = PluginEnabled | PluginDisabled DisabledReason
   deriving (Eq)
 
-instance Show PluginStatus where
-  show PluginEnabled = "is enabled"
-  show (PluginDisabled PluginRejected) = "chose to reject this request"
-  show (PluginDisabled (NotResolveOwner s)) = "does not respond to resolve requests for " ++ s ++ ")"
-  show (PluginDisabled DisabledByConfig) = "is disabled from the config"
-  show (PluginDisabled (DisabledByFileType s)) = "does not respond to requests for " ++ s ++ " filetypes)"
+instance Pretty PluginStatus where
+  pretty PluginEnabled = "is enabled"
+  pretty (PluginDisabled (PluginRejected t)) = "rejected the request with: " <> pretty t
+  pretty (PluginDisabled (NotResolveOwner s)) = "does not respond to resolve requests for " <> pretty s <> ")"
+  pretty (PluginDisabled DisabledByConfig) = "is disabled from the config"
+  pretty (PluginDisabled (DisabledByFileType s)) = "does not respond to requests for " <> pretty s <> " filetypes)"
 
+-- We always want to keep the leftmost disabled reason
 instance Semigroup PluginStatus where
   PluginEnabled <> PluginEnabled = PluginEnabled
   PluginDisabled r <> _          = PluginDisabled r
@@ -403,15 +407,19 @@ class HasTracing (MessageParams m) => PluginMethod (k :: MessageKind) (m :: Meth
     where
         uri = params ^. L.textDocument . L.uri
 
+-- | Only check if the file type is supported
 pluginEnabledOnlyFileType :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
                               => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> PluginStatus
 pluginEnabledOnlyFileType  _ msgParams pluginDesc _ = pluginResponsible uri pluginDesc
     where
       uri = msgParams ^. L.textDocument . L.uri
 
+-- | Only check if the plugin is enabled globally
 pluginEnabledOnlyGlobalOn :: SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> PluginStatus
 pluginEnabledOnlyGlobalOn _ _ desc conf = pluginGlobalEnabled (configForPlugin conf desc)
 
+-- | Check if a plugin is enabled, if one of it's specific config's is enabled,
+-- and if it supports the file
 pluginEnabledWithFeature :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
                               => (PluginConfig -> Bool) -> SMethod m -> MessageParams m
                               -> PluginDescriptor c -> Config -> PluginStatus
@@ -421,6 +429,8 @@ pluginEnabledWithFeature feature _ msgParams pluginDesc config =
     where
       uri = msgParams ^. L.textDocument . L.uri
 
+-- | Check if a plugin is enabled, if one of it's specific configs is enabled,
+-- and if it's the plugin responsible for a resolve request.
 pluginEnabledResolve :: L.HasData_ s (Maybe Value) => (PluginConfig -> Bool) -> p -> s -> PluginDescriptor c -> Config -> PluginStatus
 pluginEnabledResolve feature _ msgParams pluginDesc config =
     pluginEnabledConfig feature (configForPlugin config pluginDesc)
@@ -740,6 +750,7 @@ nullToMaybe' :: (a |? (b |? Null)) -> Maybe (a |? b)
 nullToMaybe' (InL x)       = Just $ InL x
 nullToMaybe' (InR (InL x)) = Just $ InR x
 nullToMaybe' (InR (InR _)) = Nothing
+
 -- ---------------------------------------------------------------------
 -- Plugin Notifications
 -- ---------------------------------------------------------------------
@@ -994,10 +1005,12 @@ configForPlugin :: Config -> PluginDescriptor c -> PluginConfig
 configForPlugin config PluginDescriptor{..}
     = Map.findWithDefault (configInitialGenericConfig pluginConfigDescriptor) pluginId (plugins config)
 
+-- | Checks that a specific plugin is enabled
 pluginGlobalEnabled :: PluginConfig -> PluginStatus
 pluginGlobalEnabled pc = if plcGlobalOn pc
                            then PluginEnabled
                            else PluginDisabled DisabledByConfig
+
 -- | Checks that a given plugin is both enabled and the specific feature is
 -- enabled
 pluginEnabledConfig :: (PluginConfig -> Bool) -> PluginConfig -> PluginStatus
@@ -1134,7 +1147,7 @@ pluginResolverResponsible :: Maybe Value -> PluginDescriptor c -> PluginStatus
 pluginResolverResponsible (Just (fromJSON -> (Success (PluginResolveData o@(PluginId ot) _ _)))) pluginDesc =
   if pluginId pluginDesc == o
     then PluginEnabled
-    else PluginDisabled $ NotResolveOwner (T.unpack ot)
+    else PluginDisabled $ NotResolveOwner ot
 -- We want to fail closed
 pluginResolverResponsible _ _ = PluginDisabled $ NotResolveOwner ""
 
