@@ -23,7 +23,8 @@ import           Data.Bifunctor                           (first)
 import           Data.Foldable                            (foldl')
 import           Development.IDE.Graph.Classes            (NFData)
 import           Language.LSP.Protocol.Types              (Position,
-                                                           Range (Range))
+                                                           Range (Range),
+                                                           isSubrangeOf)
 #ifdef USE_FINGERTREE
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IM
 #endif

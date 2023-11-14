@@ -366,7 +366,7 @@ getVirtualFile nf = do
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe (LSP.LanguageContextEnv a) -> IO VFS
-vfsSnapshot Nothing       = pure $ VFS mempty ""
+vfsSnapshot Nothing       = pure $ VFS mempty
 vfsSnapshot (Just lspEnv) = LSP.runLspT lspEnv LSP.getVirtualFiles
 
 

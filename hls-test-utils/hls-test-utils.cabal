@@ -46,9 +46,9 @@ library
     , hls-graph
     , hls-plugin-api          == 2.4.0.0
     , lens
-    , lsp                     ^>=2.2
+    , lsp                     ^>=2.3
     , lsp-test                ^>=0.16
-    , lsp-types               ^>=2.0.2
+    , lsp-types               ^>=2.1
     , tasty
     , tasty-expected-failure
     , tasty-golden
