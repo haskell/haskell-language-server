@@ -177,7 +177,7 @@ jobs:
           echo "ID=linux" >> /etc/os-release
           echo "PRETTY_NAME=Linux" >> /etc/os-release
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Run build
         run: |
@@ -235,7 +235,7 @@ jobs:
         shell: bash
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
         name: Run build (aarch64 linux)
@@ -285,7 +285,7 @@ jobs:
         ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8", "9.0.2"]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run build
         run: |
@@ -330,7 +330,7 @@ jobs:
         ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8"]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run build
         run: |
@@ -383,7 +383,7 @@ jobs:
           taskkill /F /FI "MODULES eq msys-2.0.dll"
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run build (windows)
         run: |
@@ -492,7 +492,7 @@ jobs:
           echo "ID=linux" >> /etc/os-release
           echo "PRETTY_NAME=Linux" >> /etc/os-release
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -544,7 +544,7 @@ jobs:
           git config --global --get-all safe.directory | grep '^\*$' || git config --global --add safe.directory "*"
         shell: bash
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -583,7 +583,7 @@ jobs:
       ARCH: 64
       ARTIFACT: "x86_64-apple-darwin"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -621,7 +621,7 @@ jobs:
       ARCH: ARM64
       ARTIFACT: "aarch64-apple-darwin"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -673,7 +673,7 @@ jobs:
           C:\msys64\usr\bin\bash -lc "pacman --disable-download-timeout --noconfirm -S unzip zip git"
           taskkill /F /FI "MODULES eq msys-2.0.dll"
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -787,7 +787,7 @@ jobs:
           echo "ID=linux" >> /etc/os-release
           echo "PRETTY_NAME=Linux" >> /etc/os-release
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -823,7 +823,7 @@ jobs:
         shell: bash
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -847,7 +847,7 @@ jobs:
       DISTRO: na
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -872,7 +872,7 @@ jobs:
       HOMEBREW_CHANGE_ARCH_TO_ARM: 1
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -911,7 +911,7 @@ jobs:
           taskkill /F /FI "MODULES eq msys-2.0.dll"
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
@@ -932,7 +932,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v3
         with:
