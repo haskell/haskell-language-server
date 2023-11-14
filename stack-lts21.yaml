@@ -65,6 +65,8 @@ configure-options:
 flags:
   haskell-language-server:
     pedantic: true
+  stylish-haskell:
+    ghc-lib: true
   retrie:
     BuildExecutable: false
 
