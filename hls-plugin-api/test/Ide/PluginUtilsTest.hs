@@ -9,7 +9,8 @@ import           Data.Char                   (isPrint)
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as T
 import qualified Ide.Plugin.RangeMap         as RangeMap
-import           Ide.PluginUtils             (positionInRange, unescape)
+import           Ide.PluginUtils             (extractTextInRange,
+                                              positionInRange, unescape)
 import           Language.LSP.Protocol.Types (Position (..), Range (Range),
                                               UInt, isSubrangeOf)
 import           Test.Tasty
@@ -19,6 +20,7 @@ import           Test.Tasty.QuickCheck
 tests :: TestTree
 tests = testGroup "PluginUtils"
     [ unescapeTest
+    , extractTextInRangeTest
     , localOption (QuickCheckMaxSize 10000) $
         testProperty "RangeMap-List filtering identical" $
           prop_rangemapListEq @Int
@@ -41,6 +43,57 @@ unescapeTest = testGroup "unescape"
     , testCase "control characters should not be escaped" $
         unescape "\"\\n\\t\"" @?= "\"\\n\\t\""
     ]
+
+extractTextInRangeTest :: TestTree
+extractTextInRangeTest = testGroup "extractTextInRange"
+    [ testCase "inline range" $
+        extractTextInRange
+            ( Range (Position 0 3) (Position 3 5) )
+            src
+        @?= T.intercalate "\n"
+                [ "ule Main where"
+                , ""
+                , "main :: IO ()"
+                , "main "
+                ]
+    , testCase "inline range with empty content" $
+        extractTextInRange
+            ( Range (Position 0 0) (Position 0 1) )
+            emptySrc
+        @?= ""
+    , testCase "multiline range with empty content" $
+        extractTextInRange
+            ( Range (Position 0 0) (Position 1 0) )
+            emptySrc
+        @?= "\n"
+    , testCase "multiline range" $
+        extractTextInRange
+            ( Range (Position 1 0) (Position 4 0) )
+            src
+        @?= T.unlines
+                [ ""
+                , "main :: IO ()"
+                , "main = do"
+                ]
+    , testCase "multiline range with end pos at the line below the last line" $
+        extractTextInRange
+            ( Range (Position 2 0) (Position 5 0) )
+            src
+        @?= T.unlines
+                [ "main :: IO ()"
+                , "main = do"
+                , "    putStrLn \"hello, world\""
+                ]
+    ]
+    where
+        src = T.unlines
+                [ "module Main where"
+                , ""
+                , "main :: IO ()"
+                , "main = do"
+                , "    putStrLn \"hello, world\""
+                ]
+        emptySrc = "\n"
 
 genRange :: Gen Range
 genRange = oneof [ genRangeInline, genRangeMultiline ]
