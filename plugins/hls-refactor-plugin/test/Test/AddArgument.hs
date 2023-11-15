@@ -22,8 +22,10 @@ import           Test.Tasty.HUnit
 
 
 import           Test.Hls
+import qualified Test.Hls.FileSystem               as FS
 
 import qualified Development.IDE.Plugin.CodeAction as Refactor
+import           System.FilePath                   ((<.>))
 
 tests :: TestTree
 tests =
@@ -63,11 +65,11 @@ mkGoldenAddArgTest' testFileName range varName = do
               <$> getCodeActions docB range
           liftIO $ actionTitle @?= ("Add argument ‘" <> varName <> "’ to function")
           executeCodeAction action
-    goldenWithHaskellDoc
+    goldenWithHaskellDocInTmpDir
       def
       (mkPluginTestDescriptor Refactor.bindingsPluginDescriptor "ghcide-code-actions-bindings")
       (testFileName <> " (golden)")
-      "test/data/golden/add-arg"
+      (FS.mkVirtualFileTree "test/data/golden/add-arg" (FS.directProject $ testFileName <.> "hs"))
       testFileName
       "expected"
       "hs"
