@@ -21,7 +21,6 @@ import           Development.IDE.GHC.Compat.ExactPrint
 import           Ide.PluginUtils                         (subRange)
 import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
 
-#if MIN_VERSION_ghc(9,2,1)
 import           GHC.Parser.Annotation                   (AddEpAnn (..),
                                                           Anchor (Anchor),
                                                           AnchorOperation (MovedAnchor),
@@ -35,15 +34,6 @@ import           GHC.Parser.Annotation                   (AddEpAnn (..),
 import           GHC.Parser.Annotation                   (TokenLocation (..))
 #endif
 import           Language.Haskell.GHC.ExactPrint         (showAst)
-#else
-import qualified Data.Map.Lazy                           as Map
-import           Language.Haskell.GHC.ExactPrint.Types   (AnnConName (CN),
-                                                          AnnKey (AnnKey),
-                                                          Annotation (..),
-                                                          DeltaPos (DP),
-                                                          KeywordId (G),
-                                                          deltaColumn)
-#endif
 
 type GP = GhcPass Parsed
 
@@ -104,9 +94,6 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
             [con_name]
 #endif
 
-#if !MIN_VERSION_ghc(9,2,1)
-            con_forall
-#endif
 #if MIN_VERSION_ghc(9,5,0)
             (L NoTokenLoc HsNormalTok)
 #endif
@@ -119,7 +106,6 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
     x -> x
     where
         -- Parameters in the data constructor
-#if MIN_VERSION_ghc(9,2,1)
         renderDetails :: HsConDeclH98Details GP -> HsConDeclGADTDetails GP
         renderDetails (PrefixCon _ args)   = PrefixConGADT args
         renderDetails (InfixCon arg1 arg2) = PrefixConGADT [arg1, arg2]
@@ -129,11 +115,6 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
         renderDetails (RecCon recs)        = RecConGADT recs
 #endif
 
-#else
-        renderDetails (PrefixCon args)     = PrefixCon args
-        renderDetails (InfixCon arg1 arg2) = PrefixCon [arg1, arg2]
-        renderDetails (RecCon recs)        = RecCon recs
-#endif
 
         -- | Construct GADT result type
         renderResultTy :: LHsType GP
@@ -192,7 +173,6 @@ The adjustment includes:
 3. Make every data constructor start with a new line and 2 spaces
 -}
 prettyGADTDecl :: DynFlags -> TyClDecl GP -> Either String String
-#if MIN_VERSION_ghc(9,2,1)
 prettyGADTDecl df decl =
     let old = printOutputable decl
         hsDecl = parseDecl df "unused" (T.unpack old)
@@ -237,63 +217,7 @@ prettyGADTDecl df decl =
         removeExtraEmptyLine s = case stripInfix "\n\n" s of
             Just (x, xs) -> x <> "\n" <> xs
             Nothing      -> s
-#else
-prettyGADTDecl df decl =
-    let old = printOutputable decl
-        hsDecl = parseDecl df "unused" (T.unpack old)
-        tycld = adjustTyClD hsDecl
-    in removeExtraEmptyLine . uncurry (flip exactPrint) <$> tycld
-    where
-        adjustTyClD = \case
-                Right (anns, t@(L _ (TyClD _ _))) -> Right (adjustDataDeclAnns anns, t)
-                Right _ -> Left "Expect TyClD"
-                Left err -> Left $ show err
 
-        adjustDataDeclAnns = Map.mapWithKey go
-            where
-                isDataDeclAnn (AnnKey _ (CN name)) = name == "DataDecl"
-                isConDeclGADTAnn (AnnKey _ (CN name)) = name == "ConDeclGADT"
-
-                go key ann
-                    | isDataDeclAnn key = adjustWhere ann
-                    | isConDeclGADTAnn key = adjustCon ann
-                    | otherwise = ann
-
-                -- Adjust where annotation to the same line of the type constructor
-                adjustWhere Ann{..} = Ann
-                    { annsDP = annsDP <&>
-                        (\(keyword, dp) ->
-                            if keyword == G AnnWhere
-                                then (keyword, DP (0, 1))
-                                else (keyword, dp))
-                    , ..
-                    }
-
-                -- Make every data constructor start with a new line and 2 spaces
-                --
-                -- Here we can't force every GADT constructor has (1, 2)
-                -- delta. For the first constructor with (1, 2), it prints
-                -- a new line with 2 spaces, but for other constructors
-                -- with (1, 2), it will print a new line with 4 spaces.
-                --
-                -- The original ann parsed with `praseDecl` shows the first
-                -- constructor has (1, 4) delta, but others have (1, 0).
-                -- Hence, the following code only deal with the first
-                -- constructor.
-                adjustCon Ann{..} = let c = deltaColumn annEntryDelta
-                    in Ann
-                    { annEntryDelta = DP $ (1,) $ if c > 0 then 2 else 0
-                    , ..
-                    }
-
-        -- Remove the first extra line if exist
-        removeExtraEmptyLine s = case stripInfix "\n\n" s of
-            Just (x, xs) -> x <> "\n" <> xs
-            Nothing      -> s
-
-#endif
-
-#if MIN_VERSION_ghc(9,2,1)
 wrap :: forall a. WrapXRec GP a => a -> XRec GP a
 wrap = wrapXRec @GP
 wrapCtxt = id
@@ -301,20 +225,8 @@ emptyCtxt = Nothing
 unWrap = unXRec @GP
 mapX = mapXRec @GP
 noUsed = EpAnnNotUsed
-#else
-wrapCtxt = Just
-wrap = L noSrcSpan
-emptyCtxt = wrap []
-unWrap (L _ r) = r
-mapX = fmap
-noUsed = noExtField
-#endif
 
 pattern UserTyVar' :: LIdP pass -> HsTyVarBndr flag pass
 pattern UserTyVar' s <- UserTyVar _ _ s
 
-#if MIN_VERSION_ghc(9,2,1)
 implicitTyVars = (wrapXRec @GP mkHsOuterImplicit)
-#else
-implicitTyVars = []
-#endif

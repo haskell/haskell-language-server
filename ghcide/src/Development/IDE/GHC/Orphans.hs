@@ -31,10 +31,8 @@ import           GHC                        (ModuleGraph)
 import           GHC.Types.Unique           (getKey)
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
 import           Data.Bifunctor             (Bifunctor (..))
 import           GHC.Parser.Annotation
-#endif
 
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.PkgQual
@@ -94,7 +92,6 @@ instance Show ParsedModule where
 instance NFData ModSummary where
     rnf = rwhnf
 
-#if MIN_VERSION_ghc(9,2,0)
 instance Ord FastString where
     compare a b = if a == b then EQ else compare (fs_sbs a) (fs_sbs b)
 
@@ -105,7 +102,6 @@ instance Bifunctor (GenLocated) where
     bimap f g (L l x) = L (f l) (g x)
 
 deriving instance Functor SrcSpanAnn'
-#endif
 
 instance NFData ParsedModule where
     rnf = rwhnf
@@ -123,10 +119,6 @@ instance NFData SourceModified where
     rnf = rwhnf
 #endif
 
-#if !MIN_VERSION_ghc(9,2,0)
-instance Show ModuleName where
-    show = moduleNameString
-#endif
 instance Hashable ModuleName where
     hashWithSalt salt = hashWithSalt salt . show
 

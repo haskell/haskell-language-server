@@ -36,13 +36,8 @@ import           GHC.IfaceToCore
 import           GHC.Types.Id.Make
 import           GHC.Utils.Binary
 
-#if !MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Types
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.TypeEnv
-#endif
 
 
 -- | Initial ram buffer to allocate for writing interface files
@@ -103,11 +98,7 @@ writeBinCoreFile core_path fat_iface = do
     bh <- openBinMem initBinMemSize
 
     let quietTrace =
-#if MIN_VERSION_ghc(9,2,0)
           QuietBinIFace
-#else
-          const $ pure ()
-#endif
 
     putWithUserData quietTrace bh fat_iface
 

@@ -122,12 +122,7 @@ instance ToTextEdit Rewrite where
   toTextEdit CodeActionArgs {..} rw = fmap (fromMaybe []) $
     runMaybeT $ do
       df <- MaybeT caaDf
-#if !MIN_VERSION_ghc(9,2,0)
-      ps <- MaybeT caaAnnSource
-      let r = rewriteToEdit df (annsA ps) rw
-#else
       let r = rewriteToEdit df rw
-#endif
       pure $ fromRight [] r
 
 instance ToTextEdit a => ToTextEdit [a] where

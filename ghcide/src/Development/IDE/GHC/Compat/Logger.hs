@@ -17,14 +17,9 @@ import           Development.IDE.GHC.Compat.Outputable
 
 import           GHC.Utils.Outputable
 
-#if !MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Session                    as DynFlags
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Env                        (hsc_logger)
 import           GHC.Utils.Logger                      as Logger
-#endif
 
 #if MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.Error
@@ -32,19 +27,11 @@ import           GHC.Types.Error
 
 putLogHook :: Logger -> HscEnv -> HscEnv
 putLogHook logger env =
-#if MIN_VERSION_ghc(9,2,0)
   env { hsc_logger = logger }
-#else
-  hscSetFlags ((hsc_dflags env) { DynFlags.log_action = Env.log_action logger }) env
-#endif
 
 pushLogHook :: (LogAction -> LogAction) -> Logger -> Logger
 pushLogHook f logger =
-#if MIN_VERSION_ghc(9,2,0)
   Logger.pushLogHook f logger
-#else
-  logger { Env.log_action = f (Env.log_action logger) }
-#endif
 
 #if MIN_VERSION_ghc(9,3,0)
 type LogActionCompat = LogFlags -> Maybe DiagnosticReason -> Maybe Severity -> SrcSpan -> PrintUnqualified -> SDoc -> IO ()

@@ -189,9 +189,7 @@ allPragmas =
     -- Language Version Extensions
   , "Haskell98"
   , "Haskell2010"
-#if MIN_VERSION_ghc(9,2,0)
   , "GHC2021"
-#endif
   ]
 
 -- ---------------------------------------------------------------------

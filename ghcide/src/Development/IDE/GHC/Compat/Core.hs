@@ -41,9 +41,6 @@ module Development.IDE.GHC.Compat.Core (
     loadSysInterface,
     importDecl,
     CommandLineOption,
-#if !MIN_VERSION_ghc(9,2,0)
-    staticPlugins,
-#endif
     sPgm_F,
     settings,
     gopt,
@@ -106,10 +103,6 @@ module Development.IDE.GHC.Compat.Core (
     -- * ModDetails
     ModDetails(..),
     -- * HsExpr,
-#if !MIN_VERSION_ghc(9,2,0)
-    pattern HsLet,
-    pattern LetStmt,
-#endif
     -- * Var
     Type (
       TyCoRep.TyVarTy,
@@ -127,18 +120,12 @@ module Development.IDE.GHC.Compat.Core (
     pattern ConPatIn,
     conPatDetails,
     mapConPatDetail,
-#if !MIN_VERSION_ghc(9,2,0)
-    Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
-#endif
     mkVisFunTys,
     -- * Specs
     ImpDeclSpec(..),
     ImportSpec(..),
     -- * SourceText
     SourceText(..),
-#if !MIN_VERSION_ghc(9,2,0)
-    rationalFromFractionalLit,
-#endif
     -- * Name
     tyThingParent_maybe,
     -- * Ways
@@ -206,13 +193,8 @@ module Development.IDE.GHC.Compat.Core (
     unLocA,
     LocatedAn,
     LocatedA,
-#if MIN_VERSION_ghc(9,2,0)
     GHC.AnnListItem(..),
     GHC.NameAnn(..),
-#else
-    AnnListItem,
-    NameAnn,
-#endif
     SrcLoc.RealLocated,
     SrcLoc.GenLocated(..),
     SrcLoc.SrcSpan(SrcLoc.UnhelpfulSpan),
@@ -222,10 +204,8 @@ module Development.IDE.GHC.Compat.Core (
     pattern RealSrcLoc,
     SrcLoc.SrcLoc(SrcLoc.UnhelpfulLoc),
     BufSpan,
-#if MIN_VERSION_ghc(9,2,0)
     SrcSpanAnn',
     GHC.SrcAnn,
-#endif
     SrcLoc.leftmost_smallest,
     SrcLoc.containsSpan,
     SrcLoc.mkGeneralSrcSpan,
@@ -314,9 +294,7 @@ module Development.IDE.GHC.Compat.Core (
     gre_imp,
     gre_lcl,
     gre_par,
-#if MIN_VERSION_ghc(9,2,0)
     collectHsBindsBinders,
-#endif
     -- * Util Module re-exports
     module GHC.Builtin.Names,
     module GHC.Builtin.Types,
@@ -329,9 +307,6 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Core.FamInstEnv,
     module GHC.Core.InstEnv,
     module GHC.Types.Unique.FM,
-#if !MIN_VERSION_ghc(9,2,0)
-    module GHC.Core.Ppr.TyThing,
-#endif
     module GHC.Core.PatSyn,
     module GHC.Core.Predicate,
     module GHC.Core.TyCon,
@@ -346,7 +321,6 @@ module Development.IDE.GHC.Compat.Core (
 
     module GHC.Iface.Syntax,
 
-#if MIN_VERSION_ghc(9,2,0)
     module GHC.Hs.Decls,
     module GHC.Hs.Expr,
     module GHC.Hs.Doc,
@@ -356,7 +330,6 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Hs.Type,
     module GHC.Hs.Utils,
     module Language.Haskell.Syntax,
-#endif
 
     module GHC.Rename.Names,
     module GHC.Rename.Splice,
@@ -377,7 +350,6 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Name.Env,
     module GHC.Types.Name.Reader,
     module GHC.Utils.Error,
-#if MIN_VERSION_ghc(9,2,0)
 #if !MIN_VERSION_ghc(9,7,0)
     module GHC.Types.Avail,
 #endif
@@ -385,7 +357,6 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.SourceText,
     module GHC.Types.TyThing,
     module GHC.Types.TyThing.Ppr,
-#endif
     module GHC.Types.Unique.Supply,
     module GHC.Types.Var,
     module GHC.Unit.Module,
@@ -527,20 +498,7 @@ import           GHC.Utils.Error              (Severity (..), emptyMessages)
 import           GHC.Utils.Panic              hiding (try)
 import qualified GHC.Utils.Panic.Plain        as Plain
 
-#if !MIN_VERSION_ghc(9,2,0)
-import           GHC.Core.Ppr.TyThing         hiding (pprFamInst)
-import           GHC.Core.TyCo.Rep            (scaledThing)
-import           GHC.Driver.Finder hiding     (mkHomeModLocation)
-import           GHC.Driver.Types
-import           GHC.Driver.Ways
-import           GHC.Hs                       hiding (HsLet, LetStmt)
-import           GHC.Parser.Lexer
-import qualified GHC.Runtime.Linker           as Linker
-import           GHC.Types.Name.Set
-import qualified GHC.Driver.Finder as GHC
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 import           Data.Foldable (toList)
 import           GHC.Data.Bag
 import           GHC.Core.Multiplicity        (scaledThing)
@@ -580,9 +538,8 @@ import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface (..),
                                                ModIface_ (..), mi_fix)
 import           GHC.Unit.Module.ModSummary   (ModSummary (..))
 import           Language.Haskell.Syntax hiding (FunDep)
-#endif
 
-#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+#if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Types.SourceFile         (SourceModified(..))
 import           GHC.Unit.Module.Graph        (mkModuleGraph)
 import qualified GHC.Unit.Finder as GHC
@@ -694,7 +651,6 @@ instance HasSrcSpan SrcSpan where
 instance HasSrcSpan (SrcLoc.GenLocated SrcSpan a) where
   getLoc = GHC.getLoc
 
-#if MIN_VERSION_ghc(9,2,0)
 instance HasSrcSpan (SrcSpanAnn' ann) where
   getLoc = locA
 instance HasSrcSpan (SrcLoc.GenLocated (SrcSpanAnn' ann) a) where
@@ -703,45 +659,27 @@ instance HasSrcSpan (SrcLoc.GenLocated (SrcSpanAnn' ann) a) where
 pattern L :: HasSrcSpan a => SrcSpan -> e -> SrcLoc.GenLocated a e
 pattern L l a <- GHC.L (getLoc -> l) a
 {-# COMPLETE L #-}
-#endif
 
 -- | Add the @-boot@ suffix to all output file paths associated with the
 -- module, not including the input file itself
 addBootSuffixLocnOut :: GHC.ModLocation -> GHC.ModLocation
 addBootSuffixLocnOut = Module.addBootSuffixLocnOut
 
-#if !MIN_VERSION_ghc(9,2,0)
-splitForAllTyCoVars :: Type -> ([TyCoVar], Type)
-splitForAllTyCoVars =
-  splitForAllTys
-#endif
 
 tcSplitForAllTyVars :: Type -> ([TyVar], Type)
 tcSplitForAllTyVars =
-#if MIN_VERSION_ghc(9,2,0)
   TcType.tcSplitForAllTyVars
-#else
-  tcSplitForAllTys
-#endif
 
 
 tcSplitForAllTyVarBinder_maybe :: Type -> Maybe (TyVarBinder, Type)
 tcSplitForAllTyVarBinder_maybe =
-#if MIN_VERSION_ghc(9,2,0)
   TcType.tcSplitForAllTyVarBinder_maybe
-#else
-  tcSplitForAllTy_maybe
-#endif
 
 -- This is from the old api, but it still simplifies
 pattern ConPatIn :: SrcLoc.Located (ConLikeP GhcPs) -> HsConPatDetails GhcPs -> Pat GhcPs
-#if MIN_VERSION_ghc(9,2,0)
 pattern ConPatIn con args <- ConPat EpAnnNotUsed (L _ (SrcLoc.noLoc -> con)) args
   where
     ConPatIn con args = ConPat EpAnnNotUsed (GHC.noLocA $ SrcLoc.unLoc con) args
-#else
-pattern ConPatIn con args = ConPat NoExtField con args
-#endif
 
 conPatDetails :: Pat p -> Maybe (HsConPatDetails p)
 conPatDetails (ConPat _ _ args) = Just args
@@ -754,98 +692,48 @@ mapConPatDetail _ _ = Nothing
 
 initObjLinker :: HscEnv -> IO ()
 initObjLinker env =
-#if !MIN_VERSION_ghc(9,2,0)
-    GHCi.initObjLinker env
-#else
     GHCi.initObjLinker (GHCi.hscInterp env)
-#endif
 
 loadDLL :: HscEnv -> String -> IO (Maybe String)
 loadDLL env =
-#if !MIN_VERSION_ghc(9,2,0)
-    GHCi.loadDLL env
-#else
     GHCi.loadDLL (GHCi.hscInterp env)
-#endif
 
 unload :: HscEnv -> [Linkable] -> IO ()
 unload hsc_env linkables =
   Linker.unload
-#if MIN_VERSION_ghc(9,2,0)
     (GHCi.hscInterp hsc_env)
-#endif
     hsc_env linkables
 
 #if !MIN_VERSION_ghc(9,3,0)
 setOutputFile :: FilePath -> DynFlags -> DynFlags
 setOutputFile f d = d {
-#if MIN_VERSION_ghc(9,2,0)
   outputFile_    = Just f
-#else
-  outputFile     = Just f
-#endif
   }
 #endif
 
 isSubspanOfA :: LocatedAn la a -> LocatedAn lb b -> Bool
-#if MIN_VERSION_ghc(9,2,0)
 isSubspanOfA a b = SrcLoc.isSubspanOf (GHC.getLocA a) (GHC.getLocA b)
-#else
-isSubspanOfA a b = SrcLoc.isSubspanOf (GHC.getLoc a) (GHC.getLoc b)
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 type LocatedAn a = GHC.LocatedAn a
-#else
-type LocatedAn a = GHC.Located
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 type LocatedA = GHC.LocatedA
-#else
-type LocatedA = GHC.Located
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 locA :: SrcSpanAnn' a -> SrcSpan
 locA = GHC.locA
-#else
-locA = id
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 unLocA :: forall pass a. XRec (GhcPass pass) a -> a
 unLocA = unXRec @(GhcPass pass)
-#else
-unLocA = id
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 getLocA :: SrcLoc.GenLocated (SrcSpanAnn' a) e -> SrcSpan
 getLocA = GHC.getLocA
-#else
--- getLocA :: HasSrcSpan a => a -> SrcSpan
-getLocA x = GHC.getLoc x
-#endif
 
 noLocA :: a -> LocatedAn an a
-#if MIN_VERSION_ghc(9,2,0)
 noLocA = GHC.noLocA
-#else
-noLocA = GHC.noLoc
-#endif
 
-#if !MIN_VERSION_ghc(9,2,0)
-type AnnListItem = SrcLoc.SrcSpan
-#endif
 
-#if !MIN_VERSION_ghc(9,2,0)
-type NameAnn = SrcLoc.SrcSpan
-#endif
 
 pattern GRE :: Name -> Parent -> Bool -> [ImportSpec] -> RdrName.GlobalRdrElt
 {-# COMPLETE GRE #-}
-#if MIN_VERSION_ghc(9,2,0)
 pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} <- RdrName.GRE
 #if MIN_VERSION_ghc(9,7,0)
     {gre_name = gre_name
@@ -853,24 +741,11 @@ pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} <- RdrName.GRE
     {gre_name = (greNamePrintableName -> gre_name)
 #endif
     ,gre_par, gre_lcl, gre_imp = (toList -> gre_imp)}
-#else
-pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} = RdrName.GRE{..}
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 collectHsBindsBinders :: CollectPass p => Bag (XRec p (HsBindLR p idR)) -> [IdP p]
 collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
-#endif
 
-#if !MIN_VERSION_ghc(9,2,0)
-pattern HsLet xlet localBinds expr <- GHC.HsLet xlet (SrcLoc.unLoc -> localBinds) expr
-pattern LetStmt xlet localBinds <- GHC.LetStmt xlet (SrcLoc.unLoc -> localBinds)
-#endif
 
-#if !MIN_VERSION_ghc(9,2,0)
-rationalFromFractionalLit :: FractionalLit -> Rational
-rationalFromFractionalLit = fl_value
-#endif
 
 makeSimpleDetails :: HscEnv -> TcGblEnv -> IO ModDetails
 makeSimpleDetails hsc_env =
@@ -920,14 +795,7 @@ hscUpdateHPT :: (HomePackageTable -> HomePackageTable) -> HscEnv -> HscEnv
 hscUpdateHPT k session = session { hsc_HPT = k (hsc_HPT session) }
 #endif
 
-#if !MIN_VERSION_ghc(9,2,0)
-match :: HsRecField' id arg -> ((), id, arg, Bool)
-match (HsRecField lhs rhs pun) = ((), SrcLoc.unLoc lhs, rhs, pun)
-
-pattern HsFieldBind :: () -> id -> arg -> Bool -> HsRecField' id arg
-pattern HsFieldBind {hfbAnn, hfbLHS, hfbRHS, hfbPun} <- (match -> (hfbAnn, hfbLHS, hfbRHS, hfbPun)) where
-  HsFieldBind _ lhs rhs pun = HsRecField (SrcLoc.noLoc lhs) rhs pun
-#elif !MIN_VERSION_ghc(9,4,0)
+#if !MIN_VERSION_ghc(9,4,0)
 pattern HsFieldBind :: XHsRecField id -> id -> arg -> Bool -> HsRecField' id arg
 pattern HsFieldBind {hfbAnn, hfbLHS, hfbRHS, hfbPun} <- HsRecField hfbAnn (SrcLoc.unLoc -> hfbLHS) hfbRHS hfbPun where
   HsFieldBind ann lhs rhs pun = HsRecField ann (SrcLoc.noLoc lhs) rhs pun

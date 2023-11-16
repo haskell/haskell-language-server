@@ -110,27 +110,17 @@ import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
 import           GHC.Tc.Gen.Splice
 
-#if !MIN_VERSION_ghc(9,2,1)
-import           GHC.Driver.Types
-#endif
 
-#if !MIN_VERSION_ghc(9,2,0)
-import qualified Data.IntMap.Strict                as IntMap
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 import qualified GHC                               as G
-#endif
 
-#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+#if !MIN_VERSION_ghc(9,3,0)
 import           GHC                               (ModuleGraph)
 #endif
 
-#if MIN_VERSION_ghc(9,2,1)
 import           GHC.Types.ForeignStubs
 import           GHC.Types.HpcInfo
 import           GHC.Types.TypeEnv
-#endif
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           Data.Map                          (Map)
@@ -265,7 +255,6 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
            ; lintInteractiveExpr "hscCompileExpr" hsc_env prepd_expr
 
 
-#if MIN_VERSION_ghc(9,2,0)
            ; let iNTERACTIVELoc = G.ModLocation{ ml_hs_file   = Nothing,
                                         ml_hi_file   = panic "hscCompileCoreExpr':ml_hi_file",
                                         ml_obj_file  = panic "hscCompileCoreExpr':ml_obj_file",
@@ -293,11 +282,6 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                        (icInteractiveModule ictxt)
                        stg_expr
                        [] Nothing
-#else
-             {- Convert to BCOs -}
-           ; bcos <- coreExprToBCOs hsc_env
-                       (icInteractiveModule (hsc_IC hsc_env)) prepd_expr
-#endif
 
             -- Exclude wired-in names because we may not have read
             -- their interface files, so getLinkDeps will fail
@@ -312,11 +296,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
                                            moduleName mod -- On <= 9.2, just the name is enough because all unit ids will be the same
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
                                          | n <- concatMap (uniqDSetToList . bcoFreeNames) $ bc_bcos bcos
-#else
-                                         | n <- uniqDSetToList (bcoFreeNames bcos)
-#endif
                                          , Just mod <- [nameModule_maybe n] -- Names from other modules
                                          , not (isWiredInName n) -- Exclude wired-in names
                                          , moduleUnitId mod `elem` home_unit_ids -- Only care about stuff from the home package set
@@ -357,13 +337,10 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
              {- load it -}
            ; (fv_hvs, lbss, pkgs) <- loadDecls (hscInterp hsc_env') hsc_env' srcspan bcos
            ; let hval = ((expectJust "hscCompileCoreExpr'" $ lookup (idName binding_id) fv_hvs), lbss, pkgs)
-#elif MIN_VERSION_ghc(9,2,0)
+#else
              {- load it -}
            ; fv_hvs <- loadDecls (hscInterp hsc_env') hsc_env' srcspan bcos
            ; let hval = (expectJust "hscCompileCoreExpr'" $ lookup (idName binding_id) fv_hvs)
-#else
-             {- link it -}
-           ; hval <- linkExpr hsc_env' srcspan bcos
 #endif
 
            ; modifyIORef' var (flip extendModuleEnvList [(mi_module $ hm_iface hm, linkableHash lb) | lb <- lbs, let hm = linkableHomeMod lb])
@@ -881,7 +858,7 @@ generateHieAsts hscEnv tcm =
   where
     dflags = hsc_dflags hscEnv
     run _ts = -- ts is only used in GHC 9.2
-#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+#if !MIN_VERSION_ghc(9,3,0)
         fmap (join . snd) . liftIO . initDs hscEnv _ts
 #else
         id
@@ -1714,9 +1691,6 @@ getDocsBatch hsc_env _names = do
 #else
                                   Map.lookup name dmap ,
 #endif
-#if !MIN_VERSION_ghc(9,2,0)
-                                  IntMap.fromAscList $ Map.toAscList $
-#endif
 #if MIN_VERSION_ghc(9,3,0)
                                   lookupWithDefaultUniqMap amap mempty name))
 #else
@@ -1739,12 +1713,7 @@ lookupName :: HscEnv
 lookupName _ name
   | Nothing <- nameModule_maybe name = pure Nothing
 lookupName hsc_env name = exceptionHandle $ do
-#if MIN_VERSION_ghc(9,2,0)
   mb_thing <- liftIO $ lookupType hsc_env name
-#else
-  eps <- liftIO $ readIORef (hsc_EPS hsc_env)
-  let mb_thing = lookupType (hsc_dflags hsc_env) (hsc_HPT hsc_env) (eps_PTE eps) name
-#endif
   case mb_thing of
     x@(Just _) -> return x
     Nothing

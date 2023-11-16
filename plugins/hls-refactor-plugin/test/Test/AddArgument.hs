@@ -31,9 +31,6 @@ tests :: TestTree
 tests =
   testGroup
     "add argument"
-#if !MIN_VERSION_ghc(9,2,1)
-    []
-#else
     [ mkGoldenAddArgTest' "Hole" (r 0 0 0 50) "_new_def",
       mkGoldenAddArgTest "NoTypeSuggestion" (r 0 0 0 50),
       mkGoldenAddArgTest "MultipleDeclAlts" (r 0 0 0 50),
@@ -74,4 +71,3 @@ mkGoldenAddArgTest' testFileName range varName = do
       "expected"
       "hs"
       action
-#endif

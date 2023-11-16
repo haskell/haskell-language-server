@@ -40,8 +40,8 @@ import           Data.Function
 import           Data.Hashable                        hiding (hash)
 import qualified Data.HashMap.Strict                  as HM
 import           Data.List
+import           Data.List.NonEmpty                   (NonEmpty (..))
 import qualified Data.List.NonEmpty                   as NE
-import           Data.List.NonEmpty                   (NonEmpty(..))
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe
 import           Data.Proxy
@@ -826,7 +826,7 @@ newComponentCache recorder exts cradlePath cfp hsc_env uids ci = do
 #if MIN_VERSION_ghc(9,3,0)
       -- Set up a multi component session with the other units on GHC 9.4
         Compat.initUnits (map snd uids) (hscSetFlags df hsc_env)
-#elif MIN_VERSION_ghc(9,2,0)
+#else
       -- This initializes the units for GHC 9.2
       -- Add the options for the current component to the HscEnv
       -- We want to call `setSessionDynFlags` instead of `hscSetFlags`
@@ -837,9 +837,6 @@ newComponentCache recorder exts cradlePath cfp hsc_env uids ci = do
       evalGhcEnv hsc_env $ do
         _ <- setSessionDynFlags $ df
         getSession
-#else
-      -- getOptions is enough to initialize units on GHC <9.2
-      pure $ hscSetFlags df hsc_env { hsc_IC = (hsc_IC hsc_env) { ic_dflags = df } }
 #endif
 
     let newFunc = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath

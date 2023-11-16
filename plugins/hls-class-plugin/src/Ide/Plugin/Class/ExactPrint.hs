@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE GADTs           #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ViewPatterns    #-}
 
 module Ide.Plugin.Class.ExactPrint where
 
@@ -13,20 +12,11 @@ import           Ide.Plugin.Class.Utils
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Parsers
 
-#if MIN_VERSION_ghc(9,2,0)
 import           Data.Either.Extra                       (eitherToMaybe)
 import           GHC.Parser.Annotation
-#else
-import           Control.Monad                           (foldM)
-import qualified Data.Map.Strict                         as Map
-import           Language.Haskell.GHC.ExactPrint.Types   hiding (GhcPs)
-import           Language.Haskell.GHC.ExactPrint.Utils   (rs)
-import           Language.LSP.Protocol.Types             (Range)
-#endif
 
 makeEditText :: Monad m => ParsedModule -> DynFlags -> AddMinimalMethodsParams -> MaybeT m (T.Text, T.Text)
 -- addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located HsModule)
-#if MIN_VERSION_ghc(9,2,0)
 makeEditText pm df AddMinimalMethodsParams{..} = do
     mDecls <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
     let ps = makeDeltaAst $ pm_parsed_source pm
@@ -73,49 +63,3 @@ addMethodDecls ps mDecls range withSig
         let dp = deltaPos 1 defaultIndent
         in L (noAnnSrcSpanDP (getLoc l) dp <> l) e
 
-#else
-
-makeEditText pm df AddMinimalMethodsParams{..} = do
-    (unzip -> (mAnns, mDecls)) <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
-    let ps = pm_parsed_source pm
-        anns = relativiseApiAnns ps (pm_annotations pm)
-        old = T.pack $ exactPrint ps anns
-        (ps', (anns', _), _) = runTransform (mergeAnns (mergeAnnList mAnns) anns) (addMethodDecls ps mDecls range withSig)
-        new = T.pack $ exactPrint ps' anns'
-    pure (old, new)
-
-makeMethodDecl :: DynFlags -> (T.Text, T.Text) -> Maybe (Anns, (LHsDecl GhcPs, LHsDecl GhcPs))
-makeMethodDecl df (mName, sig) = do
-    (nameAnn, name) <- case parseDecl df (T.unpack mName) . T.unpack $ toMethodName mName <> " = _" of
-        Right (ann, d) -> Just (setPrecedingLines d 1 defaultIndent ann, d)
-        Left _         -> Nothing
-    (sigAnn, sig) <- case parseDecl df (T.unpack sig) $ T.unpack sig of
-        Right (ann, d) -> Just (setPrecedingLines d 1 defaultIndent ann, d)
-        Left _         -> Nothing
-    pure (mergeAnnList [nameAnn, sigAnn], (name, sig))
-
-addMethodDecls ps mDecls range withSig = do
-    d <- findInstDecl ps range
-    newSpan <- uniqueSrcSpanT
-    let decls = if withSig then concatMap (\(decl, sig) -> [sig, decl]) mDecls else map fst mDecls
-        annKey = mkAnnKey d
-        newAnnKey = AnnKey (rs newSpan) (CN "HsValBinds")
-        addWhere mkds@(Map.lookup annKey -> Just ann) = Map.insert newAnnKey ann2 mkds2
-            where
-                ann1 = ann
-                        { annsDP = annsDP ann ++ [(G AnnWhere, DP (0, 1))]
-                        , annCapturedSpan = Just newAnnKey
-                        , annSortKey = Just (fmap (rs . getLoc) decls)
-                        }
-                mkds2 = Map.insert annKey ann1 mkds
-                ann2 = annNone
-                        { annEntryDelta = DP (1, defaultIndent)
-                        }
-        addWhere _ = panic "Ide.Plugin.Class.addMethodPlaceholder"
-    modifyAnnsT addWhere
-    modifyAnnsT (captureOrderAnnKey newAnnKey decls)
-    foldM (insertAfter d) ps (reverse decls)
-
-findInstDecl :: ParsedSource -> Range -> Transform (LHsDecl GhcPs)
-findInstDecl ps range = head . filter (inRange range . getLoc) <$> hsDecls ps
-#endif

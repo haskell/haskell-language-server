@@ -95,8 +95,6 @@ import qualified Development.IDE.GHC.Compat.Core              as Compat (Interac
 import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (HasSrcSpan (getLoc),
                                                                          unLoc)
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
-#if MIN_VERSION_ghc(9,2,0)
-#endif
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
 import           Development.IDE.Core.FileStore               (setSomethingModified)
@@ -664,9 +662,6 @@ doTypeCmd dflags arg = do
 
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
 parseExprMode rawArg = case T.break isSpace rawArg of
-#if !MIN_VERSION_ghc(9,2,0)
-    ("+v", rest) -> (TM_NoInst, T.strip rest)
-#endif
     ("+d", rest) -> (TM_Default, T.strip rest)
     _            -> (TM_Inst, rawArg)
 
