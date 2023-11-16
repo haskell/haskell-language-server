@@ -399,7 +399,7 @@ extractMinimalImports hsc TcModuleResult {..} = runMaybeT $ do
           not $ any (\e -> ("module " ++ moduleNameString name) == e) exports
 
 isExplicitImport :: ImportDecl GhcRn -> Bool
-#if MIN_VERSION_ghc (9,5,0)
+#if MIN_VERSION_ghc(9,5,0)
 isExplicitImport ImportDecl {ideclImportList = Just (Exactly, _)} = True
 #else
 isExplicitImport ImportDecl {ideclHiding = Just (False, _)}       = True

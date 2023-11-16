@@ -1189,7 +1189,7 @@ getModSummaryFromImports env fp _modTime mContents = do
 
 
         convImport (L _ i) = (
-#if !MIN_VERSION_ghc (9,3,0)
+#if !MIN_VERSION_ghc(9,3,0)
                                fmap sl_fs
 #endif
                                (ideclPkgQual i)
@@ -1197,7 +1197,7 @@ getModSummaryFromImports env fp _modTime mContents = do
 
         msrImports = implicit_imports ++ imps
 
-#if MIN_VERSION_ghc (9,3,0)
+#if MIN_VERSION_ghc(9,3,0)
         rn_pkg_qual = renameRawPkgQual (hsc_unit_env ppEnv)
         rn_imps = fmap (\(pk, lmn@(L _ mn)) -> (rn_pkg_qual mn pk, lmn))
         srcImports = rn_imps $ map convImport src_idecls
