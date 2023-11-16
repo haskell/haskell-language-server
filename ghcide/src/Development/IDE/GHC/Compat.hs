@@ -537,10 +537,6 @@ ghcVersion = GHC96
 ghcVersion = GHC94
 #elif MIN_VERSION_GLASGOW_HASKELL(9,2,0,0)
 ghcVersion = GHC92
-#elif MIN_VERSION_GLASGOW_HASKELL(9,0,0,0)
-ghcVersion = GHC90
-#elif MIN_VERSION_GLASGOW_HASKELL(8,10,0,0)
-ghcVersion = GHC810
 #endif
 
 runUnlit :: Logger -> DynFlags -> [Option] -> IO ()

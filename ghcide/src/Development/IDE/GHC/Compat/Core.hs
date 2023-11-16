@@ -596,31 +596,24 @@ pattern RealSrcLoc x y = SrcLoc.RealSrcLoc x y
 pattern AvailTC :: Name -> [Name] -> [FieldLabel] -> Avail.AvailInfo
 #if __GLASGOW_HASKELL__ >= 907
 pattern AvailTC n names pieces <- Avail.AvailTC n ((,[]) -> (names,pieces))
-#elif __GLASGOW_HASKELL__ >= 902
+#else 
 pattern AvailTC n names pieces <- Avail.AvailTC n ((\gres -> foldr (\gre (names, pieces) -> case gre of
       Avail.NormalGreName name -> (name: names, pieces)
       Avail.FieldGreName label -> (names, label:pieces)) ([], []) gres) -> (names, pieces))
-#else
-pattern AvailTC n names pieces <- Avail.AvailTC n names pieces
 #endif
 
 pattern AvailName :: Name -> Avail.AvailInfo
 #if __GLASGOW_HASKELL__ >= 907
 pattern AvailName n <- Avail.Avail n
-#elif __GLASGOW_HASKELL__ >= 902
+#else 
 pattern AvailName n <- Avail.Avail (Avail.NormalGreName n)
-#else
-pattern AvailName n <- Avail.Avail n
 #endif
 
 pattern AvailFL :: FieldLabel -> Avail.AvailInfo
 #if __GLASGOW_HASKELL__ >= 907
 pattern AvailFL fl <- (const Nothing -> Just fl) -- this pattern always fails as this field was removed in 9.7
-#elif __GLASGOW_HASKELL__ >= 902
+#else 
 pattern AvailFL fl <- Avail.Avail (Avail.FieldGreName fl)
-#else
--- pattern synonym that is never populated
-pattern AvailFL x <- Avail.Avail (const (True, undefined) -> (False, x))
 #endif
 
 {-# COMPLETE AvailTC, AvailName, AvailFL #-}
