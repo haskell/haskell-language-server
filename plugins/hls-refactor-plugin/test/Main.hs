@@ -324,9 +324,7 @@ codeActionTests = testGroup "code actions"
   , exportUnusedTests
   , addImplicitParamsConstraintTests
   , removeExportTests
-#if MIN_VERSION_ghc(9,2,1)
   , Test.AddArgument.tests
-#endif
   ]
 
 insertImportTests :: TestTree
@@ -2220,9 +2218,6 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
         ]
         ++ txtB')
   ]
-
-#if MIN_VERSION_ghc(9,2,1)
-#endif
 
 deleteUnusedDefinitionTests :: TestTree
 deleteUnusedDefinitionTests = testGroup "delete unused definition action"
