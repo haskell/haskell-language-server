@@ -1,25 +1,24 @@
-cabal-version: 2.4
-name:          hls-graph
-version:       2.4.0.0
-synopsis:      Haskell Language Server internal graph API
+cabal-version:      2.4
+name:               hls-graph
+version:            2.4.0.0
+synopsis:           Haskell Language Server internal graph API
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/hls-graph#readme>
 
-homepage:      https://github.com/haskell/haskell-language-server#readme
-bug-reports:   https://github.com/haskell/haskell-language-server/issues
-license:       Apache-2.0
-license-file:  LICENSE
-author:        The Haskell IDE Team
-maintainer:    The Haskell IDE Team
-copyright:     The Haskell IDE Team
-category:      Development
-build-type:    Simple
+homepage:           https://github.com/haskell/haskell-language-server#readme
+bug-reports:        https://github.com/haskell/haskell-language-server/issues
+license:            Apache-2.0
+license-file:       LICENSE
+author:             The Haskell IDE Team
+maintainer:         The Haskell IDE Team
+copyright:          The Haskell IDE Team
+category:           Development
+build-type:         Simple
 data-files:
-    html/profile.html
-    html/shake.js
+  html/profile.html
+  html/shake.js
 
-extra-source-files:
-    README.md
+extra-source-files: README.md
 
 flag pedantic
   description: Enable -Werror
@@ -27,13 +26,13 @@ flag pedantic
   manual:      True
 
 flag embed-files
-  default: False
-  manual: True
+  default:     False
+  manual:      True
   description: Embed data files into the shake library
 
 flag stm-stats
-  default: False
-  manual: True
+  default:     False
+  manual:      True
   description: Collect STM transaction stats
 
 source-repository head
@@ -46,25 +45,24 @@ library
     Development.IDE.Graph
     Development.IDE.Graph.Classes
     Development.IDE.Graph.Database
-    Development.IDE.Graph.Rule
-    Development.IDE.Graph.KeyMap
-    Development.IDE.Graph.KeySet
     Development.IDE.Graph.Internal.Action
-    Development.IDE.Graph.Internal.Options
-    Development.IDE.Graph.Internal.Rules
     Development.IDE.Graph.Internal.Database
+    Development.IDE.Graph.Internal.Options
     Development.IDE.Graph.Internal.Paths
     Development.IDE.Graph.Internal.Profile
+    Development.IDE.Graph.Internal.Rules
     Development.IDE.Graph.Internal.Types
+    Development.IDE.Graph.KeyMap
+    Development.IDE.Graph.KeySet
+    Development.IDE.Graph.Rule
     Paths_hls_graph
 
-  autogen-modules:  Paths_hls_graph
-
+  autogen-modules:    Paths_hls_graph
   hs-source-dirs:     src
   build-depends:
     , aeson
-    , async >= 2.0
-    , base >=4.12 && <5
+    , async                 >=2.0
+    , base                  >=4.12    && <5
     , bytestring
     , containers
     , deepseq
@@ -72,7 +70,7 @@ library
     , exceptions
     , extra
     , filepath
-    , focus
+    , focus                 >=1.0.3.2
     , hashable
     , js-dgtable
     , js-flot
@@ -80,24 +78,24 @@ library
     , list-t
     , stm
     , stm-containers
+    , text
     , time
     , transformers
     , unliftio
     , unordered-containers
-    , text
 
   if flag(embed-files)
-        cpp-options: -DFILE_EMBED
-        build-depends:
-            file-embed >= 0.0.11,
-            template-haskell
+    cpp-options:   -DFILE_EMBED
+    build-depends:
+      , file-embed        >=0.0.11
+      , template-haskell
+
   if flag(stm-stats)
-        cpp-options: -DSTM_STATS
+    cpp-options: -DSTM_STATS
 
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing
-    -Wno-unticked-promoted-constructors
-    -Wunused-packages
+    -Wno-unticked-promoted-constructors -Wunused-packages
 
   if flag(pedantic)
     ghc-options: -Werror
@@ -109,10 +107,10 @@ library
     TypeOperators
 
 test-suite tests
-  type:             exitcode-stdio-1.0
-  default-language: Haskell2010
-  hs-source-dirs:   test
-  main-is:          Main.hs
+  type:               exitcode-stdio-1.0
+  default-language:   Haskell2010
+  hs-source-dirs:     test
+  main-is:            Main.hs
   other-modules:
     ActionSpec
     DatabaseSpec
@@ -120,7 +118,10 @@ test-suite tests
     RulesSpec
     Spec
 
-  ghc-options:      -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts -Wunused-packages
+  ghc-options:
+    -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts
+    -Wunused-packages
+
   build-depends:
     , base
     , containers
@@ -137,4 +138,5 @@ test-suite tests
     , tasty-rerun
     , text
     , unordered-containers
-  build-tool-depends: hspec-discover:hspec-discover -any
+
+  build-tool-depends: hspec-discover:hspec-discover
