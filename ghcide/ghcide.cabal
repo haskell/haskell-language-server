@@ -28,13 +28,6 @@ source-repository head
   type:     git
   location: https://github.com/haskell/haskell-language-server.git
 
-flag ghc-patched-unboxed-bytecode
-  description:
-    The GHC version we link against supports unboxed sums and tuples in bytecode
-
-  default:     False
-  manual:      True
-
 flag ekg
   description:
     Enable EKG monitoring of the build graph and other metrics on port 8999
@@ -231,9 +224,6 @@ library
   ghc-options:
     -Wall -Wincomplete-uni-patterns -Wno-unticked-promoted-constructors
     -Wunused-packages -fno-ignore-asserts
-
-  if flag(ghc-patched-unboxed-bytecode)
-    cpp-options: -DGHC_PATCHED_UNBOXED_BYTECODE
 
   if flag(pedantic)
     -- We eventually want to build with Werror fully, but we haven't

@@ -2,7 +2,7 @@
 -- | Compat module for GHC 9.2 Logger infrastructure.
 module Development.IDE.GHC.Compat.Logger (
     putLogHook,
-    Development.IDE.GHC.Compat.Logger.pushLogHook,
+    Logger.pushLogHook,
     -- * Logging stuff
     LogActionCompat,
     logActionCompat,
@@ -28,10 +28,6 @@ import           GHC.Types.Error
 putLogHook :: Logger -> HscEnv -> HscEnv
 putLogHook logger env =
   env { hsc_logger = logger }
-
-pushLogHook :: (LogAction -> LogAction) -> Logger -> Logger
-pushLogHook f logger =
-  Logger.pushLogHook f logger
 
 #if MIN_VERSION_ghc(9,3,0)
 type LogActionCompat = LogFlags -> Maybe DiagnosticReason -> Maybe Severity -> SrcSpan -> PrintUnqualified -> SDoc -> IO ()

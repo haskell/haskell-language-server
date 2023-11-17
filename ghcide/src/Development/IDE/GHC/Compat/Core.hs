@@ -170,8 +170,8 @@ module Development.IDE.GHC.Compat.Core (
     hscTypecheckRename,
     Development.IDE.GHC.Compat.Core.makeSimpleDetails,
     -- * Typecheck utils
-    Development.IDE.GHC.Compat.Core.tcSplitForAllTyVars,
-    Development.IDE.GHC.Compat.Core.tcSplitForAllTyVarBinder_maybe,
+    tcSplitForAllTyVars,
+    tcSplitForAllTyVarBinder_maybe,
     typecheckIface,
     Development.IDE.GHC.Compat.Core.mkIfaceTc,
     Development.IDE.GHC.Compat.Core.mkBootModDetailsTc,
@@ -187,12 +187,12 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.Located,
     SrcLoc.unLoc,
     getLoc,
-    getLocA,
-    locA,
-    noLocA,
+    GHC.getLocA,
+    GHC.locA,
+    GHC.noLocA,
     unLocA,
     LocatedAn,
-    LocatedA,
+    GHC.LocatedA,
     GHC.AnnListItem(..),
     GHC.NameAnn(..),
     SrcLoc.RealLocated,
@@ -490,7 +490,7 @@ import           GHC.Types.Var                (Var (varName), setTyVarUnique,
                                                setVarUnique)
 import           GHC.Unit.Info                (PackageName (..))
 import           GHC.Unit.Module              hiding (ModLocation (..), UnitId,
-                                               addBootSuffixLocnOut, moduleUnit,
+                                               moduleUnit,
                                                toUnitId)
 import qualified GHC.Unit.Module              as Module
 import           GHC.Unit.State               (ModuleOrigin (..))
@@ -645,28 +645,13 @@ instance HasSrcSpan (SrcLoc.GenLocated SrcSpan a) where
   getLoc = GHC.getLoc
 
 instance HasSrcSpan (SrcSpanAnn' ann) where
-  getLoc = locA
+  getLoc = GHC.locA
 instance HasSrcSpan (SrcLoc.GenLocated (SrcSpanAnn' ann) a) where
   getLoc (L l _) = l
 
 pattern L :: HasSrcSpan a => SrcSpan -> e -> SrcLoc.GenLocated a e
 pattern L l a <- GHC.L (getLoc -> l) a
 {-# COMPLETE L #-}
-
--- | Add the @-boot@ suffix to all output file paths associated with the
--- module, not including the input file itself
-addBootSuffixLocnOut :: GHC.ModLocation -> GHC.ModLocation
-addBootSuffixLocnOut = Module.addBootSuffixLocnOut
-
-
-tcSplitForAllTyVars :: Type -> ([TyVar], Type)
-tcSplitForAllTyVars =
-  TcType.tcSplitForAllTyVars
-
-
-tcSplitForAllTyVarBinder_maybe :: Type -> Maybe (TyVarBinder, Type)
-tcSplitForAllTyVarBinder_maybe =
-  TcType.tcSplitForAllTyVarBinder_maybe
 
 -- This is from the old api, but it still simplifies
 pattern ConPatIn :: SrcLoc.Located (ConLikeP GhcPs) -> HsConPatDetails GhcPs -> Pat GhcPs
@@ -709,20 +694,8 @@ isSubspanOfA a b = SrcLoc.isSubspanOf (GHC.getLocA a) (GHC.getLocA b)
 
 type LocatedAn a = GHC.LocatedAn a
 
-type LocatedA = GHC.LocatedA
-
-locA :: SrcSpanAnn' a -> SrcSpan
-locA = GHC.locA
-
 unLocA :: forall pass a. XRec (GhcPass pass) a -> a
 unLocA = unXRec @(GhcPass pass)
-
-getLocA :: SrcLoc.GenLocated (SrcSpanAnn' a) e -> SrcSpan
-getLocA = GHC.getLocA
-
-noLocA :: a -> LocatedAn an a
-noLocA = GHC.noLocA
-
 
 
 pattern GRE :: Name -> Parent -> Bool -> [ImportSpec] -> RdrName.GlobalRdrElt

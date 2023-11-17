@@ -184,7 +184,7 @@ import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                    hiding (ExposePackage)
 import           GHC.Types.Var.Env
 import           GHC.Iface.Make                        (mkIfaceExports)
-import qualified GHC.SysTools.Tasks                    as SysTools
+import           GHC.SysTools.Tasks                    (runUnlit, runPp)
 import qualified GHC.Types.Avail                       as Avail
 
 
@@ -194,7 +194,7 @@ import           GHC.Core.Lint                         (lintInteractiveExpr)
 
 
 import           GHC.Iface.Env
-import qualified GHC.Types.SrcLoc                      as SrcLoc
+import           GHC.Types.SrcLoc                      (combineRealSrcSpans)
 import           GHC.Linker.Loader                     (loadExpr)
 import           GHC.Runtime.Context                   (icInteractiveModule)
 import           GHC.Unit.Home.ModInfo                 (HomePackageTable,
@@ -539,14 +539,6 @@ ghcVersion = GHC94
 ghcVersion = GHC92
 #endif
 
-runUnlit :: Logger -> DynFlags -> [Option] -> IO ()
-runUnlit =
-    SysTools.runUnlit
-
-runPp :: Logger -> DynFlags -> [Option] -> IO ()
-runPp =
-    SysTools.runPp
-
 simpleNodeInfoCompat :: FastStringCompat -> FastStringCompat -> NodeInfo a
 simpleNodeInfoCompat ctor typ = simpleNodeInfo (coerce ctor) (coerce typ)
 
@@ -564,9 +556,6 @@ instance IsString FastStringCompat where
 
 mkAstNode :: NodeInfo a -> Span -> [HieAST a] -> HieAST a
 mkAstNode n = Node (SourcedNodeInfo $ Map.singleton GeneratedInfo n)
-
-combineRealSrcSpans :: RealSrcSpan -> RealSrcSpan -> RealSrcSpan
-combineRealSrcSpans = SrcLoc.combineRealSrcSpans
 
 -- | Load modules, quickly. Input doesn't need to be desugared.
 -- A module must be loaded before dependent modules can be typechecked.

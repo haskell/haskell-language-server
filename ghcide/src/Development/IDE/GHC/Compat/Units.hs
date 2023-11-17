@@ -61,6 +61,7 @@ import           Prelude                               hiding (mod)
 import           GHC.Types.Unique.Set
 import qualified GHC.Unit.Info                         as UnitInfo
 import           GHC.Unit.State                        (LookupResult, UnitInfo,
+                                                        UnitInfoMap,
                                                         UnitState (unitInfoMap),
                                                         lookupUnit', mkUnit,
                                                         unitDepends,
@@ -99,7 +100,6 @@ import           GHC.Unit.Home.ModInfo
 
 
 type PreloadUnitClosure = UniqSet UnitId
-type UnitInfoMap = State.UnitInfoMap
 
 unitState :: HscEnv -> UnitState
 unitState = ue_units . hsc_unit_env

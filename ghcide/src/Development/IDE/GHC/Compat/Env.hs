@@ -16,17 +16,17 @@ module Development.IDE.GHC.Compat.Env (
     setInteractiveDynFlags,
     Env.hsc_dflags,
     hsc_EPS,
-    hsc_logger,
-    hsc_tmpfs,
-    hsc_unit_env,
-    hsc_hooks,
+    Env.hsc_logger,
+    Env.hsc_tmpfs,
+    Env.hsc_unit_env,
+    Env.hsc_hooks,
     hscSetHooks,
     TmpFs,
     -- * HomeUnit
     hscHomeUnit,
     HomeUnit,
     setHomeUnitId_,
-    Development.IDE.GHC.Compat.Env.mkHomeModule,
+    Home.mkHomeModule,
     -- * Provide backwards Compatible
     -- types and helper functions.
     Logger(..),
@@ -35,11 +35,11 @@ module Development.IDE.GHC.Compat.Env (
     hscSetFlags,
     initTempFs,
     -- * Home Unit
-    Development.IDE.GHC.Compat.Env.homeUnitId_,
+    Session.homeUnitId_,
     -- * DynFlags Helper
     setBytecodeLinkerOptions,
     setInterpreterLinkerOptions,
-    Development.IDE.GHC.Compat.Env.safeImportsOn,
+    Session.safeImportsOn,
     -- * Ways
     Ways,
     Way,
@@ -92,7 +92,7 @@ import           Language.Haskell.Syntax.Module.Name
 
 #if MIN_VERSION_ghc(9,3,0)
 hsc_EPS :: HscEnv -> UnitEnv
-hsc_EPS = hsc_unit_env
+hsc_EPS = Env.hsc_unit_env
 #endif
 
 
@@ -110,42 +110,13 @@ initTempFs env = do
 hscSetUnitEnv :: UnitEnv -> HscEnv -> HscEnv
 hscSetUnitEnv ue env = env { Env.hsc_unit_env = ue }
 
-hsc_unit_env :: HscEnv -> UnitEnv
-hsc_unit_env =
-  Env.hsc_unit_env
-
-hsc_tmpfs :: HscEnv -> TmpFs
-hsc_tmpfs =
-  Env.hsc_tmpfs
-
-hsc_logger :: HscEnv -> Logger
-hsc_logger =
-  Env.hsc_logger
-
-hsc_hooks :: HscEnv -> Hooks
-hsc_hooks =
-  Env.hsc_hooks
-
 hscSetHooks :: Hooks -> HscEnv -> HscEnv
 hscSetHooks hooks env =
   env { Env.hsc_hooks = hooks }
 
-homeUnitId_ :: DynFlags -> UnitId
-homeUnitId_ =
-  Session.homeUnitId_
-
-safeImportsOn :: DynFlags -> Bool
-safeImportsOn =
-  Session.safeImportsOn
-
-
 hscHomeUnit :: HscEnv -> HomeUnit
 hscHomeUnit =
   Env.hsc_home_unit
-
-mkHomeModule :: HomeUnit -> ModuleName -> Module
-mkHomeModule =
-  Home.mkHomeModule
 
 -- | We don't want to generate object code so we compile to bytecode
 -- (HscInterpreted) which implies LinkInMemory
