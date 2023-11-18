@@ -159,7 +159,7 @@ jobs:
         name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin --test-options="$TEST_OPTS" || cabal test hls-splice-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2' && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test && matrix.ghc != '9.2'
         name: Test hls-stan-plugin
         run: cabal test hls-stan-plugin --test-options="$TEST_OPTS" || cabal test hls-stan-plugin --test-options="$TEST_OPTS"
 
