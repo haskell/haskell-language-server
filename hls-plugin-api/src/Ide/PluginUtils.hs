@@ -236,7 +236,20 @@ usePropertyLsp kn pId p = do
 extractTextInRange :: Range -> T.Text -> T.Text
 extractTextInRange (Range (Position sl sc) (Position el ec)) s = newS
   where
-    focusLines = take (fromIntegral $ el - sl + 1) $ drop (fromIntegral sl) $ T.lines s
+    focusLines =
+      T.lines s
+        -- NOTE: Always append an empty line to the end to ensure there are
+        -- sufficient lines to take from.
+        --
+        -- There is a situation that when the end position is placed at the line
+        -- below the last line, if we simply do `drop` and then `take`, there
+        -- will be `el - sl` lines left, not `el - sl + 1` lines. And then
+        -- the last line of code will be emptied unexpectedly.
+        --
+        -- For details, see https://github.com/haskell/haskell-language-server/issues/3847
+        & (++ [""])
+        & drop (fromIntegral sl)
+        & take (fromIntegral $ el - sl + 1)
     -- NOTE: We have to trim the last line first to handle the single-line case
     newS =
       focusLines

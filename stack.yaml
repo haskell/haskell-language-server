@@ -44,7 +44,8 @@ allow-newer: true
 extra-deps:
 - Cabal-syntax-3.10.1.0@sha256:bb835ebab577fd0f9c11dab96210dbb8d68ffc62652576f4b092563c345930e7,7434
 # - floskell-0.10.7
-- hiedb-0.4.3.0
+- hiedb-0.4.4.0
+- hie-bios-0.12.1
 - implicit-hie-0.1.2.7
 - implicit-hie-cradle-0.5.0.1
 - algebraic-graphs-0.6.1
@@ -52,9 +53,9 @@ extra-deps:
 - hw-fingertree-0.1.2.1
 - hw-prim-0.6.3.2
 - ansi-terminal-0.11.5
-- lsp-2.2.0.0
-- lsp-test-0.16.0.0
-- lsp-types-2.0.2.0
+- lsp-2.3.0.0
+- lsp-test-0.16.0.1
+- lsp-types-2.1.0.0
 
 # stan dependencies not found in the stackage snapshot
 - stan-0.1.0.2

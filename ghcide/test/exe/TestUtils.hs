@@ -210,7 +210,7 @@ knownIssueFor solution = go . \case
         go True = case solution of
             Broken -> expectFailBecause
             Ignore -> ignoreTestBecause
-        go False = \_ -> id
+        go False = const id
 
 data Expect
   = ExpectRange Range -- Both gotoDef and hover should report this range
@@ -278,21 +278,22 @@ pattern R x y x' y' = Range (Position x y) (Position x' y')
 checkDefs :: Definition |? ([DefinitionLink] |? Null) -> Session [Expect] -> Session ()
 checkDefs (defToLocation -> defs) mkExpectations = traverse_ check =<< mkExpectations where
   check (ExpectRange expectedRange) = do
-    assertNDefinitionsFound 1 defs
-    assertRangeCorrect (head defs) expectedRange
+    def <- assertOneDefinitionFound defs
+    assertRangeCorrect def expectedRange
   check (ExpectLocation expectedLocation) = do
-    assertNDefinitionsFound 1 defs
+    def <- assertOneDefinitionFound defs
     liftIO $ do
-      canonActualLoc <- canonicalizeLocation (head defs)
+      canonActualLoc <- canonicalizeLocation def
       canonExpectedLoc <- canonicalizeLocation expectedLocation
       canonActualLoc @?= canonExpectedLoc
   check ExpectNoDefinitions = do
-    assertNDefinitionsFound 0 defs
+    liftIO $ assertBool "Expecting no definitions" $ null defs
   check ExpectExternFail = liftIO $ assertFailure "Expecting to fail to find in external file"
   check _ = pure () -- all other expectations not relevant to getDefinition
 
-  assertNDefinitionsFound :: Int -> [a] -> Session ()
-  assertNDefinitionsFound n defs = liftIO $ assertEqual "number of definitions" n (length defs)
+  assertOneDefinitionFound :: [Location] -> Session Location
+  assertOneDefinitionFound [def] = pure def
+  assertOneDefinitionFound _ = liftIO $ assertFailure "Expecting exactly one definition"
 
   assertRangeCorrect Location{_range = foundRange} expectedRange =
     liftIO $ expectedRange @=? foundRange

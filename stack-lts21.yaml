@@ -44,16 +44,17 @@ allow-newer: true
 
 extra-deps:
 - floskell-0.10.7
-- hiedb-0.4.3.0
+- hiedb-0.4.4.0
+- hie-bios-0.12.1
 - implicit-hie-0.1.2.7
 - implicit-hie-cradle-0.5.0.1
 - monad-dijkstra-0.1.1.3
 - algebraic-graphs-0.6.1
 - retrie-1.2.2
 - stylish-haskell-0.14.4.0
-- lsp-2.2.0.0
-- lsp-test-0.16.0.0
-- lsp-types-2.0.2.0
+- lsp-2.3.0.0
+- lsp-test-0.16.0.1
+- lsp-types-2.1.0.0
 
 # stan dependencies not found in the stackage snapshot
 - stan-0.1.0.2
@@ -78,6 +79,8 @@ configure-options:
 flags:
   haskell-language-server:
     pedantic: true
+  stylish-haskell:
+    ghc-lib: true
   retrie:
     BuildExecutable: false
 
