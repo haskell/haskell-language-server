@@ -54,33 +54,29 @@ module Development.IDE.GHC.Compat.Env (
     Development.IDE.GHC.Compat.Env.platformDefaultBackend,
     ) where
 
-import           GHC                                 (setInteractiveDynFlags)
+import           GHC                 (setInteractiveDynFlags)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-import           GHC.Driver.Backend                  as Backend
-import qualified GHC.Driver.Env                      as Env
-import           GHC.Driver.Hooks                    (Hooks)
-import           GHC.Driver.Session                  hiding (mkHomeModule)
-import qualified GHC.Driver.Session                  as Session
+import           GHC.Driver.Backend  as Backend
+import qualified GHC.Driver.Env      as Env
+import           GHC.Driver.Hooks    (Hooks)
+import           GHC.Driver.Session  hiding (mkHomeModule)
+import qualified GHC.Driver.Session  as Session
 import           GHC.Platform.Ways
 import           GHC.Runtime.Context
-import           GHC.Unit.Env                        (UnitEnv)
-import           GHC.Unit.Home                       as Home
-import           GHC.Unit.Types                      (UnitId)
+import           GHC.Unit.Env        (UnitEnv)
+import           GHC.Unit.Home       as Home
+import           GHC.Unit.Types      (UnitId)
 import           GHC.Utils.Logger
 import           GHC.Utils.TmpFs
 
 #if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Env                      (HscEnv, hsc_EPS)
+import           GHC.Driver.Env      (HscEnv, hsc_EPS)
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Env                      (HscEnv)
-#endif
-
-#if MIN_VERSION_ghc(9,5,0)
-import           Language.Haskell.Syntax.Module.Name
+import           GHC.Driver.Env      (HscEnv)
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
