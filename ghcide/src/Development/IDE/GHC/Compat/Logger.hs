@@ -17,8 +17,6 @@ import           Development.IDE.GHC.Compat.Outputable
 
 import           GHC.Utils.Outputable
 
-
-import           GHC.Driver.Env                        (hsc_logger)
 import           GHC.Utils.Logger                      as Logger
 
 #if MIN_VERSION_ghc(9,3,0)
