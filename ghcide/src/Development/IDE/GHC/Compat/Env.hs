@@ -61,7 +61,7 @@ import           GHC                 (setInteractiveDynFlags)
 import           GHC.Driver.Backend  as Backend
 import qualified GHC.Driver.Env      as Env
 import           GHC.Driver.Hooks    (Hooks)
-import           GHC.Driver.Session  hiding (mkHomeModule)
+import           GHC.Driver.Session
 import qualified GHC.Driver.Session  as Session
 import           GHC.Platform.Ways
 import           GHC.Runtime.Context
