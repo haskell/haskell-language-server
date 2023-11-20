@@ -63,9 +63,5 @@ doCpp env input_fn output_fn =
     let cpp_opts = True in
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
     Pipeline.doCpp (hsc_logger env) (hsc_tmpfs env) (hsc_dflags env) (hsc_unit_env env) cpp_opts input_fn output_fn
-#else
-    Pipeline.doCpp (hsc_dflags env) cpp_opts input_fn output_fn
-#endif
 

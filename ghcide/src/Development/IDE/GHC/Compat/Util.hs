@@ -35,10 +35,8 @@ module Development.IDE.GHC.Compat.Util (
     toList,
     -- * FastString exports
     FastString,
-#if MIN_VERSION_ghc(9,2,0)
     -- Export here, so we can coerce safely on consumer sites
     LexicalFastString(..),
-#endif
     uniq,
     unpackFS,
     mkFastString,

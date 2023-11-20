@@ -159,24 +159,17 @@ import           System.Directory                     (makeAbsolute)
 import           GHC.Types.PkgQual
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
+import           Control.Arrow                        ((&&&))
 import           Control.Exception                    (evaluate)
 import           Data.Monoid                          (First (First))
-import           Retrie.ExactPrint                    (makeDeltaAst)
-import           Retrie.GHC                           (ann)
-#else
-import           Data.Monoid                          (First (..))
-import qualified GHC.Exts                             as Ext
-import           Retrie.AlphaEnv                      (extendAlphaEnv)
-import           Retrie.ExactPrint                    (relativiseApiAnns)
-#endif
-import           Control.Arrow                        ((&&&))
 import           Development.IDE.Core.Actions         (lookupMod)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Spans.AtPoint        (LookupModule,
                                                        getNamesAtPoint,
                                                        nameToLocation)
 import           Development.IDE.Types.Shake          (WithHieDb)
+import           Retrie.ExactPrint                    (makeDeltaAst)
+import           Retrie.GHC                           (ann)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -571,11 +564,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
       (theImports, theRewrites) = partitionEithers rewrites
 
       annotatedImports =
-#if MIN_VERSION_ghc(9,2,0)
         unsafeMkA (map (noLocA . toImportDecl) theImports) 0
-#else
-        unsafeMkA (map (noLocA . toImportDecl) theImports) mempty 0
-#endif
 
   (originFixities, originParsedModule) <- reuseParsedModule state origin
   retrie <-
@@ -630,13 +619,7 @@ fixFixities state f pm = do
       return (fixities, res)
 
 fixAnns :: ParsedModule -> Annotated GHC.ParsedSource
-#if MIN_VERSION_ghc(9,2,0)
 fixAnns GHC.ParsedModule{pm_parsed_source} = unsafeMkA (makeDeltaAst pm_parsed_source) 0
-#else
-fixAnns GHC.ParsedModule {..} =
-      let ranns = relativiseApiAnns pm_parsed_source pm_annotations
-       in unsafeMkA pm_parsed_source ranns 0
-#endif
 
 parseSpecs
   :: IdeState
@@ -646,14 +629,10 @@ parseSpecs
   -> [RewriteSpec]
   -> IO [Rewrite Universe]
 parseSpecs state origin originParsedModule originFixities specs = do
-#if MIN_VERSION_ghc(9,2,0)
   -- retrie needs the libdir for `parseRewriteSpecs`
   libdir <- topDir . ms_hspp_opts . msrModSummary <$> useOrFail state "Retrie.GetModSummary" (CallRetrieInternalError "file not found") GetModSummary origin
-#endif
   parseRewriteSpecs
-#if MIN_VERSION_ghc(9,2,0)
     libdir
-#endif
     (\_f -> return $ NoCPP originParsedModule)
     originFixities
     specs
@@ -678,9 +657,7 @@ showQuery = ppRewrite
 
 s :: Data a => a -> String
 s = T.unpack . printOutputable . showAstData NoBlankSrcSpan
-#if MIN_VERSION_ghc(9,2,0)
         NoBlankEpAnnotations
-#endif
 constructInlineFromIdentifer originParsedModule originSpan = do
     -- traceM $ s $ astA originParsedModule
     fmap astA $ transformA originParsedModule $ \(L _ m) -> do
@@ -779,10 +756,8 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
       , ideclSourceText = ideclSourceSrc
       , ideclImplicit = ideclImplicit
       }
-#elif MIN_VERSION_ghc(9,2,0)
-    ideclExt = GHCGHC.EpAnnNotUsed
 #else
-    ideclExt = GHC.noExtField
+    ideclExt = GHCGHC.EpAnnNotUsed
 #endif
     ideclAs = toMod <$> ideclAsString
     ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified

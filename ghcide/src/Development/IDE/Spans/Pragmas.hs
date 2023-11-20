@@ -152,21 +152,13 @@ updateParserState token range prevParserState
       ModeInitial ->
         case token of
           ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
-#if !MIN_VERSION_ghc(9,2,0)
-          ITlineComment s
-#else
           ITlineComment s _
-#endif
             | isDownwardLineHaddock s -> defaultParserState{ mode = ModeHaddock }
             | otherwise ->
                 defaultParserState
                   { nextPragma = NextPragmaInfo (endLine + 1) Nothing
                   , mode = ModeComment }
-#if !MIN_VERSION_ghc(9,2,0)
-          ITblockComment s
-#else
           ITblockComment s _
-#endif
             | isPragma s ->
                 defaultParserState
                   { nextPragma = NextPragmaInfo (endLine + 1) Nothing
@@ -182,11 +174,7 @@ updateParserState token range prevParserState
       ModeComment ->
         case token of
           ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
-#if !MIN_VERSION_ghc(9,2,0)
-          ITlineComment s
-#else
           ITlineComment s _
-#endif
             | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
             , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
                 defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
@@ -198,11 +186,7 @@ updateParserState token range prevParserState
                   , mode = ModeHaddock }
             | otherwise ->
                 defaultParserState { nextPragma = NextPragmaInfo (endLine + 1) Nothing }
-#if !MIN_VERSION_ghc(9,2,0)
-          ITblockComment s
-#else
           ITblockComment s _
-#endif
             | isPragma s ->
                 defaultParserState
                   { nextPragma = NextPragmaInfo (endLine + 1) Nothing
@@ -226,21 +210,13 @@ updateParserState token range prevParserState
         case token of
           ITvarsym "#" ->
             defaultParserState{ isLastTokenHash = True }
-#if !MIN_VERSION_ghc(9,2,0)
-          ITlineComment s
-#else
           ITlineComment s _
-#endif
             | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
             , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
                 defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
             | otherwise ->
                 defaultParserState
-#if !MIN_VERSION_ghc(9,2,0)
-          ITblockComment s
-#else
           ITblockComment s _
-#endif
             | isPragma s ->
                 defaultParserState{
                   nextPragma = NextPragmaInfo (endLine + 1) Nothing,
@@ -254,11 +230,7 @@ updateParserState token range prevParserState
       ModePragma ->
         case token of
           ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
-#if !MIN_VERSION_ghc(9,2,0)
-          ITlineComment s
-#else
           ITlineComment s _
-#endif
             | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
             , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
                 defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
@@ -268,11 +240,7 @@ updateParserState token range prevParserState
                 defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
             | otherwise ->
                 defaultParserState
-#if !MIN_VERSION_ghc(9,2,0)
-          ITblockComment s
-#else
           ITblockComment s _
-#endif
             | isPragma s ->
                 defaultParserState{ nextPragma = NextPragmaInfo (endLine + 1) Nothing, lastPragmaLine = endLine }
             | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits

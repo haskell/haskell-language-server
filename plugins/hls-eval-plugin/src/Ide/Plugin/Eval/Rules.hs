@@ -42,9 +42,7 @@ import           Development.IDE.Graph                (alwaysRerun)
 import           Ide.Logger         (Pretty (pretty),
                                                        Recorder, WithPriority,
                                                        cmapWithPrio)
-#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Parser.Annotation
-#endif
 import           Ide.Plugin.Eval.Types
 
 import qualified Data.ByteString                      as BS
@@ -76,7 +74,6 @@ unqueueForEvaluation ide nfp = do
     -- remove the module from the Evaluating state, so that next time it won't evaluate to True
     atomicModifyIORef' var $ \fs -> (Set.delete nfp fs, ())
 
-#if MIN_VERSION_ghc(9,2,0)
 #if MIN_VERSION_ghc(9,5,0)
 getAnnotations :: Development.IDE.GHC.Compat.Located (HsModule GhcPs) -> [LEpaComment]
 getAnnotations (L _ m@(HsModule { hsmodExt = XModulePs {hsmodAnn = anns'}})) =
@@ -102,13 +99,6 @@ apiAnnComments' pm = do
 
 pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
 pattern RealSrcSpanAlready x = x
-#else
-apiAnnComments' :: ParsedModule -> [SrcLoc.RealLocated AnnotationComment]
-apiAnnComments' = apiAnnRogueComments . pm_annotations
-
-pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
-pattern RealSrcSpanAlready x = x
-#endif
 
 evalParsedModuleRule :: Recorder (WithPriority Log) -> Rules ()
 evalParsedModuleRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetEvalComments nfp -> do

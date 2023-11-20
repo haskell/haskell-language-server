@@ -31,13 +31,11 @@ module Development.IDE.GHC.Compat(
     pattern PFailedWithErrorMessages,
     isObjectLinkable,
 
-#if MIN_VERSION_ghc(9,2,0)
 #if !MIN_VERSION_ghc(9,3,0)
     extendModSummaryNoDeps,
     emsModSummary,
 #endif
     myCoreToStgExpr,
-#endif
 
     Usage(..),
 
@@ -123,17 +121,12 @@ module Development.IDE.GHC.Compat(
     emptyInScopeSet,
     Unfolding(..),
     noUnfolding,
-#if MIN_VERSION_ghc(9,2,0)
     loadExpr,
     byteCodeGen,
     bc_bcos,
     loadDecls,
     hscInterp,
     expectJust,
-#else
-    coreExprToBCOs,
-    linkExpr,
-#endif
     extract_cons,
     recDotDot,
 #if MIN_VERSION_ghc(9,5,0)
@@ -191,27 +184,17 @@ import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                    hiding (ExposePackage)
 import           GHC.Types.Var.Env
 import           GHC.Iface.Make                        (mkIfaceExports)
-import qualified GHC.SysTools.Tasks                    as SysTools
+import           GHC.SysTools.Tasks                    (runUnlit, runPp)
 import qualified GHC.Types.Avail                       as Avail
 
-#if !MIN_VERSION_ghc(9,2,0)
-import           GHC.Utils.Error
-import           GHC.CoreToByteCode                    (coreExprToBCOs)
-import           GHC.Runtime.Linker                    (linkExpr)
-import           GHC.Driver.Types
-#endif
 
 #if !MIN_VERSION_ghc(9,5,0)
 import           GHC.Core.Lint                         (lintInteractiveExpr)
 #endif
 
-#if !MIN_VERSION_ghc(9,2,0)
-import           Data.Bifunctor
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Iface.Env
-import qualified GHC.Types.SrcLoc                      as SrcLoc
+import           GHC.Types.SrcLoc                      (combineRealSrcSpans)
 import           GHC.Linker.Loader                     (loadExpr)
 import           GHC.Runtime.Context                   (icInteractiveModule)
 import           GHC.Unit.Home.ModInfo                 (HomePackageTable,
@@ -228,9 +211,8 @@ import           GHC.Stg.Syntax
 import           GHC.StgToByteCode
 import           GHC.Types.CostCentre
 import           GHC.Types.IPE
-#endif            
 
-#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+#if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Unit.Module.Deps (Dependencies(dep_mods), Usage(..))
 import           GHC.Linker.Types                      (isObjectLinkable)
 import           GHC.Unit.Module.ModSummary
@@ -276,7 +258,6 @@ nameEnvElts :: NameEnv a -> [a]
 nameEnvElts = nonDetNameEnvElts
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
 myCoreToStgExpr :: Logger -> DynFlags -> InteractiveContext
 #if MIN_VERSION_ghc(9,3,0)
             -> Bool
@@ -365,16 +346,8 @@ myCoreToStg logger dflags ictxt
 #endif
 
     return (stg_binds2, denv, cost_centre_info)
-#endif
 
 
-#if !MIN_VERSION_ghc(9,2,0)
-reLoc :: Located a -> Located a
-reLoc = id
-
-reLocA :: Located a -> Located a
-reLocA = id
-#endif
 
 getDependentMods :: ModIface -> [ModuleName]
 #if MIN_VERSION_ghc(9,3,0)
@@ -408,18 +381,12 @@ renderMessages msgs =
   msgs
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
 pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope DecoratedSDoc)) -> ParseResult a
 pattern PFailedWithErrorMessages msgs
 #if MIN_VERSION_ghc(9,3,0)
      <- PFailed (const . fmap (fmap renderDiagnosticMessageWithHints) . getMessages . getPsErrorMessages -> msgs)
 #else
      <- PFailed (const . fmap pprError . getErrorMessages -> msgs)
-#endif
-#else
-pattern PFailedWithErrorMessages :: (DynFlags -> ErrorMessages) -> ParseResult a
-pattern PFailedWithErrorMessages msgs
-     <- PFailed (getErrorMessages -> msgs)
 #endif
 {-# COMPLETE POk, PFailedWithErrorMessages #-}
 
@@ -570,26 +537,6 @@ ghcVersion = GHC96
 ghcVersion = GHC94
 #elif MIN_VERSION_GLASGOW_HASKELL(9,2,0,0)
 ghcVersion = GHC92
-#elif MIN_VERSION_GLASGOW_HASKELL(9,0,0,0)
-ghcVersion = GHC90
-#elif MIN_VERSION_GLASGOW_HASKELL(8,10,0,0)
-ghcVersion = GHC810
-#endif
-
-runUnlit :: Logger -> DynFlags -> [Option] -> IO ()
-runUnlit =
-#if MIN_VERSION_ghc(9,2,0)
-    SysTools.runUnlit
-#else
-    const SysTools.runUnlit
-#endif
-
-runPp :: Logger -> DynFlags -> [Option] -> IO ()
-runPp =
-#if MIN_VERSION_ghc(9,2,0)
-    SysTools.runPp
-#else
-    const SysTools.runPp
 #endif
 
 simpleNodeInfoCompat :: FastStringCompat -> FastStringCompat -> NodeInfo a
@@ -599,42 +546,16 @@ isAnnotationInNodeInfo :: (FastStringCompat, FastStringCompat) -> NodeInfo a -> 
 isAnnotationInNodeInfo p = S.member p . nodeAnnotations
 
 nodeAnnotations :: NodeInfo a -> S.Set (FastStringCompat, FastStringCompat)
-#if MIN_VERSION_ghc(9,2,0)
 nodeAnnotations = S.map (\(NodeAnnotation ctor typ) -> (coerce ctor, coerce typ)) . GHC.nodeAnnotations
-#else
-nodeAnnotations = S.map (bimap coerce coerce) . GHC.nodeAnnotations
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 newtype FastStringCompat = FastStringCompat LexicalFastString
-#else
-newtype FastStringCompat = FastStringCompat FastString
-#endif
     deriving (Show, Eq, Ord)
 
 instance IsString FastStringCompat where
-#if MIN_VERSION_ghc(9,2,0)
     fromString = FastStringCompat . LexicalFastString . fromString
-#else
-    fromString = FastStringCompat . fromString
-#endif
 
 mkAstNode :: NodeInfo a -> Span -> [HieAST a] -> HieAST a
 mkAstNode n = Node (SourcedNodeInfo $ Map.singleton GeneratedInfo n)
-
-combineRealSrcSpans :: RealSrcSpan -> RealSrcSpan -> RealSrcSpan
-#if MIN_VERSION_ghc(9,2,0)
-combineRealSrcSpans = SrcLoc.combineRealSrcSpans
-#else
-combineRealSrcSpans span1 span2
-  = mkRealSrcSpan (mkRealSrcLoc file line_start col_start) (mkRealSrcLoc file line_end col_end)
-  where
-    (line_start, col_start) = min (srcSpanStartLine span1, srcSpanStartCol span1)
-                                  (srcSpanStartLine span2, srcSpanStartCol span2)
-    (line_end, col_end)     = max (srcSpanEndLine span1, srcSpanEndCol span1)
-                                  (srcSpanEndLine span2, srcSpanEndCol span2)
-    file = srcSpanFile span1
-#endif
 
 -- | Load modules, quickly. Input doesn't need to be desugared.
 -- A module must be loaded before dependent modules can be typechecked.
