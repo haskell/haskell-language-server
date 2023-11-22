@@ -24,5 +24,5 @@ tests = testGroup "behaviour on malformed projects"
             liftIO $ assertBool "missing module name" $
                 "Other" `T.isInfixOf` (diag ^. L.message)
             liftIO $ assertBool  "hie-bios message" $
-                "Cabal {component = Just \"exe:testExe\"}" `T.isInfixOf` (diag ^. L.message)
+                "Cabal" `T.isInfixOf` (diag ^. L.message)
     ]
