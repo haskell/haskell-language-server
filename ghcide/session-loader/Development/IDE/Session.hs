@@ -40,7 +40,6 @@ import           Data.Function
 import           Data.Hashable                        hiding (hash)
 import qualified Data.HashMap.Strict                  as HM
 import           Data.IORef
-import qualified Data.Set                             as OS
 import           Data.List
 import           Data.List.NonEmpty                   (NonEmpty (..))
 import           Data.List.Extra                      as L
@@ -66,7 +65,7 @@ import           Development.IDE.Graph                (Action)
 import           Development.IDE.Session.VersionCheck
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq, envImportPaths,
+import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
                                                        newHscEnvEqPreserveImportPaths)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
@@ -119,13 +118,14 @@ import Development.IDE.GHC.Compat.CmdLine
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 #if MIN_VERSION_ghc(9,3,0)
+import qualified Data.Set                             as OS
+
 import GHC.Driver.Errors.Types
 import GHC.Driver.Env (hscSetActiveUnitId, hsc_all_home_unit_ids)
 import GHC.Driver.Make (checkHomeUnitsClosed)
 import GHC.Unit.State
 import GHC.Types.Error (errMsgDiagnostic)
 import GHC.Data.Bag
-import GHC.Unit.Env
 #endif
 
 import GHC.ResponseFile
@@ -518,9 +518,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   -- compilation but these are the true source of
                   -- information.
                   new_deps = fmap (\(df, targets) -> RawComponentInfo (homeUnitId_ df) df targets cfp opts dep_info) newTargetDfs
-                  all_deps = new_deps `appendListToNonEmpty` maybe [] id oldDeps
+                  all_deps = new_deps `NE.appendList` maybe [] id oldDeps
                   -- Get all the unit-ids for things in this component
-                  inplace = map rawComponentUnitId $ NE.toList all_deps
+                  _inplace = map rawComponentUnitId $ NE.toList all_deps
 
               all_deps' <- forM all_deps $ \RawComponentInfo{..} -> do
                   -- Remove all inplace dependencies from package flags for
@@ -528,7 +528,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 #if MIN_VERSION_ghc(9,3,0)
                   let (df2, uids) = (rawComponentDynFlags, [])
 #else
-                  let (df2, uids) = _removeInplacePackages fakeUid inplace rawComponentDynFlags
+                  let (df2, uids) = _removeInplacePackages fakeUid _inplace rawComponentDynFlags
 #endif
                   let prefix = show rawComponentUnitId
                   -- See Note [Avoiding bad interface files]
@@ -539,13 +539,15 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   -- The final component information, mostly the same but the DynFlags don't
                   -- contain any packages which are also loaded
                   -- into the same component.
-                  pure $ ComponentInfo rawComponentUnitId
-                                       processed_df
-                                       uids
-                                       rawComponentTargets
-                                       rawComponentFP
-                                       rawComponentCOptions
-                                       rawComponentDependencyInfo
+                  pure $ ComponentInfo
+                           { componentUnitId = rawComponentUnitId
+                           , componentDynFlags = processed_df
+                           , componentInternalUnits = uids
+                           , componentTargets = rawComponentTargets
+                           , componentFP = rawComponentFP
+                           , componentCOptions = rawComponentCOptions
+                           , componentDependencyInfo = rawComponentDependencyInfo
+                           }
               -- Modify the map so the hieYaml now maps to the newly updated
               -- ComponentInfos
               -- Returns
@@ -786,7 +788,7 @@ newComponentCache
          -> [ComponentInfo]    -- ^ New components to be loaded
          -> [ComponentInfo]    -- ^ old, already existing components
          -> IO [ ([TargetDetails], (IdeResult HscEnvEq, DependencyInfo))]
-newComponentCache recorder exts cradlePath cfp hsc_env old_cis new_cis = do
+newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis = do
     let cis = Map.unionWith unionCIs (mkMap new_cis) (mkMap old_cis)
         -- When we have multiple components with the same uid,
         -- prefer the new one over the old.
@@ -809,7 +811,7 @@ newComponentCache recorder exts cradlePath cfp hsc_env old_cis new_cis = do
 
     case closure_errs of
       errs@(_:_) -> do
-        let rendered_err = map (ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) cfp . T.pack . Compat.printWithoutUniques) errs
+        let rendered_err = map (ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) _cfp . T.pack . Compat.printWithoutUniques) errs
             res = (rendered_err,Nothing)
             dep_info = foldMap componentDependencyInfo (filter isBad $ Map.elems cis)
             bad_units = OS.fromList $ concat $ do
@@ -817,7 +819,7 @@ newComponentCache recorder exts cradlePath cfp hsc_env old_cis new_cis = do
               DriverHomePackagesNotClosed us <- pure x
               pure us
             isBad ci = (homeUnitId_ (componentDynFlags ci)) `OS.member` bad_units
-        return [([TargetDetails (TargetFile cfp) res dep_info [cfp]],(res,dep_info))]
+        return [([TargetDetails (TargetFile _cfp) res dep_info [_cfp]],(res,dep_info))]
       [] -> do
 #else
     do
@@ -968,13 +970,13 @@ data ComponentInfo = ComponentInfo
   -- | Internal units, such as local libraries, that this component
   -- is loaded with. These have been extracted from the original
   -- ComponentOptions.
-  , _componentInternalUnits :: [UnitId]
+  , componentInternalUnits :: [UnitId]
   -- | All targets of this components.
   , componentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
   , componentFP             :: NormalizedFilePath
   -- | Component Options used to load the component.
-  , _componentCOptions      :: ComponentOptions
+  , componentCOptions      :: ComponentOptions
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
   -- to last modification time. See Note [Multi Cradle Dependency Info]
   , componentDependencyInfo :: DependencyInfo
@@ -1050,9 +1052,9 @@ addUnit unit_str = liftEwM $ do
   putCmdLineState (unit_str : units)
 
 -- | Throws if package flags are unsatisfiable
-setOptions :: GhcMonad m => NormalizedFilePath -> ComponentOptions -> DynFlags -> m (NE.NonEmpty (DynFlags, [GHC.Target]))
+setOptions :: GhcMonad m => NormalizedFilePath -> ComponentOptions -> DynFlags -> m (NonEmpty (DynFlags, [GHC.Target]))
 setOptions cfp (ComponentOptions theOpts compRoot _) dflags = do
-    ((theOpts',errs,warns),units) <- processCmdLineP unit_flags [] (map noLoc theOpts)
+    ((theOpts',_errs,_warns),units) <- processCmdLineP unit_flags [] (map noLoc theOpts)
     case NE.nonEmpty units of
       Just us -> initMulti us
       Nothing -> do
@@ -1071,14 +1073,14 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags = do
         -- does list all targets.
         abs_fp <- liftIO $ makeAbsolute (fromNormalizedFilePath cfp)
         let special_target = Compat.mkSimpleTarget df abs_fp
-        pure $ (df, special_target : targets) NE.:| []
+        pure $ (df, special_target : targets) :| []
     where
       initMulti unitArgFiles =
         forM unitArgFiles $ \f -> do
           args <- liftIO $ expandResponse [f]
           initOne args
-      initOne theOpts = do
-        (dflags', targets') <- addCmdOpts theOpts dflags
+      initOne this_opts = do
+        (dflags', targets') <- addCmdOpts this_opts dflags
         let dflags'' =
 #if MIN_VERSION_ghc(9,3,0)
                 case unitIdString (homeUnitId_ dflags') of
@@ -1089,7 +1091,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags = do
                      -- This works because there won't be any dependencies on the
                      -- executable unit.
                      "main" ->
-                       let hash = B.unpack $ B16.encode $ H.finalize $ H.updates H.init (map B.pack $ theOpts)
+                       let hash = B.unpack $ B16.encode $ H.finalize $ H.updates H.init (map B.pack $ this_opts)
                            hashed_uid = Compat.toUnitId (Compat.stringToUnit ("main-"++hash))
                        in setHomeUnitId_ hashed_uid dflags'
                      _ -> dflags'
@@ -1202,11 +1204,3 @@ showPackageSetupException (PackageCheckFailed BasePackageAbiMismatch{..}) = unwo
 renderPackageSetupException :: FilePath -> PackageSetupException -> (NormalizedFilePath, ShowDiagnostic, Diagnostic)
 renderPackageSetupException fp e =
     ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) (toNormalizedFilePath' fp) (T.pack $ showPackageSetupException e)
-
-
-appendListToNonEmpty :: NE.NonEmpty a -> [a] -> NE.NonEmpty a
-#if MIN_VERSION_base(4,16,0)
-appendListToNonEmpty = NE.appendList
-#else
-appendListToNonEmpty (x NE.:| xs) ys = x NE.:| (xs ++ ys)
-#endif
