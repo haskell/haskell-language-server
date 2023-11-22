@@ -18,18 +18,9 @@ module Development.IDE.GHC.Compat.CmdLine (
 import GHC.Driver.Session (processCmdLineP, CmdLineP (..), getCmdLineState, putCmdLineState)
 import GHC.Driver.CmdLine
 #else
-
-#if MIN_VERSION_ghc(9,0,0)
 import GHC.Driver.CmdLine
-#else
-import CmdLineParser
-#endif
-
 import Control.Monad.IO.Class
-import Control.Monad.Trans.State
-import GHC (Located, mkGeneralLocated)
-import GHC.ResponseFile
-import Control.Exception
+import GHC (Located)
 #endif
 
 #if !MIN_VERSION_ghc(9,3,0)
@@ -44,5 +35,4 @@ processCmdLineP
                             -- ^ (leftovers, errors, warnings)
 processCmdLineP activeFlags s0 args =
     pure $ runCmdLine (processArgs activeFlags args) s0
-
 #endif
