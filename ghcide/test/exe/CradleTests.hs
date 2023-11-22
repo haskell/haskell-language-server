@@ -41,7 +41,8 @@ tests = testGroup "cradle"
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
     ,testGroup "multi"   (multiTests "multi")
-    ,testGroup "multi-unit" (multiTests "multi-unit")
+    ,ignoreFor (BrokenForGHC [GHC92]) "multiple units not supported on 9.2"
+       $ testGroup "multi-unit" (multiTests "multi-unit")
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
     ]
 
