@@ -49,12 +49,17 @@ inferCradleTree start_dir =
    -- (dist-newstyle/.stack-work), prefer that
    <|> (cabalExecutable >> cabalConfigDir start_dir >>= \dir -> cabalWorkDir dir >> pure (cabalCradle dir))
    <|> (stackExecutable >> stackConfigDir start_dir >>= \dir -> stackWorkDir dir >> stackCradle dir)
-   -- Redo the checks, but don't check for the work-dir, maybe the user hasn't run a build yet
-   <|> (cabalExecutable >> cabalConfigDir start_dir >>= pure . cabalCradle)
+   -- If we have a cabal.project OR we have a .cabal and dist-newstyle, prefer cabal
+   <|> (cabalExecutable >> (cabalConfigDir start_dir <|> cabalFileAndWorkDir) >>= pure . cabalCradle)
+   -- If we have a stack.yaml, use stack
    <|> (stackExecutable >> stackConfigDir start_dir >>= stackCradle)
+   -- If we have a cabal file, use cabal
+   <|> (cabalExecutable >> cabalFileDir start_dir >>= pure . cabalCradle)
 
   where
   maybeItsBios = (\wdir -> (Bios (Program $ wdir </> ".hie-bios") Nothing Nothing, wdir)) <$> biosWorkDir start_dir
+
+  cabalFileAndWorkDir = cabalFileDir start_dir >>= (\dir -> cabalWorkDir dir >> pure dir)
 
   stackCradle :: FilePath -> MaybeT IO (CradleTree a, FilePath)
   stackCradle fp = do
@@ -90,8 +95,10 @@ stackWorkDir wdir = do
   unless check $ fail "No .stack-work"
 
 cabalConfigDir :: FilePath -> MaybeT IO FilePath
-cabalConfigDir wdir = findFileUpwards (== "cabal.project") wdir
-                  <|> findFileUpwards (\fp -> takeExtension fp == ".cabal") wdir
+cabalConfigDir = findFileUpwards (\fp -> fp == "cabal.project" || fp == "cabal.project.local")
+
+cabalFileDir :: FilePath -> MaybeT IO FilePath
+cabalFileDir = findFileUpwards (\fp -> takeExtension fp == ".cabal")
 
 stackConfigDir :: FilePath -> MaybeT IO FilePath
 stackConfigDir = findFileUpwards isStack
