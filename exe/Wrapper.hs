@@ -51,8 +51,7 @@ import           Ide.Logger                         (Doc, Logger (Logger),
                                                      Recorder (logger_),
                                                      WithPriority (WithPriority),
                                                      cmapWithPrio,
-                                                     makeDefaultStderrRecorder,
-                                                     toCologActionWithPrio)
+                                                     makeDefaultStderrRecorder)
 import           Ide.Plugin.Config                  (Config)
 import           Ide.Types                          (IdePlugins (IdePlugins))
 import           Language.LSP.Protocol.Message      (Method (Method_Initialize),
@@ -84,7 +83,7 @@ main = do
           putStrLn $ showProgramVersionOfInterest programsOfInterest
           putStrLn "Tool versions in your project"
           cradle <- findProjectCradle' recorder False
-          ghcVersion <- runExceptT $ getRuntimeGhcVersion' recorder cradle
+          ghcVersion <- runExceptT $ getRuntimeGhcVersion' cradle
           putStrLn $ showProgramVersion "ghc" $ mkVersion =<< eitherToMaybe ghcVersion
 
       VersionMode PrintVersion ->
@@ -124,7 +123,7 @@ launchHaskellLanguageServer recorder parsedArgs = do
   case parsedArgs of
     Ghcide GhcideArguments{..} ->
       when argsProjectGhcVersion $ do
-        runExceptT (getRuntimeGhcVersion' recorder cradle) >>= \case
+        runExceptT (getRuntimeGhcVersion' cradle) >>= \case
           Right ghcVersion -> putStrLn ghcVersion >> exitSuccess
           Left err -> T.putStrLn (prettyError err NoShorten) >> exitFailure
     _ -> pure ()
@@ -147,7 +146,7 @@ launchHaskellLanguageServer recorder parsedArgs = do
   hPutStrLn stderr "Consulting the cradle to get project GHC version..."
 
   runExceptT $ do
-      ghcVersion <- getRuntimeGhcVersion' recorder cradle
+      ghcVersion <- getRuntimeGhcVersion' cradle
       liftIO $ hPutStrLn stderr $ "Project GHC version: " ++ ghcVersion
 
       let
@@ -192,8 +191,8 @@ cradleResult cradleName CradleNone = throwE $ NoneCradleGhcVersion cradleName
 
 -- | Version of 'getRuntimeGhcVersion' that dies if we can't get it, and also
 -- checks to see if the tool is missing if it is one of
-getRuntimeGhcVersion' :: Recorder (WithPriority (Doc ())) -> Cradle Void -> ExceptT WrapperSetupError IO String
-getRuntimeGhcVersion' recorder cradle = do
+getRuntimeGhcVersion' :: Cradle Void -> ExceptT WrapperSetupError IO String
+getRuntimeGhcVersion' cradle = do
   let cradleName = actionName (cradleOptsProg cradle)
 
   -- See if the tool is installed
