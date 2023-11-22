@@ -19,6 +19,9 @@ module Development.IDE.GHC.Compat.Env (
     Env.hsc_logger,
     Env.hsc_tmpfs,
     Env.hsc_unit_env,
+#if !MIN_VERSION_ghc(9,3,0)
+    Env.hsc_unit_dbs,
+#endif
     Env.hsc_hooks,
     hscSetHooks,
     TmpFs,

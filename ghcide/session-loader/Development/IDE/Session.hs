@@ -729,8 +729,17 @@ emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 #endif
 emptyHscEnv nc libDir = do
     -- We call setSessionDynFlags so that the loader is initialised
-    env <- runGhc (Just libDir) $ getSessionDynFlags >>= setSessionDynFlags >> getSession
+    -- We need to do this before we call initUnits.
+    env <- runGhc (Just libDir) $
+      getSessionDynFlags >>= setSessionDynFlags >> getSession
+    -- On GHC 9.2 calling setSessionDynFlags caches the unit databases
+    -- for an empty environment. This prevents us from reading the
+    -- package database subsequently. So clear the unit db cache in
+    -- hsc_unit_dbs
     pure $ setNameCache nc (hscSetFlags ((hsc_dflags env){useUnicode = True }) env)
+#if !MIN_VERSION_ghc(9,3,0)
+              {hsc_unit_dbs = Nothing}
+#endif
 
 data TargetDetails = TargetDetails
   {
@@ -832,6 +841,8 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis = do
         -- some code. If the binary is dynamically linked, then this will have
         -- no effect.
         -- See https://github.com/haskell/haskell-language-server/issues/221
+        -- We need to do this after the call to setSessionDynFlags initialises
+        -- the loader
         when (os == "linux") $ do
           initObjLinker hscEnv'
           res <- loadDLL hscEnv' "libm.so.6"
@@ -856,7 +867,7 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis = do
                 -- which we need for any changes to the package flags in the dynflags
                 -- to be visible.
                 -- See #2693
-                evalGhcEnv hsc_env $ do
+                evalGhcEnv hscEnv' $ do
                   _ <- setSessionDynFlags df
                   getSession
 #endif
