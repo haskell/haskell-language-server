@@ -116,7 +116,8 @@ import           Ide.Plugin.Eval.Config                       (EvalConfig (..),
 import           Ide.Plugin.Eval.GHC                          (addImport,
                                                                addPackages,
                                                                hasPackage,
-                                                               showDynFlags)
+                                                               showDynFlags,
+                                                               setSessionAndInteractiveDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments               (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option                 (parseSetFlags)
 import           Ide.Plugin.Eval.Rules                        (queueForEvaluation,
@@ -465,9 +466,7 @@ evals mark_exception (st, fp) df stmts = do
                                 <> T.pack (intercalate ", " $ map SrcLoc.unLoc ignoreds)
                                 ]
                     dbg "post set" $ showDynFlags df'
-                    _ <- setSessionDynFlags df'
-                    sessDyns <- getSessionDynFlags
-                    setInteractiveDynFlags sessDyns
+                    setSessionAndInteractiveDynFlags df'
                     pure $ warnings <> igns
         | -- A type/kind command
           Just (cmd, arg) <- parseGhciLikeCmd $ T.pack stmt =
@@ -689,4 +688,3 @@ parseGhciLikeCmd :: Text -> Maybe (Text, Text)
 parseGhciLikeCmd input = do
     (':', rest) <- T.uncons $ T.stripStart input
     pure $ second T.strip $ T.break isSpace rest
-
