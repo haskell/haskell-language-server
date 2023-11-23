@@ -46,6 +46,7 @@ data Log
   | LogLspStart !GhcideArguments ![PluginId]
   | LogIDEMain IDEMain.Log
   | LogHieBios HieBios.Log
+  | LogSession Session.Log
   | LogOther T.Text
   deriving Show
 
@@ -61,6 +62,7 @@ instance Pretty Log where
           , "PluginIds:" <+> pretty (coerce @_ @[Text] pluginIds) ]
     LogIDEMain iDEMainLog -> pretty iDEMainLog
     LogHieBios hieBiosLog -> pretty hieBiosLog
+    LogSession sessionLog -> pretty sessionLog
     LogOther t -> pretty t
 
 defaultMain :: Recorder (WithPriority Log) -> Arguments -> IdePlugins IdeState -> IO ()
@@ -91,7 +93,7 @@ defaultMain recorder args idePlugins = do
         BiosMode PrintCradleType -> do
             dir <- IO.getCurrentDirectory
             hieYaml <- Session.findCradle def (dir </> "a")
-            cradle <- Session.loadCradle def hieYaml dir
+            cradle <- Session.loadCradle def (cmapWithPrio LogSession recorder) hieYaml dir
             print cradle
 
         Ghcide ghcideArgs -> do
@@ -107,8 +109,8 @@ defaultMain recorder args idePlugins = do
           d <- getCurrentDirectory
           let initialFp = d </> "a"
           hieYaml <- Session.findCradle def initialFp
-          cradle <- Session.loadCradle def hieYaml d
-          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir (toCologActionWithPrio (cmapWithPrio LogHieBios recorder)) cradle
+          cradle <- Session.loadCradle def (cmapWithPrio LogSession recorder) hieYaml d
+          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
           putStr libdir
   where
     encodePrettySorted = A.encodePretty' A.defConfig

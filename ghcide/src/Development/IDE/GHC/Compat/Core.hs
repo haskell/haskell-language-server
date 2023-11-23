@@ -262,6 +262,7 @@ module Development.IDE.GHC.Compat.Core (
     -- * Driver-Make
     Target(..),
     TargetId(..),
+    mkSimpleTarget,
     mkModuleGraph,
     -- * GHCi
     initObjLinker,
@@ -804,4 +805,11 @@ homeModInfoObject = hm_linkable
 
 field_label :: a -> a
 field_label = id
+#endif
+
+mkSimpleTarget :: DynFlags -> FilePath -> Target
+#if MIN_VERSION_ghc(9,3,0)
+mkSimpleTarget df fp = Target (TargetFile fp Nothing) True (homeUnitId_ df) Nothing
+#else
+mkSimpleTarget _ fp = Target (TargetFile fp Nothing) True Nothing
 #endif

@@ -19,6 +19,9 @@ module Development.IDE.GHC.Compat.Env (
     Env.hsc_logger,
     Env.hsc_tmpfs,
     Env.hsc_unit_env,
+#if !MIN_VERSION_ghc(9,3,0)
+    Env.hsc_unit_dbs,
+#endif
     Env.hsc_hooks,
     hscSetHooks,
     TmpFs,
@@ -52,6 +55,7 @@ module Development.IDE.GHC.Compat.Env (
     setBackend,
     ghciBackend,
     Development.IDE.GHC.Compat.Env.platformDefaultBackend,
+    workingDirectory
     ) where
 
 import           GHC                 (setInteractiveDynFlags)
@@ -84,6 +88,10 @@ hsc_EPS :: HscEnv -> UnitEnv
 hsc_EPS = Env.hsc_unit_env
 #endif
 
+#if !MIN_VERSION_ghc(9,3,0)
+workingDirectory :: a -> Maybe b
+workingDirectory _ = Nothing
+#endif
 
 setHomeUnitId_ :: UnitId -> DynFlags -> DynFlags
 setHomeUnitId_ uid df = df { Session.homeUnitId_ = uid }

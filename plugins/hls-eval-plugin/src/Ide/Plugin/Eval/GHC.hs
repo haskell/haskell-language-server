@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving  #-}
@@ -11,6 +12,7 @@ module Ide.Plugin.Eval.GHC (
     addPackages,
     modifyFlags,
     showDynFlags,
+    setSessionAndInteractiveDynFlags,
 ) where
 
 import           Data.List                       (isPrefixOf)
@@ -24,6 +26,12 @@ import           Development.IDE.GHC.Util        (printOutputable)
 
 import           GHC.LanguageExtensions.Type     (Extension (..))
 import           Ide.Plugin.Eval.Util            (gStrictTry)
+
+#if MIN_VERSION_ghc(9,3,0)
+import           GHC                             (setUnitDynFlags, setTopSessionDynFlags)
+import           GHC.Driver.Session              (getDynFlags)
+import           GHC.Driver.Env
+#endif
 
 {- $setup
 >>> import GHC
@@ -164,3 +172,16 @@ showDynFlags df =
 
 vList :: [String] -> SDoc
 vList = vcat . map text
+
+setSessionAndInteractiveDynFlags :: DynFlags -> Ghc ()
+setSessionAndInteractiveDynFlags df = do
+#if MIN_VERSION_ghc(9,3,0)
+    _ <- setUnitDynFlags (homeUnitId_ df) df
+    modifySession (hscUpdateLoggerFlags . hscSetActiveUnitId (homeUnitId_ df))
+    df' <- getDynFlags
+    setTopSessionDynFlags df'
+#else
+    _ <- setSessionDynFlags df
+#endif
+    sessDyns <- getSessionDynFlags
+    setInteractiveDynFlags sessDyns
