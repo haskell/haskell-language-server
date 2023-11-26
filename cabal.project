@@ -105,3 +105,9 @@ if impl(ghc >= 9.7)
     -- https://github.com/kcsongor/generic-lens/issues/158
     generic-lens:text,
     generic-lens-core:text,
+
+source-repository-package
+  type:git
+  location: https://github.com/haskell/lsp
+  tag: 3901b5b36b229b0faa2dabd0990be635de48c7e6
+  subdir: lsp lsp-types lsp-test
