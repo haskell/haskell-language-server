@@ -21,9 +21,6 @@ build_task:
     GITHUB_WORKSPACE: ${CIRRUS_WORKING_DIR}
     CABAL_CACHE_NONFATAL: "yes"
   matrix:
-    - name: build-ghc-9.0.2
-      env:
-        GHC_VERSION: 9.0.2
     - name: build-ghc-9.2.5
       env:
         GHC_VERSION: 9.2.5
@@ -43,7 +40,6 @@ build_task:
 bindist_task:
   name: bindist
   depends_on:
-    - build-ghc-9.0.2
     - build-ghc-9.2.5
     - build-ghc-9.2.7
   timeout_in: 120m
@@ -59,10 +55,6 @@ bindist_task:
   script:
     - tzsetup Etc/GMT
     - adjkerntz -a
-
-    - curl -o binaries-9.0.2.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.0.2/binaries/out.tar.xz
-    - tar xvf binaries-9.0.2.tar.xz
-    - rm -f binaries-9.0.2.tar.xz
 
     - curl -o binaries-9.2.5.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.2.5/binaries/out.tar.xz
     - tar xvf binaries-9.2.5.tar.xz
