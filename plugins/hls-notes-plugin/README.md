@@ -11,6 +11,8 @@ module Main where
 main :: IO
 main = do
     doSomething -- We need this here, see Note [Do Something] in Foo
+                -- Using at-signs around the note works as well:
+                -- see @Note [Do Something]@ in Foo
 ```
 
 Foo.hs

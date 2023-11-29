@@ -54,6 +54,11 @@ instance Pretty Log where
             "Found notes in " <> pretty (show file) <> ": ["
             <> pretty (intercalate ", " (fmap (\(s, p) -> "\"" <> s <> "\" at " <> T.pack (show p)) notes)) <> "]"
 
+{-
+The first time the user requests a jump-to-definition on a note reference, the
+project is indexed and searched for all note definitions. Their location and
+title is then saved in the HLS database to be retrieved for all future requests.
+-}
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId "Provides goto definition support for GHC-style notes")
     { Ide.Types.pluginRules = findNotesRules recorder
@@ -89,12 +94,18 @@ jumpToNote state _ param
         uriOrig = toNormalizedUri $ param ^. (L.textDocument . L.uri)
         err s = maybe (throwError $ PluginInternalError s) pure
         atPos c arr = case arr A.! 0 of
+            -- We check if the line we are currently at contains a note
+            -- reference. However, we need to know if the cursor is within the
+            -- match or somewhere else. The second entry of the array contains
+            -- the title of the note as extracted by the regex.
             (_, (c', len)) -> if c' <= c && c <= c' + len
                 then Just (fst (arr A.! 1)) else Nothing
 jumpToNote _ _ _ = throwError $ PluginInternalError "conversion to normalized file path failed"
 
 findNotesInFile :: NormalizedFilePath -> Recorder (WithPriority Log) -> Action (Maybe (HM.HashMap Text Position))
 findNotesInFile file recorder = do
+    -- GetFileContents only returns a value if the file is open in the editor of
+    -- the user. If not, we need to read it from disk.
     contentOpt <- (snd =<<) <$> use GetFileContents file
     content <- case contentOpt of
         Just x  -> pure x
@@ -105,6 +116,12 @@ findNotesInFile file recorder = do
     pure $ Just m
     where
         uint = fromIntegral . toInteger
+        -- the regex library returns the character index of the match. However
+        -- to return the position from HLS we need it as a (line, character)
+        -- tuple. To convert between the two we count the newline characters and
+        -- reset the current character index every time. For every regex match,
+        -- once we have counted up to their character index, we save the current
+        -- line and character values instead.
         toPositions matches = snd . fst . T.foldl' (\case
             (([], m), _) -> const (([], m), (0, 0, 0))
             ((x@(name, (char, _)):xs, m), (n, nc, c)) -> \char' ->
