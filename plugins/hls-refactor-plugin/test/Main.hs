@@ -176,6 +176,25 @@ completionTests =
             "join"
             ["{-# LANGUAGE NoImplicitPrelude #-}",
             "module A where", "import Control.Monad as M ()", "import Control.Monad as N (join)", "f = N.joi"]
+        -- Regression test for https://github.com/haskell/haskell-language-server/issues/2824
+        , completionNoCommandTest
+            "explicit qualified"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import qualified Control.Monad as M (j)"]
+            (Position 2 38)
+            "join"
+        , completionNoCommandTest
+            "explicit qualified post"
+            ["{-# LANGUAGE NoImplicitPrelude, ImportQualifiedPost #-}",
+            "module A where", "import Control.Monad qualified as M (j)"]
+            (Position 2 38)
+            "join"
+        , completionNoCommandTest
+            "multiline import"
+            [ "{-# LANGUAGE NoImplicitPrelude #-}"
+            , "module A where", "import Control.Monad", "    (fore)"]
+            (Position 3 9)
+            "forever"
         ]
       , testGroup "Data constructor"
         [ completionCommandTest
@@ -288,11 +307,8 @@ completionNoCommandTest name src pos wanted = testSession name $ do
   docId <- createDoc "A.hs" "haskell" (T.unlines src)
   _ <- waitForDiagnostics
   compls <- getCompletions docId pos
-  let wantedC = find ( \case
-            CompletionItem {_insertText = Just x} -> wanted `T.isPrefixOf` x
-            _                                     -> False
-            ) compls
-  case wantedC of
+  let isPrefixOfInsertOrLabel ci = any (wanted `T.isPrefixOf`) [fromMaybe "" (ci ^. L.insertText), ci ^. L.label]
+  case find isPrefixOfInsertOrLabel compls of
     Nothing ->
       liftIO $ assertFailure $ "Cannot find expected completion in: " <> show [_label | CompletionItem {_label} <- compls]
     Just CompletionItem{..} -> liftIO . assertBool ("Expected no command but got: " <> show _command) $ null _command

@@ -215,7 +215,7 @@ getCompletionsLSP ide plId
                     plugins = idePlugins $ shakeExtras ide
                 config <- liftIO $ runAction "" ide $ getCompletionsConfig plId
 
-                allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports uri
+                let allCompletions = getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports uri
                 pure $ InL (orderedCompletions allCompletions)
           _ -> return (InL [])
       _ -> return (InL [])
