@@ -34,15 +34,15 @@ source-repository head
 
 library
   exposed-modules:
-    Ide.Plugin.Error
+    Ide.Logger
     Ide.Plugin.Config
     Ide.Plugin.ConfigUtils
+    Ide.Plugin.Error
     Ide.Plugin.Properties
     Ide.Plugin.RangeMap
     Ide.Plugin.Resolve
     Ide.PluginUtils
     Ide.Types
-    Ide.Logger
 
   hs-source-dirs:     src
   build-depends:
@@ -59,10 +59,11 @@ library
     , filepath
     , ghc
     , hashable
-    , hls-graph             == 2.4.0.0
+    , hls-graph             ==2.4.0.0
     , lens
     , lens-aeson
-    , lsp                   ^>=2.2
+    , lsp                   ^>=2.3
+    , megaparsec            >=9.0
     , mtl
     , opentelemetry         >=0.4
     , optparse-applicative
@@ -75,7 +76,6 @@ library
     , transformers
     , unliftio
     , unordered-containers
-    , megaparsec > 9
 
   if os(windows)
     build-depends: Win32
@@ -85,14 +85,13 @@ library
 
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing
-    -Wno-unticked-promoted-constructors
-    -Wunused-packages
+    -Wno-unticked-promoted-constructors -Wunused-packages
 
   if flag(pedantic)
     ghc-options: -Werror
 
   if flag(use-fingertree)
-    cpp-options: -DUSE_FINGERTREE
+    cpp-options:   -DUSE_FINGERTREE
     build-depends: hw-fingertree
 
   default-language:   Haskell2010
@@ -107,33 +106,39 @@ test-suite tests
   hs-source-dirs:   test
   main-is:          Main.hs
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
-  other-modules:    Ide.PluginUtilsTest
+  other-modules:
+    Ide.PluginUtilsTest
+    Ide.TypesTests
+
   build-depends:
-      base
+    , base
+    , containers
+    , data-default
     , hls-plugin-api
+    , lens
+    , lsp-types
     , tasty
     , tasty-hunit
-    , tasty-rerun
     , tasty-quickcheck
+    , tasty-rerun
     , text
-    , lsp-types
-    , containers
 
 benchmark rangemap-benchmark
   -- Benchmark doesn't make sense if fingertree implementation
   -- is not used.
   if !flag(use-fingertree)
     buildable: False
+
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   bench
   main-is:          Main.hs
   ghc-options:      -threaded -Wall
   build-depends:
-      base
+    , base
+    , criterion
+    , deepseq
     , hls-plugin-api
     , lsp-types
-    , criterion
     , random
     , random-fu
-    , deepseq

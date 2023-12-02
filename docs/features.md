@@ -38,6 +38,12 @@ Provided by: `hls-hlint-plugin`
 
 Provides hlint hints as diagnostics.
 
+### Stan hints
+
+Provided by: `hls-stan-plugin`
+
+Provides Stan hints as diagnostics.
+
 ### Cabal parse errors and warnings
 
 Provided by: `hls-cabal-plugin`

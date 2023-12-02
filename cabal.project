@@ -28,13 +28,14 @@ packages:
          ./plugins/hls-qualify-imported-names-plugin
          ./plugins/hls-code-range-plugin
          ./plugins/hls-change-type-signature-plugin
+         ./plugins/hls-stan-plugin
          ./plugins/hls-gadt-plugin
          ./plugins/hls-explicit-fixity-plugin
          ./plugins/hls-explicit-record-fields-plugin
          ./plugins/hls-refactor-plugin
          ./plugins/hls-overloaded-record-dot-plugin
 
-index-state: 2023-10-06T06:12:29Z
+index-state: 2023-11-14T11:26:13Z
 
 tests: True
 test-show-details: direct
@@ -54,6 +55,10 @@ constraints:
   text -simdutf,
   ghc-check -ghc-check-use-package-abis,
   ghc-lib-parser-ex -auto,
+  -- This is only present in some versions, and it's on by default since 
+  -- 0.14.5.0, but there are some versions we allow that need this 
+  -- setting
+  stylish-haskell +ghc-lib,
   -- Centos 7 comes with an old gcc version that doesn't know about
   -- the flag '-fopen-simd', which blocked the release 2.2.0.0.
   -- We want to be able to benefit from the performance optimisations
@@ -84,27 +89,19 @@ if impl(ghc >= 9.1)
 
 if impl(ghc >= 9.7)
   allow-newer:
-    base,
-    template-haskell,
-    ghc,
-    ghc-prim,
-    integer-gmp,
-    ghc-bignum,
-    template-haskell,
-    text,
-    binary,
-    bytestring,
-    Cabal,
-    unix,
-    deepseq,
-
-  repository head.hackage.ghc.haskell.org
-     url: https://ghc.gitlab.haskell.org/head.hackage/
-     secure: True
-     key-threshold: 3
-     root-keys:
-         f76d08be13e9a61a377a85e2fb63f4c5435d40f8feb3e12eb05905edb8cdea89
-         26021a13b401500c8eb2761ca95c61f2d625bfef951b939a8124ed12ecf07329
-         7541f32a4ccca4f97aea3b22f5e593ba2c0267546016b992dfadcd2fe944e55d
-
-  active-repositories: hackage.haskell.org, head.hackage.ghc.haskell.org
+    ekg-core:text,
+    -- https://github.com/maoe/ghc-trace-events/issues/12
+    ghc-trace-events:base,
+    ghc-trace-events:bytestring,
+    ghc-trace-events:text,
+    -- https://github.com/haskell-primitive/primitive-unlifted/issues/39
+    primitive-unlifted:bytestring,
+    -- https://github.com/obsidiansystems/constraints-extras/issues/54
+    constraints-extras:base,
+    constraints-extras:template-haskell,
+    -- https://github.com/obsidiansystems/commutative-semigroups/issues/13
+    commutative-semigroups:base,
+    commutative-semigroups:template-haskell,
+    -- https://github.com/kcsongor/generic-lens/issues/158
+    generic-lens:text,
+    generic-lens-core:text,

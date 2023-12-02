@@ -1,40 +1,26 @@
 {-# LANGUAGE CPP #-}
 module Development.IDE.GHC.Dump(showAstDataHtml) where
+import qualified Data.ByteString                       as B
 import           Data.Data                             hiding (Fixity)
 import           Development.IDE.GHC.Compat            hiding (LocatedA,
                                                         NameAnn)
 import           Development.IDE.GHC.Compat.ExactPrint
-import           GHC.Hs.Dump
-#if MIN_VERSION_ghc(9,2,1)
-import qualified Data.ByteString                       as B
 import           Development.IDE.GHC.Compat.Util
 import           Generics.SYB                          (ext1Q, ext2Q, extQ)
 import           GHC.Hs                                hiding (AnnLet)
-#endif
+import           GHC.Hs.Dump
 import           GHC.Plugins                           hiding (AnnLet)
 import           Prelude                               hiding ((<>))
 
 -- | Show a GHC syntax tree in HTML.
-#if MIN_VERSION_ghc(9,2,1)
 showAstDataHtml :: (Data a, ExactPrint a, Outputable a) => a -> SDoc
-#else
-showAstDataHtml :: (Data a, Outputable a) => a -> SDoc
-#endif
 showAstDataHtml a0 = html $
     header $$
     body (tag' [("id",text (show @String "myUL"))] "ul" $ vcat
         [
-#if MIN_VERSION_ghc(9,2,1)
             li (pre $ text (exactPrint a0)),
             li (showAstDataHtml' a0),
             li (nested "Raw" $ pre $ showAstData NoBlankSrcSpan NoBlankEpAnnotations a0)
-#else
-            li (nested "Raw" $ pre $ showAstData NoBlankSrcSpan
-#if MIN_VERSION_ghc(9,3,0)
-                                                 NoBlankEpAnnotations
-#endif
-                                                 a0)
-#endif
         ])
   where
     tag = tag' []
@@ -46,7 +32,7 @@ showAstDataHtml a0 = html $
     li = tag "li"
     caret x = tag' [("class", text "caret")] "span" "" <+> x
     nested foo cts
-#if MIN_VERSION_ghc(9,2,1) && !MIN_VERSION_ghc(9,3,0)
+#if !MIN_VERSION_ghc(9,3,0)
       | cts == empty = foo
 #endif
       | otherwise = foo $$ (caret $ ul cts)
@@ -54,7 +40,6 @@ showAstDataHtml a0 = html $
     header = tag "head" $ tag "style" $ text css
     html = tag "html"
     pre = tag "pre"
-#if MIN_VERSION_ghc(9,2,1)
     showAstDataHtml' :: Data a => a -> SDoc
     showAstDataHtml' =
       (generic
@@ -287,7 +272,6 @@ showAstDataHtml a0 = html $
                               $$ li(srcSpan s))
                 Nothing -> text "locatedAnn:unmatched" <+> tag
                            <+> (text (showConstr (toConstr ss)))
-#endif
 
 
 normalize_newlines :: String -> String

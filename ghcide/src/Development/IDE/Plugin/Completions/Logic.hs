@@ -69,14 +69,12 @@ import           Development.IDE.Spans.AtPoint            (pointCommand)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Plugins                              (Depth (AllTheWay),
                                                            mkUserStyle,
                                                            neverQualify,
                                                            sdocStyle)
-#endif
 
-#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+#if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Plugins                              (defaultSDocContext,
                                                            renderWithContext)
 #endif
@@ -285,13 +283,9 @@ mkNameCompItem doc thingParent origName provenance isInfix !imp mod = CI {..}
           }
 
 showForSnippet :: Outputable a => a -> T.Text
-#if MIN_VERSION_ghc(9,2,0)
 showForSnippet x = T.pack $ renderWithContext ctxt $ GHC.ppr x -- FIXme
     where
         ctxt = defaultSDocContext{sdocStyle = mkUserStyle neverQualify AllTheWay}
-#else
-showForSnippet x = printOutputable x
-#endif
 
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
@@ -368,7 +362,6 @@ cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
 
       -- construct a map from Parents(type) to their fields
       fieldMap = Map.fromListWith (++) $ flip mapMaybe rdrElts $ \elt -> do
-#if MIN_VERSION_ghc(9,2,0)
         par <- greParent_maybe elt
 #if MIN_VERSION_ghc(9,7,0)
         flbl <- greFieldLabel_maybe elt
@@ -376,13 +369,6 @@ cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
         flbl <- greFieldLabel elt
 #endif
         Just (par,[flLabel flbl])
-#else
-        case gre_par elt of
-          FldParent n ml -> do
-            l <- ml
-            Just (n, [l])
-          _ -> Nothing
-#endif
 
       getCompls :: [GlobalRdrElt] -> ([CompItem],QualCompls)
       getCompls = foldMap getComplsForOne
@@ -419,9 +405,6 @@ cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
         let (mbParent, originName) = case par of
                             NoParent -> (Nothing, nameOccName n)
                             ParentIs n' -> (Just . T.pack $ printName n', nameOccName n)
-#if !MIN_VERSION_ghc(9,2,0)
-                            FldParent n' lbl -> (Just . T.pack $ printName n', maybe (nameOccName n) mkVarOccFS lbl)
-#endif
             recordCompls = case par of
                 ParentIs parent
                   | isDataConName n
