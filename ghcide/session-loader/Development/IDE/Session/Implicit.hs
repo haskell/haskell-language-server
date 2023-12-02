@@ -47,33 +47,54 @@ inferCradleTree start_dir =
        maybeItsBios
    -- If we have both a config file (cabal.project/stack.yaml) and a work dir
    -- (dist-newstyle/.stack-work), prefer that
-   <|> (cabalExecutable >> cabalConfigDir start_dir >>= \dir -> cabalWorkDir dir >> pure (cabalCradle dir))
+   <|> (cabalExecutable >> cabalConfigDir start_dir >>= \dir -> cabalWorkDir dir >> pure (simpleCabalCradle dir))
    <|> (stackExecutable >> stackConfigDir start_dir >>= \dir -> stackWorkDir dir >> stackCradle dir)
    -- If we have a cabal.project OR we have a .cabal and dist-newstyle, prefer cabal
-   <|> (cabalExecutable >> (cabalConfigDir start_dir <|> cabalFileAndWorkDir) >>= pure . cabalCradle)
+   <|> (cabalExecutable >> (cabalConfigDir start_dir <|> cabalFileAndWorkDir) >>= pure . simpleCabalCradle)
    -- If we have a stack.yaml, use stack
    <|> (stackExecutable >> stackConfigDir start_dir >>= stackCradle)
    -- If we have a cabal file, use cabal
-   <|> (cabalExecutable >> cabalFileDir start_dir >>= pure . cabalCradle)
+   <|> (cabalExecutable >> cabalFileDir start_dir >>= pure . simpleCabalCradle)
 
   where
   maybeItsBios = (\wdir -> (Bios (Program $ wdir </> ".hie-bios") Nothing Nothing, wdir)) <$> biosWorkDir start_dir
 
   cabalFileAndWorkDir = cabalFileDir start_dir >>= (\dir -> cabalWorkDir dir >> pure dir)
 
-  stackCradle :: FilePath -> MaybeT IO (CradleTree a, FilePath)
-  stackCradle fp = do
-    pkgs <- stackYamlPkgs fp
-    pkgsWithComps <- liftIO $ catMaybes <$> mapM (nestedPkg fp) pkgs
-    let yaml = fp </> "stack.yaml"
-    pure $ (,fp) $ case pkgsWithComps of
-      [] -> Stack (StackType Nothing (Just yaml))
-      ps -> StackMulti mempty $ do
-        Package n cs <- ps
-        c <- cs
-        let (prefix, comp) = Implicit.stackComponent n c
-        pure (prefix, StackType (Just comp) (Just yaml))
-  cabalCradle fp = (Cabal $ CabalType Nothing Nothing, fp)
+-- | Generate a stack cradle given a filepath.
+--
+-- Since we assume there was proof that this file belongs to a stack cradle
+-- we look immediately for the relevant @*.cabal@ and @stack.yaml@ files.
+-- We do not look for package.yaml, as we assume the corresponding .cabal has
+-- been generated already.
+--
+-- We parse the @stack.yaml@ to find relevant @*.cabal@ file locations, then
+-- we parse the @*.cabal@ files to generate a mapping from @hs-source-dirs@ to
+-- component names.
+stackCradle :: FilePath -> MaybeT IO (CradleTree a, FilePath)
+stackCradle fp = do
+  pkgs <- stackYamlPkgs fp
+  pkgsWithComps <- liftIO $ catMaybes <$> mapM (nestedPkg fp) pkgs
+  let yaml = fp </> "stack.yaml"
+  pure $ (,fp) $ case pkgsWithComps of
+    [] -> Stack (StackType Nothing (Just yaml))
+    ps -> StackMulti mempty $ do
+      Package n cs <- ps
+      c <- cs
+      let (prefix, comp) = Implicit.stackComponent n c
+      pure (prefix, StackType (Just comp) (Just yaml))
+
+-- | By default, we generate a simple cabal cradle which is equivalent to the
+-- following hie.yaml:
+--
+-- @
+--   cradle:
+--     cabal:
+-- @
+--
+-- Note, this only works reliable for reasonably modern cabal versions >= 3.2.
+simpleCabalCradle :: FilePath -> (CradleTree a, FilePath)
+simpleCabalCradle fp = (Cabal $ CabalType Nothing Nothing, fp)
 
 cabalExecutable :: MaybeT IO FilePath
 cabalExecutable = MaybeT $ findExecutable "cabal"
