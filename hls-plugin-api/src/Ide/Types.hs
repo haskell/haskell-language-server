@@ -497,6 +497,12 @@ instance PluginMethod Request Method_TextDocumentFormatting where
       uri = msgParams ^. L.textDocument . L.uri
       pid = pluginId pluginDesc
 
+instance PluginMethod Request Method_TextDocumentSemanticTokensFull where
+  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
+    where
+      uri = msgParams ^. L.textDocument . L.uri
+
 instance PluginMethod Request Method_TextDocumentRangeFormatting where
   pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
       && (PluginId (formattingProvider conf) == pid || PluginId (cabalFormattingProvider conf) == pid)
@@ -690,6 +696,9 @@ instance PluginRequestMethod Method_CallHierarchyOutgoingCalls where
 
 instance PluginRequestMethod (Method_CustomMethod m) where
   combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod Method_TextDocumentSemanticTokensFull where
+      combineResponses _ _ _ _ (x :| _) = x
 
 takeLefts :: [a |? b] -> [a]
 takeLefts = mapMaybe (\x -> [res | (InL res) <- Just x])

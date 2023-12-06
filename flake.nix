@@ -69,7 +69,7 @@
             (pkgs.haskell.lib.justStaticExecutables (pkgs.haskell.lib.dontCheck pkgs.haskellPackages.opentelemetry-extra))
             capstone
             # ormolu
-            # stylish-haskell
+            stylish-haskell
             pre-commit
             ] ++ lib.optionals (!stdenv.isDarwin)
                    [ # tracy has a build problem on macos.

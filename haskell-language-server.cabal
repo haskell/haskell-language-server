@@ -164,6 +164,11 @@ flag overloadedRecordDot
   default:     True
   manual:      True
 
+flag semanticTokens
+  description: Enable semantic tokens plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -333,6 +338,12 @@ common refactor
     build-depends: hls-refactor-plugin == 2.5.0.0
     cpp-options: -Dhls_refactor
 
+common semanticTokens
+  if flag(semanticTokens)
+    build-depends: hls-semantic-tokens-plugin == 2.4.0.0
+    cpp-options: -Dhls_semanticTokens
+
+
 library
   import:           common-deps
                     -- configuration
@@ -365,6 +376,7 @@ library
                   , stylishHaskell
                   , refactor
                   , overloadedRecordDot
+                  , semanticTokens
 
   exposed-modules:
     Ide.Arguments
