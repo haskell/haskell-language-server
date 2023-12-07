@@ -5,8 +5,9 @@ module Ide.Plugin.SemanticTokens.Types where
 import qualified Data.List                   as List
 import qualified Data.Set                    as Set
 import           Development.IDE.GHC.Compat
-import           Language.LSP.Protocol.Types (LspEnum (knownValues),
-                                              SemanticTokenTypes (..))
+import           Language.LSP.Protocol.Types
+
+x = defaultSemanticTokensLegend
 
 -- mapping from our token type to LSP default token type
 toLspTokenType :: SemanticTokenType -> SemanticTokenTypes
@@ -45,12 +46,8 @@ toLspTokenType tk = case tk of
     TTypeSyn      -> SemanticTokenTypes_Type
     TNothing      -> SemanticTokenTypes_Namespace
 
-typeToInt :: SemanticTokenTypes -> Int
-typeToInt x = case Set.lookupIndex x knownValues
-    of Just i  -> i
-       Nothing -> 0
-intToType :: Int -> SemanticTokenTypes
-intToType i = Set.elemAt i knownValues
+intToType :: UInt -> SemanticTokenTypes
+intToType i = Set.elemAt (fromIntegral i) knownValues
 
 fromLspTokenType :: SemanticTokenTypes -> SemanticTokenType
 fromLspTokenType tk = case tk of
@@ -83,19 +80,23 @@ data SemanticTokenType =
     | TClassMethod -- Class method
     -- by decls
     | TTypeSyn -- Type synonym (Non-local is not captured)
-    | TClass -- Class (Constraint constructor)
+    | TClass -- Class (ConstraUInt constructor)
     | TTypeCon -- Type (Type constructor)
     | TDataCon -- Data constructor
     | TTypeFamily -- type family
     | TNothing -- unknown
     deriving (Eq, Ord, Show, Enum)
 
+-- toAbs :: SemanticTokenData -> SemanticTokenAbsolute
+-- toAbs (line, startChar, len, tokenType, tokenModifiers) =
+--     SemanticTokenAbsolute line startChar len (toLspTokenType tokenType) [SemanticTokenModifiers_Declaration]
 
 type SemanticCollect = (SemanticTokenType, LIdP GhcRn)
 -- { line: 2, startChar 5, length: 3, tokenType: SemanticTokenType, tokenModifiers: 3, string},
-type SemanticToken = (SemanticTokenData, SemanticCollect)
-type SemanticTokenData = (Int, Int, Int, SemanticTokenType, Int)
-type SemanticTokenInt = Int
+-- type SemanticToken = (SemanticTokenData, SemanticCollect)
+-- type SemanticTokenData = (UInt, UInt, UInt, SemanticTokenType, UInt)
+
+type SemanticTokenUInt = UInt
 
 data SemanticTokenOriginal =  SemanticTokenOriginal
   { tokenType :: SemanticTokenType,
@@ -105,8 +106,8 @@ data SemanticTokenOriginal =  SemanticTokenOriginal
   deriving (Show, Eq, Ord)
 
 data Loc = Loc
-  { line      :: Int,
-    startChar :: Int,
-    len       :: Int
+  { line      :: UInt,
+    startChar :: UInt,
+    len       :: UInt
   }
   deriving (Show, Eq, Ord)

@@ -1,8 +1,9 @@
 {-
     The query module is used to query the semantic tokens from the AST
 -}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving  #-}
 module Ide.Plugin.SemanticTokens.Query where
 import           Control.Arrow                   ((&&&))
 import           Data.Function                   (on)
@@ -13,11 +14,13 @@ import qualified Data.Map                        as Map
 import           Data.Maybe                      (fromMaybe, mapMaybe)
 import           Data.Ord                        (comparing)
 import qualified Data.Set                        as Set
+import           Data.Text                       (Text)
 import           Development.IDE                 (realSpan)
 import           Development.IDE.GHC.Compat
 import qualified Extra                           as List
 import           Generics.SYB                    (mkQ)
 import           Ide.Plugin.SemanticTokens.Types
+import           Language.LSP.Protocol.Types
 
 
 -----------------------
@@ -171,35 +174,6 @@ nameGetter = everything (++) ([] `mkQ` nameToCollect)
 nameToCollect :: LIdP GhcRn -> [SemanticCollect]
 nameToCollect locName = [(toTokenType locName, locName)]
 
-------------------------
--- convert to lsp format
-------------------------
-
-toSemanticToken :: SemanticCollect -> Maybe SemanticToken
-toSemanticToken ori@(tokenType, locName) = do
-    loc <- realSpan $ getLocA locName
-    let line = srcSpanStartLine loc
-    let startChar = srcSpanStartCol loc
-    let len= srcSpanEndCol loc - startChar
-    return
-        -- vscode render col start from 0
-        ((line, startChar-1, len, tokenType, 0), ori)
-
--- need to take offset
-toSemanticTokens :: [SemanticCollect] -> [SemanticToken]
-toSemanticTokens = computeOffsets . List.sortOn fst. mapMaybe toSemanticToken
-    where
-        computeOffsets :: [SemanticToken] -> [SemanticToken]
-        computeOffsets = ls . foldl f (1, 0, [])
-        f (lastLine, lastStartChar, acc) ((line, startChar, len, tokenType, tokenModifiers), locName)
-            = ( line, startChar,
-                (if lastLine == line then
-                    (0, startChar - lastStartChar, len, tokenType, tokenModifiers)
-                else
-                    (line - lastLine, startChar, len, tokenType, tokenModifiers)
-                    , locName) :acc)
-        ls (_, _, acc) = List.reverse acc
-
 
 -----------------------------------
 -- extract semantic tokens from ast
@@ -207,10 +181,26 @@ toSemanticTokens = computeOffsets . List.sortOn fst. mapMaybe toSemanticToken
 refineTokenType ::  NameTokenTypeMap -> SemanticCollect -> SemanticCollect
 refineTokenType m (tokenType, locName) = case Map.lookup (unLoc locName) m of
     Just x  -> (x, locName)
-    Nothing -> (TNothing, locName)
+    Nothing -> (tokenType, locName)
 
 
-extractSemanticTokens :: forall a. HieAST a -> RenamedSource -> [SemanticToken]
-extractSemanticTokens ast rs = toSemanticTokens $ map (refineTokenType iMap) $ nameGetter rs
+
+extractSemanticTokens' :: forall a. HieAST a -> RenamedSource -> Either Text SemanticTokens
+extractSemanticTokens' ast rs = makeSemanticTokens defaultSemanticTokensLegend $ List.sort $ toAbsSemanticTokens
+        $ map (refineTokenType iMap) $ nameGetter rs
     where collections = nameGetter rs
           iMap = constructIdentifierMap ast
+
+toAbsSemanticTokens :: [SemanticCollect] -> [SemanticTokenAbsolute]
+toAbsSemanticTokens = mapMaybe toAbsSemanticToken
+
+
+toAbsSemanticToken :: SemanticCollect -> Maybe SemanticTokenAbsolute
+toAbsSemanticToken ori@(tokenType, locName) = do
+    loc <- realSpan $ getLocA locName
+    let line = srcSpanStartLine loc - 1
+    let startChar = srcSpanStartCol loc - 1
+    let len= srcSpanEndCol loc - 1 - startChar
+    return $ SemanticTokenAbsolute (fromIntegral line) (fromIntegral startChar)
+        (fromIntegral len) (toLspTokenType tokenType) [SemanticTokenModifiers_Declaration]
+

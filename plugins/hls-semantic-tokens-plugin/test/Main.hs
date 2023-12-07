@@ -97,7 +97,7 @@ main1 = do
         -- res <- waitForAction "SemanticTokens.semanticTokensFull" doc
         res <- Test.getSemanticTokens doc
         case res ^? _L  of
-          Just tokens -> liftIO $ mapM_ print $ recoverSemanticTokens content tokens
+        --   Just tokens -> liftIO $ mapM_ print $ recoverSemanticTokens content tokens
           _ -> liftIO $ print "error"
         liftIO $ print res
         lenses <- getCodeLenses doc
@@ -138,7 +138,7 @@ main1 = do
         -- liftIO $ Prelude.writeFile "out2.txt" $ showSDoc fakeDynFlags $ ppr ast
         -- liftIO $ Prelude.writeFile "out3.txt" $ astToString $ tm_renamed_source typecheckedModule
         -- liftIO $ Prelude.writeFile "out4.txt" $ Prelude.unlines (collectToString <$> nameGetter rms)
-        -- liftIO $ Prelude.writeFile "out5.txt" $ Prelude.unlines $ fmap semanticTokenToString $ toSemanticTokens $ nameGetter rms
+        -- liftIO $ Prelude.writeFile "out5.txt" $ Prelude.unlines $ fmap semanticTokenToString $ toRelativeSemanticTokens $ nameGetter rms
 
         -- liftIO $ print $ Map.size $ nodeIdentifiers $ snd $ List.head $ Map.toList mm
 
@@ -158,7 +158,7 @@ semanticTokensTests =
             -- res <- waitForAction "SemanticTokens.semanticTokensFull" doc
             res <- Test.getSemanticTokens doc
             case res ^? _L  of
-                Just tokens -> liftIO $ mapM_ print $ recoverSemanticTokens content tokens
+                -- Just tokens -> liftIO $ mapM_ print $ recoverSemanticTokens content tokens
                 _ -> liftIO $ print "error"
             liftIO $ print res
             lenses <- getCodeLenses doc

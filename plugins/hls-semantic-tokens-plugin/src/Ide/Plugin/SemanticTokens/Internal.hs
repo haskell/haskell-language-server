@@ -72,16 +72,17 @@ computeSemanticTokens :: NormalizedFilePath -> Action (Maybe SemanticTokens)
 computeSemanticTokens nfp = runMaybeT $ do
     HAR{hieAst} <- MaybeT $ use GetHieAst nfp
     source :: ByteString <- lift $ getSourceFileSource nfp
-
     let xs = Map.toList $ getAsts hieAst
-    -- liftIO $ putStrLn $ "size" <> show (List.length xs)
-    -- typedAst <- MaybeT $ pure $ cast hieAst
     case xs of
         (x:_) -> do
             -- liftIO $ putStrLn $ "computeSemanticTokens': " <> show (fst x)
             -- MaybeT $ computeSemanticTokens' (bytestringString source) $ snd x
             tcM <- MaybeT $ use TypeCheck nfp
-            pure $ toLspSemanticTokens $ extractSemanticTokens (snd x) $ tmrRenamed tcM
+            case extractSemanticTokens' (snd x) $ tmrRenamed tcM of
+                Right tokens -> pure tokens
+                Left err -> do
+                    liftIO $ putStrLn $ "computeSemanticTokens: " <> show err
+                    MaybeT . pure $ Nothing
         _ -> MaybeT . pure  $ Nothing
 
 
@@ -97,36 +98,34 @@ semanticTokensFull state _ param = do
         Nothing -> pure $ InR Null
         Just items -> do
             content <- liftIO $ readFile $ fromNormalizedFilePath nfp
-            liftIO $ mapM_ (putStrLn . show) $ recoverSemanticTokens content items
+            liftIO $ mapM_ print $ recoverSemanticTokens content items
             pure $ InL items
 
 
 -----------------------
----- convert to lsp
+---- recover tokens
 -----------------------
 
 recoverSemanticTokens :: String -> SemanticTokens -> [SemanticTokenOriginal]
 recoverSemanticTokens sourceCode (SemanticTokens _ xs) = map (tokenOrigin sourceCode) $ recoverSemanticToken xs
 
-tokenOrigin :: String -> SemanticTokenData -> SemanticTokenOriginal
 tokenOrigin sourceCode (line, startChar, len, tokenType, _) = SemanticTokenOriginal tokenType (Loc line startChar len) name
-        where tLine = lines sourceCode !! (line-1)
-              name = take len $ drop (startChar-0) tLine
-
+        where tLine = lines sourceCode !! (fromIntegral line-1)
+              name = take (fromIntegral len) $ drop (fromIntegral startChar-0) tLine
 
 -- every five elements is a token
-recoverSemanticToken :: [UInt] -> [SemanticTokenData]
+-- recoverSemanticToken :: [UInt] -> [SemanticTokenData]
 recoverSemanticToken xs =
     recoverPosition $
     if length xs `mod` 5 /= 0
     then panic "recoverSemanticToken: impossible"
     else map toTuple $ chunksOf 5 $ map fromIntegral xs
     where
-          toTuple :: [Int] -> SemanticTokenData
+        --   toTuple :: [UInt] -> SemanticTokenData
           toTuple [a, b, c, d, e] = (a, b, c, fromLspTokenType $ intToType d, e)
           toTuple _               = panic "recoverSemanticToken: impossible"
           -- recover to absolute position
-          recoverPosition :: [SemanticTokenData] -> [SemanticTokenData]
+        --   recoverPosition :: [SemanticTokenData] -> [SemanticTokenData]
           recoverPosition xs = ls $ foldl f (1, 0, []) xs
               where
                   f (lastLine, lastStartChar, acc) (line, startChar, len, tokenType, tokenModifiers)
@@ -138,20 +137,3 @@ recoverSemanticToken xs =
                   ls (_, _, acc) = List.reverse acc
 
 
-sourceToTokens :: RenamedSource -> SemanticTokens
-sourceToTokens = toLspSemanticTokens . toSemanticTokens . nameGetter
-
-emptySemanticTokens :: SemanticTokens
-emptySemanticTokens = SemanticTokens Nothing []
-
-toLspSemanticTokens :: [SemanticToken] -> SemanticTokens
-toLspSemanticTokens xs = SemanticTokens Nothing (concatMap toTokenInt xs)
-
-
--- semanticTokenToString :: SemanticToken -> String
--- semanticTokenToString ((line, startChar, len, tokenType, tokenModifiers), locName) =
---     show line ++ ":" ++ show startChar ++ ":" ++ show len ++ ":" ++ show tokenType ++ ":" ++ show tokenModifiers ++ ":\n" ++ collectToString locName
-
-toTokenInt :: SemanticToken -> [UInt]
-toTokenInt ((line, startChar, len, tokenType, tokenModifiers), _) =
-    [fromIntegral line, fromIntegral startChar, fromIntegral len,  fromIntegral $ typeToInt $ toLspTokenType tokenType, fromIntegral tokenModifiers]
