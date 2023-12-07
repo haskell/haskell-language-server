@@ -74,12 +74,12 @@ computeSemanticTokens nfp = runMaybeT $ do
     source :: ByteString <- lift $ getSourceFileSource nfp
 
     let xs = Map.toList $ getAsts hieAst
-    liftIO $ putStrLn $ "size" <> show (List.length xs)
+    -- liftIO $ putStrLn $ "size" <> show (List.length xs)
     -- typedAst <- MaybeT $ pure $ cast hieAst
     case xs of
         (x:_) -> do
-            liftIO $ putStrLn $ "computeSemanticTokens': " <> show (fst x)
-            MaybeT $ computeSemanticTokens' (bytestringString source) $ snd x
+            -- liftIO $ putStrLn $ "computeSemanticTokens': " <> show (fst x)
+            -- MaybeT $ computeSemanticTokens' (bytestringString source) $ snd x
             tcM <- MaybeT $ use TypeCheck nfp
             pure $ toLspSemanticTokens $ extractSemanticTokens (snd x) $ tmrRenamed tcM
         _ -> MaybeT . pure  $ Nothing
@@ -97,7 +97,7 @@ semanticTokensFull state _ param = do
         Nothing -> pure $ InR Null
         Just items -> do
             content <- liftIO $ readFile $ fromNormalizedFilePath nfp
-            -- dbg $ unlines $ map show $ recoverSemanticTokens content items
+            liftIO $ mapM_ (putStrLn . show) $ recoverSemanticTokens content items
             pure $ InL items
 
 
@@ -109,7 +109,7 @@ recoverSemanticTokens :: String -> SemanticTokens -> [SemanticTokenOriginal]
 recoverSemanticTokens sourceCode (SemanticTokens _ xs) = map (tokenOrigin sourceCode) $ recoverSemanticToken xs
 
 tokenOrigin :: String -> SemanticTokenData -> SemanticTokenOriginal
-tokenOrigin sourceCode (line, startChar, len, tokenType, _) = SemanticTokenOriginal (toEnum tokenType) (Loc line startChar len) name
+tokenOrigin sourceCode (line, startChar, len, tokenType, _) = SemanticTokenOriginal tokenType (Loc line startChar len) name
         where tLine = lines sourceCode !! (line-1)
               name = take len $ drop (startChar-0) tLine
 
@@ -120,8 +120,10 @@ recoverSemanticToken xs =
     recoverPosition $
     if length xs `mod` 5 /= 0
     then panic "recoverSemanticToken: impossible"
-    else map toTuple $ chunksOf 5 $ map fromIntegral $ xs
-    where toTuple [a, b, c, d, e] = (a, b, c, d, e)
+    else map toTuple $ chunksOf 5 $ map fromIntegral xs
+    where
+          toTuple :: [Int] -> SemanticTokenData
+          toTuple [a, b, c, d, e] = (a, b, c, fromLspTokenType $ intToType d, e)
           toTuple _               = panic "recoverSemanticToken: impossible"
           -- recover to absolute position
           recoverPosition :: [SemanticTokenData] -> [SemanticTokenData]
@@ -152,4 +154,4 @@ toLspSemanticTokens xs = SemanticTokens Nothing (concatMap toTokenInt xs)
 
 toTokenInt :: SemanticToken -> [UInt]
 toTokenInt ((line, startChar, len, tokenType, tokenModifiers), _) =
-    [fromIntegral line, fromIntegral startChar, fromIntegral len, fromIntegral tokenType, fromIntegral tokenModifiers]
+    [fromIntegral line, fromIntegral startChar, fromIntegral len,  fromIntegral $ typeToInt $ toLspTokenType tokenType, fromIntegral tokenModifiers]

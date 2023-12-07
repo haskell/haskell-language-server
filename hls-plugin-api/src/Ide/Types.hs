@@ -697,7 +697,7 @@ instance PluginRequestMethod (Method_CustomMethod m) where
   combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentSemanticTokensFull where
-      combineResponses _ _ _ _ (x :| _) = x
+  combineResponses _ _ _ _ (x :| _) = x
 
 takeLefts :: [a |? b] -> [a]
 takeLefts = mapMaybe (\x -> [res | (InL res) <- Just x])

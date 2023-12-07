@@ -183,7 +183,7 @@ toSemanticToken ori@(tokenType, locName) = do
     let len= srcSpanEndCol loc - startChar
     return
         -- vscode render col start from 0
-        ((line, startChar-1, len, fromEnum tokenType, 0), ori)
+        ((line, startChar-1, len, tokenType, 0), ori)
 
 -- need to take offset
 toSemanticTokens :: [SemanticCollect] -> [SemanticToken]
