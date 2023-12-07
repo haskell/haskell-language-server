@@ -53,14 +53,21 @@ import           Development.IDE                 (IdeState, Priority (..),
 logWith :: (Show a, MonadIO m) => IdeState -> a -> m ()
 logWith st = liftIO . logPriority (ideLogger st) Info . T.pack . show
 
+bytestringString :: ByteString -> String
+bytestringString = map (toEnum . fromEnum) . unpack
+
+computeSemanticTokens' ::  forall a . String -> HieAST a -> Action (Maybe ())
+computeSemanticTokens' src hieAst = do
+    -- let identifiers = map NIdentifier $ identifierGetter hieAst
+    let identifiersGroups = (map .map) NIdentifier $ toNameGroups $ identifierGetter hieAst
+
+    liftIO $ mapM_ (\gr ->  liftIO (putStrLn $ "group size: " <> show (List.length gr)) >> mapM_ (\x -> putStrLn $ getOriginalTextFromId src x <> ":" <> show x) gr) identifiersGroups
+    -- liftIO $ print $ "identifiers size: " <> show ( identifiers)
+    pure $ Just ()
 
 -----------------------
 ---- the api
 -----------------------
-bytestringString :: ByteString -> String
-bytestringString = map (toEnum . fromEnum) . unpack
--- para :: MessageParams 'Method_TextDocumentSemanticTokensFull
--- para = _
 computeSemanticTokens :: NormalizedFilePath -> Action (Maybe SemanticTokens)
 computeSemanticTokens nfp = runMaybeT $ do
     HAR{hieAst} <- MaybeT $ use GetHieAst nfp
@@ -78,17 +85,6 @@ computeSemanticTokens nfp = runMaybeT $ do
         _ -> MaybeT . pure  $ Nothing
 
 
-computeSemanticTokens' ::  forall a . String -> HieAST a -> Action (Maybe ())
-computeSemanticTokens' src hieAst = do
-    -- let identifiers = map NIdentifier $ identifierGetter hieAst
-    let identifiersGroups = (map .map) NIdentifier $ toNameGroups $ identifierGetter hieAst
-
-    liftIO $ mapM_ (\gr ->  liftIO (putStrLn $ "group size: " <> show (List.length gr)) >> mapM_ (\x -> putStrLn $ getOriginalTextFromId src x <> ":" <> show x) gr) identifiersGroups
-    -- liftIO $ print $ "identifiers size: " <> show ( identifiers)
-    pure $ Just ()
-
-
-
 semanticTokensFull :: PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull state _ param = do
     let dbg = logWith state
@@ -103,6 +99,7 @@ semanticTokensFull state _ param = do
             content <- liftIO $ readFile $ fromNormalizedFilePath nfp
             -- dbg $ unlines $ map show $ recoverSemanticTokens content items
             pure $ InL items
+
 
 -----------------------
 ---- convert to lsp

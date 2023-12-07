@@ -165,17 +165,17 @@ toTokenType locName = case occNameSpace $ occName $ unLoc locName of
   x | isVarNameSpace x     -> TVariable
   _                        -> TVariable
 
-nameGetter :: RenamedSource -> [SemanticCollectFinal]
+nameGetter :: RenamedSource -> [SemanticCollect]
 nameGetter = everything (++) ([] `mkQ` nameToCollect)
 
-nameToCollect :: LIdP GhcRn -> [SemanticCollectFinal]
+nameToCollect :: LIdP GhcRn -> [SemanticCollect]
 nameToCollect locName = [(toTokenType locName, locName)]
 
 ------------------------
 -- convert to lsp format
 ------------------------
 
-toSemanticToken :: SemanticCollectFinal -> Maybe SemanticToken
+toSemanticToken :: SemanticCollect -> Maybe SemanticToken
 toSemanticToken ori@(tokenType, locName) = do
     loc <- realSpan $ getLocA locName
     let line = srcSpanStartLine loc
@@ -186,7 +186,7 @@ toSemanticToken ori@(tokenType, locName) = do
         ((line, startChar-1, len, fromEnum tokenType, 0), ori)
 
 -- need to take offset
-toSemanticTokens :: [SemanticCollectFinal] -> [SemanticToken]
+toSemanticTokens :: [SemanticCollect] -> [SemanticToken]
 toSemanticTokens = computeOffsets . List.sortOn fst. mapMaybe toSemanticToken
     where
         computeOffsets :: [SemanticToken] -> [SemanticToken]
@@ -204,7 +204,7 @@ toSemanticTokens = computeOffsets . List.sortOn fst. mapMaybe toSemanticToken
 -----------------------------------
 -- extract semantic tokens from ast
 -----------------------------------
-refineTokenType ::  NameTokenTypeMap -> SemanticCollectFinal -> SemanticCollectFinal
+refineTokenType ::  NameTokenTypeMap -> SemanticCollect -> SemanticCollect
 refineTokenType m (tokenType, locName) = case Map.lookup (unLoc locName) m of
     Just x  -> (x, locName)
     Nothing -> (TNothing, locName)

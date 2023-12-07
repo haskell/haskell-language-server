@@ -498,8 +498,7 @@ instance PluginMethod Request Method_TextDocumentFormatting where
       pid = pluginId pluginDesc
 
 instance PluginMethod Request Method_TextDocumentSemanticTokensFull where
-  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
+  pluginEnabled _ msgParams pluginDesc _ = pluginResponsible uri pluginDesc
     where
       uri = msgParams ^. L.textDocument . L.uri
 

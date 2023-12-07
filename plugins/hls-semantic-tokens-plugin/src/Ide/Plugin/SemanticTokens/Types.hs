@@ -96,9 +96,9 @@ data SemanticTokenType =
 --   fromEnum SFieldName = property
 --   fromEnum SNothing   = 14
 
-type SemanticCollectFinal = (SemanticTokenType, LIdP GhcRn)
+type SemanticCollect = (SemanticTokenType, LIdP GhcRn)
 -- { line: 2, startChar 5, length: 3, tokenType: SemanticTokenType, tokenModifiers: 3, string},
-type SemanticToken = (SemanticTokenData, SemanticCollectFinal)
+type SemanticToken = (SemanticTokenData, SemanticCollect)
 type SemanticTokenData = (Int, Int, Int, Int, Int)
 type SemanticTokenInt = Int
 
