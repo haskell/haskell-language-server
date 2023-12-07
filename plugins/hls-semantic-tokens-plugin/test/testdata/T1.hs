@@ -1,3 +1,6 @@
+-- patter syn
+{-# LANGUAGE PatternSynonyms #-}
+
 module Main where
 
 import Data.Set (Set, insert)
@@ -12,6 +15,10 @@ instance Boo Int where
     boo x = x + 1
 
 data Dd = Dd Int
+
+pattern One = Foo 1
+
+ggg = One
 
 data Doo = Doo Prelude.Int
 type Bar1 = Int
