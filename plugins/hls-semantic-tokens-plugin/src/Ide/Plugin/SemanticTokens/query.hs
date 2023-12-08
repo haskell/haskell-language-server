@@ -30,20 +30,12 @@ import           Language.LSP.Protocol.Types
 -- from declaration site to token type
 type NameTokenTypeMap  = Map.Map Name SemanticTokenType
 type NameTokenTypeItem = (Name, ContextInfo)
--- name is unique
-type IdentifierItem = (Span, SrcSpan, Name, [ContextInfo])
 
 identifierItemContext :: IdentifierItem -> [ContextInfo]
 identifierItemContext (span, c, x, y) = y
 identifierItemName :: IdentifierItem -> Name
 identifierItemName (span, c, x, y) = x
 
-
-newtype NIdentifier = NIdentifier IdentifierItem
-
-instance Show NIdentifier where
-    show (NIdentifier (span, c, x, y)) = occNameString (nameOccName x) <> " " <> show y <> ""
-            <> printCompactSrcSpan c <> " " <> printCompactRealSrc span
 
 -- determine the precedence of context info
 -- since we have multiple context info, we need to choose
@@ -64,27 +56,6 @@ contextInfoLevel x = case x of
     EvidenceVarUse        -> -1
     EvidenceVarBind _ _ _ -> -1
 
-instance Show (IdentifierDetails a) where
-    show x = show $ identInfo x
-
-deriving instance Show DeclType
-deriving instance Show BindType
-deriving instance Show RecFieldContext
-
-instance Show ContextInfo where
-    show x = case x of
-        Use                   -> "Use"
-        MatchBind             -> "MatchBind"
-        IEThing _             -> "IEThing IEType" -- imported
-        TyDecl                -> "TyDecl"
-        ValBind bt _ _        -> "ValBind of " <> show bt
-        PatternBind _ _ _     -> "PatternBind"
-        ClassTyDecl _         -> "ClassTyDecl"
-        Decl d _              -> "Decl of " <> show d
-        TyVarBind _ _         -> "TyVarBind"
-        RecField c _          -> "RecField of " <> show c
-        EvidenceVarBind _ _ _ -> "EvidenceVarBind"
-        EvidenceVarUse        -> "EvidenceVarUse"
 
 mergeInfo :: ContextInfo -> ContextInfo -> ContextInfo
 mergeInfo x y = if contextInfoLevel x > contextInfoLevel y then x else y
@@ -94,7 +65,7 @@ infoTokenType :: ContextInfo -> SemanticTokenType
 infoTokenType x = case x of
     Use                   -> TVariable
     MatchBind             -> TValBind
-    IEThing _             -> TVariable -- todo check names space to distinguish
+    IEThing _             -> TNothing -- todo check names space to distinguish
     TyDecl                -> TVariable -- type signature
     ValBind bt _ _        -> TValBind
     PatternBind _ _ _     -> TPatternBind
@@ -115,31 +86,13 @@ infoTokenType x = case x of
 
 -- one definition site might have multiple identifiers
 
-
+-----------------------------------------
+---- construct definition map from HieAST a
+-----------------------------------------
 collectInfo :: [IdentifierItem] -> [NameTokenTypeItem]
 collectInfo = map (identifierItemName &&& (foldr mergeInfo Use . identifierItemContext))
 
-toNameGroups :: [IdentifierItem] -> [[IdentifierItem]]
-toNameGroups = List.groupBy ((==) `on` identifierItemName) . List.sortOn identifierItemName
 
-printCompactSrcSpan :: SrcSpan -> String
-printCompactSrcSpan (RealSrcSpan x _buf) = printCompactRealSrc x
-printCompactSrcSpan x                    = "noSrc"
-
-printCompactRealSrc :: RealSrcSpan -> String
-printCompactRealSrc x = show (srcSpanStartLine x) <> ":" <> show (srcSpanStartCol x) <> "-" <> show (srcSpanEndCol x)
-
-getOriginalTextFromId :: String -> NIdentifier -> String
-getOriginalTextFromId sourceCode (NIdentifier (span, c, _, _)) = fromMaybe "" $ do
-            tLine <- lines sourceCode List.!? (line-1)
-            return $ take len $ drop (startChar-1) tLine
-        where
-              line = srcSpanStartLine span
-              startChar = srcSpanStartCol span
-              len= srcSpanEndCol span - startChar
-
--- | Recurses through the given AST to find identifiers which are
--- 'InstanceValBind's.
 identifierGetter :: HieAST a -> [IdentifierItem]
 identifierGetter ast =
     let ids = [ (nodeSpan ast, nameSrcSpan c, c, Set.toList $ identInfo d) | (Right c, d) <- Map.toList $ getNodeIds ast]
@@ -153,7 +106,6 @@ toNameGroupsMap = Map.fromListWith mergeInfo
 
 constructIdentifierMap :: HieAST a -> NameTokenTypeMap
 constructIdentifierMap ast = identifierNameTokenTypeMap $ toNameGroupsMap $ collectInfo $ identifierGetter ast
-
 
 -----------------------------------------
 ---- collect all names from RenamedSource
@@ -180,19 +132,15 @@ nameToCollect locName = [(toTokenType locName, locName)]
 -----------------------------------
 refineTokenType ::  NameTokenTypeMap -> SemanticCollect -> SemanticCollect
 refineTokenType m (tokenType, locName) = case Map.lookup (unLoc locName) m of
-    Just x  -> (x, locName)
+    Just x  -> (x <> tokenType, locName)
     Nothing -> (tokenType, locName)
 
 
-
 extractSemanticTokens' :: forall a. HieAST a -> RenamedSource -> Either Text SemanticTokens
-extractSemanticTokens' ast rs = makeSemanticTokens defaultSemanticTokensLegend $ List.sort $ toAbsSemanticTokens
-        $ map (refineTokenType iMap) $ nameGetter rs
+extractSemanticTokens' ast rs = makeSemanticTokens defaultSemanticTokensLegend
+    $ List.sort $ mapMaybe (toAbsSemanticToken . refineTokenType iMap) (nameGetter rs)
     where collections = nameGetter rs
           iMap = constructIdentifierMap ast
-
-toAbsSemanticTokens :: [SemanticCollect] -> [SemanticTokenAbsolute]
-toAbsSemanticTokens = mapMaybe toAbsSemanticToken
 
 
 toAbsSemanticToken :: SemanticCollect -> Maybe SemanticTokenAbsolute

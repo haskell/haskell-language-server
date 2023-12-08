@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
@@ -10,7 +11,7 @@
 {-# LANGUAGE TypeApplications    #-}
 
 import           Data.Bifunctor
-import           Data.ByteString             as BS
+import           Data.ByteString                 as BS
 import           Data.Default
 import qualified Data.Maybe
 import           Data.Text
@@ -36,36 +37,37 @@ import           Development.IDE
 -- import Development.IDE.Test
 -- import Test.Hls
 -- import Test.Hls.Util              (withCanonicalTempDir)
-import           Control.Arrow               (Arrow ((***)), (&&&), (+++))
+import           Control.Arrow                   (Arrow ((***)), (&&&), (+++))
 import           Data.Data
-import           Data.Functor                (void)
-import           Data.Map                    as Map
-import           Data.String                 (fromString)
+import           Data.Functor                    (void)
+import           Data.Map                        as Map
+import           Data.String                     (fromString)
 import           System.Environment.Blank
 import           System.FilePath
 -- import qualified Development.IDE.Core.Shake           as Shake
 import           Ide.Types
-import qualified Test.Hls                    (PluginTestDescriptor,
-                                              mkPluginTestDescriptor',
-                                              runSessionWithServerInTmpDir,
-                                              waitForAction)
-import qualified Test.Hls.FileSystem         as FS
+import qualified Test.Hls                        (PluginTestDescriptor,
+                                                  mkPluginTestDescriptor',
+                                                  runSessionWithServerInTmpDir,
+                                                  waitForAction)
+import qualified Test.Hls.FileSystem             as FS
 -- import Development.IDE.Plugin.Test
-import           Control.Lens                hiding (use)
-import qualified Data.List                   as List
-import           Data.Maybe                  (fromJust)
-import qualified Data.Set                    as Set
-import           Ide.Plugin.Error            (getNormalizedFilePathE)
+import           Control.Lens                    hiding (use)
+import qualified Data.List                       as List
+import           Data.Maybe                      (fromJust)
+import qualified Data.Set                        as Set
+import           Ide.Plugin.Error                (getNormalizedFilePathE)
 import           Ide.Plugin.SemanticTokens
-import qualified Language.LSP.Protocol.Lens  as L
-import           Language.LSP.Protocol.Types
-import           Language.LSP.Protocol.Types (SemanticTokensParams (..))
-import qualified Language.LSP.Test           as Test
+import           Ide.Plugin.SemanticTokens.Types
+import qualified Language.LSP.Protocol.Lens      as L
+import           Language.LSP.Protocol.Types     (SemanticTokens (..),
+                                                  SemanticTokensParams (..))
+import qualified Language.LSP.Test               as Test
 import           Test.Hls
-import           Test.Hls                    (TextDocumentIdentifier,
-                                              getCodeLenses, openDoc,
-                                              waitForAction)
-import           Test.Hls.Util               (withCanonicalTempDir)
+import           Test.Hls                        (TextDocumentIdentifier,
+                                                  getCodeLenses, openDoc,
+                                                  waitForAction)
+import           Test.Hls.Util                   (withCanonicalTempDir)
 
 getUniqueName :: (NamedThing a) => a -> Name
 getUniqueName = getName
@@ -86,83 +88,50 @@ semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor' Ide.Plugin.SemanticToken
 mkSemanticTokensParams :: TextDocumentIdentifier -> SemanticTokensParams
 mkSemanticTokensParams doc = SemanticTokensParams Nothing Nothing doc
 
-main1 :: IO ()
-main1 = do
+runSessionWithServerInDir file x = Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProject file) $ do
+            doc <- openDoc file "haskell"
+            res <- waitForAction "TypeCheck" doc
+            x doc
 
-    let filePath = "./test/testdata/T1.hs"
-    content <- Prelude.readFile filePath
-    Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProject "T1.hs") $ do
-        doc <- openDoc "T1.hs" "haskell"
-        res <- waitForAction "TypeCheck" doc
-        -- res <- waitForAction "SemanticTokens.semanticTokensFull" doc
-        res <- Test.getSemanticTokens doc
-        case res ^? _L  of
-        --   Just tokens -> liftIO $ mapM_ print $ recoverSemanticTokens content tokens
-          _ -> liftIO $ print "error"
-        liftIO $ print res
-        lenses <- getCodeLenses doc
-        liftIO $ print lenses
+runSessionWithServerInDirAndGetSemantic file x =
+        Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProject file) $ do
+            doc <- openDoc file "haskell"
+            res <- waitForAction "TypeCheck" doc
+            res <- Test.getSemanticTokens doc
+            x res doc
 
-    -- let filePath = "hello.hs"
-    -- content <- Prelude.readFile filePath
-    -- runGhc (Just libdir) $ do
-    --     dflags <- getSessionDynFlags
-    --     setSessionDynFlags dflags
-    --     target <- guessTarget filePath Nothing Nothing
-    --     setTargets [target]
-    --     load LoadAllTargets
-    --     -- hsc_typecheck :: Bool -- ^ Keep renamed source?
-    --     --       -> ModSummary -> Maybe HsParsedModule
-    --     --       -> Hsc (TcGblEnv, RenamedStuff)
-    --     modSum <- getModSummary $ mkModuleName "Main"
-    --     parsedModule <- parseModule modSum
-    --     typecheckedModule <- typecheckModule parsedModule
-    --     let rms = fromJust $ renamedSource typecheckedModule
-    --     let tcGblEnv = fst $ tm_internals_ typecheckedModule
-        -- -- mkHieFileWithSource :: FilePath
-        -- --             -> BS.ByteString
-        -- --             -> ModSummary
-        -- --             -> TcGblEnv
-        -- --             -> RenamedSource -> HieFile
-        -- -- let file = mkHieFileWithSource filePath content modSum tcGblEnv rms
-        -- file <- mkHieFile modSum tcGblEnv rms
-        -- let ast = snd $ List.head $ Map.toList $ getAsts $ hie_asts file
-        -- let fileContent = srcSpanFile $ nodeSpan ast
-        -- liftIO $ print fileContent
-        -- let x = getter content ast
-        -- -- liftIO $ mapM_ print x
-        -- liftIO $ Prelude.writeFile "out.txt" $ Prelude.unlines $ fmap show x
-
-        -- let mm = getSourcedNodeInfo ast
-
-        -- liftIO $ Prelude.writeFile "out2.txt" $ showSDoc fakeDynFlags $ ppr ast
-        -- liftIO $ Prelude.writeFile "out3.txt" $ astToString $ tm_renamed_source typecheckedModule
-        -- liftIO $ Prelude.writeFile "out4.txt" $ Prelude.unlines (collectToString <$> nameGetter rms)
-        -- liftIO $ Prelude.writeFile "out5.txt" $ Prelude.unlines $ fmap semanticTokenToString $ toRelativeSemanticTokens $ nameGetter rms
-
-        -- liftIO $ print $ Map.size $ nodeIdentifiers $ snd $ List.head $ Map.toList mm
-
-        -- liftIO $ mapM (print . (astToString &&& (show . nameUnique) &&& (show . nameSrcSpan))) names
-        return ()
 
 semanticTokensTests :: TestTree
 semanticTokensTests =
   testGroup
   "get semantic Tokens"
-  [ testCase "variable" $ do
-        let filePath = "./test/testdata/T1.hs"
-        content <- Prelude.readFile filePath
-        Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProject "T1.hs") $ do
-            doc <- openDoc "T1.hs" "haskell"
-            res <- waitForAction "TypeCheck" doc
-            -- res <- waitForAction "SemanticTokens.semanticTokensFull" doc
-            res <- Test.getSemanticTokens doc
-            case res ^? _L  of
-                -- Just tokens -> liftIO $ mapM_ print $ recoverSemanticTokens content tokens
-                _ -> liftIO $ print "error"
-            liftIO $ print res
-            lenses <- getCodeLenses doc
-            liftIO $ print lenses
+  [
+    testCase "variable" $ do
+        -- let filePath = "./test/testdata/T1.hs"
+        runSessionWithServerInDirAndGetSemantic "T1.hs" $ \tokens _ -> do
+            case tokens ^? _L  of
+                Just tokens -> do
+                    liftIO $ 1 @?= 1
+                _ -> error "No tokens found"
+            liftIO $ 1 @?= 1
+    , testCase "value bind" $ do
+        let filePath = "./test/testdata/valBind.hs"
+        content <- liftIO $ Prelude.readFile filePath
+        let expect = [
+                SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 4, startChar = 1, len = 5}, name = "hello"}
+                , SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 4, startChar = 10, len = 6}, name = "String"}
+                , SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 5, startChar = 1, len = 5}, name = "hello"}
+                , SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 5, startChar = 1, len = 5}, name = "hello"}
+                ]
+        runSessionWithServerInDirAndGetSemantic "valBind.hs" $ \res doc -> do
+            -- content <- waitForAction "getFileContents" doc
+            case res ^? _L of
+                Just tokens -> do
+                    either (error . show)
+                        (\ xs -> liftIO $ expect @?= xs) $ recoverSemanticTokens content tokens
+                    return ()
+                _ -> error "No tokens found"
+            liftIO $ 1 @?= 1
   ]
 
 main :: IO ()

@@ -21,11 +21,12 @@ source-repository head
 
 library
   buildable: True
-  exposed-modules:    Ide.Plugin.SemanticTokens
+  exposed-modules:
+    Ide.Plugin.SemanticTokens
+    Ide.Plugin.SemanticTokens.Types
   other-modules:
     Ide.Plugin.SemanticTokens.Query
     Ide.Plugin.SemanticTokens.Internal
-    Ide.Plugin.SemanticTokens.Types
 
   hs-source-dirs:     src
   build-depends:

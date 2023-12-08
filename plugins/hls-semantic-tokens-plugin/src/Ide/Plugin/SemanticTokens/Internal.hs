@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -17,7 +18,8 @@ import           Data.Data                       (Data)
 import           Data.Generics                   (everything, mkQ)
 import           Data.List                       (sortBy)
 import qualified Data.List                       as List
-import           Data.Maybe                      (listToMaybe, mapMaybe)
+import           Data.Maybe                      (fromMaybe, listToMaybe,
+                                                  mapMaybe)
 import           Development.IDE                 (Action, GetHieAst (GetHieAst),
                                                   HieAstResult (HAR, hieAst),
                                                   IdeState,
@@ -41,11 +43,13 @@ import           Ide.Types
 import           Control.Arrow                   ((&&&), (+++))
 import           Control.Monad.Trans.Class       (lift)
 import           Data.ByteString                 (ByteString, unpack)
+import           Data.Function                   (on)
 import           Data.Generics                   (Typeable)
-import           Data.List.Extra                 (chunksOf)
+import           Data.List.Extra                 (chunksOf, (!?))
 import qualified Data.List.NonEmpty              as NonEmpty
 import qualified Data.Map                        as Map
 import qualified Data.Set                        as Set
+import           Data.Text                       (Text)
 import           Data.Typeable                   (cast)
 import           Development.IDE                 (IdeState, Priority (..),
                                                   ideLogger, logPriority)
@@ -56,14 +60,17 @@ logWith st = liftIO . logPriority (ideLogger st) Info . T.pack . show
 bytestringString :: ByteString -> String
 bytestringString = map (toEnum . fromEnum) . unpack
 
-computeSemanticTokens' ::  forall a . String -> HieAST a -> Action (Maybe ())
-computeSemanticTokens' src hieAst = do
+debugComputeSemanticTokens ::  forall a . String -> HieAST a -> Action (Maybe ())
+debugComputeSemanticTokens src hieAst = do
     -- let identifiers = map NIdentifier $ identifierGetter hieAst
     let identifiersGroups = (map .map) NIdentifier $ toNameGroups $ identifierGetter hieAst
 
     liftIO $ mapM_ (\gr ->  liftIO (putStrLn $ "group size: " <> show (List.length gr)) >> mapM_ (\x -> putStrLn $ getOriginalTextFromId src x <> ":" <> show x) gr) identifiersGroups
     -- liftIO $ print $ "identifiers size: " <> show ( identifiers)
     pure $ Just ()
+    where
+        toNameGroups :: [IdentifierItem] -> [[IdentifierItem]]
+        toNameGroups = List.groupBy ((==) `on` identifierItemName) . List.sortOn identifierItemName
 
 -----------------------
 ---- the api
@@ -75,8 +82,6 @@ computeSemanticTokens nfp = runMaybeT $ do
     let xs = Map.toList $ getAsts hieAst
     case xs of
         (x:_) -> do
-            -- liftIO $ putStrLn $ "computeSemanticTokens': " <> show (fst x)
-            -- MaybeT $ computeSemanticTokens' (bytestringString source) $ snd x
             tcM <- MaybeT $ use TypeCheck nfp
             case extractSemanticTokens' (snd x) $ tmrRenamed tcM of
                 Right tokens -> pure tokens
@@ -97,8 +102,8 @@ semanticTokensFull state _ param = do
     case items of
         Nothing -> pure $ InR Null
         Just items -> do
-            content <- liftIO $ readFile $ fromNormalizedFilePath nfp
-            liftIO $ mapM_ print $ recoverSemanticTokens content items
+            -- content <- liftIO $ readFile $ fromNormalizedFilePath nfp
+            -- liftIO $ mapM_ (mapM_ print) $ recoverSemanticTokens content items
             pure $ InL items
 
 
@@ -106,24 +111,29 @@ semanticTokensFull state _ param = do
 ---- recover tokens
 -----------------------
 
-recoverSemanticTokens :: String -> SemanticTokens -> [SemanticTokenOriginal]
-recoverSemanticTokens sourceCode (SemanticTokens _ xs) = map (tokenOrigin sourceCode) $ recoverSemanticToken xs
+recoverSemanticTokens :: String -> SemanticTokens -> Either Text [SemanticTokenOriginal]
+recoverSemanticTokens sourceCode (SemanticTokens _ xs) = fmap (fmap $ tokenOrigin sourceCode) $ dataActualToken xs
 
-tokenOrigin sourceCode (line, startChar, len, tokenType, _) = SemanticTokenOriginal tokenType (Loc line startChar len) name
-        where tLine = lines sourceCode !! (fromIntegral line-1)
-              name = take (fromIntegral len) $ drop (fromIntegral startChar-0) tLine
+-- printRecoveredSemanticTokens :: [SemanticTokenOriginal] -> IO ()
+-- printRecoveredSemanticTokens = mapM_ print
 
--- every five elements is a token
--- recoverSemanticToken :: [UInt] -> [SemanticTokenData]
-recoverSemanticToken xs =
-    recoverPosition $
-    if length xs `mod` 5 /= 0
-    then panic "recoverSemanticToken: impossible"
-    else map toTuple $ chunksOf 5 $ map fromIntegral xs
+
+tokenOrigin :: [Char] -> ActualToken -> SemanticTokenOriginal
+tokenOrigin sourceCode (line, startChar, len, tokenType, _) =
+        -- convert back to count from 1
+        SemanticTokenOriginal tokenType (Loc (line+1) (startChar+1) len) name
+        where tLine = lines sourceCode !? fromIntegral line
+              name = maybe "no source" (take (fromIntegral len) . drop (fromIntegral startChar)) tLine
+
+
+dataActualToken :: [UInt] -> Either Text [ActualToken]
+dataActualToken xs = maybe decodeError (Right . fmap semanticTokenAbsoluteActualToken . absolutizeTokens)
+        $ mapM fromTuple (chunksOf 5 $ map fromIntegral xs)
     where
+          decodeError = Left "recoverSemanticTokenRelative: wrong token data"
         --   toTuple :: [UInt] -> SemanticTokenData
-          toTuple [a, b, c, d, e] = (a, b, c, fromLspTokenType $ intToType d, e)
-          toTuple _               = panic "recoverSemanticToken: impossible"
+          fromTuple [a, b, c, d, _] = Just $ SemanticTokenRelative a b c (fromInt $ fromIntegral d) []
+          fromTuple _               = Nothing
           -- recover to absolute position
         --   recoverPosition :: [SemanticTokenData] -> [SemanticTokenData]
           recoverPosition xs = ls $ foldl f (1, 0, []) xs
@@ -135,5 +145,3 @@ recoverSemanticToken xs =
                           (newline,newStartChar,
                           (newline,newStartChar, len, tokenType, tokenModifiers) :acc)
                   ls (_, _, acc) = List.reverse acc
-
-

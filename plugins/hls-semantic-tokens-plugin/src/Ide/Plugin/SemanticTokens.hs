@@ -1,7 +1,8 @@
-module Ide.Plugin.SemanticTokens (descriptor) where
+module Ide.Plugin.SemanticTokens (descriptor, Internal.recoverSemanticTokens) where
 
 import           Development.IDE
 import qualified Ide.Plugin.SemanticTokens.Internal as Internal
+import qualified Ide.Plugin.SemanticTokens.Types    as Types
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 
