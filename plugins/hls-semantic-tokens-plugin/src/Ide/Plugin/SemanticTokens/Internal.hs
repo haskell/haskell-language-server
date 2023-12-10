@@ -98,12 +98,14 @@ computeSemanticTokens nfp = runMaybeT $ do
             tcM <- MaybeT $ use TypeCheck nfp
             binds <- MaybeT $ use GetBindings nfp
             -- MaybeT $ debugComputeSemanticTokens (bytestringString source) (snd x) $ tmrRenamed tcM
-            case extractSemanticTokens ast $ tmrRenamed tcM of
+            case extractSemanticTokens refMap ast $ tmrRenamed tcM of
                 Right tokens -> do
-                    let refMap = identifierGetter ast
-                    let iMap = constructIdentifierMap refMap
+                    -- let locatedNames = List.nub $ nameGetter$ tmrRenamed tcM
+                    -- let refMap = identifierGetter ast
+                    -- let iMap = constructIdentifierMap refMap
                     liftIO $ mapM_ (\x -> mapM_ print x) $ recoverSemanticTokens (bytestringString source) tokens
-                    liftIO $ putStrLn $ showRefMap refMap
+                    -- liftIO $ putStrLn $ showRefMap refMap
+                    -- liftIO $ putStrLn $ showLocatedNames locatedNames
 
                     -- liftIO $ putStrLn $ showNameTokenTypeMap iMap
                     pure tokens

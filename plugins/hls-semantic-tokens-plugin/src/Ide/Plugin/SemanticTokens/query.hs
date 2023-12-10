@@ -33,15 +33,15 @@ import           Language.LSP.Protocol.Types
 ---- construct definition map from HieAST a
 -----------------------------------------
 
-
--- do not use refMap from useAsts because it may contain ghc generated names or derived names
+-- do not use refMap from useAsts to get identifiers
+-- because it may contain ghc generated names or derived names
 -- which are not useful for semantic tokens (since they are not in source code)
 -- only use identifier both None derived and from source code
-identifierGetter :: HieAST a -> RefMap a
-identifierGetter ast = Map.unionWith (<>) (getIds ast) (Map.unionsWith (<>) $ map identifierGetter (nodeChildren ast))
+identifierGetter' :: HieAST a -> [(Name, Span)]
+identifierGetter' ast = getIds ast ++ concatMap identifierGetter' (nodeChildren ast)
     where
-        getIds :: HieAST a -> RefMap a
-        getIds ast = Map.fromList [ (Right c, [(nodeSpan ast, d)])
+        getIds :: HieAST a -> [(Name, Span)]
+        getIds ast = [(c, nodeSpan ast)
                     | (Right c, d) <- Map.toList $ getNodeIds' ast
                     -- at least get one info
                     , let (Just infos) = NE.nonEmpty $ Set.toList $ identInfo d
@@ -60,51 +60,34 @@ identifierGetter ast = Map.unionWith (<>) (getIds ast) (Map.unionsWith (<>) $ ma
 
 
 
-constructIdentifierMap :: RefMap a -> NameTokenTypeMap
-constructIdentifierMap =
-        Map.mapWithKey (\k vs ->
-            let semanticToken = foldl (<>) (identifierTokenType k) $ mapMaybe (collectToken . snd) vs
-            in (map fst vs, semanticToken))
-    where
-        collectToken :: IdentifierDetails a -> Maybe SemanticTokenType
-        collectToken details = case NE.nonEmpty $ Set.toList $ identInfo details of
-            Just infos -> Just $ List.maximum $ NE.map infoTokenType infos
-            Nothing    -> Nothing
+collectToken :: IdentifierDetails a -> Maybe SemanticTokenType
+collectToken details = case NE.nonEmpty $ Set.toList $ identInfo details of
+    Just infos -> Just $ List.maximum $ NE.map infoTokenType infos
+    Nothing    -> Nothing
 
-        infoTokenType :: ContextInfo -> SemanticTokenType
-        infoTokenType x = case x of
-            Use                   -> TNothing
-            MatchBind             -> TNothing
-            IEThing _             -> TNothing -- todo find a way to get imported name
-            TyDecl                -> TNothing -- type signature
+infoTokenType :: ContextInfo -> SemanticTokenType
+infoTokenType x = case x of
+    Use                   -> TNothing
+    MatchBind             -> TNothing
+    IEThing _             -> TNothing -- todo find a way to get imported name
+    TyDecl                -> TNothing -- type signature
 
-            ValBind bt _ _        -> TValBind
-            PatternBind _ _ _     -> TPatternBind
-            ClassTyDecl _         -> TClassMethod
-            TyVarBind _ _         -> TTypeVariable
-            RecField _ _          -> TRecField
-            -- data constructor, type constructor, type synonym, type family
-            Decl ClassDec _       -> TClass
-            Decl DataDec  _       -> TTypeCon
-            Decl ConDec   _       -> TDataCon
-            Decl SynDec   _       -> TTypeSyn
-            Decl FamDec   _       -> TTypeFamily
-            -- instance dec is class method
-            Decl InstDec  _       -> TClassMethod
-            Decl PatSynDec _      -> TPatternSyn
-            EvidenceVarUse        -> TNothing
-            EvidenceVarBind _ _ _ -> TNothing
-
------------------------------------------
----- collect all names from RenamedSource
------------------------------------------
-
-
-nameToCollect :: LIdP GhcRn -> [Name]
-nameToCollect locName = [unLoc locName]
-
-nameGetter :: RenamedSource -> [Name]
-nameGetter = everything (++) ([] `mkQ` nameToCollect)
+    ValBind bt _ _        -> TValBind
+    PatternBind _ _ _     -> TPatternBind
+    ClassTyDecl _         -> TClassMethod
+    TyVarBind _ _         -> TTypeVariable
+    RecField _ _          -> TRecField
+    -- data constructor, type constructor, type synonym, type family
+    Decl ClassDec _       -> TClass
+    Decl DataDec  _       -> TTypeCon
+    Decl ConDec   _       -> TDataCon
+    Decl SynDec   _       -> TTypeSyn
+    Decl FamDec   _       -> TTypeFamily
+    -- instance dec is class method
+    Decl InstDec  _       -> TClassMethod
+    Decl PatSynDec _      -> TPatternSyn
+    EvidenceVarUse        -> TNothing
+    EvidenceVarBind _ _ _ -> TNothing
 
 
 -----------------------------------
@@ -112,24 +95,41 @@ nameGetter = everything (++) ([] `mkQ` nameToCollect)
 -----------------------------------
 
 
-extractSemanticTokens :: forall a. HieAST a -> RenamedSource -> Either Text SemanticTokens
-extractSemanticTokens ast rs = makeSemanticTokens defaultSemanticTokensLegend
-    $ List.sort $ Map.foldMapWithKey toAbsSemanticToken $ identifierToSemanticMap iMap
+extractSemanticTokens :: forall a. RefMap a -> HieAST a -> RenamedSource -> Either Text SemanticTokens
+extractSemanticTokens rm ast rs = makeSemanticTokens defaultSemanticTokensLegend
+    $ List.sort $  map (uncurry toAbsSemanticToken) $ mapMaybe (getSemantic (toNameSemanticMap rm)) locatedNames
     where
-          ids = identifierGetter ast
-          iMap = constructIdentifierMap ids
-          -- refine the semantic token type
-          identifierToSemanticMap :: NameTokenTypeMap -> Map.Map Span SemanticTokenType
-          identifierToSemanticMap nameMap = Map.fromList
-                [ (span, tokenType)
-                | (spans, tokenType) <- Map.elems nameMap
-                   , span <- spans]
+        --   ids = identifierGetter ast
+        --   iMap = constructIdentifierMap ids
+          locatedNames= identifierGetter' ast
 
-            -- toAbsSemanticToken :: Span -> SemanticTokenType -> SemanticTokenAbsolute
+          getSemantic :: Map Name SemanticTokenType -> (Name, Span) -> Maybe (Span, SemanticTokenType)
+          getSemantic nameMap locName = do
+                let name = fst locName
+                let span = snd locName
+                let tkt = toTokenType name
+                let tokenType = maybe tkt (\x -> tkt <> x) $ Map.lookup name nameMap
+                pure (span, tokenType)
+
+
+          toNameSemanticMap :: RefMap a -> Map Name SemanticTokenType
+          toNameSemanticMap rm = Map.fromListWith (<>)
+                [ (name, tokenType)
+                | (Right name, details) <- Map.toList rm
+                , (_, detail) <- details
+                , let tokenType = collectToken detail
+                , (Just tokenType) <- [tokenType]
+                ]
+
           toAbsSemanticToken loc tokenType =
                 let line = srcSpanStartLine loc - 1
                     startChar = srcSpanStartCol loc - 1
                     len = srcSpanEndCol loc - 1 - startChar
-                in return $ SemanticTokenAbsolute (fromIntegral line) (fromIntegral startChar)
+                in SemanticTokenAbsolute (fromIntegral line) (fromIntegral startChar)
                     (fromIntegral len) (toLspTokenType tokenType) [SemanticTokenModifiers_Declaration]
 
+
+showLocatedNames :: [LIdP GhcRn] -> String
+showLocatedNames xs = unlines
+    [ showSDocUnsafe (ppr locName) ++ " " ++ show (getLoc locName)
+    | locName <- xs]
