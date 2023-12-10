@@ -113,7 +113,6 @@ semanticTokensTests =
                         (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
                     return ()
                 _ -> error "No tokens found"
-            liftIO $ 1 @?= 1
 
     , testCase "record" $ do
         let filePath = "./test/testdata/record.hs"
@@ -131,7 +130,6 @@ semanticTokensTests =
                         (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
                     return ()
                 _ -> error "No tokens found"
-            liftIO $ 1 @?= 1
     , testCase "type class" $ do
         let filePath = "./test/testdata/class.hs"
         content <- liftIO $ Prelude.readFile filePath
@@ -149,7 +147,7 @@ semanticTokensTests =
                         (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
                     return ()
                 _ -> error "No tokens found"
-            liftIO $ 1 @?= 1
+
     , testCase "pattern bind" $ do
         let filePath = "./test/testdata/patternBind.hs"
         content <- liftIO $ Prelude.readFile filePath
@@ -171,7 +169,34 @@ semanticTokensTests =
                         (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
                     return ()
                 _ -> error "No tokens found"
-            liftIO $ 1 @?= 1
+    , testCase "pattern syn" $ do
+        let filePath = "./test/testdata/patternsyn.hs"
+        content <- liftIO $ Prelude.readFile filePath
+        let expect = [SemanticTokenOriginal {tokenType = TPatternSyn, loc = Loc {line = 5, startChar = 9, len = 3}
+            , name = "Foo"}]
+        runSessionWithServerInDirAndGetSemantic "patternsyn.hs" $ \res doc -> do
+            -- content <- waitForAction "getFileContents" doc
+            case res ^? _L of
+                Just tokens -> do
+                    either (error . show)
+                        (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
+                    return ()
+                _ -> error "No tokens found"
+    , testCase "imported" $ do
+        let filePath = "./test/testdata/imported.hs"
+        content <- liftIO $ Prelude.readFile filePath
+        let expect =
+                [SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 4, startChar = 1, len = 1}, name = "a"}
+                ,SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 4, startChar = 7, len = 1}, name = "+"}
+                ]
+        runSessionWithServerInDirAndGetSemantic "imported.hs" $ \res doc -> do
+            -- content <- waitForAction "getFileContents" doc
+            case res ^? _L of
+                Just tokens -> do
+                    either (error . show)
+                        (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
+                    return ()
+                _ -> error "No tokens found"
   ]
 
 main :: IO ()

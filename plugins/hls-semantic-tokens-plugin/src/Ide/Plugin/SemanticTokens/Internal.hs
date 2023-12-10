@@ -11,48 +11,52 @@
 
 module Ide.Plugin.SemanticTokens.Internal where
 
-import           Control.Lens                    ((^.))
-import           Control.Monad.IO.Class          (MonadIO, liftIO)
-import           Control.Monad.Trans.Maybe       (MaybeT (..))
-import           Data.Data                       (Data)
-import           Data.Generics                   (everything, mkQ)
-import           Data.List                       (sortBy)
-import qualified Data.List                       as List
-import           Data.Maybe                      (fromMaybe, listToMaybe,
-                                                  mapMaybe)
-import           Development.IDE                 (Action, GetHieAst (GetHieAst),
-                                                  HieAstResult (HAR, hieAst),
-                                                  IdeState,
-                                                  TypeCheck (TypeCheck),
-                                                  realSpan)
-import           Development.IDE.Core.Compile    (TcModuleResult (..))
-import           Development.IDE.Core.Rules      (getSourceFileSource,
-                                                  runAction)
-import           Development.IDE.Core.Shake      (use)
+import           Control.Lens                         ((^.))
+import           Control.Monad.IO.Class               (MonadIO, liftIO)
+import           Control.Monad.Trans.Maybe            (MaybeT (..))
+import           Data.Data                            (Data)
+import           Data.Generics                        (everything, mkQ)
+import           Data.List                            (sortBy)
+import qualified Data.List                            as List
+import           Data.Maybe                           (fromMaybe, listToMaybe,
+                                                       mapMaybe)
+import           Development.IDE                      (Action,
+                                                       GetBindings (GetBindings),
+                                                       GetHieAst (GetHieAst),
+                                                       HieAstResult (HAR, hieAst, refMap),
+                                                       IdeState,
+                                                       TypeCheck (TypeCheck),
+                                                       realSpan,
+                                                       useWithStaleFast)
+import           Development.IDE.Core.Compile         (TcModuleResult (..))
+import           Development.IDE.Core.Rules           (getSourceFileSource,
+                                                       runAction)
+import           Development.IDE.Core.Shake           (use)
 import           Development.IDE.GHC.Compat
-import           Ide.Plugin.Error                (getNormalizedFilePathE)
-import qualified Language.LSP.Protocol.Lens      as L
+import           Ide.Plugin.Error                     (getNormalizedFilePathE)
+import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 -- import Language.LSP.Protocol.Types.Common
-import qualified Data.Text                       as T
+import qualified Data.Text                            as T
 import           Ide.Plugin.SemanticTokens.Query
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 -- import System.FilePath (takeExtension)
-import           Control.Arrow                   ((&&&), (+++))
-import           Control.Monad.Trans.Class       (lift)
-import           Data.ByteString                 (ByteString, unpack)
-import           Data.Function                   (on)
-import           Data.Generics                   (Typeable)
-import           Data.List.Extra                 (chunksOf, (!?))
-import qualified Data.List.NonEmpty              as NonEmpty
-import qualified Data.Map                        as Map
-import qualified Data.Set                        as Set
-import           Data.Text                       (Text)
-import           Data.Typeable                   (cast)
-import           Development.IDE                 (IdeState, Priority (..),
-                                                  ideLogger, logPriority)
+import           Control.Arrow                        ((&&&), (+++))
+import           Control.Monad.Trans.Class            (lift)
+import           Data.ByteString                      (ByteString, unpack)
+import           Data.Function                        (on)
+import           Data.Generics                        (Typeable)
+import           Data.List.Extra                      (chunksOf, (!?))
+import qualified Data.List.NonEmpty                   as NonEmpty
+import qualified Data.Map                             as Map
+import qualified Data.Set                             as Set
+import           Data.Text                            (Text)
+import           Data.Typeable                        (cast)
+import           Development.IDE                      (IdeState, Priority (..),
+                                                       ideLogger, logPriority)
+import           Development.IDE.Core.PositionMapping (zeroMapping)
 
 logWith :: (Show a, MonadIO m) => IdeState -> a -> m ()
 logWith st = liftIO . logPriority (ideLogger st) Info . T.pack . show
@@ -60,40 +64,48 @@ logWith st = liftIO . logPriority (ideLogger st) Info . T.pack . show
 bytestringString :: ByteString -> String
 bytestringString = map (toEnum . fromEnum) . unpack
 
-debugComputeSemanticTokens ::  forall a . String -> HieAST a -> RenamedSource -> Action (Maybe ())
-debugComputeSemanticTokens src hieAst rs = do
-    -- let identifiers = map NIdentifier $ identifierGetter hieAst
-    -- let ns = nameGetter rs
-    let identifiersGroups = (map . map) NIdentifier
-            $ toNameGroups
-            -- $ filter (\(_, name, _) -> name `List.elem` ns)
-            $ identifierGetter hieAst
-    liftIO $ mapM_ (\gr ->  liftIO (putStrLn $ "group size: " <> show (List.length gr)) >> mapM_ (\x -> putStrLn $
-        getOriginalTextFromId src x
-        <> ":"
-        <> show x) gr)
-        identifiersGroups
-    -- liftIO $ print $ "identifiers size: " <> show ( identifiers)
-    pure $ Just ()
-    where
-        toNameGroups :: [IdentifierItem] -> [[IdentifierItem]]
-        toNameGroups = List.groupBy ((==) `on` identifierItemName) . List.sortOn identifierItemName
+-- debugComputeSemanticTokens ::  forall a . String -> HieAST a -> RenamedSource -> Action (Maybe ())
+-- debugComputeSemanticTokens src hieAst rs = do
+--     let identifiersGroups = (map . map) NIdentifier
+--             $ toNameGroups
+--             -- $ filter (\(_, name, _) -> name `List.elem` ns)
+--             $ identifierGetter hieAst
+--     liftIO $ mapM_ (\gr ->  liftIO (putStrLn $ "group size: " <> show (List.length gr)) >> mapM_ (\x -> putStrLn $
+--         getOriginalTextFromId src x
+--         <> ":"
+--         <> show x) gr)
+--         identifiersGroups
+--     -- liftIO $ print $ "identifiers size: " <> show ( identifiers)
+--     pure $ Just ()
+--     where
+--         toNameGroups :: [IdentifierItem] -> [[IdentifierItem]]
+--         toNameGroups = List.groupBy ((==) `on` identifierItemName) . List.sortOn identifierItemName
+--         identifierItemName :: IdentifierItem -> Name
+--         identifierItemName (span, x, y) = x
 
 -----------------------
 ---- the api
 -----------------------
 computeSemanticTokens :: NormalizedFilePath -> Action (Maybe SemanticTokens)
 computeSemanticTokens nfp = runMaybeT $ do
-    HAR{hieAst} <- MaybeT $ use GetHieAst nfp
+    HAR{hieAst, refMap} <- MaybeT $ use GetHieAst nfp
     source :: ByteString <- lift $ getSourceFileSource nfp
     let xs = Map.toList $ getAsts hieAst
+    liftIO $ print $ "hieAst size: " <> show (List.length xs)
+
     case xs of
-        (x:_) -> do
+        ((_,ast):_) -> do
             tcM <- MaybeT $ use TypeCheck nfp
-            MaybeT $ debugComputeSemanticTokens (bytestringString source) (snd x) $ tmrRenamed tcM
-            case extractSemanticTokens' (snd x) $ tmrRenamed tcM of
+            binds <- MaybeT $ use GetBindings nfp
+            -- MaybeT $ debugComputeSemanticTokens (bytestringString source) (snd x) $ tmrRenamed tcM
+            case extractSemanticTokens ast $ tmrRenamed tcM of
                 Right tokens -> do
+                    let refMap = identifierGetter ast
+                    let iMap = constructIdentifierMap refMap
                     liftIO $ mapM_ (\x -> mapM_ print x) $ recoverSemanticTokens (bytestringString source) tokens
+                    liftIO $ putStrLn $ showRefMap refMap
+
+                    -- liftIO $ putStrLn $ showNameTokenTypeMap iMap
                     pure tokens
                 Left err -> do
                     liftIO $ putStrLn $ "computeSemanticTokens: " <> show err

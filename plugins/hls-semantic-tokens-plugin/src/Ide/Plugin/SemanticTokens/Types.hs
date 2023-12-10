@@ -52,11 +52,12 @@ fromLspTokenType tk = fromMaybe TNothing $ Map.lookup tk lspTokenReverseMap
 data SemanticTokenType =
     TNothing -- unknown
     -- | TVariable -- fallback
-    | TValBind -- MatchBind, valBind instance bind or regular bind
-    | TTypeVariable -- Type variable
+    -- since many thing can be valbind. we put it as less priority
+    | TValBind -- valBind instance bind or regular bind
     | TPatternBind -- PatternBind, parameters, as values in let/in, case, lambda
-    | TClassMethod -- Class method
     | TDataCon -- Data constructor
+    | TTypeVariable -- Type variable
+    | TClassMethod -- Class method
     | TPatternSyn -- Pattern synonym
     | TTypeCon -- Type (Type constructor)
     | TClass -- Class (ConstraUInt constructor)
@@ -133,9 +134,14 @@ printCompactSrcSpan x                    = "noSrc"
 printCompactRealSrc :: RealSrcSpan -> String
 printCompactRealSrc x = show (srcSpanStartLine x) <> ":" <> show (srcSpanStartCol x) <> "-" <> show (srcSpanEndCol x)
 
+
+
 type IdentifierItem = (Span, Name, NE.NonEmpty ContextInfo)
 newtype NIdentifier = NIdentifier IdentifierItem
 
+identifierTokenType :: Identifier -> SemanticTokenType
+identifierTokenType (Right x) = toTokenType x
+identifierTokenType (Left x)  = TNothing
 
 toTokenType :: Name -> SemanticTokenType
 toTokenType locName = case occNameSpace $ occName locName of
@@ -162,3 +168,36 @@ getOriginalTextFromId sourceCode (NIdentifier (span, _, _)) = fromMaybe "" $ do
               line = srcSpanStartLine span
               startChar = srcSpanStartCol span
               len= srcSpanEndCol span - startChar
+
+
+-----------------------
+----- identifier token map
+-----------------------
+
+-- unsafePrintDoc :: SDoc -> String
+
+-- from declaration site to token type
+type NameTokenTypeMap  = Map.Map Identifier ([Span], SemanticTokenType)
+
+showNameTokenTypeMap :: NameTokenTypeMap -> String
+showNameTokenTypeMap m = unlines
+    [
+       showSDocUnsafe (pprIdentifier idn) ++ ":" ++ show v
+       ++ "\n" ++ unlines [showSDocUnsafe (ppr span) | span <- spans]
+    | (idn, (spans, v)) <- Map.toList m]
+
+
+-- type RefMap a = M.Map Identifier [(Span, IdentifierDetails a)]
+showRefMap :: RefMap a -> String
+showRefMap m = unlines
+    [
+       showIdentifier idn ++ ":"
+       ++ "\n" ++ unlines [showSDocUnsafe (ppr span) ++ "\n" ++ showIdentifierDetails v | (span, v) <- spans]
+    | (idn, spans) <- Map.toList m]
+
+showIdentifierDetails :: IdentifierDetails a -> String
+showIdentifierDetails x = show $ identInfo x
+
+showIdentifier :: Identifier -> String
+showIdentifier (Left x)  = showSDocUnsafe (ppr x)
+showIdentifier (Right x) = nameStableString x
