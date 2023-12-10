@@ -6,15 +6,18 @@
 {-# LANGUAGE StandaloneDeriving  #-}
 module Ide.Plugin.SemanticTokens.Query where
 import           Control.Arrow                   ((&&&))
+import           Data.Char                       (isAlphaNum)
 import           Data.Function                   (on)
 import           Data.Generics                   (everything)
 import qualified Data.List                       as List
+import qualified Data.List.NonEmpty              as NE
 import           Data.Map                        (Map)
 import qualified Data.Map                        as Map
-import           Data.Maybe                      (fromMaybe, mapMaybe)
 import           Data.Ord                        (comparing)
 import qualified Data.Set                        as Set
 import           Data.Text                       (Text)
+import qualified Data.Text                       as Text
+import qualified Data.Text.Lazy.Builder          as Text
 import           Development.IDE                 (realSpan)
 import           Development.IDE.GHC.Compat
 import qualified Extra                           as List
@@ -29,44 +32,23 @@ import           Language.LSP.Protocol.Types
 
 -- from declaration site to token type
 type NameTokenTypeMap  = Map.Map Name SemanticTokenType
-type NameTokenTypeItem = (Name, ContextInfo)
+type IdentifierNameMap  = Set.Set Name
+type NameTokenTypeItem = (Name, SemanticTokenType)
 
-identifierItemContext :: IdentifierItem -> [ContextInfo]
-identifierItemContext (span, c, x, y) = y
 identifierItemName :: IdentifierItem -> Name
-identifierItemName (span, c, x, y) = x
+identifierItemName (span, x, y) = x
 
 
--- determine the precedence of context info
--- since we have multiple context info, we need to choose
--- the one with the highest level
-contextInfoLevel :: ContextInfo -> Int
-contextInfoLevel x = case x of
-    Use                   -> 0
-    MatchBind             -> 1
-    IEThing _             -> 2 -- imported
-    TyDecl                -> 3 -- type signature
-    ValBind bt _ _        -> 4 -- lhs of val bind overrided by
-    PatternBind _ _ _     -> 5 -- as in pattern
-    ClassTyDecl _         -> 6 -- class method
-    TyVarBind _ _         -> 8
-    RecField _ _          -> 9 -- record field
-    -- data constructor, type constructor, type synonym, type family
-    Decl _ _              -> 10
-    EvidenceVarUse        -> -1
-    EvidenceVarBind _ _ _ -> -1
-
-
-mergeInfo :: ContextInfo -> ContextInfo -> ContextInfo
-mergeInfo x y = if contextInfoLevel x > contextInfoLevel y then x else y
+-- mergeInfo :: ContextInfo -> ContextInfo -> ContextInfo
+mergeInfo x y = x `max` y
 
 
 infoTokenType :: ContextInfo -> SemanticTokenType
 infoTokenType x = case x of
-    Use                   -> TVariable
-    MatchBind             -> TValBind
+    Use                   -> TNothing
+    MatchBind             -> TNothing
     IEThing _             -> TNothing -- todo check names space to distinguish
-    TyDecl                -> TVariable -- type signature
+    TyDecl                -> TNothing -- type signature
     ValBind bt _ _        -> TValBind
     PatternBind _ _ _     -> TPatternBind
     ClassTyDecl _         -> TClassMethod
@@ -74,15 +56,15 @@ infoTokenType x = case x of
     RecField _ _          -> TRecField
     -- data constructor, type constructor, type synonym, type family
     Decl ClassDec _       -> TClass
-    Decl DataDec  _       -> TDataCon
-    Decl ConDec   _       -> TTypeCon
+    Decl DataDec  _       -> TTypeCon
+    Decl ConDec   _       -> TDataCon
     Decl SynDec   _       -> TTypeSyn
     Decl FamDec   _       -> TTypeFamily
     -- instance dec is class method
     Decl InstDec  _       -> TClassMethod
-    Decl PatSynDec _      ->  TPatternSyn
-    EvidenceVarUse        -> TVariable
-    EvidenceVarBind _ _ _ -> TVariable
+    Decl PatSynDec _      -> TPatternSyn
+    EvidenceVarUse        -> TNothing
+    EvidenceVarBind _ _ _ -> TNothing
 
 -- one definition site might have multiple identifiers
 
@@ -90,65 +72,74 @@ infoTokenType x = case x of
 ---- construct definition map from HieAST a
 -----------------------------------------
 collectInfo :: [IdentifierItem] -> [NameTokenTypeItem]
-collectInfo = map (identifierItemName &&& (foldr mergeInfo Use . identifierItemContext))
+collectInfo = map (\(_, name, ty) -> (name, foldr1 (<>) $ fmap infoTokenType ty))
 
+isNotEvidence :: ContextInfo -> Bool
+isNotEvidence EvidenceVarUse          = False
+isNotEvidence (EvidenceVarBind _ _ _) = False
+isNotEvidence _                       = True
+
+
+getIds :: HieAST a -> [(Span, Name, NE.NonEmpty ContextInfo)]
+getIds ast = [ (nodeSpan ast, c, infos)
+            | (Right c, d) <- Map.toList $ getNodeIds ast
+            , let (Just infos) = NE.nonEmpty $ Set.toList $ identInfo d
+            , not $ isDerivedOccName (occName c)
+            ]
+
+leafIdentifierGetter :: HieAST a -> [IdentifierItem]
+leafIdentifierGetter ast =
+        if null $ nodeChildren ast
+            then getIds ast
+            else concatMap identifierGetter (nodeChildren ast)
 
 identifierGetter :: HieAST a -> [IdentifierItem]
-identifierGetter ast =
-    let ids = [ (nodeSpan ast, nameSrcSpan c, c, Set.toList $ identInfo d) | (Right c, d) <- Map.toList $ getNodeIds ast]
-    in ids <> concatMap identifierGetter (nodeChildren ast)
+identifierGetter ast = getIds ast <> concatMap identifierGetter (nodeChildren ast)
 
-identifierNameTokenTypeMap :: Map.Map Name ContextInfo -> NameTokenTypeMap
-identifierNameTokenTypeMap xs =  fmap infoTokenType xs
+toNameGroupsMap :: [NameTokenTypeItem] -> NameTokenTypeMap
+toNameGroupsMap = Map.mapWithKey (\name tk -> if tk == TNothing then
+    toTokenType name else tk) .  Map.fromListWith mergeInfo
 
-toNameGroupsMap :: [NameTokenTypeItem] -> Map.Map Name ContextInfo
-toNameGroupsMap = Map.fromListWith mergeInfo
-
-constructIdentifierMap :: HieAST a -> NameTokenTypeMap
-constructIdentifierMap ast = identifierNameTokenTypeMap $ toNameGroupsMap $ collectInfo $ identifierGetter ast
+constructIdentifierMap :: [IdentifierItem] -> NameTokenTypeMap
+constructIdentifierMap nis = toNameGroupsMap $ collectInfo $ nis
 
 -----------------------------------------
 ---- collect all names from RenamedSource
 -----------------------------------------
 
 
-toTokenType :: LIdP GhcRn -> SemanticTokenType
-toTokenType locName = case occNameSpace $ occName $ unLoc locName of
-  x | isTcClsNameSpace x   -> TClass
-  x | isTvNameSpace x      -> TTypeVariable
-  x | isDataConNameSpace x -> TDataCon
-  x | isVarNameSpace x     -> TVariable
-  _                        -> TVariable
+nameToCollect :: LIdP GhcRn -> [Name]
+nameToCollect locName = [unLoc locName]
 
-nameGetter :: RenamedSource -> [SemanticCollect]
+nameGetter :: RenamedSource -> [Name]
 nameGetter = everything (++) ([] `mkQ` nameToCollect)
-
-nameToCollect :: LIdP GhcRn -> [SemanticCollect]
-nameToCollect locName = [(toTokenType locName, locName)]
 
 
 -----------------------------------
 -- extract semantic tokens from ast
 -----------------------------------
-refineTokenType ::  NameTokenTypeMap -> SemanticCollect -> SemanticCollect
-refineTokenType m (tokenType, locName) = case Map.lookup (unLoc locName) m of
-    Just x  -> (x <> tokenType, locName)
-    Nothing -> (tokenType, locName)
 
 
 extractSemanticTokens' :: forall a. HieAST a -> RenamedSource -> Either Text SemanticTokens
 extractSemanticTokens' ast rs = makeSemanticTokens defaultSemanticTokensLegend
-    $ List.sort $ mapMaybe (toAbsSemanticToken . refineTokenType iMap) (nameGetter rs)
-    where collections = nameGetter rs
-          iMap = constructIdentifierMap ast
+    $ List.sort $ Map.foldMapWithKey toAbsSemanticToken $ identifierToSemanticMap iMap ids
+    where
+        --   targetNames = nameGetter rs
+          ids =
+            -- filter (\(_, name, _) -> name `List.elem` targetNames) $
+            leafIdentifierGetter ast
+          iMap = constructIdentifierMap ids
+          -- refine the semantic token type
+          identifierToSemanticMap   :: NameTokenTypeMap -> [IdentifierItem] -> Map.Map Span SemanticTokenType
+          identifierToSemanticMap nMap xs = Map.fromListWith (<>) $
+                map (\(span, name, info) -> (span, (toTokenType name) <> Map.findWithDefault (toTokenType name) name nMap)) xs
 
 
-toAbsSemanticToken :: SemanticCollect -> Maybe SemanticTokenAbsolute
-toAbsSemanticToken ori@(tokenType, locName) = do
-    loc <- realSpan $ getLocA locName
-    let line = srcSpanStartLine loc - 1
-    let startChar = srcSpanStartCol loc - 1
-    let len= srcSpanEndCol loc - 1 - startChar
-    return $ SemanticTokenAbsolute (fromIntegral line) (fromIntegral startChar)
-        (fromIntegral len) (toLspTokenType tokenType) [SemanticTokenModifiers_Declaration]
+            -- toAbsSemanticToken :: Span -> SemanticTokenType -> SemanticTokenAbsolute
+          toAbsSemanticToken loc tokenType =
+                let line = srcSpanStartLine loc - 1
+                    startChar = srcSpanStartCol loc - 1
+                    len = srcSpanEndCol loc - 1 - startChar
+                in return $ SemanticTokenAbsolute (fromIntegral line) (fromIntegral startChar)
+                    (fromIntegral len) (toLspTokenType tokenType) [SemanticTokenModifiers_Declaration]
 

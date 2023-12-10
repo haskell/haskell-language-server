@@ -4,6 +4,7 @@ module Ide.Plugin.SemanticTokens.Types where
 
 import qualified Data.List                   as List
 import qualified Data.List.Extra             as List
+import qualified Data.List.NonEmpty          as NE
 import qualified Data.Map                    as Map
 import           Data.Maybe                  (fromMaybe)
 import qualified Data.Set                    as Set
@@ -18,55 +19,50 @@ fromInt i = Set.elemAt i knownValues
 -- mapping from our token type to LSP default token type
 toLspTokenType :: SemanticTokenType -> SemanticTokenTypes
 toLspTokenType tk = case tk of
-    TVariable     -> SemanticTokenTypes_Variable
-    TRecField     -> SemanticTokenTypes_Property
+    -- TVariable     -> SemanticTokenTypes_Variable
     -- left hand side of none pattern bind
     TValBind      -> SemanticTokenTypes_Function
     -- any pattern bind
     TPatternBind  -> SemanticTokenTypes_Parameter
-    TClassMethod  -> SemanticTokenTypes_Method
     TClass        -> SemanticTokenTypes_Class
+    TClassMethod  -> SemanticTokenTypes_Method
     TTypeVariable -> SemanticTokenTypes_TypeParameter
     -- normal data type is a tagged union type look like enum type
     -- and a record is a product type like struct
     -- but we don't distinguish them yet
     TTypeCon      -> SemanticTokenTypes_Enum
     TDataCon      -> SemanticTokenTypes_EnumMember
-    -------------------------------------
-    -- wiggle not sure if this is correct choice
-    -------------------------------------
-    TTypeFamily   -> SemanticTokenTypes_Interface
+    TRecField     -> SemanticTokenTypes_Property
     -- pattern syn is like a limited version of macro of constructing a data type
     TPatternSyn   -> SemanticTokenTypes_Macro
-    TTypeSyn      -> SemanticTokenTypes_Macro
+    -- saturated type
+    TTypeSyn      -> SemanticTokenTypes_Type
+    -- not sure if this is correct choice
+    TTypeFamily   -> SemanticTokenTypes_Interface
     TNothing      -> SemanticTokenTypes_Namespace
 
 lspTokenReverseMap :: Map.Map SemanticTokenTypes SemanticTokenType
 lspTokenReverseMap = Map.fromList $ List.map (\x -> (toLspTokenType x, x)) $ boundedEnumFrom minBound
 
-intToType :: UInt -> SemanticTokenTypes
-intToType i = Set.elemAt (fromIntegral i) knownValues
-
 fromLspTokenType :: SemanticTokenTypes -> SemanticTokenType
 fromLspTokenType tk = fromMaybe TNothing $ Map.lookup tk lspTokenReverseMap
 
 -- data SemanticTokenType = SClass | SVariable | STypeVar | SDataCon | SNothing | SFieldName  deriving (Eq, Ord)
--- order of declarations matters
+-- !!!! order of declarations matters
 data SemanticTokenType =
     TNothing -- unknown
-    | TVariable -- fallback to variable for all other cases
+    -- | TVariable -- fallback
+    | TValBind -- MatchBind, valBind instance bind or regular bind
     | TTypeVariable -- Type variable
     | TPatternBind -- PatternBind, parameters, as values in let/in, case, lambda
-    | TValBind -- MatchBind, valBind instance bind or regular bind
-    | TRecField -- from match bind
-    | TPatternSyn -- Pattern synonym
     | TClassMethod -- Class method
-    -- by decls
+    | TDataCon -- Data constructor
+    | TPatternSyn -- Pattern synonym
+    | TTypeCon -- Type (Type constructor)
     | TClass -- Class (ConstraUInt constructor)
     | TTypeSyn -- Type synonym (Non-local is not captured)
-    | TTypeCon -- Type (Type constructor)
-    | TDataCon -- Data constructor
     | TTypeFamily -- type family
+    | TRecField -- from match bind
     deriving (Eq, Ord, Show, Enum, Bounded)
 
 instance Semigroup SemanticTokenType where
@@ -77,6 +73,10 @@ instance Monoid SemanticTokenType where
 
 
 type SemanticCollect = (SemanticTokenType, LIdP GhcRn)
+
+showCollect :: SemanticCollect -> String
+showCollect (tk, L _ x) = show tk <> " " <> showSDocUnsafe (ppr x)
+
 type ActualToken = (UInt, UInt, UInt, SemanticTokenType, UInt)
 
 semanticTokenAbsoluteActualToken :: SemanticTokenAbsolute -> ActualToken
@@ -133,16 +133,29 @@ printCompactSrcSpan x                    = "noSrc"
 printCompactRealSrc :: RealSrcSpan -> String
 printCompactRealSrc x = show (srcSpanStartLine x) <> ":" <> show (srcSpanStartCol x) <> "-" <> show (srcSpanEndCol x)
 
-type IdentifierItem = (Span, SrcSpan, Name, [ContextInfo])
+type IdentifierItem = (Span, Name, NE.NonEmpty ContextInfo)
 newtype NIdentifier = NIdentifier IdentifierItem
 
+
+toTokenType :: Name -> SemanticTokenType
+toTokenType locName = case occNameSpace $ occName locName of
+  x | isDataConNameSpace x -> TDataCon
+  x | isTvNameSpace x      -> TTypeVariable
+  x | isTcClsNameSpace x   -> TTypeCon -- Type constructors and classes in the same name space for now
+  x | isVarNameSpace x     -> TValBind
+  _                        -> TNothing
+
 instance Show NIdentifier where
-    show (NIdentifier (span, c, x, y)) = occNameString (nameOccName x) <> " " <> show y <> ""
-            <> printCompactSrcSpan c <> " " <> printCompactRealSrc span
+    show (NIdentifier (span, x, y)) =
+        occNameString (nameOccName x)
+        <> "&" <> (show $ break (==':') $ occNameString $ nameOccName x)
+        <> "&" <> (show $ toTokenType x)
+        <> " [" <> show y <> "]"
+            <> " nameSrc: "<> printCompactSrcSpan (nameSrcSpan x) <> " " <> printCompactRealSrc span
 
 
 getOriginalTextFromId :: String -> NIdentifier -> String
-getOriginalTextFromId sourceCode (NIdentifier (span, c, _, _)) = fromMaybe "" $ do
+getOriginalTextFromId sourceCode (NIdentifier (span, _, _)) = fromMaybe "" $ do
             tLine <- lines sourceCode List.!? (line-1)
             return $ take len $ drop (startChar-1) tLine
         where

@@ -60,12 +60,19 @@ logWith st = liftIO . logPriority (ideLogger st) Info . T.pack . show
 bytestringString :: ByteString -> String
 bytestringString = map (toEnum . fromEnum) . unpack
 
-debugComputeSemanticTokens ::  forall a . String -> HieAST a -> Action (Maybe ())
-debugComputeSemanticTokens src hieAst = do
+debugComputeSemanticTokens ::  forall a . String -> HieAST a -> RenamedSource -> Action (Maybe ())
+debugComputeSemanticTokens src hieAst rs = do
     -- let identifiers = map NIdentifier $ identifierGetter hieAst
-    let identifiersGroups = (map .map) NIdentifier $ toNameGroups $ identifierGetter hieAst
-
-    liftIO $ mapM_ (\gr ->  liftIO (putStrLn $ "group size: " <> show (List.length gr)) >> mapM_ (\x -> putStrLn $ getOriginalTextFromId src x <> ":" <> show x) gr) identifiersGroups
+    -- let ns = nameGetter rs
+    let identifiersGroups = (map . map) NIdentifier
+            $ toNameGroups
+            -- $ filter (\(_, name, _) -> name `List.elem` ns)
+            $ identifierGetter hieAst
+    liftIO $ mapM_ (\gr ->  liftIO (putStrLn $ "group size: " <> show (List.length gr)) >> mapM_ (\x -> putStrLn $
+        getOriginalTextFromId src x
+        <> ":"
+        <> show x) gr)
+        identifiersGroups
     -- liftIO $ print $ "identifiers size: " <> show ( identifiers)
     pure $ Just ()
     where
@@ -83,8 +90,11 @@ computeSemanticTokens nfp = runMaybeT $ do
     case xs of
         (x:_) -> do
             tcM <- MaybeT $ use TypeCheck nfp
+            MaybeT $ debugComputeSemanticTokens (bytestringString source) (snd x) $ tmrRenamed tcM
             case extractSemanticTokens' (snd x) $ tmrRenamed tcM of
-                Right tokens -> pure tokens
+                Right tokens -> do
+                    liftIO $ mapM_ (\x -> mapM_ print x) $ recoverSemanticTokens (bytestringString source) tokens
+                    pure tokens
                 Left err -> do
                     liftIO $ putStrLn $ "computeSemanticTokens: " <> show err
                     MaybeT . pure $ Nothing
@@ -114,9 +124,6 @@ semanticTokensFull state _ param = do
 recoverSemanticTokens :: String -> SemanticTokens -> Either Text [SemanticTokenOriginal]
 recoverSemanticTokens sourceCode (SemanticTokens _ xs) = fmap (fmap $ tokenOrigin sourceCode) $ dataActualToken xs
 
--- printRecoveredSemanticTokens :: [SemanticTokenOriginal] -> IO ()
--- printRecoveredSemanticTokens = mapM_ print
-
 
 tokenOrigin :: [Char] -> ActualToken -> SemanticTokenOriginal
 tokenOrigin sourceCode (line, startChar, len, tokenType, _) =
@@ -131,17 +138,5 @@ dataActualToken xs = maybe decodeError (Right . fmap semanticTokenAbsoluteActual
         $ mapM fromTuple (chunksOf 5 $ map fromIntegral xs)
     where
           decodeError = Left "recoverSemanticTokenRelative: wrong token data"
-        --   toTuple :: [UInt] -> SemanticTokenData
           fromTuple [a, b, c, d, _] = Just $ SemanticTokenRelative a b c (fromInt $ fromIntegral d) []
           fromTuple _               = Nothing
-          -- recover to absolute position
-        --   recoverPosition :: [SemanticTokenData] -> [SemanticTokenData]
-          recoverPosition xs = ls $ foldl f (1, 0, []) xs
-              where
-                  f (lastLine, lastStartChar, acc) (line, startChar, len, tokenType, tokenModifiers)
-                      = let newStartChar = if line == 0 then startChar + lastStartChar else startChar
-                            newline = line + lastLine
-                          in
-                          (newline,newStartChar,
-                          (newline,newStartChar, len, tokenType, tokenModifiers) :acc)
-                  ls (_, _, acc) = List.reverse acc

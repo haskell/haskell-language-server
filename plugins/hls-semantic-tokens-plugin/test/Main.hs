@@ -15,25 +15,8 @@ import           Data.ByteString                 as BS
 import           Data.Default
 import qualified Data.Maybe
 import           Data.Text
-import           Development.IDE.GHC.Compat
--- import GHC.Data.StringBuffer
--- import GHC.Driver.Config.Parser
--- import GHC.Hs
--- import GHC.Hs.Dump
--- import qualified GHC.Parser as Parser ( parseModule )
--- import GHC.Parser.Lexer
--- import GHC.Platform
--- import GHC.Plugins
--- import GHC.Settings
--- import GHC.Settings.Config
--- import GHC.Generics
--- import Data.Generics (everything, mkQ, extQ)
--- import GHC
--- import qualified GHC
--- import GHC.Paths (libdir)
--- import GHC.Tc.Types
--- import GHC.Tc.Utils.Env (lookupGlobal)
 import           Development.IDE
+import           Development.IDE.GHC.Compat
 -- import Development.IDE.Test
 -- import Test.Hls
 -- import Test.Hls.Util              (withCanonicalTempDir)
@@ -119,8 +102,7 @@ semanticTokensTests =
         content <- liftIO $ Prelude.readFile filePath
         let expect = [
                 SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 4, startChar = 1, len = 5}, name = "hello"}
-                , SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 4, startChar = 10, len = 6}, name = "String"}
-                , SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 5, startChar = 1, len = 5}, name = "hello"}
+                , SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 10, len = 6}, name = "String"}
                 , SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 5, startChar = 1, len = 5}, name = "hello"}
                 ]
         runSessionWithServerInDirAndGetSemantic "valBind.hs" $ \res doc -> do
@@ -128,7 +110,65 @@ semanticTokensTests =
             case res ^? _L of
                 Just tokens -> do
                     either (error . show)
-                        (\ xs -> liftIO $ expect @?= xs) $ recoverSemanticTokens content tokens
+                        (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
+                    return ()
+                _ -> error "No tokens found"
+            liftIO $ 1 @?= 1
+
+    , testCase "record" $ do
+        let filePath = "./test/testdata/record.hs"
+        content <- liftIO $ Prelude.readFile filePath
+        let expect =
+                [SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 6, len = 3}, name = "Foo"}
+                ,SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 12, len = 3}, name = "Foo"}
+                ,SemanticTokenOriginal {tokenType = TRecField, loc = Loc {line = 4, startChar = 18, len = 3}, name = "foo"}
+                ,SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 25, len = 3}, name = "Int"}]
+        runSessionWithServerInDirAndGetSemantic "record.hs" $ \res doc -> do
+            -- content <- waitForAction "getFileContents" doc
+            case res ^? _L of
+                Just tokens -> do
+                    either (error . show)
+                        (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
+                    return ()
+                _ -> error "No tokens found"
+            liftIO $ 1 @?= 1
+    , testCase "type class" $ do
+        let filePath = "./test/testdata/class.hs"
+        content <- liftIO $ Prelude.readFile filePath
+        let expect =
+                [SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 4, startChar = 7, len = 3}, name = "Foo"}
+                ,SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 4, startChar = 11, len = 1}, name = "a"}
+                ,SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 5, startChar = 3, len = 3}, name = "foo"}
+                ,SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 5, startChar = 10, len = 1}, name = "a"}
+                ,SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 15, len = 3}, name = "Int"}]
+        runSessionWithServerInDirAndGetSemantic "class.hs" $ \res doc -> do
+            -- content <- waitForAction "getFileContents" doc
+            case res ^? _L of
+                Just tokens -> do
+                    either (error . show)
+                        (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
+                    return ()
+                _ -> error "No tokens found"
+            liftIO $ 1 @?= 1
+    , testCase "pattern bind" $ do
+        let filePath = "./test/testdata/patternBind.hs"
+        content <- liftIO $ Prelude.readFile filePath
+        let expect =
+
+                [SemanticTokenOriginal {tokenType = TPatternBind, loc = Loc {line = 3, startChar = 2, len = 1}, name = "a"}
+                ,SemanticTokenOriginal {tokenType = TPatternBind, loc = Loc {line = 3, startChar = 5, len = 1}, name = "b"}
+                ,SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 5, startChar = 1, len = 1}, name = "f"}
+                ,SemanticTokenOriginal {tokenType = TPatternBind, loc = Loc {line = 5, startChar = 3, len = 1}, name = "x"}
+                ,SemanticTokenOriginal {tokenType = TPatternBind, loc = Loc {line = 5, startChar = 5, len = 1}, name = "y"}
+                ,SemanticTokenOriginal {tokenType = TPatternBind, loc = Loc {line = 5, startChar = 9, len = 1}, name = "x"}
+                ,SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 5, startChar = 11, len = 1}, name = "+"}
+                ,SemanticTokenOriginal {tokenType = TPatternBind, loc = Loc {line = 5, startChar = 13, len = 1}, name = "y"}]
+        runSessionWithServerInDirAndGetSemantic "patternBind.hs" $ \res doc -> do
+            -- content <- waitForAction "getFileContents" doc
+            case res ^? _L of
+                Just tokens -> do
+                    either (error . show)
+                        (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
                     return ()
                 _ -> error "No tokens found"
             liftIO $ 1 @?= 1
