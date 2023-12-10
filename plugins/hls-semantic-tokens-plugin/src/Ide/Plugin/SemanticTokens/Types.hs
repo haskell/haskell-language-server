@@ -18,41 +18,27 @@ fromInt i = Set.elemAt i knownValues
 -- mapping from our token type to LSP default token type
 toLspTokenType :: SemanticTokenType -> SemanticTokenTypes
 toLspTokenType tk = case tk of
-    -------
-    -- term
-    -------
     TVariable     -> SemanticTokenTypes_Variable
     TRecField     -> SemanticTokenTypes_Property
-    -- most likely a function
+    -- left hand side of none pattern bind
     TValBind      -> SemanticTokenTypes_Function
-    TClassMethod  -> SemanticTokenTypes_Method
-
-    -------
-    -- type
-    -------
-    TClass        -> SemanticTokenTypes_Class
+    -- any pattern bind
     TPatternBind  -> SemanticTokenTypes_Parameter
+    TClassMethod  -> SemanticTokenTypes_Method
+    TClass        -> SemanticTokenTypes_Class
     TTypeVariable -> SemanticTokenTypes_TypeParameter
-
-    -- data type is a likely a tagged sum type since we choose data constructor as enum member
-    -- we choose enum for data type
-
-    -- but we are not distinguishing between data and record
-    -- maybe a record type - struct ?
-    -- TTypeCon      -> SemanticTokenTypes_Enum
-    -- TDataCon      -> SemanticTokenTypes_EnumMember
-
+    -- normal data type is a tagged union type look like enum type
+    -- and a record is a product type like struct
+    -- but we don't distinguish them yet
     TTypeCon      -> SemanticTokenTypes_Enum
     TDataCon      -> SemanticTokenTypes_EnumMember
-
     -------------------------------------
     -- wiggle not sure if this is correct choice
     -------------------------------------
     TTypeFamily   -> SemanticTokenTypes_Interface
-    -- is a likely a data constructor result
-    TPatternSyn   -> SemanticTokenTypes_Event
-    -- let it falls to other type
-    TTypeSyn      -> SemanticTokenTypes_Type
+    -- pattern syn is like a limited version of macro of constructing a data type
+    TPatternSyn   -> SemanticTokenTypes_Macro
+    TTypeSyn      -> SemanticTokenTypes_Macro
     TNothing      -> SemanticTokenTypes_Namespace
 
 lspTokenReverseMap :: Map.Map SemanticTokenTypes SemanticTokenType
