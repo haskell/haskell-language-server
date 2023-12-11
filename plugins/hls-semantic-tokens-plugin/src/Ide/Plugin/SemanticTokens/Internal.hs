@@ -6,6 +6,7 @@
 {-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
 
@@ -18,12 +19,12 @@ import           Data.Data                            (Data)
 import           Data.Generics                        (everything, mkQ)
 import           Data.List                            (sortBy)
 import qualified Data.List                            as List
-import           Data.Maybe                           (fromMaybe, listToMaybe,
-                                                       mapMaybe)
+import           Data.Maybe                           (catMaybes, fromMaybe,
+                                                       listToMaybe, mapMaybe)
 import           Development.IDE                      (Action,
                                                        GetBindings (GetBindings),
                                                        GetHieAst (GetHieAst),
-                                                       HieAstResult (HAR, hieAst, refMap),
+                                                       HieAstResult (HAR, hieAst, hieModule, refMap),
                                                        IdeState,
                                                        TypeCheck (TypeCheck),
                                                        realSpan,
@@ -31,7 +32,9 @@ import           Development.IDE                      (Action,
 import           Development.IDE.Core.Compile         (TcModuleResult (..))
 import           Development.IDE.Core.Rules           (getSourceFileSource,
                                                        runAction)
-import           Development.IDE.Core.Shake           (use)
+import           Development.IDE.Core.Shake           (ShakeExtras (ShakeExtras),
+                                                       getShakeExtras, use,
+                                                       withHieDb)
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.Error                     (getNormalizedFilePathE)
 import qualified Language.LSP.Protocol.Lens           as L
@@ -44,6 +47,7 @@ import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 -- import System.FilePath (takeExtension)
 import           Control.Arrow                        ((&&&), (+++))
+import           Control.Monad                        (forM, forM_)
 import           Control.Monad.Trans.Class            (lift)
 import           Data.ByteString                      (ByteString, unpack)
 import           Data.Function                        (on)
@@ -57,6 +61,8 @@ import           Data.Typeable                        (cast)
 import           Development.IDE                      (IdeState, Priority (..),
                                                        ideLogger, logPriority)
 import           Development.IDE.Core.PositionMapping (zeroMapping)
+import           Development.IDE.Spans.LocalBindings  (getDefiningBindings,
+                                                       getLocalScope)
 
 logWith :: (Show a, MonadIO m) => IdeState -> a -> m ()
 logWith st = liftIO . logPriority (ideLogger st) Info . T.pack . show
@@ -86,28 +92,32 @@ bytestringString = map (toEnum . fromEnum) . unpack
 -----------------------
 ---- the api
 -----------------------
+
 computeSemanticTokens :: NormalizedFilePath -> Action (Maybe SemanticTokens)
-computeSemanticTokens nfp = runMaybeT $ do
-    HAR{hieAst, refMap} <- MaybeT $ use GetHieAst nfp
+computeSemanticTokens nfp =
+        runMaybeT $ do
+    -- HAR{hieAst, refMap} <- MaybeT $ use GetHieAst nfp
+    HAR{..} <- MaybeT $ use GetHieAst nfp
+    liftIO $ putStrLn $ "moduleName: " <> showSDocUnsafe (ppr hieModule)
+    -- (ImportMap imports, _) <- MaybeT $ useWithStaleFastMT GetImportMap file
     source :: ByteString <- lift $ getSourceFileSource nfp
     let xs = Map.toList $ getAsts hieAst
     liftIO $ print $ "hieAst size: " <> show (List.length xs)
 
     case xs of
         ((_,ast):_) -> do
-            tcM <- MaybeT $ use TypeCheck nfp
             binds <- MaybeT $ use GetBindings nfp
-            -- MaybeT $ debugComputeSemanticTokens (bytestringString source) (snd x) $ tmrRenamed tcM
-            case extractSemanticTokens refMap ast $ tmrRenamed tcM of
+            let importedNames = importedNameFromModule hieModule ast
+            ShakeExtras{withHieDb} <- MaybeT $ fmap Just getShakeExtras
+            nameRefPaths <- getNamesRefs withHieDb importedNames
+            importedModuleNameSemanticMap <- MaybeT $ fmap Just $ computeImportedSemanticTokens nameRefPaths
+            let originalModuleNameSemanticMap = toNameSemanticMap refMap
+            let combineMap = Map.unionWith (<>) originalModuleNameSemanticMap importedModuleNameSemanticMap
+            let names = identifierGetter ast
+            let moduleAbsTks = extractSemanticTokensFromNames combineMap names
+            case semanticTokenAbsoluteSemanticTokens moduleAbsTks of
                 Right tokens -> do
-                    -- let locatedNames = List.nub $ nameGetter$ tmrRenamed tcM
-                    -- let refMap = identifierGetter ast
-                    -- let iMap = constructIdentifierMap refMap
                     liftIO $ mapM_ (\x -> mapM_ print x) $ recoverSemanticTokens (bytestringString source) tokens
-                    -- liftIO $ putStrLn $ showRefMap refMap
-                    -- liftIO $ putStrLn $ showLocatedNames locatedNames
-
-                    -- liftIO $ putStrLn $ showNameTokenTypeMap iMap
                     pure tokens
                 Left err -> do
                     liftIO $ putStrLn $ "computeSemanticTokens: " <> show err
@@ -154,3 +164,14 @@ dataActualToken xs = maybe decodeError (Right . fmap semanticTokenAbsoluteActual
           decodeError = Left "recoverSemanticTokenRelative: wrong token data"
           fromTuple [a, b, c, d, _] = Just $ SemanticTokenRelative a b c (fromInt $ fromIntegral d) []
           fromTuple _               = Nothing
+
+-- span: /Users/ares/src/test/lib/SemanticTokens/Types.hs:(34,12)-(38,3)
+-- type RefMap a = M.Map Identifier [(Span, IdentifierDetails a)]
+computeImportedSemanticTokens :: [NormalizedFilePath] -> Action NameSemanticMap
+computeImportedSemanticTokens namPathMap = do
+    x <- forM namPathMap $ \nfp -> runMaybeT $ do
+            HAR{hieAst, refMap} <- MaybeT $ use GetHieAst nfp
+            binds <- MaybeT $ use GetBindings nfp
+            return $ toNameSemanticMap refMap
+    let xs = catMaybes x
+    return $ Map.unionsWith (<>) xs

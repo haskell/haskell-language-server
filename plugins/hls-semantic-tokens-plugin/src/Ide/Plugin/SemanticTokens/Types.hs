@@ -174,19 +174,6 @@ getOriginalTextFromId sourceCode (NIdentifier (span, _, _)) = fromMaybe "" $ do
 ----- identifier token map
 -----------------------
 
--- unsafePrintDoc :: SDoc -> String
-
--- from declaration site to token type
-type NameTokenTypeMap  = Map.Map Identifier ([Span], SemanticTokenType)
-
-showNameTokenTypeMap :: NameTokenTypeMap -> String
-showNameTokenTypeMap m = unlines
-    [
-       showSDocUnsafe (pprIdentifier idn) ++ ":" ++ show v
-       ++ "\n" ++ unlines [showSDocUnsafe (ppr span) | span <- spans]
-    | (idn, (spans, v)) <- Map.toList m]
-
-
 -- type RefMap a = M.Map Identifier [(Span, IdentifierDetails a)]
 showRefMap :: RefMap a -> String
 showRefMap m = unlines

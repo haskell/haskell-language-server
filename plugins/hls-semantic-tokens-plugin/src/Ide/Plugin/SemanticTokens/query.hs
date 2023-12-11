@@ -1,30 +1,52 @@
 {-
     The query module is used to query the semantic tokens from the AST
 -}
+{-# LANGUAGE ExplicitNamespaces  #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeOperators       #-}
 module Ide.Plugin.SemanticTokens.Query where
-import           Control.Arrow                   ((&&&))
-import           Data.Char                       (isAlphaNum)
-import           Data.Function                   (on)
-import           Data.Generics                   (everything)
-import qualified Data.List                       as List
-import qualified Data.List.NonEmpty              as NE
-import           Data.Map                        (Map)
-import qualified Data.Map                        as Map
-import           Data.Maybe                      (catMaybes, listToMaybe,
-                                                  mapMaybe)
-import           Data.Ord                        (comparing)
-import qualified Data.Set                        as Set
-import           Data.Text                       (Text)
-import qualified Data.Text                       as Text
-import qualified Data.Text.Lazy.Builder          as Text
-import           Development.IDE                 (realSpan)
+import           Control.Arrow                       ((&&&))
+import           Control.Monad                       (forM)
+import           Control.Monad.IO.Class              (MonadIO (liftIO))
+import           Data.Char                           (isAlphaNum)
+import           Data.Function                       (on)
+import           Data.Generics                       (everything)
+import qualified Data.List                           as List
+import qualified Data.List.NonEmpty                  as NE
+import           Data.Map                            (Map)
+import qualified Data.Map                            as Map
+import           Data.Maybe                          (catMaybes, listToMaybe,
+                                                      mapMaybe)
+import           Data.Ord                            (comparing)
+import qualified Data.Set                            as Set
+import           Data.Text                           (Text)
+import qualified Data.Text                           as Text
+import qualified Data.Text.Lazy.Builder              as Text
+import           Development.IDE                     (Action,
+                                                      rangeToRealSrcSpan,
+                                                      realSpan)
 import           Development.IDE.GHC.Compat
-import           Generics.SYB                    (mkQ)
+import           Development.IDE.Spans.AtPoint       (FOIReferences)
+import           Development.IDE.Types.Shake         (WithHieDb)
+import           Generics.SYB                        (mkQ)
+import           HieDb                               (DefRow (..),
+                                                      HieDbErr (AmbiguousUnitId, NameNotFound, NameUnhelpfulSpan, NoNameAtPoint, NotIndexed),
+                                                      ModuleInfo (modInfoSrcFile),
+                                                      RefRow (..), Res,
+                                                      findOneDef,
+                                                      findReferences,
+                                                      type (:.) (..))
 import           Ide.Plugin.SemanticTokens.Types
 import           Language.LSP.Protocol.Types
+-- import HieDb.Types (DefRow (..))
+import           Data.Either                         (rights)
+import           Development.IDE                     (filePathToUri')
+import           Development.IDE.GHC.Error           (positionToRealSrcLoc)
+import           Development.IDE.Spans.LocalBindings (Bindings)
+import           Development.IDE.Types.Location      (toNormalizedFilePath')
 
 
 
@@ -37,8 +59,8 @@ import           Language.LSP.Protocol.Types
 -- because it may contain ghc generated names or derived names
 -- which are not useful for semantic tokens (since they are not in source code)
 -- only use identifier both None derived and from source code
-identifierGetter' :: HieAST a -> [(Name, Span)]
-identifierGetter' ast = getIds ast ++ concatMap identifierGetter' (nodeChildren ast)
+identifierGetter :: HieAST a -> [(Name, Span)]
+identifierGetter ast = getIds ast ++ concatMap identifierGetter (nodeChildren ast)
     where
         getIds :: HieAST a -> [(Name, Span)]
         getIds ast = [(c, nodeSpan ast)
@@ -90,46 +112,68 @@ infoTokenType x = case x of
     EvidenceVarBind _ _ _ -> TNothing
 
 
+type NameSemanticMap = Map Name SemanticTokenType
 -----------------------------------
 -- extract semantic tokens from ast
 -----------------------------------
 
+toNameSemanticMap :: RefMap a -> NameSemanticMap
+toNameSemanticMap rm = Map.fromListWith (<>)
+    [ (name, tokenType)
+    | (Right name, details) <- Map.toList rm
+    , (_, detail) <- details
+    , let tokenType = collectToken detail
+    , (Just tokenType) <- [tokenType]
+    ]
+semanticTokenAbsoluteSemanticTokens :: [SemanticTokenAbsolute] -> Either Text SemanticTokens
+semanticTokenAbsoluteSemanticTokens xs = makeSemanticTokens defaultSemanticTokensLegend . List.sort $ xs
 
-extractSemanticTokens :: forall a. RefMap a -> HieAST a -> RenamedSource -> Either Text SemanticTokens
-extractSemanticTokens rm ast rs = makeSemanticTokens defaultSemanticTokensLegend
-    $ List.sort $  map (uncurry toAbsSemanticToken) $ mapMaybe (getSemantic (toNameSemanticMap rm)) locatedNames
-    where
-        --   ids = identifierGetter ast
-        --   iMap = constructIdentifierMap ids
-          locatedNames= identifierGetter' ast
+extractSemanticTokensFromNames :: NameSemanticMap -> [(Name, Span)] -> [SemanticTokenAbsolute]
+extractSemanticTokensFromNames nsm = map (uncurry toAbsSemanticToken) . mapMaybe (getSemantic nsm)
 
-          getSemantic :: Map Name SemanticTokenType -> (Name, Span) -> Maybe (Span, SemanticTokenType)
-          getSemantic nameMap locName = do
-                let name = fst locName
-                let span = snd locName
-                let tkt = toTokenType name
-                let tokenType = maybe tkt (\x -> tkt <> x) $ Map.lookup name nameMap
-                pure (span, tokenType)
+toAbsSemanticToken :: Span -> SemanticTokenType -> SemanticTokenAbsolute
+toAbsSemanticToken loc tokenType =
+    let line = srcSpanStartLine loc - 1
+        startChar = srcSpanStartCol loc - 1
+        len = srcSpanEndCol loc - 1 - startChar
+    in SemanticTokenAbsolute (fromIntegral line) (fromIntegral startChar)
+        (fromIntegral len) (toLspTokenType tokenType) [SemanticTokenModifiers_Declaration]
 
+getSemantic :: Map Name SemanticTokenType -> (Name, Span) -> Maybe (Span, SemanticTokenType)
+getSemantic nameMap locName = do
+    let name = fst locName
+    let span = snd locName
+    let tkt = toTokenType name
+    let tokenType = maybe tkt (\x -> tkt <> x) $ Map.lookup name nameMap
+    pure (span, tokenType)
 
-          toNameSemanticMap :: RefMap a -> Map Name SemanticTokenType
-          toNameSemanticMap rm = Map.fromListWith (<>)
-                [ (name, tokenType)
-                | (Right name, details) <- Map.toList rm
-                , (_, detail) <- details
-                , let tokenType = collectToken detail
-                , (Just tokenType) <- [tokenType]
-                ]
-
-          toAbsSemanticToken loc tokenType =
-                let line = srcSpanStartLine loc - 1
-                    startChar = srcSpanStartCol loc - 1
-                    len = srcSpanEndCol loc - 1 - startChar
-                in SemanticTokenAbsolute (fromIntegral line) (fromIntegral startChar)
-                    (fromIntegral len) (toLspTokenType tokenType) [SemanticTokenModifiers_Declaration]
+importedNameFromModule :: forall a. Module -> HieAST a -> Set.Set Name
+importedNameFromModule mod ast = Set.fromList importedNames
+    where locatedNames = identifierGetter ast
+          importedNames = [name | (name, _) <- locatedNames, not $ nameIsLocalOrFrom mod name
+            , Just mod <- [nameModule_maybe name]]
 
 
 showLocatedNames :: [LIdP GhcRn] -> String
 showLocatedNames xs = unlines
     [ showSDocUnsafe (ppr locName) ++ " " ++ show (getLoc locName)
     | locName <- xs]
+
+
+getNamesRefs
+  :: (MonadIO m)
+  => WithHieDb
+  -> Set.Set Name
+  -> m [NormalizedFilePath]
+getNamesRefs withHieDb nameSet = do
+--   let nameSpanMap = Map.toList $ Map.fromListWith (<>) $ (fmap . fmap) return nameSet
+  refs <- fmap rights $  forM (Set.toList nameSet) $ \name ->
+      do ans <- liftIO $ withHieDb (\hieDb -> findOneDef hieDb (nameOccName name) Nothing Nothing)
+         return $ ans
+--   only those names that are in source code
+  return [path | ref <- refs, let (Just path) = rowToLoc ref]
+  where
+    rowToLoc (row:.info) = mfile
+        where mfile = toNormalizedFilePath <$> modInfoSrcFile info
+
+

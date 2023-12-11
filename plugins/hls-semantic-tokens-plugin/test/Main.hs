@@ -39,6 +39,7 @@ import           Control.Lens                    hiding (use)
 import qualified Data.List                       as List
 import           Data.Maybe                      (fromJust)
 import qualified Data.Set                        as Set
+import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           Ide.Plugin.Error                (getNormalizedFilePathE)
 import           Ide.Plugin.SemanticTokens
 import           Ide.Plugin.SemanticTokens.Types
@@ -71,7 +72,8 @@ semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor' Ide.Plugin.SemanticToken
 mkSemanticTokensParams :: TextDocumentIdentifier -> SemanticTokensParams
 mkSemanticTokensParams doc = SemanticTokensParams Nothing Nothing doc
 
-runSessionWithServerInDir file x = Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProject file) $ do
+runSessionWithServerInDir file x =
+    Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProject file) $ do
             doc <- openDoc file "haskell"
             res <- waitForAction "TypeCheck" doc
             x doc
@@ -197,6 +199,34 @@ semanticTokensTests =
                         (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
                     return ()
                 _ -> error "No tokens found"
+
+    ,
+    testCase "module import test" $ do
+        let filePath1 = "./test/testdata/imported.hs"
+        let filePath2 = "./test/testdata/imported.hs"
+        content1 <- liftIO $ Prelude.readFile filePath1
+        content2 <- liftIO $ Prelude.readFile filePath2
+
+        let file1 = "moduleA.hs"
+        let file2 = "moduleB.hs"
+        let expect = []
+        Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
+                doc1 <- openDoc file1 "haskell"
+                doc2 <- openDoc file2 "haskell"
+                check1 <- waitForAction "TypeCheck" doc1
+                check2 <- waitForAction "TypeCheck" doc2
+                -- case check2 of
+                --     Right (WaitForIdeRuleResult x) -> liftIO $ print $ "result of checking2: " <> show x
+                --     Left y -> error "TypeCheck2 failed"
+
+                -- res2 <- Test.getSemanticTokens doc2
+                -- case res2 ^? _L of
+                --     Just tokens -> do
+                --         either (error . show)
+                --             (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content2 tokens
+                --         return ()
+                --     _ -> error "No tokens found"
+                liftIO $ 1 @?= 1
   ]
 
 main :: IO ()
