@@ -1,0 +1,11 @@
+name: a
+version: 1.0.0
+build-type: Simple
+cabal-version: >= 1.2
+extra-source-files: wdtest
+
+library
+  build-depends: base, template-haskell
+  exposed-modules: A B
+  ghc-options: -Wmissing-signatures
+  hs-source-dirs: .
