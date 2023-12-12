@@ -1109,6 +1109,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags = do
               Nothing -> compRoot
               Just wdir -> compRoot </> wdir
         let dflags''' =
+              setWorkingDirectory root $
               disableWarningsAsErrors $
               -- disabled, generated directly by ghcide instead
               flip gopt_unset Opt_WriteInterface $
@@ -1119,7 +1120,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags = do
               setBytecodeLinkerOptions $
               disableOptimisation $
               Compat.setUpTypedHoles $
-              makeDynFlagsAbsolute compRoot
+              makeDynFlagsAbsolute compRoot -- makeDynFlagsAbsolute already accounts for workingDirectory
               dflags''
         -- initPackages parses the -package flags and
         -- sets up the visibility for each component.

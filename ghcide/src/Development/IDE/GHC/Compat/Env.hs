@@ -55,7 +55,8 @@ module Development.IDE.GHC.Compat.Env (
     setBackend,
     ghciBackend,
     Development.IDE.GHC.Compat.Env.platformDefaultBackend,
-    workingDirectory
+    workingDirectory,
+    setWorkingDirectory,
     ) where
 
 import           GHC                 (setInteractiveDynFlags)
@@ -91,6 +92,12 @@ hsc_EPS = Env.hsc_unit_env
 #if !MIN_VERSION_ghc(9,3,0)
 workingDirectory :: a -> Maybe b
 workingDirectory _ = Nothing
+
+setWorkingDirectory :: FilePath -> DynFlags -> DynFlags
+setWorkingDirectory = const id
+#else
+setWorkingDirectory :: FilePath -> DynFlags -> DynFlags
+setWorkingDirectory p d = d { workingDirectory =  Just p }
 #endif
 
 setHomeUnitId_ :: UnitId -> DynFlags -> DynFlags
