@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-semantic-tokens-plugin
-version:            2.4.0.0
+version:            2.5.0.0
 synopsis:           Call hierarchy plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-call-hierarchy-plugin#readme>
@@ -35,8 +35,8 @@ library
     , containers
     , extra
     , hiedb
-    , ghcide                == 2.4.0.0
-    , hls-plugin-api        == 2.4.0.0
+    , ghcide                == 2.5.0.0
+    , hls-plugin-api        == 2.5.0.0
     , lens
     , lsp                    >=2.3
     , sqlite-simple
@@ -64,7 +64,7 @@ test-suite tests
     , extra
     , filepath
     , hls-semantic-tokens-plugin
-    , hls-test-utils              == 2.4.0.0
+    , hls-test-utils              == 2.5.0.0
     , ghcide-test-utils
     , hls-plugin-api
     , lens
@@ -74,5 +74,5 @@ test-suite tests
     , text
     , data-default
     , bytestring
-    , ghcide                == 2.4.0.0
-    , hls-plugin-api        == 2.4.0.0
+    , ghcide                == 2.5.0.0
+    , hls-plugin-api        == 2.5.0.0
