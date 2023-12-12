@@ -1,5 +1,43 @@
 # Changelog for haskell-language-server
 
+## 2.5.0.0
+
+- Bindists for GHC 9.4.8
+- Drop support for GHC 9.0
+- Re-add stan plugin
+- Load default operator fixities in Fourmolu plugin
+
+### Pull Requests
+
+- Drop support for GHC 9.0
+  ([#3875](https://github.com/haskell/haskell-language-server/pull/3875)) by @michaelpj
+- Fix support tables
+  ([#3874](https://github.com/haskell/haskell-language-server/pull/3874)) by @michaelpj
+- Prefer hls-test-utils functions over code duplication
+  ([#3870](https://github.com/haskell/haskell-language-server/pull/3870)) by @fendor
+- Make sure running tests locally pick up the correct cradle type
+  ([#3869](https://github.com/haskell/haskell-language-server/pull/3869)) by @fendor
+- Some versions of stylish-haskell do need the ghc-lib flag
+  ([#3868](https://github.com/haskell/haskell-language-server/pull/3868)) by @michaelpj
+- Remove head.hackage
+  ([#3867](https://github.com/haskell/haskell-language-server/pull/3867)) by @wz1000
+- Load default operator fixities in Fourmolu plugin non-CLI mode
+  ([#3855](https://github.com/haskell/haskell-language-server/pull/3855)) by @georgefst
+- Fix #3847
+  ([#3854](https://github.com/haskell/haskell-language-server/pull/3854)) by @BurningLutz
+- Re-add hls-stan-plugin
+  ([#3851](https://github.com/haskell/haskell-language-server/pull/3851)) by @0rphee
+- Bump fkirc/skip-duplicate-actions from 5.3.0 to 5.3.1
+  ([#3850](https://github.com/haskell/haskell-language-server/pull/3850)) by @dependabot[bot]
+- Merge definitions from all plugins for Document(Type)Definition message
+  ([#3846](https://github.com/haskell/haskell-language-server/pull/3846)) by @JiriLojda
+- Simplify cabal.project
+  ([#3836](https://github.com/haskell/haskell-language-server/pull/3836)) by @michaelpj
+- Set the root for tests to the test directory
+  ([#3830](https://github.com/haskell/haskell-language-server/pull/3830)) by @fendor
+- Reduce Nix support
+  ([#3804](https://github.com/haskell/haskell-language-server/pull/3804)) by @michaelpj
+
 ## 2.4.0.0
 
 * Initial support for GHC 9.8.1, without plugins dependent on `ghc-exactprint`
