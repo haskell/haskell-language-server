@@ -70,3 +70,7 @@ test-suite tests
     , hls-plugin-api
     , hls-rename-plugin
     , hls-test-utils             == 2.4.0.0
+    , lens
+    , lsp-types
+    , row-types
+    , text
