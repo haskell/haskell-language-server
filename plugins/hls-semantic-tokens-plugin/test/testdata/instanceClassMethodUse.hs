@@ -1,0 +1,5 @@
+module InstanceClassMethodUse where
+
+
+go  =   (==)
+
