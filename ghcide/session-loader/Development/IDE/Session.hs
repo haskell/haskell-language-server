@@ -817,71 +817,65 @@ newComponentCache recorder exts cradlePath _cfp hsc_env old_cis new_cis = do
           home_unit_id <- uids
           home_unit_env <- maybeToList $ unitEnv_lookup_maybe home_unit_id $ hsc_HUG hscEnv'
           map (home_unit_id,) (map (Compat.toUnitId . fst) $ explicitUnits $ homeUnitEnv_units home_unit_env)
-
-    case closure_errs of
-      errs@(_:_) -> do
-        let rendered_err = map (ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Error) _cfp . T.pack . Compat.printWithoutUniques) errs
-            res = (rendered_err,Nothing)
-            dep_info = foldMap componentDependencyInfo (filter isBad $ Map.elems cis)
-            bad_units = OS.fromList $ concat $ do
-              x <- bagToList $ mapBag errMsgDiagnostic $ unionManyBags $ map Compat.getMessages errs
-              DriverHomePackagesNotClosed us <- pure x
-              pure us
-            isBad ci = (homeUnitId_ (componentDynFlags ci)) `OS.member` bad_units
-        return [([TargetDetails (TargetFile _cfp) res dep_info [_cfp]],(res,dep_info))]
-      [] -> do
+        multi_errs = map (ideErrorWithSource (Just "cradle") (Just DiagnosticSeverity_Warning) _cfp . T.pack . Compat.printWithoutUniques) closure_errs
+        bad_units = OS.fromList $ concat $ do
+            x <- bagToList $ mapBag errMsgDiagnostic $ unionManyBags $ map Compat.getMessages closure_errs
+            DriverHomePackagesNotClosed us <- pure x
+            pure us
+        isBad ci = (homeUnitId_ (componentDynFlags ci)) `OS.member` bad_units
 #else
-    do
+    let isBad = const False
+        multi_errs = []
 #endif
-        -- Whenever we spin up a session on Linux, dynamically load libm.so.6
-        -- in. We need this in case the binary is statically linked, in which
-        -- case the interactive session will fail when trying to load
-        -- ghc-prim, which happens whenever Template Haskell is being
-        -- evaluated or haskell-language-server's eval plugin tries to run
-        -- some code. If the binary is dynamically linked, then this will have
-        -- no effect.
-        -- See https://github.com/haskell/haskell-language-server/issues/221
-        -- We need to do this after the call to setSessionDynFlags initialises
-        -- the loader
-        when (os == "linux") $ do
-          initObjLinker hscEnv'
-          res <- loadDLL hscEnv' "libm.so.6"
-          case res of
-            Nothing  -> pure ()
-            Just err -> logWith recorder Error $ LogDLLLoadError err
+    -- Whenever we spin up a session on Linux, dynamically load libm.so.6
+    -- in. We need this in case the binary is statically linked, in which
+    -- case the interactive session will fail when trying to load
+    -- ghc-prim, which happens whenever Template Haskell is being
+    -- evaluated or haskell-language-server's eval plugin tries to run
+    -- some code. If the binary is dynamically linked, then this will have
+    -- no effect.
+    -- See https://github.com/haskell/haskell-language-server/issues/221
+    -- We need to do this after the call to setSessionDynFlags initialises
+    -- the loader
+    when (os == "linux") $ do
+      initObjLinker hscEnv'
+      res <- loadDLL hscEnv' "libm.so.6"
+      case res of
+        Nothing  -> pure ()
+        Just err -> logWith recorder Error $ LogDLLLoadError err
 
-        forM (Map.elems cis) $ \ci -> do
-          let df = componentDynFlags ci
-          let createHscEnvEq = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
-          thisEnv <- do
+    forM (Map.elems cis) $ \ci -> do
+      let df = componentDynFlags ci
+      let createHscEnvEq = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
+      thisEnv <- do
 #if MIN_VERSION_ghc(9,3,0)
-                -- In GHC 9.4 we have multi component support, and we have initialised all the units
-                -- above.
-                -- We just need to set the current unit here
-                pure $ hscSetActiveUnitId (homeUnitId_ df) hscEnv'
+            -- In GHC 9.4 we have multi component support, and we have initialised all the units
+            -- above.
+            -- We just need to set the current unit here
+            pure $ hscSetActiveUnitId (homeUnitId_ df) hscEnv'
 #else
-                -- This initializes the units for GHC 9.2
-                -- Add the options for the current component to the HscEnv
-                -- We want to call `setSessionDynFlags` instead of `hscSetFlags`
-                -- because `setSessionDynFlags` also initializes the package database,
-                -- which we need for any changes to the package flags in the dynflags
-                -- to be visible.
-                -- See #2693
-                evalGhcEnv hscEnv' $ do
-                  _ <- setSessionDynFlags df
-                  getSession
+            -- This initializes the units for GHC 9.2
+            -- Add the options for the current component to the HscEnv
+            -- We want to call `setSessionDynFlags` instead of `hscSetFlags`
+            -- because `setSessionDynFlags` also initializes the package database,
+            -- which we need for any changes to the package flags in the dynflags
+            -- to be visible.
+            -- See #2693
+            evalGhcEnv hscEnv' $ do
+              _ <- setSessionDynFlags df
+              getSession
 #endif
-          henv <- createHscEnvEq thisEnv (zip uids dfs)
-          let targetEnv = ([], Just henv)
-              targetDepends = componentDependencyInfo ci
-              res = ( targetEnv, targetDepends)
-          logWith recorder Debug $ LogNewComponentCache res
-          evaluate $ liftRnf rwhnf $ componentTargets ci
+      henv <- createHscEnvEq thisEnv (zip uids dfs)
+      let targetEnv = (if isBad ci then multi_errs else [], Just henv)
+          targetDepends = componentDependencyInfo ci
+          res = ( targetEnv, targetDepends)
+      logWith recorder Debug $ LogNewComponentCache res
+      evaluate $ liftRnf rwhnf $ componentTargets ci
 
-          let mk t = fromTargetId (importPaths df) exts (targetId t) targetEnv targetDepends
-          ctargets <- concatMapM mk (componentTargets ci)
+      let mk t = fromTargetId (importPaths df) exts (targetId t) targetEnv targetDepends
+      ctargets <- concatMapM mk (componentTargets ci)
 
-          return (L.nubOrdOn targetTarget ctargets, res)
+      return (L.nubOrdOn targetTarget ctargets, res)
 
 {- Note [Avoiding bad interface files]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
