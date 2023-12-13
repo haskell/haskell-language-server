@@ -58,6 +58,7 @@ extra-deps:
 - monad-dijkstra-0.1.1.4
 - attoparsec-aeson-2.2.0.1
 - integer-conversion-0.1.0.1
+- aeson-2.2.1.0
 
 # stan dependencies not found in the stackage snapshot
 - stan-0.1.0.2
