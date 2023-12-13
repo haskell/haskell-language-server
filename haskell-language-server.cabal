@@ -340,7 +340,7 @@ common refactor
 
 common semanticTokens
   if flag(semanticTokens)
-    build-depends: hls-semantic-tokens-plugin == 2.4.0.0
+    build-depends: hls-semantic-tokens-plugin == 2.5.0.0
     cpp-options: -Dhls_semanticTokens
 
 
