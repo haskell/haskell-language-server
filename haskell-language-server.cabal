@@ -309,7 +309,7 @@ common overloadedRecordDot
 -- formatters
 
 common floskell
-  if flag(floskell) && impl(ghc < 9.7)
+  if flag(floskell) && (impl(ghc < 9.7) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-floskell-plugin == 2.5.0.0
     cpp-options: -Dhls_floskell
 
@@ -556,7 +556,7 @@ test-suite func-test
   if flag(eval)
     cpp-options: -Dhls_eval
 -- formatters
-  if flag(floskell) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(floskell) 
     cpp-options: -Dhls_floskell
   if flag(fourmolu)
     cpp-options: -Dhls_fourmolu
