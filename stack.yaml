@@ -42,26 +42,23 @@ ghc-options:
 allow-newer: true
 
 extra-deps:
-- Cabal-syntax-3.10.1.0@sha256:bb835ebab577fd0f9c11dab96210dbb8d68ffc62652576f4b092563c345930e7,7434
-- floskell-0.11.0
-- hiedb-0.4.4.0
-- hie-bios-0.13.1
-- implicit-hie-0.1.4.0
-- algebraic-graphs-0.6.1
+- floskell-0.10.8
 - retrie-1.2.2
-- hw-fingertree-0.1.2.1
-- hw-prim-0.6.3.2
-- ansi-terminal-0.11.5
+- hiedb-0.4.4.0
+- implicit-hie-0.1.4.0
+- hie-bios-0.13.1
 - lsp-2.3.0.0
 - lsp-test-0.16.0.1
 - lsp-types-2.1.0.0
-- monad-dijkstra-0.1.1.4
-- attoparsec-aeson-2.2.0.1
+- attoparsec-aeson-2.1.0.0
+- hw-fingertree-0.1.2.1
 - integer-conversion-0.1.0.1
-- aeson-2.2.1.0
+- monad-dijkstra-0.1.1.4
+- hw-prim-0.6.3.2
+- optparse-applicative-0.17.1.0
 
-# stan dependencies not found in the stackage snapshot
-- stan-0.1.0.2
+# stan and friends
+- stan-0.1.1.0
 - clay-0.14.0
 - colourista-0.1.0.2
 - dir-traverse-0.2.3.0
