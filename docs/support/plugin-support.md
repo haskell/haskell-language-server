@@ -57,7 +57,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-hlint-plugin`                  | 2    | 9.8                      |
 | `hls-module-name-plugin`            | 2    |                          |
 | `hls-qualify-imported-names-plugin` | 2    |                          |
-| `hls-ormolu-plugin`                 | 2    | 9.8                      |
+| `hls-ormolu-plugin`                 | 2    |                          |
 | `hls-rename-plugin`                 | 2    | 9.8                      |
 | `hls-stylish-haskell-plugin`        | 2    | 9.8                      |
 | `hls-overloaded-record-dot-plugin`  | 2    |                          |
