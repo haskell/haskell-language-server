@@ -35,7 +35,7 @@ packages:
          ./plugins/hls-refactor-plugin
          ./plugins/hls-overloaded-record-dot-plugin
 
-index-state: 2023-12-10T23:30:17Z
+index-state: 2023-12-13T00:00:00Z
 
 tests: True
 test-show-details: direct
@@ -96,12 +96,6 @@ if impl(ghc >= 9.7)
     ghc-trace-events:text,
     -- https://github.com/haskell-primitive/primitive-unlifted/issues/39
     primitive-unlifted:bytestring,
-    -- https://github.com/obsidiansystems/constraints-extras/issues/54
-    constraints-extras:base,
-    constraints-extras:template-haskell,
     -- https://github.com/obsidiansystems/commutative-semigroups/issues/13
     commutative-semigroups:base,
     commutative-semigroups:template-haskell,
-    -- https://github.com/kcsongor/generic-lens/issues/158
-    generic-lens:text,
-    generic-lens-core:text,
