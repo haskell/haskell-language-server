@@ -52,16 +52,16 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-eval-plugin`                   | 2    |                          |
 | `hls-explicit-fixity-plugin`        | 2    |                          |
 | `hls-explicit-record-fields-plugin` | 2    |                          |
-| `hls-fourmolu-plugin`               | 2    | 9.8                      |
+| `hls-fourmolu-plugin`               | 2    |                          |
 | `hls-gadt-plugin`                   | 2    | 9.8                      |
 | `hls-hlint-plugin`                  | 2    | 9.8                      |
 | `hls-module-name-plugin`            | 2    |                          |
 | `hls-qualify-imported-names-plugin` | 2    |                          |
-| `hls-ormolu-plugin`                 | 2    | 9.8                      |
+| `hls-ormolu-plugin`                 | 2    |                          |
 | `hls-rename-plugin`                 | 2    | 9.8                      |
 | `hls-stylish-haskell-plugin`        | 2    | 9.8                      |
 | `hls-overloaded-record-dot-plugin`  | 2    |                          |
-| `hls-floskell-plugin`               | 3    | 9.6, 9.8                 |
+| `hls-floskell-plugin`               | 3    | 9.8                      |
 | `hls-stan-plugin`                   | 3    | 9.2.(4-8)                |
 | `hls-retrie-plugin`                 | 3    | 9.8                      |
 | `hls-splice-plugin`                 | 3    | 9.8                      |
