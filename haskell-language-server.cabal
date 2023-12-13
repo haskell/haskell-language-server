@@ -309,7 +309,7 @@ common overloadedRecordDot
 -- formatters
 
 common floskell
-  if flag(floskell) && impl(ghc < 9.5)
+  if flag(floskell) && impl(ghc < 9.7)
     build-depends: hls-floskell-plugin == 2.5.0.0
     cpp-options: -Dhls_floskell
 
