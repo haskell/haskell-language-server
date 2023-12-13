@@ -20,7 +20,7 @@ packages:
   - ./plugins/hls-explicit-fixity-plugin
   - ./plugins/hls-explicit-imports-plugin
   - ./plugins/hls-explicit-record-fields-plugin
-  # - ./plugins/hls-floskell-plugin
+  - ./plugins/hls-floskell-plugin
   - ./plugins/hls-fourmolu-plugin
   - ./plugins/hls-gadt-plugin
   - ./plugins/hls-hlint-plugin
