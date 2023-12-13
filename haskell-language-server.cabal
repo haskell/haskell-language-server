@@ -314,7 +314,7 @@ common floskell
     cpp-options: -Dhls_floskell
 
 common fourmolu
-  if flag(fourmolu) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
+  if flag(fourmolu) 
     build-depends: hls-fourmolu-plugin == 2.5.0.0
     cpp-options: -Dhls_fourmolu
 

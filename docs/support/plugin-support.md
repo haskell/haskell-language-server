@@ -52,7 +52,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-eval-plugin`                   | 2    |                          |
 | `hls-explicit-fixity-plugin`        | 2    |                          |
 | `hls-explicit-record-fields-plugin` | 2    |                          |
-| `hls-fourmolu-plugin`               | 2    | 9.8                      |
+| `hls-fourmolu-plugin`               | 2    |                          |
 | `hls-gadt-plugin`                   | 2    | 9.8                      |
 | `hls-hlint-plugin`                  | 2    | 9.8                      |
 | `hls-module-name-plugin`            | 2    |                          |

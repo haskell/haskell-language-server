@@ -23,11 +23,6 @@ source-repository head
   location: git://github.com/haskell/haskell-language-server.git
 
 library
-  -- Plugins that need exactprint have not been updated for 9.8 yet
-  if impl(ghc >= 9.8)
-    buildable: False
-  else
-    buildable: True
   exposed-modules:
       Ide.Plugin.Fourmolu
   hs-source-dirs:   src
@@ -48,10 +43,8 @@ library
 
   if impl(ghc >= 9.0) && impl(ghc < 9.2)
     build-depends: fourmolu ^>= 0.11
-  elif impl(ghc >= 9.2) && impl(ghc < 9.8)
+  else 
     build-depends: fourmolu ^>= 0.14
-  else
-    buildable: False
 
   -- fourmolu 0.9.0 fails to build on Windows CI for reasons unknown
   if impl(ghc >= 9.2) && os(windows) && impl(ghc < 9.4)
@@ -59,10 +52,6 @@ library
   default-language: Haskell2010
 
 test-suite tests
-  if impl(ghc >= 9.8)
-    buildable: False
-  else
-    buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
