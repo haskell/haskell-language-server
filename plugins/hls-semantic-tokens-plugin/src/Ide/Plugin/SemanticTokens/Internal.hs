@@ -69,6 +69,7 @@ import qualified Data.Set                             as Set
 import           Data.Text                            (Text)
 import           Data.Traversable                     (for)
 import           Data.Typeable                        (cast)
+import           Debug.Trace                          (trace)
 import           Development.IDE                      (IdeAction, IdeState,
                                                        Priority (..), ideLogger,
                                                        logPriority, use, uses)
@@ -83,80 +84,15 @@ import           Development.IDE.Types.Exports        (ExportsMap (..),
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
 import           GHC.Conc                             (readTVar)
 
--- logWith :: (MonadIO m) => IdeState -> String -> m ()
--- logWith st = liftIO . logPriority (ideLogger st) Info . T.pack . show
-
 logWith :: (MonadIO m) => IdeState -> String -> m ()
-logWith st = liftIO . print
+logWith st = liftIO . logPriority (ideLogger st) Info . T.pack
+
+
+-- logWith :: (MonadIO m) => IdeState -> String -> m ()
+-- logWith st = liftIO . print
 
 bytestringString :: ByteString -> String
 bytestringString = map (toEnum . fromEnum) . unpack
-
--- data TyThing
---   = AnId     Id
---   | AConLike ConLike
---   | ATyCon   TyCon       -- TyCons and classes; see Note [ATyCon for classes]
---   | ACoAxiom (CoAxiom Branched)
--- a :: IdDetails
--- a = undefined
-
--- | Identifier Details
---
--- The 'IdDetails' of an 'Id' give stable, and necessary,
--- information about the Id.
--- data IdDetails
---   = VanillaId
-
---   -- | The 'Id' for a record selector
---   | RecSelId
---     { sel_tycon   :: RecSelParent
---     , sel_naughty :: Bool       -- True <=> a "naughty" selector which can't actually exist, for example @x@ in:
---                                 --    data T = forall a. MkT { x :: a }
---     }                           -- See Note [Naughty record selectors] in GHC.Tc.TyCl
-
---   | DataConWorkId DataCon       -- ^ The 'Id' is for a data constructor /worker/
---   | DataConWrapId DataCon       -- ^ The 'Id' is for a data constructor /wrapper/
-
---                                 -- [the only reasons we need to know is so that
---                                 --  a) to support isImplicitId
---                                 --  b) when desugaring a RecordCon we can get
---                                 --     from the Id back to the data con]
---   | ClassOpId Class             -- ^ The 'Id' is a superclass selector,
---                                 -- or class operation of a class
-
---   | PrimOpId PrimOp Bool        -- ^ The 'Id' is for a primitive operator
---                                 -- True <=> is representation-polymorphic,
---                                 --          and hence has no binding
---                                 -- This lev-poly flag is used only in GHC.Types.Id.hasNoBinding
-
---   | FCallId ForeignCall         -- ^ The 'Id' is for a foreign call.
---                                 -- Type will be simple: no type families, newtypes, etc
-
---   | TickBoxOpId TickBoxOp       -- ^ The 'Id' is for a HPC tick box (both traditional and binary)
-
---   | DFunId Bool                 -- ^ A dictionary function.
---        -- Bool = True <=> the class has only one method, so may be
---        --                  implemented with a newtype, so it might be bad
---        --                  to be strict on this dictionary
-
---   | CoVarId    -- ^ A coercion variable
---                -- This only covers /un-lifted/ coercions, of type
---                -- (t1 ~# t2) or (t1 ~R# t2), not their lifted variants
---   | JoinId JoinArity (Maybe [CbvMark])
---         -- ^ An 'Id' for a join point taking n arguments
---         -- Note [Join points] in "GHC.Core"
---         -- Can also work as a WorkerLikeId if given `CbvMark`s.
---         -- See Note [CBV Function Ids]
---         -- The [CbvMark] is always empty (and ignored) until after Tidy.
---   | WorkerLikeId [CbvMark]
---         -- ^ An 'Id' for a worker like function, which might expect some arguments to be
---         -- passed both evaluated and tagged.
---         -- Worker like functions are create by W/W and SpecConstr and we can expect that they
---         -- aren't used unapplied.
---         -- See Note [CBV Function Ids]
---         -- See Note [Tag Inference]
---         -- The [CbvMark] is always empty (and ignored) until after Tidy for ids from the current
---         -- module.
 
 tyThingSemantic :: TyThing -> SemanticTokenType
 tyThingSemantic ty = case ty of
@@ -171,11 +107,11 @@ tyThingSemantic ty = case ty of
         RealDataCon _ -> TDataCon
         PatSynCon _   -> TPatternSyn
     ATyCon tyCon
-        | isDataTyCon tyCon -> TTypeCon
-        | isPrimTyCon tyCon -> TTypeCon
-        | isClassTyCon tyCon -> TClass
         | isTypeSynonymTyCon tyCon -> TTypeSyn
         | isTypeFamilyTyCon tyCon -> TTypeFamily
+        | isClassTyCon tyCon -> TClass
+        | isDataTyCon tyCon -> TTypeCon
+        | isPrimTyCon tyCon -> TTypeCon
         | otherwise -> TNothing
     ACoAxiom _ -> TNothing
 
@@ -185,48 +121,40 @@ tyThingSemantic ty = case ty of
 
 computeSemanticTokens ::  IdeState -> NormalizedFilePath -> Action (Maybe SemanticTokens)
 computeSemanticTokens state nfp =
-    let dbg = logWith state in
-        runMaybeT $ do
-    -- HAR{hieAst, refMap} <- MaybeT $ use GetHieAst nfp
-    [HAR{..}] <- usesMT GetHieAst [nfp]
-    -- [TcModuleResult{..}]<- usesMT TypeCheck [nfp]
-    [hscEnv -> hsc]        <- usesMT (GhcSessionDeps_ True) [nfp]
-    -- HAR{..} <- MaybeT $ useWithStaleFastMT GetHieAst nfp
-    liftIO $ putStrLn $ "moduleName: " <> showSDocUnsafe (ppr hieModule)
-    let xs = Map.toList $ getAsts hieAst
-    liftIO $ putStrLn $ "hieAst size: " <> show (List.length xs)
+    runMaybeT $ do
+    -- let dbg = logWith state
+    -- let getAst HAR{hieAst, refMap} = hieAst
+    (HAR{hieAst, refMap, hieModule}, _) <- useWithStaleMT GetHieAst nfp
+    (_, ast) <- MaybeT $ return $ listToMaybe $ Map.toList $ getAsts hieAst
+    (TcModuleResult{..}, _) <- useWithStaleMT TypeCheck nfp
+    (hscEnv -> hsc, _) <- useWithStaleMT GhcSessionDeps nfp
+    -- because the names get from ast might contain derived name
+    let nameSet = nameGetter tmrRenamed
+    -- let nameSet = hieAstNameSet ast
+    let names = hieAstSpanNames ast
 
-    case xs of
-        ((_,ast):_) -> do
-            -- compute imported names from hieAst
-            let importedNames = importedNameFromModule hieModule ast
-            -- accumulate names from typechecked module
-            -- km <- liftIO $ foldrM (getType hsc) (tcg_type_env tmrTypechecked) importedNames
-            km <- liftIO $ foldrM (getType hsc) emptyNameEnv importedNames
-            let importedModuleNameSemanticMap =  Map.fromList $ flip mapMaybe (Set.toList importedNames) $ \name -> do
-                    ty <- lookupNameEnv km name
-                    return (name, tyThingSemantic ty)
-            liftIO $ forM (Set.toList importedNames) $ \name -> do
-                    let ty = lookupNameEnv km name
-                    dbg $ "imported name: "
-                        <> showSDocUnsafe (ppr name)
-                        <> " :: " <> showSDocUnsafe (ppr ty)
-                    -- return (name, tyThingSemantic ty)
-            ShakeExtras{..} <- MaybeT $ fmap Just getShakeExtras
-            let originalModuleNameSemanticMap = toNameSemanticMap refMap
-            let combineMap = Map.unionWith (<>) originalModuleNameSemanticMap importedModuleNameSemanticMap
-            let names = identifierGetter ast
-
+    -- ask hscEnv for none local types
+    km <- liftIO $ foldrM (getType hsc) (tcg_type_env tmrTypechecked) nameSet
+    -- name from type typecheck
+    let importedModuleNameSemanticMap =  Map.fromList $ flip mapMaybe (Set.toList nameSet) $ \name -> do
+            ty <- lookupNameEnv km name
+            return (name, tyThingSemantic ty)
+    let localNameSemanticMap = toNameSemanticMap $ Map.filterWithKey (\k _ ->
+                either (const False) (flip Set.member nameSet) k) refMap
+    let combineMap = Map.unionWith (<>) localNameSemanticMap importedModuleNameSemanticMap
+    -- print all names
+    -- deriving method locate in the same position as the class name
+    -- liftIO $ mapM_ (\ (name, tokenType) -> dbg ("debug semanticMap: " <> showClearName name <> ":" <> show tokenType )) $ Map.toList importedModuleNameSemanticMap
+    -- liftIO $ mapM_ (\ (span, name) -> dbg ("debug names: " <> showClearName name <> ":" <> printCompactRealSrc span ) ) names
+    let moduleAbsTks = extractSemanticTokensFromNames combineMap names
+    case semanticTokenAbsoluteSemanticTokens moduleAbsTks of
+        Right tokens -> do
             source :: ByteString <- lift $ getSourceFileSource nfp
-            let moduleAbsTks = extractSemanticTokensFromNames combineMap names
-            case semanticTokenAbsoluteSemanticTokens moduleAbsTks of
-                Right tokens -> do
-                    liftIO $ mapM_ (\x -> mapM_ (dbg . show) x) $ recoverSemanticTokens (bytestringString source) tokens
-                    pure tokens
-                Left err -> do
-                    liftIO $ putStrLn $ "computeSemanticTokens: " <> show err
-                    MaybeT . pure $ Nothing
-        _ -> MaybeT . pure  $ Nothing
+            -- liftIO $ mapM_ (\x -> mapM_ (dbg . show) x) $ recoverSemanticTokens (bytestringString source) tokens
+            pure tokens
+        Left err -> do
+            liftIO $ putStrLn $ "computeSemanticTokens: " <> show err
+            MaybeT . pure $ Nothing
     where
     getType env n nameMap
       | Nothing <- lookupNameEnv nameMap n
@@ -239,9 +167,9 @@ computeSemanticTokens state nfp =
 
 semanticTokensFull :: PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull state _ param = do
-    let dbg = logWith state
+    -- let dbg = logWith state
     nfp <-  getNormalizedFilePathE (param ^. (L.textDocument . L.uri))
-    dbg $ "semanticTokensFull: " <> show nfp
+    -- dbg $ "semanticTokensFull: " <> show nfp
     -- source :: ByteString <- lift $ getSourceFileSource nfp
     items <- liftIO
         $ runAction "SemanticTokens.semanticTokensFull" state
@@ -258,32 +186,25 @@ semanticTokensFull state _ param = do
 ---- recover tokens
 -----------------------
 
+-- | recoverSemanticTokens
+-- used for debug and test
+-- this function is used to recover the original tokens(with token in haskell token type zoon)
+-- from the lsp semantic tokens(with token in lsp token type zoon)
 recoverSemanticTokens :: String -> SemanticTokens -> Either Text [SemanticTokenOriginal]
 recoverSemanticTokens sourceCode (SemanticTokens _ xs) = fmap (fmap $ tokenOrigin sourceCode) $ dataActualToken xs
-
-
-tokenOrigin :: [Char] -> ActualToken -> SemanticTokenOriginal
-tokenOrigin sourceCode (line, startChar, len, tokenType, _) =
-        -- convert back to count from 1
-        SemanticTokenOriginal tokenType (Loc (line+1) (startChar+1) len) name
-        where tLine = lines sourceCode !? fromIntegral line
-              name = maybe "no source" (take (fromIntegral len) . drop (fromIntegral startChar)) tLine
-
-
-dataActualToken :: [UInt] -> Either Text [ActualToken]
-dataActualToken xs = maybe decodeError (Right . fmap semanticTokenAbsoluteActualToken . absolutizeTokens)
-        $ mapM fromTuple (chunksOf 5 $ map fromIntegral xs)
     where
-          decodeError = Left "recoverSemanticTokenRelative: wrong token data"
-          fromTuple [a, b, c, d, _] = Just $ SemanticTokenRelative a b c (fromInt $ fromIntegral d) []
-          fromTuple _               = Nothing
+        tokenOrigin :: [Char] -> ActualToken -> SemanticTokenOriginal
+        tokenOrigin sourceCode (line, startChar, len, tokenType, _) =
+                -- convert back to count from 1
+                SemanticTokenOriginal tokenType (Loc (line+1) (startChar+1) len) name
+                where tLine = lines sourceCode !? fromIntegral line
+                      name = maybe "no source" (take (fromIntegral len) . drop (fromIntegral startChar)) tLine
 
--- span: /Users/ares/src/test/lib/SemanticTokens/Types.hs:(34,12)-(38,3)
--- type RefMap a = M.Map Identifier [(Span, IdentifierDetails a)]
-computeImportedSemanticTokens :: IdeState -> [NormalizedFilePath] -> Set.Set Name -> MaybeT Action NameSemanticMap
-computeImportedSemanticTokens state nfps names =
-    let dbg = logWith state in do
-    dbg "heelo"
-    let nameList = Set.toList names
-    let moduleNamePairs = [(1, nameOccName name) | name <- nameList]
-    return Map.empty
+
+        dataActualToken :: [UInt] -> Either Text [ActualToken]
+        dataActualToken xs = maybe decodeError (Right . fmap semanticTokenAbsoluteActualToken . absolutizeTokens)
+                $ mapM fromTuple (chunksOf 5 $ map fromIntegral xs)
+            where
+                decodeError = Left "recoverSemanticTokenRelative: wrong token data"
+                fromTuple [a, b, c, d, _] = Just $ SemanticTokenRelative a b c (fromInt $ fromIntegral d) []
+                fromTuple _               = Nothing

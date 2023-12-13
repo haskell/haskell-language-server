@@ -1,8 +1,8 @@
 module ValBind where
 
 
-hello :: String
-hello = "Hello, Haskell!"
+hello :: Char
+hello = head "Hello, Haskell!"
 
 
 

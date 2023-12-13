@@ -1,4 +1,6 @@
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE StrictData         #-}
+
 module Ide.Plugin.SemanticTokens.Types where
 
 
@@ -127,21 +129,10 @@ instance Show ContextInfo where
         EvidenceVarUse        -> "EvidenceVarUse"
 
 
-printCompactSrcSpan :: SrcSpan -> String
-printCompactSrcSpan (RealSrcSpan x _buf) = printCompactRealSrc x
-printCompactSrcSpan x                    = "noSrc"
 
 printCompactRealSrc :: RealSrcSpan -> String
 printCompactRealSrc x = show (srcSpanStartLine x) <> ":" <> show (srcSpanStartCol x) <> "-" <> show (srcSpanEndCol x)
 
-
-
-type IdentifierItem = (Span, Name, NE.NonEmpty ContextInfo)
-newtype NIdentifier = NIdentifier IdentifierItem
-
-identifierTokenType :: Identifier -> SemanticTokenType
-identifierTokenType (Right x) = toTokenType x
-identifierTokenType (Left x)  = TNothing
 
 toTokenType :: Name -> SemanticTokenType
 toTokenType locName = case occNameSpace $ occName locName of
@@ -151,23 +142,7 @@ toTokenType locName = case occNameSpace $ occName locName of
   x | isVarNameSpace x     -> TValBind
   _                        -> TNothing
 
-instance Show NIdentifier where
-    show (NIdentifier (span, x, y)) =
-        occNameString (nameOccName x)
-        <> "&" <> (show $ break (==':') $ occNameString $ nameOccName x)
-        <> "&" <> (show $ toTokenType x)
-        <> " [" <> show y <> "]"
-            <> " nameSrc: "<> printCompactSrcSpan (nameSrcSpan x) <> " " <> printCompactRealSrc span
 
-
-getOriginalTextFromId :: String -> NIdentifier -> String
-getOriginalTextFromId sourceCode (NIdentifier (span, _, _)) = fromMaybe "" $ do
-            tLine <- lines sourceCode List.!? (line-1)
-            return $ take len $ drop (startChar-1) tLine
-        where
-              line = srcSpanStartLine span
-              startChar = srcSpanStartCol span
-              len= srcSpanEndCol span - startChar
 
 
 -----------------------
@@ -188,3 +163,18 @@ showIdentifierDetails x = show $ identInfo x
 showIdentifier :: Identifier -> String
 showIdentifier (Left x)  = showSDocUnsafe (ppr x)
 showIdentifier (Right x) = nameStableString x
+
+showLocatedNames :: [LIdP GhcRn] -> String
+showLocatedNames xs = unlines
+    [ showSDocUnsafe (ppr locName) ++ " " ++ show (getLoc locName)
+    | locName <- xs]
+
+showClearName :: Name -> String
+showClearName name = occNameString (occName name) <> ":" <> showSDocUnsafe (ppr name) <> ":" <> showNameType name
+
+showNameType :: Name -> String
+showNameType name
+    | isInternalName name = "InternalName"
+    | isExternalName name = "ExternalName"
+    | isSystemName name   = "SystemName"
+    | isWiredInName name  = "WiredInName"

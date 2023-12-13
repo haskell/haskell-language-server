@@ -31,7 +31,7 @@ library
   hs-source-dirs:     src
   build-depends:
     , aeson
-    , base                  >=4.12 && <5
+    , base
     , containers
     , extra
     , hiedb
@@ -75,4 +75,5 @@ test-suite tests
     , data-default
     , bytestring
     , ghcide                == 2.5.0.0
+    -- , ghcide                == 2.5.0.0
     , hls-plugin-api        == 2.5.0.0
