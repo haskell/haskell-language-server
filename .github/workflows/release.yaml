@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8"]
+        ghc: ["9.8.1", "9.6.3", "9.4.8", "9.2.8"]
         platform: [ { image: "debian:9"
                     , installCmd: "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
                     , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
@@ -127,7 +127,7 @@ jobs:
               , ARTIFACT: "x86_64-linux-unknown"
               , ADD_CABAL_ARGS: "--enable-split-sections"
               }
-          - ghc: 9.4.7
+          - ghc: 9.4.8
             platform:
               { image: "fedora:27"
               , installCmd: "dnf install -y"
@@ -213,7 +213,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8" ]
+        ghc: ["9.8.1", "9.6.3", "9.4.8", "9.2.8" ]
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
@@ -273,7 +273,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8"]
+        ghc: ["9.8.1", "9.6.3", "9.4.8", "9.2.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -318,7 +318,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8"]
+        ghc: ["9.8.1", "9.6.3", "9.4.8", "9.2.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -363,7 +363,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8"]
+        ghc: ["9.8.1", "9.6.3", "9.4.8", "9.2.8"]
     steps:
       - name: install windows deps
         shell: pwsh
@@ -621,13 +621,13 @@ jobs:
 
       - name: Create bindist
         run: |
-          bash .github/scripts/brew.sh git coreutils llvm@11 autoconf automake tree
-          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@11/bin:$PATH"
-          export CC="$HOME/.brew/opt/llvm@11/bin/clang"
-          export CXX="$HOME/.brew/opt/llvm@11/bin/clang++"
+          bash .github/scripts/brew.sh git coreutils llvm@13 autoconf automake tree
+          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@13/bin:$PATH"
+          export CC="$HOME/.brew/opt/llvm@13/bin/clang"
+          export CXX="$HOME/.brew/opt/llvm@13/bin/clang++"
           export LD=ld
-          export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
-          export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
+          export AR="$HOME/.brew/opt/llvm@13/bin/llvm-ar"
+          export RANLIB="$HOME/.brew/opt/llvm@13/bin/llvm-ranlib"
           for bindist in out-*.tar ; do
             tar xf "${bindist}"
           done
@@ -872,13 +872,13 @@ jobs:
 
       - name: Run test (mac)
         run: |
-          bash .github/scripts/brew.sh git coreutils llvm@11 autoconf automake tree
-          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@11/bin:$PATH"
-          export CC="$HOME/.brew/opt/llvm@11/bin/clang"
-          export CXX="$HOME/.brew/opt/llvm@11/bin/clang++"
+          bash .github/scripts/brew.sh git coreutils llvm@13 autoconf automake tree
+          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@13/bin:$PATH"
+          export CC="$HOME/.brew/opt/llvm@13/bin/clang"
+          export CXX="$HOME/.brew/opt/llvm@13/bin/clang++"
           export LD=ld
-          export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
-          export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
+          export AR="$HOME/.brew/opt/llvm@13/bin/llvm-ar"
+          export RANLIB="$HOME/.brew/opt/llvm@13/bin/llvm-ranlib"
           bash .github/scripts/test.sh
 
   test-win:
