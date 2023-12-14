@@ -76,6 +76,8 @@ toTokenType locName = case occNameSpace $ occName locName of
   _                        -> TNothing
 
 
+-- | tyThingSemantic
+-- from ghc source code https://hackage.haskell.org/package/ghc-9.6.3/docs/src/GHC.Core.TyCon.html#isDataTyCon
 tyThingSemantic :: TyThing -> SemanticTokenType
 tyThingSemantic ty = case ty of
     AnId vid
@@ -92,9 +94,11 @@ tyThingSemantic ty = case ty of
         | isTypeSynonymTyCon tyCon -> TTypeSyn
         | isTypeFamilyTyCon tyCon -> TTypeFamily
         | isClassTyCon tyCon -> TClass
-        | isDataTyCon tyCon -> TTypeCon
-        | isPrimTyCon tyCon -> TTypeCon
-        | otherwise -> TNothing
+        -- | isVanillaAlgTyCon tyCon -> TTypeCon
+        -- | isPrimTyCon tyCon -> TTypeCon
+        -- fall back to TTypeCon for
+        -- including defined by data, newtype, and type family instance
+        | otherwise -> TTypeCon
     ACoAxiom _ -> TNothing
 
 

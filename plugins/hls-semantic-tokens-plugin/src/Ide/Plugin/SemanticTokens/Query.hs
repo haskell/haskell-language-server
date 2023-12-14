@@ -4,9 +4,8 @@
 {-# LANGUAGE ExplicitNamespaces  #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving  #-}
 {-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TypeOperators       #-}
+
 module Ide.Plugin.SemanticTokens.Query where
 import           Control.Arrow                       (ArrowChoice ((|||)),
                                                       (&&&))

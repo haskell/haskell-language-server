@@ -40,11 +40,16 @@ It should be implemented in the future.
   * [x] record field name
   * [x] type synonym
   * [x] pattern synonym
-  * [x] pattern bindings
-  * [x] value bindings
+  * [x] pattern bindings (map to parameters in standard token)
+  * [x] value bindings (map to functions in standard token)
   * [x] imported name
 
 * Supported modifiers:
-  * [ ] declaration (as in class declearations and type family)
+  * [ ] declaration (as in class declarations and type family)
   * [ ] definition (as in class instance declaration and type family instance)
   * [ ] modification (as in rec field update)
+
+## Semantic highlighting sample
+
+![semantic highlighting sample](SemanticHighlightingSample0.png)
+![semantic highlighting sample](SemanticHighlightingSample1.png)
