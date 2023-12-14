@@ -41,8 +41,8 @@ import           Data.Hashable                        hiding (hash)
 import qualified Data.HashMap.Strict                  as HM
 import           Data.IORef
 import           Data.List
-import           Data.List.NonEmpty                   (NonEmpty (..))
 import           Data.List.Extra                      as L
+import           Data.List.NonEmpty                   (NonEmpty (..))
 import qualified Data.List.NonEmpty                   as NE
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe
@@ -113,22 +113,23 @@ import           System.Random                        (RandomGen)
 
 import qualified Development.IDE.Session.Implicit     as GhcIde
 
-import Development.IDE.GHC.Compat.CmdLine
+import           Development.IDE.GHC.Compat.CmdLine
 
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 #if MIN_VERSION_ghc(9,3,0)
 import qualified Data.Set                             as OS
 
-import GHC.Driver.Errors.Types
-import GHC.Driver.Env (hscSetActiveUnitId, hsc_all_home_unit_ids)
-import GHC.Driver.Make (checkHomeUnitsClosed)
-import GHC.Unit.State
-import GHC.Types.Error (errMsgDiagnostic)
-import GHC.Data.Bag
+import           GHC.Data.Bag
+import           GHC.Driver.Env                       (hscSetActiveUnitId,
+                                                       hsc_all_home_unit_ids)
+import           GHC.Driver.Errors.Types
+import           GHC.Driver.Make                      (checkHomeUnitsClosed)
+import           GHC.Types.Error                      (errMsgDiagnostic)
+import           GHC.Unit.State
 #endif
 
-import GHC.ResponseFile
+import           GHC.ResponseFile
 
 data Log
   = LogSettingInitialDynFlags
@@ -479,12 +480,28 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
         -- files in the project so that `knownFiles` can learn about them and
         -- we can generate a complete module graph
     let extendKnownTargets newTargets = do
-          knownTargets <- forM newTargets $ \TargetDetails{..} ->
+          knownTargets <- concatForM  newTargets $ \TargetDetails{..} ->
             case targetTarget of
-              TargetFile f -> pure (targetTarget, [f])
+              TargetFile f -> do
+                -- If a target file has multiple possible locations, then we
+                -- assume they are all separate file targets.
+                -- This happens with '.hs-boot' files if they are in the root directory of the project.
+                -- GHC reports options such as '-i. A' as 'TargetFile A.hs' instead of 'TargetModule A'.
+                -- In 'fromTargetId', we dutifully look for '.hs-boot' files and add them to the
+                -- targetLocations of the TargetDetails. Then we add everything to the 'knownTargetsVar'.
+                -- However, when we look for a 'Foo.hs-boot' file in 'FindImports.hs', we look for either
+                --
+                --  * TargetFile Foo.hs-boot
+                --  * TargetModule Foo
+                --
+                -- If we don't generate a TargetFile for each potential location, we will only have
+                -- 'TargetFile Foo.hs' in the 'knownTargetsVar', thus not find 'TargetFile Foo.hs-boot'
+                -- and also not find 'TargetModule Foo'.
+                fs <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
+                pure $ map (\fp -> (TargetFile fp, [fp])) (nubOrd (f:fs))
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
-                return (targetTarget, found)
+                return [(targetTarget, found)]
           hasUpdate <- join $ atomically $ do
             known <- readTVar knownTargetsVar
             let known' = flip mapHashed known $ \k ->
@@ -975,13 +992,13 @@ data ComponentInfo = ComponentInfo
   -- | Internal units, such as local libraries, that this component
   -- is loaded with. These have been extracted from the original
   -- ComponentOptions.
-  , componentInternalUnits :: [UnitId]
+  , componentInternalUnits  :: [UnitId]
   -- | All targets of this components.
   , componentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
   , componentFP             :: NormalizedFilePath
   -- | Component Options used to load the component.
-  , componentCOptions      :: ComponentOptions
+  , componentCOptions       :: ComponentOptions
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
   -- to last modification time. See Note [Multi Cradle Dependency Info]
   , componentDependencyInfo :: DependencyInfo
@@ -1106,7 +1123,7 @@ setOptions cfp (ComponentOptions theOpts compRoot _) dflags = do
 
         let targets = makeTargetsAbsolute root targets'
             root = case workingDirectory dflags'' of
-              Nothing -> compRoot
+              Nothing   -> compRoot
               Just wdir -> compRoot </> wdir
         let dflags''' =
               setWorkingDirectory root $
