@@ -20,7 +20,8 @@ jobs:
     - name: 'Checking code'
       uses: rwe/actions-hlint-run@v2
       with:
-        hlint-bin: "hlint --with-group=extra"
+        # Ignore testdata directories to silence hlint warnings for test data files.
+        hlint-bin: "hlint --with-group=extra --ignore-glob='**/testdata/**/*.hs' --ignore-glob='**/test/data/**/*.hs'"
         fail-on: error
         path: .
 
