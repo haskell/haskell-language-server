@@ -24,8 +24,10 @@ library
   exposed-modules:
     Ide.Plugin.SemanticTokens
     Ide.Plugin.SemanticTokens.Types
+    Ide.Plugin.SemanticTokens.Mappings
   other-modules:
     Ide.Plugin.SemanticTokens.Query
+    Ide.Plugin.SemanticTokens.Utils
     Ide.Plugin.SemanticTokens.Internal
 
   hs-source-dirs:     src
@@ -44,7 +46,6 @@ library
     , unordered-containers
     , transformers
     , bytestring
-
     , syb
 
   default-language:   Haskell2010

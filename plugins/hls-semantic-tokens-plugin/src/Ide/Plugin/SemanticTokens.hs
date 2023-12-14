@@ -1,4 +1,4 @@
-module Ide.Plugin.SemanticTokens (descriptor, Internal.recoverSemanticTokens) where
+module Ide.Plugin.SemanticTokens (descriptor) where
 
 import           Development.IDE
 import qualified Ide.Plugin.SemanticTokens.Internal as Internal

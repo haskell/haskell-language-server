@@ -1,15 +1,10 @@
 {-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.SemanticTokens.Internal where
@@ -18,7 +13,8 @@ import           Control.Lens                         ((^.))
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Control.Monad.Trans.Maybe            (MaybeT (..))
 import           Data.Data                            (Data)
-import           Data.Generics                        (everything, mkQ)
+import           Data.Generics                        (Typeable, everything,
+                                                       mkQ)
 import           Data.List                            (sortBy)
 import qualified Data.List                            as List
 import           Data.Maybe                           (catMaybes, fromMaybe,
@@ -31,10 +27,13 @@ import           Development.IDE                      (Action,
                                                        GetModIface (GetModIface),
                                                        GhcSessionDeps (GhcSessionDeps, GhcSessionDeps_),
                                                        HieAstResult (HAR, hieAst, hieModule, refMap),
-                                                       IdeState,
+                                                       IdeAction, IdeState,
+                                                       Priority (..),
                                                        TypeCheck (TypeCheck),
-                                                       catchSrcErrors, realSpan,
-                                                       useWithStaleFast)
+                                                       catchSrcErrors,
+                                                       ideLogger, logPriority,
+                                                       realSpan, use,
+                                                       useWithStaleFast, uses)
 import           Development.IDE.Core.Compile         (TcModuleResult (..),
                                                        lookupName)
 import           Development.IDE.Core.Rules           (getSourceFileSource,
@@ -60,7 +59,6 @@ import           Data.ByteString                      (ByteString, unpack)
 import           Data.Either                          (fromRight, rights)
 import           Data.Either.Extra                    (lefts)
 import           Data.Function                        (on)
-import           Data.Generics                        (Typeable)
 import qualified Data.HashSet                         as HashSet
 import           Data.List.Extra                      (chunksOf, (!?))
 import qualified Data.List.NonEmpty                   as NonEmpty
@@ -70,9 +68,6 @@ import           Data.Text                            (Text)
 import           Data.Traversable                     (for)
 import           Data.Typeable                        (cast)
 import           Debug.Trace                          (trace)
-import           Development.IDE                      (IdeAction, IdeState,
-                                                       Priority (..), ideLogger,
-                                                       logPriority, use, uses)
 import           Development.IDE.Core.PluginUtils     (useWithStaleFastMT,
                                                        useWithStaleMT, usesMT)
 import           Development.IDE.Core.PositionMapping (zeroMapping)
@@ -82,38 +77,15 @@ import           Development.IDE.Spans.LocalBindings  (getDefiningBindings,
 import           Development.IDE.Types.Exports        (ExportsMap (..),
                                                        createExportsMapHieDb)
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
-import           GHC.Conc                             (readTVar)
+
+import           Ide.Plugin.SemanticTokens.Mappings
 
 logWith :: (MonadIO m) => IdeState -> String -> m ()
 logWith st = liftIO . logPriority (ideLogger st) Info . T.pack
 
-
 -- logWith :: (MonadIO m) => IdeState -> String -> m ()
 -- logWith st = liftIO . print
 
-bytestringString :: ByteString -> String
-bytestringString = map (toEnum . fromEnum) . unpack
-
-tyThingSemantic :: TyThing -> SemanticTokenType
-tyThingSemantic ty = case ty of
-    AnId vid
-        | isTyVar vid -> TTypeVariable
-        | isRecordSelector vid -> TRecField
-        | isClassOpId vid -> TClassMethod
-        -- | isLocalId vid -> TPatternBind
-        -- | isDFunId vid -> TClassMethod
-        | otherwise -> TValBind
-    AConLike con -> case con of
-        RealDataCon _ -> TDataCon
-        PatSynCon _   -> TPatternSyn
-    ATyCon tyCon
-        | isTypeSynonymTyCon tyCon -> TTypeSyn
-        | isTypeFamilyTyCon tyCon -> TTypeFamily
-        | isClassTyCon tyCon -> TClass
-        | isDataTyCon tyCon -> TTypeCon
-        | isPrimTyCon tyCon -> TTypeCon
-        | otherwise -> TNothing
-    ACoAxiom _ -> TNothing
 
 -----------------------
 ---- the api
@@ -140,12 +112,12 @@ computeSemanticTokens state nfp =
             ty <- lookupNameEnv km name
             return (name, tyThingSemantic ty)
     let localNameSemanticMap = toNameSemanticMap $ Map.filterWithKey (\k _ ->
-                either (const False) (flip Set.member nameSet) k) refMap
+                either (const False) (`Set.member` nameSet) k) refMap
     let combineMap = Map.unionWith (<>) localNameSemanticMap importedModuleNameSemanticMap
     -- print all names
     -- deriving method locate in the same position as the class name
     -- liftIO $ mapM_ (\ (name, tokenType) -> dbg ("debug semanticMap: " <> showClearName name <> ":" <> show tokenType )) $ Map.toList importedModuleNameSemanticMap
-    -- liftIO $ mapM_ (\ (span, name) -> dbg ("debug names: " <> showClearName name <> ":" <> printCompactRealSrc span ) ) names
+    -- liftIO $ mapM_ (\ (span, name) -> dbg ("debug names: " <> showClearName name <> ":" <> showCompactRealSrc span ) ) names
     let moduleAbsTks = extractSemanticTokensFromNames combineMap names
     case semanticTokenAbsoluteSemanticTokens moduleAbsTks of
         Right tokens -> do
@@ -168,7 +140,7 @@ computeSemanticTokens state nfp =
 semanticTokensFull :: PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull state _ param = do
     -- let dbg = logWith state
-    nfp <-  getNormalizedFilePathE (param ^. (L.textDocument . L.uri))
+    nfp <-  getNormalizedFilePathE (param ^. L.textDocument . L.uri)
     -- dbg $ "semanticTokensFull: " <> show nfp
     -- source :: ByteString <- lift $ getSourceFileSource nfp
     items <- liftIO
@@ -182,29 +154,3 @@ semanticTokensFull state _ param = do
             pure $ InL items
 
 
------------------------
----- recover tokens
------------------------
-
--- | recoverSemanticTokens
--- used for debug and test
--- this function is used to recover the original tokens(with token in haskell token type zoon)
--- from the lsp semantic tokens(with token in lsp token type zoon)
-recoverSemanticTokens :: String -> SemanticTokens -> Either Text [SemanticTokenOriginal]
-recoverSemanticTokens sourceCode (SemanticTokens _ xs) = fmap (fmap $ tokenOrigin sourceCode) $ dataActualToken xs
-    where
-        tokenOrigin :: [Char] -> ActualToken -> SemanticTokenOriginal
-        tokenOrigin sourceCode (line, startChar, len, tokenType, _) =
-                -- convert back to count from 1
-                SemanticTokenOriginal tokenType (Loc (line+1) (startChar+1) len) name
-                where tLine = lines sourceCode !? fromIntegral line
-                      name = maybe "no source" (take (fromIntegral len) . drop (fromIntegral startChar)) tLine
-
-
-        dataActualToken :: [UInt] -> Either Text [ActualToken]
-        dataActualToken xs = maybe decodeError (Right . fmap semanticTokenAbsoluteActualToken . absolutizeTokens)
-                $ mapM fromTuple (chunksOf 5 $ map fromIntegral xs)
-            where
-                decodeError = Left "recoverSemanticTokenRelative: wrong token data"
-                fromTuple [a, b, c, d, _] = Just $ SemanticTokenRelative a b c (fromInt $ fromIntegral d) []
-                fromTuple _               = Nothing

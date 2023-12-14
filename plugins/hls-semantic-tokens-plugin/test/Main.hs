@@ -6,39 +6,41 @@
 
 
 
-import           Control.Arrow                   (Arrow ((***)), (&&&), (+++))
-import           Control.Lens                    hiding (use)
-import           Control.Monad                   (forM)
+import           Control.Arrow                      (Arrow ((***)), (&&&),
+                                                     (+++))
+import           Control.Lens                       hiding (use)
+import           Control.Monad                      (forM)
 import           Data.Bifunctor
-import qualified Data.ByteString                 as BS
+import qualified Data.ByteString                    as BS
 import           Data.Data
 import           Data.Default
-import           Data.Functor                    (void)
-import qualified Data.List                       as List
-import           Data.Map                        as Map
-import           Data.Maybe                      (fromJust)
+import           Data.Functor                       (void)
+import qualified Data.List                          as List
+import           Data.Map                           as Map
+import           Data.Maybe                         (fromJust)
 import qualified Data.Maybe
-import qualified Data.Set                        as Set
-import           Data.String                     (fromString)
+import qualified Data.Set                           as Set
+import           Data.String                        (fromString)
 import           Data.Text
-import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
-import           Ide.Plugin.Error                (getNormalizedFilePathE)
+import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
+import           Ide.Plugin.Error                   (getNormalizedFilePathE)
 import           Ide.Plugin.SemanticTokens
+import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens      as L
-import           Language.LSP.Protocol.Types     (SemanticTokens (..),
-                                                  SemanticTokensParams (..))
-import qualified Language.LSP.Test               as Test
+import qualified Language.LSP.Protocol.Lens         as L
+import           Language.LSP.Protocol.Types        (SemanticTokens (..),
+                                                     SemanticTokensParams (..))
+import qualified Language.LSP.Test                  as Test
 import           System.Environment.Blank
 import           System.FilePath
-import qualified Test.Hls                        (PluginTestDescriptor,
-                                                  mkPluginTestDescriptor',
-                                                  runSessionWithServerInTmpDir,
-                                                  waitForAction)
+import qualified Test.Hls                           (PluginTestDescriptor,
+                                                     mkPluginTestDescriptor',
+                                                     runSessionWithServerInTmpDir,
+                                                     waitForAction)
 import           Test.Hls
-import qualified Test.Hls.FileSystem             as FS
-import           Test.Hls.Util                   (withCanonicalTempDir)
+import qualified Test.Hls.FileSystem                as FS
+import           Test.Hls.Util                      (withCanonicalTempDir)
 
 
 testDataDir :: FilePath
