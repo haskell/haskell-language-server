@@ -69,19 +69,14 @@ nameGetter =  everything Set.union (Set.empty `mkQ` nameToCollect)
 --- | construct definition map from HieAST a
 --------------------------------------------
 
--- this one might contain derived names
-hieAstNameSet :: HieAST a -> Set.Set Name
-hieAstNameSet ast = Set.fromList importedNames
-    where locatedNames = hieAstSpanNames ast
-          importedNames = [name | (_, name) <- locatedNames]
-
-hieAstSpanNames :: HieAST a -> [(Span, Name)]
-hieAstSpanNames ast = if null (nodeChildren ast) then
-    getIds ast else concatMap hieAstSpanNames (nodeChildren ast)
+hieAstSpanNames :: Set.Set Name -> HieAST a -> [(Span, Name)]
+hieAstSpanNames nameSet ast = if null (nodeChildren ast) then
+    getIds ast else concatMap (hieAstSpanNames nameSet) (nodeChildren ast)
     where
         getIds :: HieAST a -> [(Span, Name)]
         getIds ast = [(nodeSpan ast, c)
                     | (Right c, d) <- Map.toList $ getNodeIds' ast
+                    , Set.member c nameSet
                     -- at least get one info
                     , not $ any isEvidenceBind $ identInfo d
                     , not $ any isEvidenceUse $ identInfo d

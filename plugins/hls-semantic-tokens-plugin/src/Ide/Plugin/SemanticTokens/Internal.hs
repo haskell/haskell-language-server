@@ -91,6 +91,12 @@ logWith st = liftIO . logPriority (ideLogger st) Info . T.pack
 ---- the api
 -----------------------
 
+-- | computeSemanticTokens
+-- collect from various source
+-- global names and imported name from typechecked and hscEnv
+-- local names from refMap
+-- name locations from hieAst
+-- visible names from renamedSource
 computeSemanticTokens ::  IdeState -> NormalizedFilePath -> Action (Maybe SemanticTokens)
 computeSemanticTokens state nfp =
     runMaybeT $ do
@@ -102,18 +108,20 @@ computeSemanticTokens state nfp =
     (hscEnv -> hsc, _) <- useWithStaleMT GhcSessionDeps nfp
     -- because the names get from ast might contain derived name
     let nameSet = nameGetter tmrRenamed
-    -- let nameSet = hieAstNameSet ast
-    let names = hieAstSpanNames ast
-
-    -- ask hscEnv for none local types
+    -- only take names we cares about from ast
+    let names = hieAstSpanNames nameSet ast
+    -- ask hscEnv for none local types, some from typechecked can avoid asking hscEnv
     km <- liftIO $ foldrM (getType hsc) (tcg_type_env tmrTypechecked) nameSet
-    -- name from type typecheck
-    let importedModuleNameSemanticMap =  Map.fromList $ flip mapMaybe (Set.toList nameSet) $ \name -> do
+    -- let km = tcg_type_env tmrTypechecked
+    -- global name map from type typecheck and hscEnv
+    let globalAndImportedModuleNameSemanticMap = Map.fromList $ flip mapMaybe (Set.toList nameSet) $ \name -> do
             ty <- lookupNameEnv km name
             return (name, tyThingSemantic ty)
+    -- local name map from refMap
     let localNameSemanticMap = toNameSemanticMap $ Map.filterWithKey (\k _ ->
-                either (const False) (`Set.member` nameSet) k) refMap
-    let combineMap = Map.unionWith (<>) localNameSemanticMap importedModuleNameSemanticMap
+                either (const False) (`Set.member` nameSet) k)
+                refMap
+    let combineMap = Map.unionWith (<>) localNameSemanticMap globalAndImportedModuleNameSemanticMap
     -- print all names
     -- deriving method locate in the same position as the class name
     -- liftIO $ mapM_ (\ (name, tokenType) -> dbg ("debug semanticMap: " <> showClearName name <> ":" <> show tokenType )) $ Map.toList importedModuleNameSemanticMap
