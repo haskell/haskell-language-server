@@ -35,6 +35,7 @@ packages:
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-stan-plugin
   - ./plugins/hls-stylish-haskell-plugin
+  - ./plugins/hls-semantic-tokens-plugin
 
 ghc-options:
   "$everything": -haddock
