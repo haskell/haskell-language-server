@@ -1,4 +1,4 @@
-module Class where
+module TClass where
 
 
 class Foo a where

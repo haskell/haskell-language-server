@@ -1,3 +1,3 @@
-module ModuleA where
+module TModuleA where
 
 data Game = Game Int

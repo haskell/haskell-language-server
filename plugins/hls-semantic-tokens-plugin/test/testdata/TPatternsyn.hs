@@ -1,5 +1,5 @@
 {-# LANGUAGE PatternSynonyms #-}
-module PatternSyn where
+module TPatternSyn where
 
 
 pattern Foo = 1

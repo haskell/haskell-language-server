@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
-module TypeFamily where
+module TTypefamily where
 
 type family Foo a where
   Foo Int = Int

@@ -21,6 +21,7 @@ import qualified Data.Maybe
 import qualified Data.Set                        as Set
 import           Data.String                     (fromString)
 import           Data.Text
+import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))
 import           Ide.Plugin.Error                (getNormalizedFilePathE)
 import           Ide.Plugin.SemanticTokens
 import           Ide.Plugin.SemanticTokens.Types
@@ -95,7 +96,7 @@ semanticTokensImportedTests = testGroup "imported test"
                       , SemanticTokenOriginal {tokenType = TPatternBind, loc = Loc {line = 7, startChar = 13, len = 1}, name = "b"}]
 
 
-            runSessionWithServerInDirAndGetSemanticsFile "class.hs" $ \res doc content -> do
+            runSessionWithServerInDirAndGetSemanticsFile "TClass.hs" $ \res doc content -> do
                 -- content <- waitForAction "getFileContents" doc
                 case res ^? _L of
                     Just tokens -> do
@@ -111,7 +112,7 @@ semanticTokensImportedTests = testGroup "imported test"
 semanticTokensClassTests :: TestTree
 semanticTokensClassTests = testGroup  "type class"
     [ testCase "type class" $ do
-        let filePath = "./test/testdata/class.hs"
+        let filePath = "./test/testdata/TClass.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect =
                 [SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 4, startChar = 7, len = 3}, name = "Foo"}
@@ -119,7 +120,7 @@ semanticTokensClassTests = testGroup  "type class"
                 ,SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 5, startChar = 3, len = 3}, name = "foo"}
                 ,SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 5, startChar = 10, len = 1}, name = "a"}
                 ,SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 15, len = 3}, name = "Int"}]
-        runSessionWithServerInDirAndGetSemantic "class.hs" $ \res doc -> do
+        runSessionWithServerInDirAndGetSemantic "TClass.hs" $ \res doc -> do
             -- content <- waitForAction "getFileContents" doc
             case res ^? _L of
                 Just tokens -> do
@@ -128,7 +129,7 @@ semanticTokensClassTests = testGroup  "type class"
                     return ()
                 _notoken -> error "No tokens found"
     , testCase "imported class method InstanceClassMethodBind" $ do
-        let filePath = "./test/testdata/InstanceClassMethodBind.hs"
+        let filePath = "./test/testdata/TInstanceClassMethodBind.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect =
                 [SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 6, len = 3}, name = "Foo"}
@@ -138,7 +139,7 @@ semanticTokensClassTests = testGroup  "type class"
                 ,SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 13, len = 3}, name = "Foo"}
                 ,SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 6, startChar = 5, len = 4}, name = "(==)"}
                 ,SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 6, startChar = 12, len = 9}, name = "undefined"}]
-        runSessionWithServerInDirAndGetSemantic "InstanceClassMethodBind.hs" $ \res doc -> do
+        runSessionWithServerInDirAndGetSemantic "TInstanceClassMethodBind.hs" $ \res doc -> do
             -- content <- waitForAction "getFileContents" doc
             case res ^? _L of
                 Just tokens -> do
@@ -147,12 +148,12 @@ semanticTokensClassTests = testGroup  "type class"
                     return ()
                 _notokens -> error "No tokens found"
     ,
-    testCase "imported class method InstanceClassMethodUse" $ do
-        let filePath = "./test/testdata/InstanceClassMethodUse.hs"
+    testCase "imported class method TInstanceClassMethodUse" $ do
+        let filePath = "./test/testdata/TInstanceClassMethodUse.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect = [SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 4, startChar = 1, len = 2}, name = "go"}
                 ,SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 4, startChar = 9, len = 4}, name = "(==)"}]
-        runSessionWithServerInDirAndGetSemantic "InstanceClassMethodUse.hs" $ \res doc -> do
+        runSessionWithServerInDirAndGetSemantic "TInstanceClassMethodUse.hs" $ \res doc -> do
             -- content <- waitForAction "getFileContents" doc
             case res ^? _L of
                 Just tokens -> do
@@ -161,13 +162,13 @@ semanticTokensClassTests = testGroup  "type class"
                 _notokens -> error "No tokens found"
 
     , testCase "imported deriving" $ do
-        let filePath = "./test/testdata/classImportedDeriving.hs"
+        let filePath = "./test/testdata/TClassImportedDeriving.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect =
                 [SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 6, len = 3}, name = "Foo"}
                 ,SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 12, len = 3}, name = "Foo"}
                 ,SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 4, startChar = 26, len = 4}, name = "Show"}]
-        runSessionWithServerInDirAndGetSemantic "classImportedDeriving.hs" $ \res doc -> do
+        runSessionWithServerInDirAndGetSemantic "TClassImportedDeriving.hs" $ \res doc -> do
             -- content <- waitForAction "getFileContents" doc
             case res ^? _L of
                 Just tokens -> do
@@ -183,14 +184,14 @@ semanticTokensValuePatternTests =
   "value and patterns "
   [
     testCase "value bind" $ do
-        let filePath = "./test/testdata/valBind.hs"
+        let filePath = "./test/testdata/TValBind.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect =
                 [SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 4, startChar = 1, len = 5}, name = "hello"}
-                ,SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 10, len = 4}, name = "Char"}
+                ,SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 10, len = 3}, name = "Int"}
                 ,SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 5, startChar = 1, len = 5}, name = "hello"}
-                ,SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 5, startChar = 9, len = 4}, name = "head"}]
-        runSessionWithServerInDirAndGetSemantic "valBind.hs" $ \res doc -> do
+                ,SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 5, startChar = 9, len = 6}, name = "length"}]
+        runSessionWithServerInDirAndGetSemantic "TValBind.hs" $ \res doc -> do
             -- content <- waitForAction "getFileContents" doc
             case res ^? _L of
                 Just tokens -> do
@@ -199,11 +200,11 @@ semanticTokensValuePatternTests =
                     return ()
                 _noTokens -> error "No tokens found"
     , testCase "pattern match" $ do
-        let filePath = "./test/testdata/patternMatch.hs"
+        let filePath = "./test/testdata/TPatternMatch.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect = [SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 4, startChar = 1, len = 1}, name = "g"}
                     ,SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 4, len = 7}, name = "Nothing"}]
-        runSessionWithServerInDirAndGetSemantic "patternMatch.hs" $ \res doc -> do
+        runSessionWithServerInDirAndGetSemantic "TPatternMatch.hs" $ \res doc -> do
             -- content <- waitForAction "getFileContents" doc
             case res ^? _L of
                 Just tokens -> do
@@ -212,7 +213,7 @@ semanticTokensValuePatternTests =
                     return ()
                 _noTokens -> error "No tokens found"
     , testCase "pattern bind" $ do
-        let filePath = "./test/testdata/patternBind.hs"
+        let filePath = "./test/testdata/TPatternBind.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect =
 
@@ -224,7 +225,7 @@ semanticTokensValuePatternTests =
                 ,SemanticTokenOriginal {tokenType = TPatternBind, loc = Loc {line = 5, startChar = 9, len = 1}, name = "x"}
                 ,SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 5, startChar = 11, len = 1}, name = "+"}
                 ,SemanticTokenOriginal {tokenType = TPatternBind, loc = Loc {line = 5, startChar = 13, len = 1}, name = "y"}]
-        runSessionWithServerInDirAndGetSemantic "patternBind.hs" $ \res doc -> do
+        runSessionWithServerInDirAndGetSemantic "TPatternBind.hs" $ \res doc -> do
             -- content <- waitForAction "getFileContents" doc
             case res ^? _L of
                 Just tokens -> do
@@ -249,11 +250,11 @@ semanticTokensTests =
                 _notokens   -> error "No tokens found"
             liftIO $ 1 @?= 1
     , testCase "pattern syn" $ do
-        let filePath = "./test/testdata/patternsyn.hs"
+        let filePath = "./test/testdata/TPatternSyn.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect = [SemanticTokenOriginal {tokenType = TPatternSyn, loc = Loc {line = 5, startChar = 9, len = 3}
             , name = "Foo"}]
-        runSessionWithServerInDirAndGetSemantic "patternsyn.hs" $ \res doc -> do
+        runSessionWithServerInDirAndGetSemantic "TPatternSyn.hs" $ \res doc -> do
             -- content <- waitForAction "getFileContents" doc
             case res ^? _L of
                 Just tokens -> do
@@ -263,7 +264,7 @@ semanticTokensTests =
                 _notokens -> error "No tokens found"
 
     , testCase "type family" $ do
-        let filePath = "./test/testdata/typefamily.hs"
+        let filePath = "./test/testdata/TTypefamily.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect =
                 [SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 4, startChar = 13, len = 3}, name = "Foo"}
@@ -274,7 +275,7 @@ semanticTokensTests =
                 ,SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 6, startChar = 3, len = 3}, name = "Foo"}
                 ,SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 6, startChar = 7, len = 1}, name = "a"}
                 ,SemanticTokenOriginal {tokenType = TTypeSyn, loc = Loc {line = 6, startChar = 11, len = 6}, name = "String"}]
-        runSessionWithServerInDirAndGetSemantic "typefamily.hs" $ \res doc -> do
+        runSessionWithServerInDirAndGetSemantic "TTypefamily.hs" $ \res doc -> do
             -- content <- waitForAction "getFileContents" doc
             case res ^? _L of
                 Just tokens -> do
@@ -283,32 +284,33 @@ semanticTokensTests =
                     return ()
                 _notokens -> error "No tokens found"
 
-    -- ,testCase "module import test" $ do
-    --     let filePath1 = "./test/testdata/moduleA.hs"
-    --     let filePath2 = "./test/testdata/moduleA.hs"
-    --     content1 <- liftIO $ Prelude.readFile filePath1
-    --     content2 <- liftIO $ Prelude.readFile filePath2
+    ,testCase "module import test" $ do
+        let filePath1 = "./test/testdata/TModuleA.hs"
+        let filePath2 = "./test/testdata/TModuleB.hs"
+        content1 <- liftIO $ Prelude.readFile filePath1
+        content2 <- liftIO $ Prelude.readFile filePath2
 
-    --     let file1 = "moduleA.hs"
-    --     let file2 = "moduleB.hs"
-    --     let expect = []
-    --     Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
-    --             doc1 <- openDoc file1 "haskell"
-    --             doc2 <- openDoc file2 "haskell"
-    --             check1 <- waitForAction "TypeCheck" doc1
-    --             check2 <- waitForAction "TypeCheck" doc2
-                -- case check2 of
-                --     Right (WaitForIdeRuleResult x) -> liftIO $ print $ "result of checking2: " <> show x
-                --     Left y -> error "TypeCheck2 failed"
+        let file1 = "TModuleA.hs"
+        let file2 = "TModuleB.hs"
+        let expect = [SemanticTokenOriginal {tokenType = TValBind, loc = Loc {line = 5, startChar = 1, len = 2}, name = "go"}
+                     ,SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 5, startChar = 6, len = 4}, name = "Game"}]
+        Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
+                doc1 <- openDoc file1 "haskell"
+                doc2 <- openDoc file2 "haskell"
+                check1 <- waitForAction "TypeCheck" doc1
+                check2 <- waitForAction "TypeCheck" doc2
+                case check2 of
+                    Right (WaitForIdeRuleResult x) -> liftIO $ print $ "result of checking2: " <> show x
+                    Left y -> error "TypeCheck2 failed"
 
-                -- res2 <- Test.getSemanticTokens doc2
-                -- case res2 ^? _L of
-                --     Just tokens -> do
-                --         either (error . show)
-                --             (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content2 tokens
-                --         return ()
-                --     _ -> error "No tokens found"
-                -- liftIO $ 1 @?= 1
+                res2 <- Test.getSemanticTokens doc2
+                case res2 ^? _L of
+                    Just tokens -> do
+                        either (error . show)
+                            (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content2 tokens
+                        return ()
+                    _ -> error "No tokens found"
+                liftIO $ 1 @?= 1
   ]
 
 
@@ -316,14 +318,14 @@ semanticTokensDataTypeTests =
     testGroup
     "get semantic Tokens"
     [ testCase "datatype" $ do
-        let filePath = "./test/testdata/datatype.hs"
+        let filePath = "./test/testdata/TDataType.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect =
                 [SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 6, len = 3}, name = "Foo"}
                 ,SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 3, startChar = 12, len = 3}, name = "Foo"}
                 ,SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 16, len = 3}, name = "Int"}
                 ,SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 3, startChar = 30, len = 2}, name = "Eq"}]
-        runSessionWithServerInDirAndGetSemantic "datatype.hs" $ \res doc -> do
+        runSessionWithServerInDirAndGetSemantic "TDataType.hs" $ \res doc -> do
             -- content <- waitForAction "getFileContents" doc
             case res ^? _L of
                 Just tokens -> do
@@ -334,14 +336,14 @@ semanticTokensDataTypeTests =
 
     -- record is part of datatype
     , testCase "record" $ do
-        let filePath = "./test/testdata/record.hs"
+        let filePath = "./test/testdata/TRecord.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect =
                 [SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 6, len = 3}, name = "Foo"}
                 ,SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 12, len = 3}, name = "Foo"}
                 ,SemanticTokenOriginal {tokenType = TRecField, loc = Loc {line = 4, startChar = 18, len = 3}, name = "foo"}
                 ,SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 25, len = 3}, name = "Int"}]
-        runSessionWithServerInDirAndGetSemantic "record.hs" $ \res doc -> do
+        runSessionWithServerInDirAndGetSemantic "TRecord.hs" $ \res doc -> do
             -- content <- waitForAction "getFileContents" doc
             case res ^? _L of
                 Just tokens -> do

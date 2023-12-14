@@ -1,4 +1,4 @@
-module InstanceClassMethodBind where
+module TInstanceClassMethodBind where
 
 
 data Foo = Foo Int

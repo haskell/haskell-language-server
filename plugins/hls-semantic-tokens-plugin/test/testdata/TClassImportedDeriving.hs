@@ -1,5 +1,5 @@
 {-# LANGUAGE StandaloneDeriving #-}
-module ClassImportedDeriving where
+module TClassImportedDeriving where
 -- deriving method source span of Show occurrence
 data Foo = Foo deriving (Show)
 

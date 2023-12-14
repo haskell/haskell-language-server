@@ -1,4 +1,4 @@
-module PatternBind where
+module TPatternBind where
 
 (a, b) = (1, 2)
 
