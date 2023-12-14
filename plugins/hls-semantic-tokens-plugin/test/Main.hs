@@ -306,8 +306,8 @@ semanticTokensTests =
                 check1 <- waitForAction "TypeCheck" doc1
                 check2 <- waitForAction "TypeCheck" doc2
                 case check2 of
-                    Right (WaitForIdeRuleResult x) -> liftIO $ print $ "result of checking2: " <> show x
-                    Left y -> error "TypeCheck2 failed"
+                    Right (WaitForIdeRuleResult x) -> return ()
+                    Left y                         -> error "TypeCheck2 failed"
 
                 res2 <- Test.getSemanticTokens doc2
                 case res2 ^? _L of

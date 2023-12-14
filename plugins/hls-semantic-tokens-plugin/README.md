@@ -19,10 +19,32 @@ But default semantic types allows user with less configuration to get semantic h
 That is why we use default semantic types for now. By mapping ghc semantic types to lsp semantic types.
 The mapping is defined in `Mapping.hs` file.
 
-### Delta semantic tokens and range semantic tokens
+### delta semantic tokens, range semantic tokens and refresh
 
-1. It is not yet support capabilities for delta semantic tokens, which might be
+It is not yet support capabilities for delta semantic tokens, which might be
 crucial for performance.
+It should be implemented in the future.
 
-2. range semantic tokens are not yet supported.
+## checkList
 
+* Supported PluginMethodHandler
+  * [x] [textDocument/semanticTokens/full](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#semanticTokens_fullRequest).
+  * [ ] [textDocument/semanticTokens/full/delta](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#semanticTokens_deltaRequest)
+  * [ ] [workspace/semanticTokens/refresh](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#semanticTokens_refreshRequest)
+
+* Supported semantic tokens:
+  * [x] class and class method
+  * [x] type family name
+  * [x] data constructor name (not distinguishing record and normal data)
+  * [x] type constructor name
+  * [x] record field name
+  * [x] type synonym
+  * [x] pattern synonym
+  * [x] pattern bindings
+  * [x] value bindings
+  * [x] imported name
+
+* Supported modifiers:
+  * [ ] declaration (as in class declearations and type family)
+  * [ ] definition (as in class instance declaration and type family instance)
+  * [ ] modification (as in rec field update)

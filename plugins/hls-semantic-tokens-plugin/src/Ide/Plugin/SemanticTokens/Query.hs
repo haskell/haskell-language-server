@@ -135,7 +135,8 @@ extractSemanticTokensFromNames nsm =
                 startChar = srcSpanStartCol loc - 1
                 len = srcSpanEndCol loc - 1 - startChar
             in SemanticTokenAbsolute (fromIntegral line) (fromIntegral startChar)
-                (fromIntegral len) (toLspTokenType tokenType) [SemanticTokenModifiers_Declaration]
+                (fromIntegral len) (toLspTokenType tokenType) []
+                -- SemanticTokenModifiers_Declaration
 
         getSemantic :: Map Name SemanticTokenType -> (Span, Name) -> Maybe (Span, SemanticTokenType)
         getSemantic nameMap (span, name) = do
