@@ -125,8 +125,7 @@ import           Ide.Plugin.Resolve
 import           Ide.PluginUtils
 import           Ide.Types                                          hiding
                                                                     (Config)
-import           Language.Haskell.HLint                             as Hlint hiding
-                                                                             (Error)
+import           Language.Haskell.HLint                             as Hlint
 import qualified Language.LSP.Protocol.Lens                         as LSP
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types                        hiding
@@ -241,25 +240,36 @@ rules recorder plugin = do
 
       diagnostics :: NormalizedFilePath -> Either ParseError [Idea] -> [FileDiagnostic]
       diagnostics file (Right ideas) =
-        [(file, ShowDiag, ideaToDiagnostic i) | i <- ideas, ideaSeverity i /= Ignore]
+       (file, ShowDiag,) <$> catMaybes [ideaToDiagnostic i | i <- ideas]
       diagnostics file (Left parseErr) =
         [(file, ShowDiag, parseErrorToDiagnostic parseErr)]
 
-      ideaToDiagnostic :: Idea -> Diagnostic
-      ideaToDiagnostic idea =
-        LSP.Diagnostic {
-            _range    = srcSpanToRange $ ideaSpan idea
-          , _severity = Just LSP.DiagnosticSeverity_Information
-          -- we are encoding the fact that idea has refactorings in diagnostic code
-          , _code     = Just (InR $ T.pack $ codePre ++ ideaHint idea)
-          , _source   = Just "hlint"
-          , _message  = idea2Message idea
-          , _relatedInformation = Nothing
-          , _tags     = Nothing
-          , _codeDescription = Nothing
-          , _data_ = Nothing
-        }
-        where codePre = if null $ ideaRefactoring idea then "" else "refact:"
+
+      ideaToDiagnostic :: Idea -> Maybe Diagnostic
+      ideaToDiagnostic idea = do
+        diagnosticSeverity <- ideaSeverityToDiagnosticSeverity (ideaSeverity idea)
+        pure $
+            LSP.Diagnostic {
+              _range    = srcSpanToRange $ ideaSpan idea
+            , _severity = Just diagnosticSeverity
+            -- we are encoding the fact that idea has refactorings in diagnostic code
+            , _code     = Just (InR $ T.pack $ codePre ++ ideaHint idea)
+            , _source   = Just "hlint"
+            , _message  = idea2Message idea
+            , _relatedInformation = Nothing
+            , _tags     = Nothing
+            , _codeDescription = Nothing
+            , _data_ = Nothing
+            }
+
+        where
+          codePre = if null $ ideaRefactoring idea then "" else "refact:"
+
+          ideaSeverityToDiagnosticSeverity :: Hlint.Severity -> Maybe LSP.DiagnosticSeverity
+          ideaSeverityToDiagnosticSeverity Hlint.Ignore = Nothing
+          ideaSeverityToDiagnosticSeverity Hlint.Suggestion = Just LSP.DiagnosticSeverity_Information
+          ideaSeverityToDiagnosticSeverity Hlint.Warning = Just LSP.DiagnosticSeverity_Warning
+          ideaSeverityToDiagnosticSeverity Hlint.Error = Just LSP.DiagnosticSeverity_Error
 
       idea2Message :: Idea -> T.Text
       idea2Message idea = T.unlines $ [T.pack $ ideaHint idea, "Found:", "  " <> T.pack (ideaFrom idea)]
@@ -275,7 +285,7 @@ rules recorder plugin = do
       parseErrorToDiagnostic (Hlint.ParseError l msg contents) =
         LSP.Diagnostic {
             _range    = srcSpanToRange l
-          , _severity = Just LSP.DiagnosticSeverity_Information
+          , _severity = Just LSP.DiagnosticSeverity_Warning
           , _code     = Just (InR sourceParser)
           , _source   = Just "hlint"
           , _message  = T.unlines [T.pack msg,T.pack contents]
