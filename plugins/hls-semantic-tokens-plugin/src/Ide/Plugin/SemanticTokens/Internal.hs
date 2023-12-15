@@ -78,6 +78,7 @@ import           Development.IDE.Types.Exports        (ExportsMap (..),
                                                        createExportsMapHieDb)
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
 
+import           Development.IDE.Core.PluginUtils     (useMT)
 import           Ide.Plugin.SemanticTokens.Mappings
 
 logWith :: (MonadIO m) => IdeState -> Priority -> String -> m ()
@@ -103,7 +104,7 @@ computeSemanticTokens state nfp =
     -- let dbg = logWith state Debug
     let logError = logWith state Debug
     -- let getAst HAR{hieAst, refMap} = hieAst
-    (HAR{hieAst, refMap, hieModule}, _) <- useWithStaleMT GetHieAst nfp
+    (HAR{hieAst, refMap, hieModule}) <- useMT GetHieAst nfp
     (_, ast) <- MaybeT $ return $ listToMaybe $ Map.toList $ getAsts hieAst
     (TcModuleResult{..}, _) <- useWithStaleMT TypeCheck nfp
     (hscEnv -> hsc, _) <- useWithStaleMT GhcSessionDeps nfp
@@ -158,7 +159,7 @@ semanticTokensFull state _ param = do
     case items of
         Nothing -> pure $ InR Null
         Just items -> do
-            content <- liftIO $ readFile $ fromNormalizedFilePath nfp
+            -- content <- liftIO $ readFile $ fromNormalizedFilePath nfp
             -- mapM_ (mapM_ (dbg . show)) $ recoverSemanticTokens content items
             pure $ InL items
 

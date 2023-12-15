@@ -15,7 +15,6 @@ import           Development.IDE.GHC.Compat
 import           Language.LSP.Protocol.Types
 
 
--- data SemanticTokenType = SClass | SVariable | STypeVar | SDataCon | SNothing | SFieldName  deriving (Eq, Ord)
 -- !!!! order of declarations matters deriving enum and ord
 -- since token may come from different source and we want to keep the most specific one
 -- and we might want to merge them.

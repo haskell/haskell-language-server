@@ -159,15 +159,13 @@ recoverSemanticTokens sourceCode (SemanticTokens _ xs) = fmap (tokenOrigin sourc
                 $ mapM fromTuple (chunksOf 5 $ map fromIntegral xs)
             where
                 decodeError = Left "recoverSemanticTokenRelative: wrong token data"
-                fromTuple [a, b, c, d, _] = SemanticTokenRelative a b c <$> (fromInt $ fromIntegral d) <*> return []
+                fromTuple [a, b, c, d, _] = SemanticTokenRelative a b c <$> fromInt (fromIntegral d) <*> return []
                 fromTuple _               = Nothing
 
         semanticTokenAbsoluteActualToken :: SemanticTokenAbsolute -> ActualToken
         semanticTokenAbsoluteActualToken (SemanticTokenAbsolute line startChar len tokenType tokenModifiers) =
             (line, startChar, len, fromLspTokenType tokenType, 0)
 
-{- -}
--- legends :: SemanticTokensLegend
--- fromInt i = Set.elemAt i knownValues
-fromInt :: Int -> Maybe SemanticTokenTypes
-fromInt i = Set.toAscList knownValues !? i
+        -- legends :: SemanticTokensLegend
+        fromInt :: Int -> Maybe SemanticTokenTypes
+        fromInt i = Set.toAscList knownValues !? i
