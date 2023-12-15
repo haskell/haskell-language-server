@@ -14,6 +14,7 @@ import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
 import           Data.Coerce                   (coerce)
 import           Data.Default
+import           Data.List                     (sortOn)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Data.Text.Lazy.Encoding       (decodeUtf8)
@@ -88,6 +89,7 @@ defaultMain recorder args idePlugins = do
             let pluginSummary =
                   PP.vsep
                     $ map describePlugin
+                    $ sortOn pluginId
                     $ ipMap idePlugins
             putStrLn $ show pluginSummary
 
