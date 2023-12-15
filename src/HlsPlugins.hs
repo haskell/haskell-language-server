@@ -178,7 +178,7 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       CallHierarchy.descriptor "callHierarchy" :
 #endif
 #if hls_semanticTokens
-      SemanticTokens.descriptor "semanticTokens" :
+      let pId = "semanticTokens" in SemanticTokens.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_class
       let pId = "class" in Class.descriptor (pluginRecorder pId) pId:

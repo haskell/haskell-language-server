@@ -1,10 +1,12 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.SemanticTokens.Internal where
@@ -13,8 +15,8 @@ import           Control.Lens                         ((^.))
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Control.Monad.Trans.Maybe            (MaybeT (..))
 import           Data.Data                            (Data)
-import           Data.Generics                        (Typeable, everything,
-                                                       mkQ)
+import           Data.Generics                        (Generic, Typeable,
+                                                       everything, mkQ)
 import           Data.List                            (sortBy)
 import qualified Data.List                            as List
 import           Data.Maybe                           (catMaybes, fromMaybe,
@@ -28,15 +30,19 @@ import           Development.IDE                      (Action,
                                                        GhcSessionDeps (GhcSessionDeps, GhcSessionDeps_),
                                                        HieAstResult (HAR, hieAst, hieModule, refMap),
                                                        IdeAction, IdeState,
-                                                       Priority (..),
+                                                       Priority (..), Recorder,
+                                                       RuleResult,
                                                        TypeCheck (TypeCheck),
+                                                       WithPriority,
                                                        catchSrcErrors,
-                                                       ideLogger, logPriority,
-                                                       realSpan, use,
-                                                       useWithStaleFast, uses)
+                                                       cmapWithPrio, ideLogger,
+                                                       logPriority, realSpan,
+                                                       use, useWithStaleFast,
+                                                       uses)
 import           Development.IDE.Core.Compile         (TcModuleResult (..),
                                                        lookupName)
-import           Development.IDE.Core.Rules           (getSourceFileSource,
+import           Development.IDE.Core.Rules           (Log (LogShake),
+                                                       getSourceFileSource,
                                                        runAction)
 import           Development.IDE.Core.Shake           (ShakeExtras (..),
                                                        getShakeExtras,
@@ -78,15 +84,15 @@ import           Development.IDE.Types.Exports        (ExportsMap (..),
                                                        createExportsMapHieDb)
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
 
+import           Development.IDE                      (Rules, define,
+                                                       useWithStale_)
 import           Development.IDE.Core.PluginUtils     (useMT)
+import           Development.IDE.Core.Rules           (Log)
+import           Development.IDE.Graph.Classes        (Hashable, NFData (rnf))
 import           Ide.Plugin.SemanticTokens.Mappings
 
 logWith :: (MonadIO m) => IdeState -> Priority -> String -> m ()
 logWith st prior = liftIO . logPriority (ideLogger st) prior. T.pack
-
--- logWith :: (MonadIO m) => IdeState -> String -> m ()
--- logWith st = liftIO . print
-
 
 -----------------------
 ---- the api
@@ -94,7 +100,7 @@ logWith st prior = liftIO . logPriority (ideLogger st) prior. T.pack
 
 -- | computeSemanticTokens
 -- collect from various source
--- global names and imported name from typechecked and hscEnv
+-- imported name from typechecked and hscEnv
 -- local names from refMap
 -- name locations from hieAst
 -- visible names from renamedSource
@@ -104,48 +110,26 @@ computeSemanticTokens state nfp =
     -- let dbg = logWith state Debug
     let logError = logWith state Debug
     -- let getAst HAR{hieAst, refMap} = hieAst
-    (HAR{hieAst, refMap, hieModule}) <- useMT GetHieAst nfp
-    (_, ast) <- MaybeT $ return $ listToMaybe $ Map.toList $ getAsts hieAst
+    (HAR{hieAst, refMap}) <- useMT GetHieAst nfp
     (TcModuleResult{..}, _) <- useWithStaleMT TypeCheck nfp
-    (hscEnv -> hsc, _) <- useWithStaleMT GhcSessionDeps nfp
+    (_, ast) <- MaybeT $ return $ listToMaybe $ Map.toList $ getAsts hieAst
+    (GTTMap{getNameSemanticMap}, _) <- useWithStaleMT GetGlobalNameSemantic nfp
     -- because the names get from ast might contain derived name
     let nameSet = nameGetter tmrRenamed
     -- only take names we cares about from ast
     let names = hieAstSpanNames nameSet ast
-    -- ask hscEnv for none local types, some from typechecked can avoid asking hscEnv
-    km <- liftIO $ foldrM (getType hsc) (tcg_type_env tmrTypechecked) nameSet
-    -- let km = tcg_type_env tmrTypechecked
-    -- global name map from type typecheck and hscEnv
-    let globalAndImportedModuleNameSemanticMap = Map.fromList $ flip mapMaybe (Set.toList nameSet) $ \name -> do
-            ty <- lookupNameEnv km name
-            return (name, tyThingSemantic ty)
+    -- let globalAndImportedModuleNameSemanticMap = Map.fromList $ flip mapMaybe (Set.toList nameSet) $ \name -> do
     -- local name map from refMap
-    let localNameSemanticMap = toNameSemanticMap $ Map.filterWithKey (\k _ ->
-                either (const False) (`Set.member` nameSet) k)
-                refMap
-    let combineMap = Map.unionWith (<>) localNameSemanticMap globalAndImportedModuleNameSemanticMap
-    -- print all names
-    -- deriving method locate in the same position as the class name
-    -- liftIO $ mapM_ (\ (name, tokenType) -> dbg ("debug semanticMap: " <> showClearName name <> ":" <> show tokenType )) $ Map.toList importedModuleNameSemanticMap
-    -- liftIO $ mapM_ (\ (span, name) -> dbg ("debug names: " <> showClearName name <> ":" <> showCompactRealSrc span ) ) names
+    let localNameSemanticMap = toNameSemanticMap nameSet refMap
+    let combineMap = plusNameEnv_C (<>) localNameSemanticMap getNameSemanticMap
     let moduleAbsTks = extractSemanticTokensFromNames combineMap names
     case semanticTokenAbsoluteSemanticTokens moduleAbsTks of
         Right tokens -> do
             source :: ByteString <- lift $ getSourceFileSource nfp
-            -- liftIO $ mapM_ (\x -> mapM_ (dbg . show) x) $ recoverSemanticTokens (bytestringString source) tokens
             pure tokens
         Left err -> do
             logError $ "computeSemanticTokens: " <> show err
             MaybeT . pure $ Nothing
-    where
-    getType env n nameMap
-      | Nothing <- lookupNameEnv nameMap n
-      = do kind <- lookupKind env n
-           pure $ maybe nameMap (extendNameEnv nameMap n) kind
-      | otherwise = pure nameMap
-    lookupKind :: HscEnv -> Name -> IO (Maybe TyThing)
-    lookupKind env = fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env
-
 
 semanticTokensFull :: PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull state _ param = do
@@ -163,4 +147,23 @@ semanticTokensFull state _ param = do
             -- mapM_ (mapM_ (dbg . show)) $ recoverSemanticTokens content items
             pure $ InL items
 
+
+getImportedNameSemanticRule :: Recorder (WithPriority Log) -> Rules ()
+getImportedNameSemanticRule recorder =
+    define (cmapWithPrio LogShake recorder) $ \GetGlobalNameSemantic nfp -> do
+      (HAR{hieAst, refMap, hieModule}, _) <- useWithStale_ GetHieAst nfp
+      (TcModuleResult{..}, _) <- useWithStale_ TypeCheck nfp
+      (hscEnv -> hsc, _) <- useWithStale_ GhcSessionDeps nfp
+      let nameSet = nameGetter tmrRenamed
+      km <- liftIO $ foldrM (getType hsc (tcg_type_env tmrTypechecked)) emptyNameEnv $ nameSetElemsStable nameSet
+      return ([],Just (GTTMap $ fmap tyThingSemantic km))
+      where
+      -- ignore one already in current module
+      getType env localMap n  nameMap
+        | Nothing <- lookupNameEnv localMap n
+        = do tyThing <- lookupImported env n
+             pure $ maybe nameMap (extendNameEnv nameMap n) tyThing
+        | otherwise = pure nameMap
+      lookupImported :: HscEnv -> Name -> IO (Maybe TyThing)
+      lookupImported env = fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env
 

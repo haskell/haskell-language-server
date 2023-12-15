@@ -47,6 +47,8 @@ library
     , transformers
     , bytestring
     , syb
+    , deepseq
+    , hls-graph == 2.5.0.0
 
   default-language:   Haskell2010
   default-extensions: DataKinds

@@ -58,24 +58,24 @@ import           Language.LSP.Protocol.Types
 --- | extract semantic tokens from RenamedSource
 ------------------------------------------------
 
-nameToCollect :: Name -> Set.Set Name
-nameToCollect = Set.singleton
+nameToCollect :: Name -> NameSet
+nameToCollect = unitNameSet
 
-nameGetter :: RenamedSource -> Set.Set Name
-nameGetter =  everything Set.union (Set.empty `mkQ` nameToCollect)
+nameGetter :: RenamedSource -> NameSet
+nameGetter =  everything unionNameSet (emptyNameSet `mkQ` nameToCollect)
 
 --------------------------------------------
 --- | construct definition map from HieAST a
 --------------------------------------------
 
-hieAstSpanNames :: Set.Set Name -> HieAST a -> [(Span, Name)]
+hieAstSpanNames :: NameSet -> HieAST a -> [(Span, Name)]
 hieAstSpanNames nameSet ast = if null (nodeChildren ast) then
     getIds ast else concatMap (hieAstSpanNames nameSet) (nodeChildren ast)
     where
         getIds :: HieAST a -> [(Span, Name)]
         getIds ast = [(nodeSpan ast, c)
                     | (Right c, d) <- Map.toList $ getNodeIds' ast
-                    , Set.member c nameSet
+                    , elemNameSet c nameSet
                     -- at least get one info
                     , not $ any isEvidenceBind $ identInfo d
                     , not $ any isEvidenceUse $ identInfo d
@@ -98,14 +98,13 @@ hieAstSpanNames nameSet ast = if null (nodeChildren ast) then
 --- | extract semantic tokens from NameSemanticMap
 --------------------------------------------------
 
-type NameSemanticMap = Map Name SemanticTokenType
 
-toNameSemanticMap :: RefMap a -> NameSemanticMap
-toNameSemanticMap rm = Map.fromListWith (<>)
+toNameSemanticMap :: NameSet -> RefMap a -> NameSemanticMap
+toNameSemanticMap ns rm = extendNameEnvList_C (<>) emptyNameEnv
     [
     --  trace ("toNameSemanticMap" <> ":" <> showSDocUnsafe (ppr name) <> " : " <> showCompactRealSrc span <> ":" <> showIdentifierDetails detail <> " : " <> show tokenType)
      (name, tokenType)
-    | (Right name, details) <- Map.toList rm
+    | (name, Just details) <- map (\x -> (x, Map.lookup (Right x) rm)) $ nameSetElemsStable ns
     , not $ isDerivedOccName (occName name)
     , (span, detail) <- details
     , let tokenType =  detailSemanticMaybeTokenType $ identInfo detail
@@ -137,11 +136,11 @@ extractSemanticTokensFromNames nsm =
                 (fromIntegral len) <$> toLspTokenType tokenType <*> return []
                 -- SemanticTokenModifiers_Declaration
 
-        getSemantic :: Map Name SemanticTokenType -> (Span, Name) -> Maybe (Span, SemanticTokenType)
+        getSemantic :: NameSemanticMap -> (Span, Name) -> Maybe (Span, SemanticTokenType)
         getSemantic nameMap (span, name) = do
             -- let tkt = toTokenType name
             -- let tokenType = maybe tkt (\x -> tkt <> x) $ Map.lookup name nameMap
-            let tokenType = Map.lookup name nameMap
+            let tokenType = lookupNameEnv nameMap name
             fmap (span,) tokenType
 
 

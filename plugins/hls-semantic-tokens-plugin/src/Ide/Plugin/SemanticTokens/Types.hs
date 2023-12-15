@@ -1,17 +1,24 @@
+{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StrictData         #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 module Ide.Plugin.SemanticTokens.Types where
 
 
-import qualified Data.List                   as List
-import qualified Data.List.Extra             as List
-import qualified Data.List.NonEmpty          as NE
-import qualified Data.Map                    as Map
-import           Data.Maybe                  (fromMaybe)
-import qualified Data.Set                    as Set
+import qualified Data.List                     as List
+import qualified Data.List.Extra               as List
+import qualified Data.List.NonEmpty            as NE
+import qualified Data.Map                      as Map
+import           Data.Maybe                    (fromMaybe)
+import qualified Data.Set                      as Set
 import           Development.IDE.GHC.Compat
 -- import           GHC.Enum                    (boundedEnumFrom)
+import           Control.DeepSeq               (NFData (rnf), rwhnf)
+import           Data.Generics                 (Typeable)
+import           Development.IDE               (RuleResult)
+import           Development.IDE.Graph.Classes (Hashable)
+import           GHC.Generics                  (Generic)
 import           Language.LSP.Protocol.Types
 
 
@@ -56,3 +63,15 @@ data Loc = Loc
   deriving (Show, Eq, Ord)
 
 
+type NameSemanticMap = NameEnv SemanticTokenType
+data GetGlobalNameSemantic = GetGlobalNameSemantic
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetGlobalNameSemantic
+instance NFData   GetGlobalNameSemantic
+
+data GlobalTokenTypeMap = GTTMap {getNameSemanticMap :: !NameSemanticMap }
+instance NFData GlobalTokenTypeMap where
+    rnf (GTTMap a) = rwhnf a
+instance Show GlobalTokenTypeMap where
+    show = const "GlobalNameMap"
+type instance RuleResult GetGlobalNameSemantic = GlobalTokenTypeMap

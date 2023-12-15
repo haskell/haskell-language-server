@@ -22,6 +22,7 @@ import qualified Data.Maybe
 import qualified Data.Set                           as Set
 import           Data.String                        (fromString)
 import           Data.Text
+import           Development.IDE.Core.Rules         (Log)
 import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
 import           Ide.Plugin.Error                   (getNormalizedFilePathE)
 import           Ide.Plugin.SemanticTokens
@@ -49,8 +50,8 @@ testDataDir = "test" </> "testdata"
 mkFs :: [FS.FileTree] -> FS.VirtualFileTree
 mkFs = FS.mkVirtualFileTree testDataDir
 
-semanticTokensPlugin :: Test.Hls.PluginTestDescriptor ()
-semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor' Ide.Plugin.SemanticTokens.descriptor "SemanticTokens"
+semanticTokensPlugin :: Test.Hls.PluginTestDescriptor Log
+semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor Ide.Plugin.SemanticTokens.descriptor "SemanticTokens"
 
 
 mkSemanticTokensParams :: TextDocumentIdentifier -> SemanticTokensParams
