@@ -23,13 +23,11 @@ import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
                                                   SemanticTokens (SemanticTokens),
                                                   UInt, absolutizeTokens)
 
+
 {- |
 1. from our token type to LSP default token type
 -}
 
-semanticTokenAbsoluteActualToken :: SemanticTokenAbsolute -> ActualToken
-semanticTokenAbsoluteActualToken (SemanticTokenAbsolute line startChar len tokenType tokenModifiers) =
-    (line, startChar, len, fromLspTokenType tokenType, 0)
 
 -- mapping from our token type to LSP default token type
 toLspTokenType :: SemanticTokenType -> SemanticTokenTypes
@@ -138,6 +136,8 @@ infoTokenType x = case x of
 ---- from lsp token to our token
 --------------------------------
 
+-- line, startChar, len, tokenType, modifiers
+type ActualToken = (UInt, UInt, UInt, SemanticTokenType, UInt)
 -- | recoverSemanticTokens
 -- used for debug and test
 -- this function is used to recover the original tokens(with token in haskell token type zoon)
@@ -158,10 +158,15 @@ recoverSemanticTokens sourceCode (SemanticTokens _ xs) = fmap (tokenOrigin sourc
                 $ mapM fromTuple (chunksOf 5 $ map fromIntegral xs)
             where
                 decodeError = Left "recoverSemanticTokenRelative: wrong token data"
-                fromTuple [a, b, c, d, _] = Just $ SemanticTokenRelative a b c (fromInt $ fromIntegral d) []
+                fromTuple [a, b, c, d, _] = SemanticTokenRelative a b c <$> (fromInt $ fromIntegral d) <*> return []
                 fromTuple _               = Nothing
+
+        semanticTokenAbsoluteActualToken :: SemanticTokenAbsolute -> ActualToken
+        semanticTokenAbsoluteActualToken (SemanticTokenAbsolute line startChar len tokenType tokenModifiers) =
+            (line, startChar, len, fromLspTokenType tokenType, 0)
 
 {- -}
 -- legends :: SemanticTokensLegend
-fromInt :: Int -> SemanticTokenTypes
-fromInt i = Set.elemAt i knownValues
+-- fromInt i = Set.elemAt i knownValues
+fromInt :: Int -> Maybe SemanticTokenTypes
+fromInt i = Set.toAscList knownValues !? i

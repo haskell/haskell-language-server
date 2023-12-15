@@ -80,8 +80,8 @@ import           Development.IDE.Types.HscEnvEq       (hscEnv)
 
 import           Ide.Plugin.SemanticTokens.Mappings
 
-logWith :: (MonadIO m) => IdeState -> String -> m ()
-logWith st = liftIO . logPriority (ideLogger st) Info . T.pack
+logWith :: (MonadIO m) => IdeState -> Priority -> String -> m ()
+logWith st prior = liftIO . logPriority (ideLogger st) prior. T.pack
 
 -- logWith :: (MonadIO m) => IdeState -> String -> m ()
 -- logWith st = liftIO . print
@@ -97,10 +97,11 @@ logWith st = liftIO . logPriority (ideLogger st) Info . T.pack
 -- local names from refMap
 -- name locations from hieAst
 -- visible names from renamedSource
-computeSemanticTokens ::  IdeState -> NormalizedFilePath -> Action (Maybe SemanticTokens)
+computeSemanticTokens :: IdeState -> NormalizedFilePath -> Action (Maybe SemanticTokens)
 computeSemanticTokens state nfp =
     runMaybeT $ do
-    -- let dbg = logWith state
+    -- let dbg = logWith state Debug
+    let logError = logWith state Debug
     -- let getAst HAR{hieAst, refMap} = hieAst
     (HAR{hieAst, refMap, hieModule}, _) <- useWithStaleMT GetHieAst nfp
     (_, ast) <- MaybeT $ return $ listToMaybe $ Map.toList $ getAsts hieAst
@@ -133,7 +134,7 @@ computeSemanticTokens state nfp =
             -- liftIO $ mapM_ (\x -> mapM_ (dbg . show) x) $ recoverSemanticTokens (bytestringString source) tokens
             pure tokens
         Left err -> do
-            liftIO $ putStrLn $ "computeSemanticTokens: " <> show err
+            logError $ "computeSemanticTokens: " <> show err
             MaybeT . pure $ Nothing
     where
     getType env n nameMap

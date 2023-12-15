@@ -42,10 +42,6 @@ instance Semigroup SemanticTokenType where
 instance Monoid SemanticTokenType where
     mempty = TNothing
 
-
-type ActualToken = (UInt, UInt, UInt, SemanticTokenType, UInt)
--- { line: 2, startChar 5, length: 3, tokenType: SemanticTokenType, tokenModifiers: 3, string},
-
 data SemanticTokenOriginal =  SemanticTokenOriginal
   { tokenType :: SemanticTokenType,
     loc       :: Loc,
