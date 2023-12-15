@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Ide.Plugin.Floskell
@@ -20,9 +21,11 @@ import           Language.LSP.Protocol.Types
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId "Provides formatting of Haskell files via floskell")
+descriptor plId = (defaultPluginDescriptor plId desc)
   { pluginHandlers = mkFormattingHandlers provider
   }
+  where
+    desc = "Provides formatting of Haskell files via floskell. Built with floskell-" <> VERSION_floskell
 
 -- ---------------------------------------------------------------------
 

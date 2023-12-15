@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.StylishHaskell
@@ -25,9 +26,11 @@ import           System.Directory
 import           System.FilePath
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId "Provides formatting of Haskell files via stylish-haskell")
+descriptor plId = (defaultPluginDescriptor plId desc)
   { pluginHandlers = mkFormattingHandlers provider
   }
+  where
+    desc = "Provides formatting of Haskell files via stylish-haskell. Built with stylish-haskell-" <> VERSION_stylish_haskell
 
 -- | Formatter provider of stylish-haskell.
 -- Formats the given source in either a given Range or the whole Document.

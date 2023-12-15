@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Ide.Plugin.Stan (descriptor, Log) where
 
 import           Compat.HieTypes                (HieASTs, HieFile)
@@ -43,12 +44,14 @@ import           Stan.Inspection.All            (inspectionsIds, inspectionsMap)
 import           Stan.Observation               (Observation (..))
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId "Provides stan diagnostics")
+descriptor recorder plId = (defaultPluginDescriptor plId desc)
   { pluginRules = rules recorder plId
   , pluginConfigDescriptor = defaultConfigDescriptor
       { configHasDiagnostics = True
       }
     }
+  where
+    desc = "Provides stan diagnostics. Built with stan-" <> VERSION_stan
 
 newtype Log = LogShake Shake.Log deriving (Show)
 

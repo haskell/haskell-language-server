@@ -52,10 +52,12 @@ import           Text.Read                       (readMaybe)
 
 descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-  (defaultPluginDescriptor plId "Provides formatting of Haskell files via ormolu")
+  (defaultPluginDescriptor plId desc)
     { pluginHandlers = mkFormattingHandlers $ provider recorder plId,
       pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
+  where
+    desc = "Provides formatting of Haskell files via ormolu. Built with ormolu-" <> VERSION_ormolu
 
 properties :: Properties '[ 'PropertyKey "external" 'TBoolean]
 properties =
