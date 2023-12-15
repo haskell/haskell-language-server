@@ -25,7 +25,7 @@ import           System.Directory
 import           System.FilePath
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
+descriptor plId = (defaultPluginDescriptor plId "Provides formatting of Haskell files via stylish-haskell")
   { pluginHandlers = mkFormattingHandlers provider
   }
 

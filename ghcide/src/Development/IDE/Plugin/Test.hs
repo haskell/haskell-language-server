@@ -77,7 +77,7 @@ newtype WaitForIdeRuleResult = WaitForIdeRuleResult { ideResultSuccess::Bool}
     deriving newtype (FromJSON, ToJSON)
 
 plugin :: PluginDescriptor IdeState
-plugin = (defaultPluginDescriptor "test") {
+plugin = (defaultPluginDescriptor "test" "") {
     pluginHandlers = mkPluginHandler (SMethod_CustomMethod (Proxy @"test")) $ \st _ ->
         testRequestHandler' st
     }
@@ -166,7 +166,7 @@ blockCommandId :: Text
 blockCommandId = "ghcide.command.block"
 
 blockCommandDescriptor :: PluginId -> PluginDescriptor state
-blockCommandDescriptor plId = (defaultPluginDescriptor plId) {
+blockCommandDescriptor plId = (defaultPluginDescriptor plId "") {
     pluginCommands = [PluginCommand (CommandId blockCommandId) "blocks forever" blockCommandHandler]
 }
 

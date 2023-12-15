@@ -20,7 +20,7 @@ import           Language.LSP.Protocol.Types
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
+descriptor plId = (defaultPluginDescriptor plId "Provides formatting of Haskell files via floskell")
   { pluginHandlers = mkFormattingHandlers provider
   }
 

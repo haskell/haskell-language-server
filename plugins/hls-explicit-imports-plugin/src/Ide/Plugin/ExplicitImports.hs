@@ -91,7 +91,7 @@ descriptorForModules
 descriptorForModules recorder modFilter plId =
   let resolveRecorder = cmapWithPrio LogResolve recorder
       codeActionHandlers = mkCodeActionHandlerWithResolve resolveRecorder (codeActionProvider recorder) (codeActionResolveProvider recorder)
-  in (defaultPluginDescriptor plId)
+  in (defaultPluginDescriptor plId "Provides a code action to make imports explicit")
     {
       -- This plugin provides a command handler
       pluginCommands = [PluginCommand importCommandId "Explicit import command" (runImportCommand recorder)],

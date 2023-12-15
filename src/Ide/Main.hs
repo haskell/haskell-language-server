@@ -14,7 +14,6 @@ import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
 import           Data.Coerce                   (coerce)
 import           Data.Default
-import           Data.List                     (sort)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Data.Text.Lazy.Encoding       (decodeUtf8)
@@ -34,8 +33,9 @@ import           Ide.Logger                    as G
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
                                                 pluginsToVSCodeExtensionSchema)
 import           Ide.Types                     (IdePlugins, PluginId (PluginId),
-                                                ipMap, pluginId)
+                                                describePlugin, ipMap, pluginId)
 import           Ide.Version
+import           Prettyprinter                 as PP
 import           System.Directory
 import qualified System.Directory.Extra        as IO
 import           System.FilePath
@@ -85,10 +85,11 @@ defaultMain recorder args idePlugins = do
             putStrLn haskellLanguageServerNumericVersion
 
         ListPluginsMode -> do
-            let pluginNames = sort
-                    $ map ((\(PluginId t) -> T.unpack t) . pluginId)
+            let pluginSummary =
+                  PP.vsep
+                    $ map describePlugin
                     $ ipMap idePlugins
-            mapM_ putStrLn pluginNames
+            putStrLn $ show pluginSummary
 
         BiosMode PrintCradleType -> do
             dir <- IO.getCurrentDirectory

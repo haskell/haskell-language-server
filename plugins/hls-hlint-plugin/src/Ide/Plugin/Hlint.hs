@@ -195,7 +195,7 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId =
   let resolveRecorder = cmapWithPrio LogResolve recorder
       (pluginCommands, pluginHandlers) = mkCodeActionWithResolveAndCommand resolveRecorder plId codeActionProvider (resolveProvider recorder)
-  in (defaultPluginDescriptor plId)
+  in (defaultPluginDescriptor plId "Provides HLint diagnostics and code actions")
   { pluginRules = rules recorder plId
   , pluginCommands = pluginCommands
   , pluginHandlers = pluginHandlers

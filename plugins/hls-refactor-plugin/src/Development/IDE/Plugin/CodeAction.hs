@@ -145,6 +145,7 @@ iePluginDescriptor recorder plId =
           , wrap suggestAddRecordFieldImport
           ]
           plId
+          "Provides various quick fixes"
    in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler SMethod_TextDocumentCodeAction codeAction }
 
 typeSigsPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
@@ -157,6 +158,7 @@ typeSigsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestConstraint
     ]
     plId
+    "Provides various quick fixes for type signatures"
 
 bindingsPluginDescriptor :: Recorder (WithPriority E.Log) ->  PluginId -> PluginDescriptor IdeState
 bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
@@ -168,12 +170,13 @@ bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestDeleteUnusedBinding
     ]
     plId
+    "Provides various quick fixes for bindings"
 
 fillHolePluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-fillHolePluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder (mkGhcideCAPlugin (wrap suggestFillHole) plId)
+fillHolePluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder (mkGhcideCAPlugin (wrap suggestFillHole) plId "Provides a code action to fill a hole")
 
 extendImportPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-extendImportPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor plId)
+extendImportPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor plId "Provides a command to extend the import list")
   { pluginCommands = [extendImportCommand] }
 
 

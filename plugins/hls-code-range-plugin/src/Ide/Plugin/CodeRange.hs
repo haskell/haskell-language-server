@@ -57,7 +57,7 @@ import           Language.LSP.Protocol.Types          (FoldingRange (..),
 import           Prelude                              hiding (log, span)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId)
+descriptor recorder plId = (defaultPluginDescriptor plId "Provides selection and folding ranges for Haskell")
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentSelectionRange (selectionRangeHandler recorder)
     <> mkPluginHandler SMethod_TextDocumentFoldingRange (foldingRangeHandler recorder)
     , pluginRules = codeRangeRule (cmapWithPrio LogRules recorder)

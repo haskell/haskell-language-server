@@ -43,7 +43,7 @@ import           Stan.Inspection.All            (inspectionsIds, inspectionsMap)
 import           Stan.Observation               (Observation (..))
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId)
+descriptor recorder plId = (defaultPluginDescriptor plId "Provides stan diagnostics")
   { pluginRules = rules recorder plId
   , pluginConfigDescriptor = defaultConfigDescriptor
       { configHasDiagnostics = True
