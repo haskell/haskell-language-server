@@ -122,19 +122,19 @@ semanticTokenAbsoluteSemanticTokens = makeSemanticTokens defaultSemanticTokensLe
 
 extractSemanticTokensFromNames :: NameSemanticMap -> [(Span, Name)] -> [SemanticTokenAbsolute]
 extractSemanticTokensFromNames nsm =
-    map (uncurry toAbsSemanticToken) . mergeNameFromSamSpan . mapMaybe (getSemantic nsm)
+    mapMaybe (uncurry toAbsSemanticToken) . mergeNameFromSamSpan . mapMaybe (getSemantic nsm)
     where
         -- merge all tokens with same span
         mergeNameFromSamSpan :: [(Span, SemanticTokenType)] -> [(Span, SemanticTokenType)]
         mergeNameFromSamSpan xs = Map.toList $ Map.fromListWith (<>) xs
 
-        toAbsSemanticToken :: Span -> SemanticTokenType -> SemanticTokenAbsolute
+        toAbsSemanticToken :: Span -> SemanticTokenType -> Maybe SemanticTokenAbsolute
         toAbsSemanticToken loc tokenType =
             let line = srcSpanStartLine loc - 1
                 startChar = srcSpanStartCol loc - 1
                 len = srcSpanEndCol loc - 1 - startChar
             in SemanticTokenAbsolute (fromIntegral line) (fromIntegral startChar)
-                (fromIntegral len) (toLspTokenType tokenType) []
+                (fromIntegral len) <$> toLspTokenType tokenType <*> return []
                 -- SemanticTokenModifiers_Declaration
 
         getSemantic :: Map Name SemanticTokenType -> (Span, Name) -> Maybe (Span, SemanticTokenType)

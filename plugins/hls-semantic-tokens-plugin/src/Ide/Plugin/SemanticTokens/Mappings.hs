@@ -6,12 +6,13 @@ This module contains the mapping
 4. from lsp token to our token
 -}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
 
 module Ide.Plugin.SemanticTokens.Mappings where
 import qualified Data.List                       as List
 import           Data.List.Extra                 (chunksOf, (!?))
 import qualified Data.Map                        as Map
-import           Data.Maybe                      (fromMaybe)
+import           Data.Maybe                      (fromMaybe, mapMaybe)
 import qualified Data.Set                        as Set
 import           Data.Text                       (Text)
 import           Development.IDE.GHC.Compat
@@ -30,32 +31,32 @@ import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
 
 
 -- mapping from our token type to LSP default token type
-toLspTokenType :: SemanticTokenType -> SemanticTokenTypes
+toLspTokenType :: SemanticTokenType -> Maybe SemanticTokenTypes
 toLspTokenType tk = case tk of
     -- TVariable     -> SemanticTokenTypes_Variable
     -- left hand side of none pattern bind
-    TValBind      -> SemanticTokenTypes_Function
+    TValBind      -> Just SemanticTokenTypes_Function
     -- any pattern bind
-    TPatternBind  -> SemanticTokenTypes_Parameter
-    TClass        -> SemanticTokenTypes_Class
-    TClassMethod  -> SemanticTokenTypes_Method
-    TTypeVariable -> SemanticTokenTypes_TypeParameter
+    TPatternBind  -> Just SemanticTokenTypes_Parameter
+    TClass        -> Just SemanticTokenTypes_Class
+    TClassMethod  -> Just SemanticTokenTypes_Method
+    TTypeVariable -> Just SemanticTokenTypes_TypeParameter
     -- normal data type is a tagged union type look like enum type
     -- and a record is a product type like struct
     -- but we don't distinguish them yet
-    TTypeCon      -> SemanticTokenTypes_Enum
-    TDataCon      -> SemanticTokenTypes_EnumMember
-    TRecField     -> SemanticTokenTypes_Property
+    TTypeCon      -> Just SemanticTokenTypes_Enum
+    TDataCon      -> Just SemanticTokenTypes_EnumMember
+    TRecField     -> Just SemanticTokenTypes_Property
     -- pattern syn is like a limited version of macro of constructing a data type
-    TPatternSyn   -> SemanticTokenTypes_Macro
+    TPatternSyn   -> Just SemanticTokenTypes_Macro
     -- saturated type
-    TTypeSyn      -> SemanticTokenTypes_Type
+    TTypeSyn      -> Just SemanticTokenTypes_Type
     -- not sure if this is correct choice
-    TTypeFamily   -> SemanticTokenTypes_Interface
-    TNothing      -> SemanticTokenTypes_Namespace
+    TTypeFamily   -> Just SemanticTokenTypes_Interface
+    TNothing      -> Nothing
 
 lspTokenReverseMap :: Map.Map SemanticTokenTypes SemanticTokenType
-lspTokenReverseMap = Map.fromList $ List.map (\x -> (toLspTokenType x, x)) $ enumFrom minBound
+lspTokenReverseMap = Map.fromList $ mapMaybe (\x -> fmap (,x) (toLspTokenType x) ) $ enumFrom minBound
 
 fromLspTokenType :: SemanticTokenTypes -> SemanticTokenType
 fromLspTokenType tk = fromMaybe TNothing $ Map.lookup tk lspTokenReverseMap
