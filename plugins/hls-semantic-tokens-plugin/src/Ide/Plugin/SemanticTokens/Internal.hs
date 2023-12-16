@@ -100,7 +100,7 @@ logWith st prior = liftIO . logPriority (ideLogger st) prior. T.pack
 
 -- | computeSemanticTokens
 -- collect from various source
--- imported name from typechecked and hscEnv
+-- imported name from GetGlobalNameSemantic
 -- local names from refMap
 -- name locations from hieAst
 -- visible names from renamedSource
@@ -121,6 +121,7 @@ computeSemanticTokens state nfp =
     -- let globalAndImportedModuleNameSemanticMap = Map.fromList $ flip mapMaybe (Set.toList nameSet) $ \name -> do
     -- local name map from refMap
     let localNameSemanticMap = toNameSemanticMap nameSet refMap
+
     let combineMap = plusNameEnv_C (<>) localNameSemanticMap getNameSemanticMap
     let moduleAbsTks = extractSemanticTokensFromNames combineMap names
     case semanticTokenAbsoluteSemanticTokens moduleAbsTks of
@@ -151,15 +152,14 @@ semanticTokensFull state _ param = do
 getImportedNameSemanticRule :: Recorder (WithPriority Log) -> Rules ()
 getImportedNameSemanticRule recorder =
     define (cmapWithPrio LogShake recorder) $ \GetGlobalNameSemantic nfp -> do
-      (HAR{hieAst, refMap, hieModule}, _) <- useWithStale_ GetHieAst nfp
       (TcModuleResult{..}, _) <- useWithStale_ TypeCheck nfp
       (hscEnv -> hsc, _) <- useWithStale_ GhcSessionDeps nfp
       let nameSet = nameGetter tmrRenamed
-      km <- liftIO $ foldrM (getType hsc (tcg_type_env tmrTypechecked)) emptyNameEnv $ nameSetElemsStable nameSet
+      km <- liftIO $ foldrM (getTypeExclude (tcg_type_env tmrTypechecked) hsc) emptyNameEnv $ nameSetElemsStable nameSet
       return ([],Just (GTTMap $ fmap tyThingSemantic km))
       where
       -- ignore one already in current module
-      getType env localMap n  nameMap
+      getTypeExclude localMap env n nameMap
         | Nothing <- lookupNameEnv localMap n
         = do tyThing <- lookupImported env n
              pure $ maybe nameMap (extendNameEnv nameMap n) tyThing
