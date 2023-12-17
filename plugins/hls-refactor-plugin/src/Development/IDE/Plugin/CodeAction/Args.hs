@@ -93,9 +93,9 @@ mkCA :: T.Text -> Maybe CodeActionKind -> Maybe Bool -> [Diagnostic] -> Workspac
 mkCA title kind isPreferred diags edit =
   InR $ CodeAction title kind (Just $ diags) isPreferred Nothing (Just edit) Nothing Nothing
 
-mkGhcideCAPlugin :: GhcideCodeAction -> PluginId -> PluginDescriptor IdeState
-mkGhcideCAPlugin codeAction plId =
-  (defaultPluginDescriptor plId)
+mkGhcideCAPlugin :: GhcideCodeAction -> PluginId -> T.Text -> PluginDescriptor IdeState
+mkGhcideCAPlugin codeAction plId desc =
+  (defaultPluginDescriptor plId desc)
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction $
         \state _ params@(CodeActionParams _ _ (TextDocumentIdentifier uri) _ CodeActionContext {_diagnostics = diags}) -> do
           results <- lift $ runGhcideCodeAction state params codeAction
@@ -107,7 +107,7 @@ mkGhcideCAPlugin codeAction plId =
                 ]
     }
 
-mkGhcideCAsPlugin :: [GhcideCodeAction] -> PluginId -> PluginDescriptor IdeState
+mkGhcideCAsPlugin :: [GhcideCodeAction] -> PluginId -> T.Text -> PluginDescriptor IdeState
 mkGhcideCAsPlugin codeActions = mkGhcideCAPlugin $ mconcat codeActions
 
 -------------------------------------------------------------------------------------------------

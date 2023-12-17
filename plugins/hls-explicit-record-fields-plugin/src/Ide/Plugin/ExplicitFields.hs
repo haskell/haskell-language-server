@@ -106,7 +106,7 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId =
   let resolveRecorder = cmapWithPrio LogResolve recorder
       (carCommands, caHandlers) = mkCodeActionWithResolveAndCommand resolveRecorder plId codeActionProvider codeActionResolveProvider
-  in (defaultPluginDescriptor plId)
+  in (defaultPluginDescriptor plId "Provides a code action to make record wildcards explicit")
   { pluginHandlers = caHandlers
   , pluginCommands = carCommands
   , pluginRules = collectRecordsRule recorder *> collectNamesRule

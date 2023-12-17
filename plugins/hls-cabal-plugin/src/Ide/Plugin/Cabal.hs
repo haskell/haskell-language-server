@@ -80,7 +80,7 @@ instance Pretty Log where
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-  (defaultCabalPluginDescriptor plId)
+  (defaultCabalPluginDescriptor plId "Provides a variety of IDE features in cabal files")
     { pluginRules = cabalRules recorder
     , pluginHandlers =
         mconcat

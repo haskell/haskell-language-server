@@ -34,7 +34,7 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder pluginId = (defaultPluginDescriptor pluginId)
+descriptor recorder pluginId = (defaultPluginDescriptor pluginId "Provides fixity information in hovers")
     { pluginRules = fixityRule recorder
     , pluginHandlers = mkPluginHandler SMethod_TextDocumentHover hover
     -- Make this plugin has a lower priority than ghcide's plugin to ensure

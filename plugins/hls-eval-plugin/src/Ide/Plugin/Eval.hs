@@ -1,4 +1,5 @@
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# OPTIONS_GHC -Wwarn #-}
 {-# LANGUAGE LambdaCase            #-}
@@ -34,7 +35,7 @@ instance Pretty Log where
 -- |Plugin descriptor
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-    (defaultPluginDescriptor plId)
+    (defaultPluginDescriptor plId "Provies a code lens to evaluate expressions in doctest comments")
         { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeLens CL.codeLens
         , pluginCommands = [CL.evalCommand plId]
         , pluginRules = rules (cmapWithPrio LogEvalRules recorder)

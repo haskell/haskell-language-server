@@ -173,7 +173,7 @@ import           Retrie.GHC                           (ann)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
-  (defaultPluginDescriptor plId)
+  (defaultPluginDescriptor plId "Provides code actions to inline Haskell definitions")
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction provider,
       pluginCommands = [retrieCommand, retrieInlineThisCommand]
     }

@@ -42,7 +42,7 @@ descriptors recorder =
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
+descriptor plId = (defaultPluginDescriptor plId desc)
   { pluginHandlers = mkPluginHandler SMethod_TextDocumentHover hover'
                   <> mkPluginHandler SMethod_TextDocumentDocumentSymbol moduleOutline
                   <> mkPluginHandler SMethod_TextDocumentDefinition (\ide _ DefinitionParams{..} ->
@@ -56,6 +56,8 @@ descriptor plId = (defaultPluginDescriptor plId)
 
     pluginConfigDescriptor = defaultConfigDescriptor
   }
+  where
+    desc = "Provides core IDE features for Haskell"
 
 -- ---------------------------------------------------------------------
 
