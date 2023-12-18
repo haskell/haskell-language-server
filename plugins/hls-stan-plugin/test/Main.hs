@@ -34,6 +34,12 @@ tests =
             assertBool "" $ T.isPrefixOf expectedPrefix (reduceDiag ^. L.message)
             reduceDiag ^. L.source @?= Just "stan"
           return ()
+    , testCase "ignores diagnostics from .stan.toml" $
+        runStanSession "" $ do
+          doc <- openDoc "dir/configTest.hs" "haskell"
+          diags <- waitForDiagnosticsFromSource doc "stan"
+          liftIO $ length diags @?= 0
+          return ()
     ]
 
 testDir :: FilePath
