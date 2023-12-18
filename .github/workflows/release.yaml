@@ -183,7 +183,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           retention-days: 2
@@ -244,7 +244,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           retention-days: 2
@@ -288,7 +288,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           retention-days: 2
@@ -335,7 +335,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           retention-days: 2
@@ -388,7 +388,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           retention-days: 2
@@ -502,7 +502,7 @@ jobs:
           ARTIFACT: ${{ matrix.ARTIFACT }}
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: bindists-${{ matrix.ARTIFACT }}
@@ -553,7 +553,7 @@ jobs:
           args: bash .github/scripts/bindist.sh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: bindists-arm
@@ -591,7 +591,7 @@ jobs:
           bash .github/scripts/bindist.sh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: bindists-mac-x86_64
@@ -635,7 +635,7 @@ jobs:
           bash .github/scripts/bindist.sh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: bindists-mac-aarch64
@@ -679,7 +679,7 @@ jobs:
         shell: pwsh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: bindists-win
