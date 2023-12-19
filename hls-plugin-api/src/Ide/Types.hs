@@ -25,6 +25,7 @@
 module Ide.Types
 ( PluginDescriptor(..), defaultPluginDescriptor, defaultCabalPluginDescriptor
 , defaultPluginPriority
+, describePlugin
 , IdeCommand(..)
 , IdeMethod(..)
 , IdeNotification(..)
@@ -104,6 +105,7 @@ import           Language.LSP.VFS
 import           Numeric.Natural
 import           OpenTelemetry.Eventlog
 import           Options.Applicative           (ParserInfo)
+import           Prettyprinter                 as PP
 import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text          ()
@@ -266,6 +268,7 @@ instance ToJSON PluginConfig where
 
 data PluginDescriptor (ideState :: Type) =
   PluginDescriptor { pluginId           :: !PluginId
+                   , pluginDescription  :: !T.Text
                    -- ^ Unique identifier of the plugin.
                    , pluginPriority     :: Natural
                    -- ^ Plugin handlers are called in priority order, higher priority first
@@ -282,6 +285,13 @@ data PluginDescriptor (ideState :: Type) =
                    --   When writing handlers, etc. for this plugin it can be assumed that all handled files are of this type.
                    --   The file extension must have a leading '.'.
                    }
+
+describePlugin :: PluginDescriptor c -> Doc ann
+describePlugin p =
+  let
+    PluginId pid = pluginId p
+    pdesc = pluginDescription p
+  in pretty pid <> ":" <> nest 4 (PP.line <> pretty pdesc)
 
 -- | Check whether the given plugin descriptor is responsible for the file with the given path.
 --   Compares the file extension of the file at the given path with the file extension
@@ -902,10 +912,11 @@ defaultPluginPriority = 1000
 --
 -- and handlers will be enabled for files with the appropriate file
 -- extensions.
-defaultPluginDescriptor :: PluginId -> PluginDescriptor ideState
-defaultPluginDescriptor plId =
+defaultPluginDescriptor :: PluginId -> T.Text -> PluginDescriptor ideState
+defaultPluginDescriptor plId desc =
   PluginDescriptor
     plId
+    desc
     defaultPluginPriority
     mempty
     mempty
@@ -922,10 +933,11 @@ defaultPluginDescriptor plId =
 --
 -- Handles files with the following extensions:
 --   * @.cabal@
-defaultCabalPluginDescriptor :: PluginId -> PluginDescriptor ideState
-defaultCabalPluginDescriptor plId =
+defaultCabalPluginDescriptor :: PluginId -> T.Text -> PluginDescriptor ideState
+defaultCabalPluginDescriptor plId desc =
   PluginDescriptor
     plId
+    desc
     defaultPluginPriority
     mempty
     mempty

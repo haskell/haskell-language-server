@@ -44,7 +44,7 @@ instance Pretty Log where
     LogShake log -> pretty log
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder pId = (defaultPluginDescriptor pId)
+descriptor recorder pId = (defaultPluginDescriptor pId "Provides code actions to convert numeric literals to different formats")
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction codeActionHandler
     , pluginRules = collectLiteralsRule recorder
     }

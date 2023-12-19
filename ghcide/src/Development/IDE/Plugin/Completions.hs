@@ -71,13 +71,15 @@ ghcideCompletionsPluginPriority :: Natural
 ghcideCompletionsPluginPriority = defaultPluginPriority
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId)
+descriptor recorder plId = (defaultPluginDescriptor plId desc)
   { pluginRules = produceCompletions recorder
   , pluginHandlers = mkPluginHandler SMethod_TextDocumentCompletion getCompletionsLSP
                      <> mkResolveHandler SMethod_CompletionItemResolve resolveCompletion
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   , pluginPriority = ghcideCompletionsPluginPriority
   }
+  where
+    desc = "Provides Haskell completions"
 
 
 produceCompletions :: Recorder (WithPriority Log) -> Rules ()

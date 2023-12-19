@@ -54,7 +54,7 @@ whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = mconcat
+descriptor recorder plId = (defaultPluginDescriptor plId desc) { pluginNotificationHandlers = mconcat
   [ mkPluginNotificationHandler LSP.SMethod_TextDocumentDidOpen $
       \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier _uri _version) []
@@ -142,6 +142,8 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
     -- (which restart the Shake build) run after everything else
         pluginPriority = ghcideNotificationsPluginPriority
     }
+  where
+    desc = "Handles basic notifications for ghcide"
 
 ghcideNotificationsPluginPriority :: Natural
 ghcideNotificationsPluginPriority = defaultPluginPriority - 900
