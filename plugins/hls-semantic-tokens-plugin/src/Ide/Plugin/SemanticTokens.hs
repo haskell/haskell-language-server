@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Ide.Plugin.SemanticTokens (descriptor) where
 
 import           Development.IDE
@@ -10,7 +11,7 @@ import           Language.LSP.Protocol.Message
 
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId)
+descriptor recorder plId = (defaultPluginDescriptor plId "provides lsp semantic tokens features")
     { Ide.Types.pluginHandlers =
         mkPluginHandler SMethod_TextDocumentSemanticTokensFull Internal.semanticTokensFull
       , Ide.Types.pluginRules = Internal.getImportedNameSemanticRule recorder
