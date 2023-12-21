@@ -367,8 +367,6 @@ semanticTokensDataTypeTests =
   testGroup
     "get semantic Tokens"
     [ testCase "simple datatype" $ do
-
-
         let filePath = "./test/testdata/TDataType.hs"
         content <- liftIO $ Prelude.readFile filePath
         let expect =
@@ -520,14 +518,22 @@ semanticTokensFunctionTests =
             _notokens -> error "No tokens found",
       testCase "local functions" $ do
         let expect =
-                [SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 3, startChar = 1, len = 1}, name = "f"}
-                ,SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 6, len = 3}, name = "Int"}
-                ,SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 13, len = 3}, name = "Int"}
-                ,SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 1}, name = "f"}
-                ,SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 7, len = 1}, name = "g"}
-                ,SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 6, startChar = 5, len = 1}, name = "g"}
-                ,SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 6, startChar = 7, len = 1}, name = "x"}]
-
+              [ SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 3, startChar = 1, len = 1}, name = "f"},
+                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 6, len = 3}, name = "Int"},
+                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 13, len = 3}, name = "Int"},
+                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 1}, name = "f"},
+                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 7, len = 1}, name = "g"},
+                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 6, startChar = 5, len = 1}, name = "g"},
+                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 6, startChar = 7, len = 1}, name = "x"}
+              ]
+        let e1 =
+              [ SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 3, startChar = 1, len = 1}, name = "f"},
+                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 6, len = 3}, name = "Int"},
+                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 13, len = 3}, name = "Int"},
+                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 1}, name = "f"},
+                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 7, len = 1}, name = "g"},
+                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 6, startChar = 5, len = 1}, name = "g"}
+              ]
 
         runSessionWithServerInDirAndGetSemanticsFile "TFunctionLocal.hs" $ \res doc content -> do
           case res ^? _L of

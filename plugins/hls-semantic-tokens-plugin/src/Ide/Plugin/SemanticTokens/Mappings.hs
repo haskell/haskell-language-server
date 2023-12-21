@@ -66,20 +66,21 @@ fromLspTokenType tk = fromMaybe TNothing $ Map.lookup tk lspTokenReverseMap
 -}
 
 typeSemantic :: Type -> SemanticTokenType
-typeSemantic  x =
+typeSemantic x =
      case x of
-        ForAllTy _ a     -> typeSemantic a
-        FunTy _ _        -> TFunction
-        TyVarTy _        -> TNothing
-        TyConApp tyCon _ -> TNothing
-            -- | isTypeSynonymTyCon tyCon -> TTypeSyn
-            -- | isTypeFamilyTyCon tyCon -> TTypeFamily
-            -- | isClassTyCon tyCon -> TClass
-            -- | otherwise -> TTypeCon
-        AppTy a b        -> TNothing
-        LitTy _          -> TNothing
-        CastTy _ _       -> TNothing
-        CoercionTy _     -> TNothing
+        ForAllTy _ a -> typeSemantic a
+        FunTy _ _    -> TFunction
+        _            -> TVariable
+        -- TyVarTy _        -> TNothing
+        -- TyConApp tyCon _ -> TNothing
+        --     -- | isTypeSynonymTyCon tyCon -> TTypeSyn
+        --     -- | isTypeFamilyTyCon tyCon -> TTypeFamily
+        --     -- | isClassTyCon tyCon -> TClass
+        --     -- | otherwise -> TTypeCon
+        -- AppTy a b        -> TNothing
+        -- LitTy _          -> TNothing
+        -- CastTy _ _       -> TNothing
+        -- CoercionTy _     -> TNothing
 
 
 toTokenType :: Name -> SemanticTokenType

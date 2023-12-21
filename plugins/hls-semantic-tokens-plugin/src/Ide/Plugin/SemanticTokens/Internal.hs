@@ -104,8 +104,8 @@ logWith st prior = liftIO . logPriority (ideLogger st) prior. T.pack
 
 -- | computeSemanticTokens
 -- collect from various source
--- imported name from GetGlobalNameSemantic
--- local names from hieAst
+-- imported name token type from GetGlobalNameSemantic
+-- local names tokenType from hieAst
 -- name locations from hieAst
 -- visible names from renamedSource
 computeSemanticTokens :: IdeState -> NormalizedFilePath -> Action (Maybe SemanticTokens)
@@ -120,9 +120,8 @@ computeSemanticTokens state nfp =
     -- because the names get from ast might contain derived name
     let nameSet = nameGetter tmrRenamed
     let spanNames = hieAstSpanNames nameSet ast
-    let localNameSemanticMapFromIdDetails = toNameSemanticMap nameSet refMap
-    let localNameSemanticMapFromTypes = fmap typeSemantic $ mkNameEnv $ getNameTypes ast refMap
-    let combineMap = plusNameEnv_C (<>) localNameSemanticMapFromTypes $ plusNameEnv_C (<>) localNameSemanticMapFromIdDetails getNameSemanticMap
+    let localNameSemanticMapFromTypes = getLocalNameSemantic ast refMap
+    let combineMap = plusNameEnv_C (<>) localNameSemanticMapFromTypes getNameSemanticMap
     let moduleAbsTks = extractSemanticTokensFromNames combineMap spanNames
     case semanticTokenAbsoluteSemanticTokens moduleAbsTks of
         Right tokens -> do
@@ -136,17 +135,13 @@ semanticTokensFull :: PluginMethodHandler IdeState 'Method_TextDocumentSemanticT
 semanticTokensFull state _ param = do
     -- let dbg = logWith state
     nfp <-  getNormalizedFilePathE (param ^. L.textDocument . L.uri)
-    -- dbg $ "semanticTokensFull: " <> show nfp
-    -- source :: ByteString <- lift $ getSourceFileSource nfp
+    logWith state Info $ "computeSemanticTokens: " <> show nfp
     items <- liftIO
         $ runAction "SemanticTokens.semanticTokensFull" state
         $ computeSemanticTokens state nfp
     case items of
-        Nothing -> pure $ InR Null
-        Just items -> do
-            -- content <- liftIO $ readFile $ fromNormalizedFilePath nfp
-            -- mapM_ (mapM_ (dbg . show)) $ recoverSemanticTokens content items
-            pure $ InL items
+        Nothing    -> pure $ InR Null
+        Just items -> pure $ InL items
 
 
 getImportedNameSemanticRule :: Recorder (WithPriority Log) -> Rules ()
@@ -156,13 +151,14 @@ getImportedNameSemanticRule recorder =
       (hscEnv -> hsc, _) <- useWithStale_ GhcSessionDeps nfp
       let nameSet = nameGetter tmrRenamed
       tm <- liftIO $ foldrM (getTypeExclude (tcg_type_env tmrTypechecked) hsc) emptyNameEnv $ nameSetElemsStable nameSet
-      return ([],Just (GTTMap $ fmap tyThingSemantic $ plusNameEnv (tcg_type_env tmrTypechecked) tm))
+      return ([],Just (GTTMap $ -- plusNameEnv (tcg_type_env tmrTypechecked)
+                                tm))
       where
       -- ignore one already in current module
       getTypeExclude localMap env n nameMap
         | Nothing <- lookupNameEnv localMap n
         = do tyThing <- lookupImported env n
-             pure $ maybe nameMap (extendNameEnv nameMap n) tyThing
+             pure $ maybe nameMap (extendNameEnv nameMap n . tyThingSemantic) tyThing
         | otherwise = pure nameMap
       lookupImported :: HscEnv -> Name -> IO (Maybe TyThing)
       lookupImported env = fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env

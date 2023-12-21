@@ -70,44 +70,49 @@ nameGetter :: RenamedSource -> NameSet
 nameGetter =  everything unionNameSet (emptyNameSet `mkQ` nameToCollect)
 
 --------------------------------------------------
---- | extract location and type info from HieAST a
+--- | extract semantic map from HieAst for local variables
 --------------------------------------------------
 
--- todo this is O(n^2) but we might do way better,
-getNameTypes :: HieAST Type -> RefMap a -> [(Name, Type)]
-getNameTypes ast rm = mapMaybe (nameType ast rm) ns
+getLocalNameSemantic :: HieAST Type -> RefMap a -> NameSemanticMap
+getLocalNameSemantic ast rm = mkNameEnv (mapMaybe (nameNameSemanticFromHie ast rm) ns)
     where ns = rights $ M.keys rm
-
-nameType :: HieAST Type -> RefMap a -> Name -> Maybe (Name,Type)
-nameType hie rm ns = do
-    span <- -- traceShow ("to find Name", showName ns) $
-        getDefinitionSite rm ns
-    ty <- -- traceShow ("nameBindSite", fmap typeSemantic $ spanTypeFromHie hie span, showName ns, span) $
-        spanTypeFromHie hie span
-    return (ns, ty)
+nameNameSemanticFromHie :: HieAST Type -> RefMap a -> Name -> Maybe (Name,SemanticTokenType)
+nameNameSemanticFromHie hie rm ns = do
+    st <- -- traceShow ("to find Name", showName ns) $
+        nameSemanticFromRefMap rm ns
+    return -- $ traceShow (showName ns, st)
+           (ns, st)
     where
-        getDefinitionSite :: RefMap a -> Name -> Maybe Span
-        getDefinitionSite rm name = do
+        nameSemanticFromRefMap :: RefMap a -> Name -> Maybe SemanticTokenType
+        nameSemanticFromRefMap rm name = do
             let nameString = showName name
-            xs <- -- traceShow ("getting spans:", nameString) $
-                Map.lookup (Right name) rm
-            x <- -- traceShow ("getDefinitionSite:size:", nameString, length xs) $
-                listToMaybe xs
-            let infos = concatMap (S.toList . identInfo. snd) xs
-            -- traceShow ("getDefinitionSite:infos", nameString, infos, mapMaybe getBindSiteFromContext infos) listToMaybe $ mapMaybe getBindSiteFromContext infos
-            listToMaybe $ mapMaybe getBindSiteFromContext infos
+            spanInfos <- -- traceShow ("getting spans:", nameString) $
+                 Map.lookup (Right name) rm
+            let infos = S.unions $ map (identInfo . snd) spanInfos
+            let bindTokenType = -- traceShow ("getDefinitionSite:infos", nameString, infos, mapMaybe getBindSiteFromContext $ S.toList  infos) $
+                     listToMaybe (mapMaybe getBindSiteFromContext $ S.toList infos) >>= bindSiteMaybeTokenType
+            let contextInfoTokenType = contextInfosMaybeTokenType infos
+            maximum <$> NE.nonEmpty (catMaybes [bindTokenType, contextInfoTokenType])
+
         spanTypeFromHie :: HieAST Type -> Span -> Maybe Type
         spanTypeFromHie ast span = do
             ast <- selectSmallestContaining span ast
-            getNodeIType ast
-        getNodeIType hie = do
-            nodeInfo <-  Map.lookup SourceInfo $ getSourcedNodeInfo $ sourcedNodeInfo hie
-            nt <- safeHead $ nodeType nodeInfo
+            nodeInfo <-  Map.lookup SourceInfo $ getSourcedNodeInfo $ sourcedNodeInfo ast
+            -- usually for a visible name, the type is in the first child
+            nt <- listToMaybe $ nodeType nodeInfo
             return nt
-        safeHead :: [a] -> Maybe a
-        safeHead []    = Nothing
-        safeHead (x:_) = Just x
 
+        bindSiteMaybeTokenType :: Span -> Maybe SemanticTokenType
+        bindSiteMaybeTokenType = fmap typeSemantic . spanTypeFromHie hie
+
+        contextInfosMaybeTokenType :: Set.Set ContextInfo -> Maybe SemanticTokenType
+        contextInfosMaybeTokenType details = case NE.nonEmpty $ Set.toList details of
+            Just infos -> Just $ maximum $ NE.map infoTokenType infos
+            Nothing    -> Nothing
+
+--------------------------------------------------
+--- | extract location from HieAST a
+--------------------------------------------------
 
 hieAstSpanNames :: NameSet -> HieAST a -> [(Span, Name)]
 hieAstSpanNames nameSet ast = if null (nodeChildren ast) then
@@ -138,24 +143,6 @@ hieAstSpanNames nameSet ast = if null (nodeChildren ast) then
 --------------------------------------------------
 --- | extract semantic tokens from NameSemanticMap
 --------------------------------------------------
-
-
-toNameSemanticMap :: NameSet -> RefMap a -> NameSemanticMap
-toNameSemanticMap ns rm = extendNameEnvList_C (<>) emptyNameEnv
-    [
-    --  trace ("toNameSemanticMap" <> ":" <> showSDocUnsafe (ppr name) <> " : " <> showCompactRealSrc span <> ":" <> showIdentifierDetails detail <> " : " <> show tokenType)
-     (name, tokenType)
-    | (name, Just details) <- map (\x -> (x, Map.lookup (Right x) rm)) $ nameSetElemsStable ns
-    , not $ isDerivedOccName (occName name)
-    , (span, detail) <- details
-    , let tokenType =  detailSemanticMaybeTokenType $ identInfo detail
-    , (Just tokenType) <- [tokenType]
-    ]
-    where
-        detailSemanticMaybeTokenType ::  Set.Set ContextInfo -> Maybe SemanticTokenType
-        detailSemanticMaybeTokenType details = case NE.nonEmpty $ Set.toList details of
-            Just infos -> Just $ maximum $ NE.map infoTokenType infos
-            Nothing    -> Nothing
 
 semanticTokenAbsoluteSemanticTokens :: [SemanticTokenAbsolute] -> Either Text SemanticTokens
 semanticTokenAbsoluteSemanticTokens = makeSemanticTokens defaultSemanticTokensLegend . List.sort
