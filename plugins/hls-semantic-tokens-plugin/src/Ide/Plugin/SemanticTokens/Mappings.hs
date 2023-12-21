@@ -70,7 +70,7 @@ typeSemantic x =
      case x of
         ForAllTy _ a -> typeSemantic a
         FunTy _ _    -> TFunction
-        _            -> TVariable
+        _            -> TNothing
         -- TyVarTy _        -> TNothing
         -- TyConApp tyCon _ -> TNothing
         --     -- | isTypeSynonymTyCon tyCon -> TTypeSyn

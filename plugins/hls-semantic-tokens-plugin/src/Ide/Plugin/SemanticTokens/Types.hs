@@ -69,7 +69,7 @@ data GetGlobalNameSemantic = GetGlobalNameSemantic
 instance Hashable GetGlobalNameSemantic
 instance NFData   GetGlobalNameSemantic
 
-data GlobalTokenTypeMap = GTTMap {getNameSemanticMap :: !NameSemanticMap }
+data GlobalTokenTypeMap = GTTMap {importedNameSemanticMap :: !NameSemanticMap }
 instance NFData GlobalTokenTypeMap where
     rnf (GTTMap a) = rwhnf a
 instance Show GlobalTokenTypeMap where

@@ -14,7 +14,7 @@ module Ide.Plugin.SemanticTokens.Internal where
 
 import           Control.Lens                         ((^.))
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
-import           Control.Monad.Trans.Maybe            (MaybeT (..), hoistMaybe)
+import           Control.Monad.Trans.Maybe            (MaybeT (..))
 import           Data.Data                            (Data)
 import           Data.Generics                        (Generic, Typeable,
                                                        everything, mkQ)
@@ -118,13 +118,13 @@ computeSemanticTokens state nfp =
     let logError = logWith state Debug
     (HAR{hieAst, refMap}, mapping) <- useWithStaleMT GetHieAst nfp
     (TcModuleResult{..}, _) <- useWithStaleMT TypeCheck nfp
-    (GTTMap{getNameSemanticMap}, _) <- useWithStaleMT GetGlobalNameSemantic nfp
+    (GTTMap{importedNameSemanticMap}, _) <- useWithStaleMT GetGlobalNameSemantic nfp
     (_, ast) <- MaybeT $ return $ listToMaybe $ Map.toList $ getAsts hieAst
     let nameSet = nameGetter tmrRenamed
     -- get current location from the old ones
     let spanNames = mapMaybe (\(span, name) -> (,name) <$> toCurrentRange mapping span) $ hieAstSpanNames nameSet ast
     -- because the names get from ast might contain derived name
-    sMap <- mkNameSemanticMap hieAst refMap getNameSemanticMap
+    sMap <- MaybeT $ return $ mkNameSemanticMap hieAst refMap importedNameSemanticMap
     let moduleAbsTks = extractSemanticTokensFromNames sMap spanNames
     case semanticTokenAbsoluteSemanticTokens moduleAbsTks of
         Right tokens -> do
@@ -153,7 +153,6 @@ getImportedNameSemanticRule recorder =
       (TcModuleResult{..}, _) <- useWithStale_ TypeCheck nfp
       (hscEnv -> hsc, _) <- useWithStale_ GhcSessionDeps nfp
       (HAR{hieAst, refMap}, _) <- useWithStale_ GetHieAst nfp
-      let x = mkLocalNameSemanticMap hieAst refMap
       let nameSet = nameGetter tmrRenamed
       gMap <- liftIO $ mkImportedNameSemanticMap hsc tmrTypechecked nameSet
     --   sMap <- fmap (mkNameSemanticMap hieAst refMap hsc) gMap
@@ -176,10 +175,9 @@ mkImportedNameSemanticMap hsc tmrTypechecked nameSet = do
 
 -- mkNameSemanticMap :: HieASTs a -> RefMap a -> HscEnv -> TcGblEnv -> NameSet -> Maybe NameSemanticMap
 -- mkNameSemanticMap :: (MonadIO m, Typeable a1) => HieASTs a1 -> RefMap a1 -> HscEnv -> TcGblEnv -> NameSet -> m (Maybe NameSemanticMap)
-mkNameSemanticMap :: (Typeable a, Monad m) => HieASTs a -> RefMap a -> NameEnv SemanticTokenType -> MaybeT m (NameEnv SemanticTokenType)
+mkNameSemanticMap :: (Typeable a) => HieASTs a -> RefMap a -> NameEnv SemanticTokenType -> Maybe NameSemanticMap
 mkNameSemanticMap hieAst rm gMap = do
-    let lMap = mkLocalNameSemanticMap hieAst rm
-    localNameSemanticMapFromTypes <- hoistMaybe lMap
+    localNameSemanticMapFromTypes <- mkLocalNameSemanticMap hieAst rm
     let combineMap = plusNameEnv_C (<>) localNameSemanticMapFromTypes gMap
     return combineMap
 
