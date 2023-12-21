@@ -1,0 +1,2 @@
+SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 1}, name = "g"}
+SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 4, len = 7}, name = "Nothing"}

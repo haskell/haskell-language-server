@@ -1,0 +1,8 @@
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 3, startChar = 2, len = 1}, name = "a"}
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 3, startChar = 5, len = 1}, name = "b"}
+SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 5, startChar = 1, len = 1}, name = "f"}
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 3, len = 1}, name = "x"}
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 5, len = 1}, name = "y"}
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 9, len = 1}, name = "x"}
+SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 5, startChar = 11, len = 1}, name = "+"}
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 13, len = 1}, name = "y"}

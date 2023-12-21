@@ -1,0 +1,11 @@
+SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 3, startChar = 1, len = 1}, name = "f"}
+SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 3, startChar = 13, len = 1}, name = "a"}
+SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 3, startChar = 16, len = 1}, name = "a"}
+SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 3, startChar = 21, len = 1}, name = "a"}
+SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 1}, name = "f"}
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 4, startChar = 3, len = 1}, name = "x"}
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 4, startChar = 7, len = 1}, name = "x"}
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 6, startChar = 1, len = 1}, name = "x"}
+SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 6, startChar = 6, len = 1}, name = "a"}
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 7, startChar = 1, len = 1}, name = "x"}
+SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 7, startChar = 5, len = 9}, name = "undefined"}

@@ -6,7 +6,7 @@
 
 import           Control.Arrow                      (Arrow ((***)), (&&&),
                                                      (+++))
-import           Control.Lens                       hiding (use)
+import           Control.Lens                       hiding (use, (<.>))
 import           Control.Monad                      (forM)
 import           Data.Bifunctor
 import qualified Data.ByteString                    as BS
@@ -14,12 +14,14 @@ import           Data.Data
 import           Data.Default
 import           Data.Functor                       (void)
 import qualified Data.List                          as List
-import           Data.Map                           as Map
+import           Data.Map                           as Map hiding (map)
 import           Data.Maybe                         (fromJust)
 import qualified Data.Maybe
 import qualified Data.Set                           as Set
 import           Data.String                        (fromString)
-import           Data.Text                          hiding (length)
+import           Data.Text                          hiding (length, map,
+                                                     unlines)
+import           Development.IDE                    (getFileContents, runAction)
 import           Development.IDE.Core.Rules         (Log)
 import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
 import           Ide.Plugin.Error                   (getNormalizedFilePathE)
@@ -76,261 +78,67 @@ runSessionWithServerInDirAndGetSemanticsFile file x =
       res <- Test.getSemanticTokens doc
       x res doc content
 
+goldenWithHaskellAndCapsOutPut config plugin title tree path desc act =
+  goldenGitDiff title (FS.vftOriginalRoot tree </> path <.> desc) $
+    runSessionWithServerInTmpDir config plugin tree $
+      fromString <$> do
+        doc <- openDoc (path <.> "hs") "haskell"
+        void waitForBuildQueue
+        r <- act doc
+        return r
+
+goldenWithSemanticTokens :: TestName -> FilePath -> TestTree
+goldenWithSemanticTokens title path =
+  goldenWithHaskellAndCapsOutPut
+    def
+    semanticTokensPlugin
+    title
+    (mkFs $ FS.directProject (path <.> "hs"))
+    path
+    "expected"
+    docSemanticTokensString
+
+docSemanticTokensString :: TextDocumentIdentifier -> Session String
+docSemanticTokensString doc = do
+  res <- Test.getSemanticTokens doc
+  content <- unpack <$> documentContents doc
+  let expect = []
+  case res ^? _L of
+    Just tokens -> do
+      either (error . show) (return . unlines . map show) $ recoverSemanticTokens content tokens
+    _noTokens -> error "No tokens found"
+
 semanticTokensImportedTests :: TestTree
 semanticTokensImportedTests =
   testGroup
     "imported test"
-    [ testCase "type class" $ do
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 6, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 12, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 4, startChar = 26, len = 4}, name = "Show"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 6, startChar = 1, len = 2}, name = "eq"},
-                SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 6, startChar = 8, len = 2}, name = "Eq"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 6, startChar = 11, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 6, startChar = 17, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 6, startChar = 22, len = 4}, name = "Bool"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 7, startChar = 1, len = 2}, name = "eq"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 7, startChar = 4, len = 1}, name = "b"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 7, startChar = 8, len = 1}, name = "b"},
-                SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 7, startChar = 10, len = 2}, name = "=="},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 7, startChar = 13, len = 1}, name = "b"}
-              ]
-
-        runSessionWithServerInDirAndGetSemanticsFile "TClass.hs" $ \res doc content -> do
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found"
+    [ goldenWithSemanticTokens "type class" "TClass"
     ]
 
 semanticTokensClassTests :: TestTree
 semanticTokensClassTests =
   testGroup
     "type class"
-    [ testCase "type class" $ do
-        let filePath = "./test/testdata/TClass.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 4, startChar = 7, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 4, startChar = 11, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 5, startChar = 3, len = 3}, name = "foo"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 5, startChar = 10, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 15, len = 3}, name = "Int"}
-              ]
-        runSessionWithServerInDirAndGetSemantic "TClass.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notoken -> error "No tokens found",
-      testCase "imported class method InstanceClassMethodBind" $ do
-        let filePath = "./test/testdata/TInstanceClassMethodBind.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 6, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 12, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 16, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 5, startChar = 10, len = 2}, name = "Eq"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 13, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 6, startChar = 5, len = 4}, name = "(==)"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 6, startChar = 12, len = 9}, name = "undefined"}
-              ]
-        runSessionWithServerInDirAndGetSemantic "TInstanceClassMethodBind.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found",
-      testCase "imported class method TInstanceClassMethodUse" $ do
-        let filePath = "./test/testdata/TInstanceClassMethodUse.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 2}, name = "go"},
-                SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 4, startChar = 9, len = 4}, name = "(==)"}
-              ]
-        runSessionWithServerInDirAndGetSemantic "TInstanceClassMethodUse.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either (error . show) (\xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found",
-      testCase "imported deriving" $ do
-        let filePath = "./test/testdata/TClassImportedDeriving.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 6, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 12, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 4, startChar = 26, len = 4}, name = "Show"}
-              ]
-        runSessionWithServerInDirAndGetSemantic "TClassImportedDeriving.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found"
+    [ goldenWithSemanticTokens "golden type class" "TClass",
+      goldenWithSemanticTokens "imported class method InstanceClassMethodBind" "TInstanceClassMethodBind",
+      goldenWithSemanticTokens "imported class method TInstanceClassMethodUse" "TInstanceClassMethodUse",
+      goldenWithSemanticTokens "imported deriving" "TClassImportedDeriving"
     ]
 
 semanticTokensValuePatternTests :: TestTree
 semanticTokensValuePatternTests =
   testGroup
     "value and patterns "
-    [ testCase "value bind" $ do
-        let filePath = "./test/testdata/TValBind.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 4, startChar = 1, len = 5}, name = "hello"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 10, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 1, len = 5}, name = "hello"},
-                SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 5, startChar = 9, len = 6}, name = "length"}
-              ]
-        runSessionWithServerInDirAndGetSemantic "TValBind.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _noTokens -> error "No tokens found",
-      testCase "pattern match" $ do
-        let filePath = "./test/testdata/TPatternMatch.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 1}, name = "g"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 4, len = 7}, name = "Nothing"}
-              ]
-        runSessionWithServerInDirAndGetSemantic "TPatternMatch.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _noTokens -> error "No tokens found",
-      testCase "pattern bind" $ do
-        let filePath = "./test/testdata/TPatternbind.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 3, startChar = 2, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 3, startChar = 5, len = 1}, name = "b"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 5, startChar = 1, len = 1}, name = "f"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 3, len = 1}, name = "x"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 5, len = 1}, name = "y"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 9, len = 1}, name = "x"},
-                SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 5, startChar = 11, len = 1}, name = "+"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 13, len = 1}, name = "y"}
-              ]
-        runSessionWithServerInDirAndGetSemantic "TPatternbind.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ length xs @?= length expect)
-                $ recoverSemanticTokens content tokens
-              either
-                (error . show)
-                ( \xs -> liftIO $ forM (Prelude.zip xs expect) $ \(x, y) -> do
-                    x @?= y
-                    return ()
-                )
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found"
+    [ goldenWithSemanticTokens "value bind" "TValBind",
+      goldenWithSemanticTokens "pattern match" "TPatternMatch",
+      goldenWithSemanticTokens "pattern bind" "TPatternbind"
     ]
 
 semanticTokensTests :: TestTree
 semanticTokensTests =
   testGroup
     "other semantic Token test"
-    [ -- testCase "mixed constancy test result generated from one ghc version" $ do
-      --     let filePath = "./test/testdata/T1.hs"
-      --     content <- liftIO $ Prelude.readFile filePath
-      --     let expect = [SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 6, startChar = 18, len = 3}, name = "Set"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 6, startChar = 23, len = 6}, name = "insert"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 9, startChar = 6, len = 3}, name = "Foo"},SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 9, startChar = 12, len = 3}, name = "Foo"},SemanticTokenOriginal {tokenType = TRecField, loc = Loc {line = 9, startChar = 18, len = 3}, name = "foo"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 9, startChar = 25, len = 3}, name = "Int"},SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 11, startChar = 7, len = 3}, name = "Boo"},SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 11, startChar = 11, len = 1}, name = "a"},SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 12, startChar = 3, len = 3}, name = "boo"},SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 12, startChar = 10, len = 1}, name = "a"},SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 12, startChar = 15, len = 1}, name = "a"},SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 14, startChar = 10, len = 3}, name = "Boo"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 14, startChar = 14, len = 3}, name = "Int"},SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 15, startChar = 5, len = 3}, name = "boo"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 15, startChar = 9, len = 1}, name = "x"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 15, startChar = 13, len = 1}, name = "x"},SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 15, startChar = 15, len = 1}, name = "+"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 17, startChar = 6, len = 2}, name = "Dd"},SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 17, startChar = 11, len = 2}, name = "Dd"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 17, startChar = 14, len = 3}, name = "Int"},SemanticTokenOriginal {tokenType = TPatternSyn, loc = Loc {line = 19, startChar = 9, len = 3}, name = "One"},SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 19, startChar = 15, len = 3}, name = "Foo"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 21, startChar = 1, len = 3}, name = "ggg"},SemanticTokenOriginal {tokenType = TPatternSyn, loc = Loc {line = 21, startChar = 7, len = 3}, name = "One"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 23, startChar = 6, len = 3}, name = "Doo"},SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 23, startChar = 12, len = 3}, name = "Doo"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 23, startChar = 16, len = 11}, name = "Prelude.Int"},SemanticTokenOriginal {tokenType = TTypeSyn, loc = Loc {line = 24, startChar = 6, len = 4}, name = "Bar1"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 24, startChar = 13, len = 3}, name = "Int"},SemanticTokenOriginal {tokenType = TTypeSyn, loc = Loc {line = 25, startChar = 6, len = 4}, name = "Bar2"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 25, startChar = 13, len = 3}, name = "Doo"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 27, startChar = 1, len = 2}, name = "bb"},SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 27, startChar = 8, len = 3}, name = "Boo"},SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 27, startChar = 12, len = 1}, name = "a"},SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 27, startChar = 18, len = 1}, name = "a"},SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 27, startChar = 23, len = 1}, name = "a"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 28, startChar = 1, len = 2}, name = "bb"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 28, startChar = 4, len = 1}, name = "x"},SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 28, startChar = 9, len = 3}, name = "boo"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 28, startChar = 13, len = 1}, name = "x"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 29, startChar = 1, len = 2}, name = "aa"},SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 29, startChar = 7, len = 4}, name = "cool"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 29, startChar = 15, len = 3}, name = "Int"},SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 29, startChar = 22, len = 4}, name = "cool"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 30, startChar = 1, len = 2}, name = "aa"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 30, startChar = 4, len = 1}, name = "x"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 30, startChar = 9, len = 1}, name = "c"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 30, startChar = 14, len = 2}, name = "aa"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 30, startChar = 17, len = 1}, name = "x"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 30, startChar = 19, len = 1}, name = "c"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 31, startChar = 12, len = 2}, name = "xx"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 31, startChar = 16, len = 2}, name = "yy"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 32, startChar = 11, len = 2}, name = "dd"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 34, startChar = 2, len = 2}, name = "zz"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 34, startChar = 6, len = 2}, name = "kk"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 35, startChar = 1, len = 2}, name = "cc"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 35, startChar = 7, len = 3}, name = "Foo"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 35, startChar = 15, len = 3}, name = "Int"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 35, startChar = 20, len = 3}, name = "Int"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 35, startChar = 28, len = 3}, name = "Int"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 36, startChar = 1, len = 2}, name = "cc"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 36, startChar = 4, len = 1}, name = "f"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 36, startChar = 7, len = 2}, name = "gg"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 36, startChar = 11, len = 2}, name = "vv"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 37, startChar = 10, len = 2}, name = "gg"},SemanticTokenOriginal {tokenType = TRecField, loc = Loc {line = 38, startChar = 14, len = 3}, name = "foo"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 38, startChar = 18, len = 1}, name = "$"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 38, startChar = 20, len = 1}, name = "f"},SemanticTokenOriginal {tokenType = TRecField, loc = Loc {line = 38, startChar = 24, len = 3}, name = "foo"},SemanticTokenOriginal {tokenType = TRecField, loc = Loc {line = 39, startChar = 14, len = 3}, name = "foo"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 39, startChar = 18, len = 1}, name = "$"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 39, startChar = 20, len = 1}, name = "f"},SemanticTokenOriginal {tokenType = TRecField, loc = Loc {line = 39, startChar = 24, len = 3}, name = "foo"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 41, startChar = 1, len = 2}, name = "go"},SemanticTokenOriginal {tokenType = TRecField, loc = Loc {line = 41, startChar = 6, len = 3}, name = "foo"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 42, startChar = 1, len = 3}, name = "add"},SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 42, startChar = 7, len = 11}, name = "(Prelude.+)"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 47, startChar = 1, len = 4}, name = "main"},SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 47, startChar = 9, len = 2}, name = "IO"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 48, startChar = 1, len = 4}, name = "main"},SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 48, startChar = 8, len = 8}, name = "putStrLn"}]
-      --     runSessionWithServerInDirAndGetSemantic "T1.hs" $ \res doc -> do
-      --         case res ^? _L of
-      --             Just tokens -> do
-      --                 either (error . show) (\ xs -> liftIO $ xs @?= expect) $ recoverSemanticTokens content tokens
-      --                 return ()
-      --             _notokens -> error "No tokens found"
-      testCase "pattern syn" $ do
-        let filePath = "./test/testdata/TPatternSyn.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal
-                  { tokenType = TPatternSyn,
-                    loc = Loc {line = 5, startChar = 9, len = 3},
-                    name = "Foo"
-                  }
-              ]
-        runSessionWithServerInDirAndGetSemantic "TPatternSyn.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found",
-      testCase "type family" $ do
-        let filePath = "./test/testdata/TTypefamily.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 4, startChar = 13, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 4, startChar = 17, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 5, startChar = 3, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 7, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 13, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 6, startChar = 3, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 6, startChar = 7, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TTypeSyn, loc = Loc {line = 6, startChar = 11, len = 6}, name = "String"}
-              ]
-        let e2 =
-              [ SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 4, startChar = 13, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 5, startChar = 3, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 7, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 13, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 6, startChar = 3, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TTypeSyn, loc = Loc {line = 6, startChar = 11, len = 6}, name = "String"}
-              ]
-
-        runSessionWithServerInDirAndGetSemantic "TTypefamily.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ length xs @?= length expect)
-                $ recoverSemanticTokens content tokens
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found",
-      testCase "module import test" $ do
+    [ testCase "module import test" $ do
         let filePath1 = "./test/testdata/TModuleA.hs"
         let filePath2 = "./test/testdata/TModuleB.hs"
         content1 <- liftIO $ Prelude.readFile filePath1
@@ -360,208 +168,28 @@ semanticTokensTests =
                 $ recoverSemanticTokens content2 tokens
               return ()
             _ -> error "No tokens found"
-          liftIO $ 1 @?= 1
+          liftIO $ 1 @?= 1,
+      goldenWithSemanticTokens "mixed constancy test result generated from one ghc version" "T1",
+      goldenWithSemanticTokens "pattern bind" "TPatternSyn",
+      goldenWithSemanticTokens "type family" "TTypefamily"
     ]
 
 semanticTokensDataTypeTests =
   testGroup
     "get semantic Tokens"
-    [ testCase "simple datatype" $ do
-        let filePath = "./test/testdata/TDataType.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 6, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 3, startChar = 12, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 16, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 3, startChar = 30, len = 2}, name = "Eq"}
-              ]
-        runSessionWithServerInDirAndGetSemantic "TDataType.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found",
-      -- record is part of datatype
-      testCase "record" $ do
-        let filePath = "./test/testdata/TRecord.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 6, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 12, len = 3}, name = "Foo"},
-                SemanticTokenOriginal {tokenType = TRecField, loc = Loc {line = 4, startChar = 18, len = 3}, name = "foo"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 25, len = 3}, name = "Int"}
-              ]
-        runSessionWithServerInDirAndGetSemantic "TRecord.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found",
-      testCase "datatype import" $ do
-        let filePath = "./test/testdata/TDatatypeImported.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 1, len = 2}, name = "go"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 7, len = 2}, name = "IO"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 6, startChar = 1, len = 2}, name = "go"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 6, startChar = 6, len = 5}, name = "print"}
-              ]
-
-        runSessionWithServerInDirAndGetSemantic "TDatatypeImported.hs" $ \res doc -> do
-          -- content <- waitForAction "getFileContents" doc
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ length xs @?= length expect)
-                $ recoverSemanticTokens content tokens
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found",
-      testCase "datatype family" $ do
-        let filePath = "./test/testdata/TDataFamily.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        -- for data family,
-        -- the data family name is type family
-        -- its data constructor is also TDataCon
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 5, startChar = 13, len = 5}, name = "XList"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 5, startChar = 19, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 8, startChar = 15, len = 5}, name = "XList"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 8, startChar = 21, len = 4}, name = "Char"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 8, startChar = 28, len = 5}, name = "XCons"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 8, startChar = 35, len = 4}, name = "Char"},
-                SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 8, startChar = 42, len = 5}, name = "XList"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 8, startChar = 48, len = 4}, name = "Char"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 8, startChar = 56, len = 4}, name = "XNil"},
-                SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 11, startChar = 15, len = 5}, name = "XList"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 11, startChar = 26, len = 9}, name = "XListUnit"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 11, startChar = 37, len = 3}, name = "Int"}
-              ]
-        runSessionWithServerInDirAndGetSemantic "TDataFamily.hs" $ \res doc -> do
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found",
-      testCase "GADT" $ do
-        let filePath = "./test/testdata/TGADT.hs"
-        content <- liftIO $ Prelude.readFile filePath
-        -- for data family,
-        -- the data family name is type family
-        -- its data constructor is also TDataCon
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 6, len = 3}, name = "Lam"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 6, startChar = 3, len = 4}, name = "Lift"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 6, startChar = 11, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 6, startChar = 36, len = 3}, name = "Lam"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 6, startChar = 40, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 7, startChar = 3, len = 3}, name = "Lam"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 7, startChar = 12, len = 3}, name = "Lam"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 7, startChar = 16, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 7, startChar = 21, len = 3}, name = "Lam"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 7, startChar = 25, len = 1}, name = "b"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 7, startChar = 36, len = 3}, name = "Lam"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 7, startChar = 41, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 7, startChar = 46, len = 1}, name = "b"}
-              ]
-        runSessionWithServerInDirAndGetSemantic "TGADT.hs" $ \res doc -> do
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found"
+    [ goldenWithSemanticTokens "simple datatype" "TDataType",
+      goldenWithSemanticTokens "record" "TRecord",
+      goldenWithSemanticTokens "datatype import" "TDatatypeImported",
+      goldenWithSemanticTokens "datatype family" "TDataFamily",
+      goldenWithSemanticTokens "GADT" "TGADT"
     ]
 
 semanticTokensFunctionTests =
   testGroup
     "get semantic of functions"
-    [ testCase "functions" $ do
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 3, startChar = 1, len = 1}, name = "f"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 3, startChar = 13, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 3, startChar = 16, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 3, startChar = 21, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 1}, name = "f"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 4, startChar = 3, len = 1}, name = "x"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 4, startChar = 7, len = 1}, name = "x"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 6, startChar = 1, len = 1}, name = "x"},
-                SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 6, startChar = 6, len = 1}, name = "a"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 7, startChar = 1, len = 1}, name = "x"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 7, startChar = 5, len = 9}, name = "undefined"}
-              ]
-        runSessionWithServerInDirAndGetSemanticsFile "TFunction.hs" $ \res doc content -> do
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found",
-      testCase "local functions" $ do
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 3, startChar = 1, len = 1}, name = "f"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 6, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 13, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 1}, name = "f"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 7, len = 1}, name = "g"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 6, startChar = 5, len = 1}, name = "g"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 6, startChar = 7, len = 1}, name = "x"}
-              ]
-        let e1 =
-              [ SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 3, startChar = 1, len = 1}, name = "f"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 6, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 13, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 1}, name = "f"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 7, len = 1}, name = "g"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 6, startChar = 5, len = 1}, name = "g"}
-              ]
-        let f x = 1
-        runSessionWithServerInDirAndGetSemanticsFile "TFunctionLocal.hs" $ \res doc content -> do
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found",
-      testCase "function in let binding" $ do
-        let expect =
-              [ SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 3, startChar = 1, len = 1}, name = "y"},
-                SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 6, len = 3}, name = "Int"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 4, startChar = 1, len = 1}, name = "y"},
-                SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 9, len = 1}, name = "f"},
-                SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 4, startChar = 11, len = 1}, name = "x"}
-              ]
-
-        runSessionWithServerInDirAndGetSemanticsFile "TFunctionLet.hs" $ \res doc content -> do
-          case res ^? _L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content tokens
-              return ()
-            _notokens -> error "No tokens found"
+    [ goldenWithSemanticTokens "functions" "TFunction",
+      goldenWithSemanticTokens "local functions" "TFunctionLocal",
+      goldenWithSemanticTokens "function in let binding" "TFunctionLet"
     ]
 
 main :: IO ()
@@ -569,9 +197,9 @@ main =
   defaultTestRunner $
     testGroup
       "Semantic tokens"
-      [ semanticTokensClassTests,
+      [ semanticTokensTests,
+        semanticTokensClassTests,
         semanticTokensDataTypeTests,
         semanticTokensValuePatternTests,
-        semanticTokensTests,
         semanticTokensFunctionTests
       ]

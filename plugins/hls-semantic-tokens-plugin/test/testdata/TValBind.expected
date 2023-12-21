@@ -1,0 +1,4 @@
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 4, startChar = 1, len = 5}, name = "hello"}
+SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 10, len = 3}, name = "Int"}
+SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 1, len = 5}, name = "hello"}
+SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 5, startChar = 9, len = 6}, name = "length"}
