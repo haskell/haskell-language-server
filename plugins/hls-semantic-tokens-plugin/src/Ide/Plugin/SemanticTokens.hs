@@ -16,3 +16,5 @@ descriptor recorder plId = (defaultPluginDescriptor plId "provides lsp semantic 
         mkPluginHandler SMethod_TextDocumentSemanticTokensFull Internal.semanticTokensFull
       , Ide.Types.pluginRules = Internal.getImportedNameSemanticRule recorder
     }
+
+

@@ -35,9 +35,8 @@ toLspTokenType :: SemanticTokenType -> Maybe SemanticTokenTypes
 toLspTokenType tk = case tk of
     -- TVariable     -> SemanticTokenTypes_Variable
     -- left hand side of none pattern bind
-    TValBind      -> Just SemanticTokenTypes_Function
-    -- any pattern bind
-    TPatternBind  -> Just SemanticTokenTypes_Parameter
+    TFunction     -> Just SemanticTokenTypes_Function
+    TVariable     -> Just SemanticTokenTypes_Variable
     TClass        -> Just SemanticTokenTypes_Class
     TClassMethod  -> Just SemanticTokenTypes_Method
     TTypeVariable -> Just SemanticTokenTypes_TypeParameter
@@ -66,12 +65,29 @@ fromLspTokenType tk = fromMaybe TNothing $ Map.lookup tk lspTokenReverseMap
 2. from ghc type (TyThing or name) to our token type
 -}
 
+typeSemantic :: Type -> SemanticTokenType
+typeSemantic  x =
+     case x of
+        ForAllTy _ a     -> typeSemantic a
+        FunTy _ _        -> TFunction
+        TyVarTy _        -> TNothing
+        TyConApp tyCon _ -> TNothing
+            -- | isTypeSynonymTyCon tyCon -> TTypeSyn
+            -- | isTypeFamilyTyCon tyCon -> TTypeFamily
+            -- | isClassTyCon tyCon -> TClass
+            -- | otherwise -> TTypeCon
+        AppTy a b        -> TNothing
+        LitTy _          -> TNothing
+        CastTy _ _       -> TNothing
+        CoercionTy _     -> TNothing
+
+
 toTokenType :: Name -> SemanticTokenType
 toTokenType locName = case occNameSpace $ occName locName of
   x | isDataConNameSpace x -> TDataCon
   x | isTvNameSpace x      -> TTypeVariable
   x | isTcClsNameSpace x   -> TTypeCon -- Type constructors and classes in the same name space for now
-  x | isVarNameSpace x     -> TValBind
+  x | isVarNameSpace x     -> TVariable
   _                        -> TNothing
 
 
@@ -83,9 +99,9 @@ tyThingSemantic ty = case ty of
         | isTyVar vid -> TTypeVariable
         | isRecordSelector vid -> TRecField
         | isClassOpId vid -> TClassMethod
-        -- | isLocalId vid -> TPatternBind
+        | isFunVar vid -> TFunction
         -- | isDFunId vid -> TClassMethod
-        | otherwise -> TValBind
+        | otherwise -> TVariable
     AConLike con -> case con of
         RealDataCon _ -> TDataCon
         PatSynCon _   -> TPatternSyn
@@ -100,6 +116,13 @@ tyThingSemantic ty = case ty of
         | otherwise -> TTypeCon
     ACoAxiom _ -> TNothing
 
+isFunVar :: Var -> Bool
+isFunVar var = isFun $ varType var
+isFun :: Type -> Bool
+isFun a = case a of
+    ForAllTy _ a -> isFun a
+    x            -> isFunTy a
+
 
 {- |
 3. from hieAst identifier detail to our token type
@@ -113,9 +136,9 @@ infoTokenType x = case x of
     IEThing _                -> TNothing
     TyDecl                   -> TNothing -- type signature
 
-    ValBind RegularBind _ _  -> TValBind
+    ValBind RegularBind _ _  -> TVariable
     ValBind InstanceBind _ _ -> TClassMethod
-    PatternBind {}           -> TPatternBind
+    PatternBind {}           -> TVariable
     ClassTyDecl _            -> TClassMethod
     TyVarBind _ _            -> TTypeVariable
     RecField _ _             -> TRecField

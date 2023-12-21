@@ -29,8 +29,8 @@ data SemanticTokenType =
     TNothing -- unknown
     -- | TVariable -- fallback
     -- since many thing can be valbind. we put it as less priority
-    | TValBind -- valBind instance bind or regular bind
-    | TPatternBind -- PatternBind, parameters, as values in let/in, case, lambda
+    | TVariable -- valBind instance bind or regular bind
+    | TFunction -- function
     | TDataCon -- Data constructor
     | TTypeVariable -- Type variable
     | TClassMethod -- Class method

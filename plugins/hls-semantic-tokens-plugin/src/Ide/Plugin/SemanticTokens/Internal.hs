@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 
@@ -84,12 +85,15 @@ import           Development.IDE.Types.Exports        (ExportsMap (..),
                                                        createExportsMapHieDb)
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
 
+import qualified Data.Map                             as M
+import qualified Data.Set                             as S
 import           Development.IDE                      (Rules, define,
                                                        useWithStale_)
 import           Development.IDE.Core.PluginUtils     (useMT)
 import           Development.IDE.Core.Rules           (Log)
 import           Development.IDE.Graph.Classes        (Hashable, NFData (rnf))
 import           Ide.Plugin.SemanticTokens.Mappings
+import           Ide.Plugin.SemanticTokens.Utils
 
 logWith :: (MonadIO m) => IdeState -> Priority -> String -> m ()
 logWith st prior = liftIO . logPriority (ideLogger st) prior. T.pack
@@ -101,29 +105,25 @@ logWith st prior = liftIO . logPriority (ideLogger st) prior. T.pack
 -- | computeSemanticTokens
 -- collect from various source
 -- imported name from GetGlobalNameSemantic
--- local names from refMap
+-- local names from hieAst
 -- name locations from hieAst
 -- visible names from renamedSource
 computeSemanticTokens :: IdeState -> NormalizedFilePath -> Action (Maybe SemanticTokens)
 computeSemanticTokens state nfp =
     runMaybeT $ do
-    -- let dbg = logWith state Debug
     let logError = logWith state Debug
-    -- let getAst HAR{hieAst, refMap} = hieAst
     (HAR{hieAst, refMap}) <- useMT GetHieAst nfp
+    typedAst :: HieASTs Type <- MaybeT $ pure $ cast hieAst
     (TcModuleResult{..}, _) <- useWithStaleMT TypeCheck nfp
-    (_, ast) <- MaybeT $ return $ listToMaybe $ Map.toList $ getAsts hieAst
+    (_, ast) <- MaybeT $ return $ listToMaybe $ Map.toList $ getAsts typedAst
     (GTTMap{getNameSemanticMap}, _) <- useWithStaleMT GetGlobalNameSemantic nfp
     -- because the names get from ast might contain derived name
     let nameSet = nameGetter tmrRenamed
-    -- only take names we cares about from ast
-    let names = hieAstSpanNames nameSet ast
-    -- let globalAndImportedModuleNameSemanticMap = Map.fromList $ flip mapMaybe (Set.toList nameSet) $ \name -> do
-    -- local name map from refMap
-    let localNameSemanticMap = toNameSemanticMap nameSet refMap
-
-    let combineMap = plusNameEnv_C (<>) localNameSemanticMap getNameSemanticMap
-    let moduleAbsTks = extractSemanticTokensFromNames combineMap names
+    let spanNames = hieAstSpanNames nameSet ast
+    let localNameSemanticMapFromIdDetails = toNameSemanticMap nameSet refMap
+    let localNameSemanticMapFromTypes = fmap typeSemantic $ mkNameEnv $ getNameTypes ast refMap
+    let combineMap = plusNameEnv_C (<>) localNameSemanticMapFromTypes $ plusNameEnv_C (<>) localNameSemanticMapFromIdDetails getNameSemanticMap
+    let moduleAbsTks = extractSemanticTokensFromNames combineMap spanNames
     case semanticTokenAbsoluteSemanticTokens moduleAbsTks of
         Right tokens -> do
             source :: ByteString <- lift $ getSourceFileSource nfp
@@ -155,8 +155,8 @@ getImportedNameSemanticRule recorder =
       (TcModuleResult{..}, _) <- useWithStale_ TypeCheck nfp
       (hscEnv -> hsc, _) <- useWithStale_ GhcSessionDeps nfp
       let nameSet = nameGetter tmrRenamed
-      km <- liftIO $ foldrM (getTypeExclude (tcg_type_env tmrTypechecked) hsc) emptyNameEnv $ nameSetElemsStable nameSet
-      return ([],Just (GTTMap $ fmap tyThingSemantic km))
+      tm <- liftIO $ foldrM (getTypeExclude (tcg_type_env tmrTypechecked) hsc) emptyNameEnv $ nameSetElemsStable nameSet
+      return ([],Just (GTTMap $ fmap tyThingSemantic $ plusNameEnv (tcg_type_env tmrTypechecked) tm))
       where
       -- ignore one already in current module
       getTypeExclude localMap env n nameMap

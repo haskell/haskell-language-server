@@ -1,4 +1,4 @@
-module TPatternBind where
+module TVariable where
 
 (a, b) = (1, 2)
 
