@@ -32,7 +32,8 @@ import           Data.Tuple                          (swap)
 import           Debug.Trace
 import           Development.IDE                     (Action, filePathToUri',
                                                       rangeToRealSrcSpan,
-                                                      realSpan)
+                                                      realSpan,
+                                                      realSrcSpanToRange)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error           (positionToRealSrcLoc)
 import           Development.IDE.Spans.AtPoint       (FOIReferences)
@@ -73,8 +74,9 @@ nameGetter =  everything unionNameSet (emptyNameSet `mkQ` nameToCollect)
 --- | extract semantic map from HieAst for local variables
 --------------------------------------------------
 
-getLocalNameSemantic :: HieAST Type -> RefMap a -> NameSemanticMap
-getLocalNameSemantic ast rm = mkNameEnv (mapMaybe (nameNameSemanticFromHie ast rm) ns)
+
+mkLocalNameSemanticFromAst :: HieAST Type -> RefMap a -> NameSemanticMap
+mkLocalNameSemanticFromAst ast rm = mkNameEnv (mapMaybe (nameNameSemanticFromHie ast rm) ns)
     where ns = rights $ M.keys rm
 nameNameSemanticFromHie :: HieAST Type -> RefMap a -> Name -> Maybe (Name,SemanticTokenType)
 nameNameSemanticFromHie hie rm ns = do
@@ -114,12 +116,12 @@ nameNameSemanticFromHie hie rm ns = do
 --- | extract location from HieAST a
 --------------------------------------------------
 
-hieAstSpanNames :: NameSet -> HieAST a -> [(Span, Name)]
+hieAstSpanNames :: UniqSet Name -> HieAST a -> [(Range, Name)]
 hieAstSpanNames nameSet ast = if null (nodeChildren ast) then
     getIds ast else concatMap (hieAstSpanNames nameSet) (nodeChildren ast)
     where
-        getIds :: HieAST a -> [(Span, Name)]
-        getIds ast = [(nodeSpan ast, c)
+        -- getIds :: HieAST a -> [(Span, Name)]
+        getIds ast = [(realSrcSpanToRange $ nodeSpan ast, c)
                     | (Right c, d) <- Map.toList $ getNodeIds' ast
                     , elemNameSet c nameSet
                     -- at least get one info
@@ -147,24 +149,23 @@ hieAstSpanNames nameSet ast = if null (nodeChildren ast) then
 semanticTokenAbsoluteSemanticTokens :: [SemanticTokenAbsolute] -> Either Text SemanticTokens
 semanticTokenAbsoluteSemanticTokens = makeSemanticTokens defaultSemanticTokensLegend . List.sort
 
-extractSemanticTokensFromNames :: NameSemanticMap -> [(Span, Name)] -> [SemanticTokenAbsolute]
+-- extractSemanticTokensFromNames :: NameSemanticMap -> [(Span, Name)] -> [SemanticTokenAbsolute]
+extractSemanticTokensFromNames :: UniqFM Name SemanticTokenType -> [(Range, Name)] -> [SemanticTokenAbsolute]
 extractSemanticTokensFromNames nsm =
     mapMaybe (uncurry toAbsSemanticToken) . mergeNameFromSamSpan . mapMaybe (getSemantic nsm)
     where
         -- merge all tokens with same span
-        mergeNameFromSamSpan :: [(Span, SemanticTokenType)] -> [(Span, SemanticTokenType)]
+        -- mergeNameFromSamSpan :: [(Span, SemanticTokenType)] -> [(Span, SemanticTokenType)]
         mergeNameFromSamSpan xs = Map.toList $ Map.fromListWith (<>) xs
 
-        toAbsSemanticToken :: Span -> SemanticTokenType -> Maybe SemanticTokenAbsolute
-        toAbsSemanticToken loc tokenType =
-            let line = srcSpanStartLine loc - 1
-                startChar = srcSpanStartCol loc - 1
-                len = srcSpanEndCol loc - 1 - startChar
-            in SemanticTokenAbsolute (fromIntegral line) (fromIntegral startChar)
+        toAbsSemanticToken :: Range -> SemanticTokenType -> Maybe SemanticTokenAbsolute
+        toAbsSemanticToken (Range (Position startLine startColumn) (Position endLine endColumn)) tokenType =
+            let len = endColumn - startColumn
+            in SemanticTokenAbsolute (fromIntegral startLine) (fromIntegral startColumn)
                 (fromIntegral len) <$> toLspTokenType tokenType <*> return []
                 -- SemanticTokenModifiers_Declaration
 
-        getSemantic :: NameSemanticMap -> (Span, Name) -> Maybe (Span, SemanticTokenType)
+        -- getSemantic :: NameSemanticMap -> (Span, Name) -> Maybe (Span, SemanticTokenType)
         getSemantic nameMap (span, name) = do
             -- let tkt = toTokenType name
             -- let tokenType = maybe tkt (\x -> tkt <> x) $ Map.lookup name nameMap

@@ -534,7 +534,7 @@ semanticTokensFunctionTests =
                 SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 7, len = 1}, name = "g"},
                 SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 6, startChar = 5, len = 1}, name = "g"}
               ]
-
+        let f x = 1
         runSessionWithServerInDirAndGetSemanticsFile "TFunctionLocal.hs" $ \res doc content -> do
           case res ^? _L of
             Just tokens -> do
