@@ -32,6 +32,7 @@ import           GHC.Generics                   (Generic)
 import           Ide.Plugin.Config
 import           Ide.Types                      (PluginDescriptor (..),
                                                  PluginId, configHasDiagnostics,
+                                                 configInitialGenericConfig,
                                                  defaultConfigDescriptor,
                                                  defaultPluginDescriptor,
                                                  pluginEnabledConfig)
@@ -46,11 +47,17 @@ import           Stan.Observation               (Observation (..))
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId desc)
   { pluginRules = rules recorder plId
-  , pluginConfigDescriptor = defaultConfigDescriptor
+  , pluginConfigDescriptor = defConfigDescriptor
       { configHasDiagnostics = True
+      -- We disable this plugin by default because users have been complaining about
+      -- the diagnostics, see https://github.com/haskell/haskell-language-server/issues/3916
+      , configInitialGenericConfig = (configInitialGenericConfig defConfigDescriptor)
+        { plcGlobalOn = False
+        }
       }
     }
   where
+    defConfigDescriptor = defaultConfigDescriptor
     desc = "Provides stan diagnostics. Built with stan-" <> VERSION_stan
 
 newtype Log = LogShake Shake.Log deriving (Show)
