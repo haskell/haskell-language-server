@@ -14,7 +14,9 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId = (defaultPluginDescriptor plId "provides lsp semantic tokens features")
     { Ide.Types.pluginHandlers =
         mkPluginHandler SMethod_TextDocumentSemanticTokensFull Internal.semanticTokensFull
-      , Ide.Types.pluginRules = Internal.getImportedNameSemanticRule recorder
+      , Ide.Types.pluginRules =
+        Internal.getImportedNameSemanticRule recorder
+        <> Internal.persistentSemanticMapRule
     }
 
 

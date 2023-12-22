@@ -101,8 +101,7 @@ nameNameSemanticFromHie hie rm ns = do
             ast <- selectSmallestContaining span ast
             nodeInfo <-  Map.lookup SourceInfo $ getSourcedNodeInfo $ sourcedNodeInfo ast
             -- usually for a visible name, the type is in the first child
-            nt <- listToMaybe $ nodeType nodeInfo
-            return nt
+            listToMaybe $ nodeType nodeInfo
 
         bindSiteMaybeTokenType :: Span -> Maybe SemanticTokenType
         bindSiteMaybeTokenType = fmap typeSemantic . spanTypeFromHie hie

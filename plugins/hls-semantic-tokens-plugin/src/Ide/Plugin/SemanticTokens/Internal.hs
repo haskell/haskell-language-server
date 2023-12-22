@@ -75,6 +75,7 @@ import           Development.IDE.Core.PluginUtils     (runActionE,
                                                        useWithStaleFastMT,
                                                        useWithStaleMT, usesMT)
 import           Development.IDE.Core.PositionMapping (fromCurrentRange,
+                                                       idDelta,
                                                        toCurrentPosition,
                                                        toCurrentRange,
                                                        zeroMapping)
@@ -82,6 +83,7 @@ import           Development.IDE.Core.Rules           (Log (LogShake),
                                                        getSourceFileSource,
                                                        runAction)
 import           Development.IDE.Core.Shake           (ShakeExtras (..),
+                                                       addPersistentRule,
                                                        getShakeExtras,
                                                        withHieDb)
 import           Development.IDE.GHC.Compat
@@ -167,3 +169,7 @@ getImportedNameSemanticRule recorder =
         lookupImported :: HscEnv -> Name -> IO (Maybe TyThing)
         lookupImported env = fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env
 
+
+-- | Persistent rule to ensure that semantic tokens doesn't block on startup
+persistentSemanticMapRule :: Rules ()
+persistentSemanticMapRule = addPersistentRule GetGlobalNameSemantic $ \_ -> pure $ Just (GTTMap mempty, idDelta, Nothing)
