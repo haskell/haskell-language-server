@@ -19,8 +19,7 @@ import           Control.Arrow                        ((&&&), (+++))
 import           Control.Lens                         ((^.))
 import           Control.Monad                        (forM, forM_)
 import           Control.Monad.Except                 (MonadError (..),
-                                                       liftEither, mapError,
-                                                       modifyError, withExceptT)
+                                                       liftEither, withExceptT)
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except           (ExceptT (ExceptT),
