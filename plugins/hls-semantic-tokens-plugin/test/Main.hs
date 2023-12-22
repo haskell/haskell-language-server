@@ -55,28 +55,6 @@ semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor Ide.Plugin.SemanticTokens
 mkSemanticTokensParams :: TextDocumentIdentifier -> SemanticTokensParams
 mkSemanticTokensParams = SemanticTokensParams Nothing Nothing
 
-runSessionWithServerInDir file x =
-  Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProject file) $ do
-    doc <- openDoc file "haskell"
-    res <- waitForAction "TypeCheck" doc
-    x doc
-
-runSessionWithServerInDirAndGetSemantic file x =
-  Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProject file) $ do
-    doc <- openDoc file "haskell"
-    res <- waitForAction "TypeCheck" doc
-    res <- Test.getSemanticTokens doc
-    x res doc
-
-runSessionWithServerInDirAndGetSemanticsFile file x =
-  do
-    let path = "." </> testDataDir </> file
-    content <- liftIO $ readFile path
-    Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProject file) $ do
-      doc <- openDoc file "haskell"
-      res <- waitForAction "TypeCheck" doc
-      res <- Test.getSemanticTokens doc
-      x res doc content
 
 goldenWithHaskellAndCapsOutPut config plugin title tree path desc act =
   goldenGitDiff title (FS.vftOriginalRoot tree </> path <.> desc) $

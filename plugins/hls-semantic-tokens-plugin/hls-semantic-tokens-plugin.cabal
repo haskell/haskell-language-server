@@ -37,6 +37,7 @@ library
     , containers
     , extra
     , hiedb
+    , mtl                   >= 2.2
     , ghcide                == 2.5.0.0
     , hls-plugin-api        == 2.5.0.0
     , lens
