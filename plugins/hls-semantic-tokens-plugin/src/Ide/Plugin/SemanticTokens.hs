@@ -11,7 +11,7 @@ import           Language.LSP.Protocol.Message
 
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId "provides lsp semantic tokens features")
+descriptor recorder plId = (defaultPluginDescriptor plId "Provides semantic tokens")
     { Ide.Types.pluginHandlers =
         mkPluginHandler SMethod_TextDocumentSemanticTokensFull Internal.semanticTokensFull
       , Ide.Types.pluginRules =

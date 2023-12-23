@@ -228,6 +228,7 @@ data PluginConfig =
       , plcRenameOn         :: !Bool
       , plcSelectionRangeOn :: !Bool
       , plcFoldingRangeOn   :: !Bool
+      , plcSemanticTokensOn :: !Bool
       , plcConfig           :: !Object
       } deriving (Show,Eq)
 
@@ -243,12 +244,13 @@ instance Default PluginConfig where
       , plcCompletionOn     = True
       , plcRenameOn         = True
       , plcSelectionRangeOn = True
-      , plcFoldingRangeOn = True
+      , plcFoldingRangeOn   = True
+      , plcSemanticTokensOn = True
       , plcConfig           = mempty
       }
 
 instance ToJSON PluginConfig where
-    toJSON (PluginConfig g ch ca cl d h s c rn sr fr cfg) = r
+    toJSON (PluginConfig g ch ca cl d h s c rn sr fr st cfg) = r
       where
         r = object [ "globalOn"         .= g
                    , "callHierarchyOn"  .= ch
@@ -261,6 +263,7 @@ instance ToJSON PluginConfig where
                    , "renameOn"         .= rn
                    , "selectionRangeOn" .= sr
                    , "foldingRangeOn"   .= fr
+                   , "semanticTokensOn" .= st
                    , "config"           .= cfg
                    ]
 
@@ -508,7 +511,8 @@ instance PluginMethod Request Method_TextDocumentFormatting where
       pid = pluginId pluginDesc
 
 instance PluginMethod Request Method_TextDocumentSemanticTokensFull where
-  pluginEnabled _ msgParams pluginDesc _ = pluginResponsible uri pluginDesc
+  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcSemanticTokensOn (configForPlugin conf pluginDesc)
     where
       uri = msgParams ^. L.textDocument . L.uri
 
