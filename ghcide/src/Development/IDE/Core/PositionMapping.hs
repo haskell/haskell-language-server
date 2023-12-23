@@ -11,6 +11,7 @@ module Development.IDE.Core.PositionMapping
   , toCurrentPosition
   , PositionDelta(..)
   , addDelta
+  , addOldDelta
   , idDelta
   , composeDelta
   , mkDelta
@@ -122,6 +123,10 @@ mkDelta cs = foldl' applyChange idDelta cs
 -- | Add a new delta onto a Mapping k n to make a Mapping (k - 1) n
 addDelta :: PositionDelta -> PositionMapping -> PositionMapping
 addDelta delta (PositionMapping pm) = PositionMapping (composeDelta delta pm)
+
+-- | Add a old delta onto a Mapping k n to make a Mapping (k - 1) n
+addOldDelta :: PositionDelta -> PositionMapping -> PositionMapping
+addOldDelta delta (PositionMapping pm) = PositionMapping (composeDelta pm delta)
 
 -- TODO: We currently ignore the right hand side (if there is only text), as
 -- that was what was done with lsp* 1.6 packages

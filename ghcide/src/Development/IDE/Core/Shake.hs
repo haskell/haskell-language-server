@@ -266,7 +266,7 @@ data ShakeExtras = ShakeExtras
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
-    -- accumulation of all previous mappings.
+    -- accumulation to the current version.
     ,progress :: ProgressReporting
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
@@ -443,7 +443,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
                               `catch` (\(_ :: IOException) -> pure Nothing)
                 atomicallyNamed "lastValueIO 2" $ do
                   STM.focus (Focus.alter (alterValue $ Stale (Just del) actual_version (toDyn v))) (toKey k file) state
-                  Just . (v,) . addDelta del <$> mappingForVersion positionMapping file actual_version
+                  Just . (v,) . addOldDelta del <$> mappingForVersion positionMapping file actual_version
 
         -- We got a new stale value from the persistent rule, insert it in the map without affecting diagnostics
         alterValue new Nothing = Just (ValueWithDiagnostics new mempty) -- If it wasn't in the map, give it empty diagnostics
@@ -459,7 +459,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
         Succeeded ver (fromDynamic -> Just v) ->
             atomicallyNamed "lastValueIO 5"  $ Just . (v,) <$> mappingForVersion positionMapping file ver
         Stale del ver (fromDynamic -> Just v) ->
-            atomicallyNamed "lastValueIO 6"  $ Just . (v,) . maybe id addDelta del <$> mappingForVersion positionMapping file ver
+            atomicallyNamed "lastValueIO 6"  $ Just . (v,) . maybe id addOldDelta del <$> mappingForVersion positionMapping file ver
         Failed p | not p -> readPersistent
         _ -> pure Nothing
 
@@ -1357,7 +1357,7 @@ updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} Versi
                 -- Very important to use mapAccum here so that the tails of
                 -- each mapping can be shared, otherwise quadratic space is
                 -- used which is evident in long running sessions.
-                EM.mapAccumRWithKey (\acc _k (delta, _) -> let new = addDelta delta acc in (new, (delta, acc)))
+                EM.mapAccumRWithKey (\acc _k (delta, _) -> let new = addOldDelta delta acc in (new, (delta, acc)))
                   zeroMapping
                   (EM.insert _version (shared_change, zeroMapping) mappingForUri)
         shared_change = mkDelta changes
