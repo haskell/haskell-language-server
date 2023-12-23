@@ -5,6 +5,7 @@ This module contains the mapping
 3. from hieAst identifier detail to our token type
 4. from lsp token to our token
 -}
+{-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
 
@@ -15,6 +16,7 @@ import qualified Data.Map                        as Map
 import           Data.Maybe                      (fromMaybe, mapMaybe)
 import qualified Data.Set                        as Set
 import           Data.Text                       (Text)
+import           Development.IDE                 (HieKind (HieFresh, HieFromDisk))
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.SemanticTokens.Types
 import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
@@ -23,6 +25,8 @@ import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
                                                   SemanticTokenTypes (..),
                                                   SemanticTokens (SemanticTokens),
                                                   UInt, absolutizeTokens)
+
+
 
 
 {- |
@@ -65,23 +69,6 @@ fromLspTokenType tk = fromMaybe TNothing $ Map.lookup tk lspTokenReverseMap
 2. from ghc type (TyThing or name) to our token type
 -}
 
-typeSemantic :: Type -> SemanticTokenType
-typeSemantic x =
-     case x of
-        ForAllTy _ a -> typeSemantic a
-        FunTy _ _    -> TFunction
-        _            -> TNothing
-        -- TyVarTy _        -> TNothing
-        -- TyConApp tyCon _ -> TNothing
-        --     -- | isTypeSynonymTyCon tyCon -> TTypeSyn
-        --     -- | isTypeFamilyTyCon tyCon -> TTypeFamily
-        --     -- | isClassTyCon tyCon -> TClass
-        --     -- | otherwise -> TTypeCon
-        -- AppTy a b        -> TNothing
-        -- LitTy _          -> TNothing
-        -- CastTy _ _       -> TNothing
-        -- CoercionTy _     -> TNothing
-
 
 toTokenType :: Name -> SemanticTokenType
 toTokenType locName = case occNameSpace $ occName locName of
@@ -118,16 +105,33 @@ tyThingSemantic ty = case ty of
     ACoAxiom _ -> TNothing
 
 isFunVar :: Var -> Bool
-isFunVar var = isFun $ varType var
-isFun :: Type -> Bool
-isFun a = case a of
-    ForAllTy _ a -> isFun a
+isFunVar var = isFunType $ varType var
+isFunType :: Type -> Bool
+isFunType a = case a of
+    ForAllTy _ a -> isFunType a
     x            -> isFunTy a
 
 
 {- |
-3. from hieAst identifier detail to our token type
+3. from HIE to our token type
 -}
+
+typeSemantic :: HieKind hType -> hType -> SemanticTokenType
+typeSemantic kind t = case kind of
+          HieFresh -> if isFunType t then TFunction else TNothing
+          HieFromDisk full_file ->
+                if isFixFunction (recoverFullType t (hie_types full_file))
+                    then  TFunction
+                    else  TNothing
+    where
+        isFixFunction :: HieTypeFix -> Bool
+        isFixFunction (Roll x) =
+            case x of
+                HForAllTy _ a -> isFixFunction a
+                HFunTy {}     -> True
+                _             -> False
+
+
 
 
 infoTokenType :: ContextInfo -> SemanticTokenType

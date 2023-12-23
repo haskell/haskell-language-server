@@ -43,6 +43,7 @@ import           Data.Maybe                           (catMaybes, fromMaybe,
                                                        listToMaybe, mapMaybe)
 import qualified Data.Set                             as S
 import qualified Data.Set                             as Set
+import           Data.String                          (IsString (..))
 import           Data.Text                            (Text)
 import qualified Data.Text                            as T
 import           Data.Traversable                     (for)
@@ -63,9 +64,9 @@ import           Development.IDE                      (Action,
                                                        WithPriority,
                                                        catchSrcErrors,
                                                        cmapWithPrio, define,
-                                                       ideLogger, logPriority,
-                                                       realSpan, use,
-                                                       useWithStaleFast,
+                                                       hieKind, ideLogger,
+                                                       logPriority, realSpan,
+                                                       use, useWithStaleFast,
                                                        useWithStale_, uses)
 import           Development.IDE.Core.Compile         (TcModuleResult (..),
                                                        lookupName)
@@ -124,8 +125,7 @@ liftMaybeEither e = liftEither . maybe (Left e) Right
 -- computeSemanticTokens :: IdeState -> NormalizedFilePath -> Action (SemanticTokens)
 computeSemanticTokens :: p -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
 computeSemanticTokens state nfp = do
-    (HAR {hieAst, refMap}, mapping) <- useWithStaleE GetHieAst nfp
-    typedAst :: HieASTs Type <- liftMaybeEither (PluginInternalError "HieAst a convert cast to HieASTs Type") $ cast hieAst
+    (HAR {..}, mapping) <- useWithStaleE GetHieAst nfp
     (TcModuleResult {..}, _) <- useWithStaleE TypeCheck nfp
     (GTTMap {importedNameSemanticMap}, _) <- useWithStaleE GetGlobalNameSemantic nfp
     (_, ast) <-
@@ -133,11 +133,11 @@ computeSemanticTokens state nfp = do
           (PluginRuleFailed $ "hieAst does not contains ast for:" <> T.pack (show nfp))
         $ listToMaybe
         $ Map.toList
-        $ getAsts typedAst
+        $ getAsts hieAst
     let nameSet = nameGetter tmrRenamed
     -- get current location from the old ones
     let spanNames = mapMaybe (\(span, name) -> (,name) <$> toCurrentRange mapping span) $ hieAstSpanNames nameSet ast
-    let sMap = plusNameEnv_C (<>) importedNameSemanticMap $ mkLocalNameSemanticFromAst ast refMap
+    let sMap = plusNameEnv_C (<>) importedNameSemanticMap $ mkLocalNameSemanticFromAst hieKind ast refMap
     let moduleAbsTks = extractSemanticTokensFromNames sMap spanNames
     withExceptT PluginInternalError $ liftEither $ semanticTokenAbsoluteSemanticTokens moduleAbsTks
 

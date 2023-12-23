@@ -30,7 +30,8 @@ import qualified Data.Text                           as Text
 import qualified Data.Text.Lazy.Builder              as Text
 import           Data.Tuple                          (swap)
 import           Debug.Trace
-import           Development.IDE                     (Action, filePathToUri',
+import           Development.IDE                     (Action, HieKind,
+                                                      filePathToUri',
                                                       rangeToRealSrcSpan,
                                                       realSpan,
                                                       realSrcSpanToRange)
@@ -75,11 +76,11 @@ nameGetter =  everything unionNameSet (emptyNameSet `mkQ` nameToCollect)
 --------------------------------------------------
 
 
-mkLocalNameSemanticFromAst :: HieAST Type -> RefMap a -> NameSemanticMap
-mkLocalNameSemanticFromAst ast rm = mkNameEnv (mapMaybe (nameNameSemanticFromHie ast rm) ns)
+mkLocalNameSemanticFromAst :: HieKind a -> HieAST a -> RefMap a -> NameSemanticMap
+mkLocalNameSemanticFromAst hieKind ast rm = mkNameEnv (mapMaybe (nameNameSemanticFromHie hieKind ast rm) ns)
     where ns = rights $ M.keys rm
-nameNameSemanticFromHie :: HieAST Type -> RefMap a -> Name -> Maybe (Name,SemanticTokenType)
-nameNameSemanticFromHie hie rm ns = do
+nameNameSemanticFromHie :: forall a. HieKind a -> HieAST a -> RefMap a -> Name -> Maybe (Name,SemanticTokenType)
+nameNameSemanticFromHie hieKind hie rm ns = do
     st <- -- traceShow ("to find Name", showName ns) $
         nameSemanticFromRefMap rm ns
     return -- $ traceShow (showName ns, st)
@@ -92,19 +93,19 @@ nameNameSemanticFromHie hie rm ns = do
                  Map.lookup (Right name) rm
             let infos = S.unions $ map (identInfo . snd) spanInfos
             let bindTokenType = -- traceShow ("getDefinitionSite:infos", nameString, infos, mapMaybe getBindSiteFromContext $ S.toList  infos) $
-                     listToMaybe (mapMaybe getBindSiteFromContext $ S.toList infos) >>= bindSiteMaybeTokenType
+                     listToMaybe (mapMaybe getBindSiteFromContext $ S.toList infos) >>= bindSiteMaybeTokenType hieKind
             let contextInfoTokenType = contextInfosMaybeTokenType infos
             maximum <$> NE.nonEmpty (catMaybes [bindTokenType, contextInfoTokenType])
 
-        spanTypeFromHie :: HieAST Type -> Span -> Maybe Type
+        spanTypeFromHie :: HieAST a -> Span -> Maybe a
         spanTypeFromHie ast span = do
             ast <- selectSmallestContaining span ast
             nodeInfo <-  Map.lookup SourceInfo $ getSourcedNodeInfo $ sourcedNodeInfo ast
             -- usually for a visible name, the type is in the first child
             listToMaybe $ nodeType nodeInfo
 
-        bindSiteMaybeTokenType :: Span -> Maybe SemanticTokenType
-        bindSiteMaybeTokenType = fmap typeSemantic . spanTypeFromHie hie
+        bindSiteMaybeTokenType :: HieKind a -> Span -> Maybe SemanticTokenType
+        bindSiteMaybeTokenType hieKind = fmap (typeSemantic hieKind) . spanTypeFromHie hie
 
         contextInfosMaybeTokenType :: Set.Set ContextInfo -> Maybe SemanticTokenType
         contextInfosMaybeTokenType details = case NE.nonEmpty $ Set.toList details of
