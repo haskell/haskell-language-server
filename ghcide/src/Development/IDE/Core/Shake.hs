@@ -62,6 +62,7 @@ module Development.IDE.Core.Shake(
     FileVersion(..),
     Priority(..),
     updatePositionMapping,
+    updatePositionMappingHelper,
     deleteValue, recordDirtyKeys,
     WithProgressFunc, WithIndefiniteProgressFunc,
     ProgressEvent(..),
@@ -1352,12 +1353,18 @@ updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} Versi
     STM.focus (Focus.alter f) uri positionMapping
       where
         uri = toNormalizedUri _uri
-        f = Just . f' . fromMaybe mempty
-        f' mappingForUri = snd $
-                -- Very important to use mapAccum here so that the tails of
-                -- each mapping can be shared, otherwise quadratic space is
-                -- used which is evident in long running sessions.
-                EM.mapAccumRWithKey (\acc _k (delta, _) -> let new = addOldDelta delta acc in (new, (delta, acc)))
-                  zeroMapping
-                  (EM.insert _version (shared_change, zeroMapping) mappingForUri)
-        shared_change = mkDelta changes
+        f = Just . updatePositionMappingHelper _version changes . fromMaybe mempty
+
+
+updatePositionMappingHelper ::
+    Int32
+    -> [TextDocumentContentChangeEvent]
+    -> EnumMap Int32 (PositionDelta, PositionMapping)
+    -> EnumMap Int32 (PositionDelta, PositionMapping)
+updatePositionMappingHelper ver changes mappingForUri = snd $
+        -- Very important to use mapAccum here so that the tails of
+        -- each mapping can be shared, otherwise quadratic space is
+        -- used which is evident in long running sessions.
+        EM.mapAccumRWithKey (\acc _k (delta, _) -> let new = addOldDelta delta acc in (new, (delta, acc)))
+            zeroMapping
+            (EM.insert ver (mkDelta changes, zeroMapping) mappingForUri)
