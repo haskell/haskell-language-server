@@ -10,7 +10,6 @@ module Development.IDE.Core.PositionMapping
   , fromCurrentPosition
   , toCurrentPosition
   , PositionDelta(..)
-  , addDelta
   , addOldDelta
   , idDelta
   , composeDelta
@@ -120,12 +119,12 @@ idDelta = PositionDelta pure pure
 mkDelta :: [TextDocumentContentChangeEvent] -> PositionDelta
 mkDelta cs = foldl' applyChange idDelta cs
 
--- | Add a new delta onto a Mapping k n to make a Mapping (k - 1) n
-addDelta :: PositionDelta -> PositionMapping -> PositionMapping
-addDelta delta (PositionMapping pm) = PositionMapping (composeDelta delta pm)
-
--- | Add a old delta onto a Mapping k n to make a Mapping (k - 1) n
-addOldDelta :: PositionDelta -> PositionMapping -> PositionMapping
+-- | addOldDelta
+-- Add a old delta onto a Mapping k n to make a Mapping (k - 1) n
+addOldDelta ::
+    PositionDelta -- ^ delta from version k - 1 to version k
+    -> PositionMapping -- ^ The input mapping is from version k to version n
+    -> PositionMapping -- ^ The output mapping is from version k - 1 to version n
 addOldDelta delta (PositionMapping pm) = PositionMapping (composeDelta pm delta)
 
 -- TODO: We currently ignore the right hand side (if there is only text), as
