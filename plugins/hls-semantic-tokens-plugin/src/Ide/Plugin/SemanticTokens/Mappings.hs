@@ -181,7 +181,6 @@ recoverSemanticTokens sourceCode (SemanticTokens _ xs) = fmap (tokenOrigin sourc
                 where tLine = lines sourceCode !? fromIntegral line
                       name = maybe "no source" (take (fromIntegral len) . drop (fromIntegral startChar)) tLine
 
-
         dataActualToken :: [UInt] -> Either Text [ActualToken]
         dataActualToken xs = maybe decodeError (Right . fmap semanticTokenAbsoluteActualToken . absolutizeTokens)
                 $ mapM fromTuple (chunksOf 5 $ map fromIntegral xs)

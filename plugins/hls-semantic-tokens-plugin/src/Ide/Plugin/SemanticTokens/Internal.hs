@@ -143,9 +143,7 @@ computeSemanticTokens state nfp = do
 
 semanticTokensFull :: PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull state _ param = do
-  -- let dbg = logWith state
   nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
---   logWith state Info $ "computeSemanticTokens: " <> show nfp
   items <- runActionE "SemanticTokens.semanticTokensFull" state $ computeSemanticTokens state nfp
   return $ InL items
 
@@ -154,7 +152,6 @@ getImportedNameSemanticRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetGlobalNameSemantic nfp -> do
     (TcModuleResult {..}, _) <- useWithStale_ TypeCheck nfp
     (hscEnv -> hsc, _) <- useWithStale_ GhcSessionDeps nfp
-    (HAR {hieAst, refMap}, _) <- useWithStale_ GetHieAst nfp
     let nameSet = nameGetter tmrRenamed
     tm <- liftIO $ foldrM (getTypeExclude (tcg_type_env tmrTypechecked) hsc) emptyNameEnv $ nameSetElemsStable nameSet
     return ([], Just $ GTTMap tm)
@@ -162,8 +159,7 @@ getImportedNameSemanticRule recorder =
         -- ignore one already in current module
         getTypeExclude localMap env n nameMap
             | Nothing <- lookupNameEnv localMap n =
-                do
-                    tyThing <- lookupImported env n
+                do  tyThing <- lookupImported env n
                     pure $ maybe nameMap (extendNameEnv nameMap n . tyThingSemantic) tyThing
             | otherwise = pure nameMap
         lookupImported :: HscEnv -> Name -> IO (Maybe TyThing)

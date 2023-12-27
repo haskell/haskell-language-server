@@ -27,17 +27,15 @@ import           Language.LSP.Protocol.Types
 -- and we might want to merge them.
 data SemanticTokenType =
     TNothing -- unknown
-    -- | TVariable -- fallback
-    -- since many thing can be valbind. we put it as less priority
-    | TVariable -- valBind instance bind or regular bind
+    | TVariable -- none function variable
     | TFunction -- function
     | TDataCon -- Data constructor
     | TTypeVariable -- Type variable
     | TClassMethod -- Class method
     | TPatternSyn -- Pattern synonym
     | TTypeCon -- Type (Type constructor)
-    | TClass -- Class (ConstraUInt constructor)
-    | TTypeSyn -- Type synonym (Non-local is not captured)
+    | TClass -- Type class
+    | TTypeSyn -- Type synonym
     | TTypeFamily -- type family
     | TRecField -- from match bind
     deriving (Eq, Ord, Show, Enum, Bounded)

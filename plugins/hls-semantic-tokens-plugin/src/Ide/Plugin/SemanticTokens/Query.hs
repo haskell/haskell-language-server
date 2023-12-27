@@ -138,7 +138,6 @@ hieAstSpanNames nameSet ast = if null (nodeChildren ast) then
 
         combineNodeIds :: Map.Map Identifier (IdentifierDetails a)
                                 -> NodeInfo a -> Map.Map Identifier (IdentifierDetails a)
-        -- ad `combineNodeIds` (NodeInfo SourceInfo _ bd) = bd
         ad `combineNodeIds` (NodeInfo _ _ bd) = Map.unionWith (<>) ad bd
 
 
@@ -163,12 +162,7 @@ extractSemanticTokensFromNames nsm =
             let len = endColumn - startColumn
             in SemanticTokenAbsolute (fromIntegral startLine) (fromIntegral startColumn)
                 (fromIntegral len) <$> toLspTokenType tokenType <*> return []
-                -- SemanticTokenModifiers_Declaration
-
-        -- getSemantic :: NameSemanticMap -> (Span, Name) -> Maybe (Span, SemanticTokenType)
         getSemantic nameMap (span, name) = do
-            -- let tkt = toTokenType name
-            -- let tokenType = maybe tkt (\x -> tkt <> x) $ Map.lookup name nameMap
             let tokenType = lookupNameEnv nameMap name
             fmap (span,) tokenType
 

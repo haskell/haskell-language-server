@@ -90,9 +90,3 @@ nameMapString nsm  names = unlines
 
 showSpan :: RealSrcSpan -> String
 showSpan x = show (srcSpanStartLine x) <> ":" <> show (srcSpanStartCol x) <> "-" <> show (srcSpanEndCol x)
-
-
-
-type family Foo a where
-  Foo Int = Int
-  Foo a = String
