@@ -1,3 +1,9 @@
+-----------------------------------------------------------------------------
+-- |
+-- This module provides the core functionality of the plugin.
+--
+-----------------------------------------------------------------------------
+
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -10,101 +16,50 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Ide.Plugin.SemanticTokens.Internal where
+module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getImportedNameSemanticRule, persistentSemanticMapRule) where
 
--- import Language.LSP.Protocol.Types.Common
-
--- import System.FilePath (takeExtension)
-import           Control.Arrow                        ((&&&), (+++))
 import           Control.Lens                         ((^.))
-import           Control.Monad                        (forM, forM_)
-import           Control.Monad.Except                 (MonadError (..),
+import           Control.Monad.Except                 (ExceptT, MonadError (..),
                                                        liftEither, withExceptT)
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
-import           Control.Monad.Trans.Class            (lift)
-import           Control.Monad.Trans.Except           (ExceptT (ExceptT),
-                                                       runExceptT)
-import           Control.Monad.Trans.Maybe            (MaybeT (..))
-import           Data.ByteString                      (ByteString, unpack)
-import           Data.Data                            (Data)
-import           Data.Either                          (fromRight, rights)
-import           Data.Either.Extra                    (lefts)
-import           Data.Function                        (on)
-import           Data.Generics                        (Generic, Typeable,
-                                                       everything, mkQ)
-import qualified Data.HashSet                         as HashSet
-import           Data.List                            (sortBy)
-import qualified Data.List                            as List
-import           Data.List.Extra                      (chunksOf, (!?))
-import qualified Data.List.NonEmpty                   as NonEmpty
-import qualified Data.Map                             as M
+import           Data.Either                          (fromRight)
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (catMaybes, fromMaybe,
-                                                       listToMaybe, mapMaybe)
-import qualified Data.Set                             as S
-import qualified Data.Set                             as Set
-import           Data.String                          (IsString (..))
-import           Data.Text                            (Text)
+import           Data.Maybe                           (listToMaybe, mapMaybe)
 import qualified Data.Text                            as T
-import           Data.Traversable                     (for)
-import           Data.Typeable                        (cast)
-import           Debug.Trace                          (trace)
 import           Development.IDE                      (Action,
-                                                       DocAndKindMap (DKMap),
-                                                       GetBindings (GetBindings),
-                                                       GetDocMap (GetDocMap),
                                                        GetHieAst (GetHieAst),
-                                                       GetModIface (GetModIface),
-                                                       GhcSessionDeps (GhcSessionDeps, GhcSessionDeps_),
+                                                       GhcSessionDeps (GhcSessionDeps),
                                                        HieAstResult (HAR, hieAst, hieModule, refMap),
-                                                       IdeAction, IdeState,
-                                                       Priority (..), Recorder,
-                                                       RuleResult, Rules,
+                                                       IdeState, Priority (..),
+                                                       Recorder, Rules,
                                                        TypeCheck (TypeCheck),
                                                        WithPriority,
                                                        catchSrcErrors,
                                                        cmapWithPrio, define,
                                                        hieKind, ideLogger,
-                                                       logPriority, realSpan,
-                                                       use, useWithStaleFast,
-                                                       useWithStale_, uses)
+                                                       logPriority,
+                                                       useWithStale_)
 import           Development.IDE.Core.Compile         (TcModuleResult (..),
                                                        lookupName)
 import           Development.IDE.Core.PluginUtils     (runActionE,
-                                                       toCurrentPositionMT,
-                                                       useMT, useWithStaleE,
-                                                       useWithStaleFastMT,
-                                                       useWithStaleMT, usesMT)
-import           Development.IDE.Core.PositionMapping (fromCurrentRange,
-                                                       idDelta,
-                                                       toCurrentPosition,
-                                                       toCurrentRange,
-                                                       zeroMapping)
-import           Development.IDE.Core.Rules           (Log (LogShake),
-                                                       getSourceFileSource,
-                                                       runAction)
-import           Development.IDE.Core.Shake           (ShakeExtras (..),
-                                                       addPersistentRule,
-                                                       getShakeExtras,
-                                                       withHieDb)
+                                                       useWithStaleE)
+import           Development.IDE.Core.PositionMapping (idDelta, toCurrentRange)
+import           Development.IDE.Core.Rules           (Log (LogShake))
+import           Development.IDE.Core.Shake           (addPersistentRule)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Graph.Classes        (Hashable, NFData (rnf))
-import           Development.IDE.Spans.Documentation  (mkDocMap)
-import           Development.IDE.Spans.LocalBindings  (getDefiningBindings,
-                                                       getLocalScope)
-import           Development.IDE.Types.Exports        (ExportsMap (..),
-                                                       createExportsMapHieDb)
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
 import           Ide.Plugin.Error                     (PluginError (PluginInternalError, PluginRuleFailed),
                                                        getNormalizedFilePathE)
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Query
 import           Ide.Plugin.SemanticTokens.Types
-import           Ide.Plugin.SemanticTokens.Utils
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
-import           Language.LSP.Protocol.Message
-import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Message        (Method (Method_TextDocumentSemanticTokensFull))
+import           Language.LSP.Protocol.Types          (NormalizedFilePath,
+                                                       SemanticTokens,
+                                                       type (|?) (InL))
+import           Prelude                              hiding (span)
 
 logWith :: (MonadIO m) => IdeState -> Priority -> String -> m ()
 logWith st prior = liftIO . logPriority (ideLogger st) prior . T.pack
@@ -116,15 +71,21 @@ liftMaybeEither e = liftEither . maybe (Left e) Right
 ---- the api
 -----------------------
 
--- | computeSemanticTokens
--- collect from various source
--- imported name token type from GetGlobalNameSemantic
--- local names tokenType from hieAst
--- name locations from hieAst
--- visible names from renamedSource
--- computeSemanticTokens :: IdeState -> NormalizedFilePath -> Action (SemanticTokens)
-computeSemanticTokens :: p -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
+-- | Compute semantic tokens for a Haskell source file.
+--
+-- This function collects information from various sources, including:
+--
+-- Imported name token type from Rule 'GetGlobalNameSemantic'
+-- Local names token type from 'hieAst'
+-- Name locations from 'hieAst'
+-- Visible names from 'tmrRenamed'
+--
+-- It then combines this information to compute the semantic tokens for the file.
+--
+computeSemanticTokens :: IdeState -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
 computeSemanticTokens state nfp = do
+    let dbg = logWith state Debug
+    dbg $ "Computing semantic tokens for: " <> show nfp
     (HAR {..}, mapping) <- useWithStaleE GetHieAst nfp
     (TcModuleResult {..}, _) <- useWithStaleE TypeCheck nfp
     (GTTMap {importedNameSemanticMap}, _) <- useWithStaleE GetGlobalNameSemantic nfp
@@ -137,7 +98,7 @@ computeSemanticTokens state nfp = do
     let nameSet = nameGetter tmrRenamed
     -- get current location from the old ones
     let spanNames = mapMaybe (\(span, name) -> (,name) <$> toCurrentRange mapping span) $ hieAstSpanNames nameSet ast
-    let sMap = plusNameEnv_C (<>) importedNameSemanticMap $ mkLocalNameSemanticFromAst hieKind ast refMap
+    let sMap = plusNameEnv_C (<>) importedNameSemanticMap $ mkLocalNameSemanticFromAst hieKind refMap
     let moduleAbsTks = extractSemanticTokensFromNames sMap spanNames
     withExceptT PluginInternalError $ liftEither $ semanticTokenAbsoluteSemanticTokens moduleAbsTks
 
@@ -147,6 +108,7 @@ semanticTokensFull state _ param = do
   items <- runActionE "SemanticTokens.semanticTokensFull" state $ computeSemanticTokens state nfp
   return $ InL items
 
+-- | Defines the 'getImportedNameSemanticRule' function, which is used to record semantic tokens for imported names.
 getImportedNameSemanticRule :: Recorder (WithPriority Log) -> Rules ()
 getImportedNameSemanticRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetGlobalNameSemantic nfp -> do

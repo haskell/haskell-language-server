@@ -4,7 +4,6 @@ module Ide.Plugin.SemanticTokens (descriptor) where
 import           Development.IDE
 import           Development.IDE.Core.Rules         (Log)
 import qualified Ide.Plugin.SemanticTokens.Internal as Internal
-import qualified Ide.Plugin.SemanticTokens.Types    as Types
 import           Ide.Types
 import           Language.LSP.Protocol.Message
 

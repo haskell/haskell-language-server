@@ -1,8 +1,8 @@
-SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 4, startChar = 13, len = 3}, name = "Foo"}
-SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 4, startChar = 17, len = 1}, name = "a"}
-SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 5, startChar = 3, len = 3}, name = "Foo"}
-SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 7, len = 3}, name = "Int"}
-SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 13, len = 3}, name = "Int"}
-SemanticTokenOriginal {tokenType = TTypeFamily, loc = Loc {line = 6, startChar = 3, len = 3}, name = "Foo"}
-SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 6, startChar = 7, len = 1}, name = "a"}
-SemanticTokenOriginal {tokenType = TTypeSyn, loc = Loc {line = 6, startChar = 11, len = 6}, name = "String"}
+SemanticTokenOriginal {_tokenType = TTypeFamily, _loc = Loc {_line = 4, _startChar = 13, _len = 3}, _name = "Foo"}
+SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 4, _startChar = 17, _len = 1}, _name = "a"}
+SemanticTokenOriginal {_tokenType = TTypeFamily, _loc = Loc {_line = 5, _startChar = 3, _len = 3}, _name = "Foo"}
+SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 5, _startChar = 7, _len = 3}, _name = "Int"}
+SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 5, _startChar = 13, _len = 3}, _name = "Int"}
+SemanticTokenOriginal {_tokenType = TTypeFamily, _loc = Loc {_line = 6, _startChar = 3, _len = 3}, _name = "Foo"}
+SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 6, _startChar = 7, _len = 1}, _name = "a"}
+SemanticTokenOriginal {_tokenType = TTypeSyn, _loc = Loc {_line = 6, _startChar = 11, _len = 6}, _name = "String"}

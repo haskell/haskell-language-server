@@ -1,3 +1,3 @@
-SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 6, len = 3}, name = "Foo"}
-SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 12, len = 3}, name = "Foo"}
-SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 4, startChar = 26, len = 4}, name = "Show"}
+SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 4, _startChar = 6, _len = 3}, _name = "Foo"}
+SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 4, _startChar = 12, _len = 3}, _name = "Foo"}
+SemanticTokenOriginal {_tokenType = TClass, _loc = Loc {_line = 4, _startChar = 26, _len = 4}, _name = "Show"}

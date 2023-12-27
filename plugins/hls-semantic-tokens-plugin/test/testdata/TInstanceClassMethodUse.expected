@@ -1,2 +1,2 @@
-SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 2}, name = "go"}
-SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 4, startChar = 9, len = 4}, name = "(==)"}
+SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 4, _startChar = 1, _len = 2}, _name = "go"}
+SemanticTokenOriginal {_tokenType = TClassMethod, _loc = Loc {_line = 4, _startChar = 9, _len = 4}, _name = "(==)"}

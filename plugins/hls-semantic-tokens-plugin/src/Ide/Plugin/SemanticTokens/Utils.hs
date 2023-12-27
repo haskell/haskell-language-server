@@ -1,6 +1,6 @@
--- stand alone deriving
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies       #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 
 module Ide.Plugin.SemanticTokens.Utils where
@@ -10,6 +10,7 @@ import           Data.ByteString.Char8           (unpack)
 import qualified Data.Map                        as Map
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.SemanticTokens.Types
+import           Prelude                         hiding (span)
 
 deriving instance Show DeclType
 deriving instance Show BindType
@@ -21,7 +22,7 @@ instance Show ContextInfo where
         MatchBind          -> "MatchBind"
         IEThing _          -> "IEThing IEType" -- imported
         TyDecl             -> "TyDecl"
-        ValBind bt _ span  -> "ValBind of " <> show bt <> show span
+        ValBind bt _ sp    -> "ValBind of " <> show bt <> show sp
         PatternBind {}     -> "PatternBind"
         ClassTyDecl _      -> "ClassTyDecl"
         Decl d _           -> "Decl of " <> show d
@@ -65,6 +66,7 @@ showNameType name
     | isExternalName name = "ExternalName"
     | isSystemName name   = "SystemName"
     | isWiredInName name  = "WiredInName"
+    | otherwise           = "UnknownName"
 
 bytestringString :: ByteString -> String
 bytestringString = map (toEnum . fromEnum) . unpack

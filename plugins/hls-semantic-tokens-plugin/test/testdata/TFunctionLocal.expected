@@ -1,7 +1,7 @@
-SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 3, startChar = 1, len = 1}, name = "f"}
-SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 6, len = 3}, name = "Int"}
-SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 3, startChar = 13, len = 3}, name = "Int"}
-SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 1, len = 1}, name = "f"}
-SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 4, startChar = 7, len = 1}, name = "g"}
-SemanticTokenOriginal {tokenType = TFunction, loc = Loc {line = 6, startChar = 5, len = 1}, name = "g"}
-SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 6, startChar = 7, len = 1}, name = "x"}
+SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 3, _startChar = 1, _len = 1}, _name = "f"}
+SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 3, _startChar = 6, _len = 3}, _name = "Int"}
+SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 3, _startChar = 13, _len = 3}, _name = "Int"}
+SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 4, _startChar = 1, _len = 1}, _name = "f"}
+SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 4, _startChar = 7, _len = 1}, _name = "g"}
+SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 6, _startChar = 5, _len = 1}, _name = "g"}
+SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 6, _startChar = 7, _len = 1}, _name = "x"}

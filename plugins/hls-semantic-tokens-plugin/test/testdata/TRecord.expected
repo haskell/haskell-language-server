@@ -1,4 +1,4 @@
-SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 6, len = 3}, name = "Foo"}
-SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 4, startChar = 12, len = 3}, name = "Foo"}
-SemanticTokenOriginal {tokenType = TRecField, loc = Loc {line = 4, startChar = 18, len = 3}, name = "foo"}
-SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 4, startChar = 25, len = 3}, name = "Int"}
+SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 4, _startChar = 6, _len = 3}, _name = "Foo"}
+SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 4, _startChar = 12, _len = 3}, _name = "Foo"}
+SemanticTokenOriginal {_tokenType = TRecField, _loc = Loc {_line = 4, _startChar = 18, _len = 3}, _name = "foo"}
+SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 4, _startChar = 25, _len = 3}, _name = "Int"}

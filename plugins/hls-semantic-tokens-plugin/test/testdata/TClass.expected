@@ -1,5 +1,5 @@
-SemanticTokenOriginal {tokenType = TClass, loc = Loc {line = 4, startChar = 7, len = 3}, name = "Foo"}
-SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 4, startChar = 11, len = 1}, name = "a"}
-SemanticTokenOriginal {tokenType = TClassMethod, loc = Loc {line = 5, startChar = 3, len = 3}, name = "foo"}
-SemanticTokenOriginal {tokenType = TTypeVariable, loc = Loc {line = 5, startChar = 10, len = 1}, name = "a"}
-SemanticTokenOriginal {tokenType = TTypeCon, loc = Loc {line = 5, startChar = 15, len = 3}, name = "Int"}
+SemanticTokenOriginal {_tokenType = TClass, _loc = Loc {_line = 4, _startChar = 7, _len = 3}, _name = "Foo"}
+SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 4, _startChar = 11, _len = 1}, _name = "a"}
+SemanticTokenOriginal {_tokenType = TClassMethod, _loc = Loc {_line = 5, _startChar = 3, _len = 3}, _name = "foo"}
+SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 5, _startChar = 10, _len = 1}, _name = "a"}
+SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 5, _startChar = 15, _len = 3}, _name = "Int"}

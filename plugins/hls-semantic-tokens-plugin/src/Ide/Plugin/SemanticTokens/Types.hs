@@ -1,22 +1,14 @@
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE StrictData         #-}
-{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE StrictData    #-}
+{-# LANGUAGE TypeFamilies  #-}
 
 module Ide.Plugin.SemanticTokens.Types where
 
 
-import qualified Data.List                     as List
-import qualified Data.List.Extra               as List
-import qualified Data.List.NonEmpty            as NE
-import qualified Data.Map                      as Map
-import           Data.Maybe                    (fromMaybe)
-import qualified Data.Set                      as Set
-import           Development.IDE.GHC.Compat
--- import           GHC.Enum                    (boundedEnumFrom)
 import           Control.DeepSeq               (NFData (rnf), rwhnf)
 import           Data.Generics                 (Typeable)
 import           Development.IDE               (RuleResult)
+import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph.Classes (Hashable)
 import           GHC.Generics                  (Generic)
 import           Language.LSP.Protocol.Types
@@ -47,16 +39,16 @@ instance Monoid SemanticTokenType where
     mempty = TNothing
 
 data SemanticTokenOriginal =  SemanticTokenOriginal
-  { tokenType :: SemanticTokenType,
-    loc       :: Loc,
-    name      :: String
+  { _tokenType :: SemanticTokenType,
+    _loc       :: Loc,
+    _name      :: String
   }
   deriving (Show, Eq, Ord)
 
 data Loc = Loc
-  { line      :: UInt,
-    startChar :: UInt,
-    len       :: UInt
+  { _line      :: UInt,
+    _startChar :: UInt,
+    _len       :: UInt
   }
   deriving (Show, Eq, Ord)
 

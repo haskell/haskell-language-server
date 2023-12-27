@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE ExplicitNamespaces  #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
@@ -8,6 +9,7 @@ import           Control.Arrow                      (Arrow ((***)), (&&&),
                                                      (+++))
 import           Control.Lens                       hiding (use, (<.>))
 import           Control.Monad                      (forM)
+import           Control.Monad.IO.Class             (liftIO)
 import           Data.Bifunctor
 import qualified Data.ByteString                    as BS
 import           Data.Data
@@ -24,6 +26,7 @@ import           Data.Text                          hiding (length, map,
 import           Development.IDE                    (getFileContents, runAction)
 import           Development.IDE.Core.Rules         (Log)
 import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
+import           Development.IDE.Test               (waitForBuildQueue)
 import           Ide.Plugin.Error                   (getNormalizedFilePathE)
 import           Ide.Plugin.SemanticTokens
 import           Ide.Plugin.SemanticTokens.Mappings
@@ -31,15 +34,24 @@ import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens         as L
 import           Language.LSP.Protocol.Types        (SemanticTokens (..),
-                                                     SemanticTokensParams (..))
+                                                     SemanticTokensParams (..),
+                                                     _L, type (|?) (..))
+import           Language.LSP.Test                  (openDoc)
 import qualified Language.LSP.Test                  as Test
 import           System.Environment.Blank
 import           System.FilePath
-import qualified Test.Hls                           (PluginTestDescriptor,
+import           Test.Hls                           (PluginTestDescriptor,
+                                                     Session, TestName,
+                                                     TestTree,
+                                                     TextDocumentIdentifier,
+                                                     defaultTestRunner,
+                                                     documentContents,
+                                                     goldenGitDiff,
+                                                     mkPluginTestDescriptor,
                                                      mkPluginTestDescriptor',
                                                      runSessionWithServerInTmpDir,
-                                                     waitForAction)
-import           Test.Hls
+                                                     testCase, testGroup,
+                                                     waitForAction, (@?=))
 import qualified Test.Hls.FileSystem                as FS
 import           Test.Hls.Util                      (withCanonicalTempDir)
 
@@ -54,7 +66,6 @@ semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor Ide.Plugin.SemanticTokens
 
 mkSemanticTokensParams :: TextDocumentIdentifier -> SemanticTokensParams
 mkSemanticTokensParams = SemanticTokensParams Nothing Nothing
-
 
 goldenWithHaskellAndCapsOutPut config plugin title tree path desc act =
   goldenGitDiff title (FS.vftOriginalRoot tree </> path <.> desc) $
@@ -125,8 +136,8 @@ semanticTokensTests =
         let file1 = "TModuleA.hs"
         let file2 = "TModuleB.hs"
         let expect =
-              [ SemanticTokenOriginal {tokenType = TVariable, loc = Loc {line = 5, startChar = 1, len = 2}, name = "go"},
-                SemanticTokenOriginal {tokenType = TDataCon, loc = Loc {line = 5, startChar = 6, len = 4}, name = "Game"}
+              [ SemanticTokenOriginal TVariable (Loc 5 1 2) "go",
+                SemanticTokenOriginal TDataCon (Loc 5 6 4) "Game"
               ]
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
           doc1 <- openDoc file1 "haskell"
