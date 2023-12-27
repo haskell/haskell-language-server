@@ -2,7 +2,7 @@ module TVariable where
 
 (a, b) = (1, 2)
 
-f x y = x + y
+f g y = g y
 
 
 

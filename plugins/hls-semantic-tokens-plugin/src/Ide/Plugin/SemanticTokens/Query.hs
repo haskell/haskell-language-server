@@ -92,20 +92,9 @@ nameNameSemanticFromHie hieKind hie rm ns = do
             spanInfos <- -- traceShow ("getting spans:", nameString) $
                  Map.lookup (Right name) rm
             let infos = S.unions $ map (identInfo . snd) spanInfos
-            let bindTokenType = -- traceShow ("getDefinitionSite:infos", nameString, infos, mapMaybe getBindSiteFromContext $ S.toList  infos) $
-                     listToMaybe (mapMaybe getBindSiteFromContext $ S.toList infos) >>= bindSiteMaybeTokenType hieKind
+            let typeTokenType = fmap (typeSemantic hieKind) $ listToMaybe $ mapMaybe (identType . snd) spanInfos
             let contextInfoTokenType = contextInfosMaybeTokenType infos
-            maximum <$> NE.nonEmpty (catMaybes [bindTokenType, contextInfoTokenType])
-
-        spanTypeFromHie :: HieAST a -> Span -> Maybe a
-        spanTypeFromHie ast span = do
-            ast <- selectSmallestContaining span ast
-            nodeInfo <-  Map.lookup SourceInfo $ getSourcedNodeInfo $ sourcedNodeInfo ast
-            -- usually for a visible name, the type is in the first child
-            listToMaybe $ nodeType nodeInfo
-
-        bindSiteMaybeTokenType :: HieKind a -> Span -> Maybe SemanticTokenType
-        bindSiteMaybeTokenType hieKind = fmap (typeSemantic hieKind) . spanTypeFromHie hie
+            maximum <$> NE.nonEmpty (catMaybes [typeTokenType, contextInfoTokenType])
 
         contextInfosMaybeTokenType :: Set.Set ContextInfo -> Maybe SemanticTokenType
         contextInfosMaybeTokenType details = case NE.nonEmpty $ Set.toList details of

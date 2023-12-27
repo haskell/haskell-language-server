@@ -120,9 +120,12 @@ typeSemantic :: HieKind hType -> hType -> SemanticTokenType
 typeSemantic kind t = case kind of
           HieFresh -> if isFunType t then TFunction else TNothing
           HieFromDisk full_file ->
-                if isFixFunction (recoverFullType t (hie_types full_file))
+                if isFixFunction fullType
                     then  TFunction
                     else  TNothing
+                    where
+                        fullType = recoverFullType t (hie_types full_file)
+
     where
         isFixFunction :: HieTypeFix -> Bool
         isFixFunction (Roll x) =
