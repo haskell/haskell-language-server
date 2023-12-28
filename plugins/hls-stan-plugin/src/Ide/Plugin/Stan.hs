@@ -31,7 +31,7 @@ import           Development.IDE.GHC.Error      (realSrcSpanToRange)
 import           GHC.Generics                   (Generic)
 import           Ide.Plugin.Config
 import           Ide.Types                      (PluginDescriptor (..),
-                                                 PluginEnabled, PluginId,
+                                                 PluginId, PluginStatus (..),
                                                  configHasDiagnostics,
                                                  configInitialGenericConfig,
                                                  defaultConfigDescriptor,
