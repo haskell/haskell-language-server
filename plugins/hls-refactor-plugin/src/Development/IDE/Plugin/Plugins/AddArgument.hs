@@ -5,10 +5,6 @@ module Development.IDE.Plugin.Plugins.AddArgument (plugin) where
 import           Development.IDE.GHC.ExactPrint            (epl)
 import           GHC.Parser.Annotation                     (TokenLocation (..))
 #endif
-#if !MIN_VERSION_ghc(9,2,1)
-import qualified Data.Text                                 as T
-import           Language.LSP.Protocol.Types               (TextEdit)
-#else
 import           Control.Monad                             (join)
 import           Control.Monad.Trans.Class                 (lift)
 import           Data.Bifunctor                            (Bifunctor (..))
@@ -39,12 +35,7 @@ import           Language.Haskell.GHC.ExactPrint           (TransformT (..),
                                                             runTransformT)
 import           Language.Haskell.GHC.ExactPrint.Transform (d1)
 import           Language.LSP.Protocol.Types
-#endif
 
-#if !MIN_VERSION_ghc(9,2,1)
-plugin :: [(T.Text, [TextEdit])]
-plugin = []
-#else
 -- When GHC tells us that a variable is not bound, it will tell us either:
 --  - there is an unbound variable with a given type
 --  - there is an unbound variable (GHC provides no type suggestion)
@@ -162,4 +153,3 @@ addTyHoleToTySigArg loc (L annHsSig (HsSig xHsSig tyVarBndrs lsigTy)) =
         lsigTy' = hsTypeFromFunTypeAsList (insertArg loc args, res)
     in L annHsSig (HsSig xHsSig tyVarBndrs lsigTy')
 
-#endif

@@ -38,7 +38,7 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.Server              (sendRequest)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
+descriptor plId = (defaultPluginDescriptor plId "Provides a code action to convert datatypes to GADT syntax")
     { Ide.Types.pluginHandlers =
         mkPluginHandler SMethod_TextDocumentCodeAction codeActionHandler
     , pluginCommands =

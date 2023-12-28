@@ -115,9 +115,9 @@ tests = let
 
   recordDotSyntaxTests
     | ghcVersion >= GHC92 =
-        [ tst (getHover, checkHover) (Position 19 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent"
-        , tst (getHover, checkHover) (Position 19 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child"
-        , tst (getHover, checkHover) (Position 19 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
+        [ tst (getHover, checkHover) (Position 17 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent"
+        , tst (getHover, checkHover) (Position 17 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child"
+        , tst (getHover, checkHover) (Position 17 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
         ]
     | otherwise = []
 

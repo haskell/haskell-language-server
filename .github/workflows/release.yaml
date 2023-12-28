@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8", "9.0.2"]
+        ghc: ["9.8.1", "9.6.3", "9.4.8", "9.2.8"]
         platform: [ { image: "debian:9"
                     , installCmd: "sed -i s/deb.debian.org/archive.debian.org/g /etc/apt/sources.list && sed -i 's|security.debian.org|archive.debian.org/|g' /etc/apt/sources.list && sed -i /-updates/d /etc/apt/sources.list && apt-get update && apt-get install -y"
                     , toolRequirements: "libnuma-dev zlib1g-dev libgmp-dev libgmp10 libssl-dev liblzma-dev libbz2-dev git wget lsb-release software-properties-common gnupg2 apt-transport-https gcc autoconf automake build-essential curl ghc gzip libffi-dev libncurses-dev libncurses5 libtinfo5 patchelf"
@@ -118,15 +118,6 @@ jobs:
         # Perhaps we can migrate *all* unknown linux builds to a uniform
         # image.
         include:
-          - ghc: 9.0.2
-            platform:
-              { image: "rockylinux:8"
-              , installCmd: "yum -y install epel-release && yum install -y --allowerasing"
-              , toolRequirements: "autoconf automake binutils bzip2 coreutils curl elfutils-devel elfutils-libs findutils gcc gcc-c++ git gmp gmp-devel jq lbzip2 make ncurses ncurses-compat-libs ncurses-devel openssh-clients patch perl pxz python3 sqlite sudo wget which xz zlib-devel patchelf"
-              , DISTRO: "Unknown"
-              , ARTIFACT: "x86_64-linux-unknown"
-              , ADD_CABAL_ARGS: "--enable-split-sections"
-              }
           - ghc: 9.2.8
             platform:
               { image: "rockylinux:8"
@@ -136,7 +127,7 @@ jobs:
               , ARTIFACT: "x86_64-linux-unknown"
               , ADD_CABAL_ARGS: "--enable-split-sections"
               }
-          - ghc: 9.4.7
+          - ghc: 9.4.8
             platform:
               { image: "fedora:27"
               , installCmd: "dnf install -y"
@@ -192,7 +183,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           retention-days: 2
@@ -222,7 +213,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8", "9.0.2"]
+        ghc: ["9.8.1", "9.6.3", "9.4.8", "9.2.8" ]
     steps:
       - uses: docker://arm64v8/ubuntu:focal
         name: Cleanup (aarch64 linux)
@@ -253,7 +244,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           retention-days: 2
@@ -282,7 +273,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8", "9.0.2"]
+        ghc: ["9.8.1", "9.6.3", "9.4.8", "9.2.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -297,7 +288,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           retention-days: 2
@@ -327,7 +318,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8"]
+        ghc: ["9.8.1", "9.6.3", "9.4.8", "9.2.8"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -344,7 +335,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           retention-days: 2
@@ -372,7 +363,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.8.1", "9.6.3", "9.4.7", "9.2.8", "9.0.2"]
+        ghc: ["9.8.1", "9.6.3", "9.4.8", "9.2.8"]
     steps:
       - name: install windows deps
         shell: pwsh
@@ -397,7 +388,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           retention-days: 2
@@ -494,7 +485,7 @@ jobs:
 
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: artifacts-${{ matrix.ARTIFACT }}
           path: ./
@@ -511,7 +502,7 @@ jobs:
           ARTIFACT: ${{ matrix.ARTIFACT }}
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: bindists-${{ matrix.ARTIFACT }}
@@ -546,7 +537,7 @@ jobs:
 
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: artifacts-arm
           path: ./
@@ -562,7 +553,7 @@ jobs:
           args: bash .github/scripts/bindist.sh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: bindists-arm
@@ -585,7 +576,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: artifacts-mac-x86_64
           path: ./
@@ -600,7 +591,7 @@ jobs:
           bash .github/scripts/bindist.sh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: bindists-mac-x86_64
@@ -623,20 +614,20 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: artifacts-mac-aarch64
           path: ./
 
       - name: Create bindist
         run: |
-          bash .github/scripts/brew.sh git coreutils llvm@11 autoconf automake tree
-          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@11/bin:$PATH"
-          export CC="$HOME/.brew/opt/llvm@11/bin/clang"
-          export CXX="$HOME/.brew/opt/llvm@11/bin/clang++"
+          bash .github/scripts/brew.sh git coreutils llvm@13 autoconf automake tree
+          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@13/bin:$PATH"
+          export CC="$HOME/.brew/opt/llvm@13/bin/clang"
+          export CXX="$HOME/.brew/opt/llvm@13/bin/clang++"
           export LD=ld
-          export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
-          export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
+          export AR="$HOME/.brew/opt/llvm@13/bin/llvm-ar"
+          export RANLIB="$HOME/.brew/opt/llvm@13/bin/llvm-ranlib"
           for bindist in out-*.tar ; do
             tar xf "${bindist}"
           done
@@ -644,7 +635,7 @@ jobs:
           bash .github/scripts/bindist.sh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: bindists-mac-aarch64
@@ -675,7 +666,7 @@ jobs:
 
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: artifacts-win
           path: ./out
@@ -688,7 +679,7 @@ jobs:
         shell: pwsh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: bindists-win
@@ -789,7 +780,7 @@ jobs:
 
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: bindists-${{ matrix.ARTIFACT }}
           path: ./out
@@ -825,7 +816,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: bindists-arm
           path: ./out
@@ -881,13 +872,13 @@ jobs:
 
       - name: Run test (mac)
         run: |
-          bash .github/scripts/brew.sh git coreutils llvm@11 autoconf automake tree
-          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@11/bin:$PATH"
-          export CC="$HOME/.brew/opt/llvm@11/bin/clang"
-          export CXX="$HOME/.brew/opt/llvm@11/bin/clang++"
+          bash .github/scripts/brew.sh git coreutils llvm@13 autoconf automake tree
+          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@13/bin:$PATH"
+          export CC="$HOME/.brew/opt/llvm@13/bin/clang"
+          export CXX="$HOME/.brew/opt/llvm@13/bin/clang++"
           export LD=ld
-          export AR="$HOME/.brew/opt/llvm@11/bin/llvm-ar"
-          export RANLIB="$HOME/.brew/opt/llvm@11/bin/llvm-ranlib"
+          export AR="$HOME/.brew/opt/llvm@13/bin/llvm-ar"
+          export RANLIB="$HOME/.brew/opt/llvm@13/bin/llvm-ranlib"
           bash .github/scripts/test.sh
 
   test-win:

@@ -13,7 +13,11 @@ import           Data.Function                 ((&))
 import           Data.Functor                  ((<&>))
 import           Data.Maybe                    (catMaybes)
 import           Data.Text                     (Text)
-import           Ide.Logger  (Doc, Priority (Error, Info),
+import qualified HlsPlugins                    as Plugins
+import           Ide.Arguments                 (Arguments (..),
+                                                GhcideArguments (..),
+                                                getArguments)
+import           Ide.Logger                    (Doc, Priority (Error, Info),
                                                 Recorder,
                                                 WithPriority (WithPriority, priority),
                                                 cfilter, cmapWithPrio,
@@ -21,11 +25,7 @@ import           Ide.Logger  (Doc, Priority (Error, Info),
                                                 layoutPretty, logWith,
                                                 makeDefaultStderrRecorder,
                                                 renderStrict, withFileRecorder)
-import qualified Ide.Logger  as Logger
-import qualified HlsPlugins                    as Plugins
-import           Ide.Arguments                 (Arguments (..),
-                                                GhcideArguments (..),
-                                                getArguments)
+import qualified Ide.Logger                    as Logger
 import           Ide.Main                      (defaultMain)
 import qualified Ide.Main                      as IdeMain
 import           Ide.PluginUtils               (pluginDescToIdePlugins)
@@ -70,7 +70,7 @@ main = do
                 ])
     -- This plugin just installs a handler for the `initialized` notification, which then
     -- picks up the LSP environment and feeds it to our recorders
-    let lspRecorderPlugin = (defaultPluginDescriptor "LSPRecorderCallback")
+    let lspRecorderPlugin = (defaultPluginDescriptor "LSPRecorderCallback" "Internal plugin")
           { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SMethod_Initialized $ \_ _ _ _ -> do
               env <- LSP.getLspEnv
               liftIO $ (cb1 <> cb2) env

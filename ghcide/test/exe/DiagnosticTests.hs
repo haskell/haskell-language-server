@@ -232,6 +232,34 @@ tests = testGroup "diagnostics"
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
       expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
+  , testSession' "bidirectional module dependency with hs-boot" $ \path -> do
+      let cradle = unlines
+            [ "cradle:"
+            , "  direct: {arguments: [ModuleA, ModuleB]}"
+            ]
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "import {-# SOURCE #-} ModuleB"
+            ]
+      let contentB = T.unlines
+            [ "{-# OPTIONS -Wmissing-signatures#-}"
+            , "module ModuleB where"
+            , "import {-# SOURCE #-} ModuleA"
+            -- introduce an artificial diagnostic
+            , "foo = ()"
+            ]
+      let contentBboot = T.unlines
+            [ "module ModuleB where"
+            ]
+      let contentAboot = T.unlines
+            [ "module ModuleA where"
+            ]
+      liftIO $ writeFile (path </> "hie.yaml") cradle
+      _ <- createDoc "ModuleA.hs" "haskell" contentA
+      _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
+      _ <- createDoc "ModuleB.hs" "haskell" contentB
+      _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
+      expectDiagnostics [("ModuleB.hs", [(DiagnosticSeverity_Warning, (3,0), "Top-level binding")])]
   , testSessionWait "correct reference used with hs-boot" $ do
       let contentB = T.unlines
             [ "module ModuleB where"

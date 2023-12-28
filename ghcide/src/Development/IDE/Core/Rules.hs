@@ -697,12 +697,10 @@ dependencyInfoForFiles fs = do
       mg = mkModuleGraph mns
 #else
   let mg = mkModuleGraph $
-#if MIN_VERSION_ghc(9,2,0)
         -- We don't do any instantiation for backpack at this point of time, so it is OK to use
         -- 'extendModSummaryNoDeps'.
         -- This may have to change in the future.
           map extendModSummaryNoDeps $
-#endif
           (catMaybes mss)
 #endif
   pure (fingerprintToBS $ Util.fingerprintFingerprints $ map (maybe fingerprint0 msrFingerprint) msrs, processDependencyInformation rawDepInfo bm mg)
@@ -822,12 +820,10 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
                       nubOrdOn mkNodeKey (ModuleNode final_deps ms : concatMap mgModSummaries' mgs)
 #else
                 let module_graph_nodes =
-#if MIN_VERSION_ghc(9,2,0)
                       -- We don't do any instantiation for backpack at this point of time, so it is OK to use
                       -- 'extendModSummaryNoDeps'.
                       -- This may have to change in the future.
                       map extendModSummaryNoDeps $
-#endif
                       nubOrdOn ms_mod (ms : concatMap mgModSummaries mgs)
 #endif
                 liftIO $ evaluate $ liftRnf rwhnf module_graph_nodes
@@ -1219,12 +1215,7 @@ uses_th_qq (ms_hspp_opts -> dflags) =
 -- Depends on whether it uses unboxed tuples or sums
 computeLinkableTypeForDynFlags :: DynFlags -> LinkableType
 computeLinkableTypeForDynFlags d
-#if defined(GHC_PATCHED_UNBOXED_BYTECODE) || MIN_VERSION_ghc(9,2,0)
           = BCOLinkable
-#else
-          | _unboxed_tuples_or_sums = ObjectLinkable
-          | otherwise              = BCOLinkable
-#endif
   where -- unboxed_tuples_or_sums is only used in GHC < 9.2
         _unboxed_tuples_or_sums =
             xopt LangExt.UnboxedTuples d || xopt LangExt.UnboxedSums d

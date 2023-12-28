@@ -41,7 +41,7 @@ tests recorder logger = do
       [ testCase "PluginHandlers" $ do
           let pluginId = "plugin-handler-exception"
               plugins = pluginDescToIdePlugins $
-                  [ (defaultPluginDescriptor pluginId)
+                  [ (defaultPluginDescriptor pluginId "")
                       { pluginHandlers = mconcat
                           [ mkPluginHandler SMethod_TextDocumentCodeLens $ \_ _ _-> do
                               _ <- liftIO $ throwIO DivideByZero
@@ -62,7 +62,7 @@ tests recorder logger = do
           let pluginId = "command-exception"
               commandId = CommandId "exception"
               plugins = pluginDescToIdePlugins $
-                  [ (defaultPluginDescriptor pluginId)
+                  [ (defaultPluginDescriptor pluginId "")
                       { pluginCommands =
                           [ PluginCommand commandId "Causes an exception" $ \_ (_::Int) -> do
                               _ <- liftIO $ throwIO DivideByZero
@@ -84,7 +84,7 @@ tests recorder logger = do
         , testCase "Notification Handlers" $ do
           let pluginId = "notification-exception"
               plugins = pluginDescToIdePlugins $
-                  [ (defaultPluginDescriptor pluginId)
+                  [ (defaultPluginDescriptor pluginId "")
                       { pluginNotificationHandlers = mconcat
                           [  mkPluginNotificationHandler SMethod_TextDocumentDidOpen $ \_ _ _ _ ->
                               liftIO $ throwIO DivideByZero
@@ -137,7 +137,7 @@ pluginOrderTestCase recorder logger msg err1 err2 =
   testCase msg $ do
       let pluginId = "error-order-test"
           plugins = pluginDescToIdePlugins $
-              [ (defaultPluginDescriptor pluginId)
+              [ (defaultPluginDescriptor pluginId "")
                   { pluginHandlers = mconcat
                       [ mkPluginHandler SMethod_TextDocumentCodeLens $ \_ _ _-> do
                           throwError $ err1 "error test"

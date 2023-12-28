@@ -14,7 +14,7 @@ import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
 import           Data.Coerce                   (coerce)
 import           Data.Default
-import           Data.List                     (sort)
+import           Data.List                     (sortOn)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Data.Text.Lazy.Encoding       (decodeUtf8)
@@ -34,8 +34,9 @@ import           Ide.Logger                    as G
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
                                                 pluginsToVSCodeExtensionSchema)
 import           Ide.Types                     (IdePlugins, PluginId (PluginId),
-                                                ipMap, pluginId)
+                                                describePlugin, ipMap, pluginId)
 import           Ide.Version
+import           Prettyprinter                 as PP
 import           System.Directory
 import qualified System.Directory.Extra        as IO
 import           System.FilePath
@@ -46,6 +47,7 @@ data Log
   | LogLspStart !GhcideArguments ![PluginId]
   | LogIDEMain IDEMain.Log
   | LogHieBios HieBios.Log
+  | LogSession Session.Log
   | LogOther T.Text
   deriving Show
 
@@ -61,6 +63,7 @@ instance Pretty Log where
           , "PluginIds:" <+> pretty (coerce @_ @[Text] pluginIds) ]
     LogIDEMain iDEMainLog -> pretty iDEMainLog
     LogHieBios hieBiosLog -> pretty hieBiosLog
+    LogSession sessionLog -> pretty sessionLog
     LogOther t -> pretty t
 
 defaultMain :: Recorder (WithPriority Log) -> Arguments -> IdePlugins IdeState -> IO ()
@@ -83,15 +86,17 @@ defaultMain recorder args idePlugins = do
             putStrLn haskellLanguageServerNumericVersion
 
         ListPluginsMode -> do
-            let pluginNames = sort
-                    $ map ((\(PluginId t) -> T.unpack t) . pluginId)
+            let pluginSummary =
+                  PP.vsep
+                    $ map describePlugin
+                    $ sortOn pluginId
                     $ ipMap idePlugins
-            mapM_ putStrLn pluginNames
+            putStrLn $ show pluginSummary
 
         BiosMode PrintCradleType -> do
             dir <- IO.getCurrentDirectory
             hieYaml <- Session.findCradle def (dir </> "a")
-            cradle <- Session.loadCradle def hieYaml dir
+            cradle <- Session.loadCradle def (cmapWithPrio LogSession recorder) hieYaml dir
             print cradle
 
         Ghcide ghcideArgs -> do
@@ -107,8 +112,8 @@ defaultMain recorder args idePlugins = do
           d <- getCurrentDirectory
           let initialFp = d </> "a"
           hieYaml <- Session.findCradle def initialFp
-          cradle <- Session.loadCradle def hieYaml d
-          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir (toCologActionWithPrio (cmapWithPrio LogHieBios recorder)) cradle
+          cradle <- Session.loadCradle def (cmapWithPrio LogSession recorder) hieYaml d
+          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
           putStr libdir
   where
     encodePrettySorted = A.encodePretty' A.defConfig

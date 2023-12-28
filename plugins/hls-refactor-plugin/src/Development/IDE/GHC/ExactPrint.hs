@@ -17,18 +17,11 @@ module Development.IDE.GHC.ExactPrint
       transform,
       transformM,
       ExactPrint(..),
-#if MIN_VERSION_ghc(9,2,1)
       modifySmallestDeclWithM,
       modifyMgMatchesT,
       modifyMgMatchesT',
       modifySigWithM,
       genAnchor1,
-#endif
-#if !MIN_VERSION_ghc(9,2,0)
-      Anns,
-      Annotate,
-      setPrecedingLinesT,
-#else
       setPrecedingLines,
       addParens,
       addParensToCtxt,
@@ -39,7 +32,6 @@ module Development.IDE.GHC.ExactPrint
       epl,
       epAnn,
       removeTrailingComma,
-#endif
       annotateParsedSource,
       getAnnotatedParsedSourceRule,
       GetAnnotatedParsedSource(..),
@@ -98,7 +90,7 @@ import           Retrie.ExactPrint                       hiding (parseDecl,
 #if MIN_VERSION_ghc(9,9,0)
 import           GHC.Plugins                             (showSDoc)
 import           GHC.Utils.Outputable                    (Outputable (ppr))
-#elif MIN_VERSION_ghc(9,2,0)
+#else
 import           GHC                                     (EpAnn (..),
                                                           NameAdornment (NameParens),
                                                           NameAnn (..),
@@ -113,18 +105,14 @@ import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           deltaPos)
 #endif
 
-#if MIN_VERSION_ghc(9,2,1)
 import Data.List (partition)
 import GHC (Anchor(..), realSrcSpan, AnchorOperation, DeltaPos(..), SrcSpanAnnN)
 import GHC.Types.SrcLoc (generatedSrcSpan)
 import Control.Lens ((&), _last)
 import Control.Lens.Operators ((%~))
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 setPrecedingLines :: Default t => LocatedAn t a -> Int -> Int -> LocatedAn t a
 setPrecedingLines ast n c = setEntryDP ast (deltaPos n c)
-#endif
 ------------------------------------------------------------------------------
 
 data Log = LogShake Shake.Log deriving Show
@@ -152,13 +140,8 @@ getAnnotatedParsedSourceRule recorder = define (cmapWithPrio LogShake recorder) 
   pm <- use GetParsedModuleWithComments nfp
   return ([], fmap annotateParsedSource pm)
 
-#if MIN_VERSION_ghc(9,2,0)
 annotateParsedSource :: ParsedModule -> Annotated ParsedSource
 annotateParsedSource (ParsedModule _ ps _ _) = unsafeMkA (makeDeltaAst ps) 0
-#else
-annotateParsedSource :: ParsedModule -> Annotated ParsedSource
-annotateParsedSource = fixAnns
-#endif
 
 ------------------------------------------------------------------------------
 
@@ -287,12 +270,7 @@ graft' ::
     LocatedAn l ast ->
     Graft (Either String) a
 graft' needs_space dst val = Graft $ \dflags a -> do
-#if MIN_VERSION_ghc(9,2,0)
     val' <- annotate dflags needs_space val
-#else
-    (anns, val') <- annotate dflags needs_space val
-    modifyAnnsT $ mappend anns
-#endif
     pure $
         everywhere'
             ( mkT $
@@ -360,18 +338,10 @@ graftExprWithM dst trans = Graft $ \dflags a -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
-#if MIN_VERSION_ghc(9,2,0)
                                 val'' <-
                                     hoistTransform (either Fail.fail pure)
                                         (annotate @AnnListItem @(HsExpr GhcPs) dflags needs_space (mk_parens val'))
                                 pure val''
-#else
-                                (anns, val'') <-
-                                    hoistTransform (either Fail.fail pure)
-                                        (annotate @AnnListItem @(HsExpr GhcPs) dflags needs_space (mk_parens val'))
-                                modifyAnnsT $ mappend anns
-                                pure val''
-#endif
                             Nothing -> pure val
                 l -> pure l
         )
@@ -392,18 +362,10 @@ graftWithM dst trans = Graft $ \dflags a -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
-#if MIN_VERSION_ghc(9,2,0)
                                 val'' <-
                                     hoistTransform (either Fail.fail pure) $
                                         annotate dflags False $ maybeParensAST val'
                                 pure val''
-#else
-                                (anns, val'') <-
-                                    hoistTransform (either Fail.fail pure) $
-                                        annotate dflags True $ maybeParensAST val'
-                                modifyAnnsT $ mappend anns
-                                pure val''
-#endif
                             Nothing -> pure val
                 l -> pure l
         )
@@ -451,7 +413,6 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
             | otherwise = DL.singleton (L src e) <> go rest
     modifyDeclsT (pure . DL.toList . go) a
 
-#if MIN_VERSION_ghc(9,2,1)
 
 -- | Replace the smallest declaration whose SrcSpan satisfies the given condition with a new
 -- list of declarations.
@@ -588,7 +549,6 @@ modifyMgMatchesT' (MG xMg (L locMatches matches) originMg) f def combineResults 
   r' <- lift $ foldM combineResults def rs
   pure $ (MG xMg (L locMatches matches') originMg, r')
 #endif
-#endif
 
 graftSmallestDeclsWithM ::
     forall a.
@@ -635,9 +595,7 @@ class
     , Typeable l
     , Outputable l
     , Outputable ast
-#if MIN_VERSION_ghc(9,2,0)
     , Default l
-#endif
     ) => ASTElement l ast | ast -> l where
     parseAST :: Parser (LocatedAn l ast)
     maybeParensAST :: LocatedAn l ast -> LocatedAn l ast
@@ -680,13 +638,6 @@ instance ASTElement NameAnn RdrName where
 
 ------------------------------------------------------------------------------
 
-#if !MIN_VERSION_ghc(9,2,0)
--- | Dark magic I stole from retrie. No idea what it does.
-fixAnns :: ParsedModule -> Annotated ParsedSource
-fixAnns ParsedModule {..} =
-    let ranns = relativiseApiAnns pm_parsed_source pm_annotations
-     in unsafeMkA pm_parsed_source ranns 0
-#endif
 
 ------------------------------------------------------------------------------
 
@@ -694,66 +645,29 @@ fixAnns ParsedModule {..} =
 -- | Given an 'LHSExpr', compute its exactprint annotations.
 --   Note that this function will throw away any existing annotations (and format)
 annotate :: (ASTElement l ast, Outputable l)
-#if MIN_VERSION_ghc(9,2,0)
     => DynFlags -> Bool -> LocatedAn l ast -> TransformT (Either String) (LocatedAn l ast)
-#else
-    => DynFlags -> Bool -> LocatedAn l ast -> TransformT (Either String) (Anns, LocatedAn l ast)
-#endif
 annotate dflags needs_space ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
 #if MIN_VERSION_ghc(9,4,0)
     expr' <- TransformT $ lift $ mapLeft (showSDoc dflags . ppr) $ parseAST dflags uniq rendered
     pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
-#elif MIN_VERSION_ghc(9,2,0)
+#else
     expr' <- lift $ mapLeft show $ parseAST dflags uniq rendered
     pure $ setPrecedingLines expr' 0 (bool 0 1 needs_space)
-#else
-    (anns, expr') <- lift $ mapLeft show $ parseAST dflags uniq rendered
-    let anns' = setPrecedingLines expr' 0 (bool 0 1 needs_space) anns
-    pure (anns',expr')
 #endif
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.
 annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (LHsDecl GhcPs)
-#if !MIN_VERSION_ghc(9,2,0)
--- The 'parseDecl' function fails to parse 'FunBind' 'ValD's which contain
--- multiple matches. To work around this, we split the single
--- 'FunBind'-of-multiple-'Match'es into multiple 'FunBind's-of-one-'Match',
--- and then merge them all back together.
-annotateDecl dflags
-            (L src (
-                ValD ext fb@FunBind
-                  { fun_matches = mg@MG { mg_alts = L alt_src alts@(_:_)}
-                  })) = do
-    let set_matches matches =
-          ValD ext fb { fun_matches = mg { mg_alts = L alt_src matches }}
-
-    (anns', alts') <- fmap unzip $ for alts $ \alt -> do
-      uniq <- show <$> uniqueSrcSpanT
-      let rendered = render dflags $ set_matches [alt]
-      lift (mapLeft show $ parseDecl dflags uniq rendered) >>= \case
-        (ann, L _ (ValD _ FunBind { fun_matches = MG { mg_alts = L _ [alt']}}))
-           -> pure (setPrecedingLines alt' 1 0 ann, alt')
-        _ ->  lift $ Left "annotateDecl: didn't parse a single FunBind match"
-
-    modifyAnnsT $ mappend $ fold anns'
-    pure $ L src $ set_matches alts'
-#endif
 annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
 #if MIN_VERSION_ghc(9,4,0)
     expr' <- TransformT $ lift $ mapLeft (showSDoc dflags . ppr) $ parseDecl dflags uniq rendered
     pure $ setPrecedingLines expr' 1 0
-#elif MIN_VERSION_ghc(9,2,0)
+#else
     expr' <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     pure $ setPrecedingLines expr' 1 0
-#else
-    (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
-    let anns' = setPrecedingLines expr' 1 0 anns
-    modifyAnnsT $ mappend anns'
-    pure expr'
 #endif
 
 ------------------------------------------------------------------------------
@@ -777,15 +691,9 @@ eqSrcSpan l r = leftmost_smallest l r == EQ
 
 -- | Equality on SrcSpan's.
 -- Ignores the (Maybe BufSpan) field of SrcSpan's.
-#if MIN_VERSION_ghc(9,2,0)
 eqSrcSpanA :: SrcAnn la -> SrcAnn b -> Bool
 eqSrcSpanA l r = leftmost_smallest (locA l) (locA r) == EQ
-#else
-eqSrcSpanA :: SrcSpan -> SrcSpan -> Bool
-eqSrcSpanA l r = leftmost_smallest l r == EQ
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 addParensToCtxt :: Maybe EpaLocation -> AnnContext -> AnnContext
 addParensToCtxt close_dp = addOpen . addClose
   where
@@ -830,4 +738,3 @@ removeTrailingComma = flip modifyAnns $ \(AnnListItem l) -> AnnListItem $ filter
 isCommaAnn :: TrailingAnn -> Bool
 isCommaAnn AddCommaAnn{} = True
 isCommaAnn _             = False
-#endif

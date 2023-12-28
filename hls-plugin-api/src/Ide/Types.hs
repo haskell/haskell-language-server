@@ -6,6 +6,7 @@
 {-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE DuplicateRecordFields      #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
@@ -13,7 +14,6 @@
 {-# LANGUAGE MonadComprehensions        #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NamedFieldPuns             #-}
-{-# LANGUAGE OverloadedLabels           #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE PolyKinds                  #-}
@@ -25,6 +25,7 @@
 module Ide.Types
 ( PluginDescriptor(..), defaultPluginDescriptor, defaultCabalPluginDescriptor
 , defaultPluginPriority
+, describePlugin
 , IdeCommand(..)
 , IdeMethod(..)
 , IdeNotification(..)
@@ -78,6 +79,7 @@ import           Data.Default
 import           Data.Dependent.Map            (DMap)
 import qualified Data.Dependent.Map            as DMap
 import qualified Data.DList                    as DList
+import           Data.Foldable                 (foldl')
 import           Data.GADT.Compare
 import           Data.Hashable                 (Hashable)
 import           Data.HashMap.Strict           (HashMap)
@@ -105,7 +107,7 @@ import           Language.LSP.VFS
 import           Numeric.Natural
 import           OpenTelemetry.Eventlog
 import           Options.Applicative           (ParserInfo)
-import           Prettyprinter
+import           Prettyprinter                 as PP
 import           System.FilePath
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text          ()
@@ -268,6 +270,7 @@ instance ToJSON PluginConfig where
 
 data PluginDescriptor (ideState :: Type) =
   PluginDescriptor { pluginId           :: !PluginId
+                   , pluginDescription  :: !T.Text
                    -- ^ Unique identifier of the plugin.
                    , pluginPriority     :: Natural
                    -- ^ Plugin handlers are called in priority order, higher priority first
@@ -284,6 +287,13 @@ data PluginDescriptor (ideState :: Type) =
                    --   When writing handlers, etc. for this plugin it can be assumed that all handled files are of this type.
                    --   The file extension must have a leading '.'.
                    }
+
+describePlugin :: PluginDescriptor c -> Doc ann
+describePlugin p =
+  let
+    PluginId pid = pluginId p
+    pdesc = pluginDescription p
+  in pretty pid <> ":" <> nest 4 (PP.line <> pretty pdesc)
 
 -- | Check whether the given plugin descriptor is responsible for the file with the given path.
 --   Compares the file extension of the file at the given path with the file extension
@@ -617,7 +627,7 @@ instance PluginRequestMethod Method_TextDocumentCodeAction where
         -- should check whether the requested kind is a *prefix* of the action kind.
         -- That means, for example, we will return actions with kinds `quickfix.import` and
         -- `quickfix.somethingElse` if the requested kind is `quickfix`.
-        , Just caKind <- ca ^. L.kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
+        , Just caKind <- ca ^. L.kind = any (`codeActionKindSubsumes` caKind) allowed
         | otherwise = False
 
 instance PluginRequestMethod Method_CodeActionResolve where
@@ -626,10 +636,14 @@ instance PluginRequestMethod Method_CodeActionResolve where
     combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentDefinition where
-  combineResponses _ _ _ _ (x :| _) = x
+    combineResponses _ _ caps _ (x :| xs)
+        | Just (Just True) <- caps ^? (L.textDocument . _Just . L.definition . _Just . L.linkSupport) = foldl' mergeDefinitions x xs
+        | otherwise = downgradeLinks $ foldl' mergeDefinitions x xs
 
 instance PluginRequestMethod Method_TextDocumentTypeDefinition where
-  combineResponses _ _ _ _ (x :| _) = x
+    combineResponses _ _ caps _ (x :| xs)
+        | Just (Just True) <- caps ^? (L.textDocument . _Just . L.typeDefinition . _Just . L.linkSupport) = foldl' mergeDefinitions x xs
+        | otherwise = downgradeLinks $ foldl' mergeDefinitions x xs
 
 instance PluginRequestMethod Method_TextDocumentDocumentHighlight where
 
@@ -751,6 +765,44 @@ nullToMaybe' (InL x)       = Just $ InL x
 nullToMaybe' (InR (InL x)) = Just $ InR x
 nullToMaybe' (InR (InR _)) = Nothing
 
+type Definitions = (Definition |? ([DefinitionLink] |? Null))
+
+-- | Merges two definition responses (TextDocumentDefinition | TextDocumentTypeDefinition)
+-- into one preserving all locations and their order (including order of the responses).
+-- Upgrades Location(s) into LocationLink(s) when one of the responses is LocationLink(s). With following fields:
+--  * LocationLink.originSelectionRange = Nothing
+--  * LocationLink.targetUri = Location.Uri
+--  * LocationLink.targetRange = Location.Range
+--  * LocationLink.targetSelectionRange = Location.Range
+-- Ignores Null responses.
+mergeDefinitions :: Definitions -> Definitions -> Definitions
+mergeDefinitions definitions1 definitions2 = case (definitions1, definitions2) of
+    (InR (InR Null), def2)               -> def2
+    (def1, InR (InR Null))               -> def1
+    (InL def1, InL def2)                 -> InL $ mergeDefs def1 def2
+    (InL def1, InR (InL links))          -> InR $ InL (defToLinks def1 ++ links)
+    (InR (InL links), InL def2)          -> InR $ InL (links ++ defToLinks def2)
+    (InR (InL links1), InR (InL links2)) -> InR $ InL (links1 ++ links2)
+    where
+        defToLinks :: Definition -> [DefinitionLink]
+        defToLinks (Definition (InL location)) = [locationToDefinitionLink location]
+        defToLinks (Definition (InR locations)) = map locationToDefinitionLink locations
+
+        locationToDefinitionLink :: Location -> DefinitionLink
+        locationToDefinitionLink Location{_uri, _range} = DefinitionLink LocationLink{_originSelectionRange = Nothing, _targetUri = _uri, _targetRange = _range, _targetSelectionRange = _range}
+
+        mergeDefs :: Definition -> Definition -> Definition
+        mergeDefs (Definition (InL loc1)) (Definition (InL loc2)) = Definition $ InR [loc1, loc2]
+        mergeDefs (Definition (InR locs1)) (Definition (InL loc2)) = Definition $ InR (locs1 ++ [loc2])
+        mergeDefs (Definition (InL loc1)) (Definition (InR locs2)) = Definition $ InR (loc1 : locs2)
+        mergeDefs (Definition (InR locs1)) (Definition (InR locs2)) = Definition $ InR (locs1 ++ locs2)
+
+downgradeLinks :: Definitions -> Definitions
+downgradeLinks (InR (InL links)) = InL . Definition . InR . map linkToLocation $ links
+    where
+        linkToLocation :: DefinitionLink -> Location
+        linkToLocation (DefinitionLink LocationLink{_targetUri, _targetRange}) = Location {_uri = _targetUri, _range = _targetRange}
+downgradeLinks defs = defs
 -- ---------------------------------------------------------------------
 -- Plugin Notifications
 -- ---------------------------------------------------------------------
@@ -883,10 +935,11 @@ defaultPluginPriority = 1000
 --
 -- and handlers will be enabled for files with the appropriate file
 -- extensions.
-defaultPluginDescriptor :: PluginId -> PluginDescriptor ideState
-defaultPluginDescriptor plId =
+defaultPluginDescriptor :: PluginId -> T.Text -> PluginDescriptor ideState
+defaultPluginDescriptor plId desc =
   PluginDescriptor
     plId
+    desc
     defaultPluginPriority
     mempty
     mempty
@@ -903,10 +956,11 @@ defaultPluginDescriptor plId =
 --
 -- Handles files with the following extensions:
 --   * @.cabal@
-defaultCabalPluginDescriptor :: PluginId -> PluginDescriptor ideState
-defaultCabalPluginDescriptor plId =
+defaultCabalPluginDescriptor :: PluginId -> T.Text -> PluginDescriptor ideState
+defaultCabalPluginDescriptor plId desc =
   PluginDescriptor
     plId
+    desc
     defaultPluginPriority
     mempty
     mempty
@@ -975,7 +1029,7 @@ mkResolveHandler m f = mkPluginHandler m $ \ideState plId params -> do
     -- as this is filtered out in `pluginEnabled`
     _ -> throwError $ PluginInternalError invalidRequest
   where invalidRequest = "The resolve request incorrectly got routed to the wrong resolve handler!"
-        parseError value err = "Unable to decode: " <> (T.pack $ show value) <> ". Error: " <> (T.pack $ show err)
+        parseError value err = "Unable to decode: " <> T.pack (show value) <> ". Error: " <> T.pack (show err)
 
 wrapResolveData :: L.HasData_ a (Maybe Value) => PluginId -> Uri -> a -> a
 wrapResolveData pid uri hasData =

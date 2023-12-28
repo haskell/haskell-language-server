@@ -76,7 +76,7 @@ genericConfigTests = testGroup "generic plugin config"
         testPluginId = "testplugin"
         -- A disabled-by-default plugin that creates diagnostics
         plugin = mkPluginTestDescriptor' @() pd testPluginId
-        pd plId = (defaultPluginDescriptor plId)
+        pd plId = (defaultPluginDescriptor plId "")
           {
             pluginConfigDescriptor = configDisabled
           , pluginRules = do

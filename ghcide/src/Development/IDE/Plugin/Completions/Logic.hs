@@ -69,14 +69,12 @@ import           Development.IDE.Spans.AtPoint            (pointCommand)
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Plugins                              (Depth (AllTheWay),
                                                            mkUserStyle,
                                                            neverQualify,
                                                            sdocStyle)
-#endif
 
-#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+#if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Plugins                              (defaultSDocContext,
                                                            renderWithContext)
 #endif
@@ -285,13 +283,9 @@ mkNameCompItem doc thingParent origName provenance isInfix !imp mod = CI {..}
           }
 
 showForSnippet :: Outputable a => a -> T.Text
-#if MIN_VERSION_ghc(9,2,0)
 showForSnippet x = T.pack $ renderWithContext ctxt $ GHC.ppr x -- FIXme
     where
         ctxt = defaultSDocContext{sdocStyle = mkUserStyle neverQualify AllTheWay}
-#else
-showForSnippet x = printOutputable x
-#endif
 
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
@@ -368,7 +362,6 @@ cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
 
       -- construct a map from Parents(type) to their fields
       fieldMap = Map.fromListWith (++) $ flip mapMaybe rdrElts $ \elt -> do
-#if MIN_VERSION_ghc(9,2,0)
         par <- greParent_maybe elt
 #if MIN_VERSION_ghc(9,7,0)
         flbl <- greFieldLabel_maybe elt
@@ -376,13 +369,6 @@ cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
         flbl <- greFieldLabel elt
 #endif
         Just (par,[flLabel flbl])
-#else
-        case gre_par elt of
-          FldParent n ml -> do
-            l <- ml
-            Just (n, [l])
-          _ -> Nothing
-#endif
 
       getCompls :: [GlobalRdrElt] -> ([CompItem],QualCompls)
       getCompls = foldMap getComplsForOne
@@ -419,9 +405,6 @@ cacheDataProducer uri visibleMods curMod globalEnv inScopeEnv limports =
         let (mbParent, originName) = case par of
                             NoParent -> (Nothing, nameOccName n)
                             ParentIs n' -> (Just . T.pack $ printName n', nameOccName n)
-#if !MIN_VERSION_ghc(9,2,0)
-                            FldParent n' lbl -> (Just . T.pack $ printName n', maybe (nameOccName n) mkVarOccFS lbl)
-#endif
             recordCompls = case par of
                 ParentIs parent
                   | isDataConName n
@@ -576,10 +559,54 @@ getCompletions
     -> CompletionsConfig
     -> ModuleNameEnv (HashSet.HashSet IdentInfo)
     -> Uri
-    -> IO [Scored CompletionItem]
-getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
-               maybe_parsed maybe_ast_res (localBindings, bmapping) prefixInfo caps config moduleExportsMap uri = do
-  let PosPrefixInfo { fullLine, prefixScope, prefixText } = prefixInfo
+    -> [Scored CompletionItem]
+getCompletions
+    plugins
+    ideOpts
+    CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
+    maybe_parsed
+    maybe_ast_res
+    (localBindings, bmapping)
+    prefixInfo@(PosPrefixInfo { fullLine, prefixScope, prefixText })
+    caps
+    config
+    moduleExportsMap
+    uri
+    -- ------------------------------------------------------------------------
+    -- IMPORT MODULENAME (NAM|)
+    | Just (ImportListContext moduleName) <- maybeContext
+    = moduleImportListCompletions moduleName
+
+    | Just (ImportHidingContext moduleName) <- maybeContext
+    = moduleImportListCompletions moduleName
+
+    -- ------------------------------------------------------------------------
+    -- IMPORT MODULENAM|
+    | Just (ImportContext _moduleName) <- maybeContext
+    = filtImportCompls
+
+    -- ------------------------------------------------------------------------
+    -- {-# LA| #-}
+    -- we leave this condition here to avoid duplications and return empty list
+    -- since HLS implements these completions (#haskell-language-server/pull/662)
+    | "{-# " `T.isPrefixOf` fullLine
+    = []
+
+    -- ------------------------------------------------------------------------
+    | otherwise =
+        -- assumes that nubOrdBy is stable
+        let uniqueFiltCompls = nubOrdBy (uniqueCompl `on` snd . Fuzzy.original) filtCompls
+            compls = (fmap.fmap.fmap) (mkCompl pId ideOpts uri) uniqueFiltCompls
+            pId = lookupCommandProvider plugins (CommandId extendImportCommandId)
+        in
+          (fmap.fmap) snd $
+          sortBy (compare `on` lexicographicOrdering) $
+          mergeListsBy (flip compare `on` score)
+            [ (fmap.fmap) (notQual,) filtModNameCompls
+            , (fmap.fmap) (notQual,) filtKeywordCompls
+            , (fmap.fmap.fmap) (toggleSnippets caps config) compls
+            ]
+    where
       enteredQual = if T.null prefixScope then "" else prefixScope <> "."
       fullPrefix  = enteredQual <> prefixText
 
@@ -602,11 +629,9 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
           $ Fuzzy.simpleFilter chunkSize maxC fullPrefix
           $ (if T.null enteredQual then id else mapMaybe (T.stripPrefix enteredQual))
             allModNamesAsNS
-
-      filtCompls = Fuzzy.filter chunkSize maxC prefixText ctxCompls (label . snd)
-        where
-
-          mcc = case maybe_parsed of
+      -- If we have a parsed module, use it to determine which completion to show.
+      maybeContext :: Maybe Context
+      maybeContext = case maybe_parsed of
             Nothing -> Nothing
             Just (pm, pmapping) ->
               let PositionMapping pDelta = pmapping
@@ -615,7 +640,9 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
                   hpos = upperRange position'
               in getCContext lpos pm <|> getCContext hpos pm
 
-
+      filtCompls :: [Scored (Bool, CompItem)]
+      filtCompls = Fuzzy.filter chunkSize maxC prefixText ctxCompls (label . snd)
+        where
           -- We need the hieast to be "fresh". We can't get types from "stale" hie files, so hasfield won't work,
           -- since it gets the record fields from the types.
           -- Perhaps this could be fixed with a refactor to GHC's IfaceTyCon, to have it also contain record fields.
@@ -653,7 +680,7 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
                 })
 
           -- completions specific to the current context
-          ctxCompls' = case mcc of
+          ctxCompls' = case maybeContext of
                         Nothing           -> compls
                         Just TypeContext  -> filter ( isTypeCompl . snd) compls
                         Just ValueContext -> filter (not . isTypeCompl . snd) compls
@@ -694,54 +721,36 @@ getCompletions plugins ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls,
         , enteredQual `T.isPrefixOf` original label
         ]
 
+      moduleImportListCompletions :: String -> [Scored CompletionItem]
+      moduleImportListCompletions moduleNameS =
+        let moduleName = T.pack moduleNameS
+            funcs = lookupWithDefaultUFM moduleExportsMap HashSet.empty $ mkModuleName moduleNameS
+            funs = map (show . name) $ HashSet.toList funcs
+        in filterModuleExports moduleName $ map T.pack funs
+
+      filtImportCompls :: [Scored CompletionItem]
       filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
+
+      filterModuleExports :: T.Text -> [T.Text] -> [Scored CompletionItem]
       filterModuleExports moduleName = filtListWith $ mkModuleFunctionImport moduleName
+
+      filtKeywordCompls :: [Scored CompletionItem]
       filtKeywordCompls
           | T.null prefixScope = filtListWith mkExtCompl (optKeywords ideOpts)
           | otherwise = []
 
-  if
-    -- TODO: handle multiline imports
-    | "import " `T.isPrefixOf` fullLine
-      && (List.length (words (T.unpack fullLine)) >= 2)
-      && "(" `isInfixOf` T.unpack fullLine
-    -> do
-      let moduleName = words (T.unpack fullLine) !! 1
-          funcs = lookupWithDefaultUFM moduleExportsMap HashSet.empty $ mkModuleName moduleName
-          funs = map (renderOcc . name) $ HashSet.toList funcs
-      return $ filterModuleExports (T.pack moduleName) funs
-    | "import " `T.isPrefixOf` fullLine
-    -> return filtImportCompls
-    -- we leave this condition here to avoid duplications and return empty list
-    -- since HLS implements these completions (#haskell-language-server/pull/662)
-    | "{-# " `T.isPrefixOf` fullLine
-    -> return []
-    | otherwise -> do
-        -- assumes that nubOrdBy is stable
-        let uniqueFiltCompls = nubOrdBy (uniqueCompl `on` snd . Fuzzy.original) filtCompls
-        let compls = (fmap.fmap.fmap) (mkCompl pId ideOpts uri) uniqueFiltCompls
-            pId = lookupCommandProvider plugins (CommandId extendImportCommandId)
-        return $
-          (fmap.fmap) snd $
-          sortBy (compare `on` lexicographicOrdering) $
-          mergeListsBy (flip compare `on` score)
-            [ (fmap.fmap) (notQual,) filtModNameCompls
-            , (fmap.fmap) (notQual,) filtKeywordCompls
-            , (fmap.fmap.fmap) (toggleSnippets caps config) compls
-            ]
-    where
-        -- We use this ordering to alphabetically sort suggestions while respecting
-        -- all the previously applied ordering sources. These are:
-        --  1. Qualified suggestions go first
-        --  2. Fuzzy score ranks next
-        --  3. In-scope completions rank next
-        --  4. label alphabetical ordering next
-        --  4. detail alphabetical ordering (proxy for module)
-        lexicographicOrdering Fuzzy.Scored{score, original} =
-          case original of
-            (isQual, CompletionItem{_label,_detail}) -> do
-              let isLocal = maybe False (":" `T.isPrefixOf`) _detail
-              (Down isQual, Down score, Down isLocal, _label, _detail)
+      -- We use this ordering to alphabetically sort suggestions while respecting
+      -- all the previously applied ordering sources. These are:
+      --  1. Qualified suggestions go first
+      --  2. Fuzzy score ranks next
+      --  3. In-scope completions rank next
+      --  4. label alphabetical ordering next
+      --  4. detail alphabetical ordering (proxy for module)
+      lexicographicOrdering Fuzzy.Scored{score, original} =
+        case original of
+          (isQual, CompletionItem{_label,_detail}) -> do
+            let isLocal = maybe False (":" `T.isPrefixOf`) _detail
+            (Down isQual, Down score, Down isLocal, _label, _detail)
 
 
 

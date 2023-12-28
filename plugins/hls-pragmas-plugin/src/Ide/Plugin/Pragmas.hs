@@ -43,19 +43,19 @@ import qualified Text.Fuzzy                         as Fuzzy
 -- ---------------------------------------------------------------------
 
 suggestPragmaDescriptor :: PluginId -> PluginDescriptor IdeState
-suggestPragmaDescriptor plId = (defaultPluginDescriptor plId)
+suggestPragmaDescriptor plId = (defaultPluginDescriptor plId "Provides a code action to add missing LANGUAGE pragmas")
   { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction suggestPragmaProvider
   , pluginPriority = defaultPluginPriority + 1000
   }
 
 completionDescriptor :: PluginId -> PluginDescriptor IdeState
-completionDescriptor plId = (defaultPluginDescriptor plId)
+completionDescriptor plId = (defaultPluginDescriptor plId "Provides completion of LANGAUGE pragmas")
   { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCompletion completion
   , pluginPriority = ghcideCompletionsPluginPriority + 1
   }
 
 suggestDisableWarningDescriptor :: PluginId -> PluginDescriptor IdeState
-suggestDisableWarningDescriptor plId = (defaultPluginDescriptor plId)
+suggestDisableWarningDescriptor plId = (defaultPluginDescriptor plId "Provides a code action to disable warnings")
   { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction suggestDisableWarningProvider
     -- #3636 Suggestions to disable warnings should appear last.
   , pluginPriority = 0
@@ -189,9 +189,7 @@ allPragmas =
     -- Language Version Extensions
   , "Haskell98"
   , "Haskell2010"
-#if MIN_VERSION_ghc(9,2,0)
   , "GHC2021"
-#endif
   ]
 
 -- ---------------------------------------------------------------------

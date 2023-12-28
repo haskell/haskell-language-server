@@ -9,16 +9,10 @@ import           Debug.Trace
 import           Development.IDE.GHC.Compat.ExactPrint as GHC
 import           Development.IDE.GHC.Dump              (showAstDataHtml)
 import           GHC.Stack
+import           GHC.Utils.Outputable
 import           System.Environment.Blank              (getEnvDefault)
 import           System.IO.Unsafe
 import           Text.Printf
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC.Utils.Outputable
-#else
-import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.Util
-#endif
 --------------------------------------------------------------------------------
 -- Tracing exactprint terms
 
@@ -38,11 +32,7 @@ traceAst lbl x
   | debugAST = trace doTrace x
   | otherwise = x
   where
-#if MIN_VERSION_ghc(9,2,0)
     renderDump = renderWithContext defaultSDocContext{sdocStyle = defaultDumpStyle, sdocPprDebug = True}
-#else
-    renderDump = showSDocUnsafe . ppr
-#endif
     htmlDump = showAstDataHtml x
     doTrace = unsafePerformIO $ do
         u <- U.newUnique
@@ -50,8 +40,6 @@ traceAst lbl x
         writeFile htmlDumpFileName $ renderDump htmlDump
         return $ unlines
             [prettyCallStack callStack ++ ":"
-#if MIN_VERSION_ghc(9,2,0)
             , exactPrint x
-#endif
             , "file://" ++ htmlDumpFileName]
 

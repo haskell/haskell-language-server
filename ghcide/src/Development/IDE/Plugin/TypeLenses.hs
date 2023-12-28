@@ -94,13 +94,15 @@ typeLensCommandId = "typesignature.add"
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-  (defaultPluginDescriptor plId)
+  (defaultPluginDescriptor plId desc)
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeLens codeLensProvider
                     <> mkResolveHandler SMethod_CodeLensResolve codeLensResolveProvider
     , pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler]
     , pluginRules = rules recorder
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
+  where
+    desc = "Provides code lenses type signatures"
 
 properties :: Properties '[ 'PropertyKey "mode" (TEnum Mode)]
 properties = emptyProperties

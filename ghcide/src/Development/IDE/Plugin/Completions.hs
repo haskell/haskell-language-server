@@ -59,9 +59,7 @@ import qualified Ide.Plugin.Config                        as Config
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.LanguageExtensions                   as LangExt
-#endif
 
 data Log = LogShake Shake.Log deriving Show
 
@@ -73,13 +71,15 @@ ghcideCompletionsPluginPriority :: Natural
 ghcideCompletionsPluginPriority = defaultPluginPriority
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId)
+descriptor recorder plId = (defaultPluginDescriptor plId desc)
   { pluginRules = produceCompletions recorder
   , pluginHandlers = mkPluginHandler SMethod_TextDocumentCompletion getCompletionsLSP
                      <> mkResolveHandler SMethod_CompletionItemResolve resolveCompletion
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   , pluginPriority = ghcideCompletionsPluginPriority
   }
+  where
+    desc = "Provides Haskell completions"
 
 
 produceCompletions :: Recorder (WithPriority Log) -> Rules ()
@@ -198,11 +198,7 @@ getCompletionsLSP ide plId
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls <> Just lModules
 
             -- get HieAst if OverloadedRecordDot is enabled
-#if MIN_VERSION_ghc(9,2,0)
             let uses_overloaded_record_dot (ms_hspp_opts . msrModSummary -> dflags) = xopt LangExt.OverloadedRecordDot dflags
-#else
-            let uses_overloaded_record_dot _ = False
-#endif
             ms <- fmap fst <$> useWithStaleFast GetModSummaryWithoutTimestamps npath
             astres <- case ms of
               Just ms' | uses_overloaded_record_dot ms'
@@ -221,7 +217,7 @@ getCompletionsLSP ide plId
                     plugins = idePlugins $ shakeExtras ide
                 config <- liftIO $ runAction "" ide $ getCompletionsConfig plId
 
-                allCompletions <- liftIO $ getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports uri
+                let allCompletions = getCompletions plugins ideOpts cci' parsedMod astres bindMap pfix clientCaps config moduleExports uri
                 pure $ InL (orderedCompletions allCompletions)
           _ -> return (InL [])
       _ -> return (InL [])

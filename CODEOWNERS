@@ -29,6 +29,7 @@
 /plugins/hls-code-range-plugin @kokobd
 /plugins/hls-splice-plugin @konn
 /plugins/hls-stylish-haskell-plugin @Ailrun
+/plugins/hls-stan-plugin @0rphee
 /plugins/hls-explicit-record-fields-plugin @ozkutuk
 /plugins/hls-overloaded-record-dot-plugin @joyfulmantis
 
