@@ -336,6 +336,7 @@ test-suite ghcide-tests
     , containers
     , data-default
     , directory
+    , enummapset
     , extra
     , filepath
     , fuzzy

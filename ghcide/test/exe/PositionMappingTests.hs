@@ -3,6 +3,7 @@
 
 module PositionMappingTests (tests) where
 
+import qualified Data.EnumMap.Strict                  as EM
 import           Data.Row
 import qualified Data.Text                            as T
 import           Data.Text.Utf16.Rope                 (Rope)
@@ -10,7 +11,8 @@ import qualified Data.Text.Utf16.Rope                 as Rope
 import           Development.IDE.Core.PositionMapping (PositionResult (..),
                                                        fromCurrent,
                                                        positionResultToMaybe,
-                                                       toCurrent)
+                                                       toCurrent,
+                                                       toCurrentPosition)
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types          hiding
                                                       (SemanticTokenAbsolute (..),
@@ -20,15 +22,36 @@ import           Language.LSP.Protocol.Types          hiding
 import           Language.LSP.VFS                     (applyChange)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
+import           Control.Arrow                        (second)
 import           Data.Functor.Identity                (runIdentity)
+import           Data.Text                            (Text)
+import           Development.IDE.Core.Shake           (updatePositionMappingHelper)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
 
+enumMapMappingTest :: TestTree
+enumMapMappingTest = testCase "enumMapMappingTest" $ do
+  let mkChangeEvent :: Range -> Text -> TextDocumentContentChangeEvent
+      mkChangeEvent r t = TextDocumentContentChangeEvent $ InL $ #range .== r .+ #rangeLength .== Nothing .+ #text .== t
+      mkCE :: UInt -> UInt -> UInt -> UInt -> Text -> TextDocumentContentChangeEvent
+      mkCE l1 c1 l2 c2 = mkChangeEvent (Range (Position l1 c1) (Position l2 c2))
+      events :: [(Int32, [TextDocumentContentChangeEvent])]
+      events = map (second return) [(0, mkCE 0 0 0 0 ""), (1, mkCE 0 1 0 1 " "), (2, mkCE 0 2 0 2 " "), (3, mkCE 0 3 0 3 " "), (4, mkCE 0 4 0 4 " "), (5, mkCE 0 5 0 5 " ")]
+      finalMap = Prelude.foldl (\m (i, e) -> updatePositionMappingHelper i e m) mempty events
+  let updatePose fromPos = do
+        mapping <- snd <$> EM.lookup 0 finalMap
+        toCurrentPosition mapping fromPos
+  updatePose (Position 0 4) @?= Just (Position 0 9)
+  updatePose (Position 0 5) @?= Just (Position 0 10)
+
+
 tests ::  TestTree
 tests =
     testGroup "position mapping"
-        [ testGroup "toCurrent"
+        [
+        enumMapMappingTest
+        , testGroup "toCurrent"
               [ testCase "before" $
                 toCurrent
                     (Range (Position 0 1) (Position 0 3))
