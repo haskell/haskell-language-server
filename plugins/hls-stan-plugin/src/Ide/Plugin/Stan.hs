@@ -31,7 +31,8 @@ import           Development.IDE.GHC.Error      (realSrcSpanToRange)
 import           GHC.Generics                   (Generic)
 import           Ide.Plugin.Config
 import           Ide.Types                      (PluginDescriptor (..),
-                                                 PluginId, configHasDiagnostics,
+                                                 PluginEnabled, PluginId,
+                                                 configHasDiagnostics,
                                                  configInitialGenericConfig,
                                                  defaultConfigDescriptor,
                                                  defaultPluginDescriptor,
@@ -80,7 +81,7 @@ rules recorder plId = do
   define (cmapWithPrio LogShake recorder) $
     \GetStanDiagnostics file -> do
       config <- getPluginConfigAction plId
-      if pluginEnabledConfig plcDiagnosticsOn config then do
+      if pluginEnabledConfig plcDiagnosticsOn config  == PluginEnabled then do
           maybeHie <- getHieFile file
           case maybeHie of
             Nothing -> return ([], Nothing)
