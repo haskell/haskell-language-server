@@ -66,14 +66,14 @@ nameNameSemanticFromHie hieKind rm ns = do
 
         contextInfosMaybeTokenType :: Set.Set ContextInfo -> Maybe SemanticTokenType
         contextInfosMaybeTokenType details = case NE.nonEmpty $ Set.toList details of
-            Just infos -> Just $ maximum $ NE.map infoTokenType infos
+            Just infos -> maximum $ NE.map infoTokenType infos
             Nothing    -> Nothing
 
 -----------------------------------
 -- * extract location from HieAST a
 -----------------------------------
 
-hieAstSpanNames :: UniqSet Name -> HieAST a -> [(Range, Name)]
+hieAstSpanNames :: NameSet -> HieAST a -> [(Range, Name)]
 hieAstSpanNames nameSet ast = if null (nodeChildren ast) then
     getIds ast else concatMap (hieAstSpanNames nameSet) (nodeChildren ast)
     where
@@ -107,17 +107,17 @@ semanticTokenAbsoluteSemanticTokens = makeSemanticTokens defaultSemanticTokensLe
 
 extractSemanticTokensFromNames :: NameSemanticMap -> [(Range, Name)] -> [SemanticTokenAbsolute]
 extractSemanticTokensFromNames nsm =
-    mapMaybe (uncurry toAbsSemanticToken) . mergeNameFromSamSpan . mapMaybe (getSemantic nsm)
+    map (uncurry toAbsSemanticToken) . mergeNameFromSamSpan . mapMaybe (getSemantic nsm)
     where
         -- merge all tokens with same span
         -- mergeNameFromSamSpan :: [(Span, SemanticTokenType)] -> [(Span, SemanticTokenType)]
         mergeNameFromSamSpan xs = Map.toList $ Map.fromListWith (<>) xs
 
-        toAbsSemanticToken :: Range -> SemanticTokenType -> Maybe SemanticTokenAbsolute
+        toAbsSemanticToken :: Range -> SemanticTokenType -> SemanticTokenAbsolute
         toAbsSemanticToken (Range (Position startLine startColumn) (Position _endLine endColumn)) tokenType =
             let len = endColumn - startColumn
             in SemanticTokenAbsolute (fromIntegral startLine) (fromIntegral startColumn)
-                (fromIntegral len) <$> toLspTokenType tokenType <*> return []
+                (fromIntegral len) (toLspTokenType tokenType) []
         getSemantic nameMap (span, name) = do
             tokenType <- lookupNameEnv nameMap name
             pure (span, tokenType)

@@ -122,7 +122,7 @@ getImportedNameSemanticRule recorder =
         getTypeExclude localMap env n nameMap
             | Nothing <- lookupNameEnv localMap n =
                 do  tyThing <- lookupImported env n
-                    pure $ maybe nameMap (extendNameEnv nameMap n . tyThingSemantic) tyThing
+                    pure $ maybe nameMap (extendNameEnv nameMap n) (tyThing >>= tyThingSemantic)
             | otherwise = pure nameMap
         lookupImported :: HscEnv -> Name -> IO (Maybe TyThing)
         lookupImported env = fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env

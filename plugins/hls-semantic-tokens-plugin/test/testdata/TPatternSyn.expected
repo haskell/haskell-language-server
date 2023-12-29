@@ -1,1 +1,1 @@
-SemanticTokenOriginal {_tokenType = TPatternSyn, _loc = Loc {_line = 5, _startChar = 9, _len = 3}, _name = "Foo"}
+5:9-12 TPatternSyn "Foo"

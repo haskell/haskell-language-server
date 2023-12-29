@@ -1,2 +1,2 @@
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 4, _startChar = 1, _len = 1}, _name = "g"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 4, _startChar = 4, _len = 7}, _name = "Nothing"}
+4:1-2 TFunction "g"
+4:4-11 TDataCon "Nothing"

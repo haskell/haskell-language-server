@@ -1,4 +1,4 @@
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 3, _startChar = 6, _len = 3}, _name = "Foo"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 3, _startChar = 12, _len = 3}, _name = "Foo"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 3, _startChar = 16, _len = 3}, _name = "Int"}
-SemanticTokenOriginal {_tokenType = TClass, _loc = Loc {_line = 3, _startChar = 30, _len = 2}, _name = "Eq"}
+3:6-9 TTypeCon "Foo"
+3:12-15 TDataCon "Foo"
+3:16-19 TTypeCon "Int"
+3:30-32 TClass "Eq"

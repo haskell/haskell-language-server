@@ -1,7 +1,7 @@
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 3, _startChar = 2, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 3, _startChar = 5, _len = 1}, _name = "b"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 5, _startChar = 1, _len = 1}, _name = "f"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 5, _startChar = 3, _len = 1}, _name = "g"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 5, _startChar = 5, _len = 1}, _name = "y"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 5, _startChar = 9, _len = 1}, _name = "g"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 5, _startChar = 11, _len = 1}, _name = "y"}
+3:2-3 TVariable "a"
+3:5-6 TVariable "b"
+5:1-2 TFunction "f"
+5:3-4 TFunction "g"
+5:5-6 TVariable "y"
+5:9-10 TFunction "g"
+5:11-12 TVariable "y"

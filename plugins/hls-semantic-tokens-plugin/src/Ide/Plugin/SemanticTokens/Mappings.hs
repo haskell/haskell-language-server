@@ -14,7 +14,6 @@ module Ide.Plugin.SemanticTokens.Mappings where
 
 import           Data.List.Extra                 (chunksOf, (!?))
 import qualified Data.Map                        as Map
-import           Data.Maybe                      (fromMaybe, mapMaybe)
 import qualified Data.Set                        as Set
 import           Data.Text                       (Text)
 import           Development.IDE                 (HieKind (HieFresh, HieFromDisk))
@@ -30,34 +29,34 @@ import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
 -- * 1. Mapping semantic token type to and from the LSP default token type.
 
 -- | map from haskell semantic token type to LSP default token type
-toLspTokenType :: SemanticTokenType -> Maybe SemanticTokenTypes
+toLspTokenType :: SemanticTokenType -> SemanticTokenTypes
 toLspTokenType tk = case tk of
   -- TVariable     -> SemanticTokenTypes_Variable
   -- left hand side of none pattern bind
-  TFunction     -> Just SemanticTokenTypes_Function
-  TVariable     -> Just SemanticTokenTypes_Variable
-  TClass        -> Just SemanticTokenTypes_Class
-  TClassMethod  -> Just SemanticTokenTypes_Method
-  TTypeVariable -> Just SemanticTokenTypes_TypeParameter
+  TFunction     -> SemanticTokenTypes_Function
+  TVariable     -> SemanticTokenTypes_Variable
+  TClass        -> SemanticTokenTypes_Class
+  TClassMethod  -> SemanticTokenTypes_Method
+  TTypeVariable -> SemanticTokenTypes_TypeParameter
   -- normal data type is a tagged union type look like enum type
   -- and a record is a product type like struct
   -- but we don't distinguish them yet
-  TTypeCon      -> Just SemanticTokenTypes_Enum
-  TDataCon      -> Just SemanticTokenTypes_EnumMember
-  TRecField     -> Just SemanticTokenTypes_Property
+  TTypeCon      -> SemanticTokenTypes_Enum
+  TDataCon      -> SemanticTokenTypes_EnumMember
+  TRecField     -> SemanticTokenTypes_Property
   -- pattern syn is like a limited version of macro of constructing a data type
-  TPatternSyn   -> Just SemanticTokenTypes_Macro
+  TPatternSyn   -> SemanticTokenTypes_Macro
   -- saturated type
-  TTypeSyn      -> Just SemanticTokenTypes_Type
+  TTypeSyn      -> SemanticTokenTypes_Type
   -- not sure if this is correct choice
-  TTypeFamily   -> Just SemanticTokenTypes_Interface
-  TNothing      -> Nothing
+  TTypeFamily   -> SemanticTokenTypes_Interface
+--   TNothing      -> Nothing
 
 lspTokenReverseMap :: Map.Map SemanticTokenTypes SemanticTokenType
-lspTokenReverseMap = Map.fromList $ mapMaybe (\x -> fmap (,x) (toLspTokenType x)) $ enumFrom minBound
+lspTokenReverseMap = Map.fromList $ map (\x -> (toLspTokenType x,x)) $ enumFrom minBound
 
-fromLspTokenType :: SemanticTokenTypes -> SemanticTokenType
-fromLspTokenType tk = fromMaybe TNothing $ Map.lookup tk lspTokenReverseMap
+fromLspTokenType :: SemanticTokenTypes -> Maybe SemanticTokenType
+fromLspTokenType tk = Map.lookup tk lspTokenReverseMap
 
 -- * 2. Mapping from GHC type and tyThing to semantic token type.
 
@@ -67,28 +66,28 @@ toTokenType locName = case occNameSpace $ occName locName of
   x | isTvNameSpace x      -> TTypeVariable
   x | isTcClsNameSpace x   -> TTypeCon -- Type constructors and classes in the same name space for now
   x | isVarNameSpace x     -> TVariable
-  _                        -> TNothing
+  _                        -> TVariable
 
 -- | tyThingSemantic
-tyThingSemantic :: TyThing -> SemanticTokenType
+tyThingSemantic :: TyThing -> Maybe SemanticTokenType
 tyThingSemantic ty = case ty of
   AnId vid
-    | isTyVar vid -> TTypeVariable
-    | isRecordSelector vid -> TRecField
-    | isClassOpId vid -> TClassMethod
-    | isFunVar vid -> TFunction
+    | isTyVar vid -> Just TTypeVariable
+    | isRecordSelector vid -> Just TRecField
+    | isClassOpId vid -> Just TClassMethod
+    | isFunVar vid -> Just TFunction
     -- \| isDFunId vid -> TClassMethod
-    | otherwise -> TVariable
+    | otherwise -> Just TVariable
   AConLike con -> case con of
-    RealDataCon _ -> TDataCon
-    PatSynCon _   -> TPatternSyn
+    RealDataCon _ -> Just TDataCon
+    PatSynCon _   -> Just TPatternSyn
   ATyCon tyCon
-    | isTypeSynonymTyCon tyCon -> TTypeSyn
-    | isTypeFamilyTyCon tyCon -> TTypeFamily
-    | isClassTyCon tyCon -> TClass
+    | isTypeSynonymTyCon tyCon -> Just TTypeSyn
+    | isTypeFamilyTyCon tyCon -> Just TTypeFamily
+    | isClassTyCon tyCon -> Just TClass
     -- fall back to TTypeCon the result
-    | otherwise -> TTypeCon
-  ACoAxiom _ -> TNothing
+    | otherwise -> Just TTypeCon
+  ACoAxiom _ -> Nothing
   where
     isFunVar :: Var -> Bool
     isFunVar var = isFunType $ varType var
@@ -100,11 +99,11 @@ isFunType a = case a of
 
 typeSemantic :: HieKind hType -> hType -> SemanticTokenType
 typeSemantic kind t = case kind of
-  HieFresh -> if isFunType t then TFunction else TNothing
+  HieFresh -> if isFunType t then TFunction else TVariable
   HieFromDisk full_file ->
     if isFixFunction fullType
       then TFunction
-      else TNothing
+      else TVariable
     where
       fullType = recoverFullType t (hie_types full_file)
   where
@@ -117,29 +116,29 @@ typeSemantic kind t = case kind of
 
 -- * 3. Mapping from hieAst ContextInfo to haskell semantic token type.
 
-infoTokenType :: ContextInfo -> SemanticTokenType
+infoTokenType :: ContextInfo -> Maybe SemanticTokenType
 infoTokenType x = case x of
-  Use                      -> TNothing
-  MatchBind                -> TNothing
-  IEThing _                -> TNothing
-  TyDecl                   -> TNothing -- type signature
-  ValBind RegularBind _ _  -> TVariable
-  ValBind InstanceBind _ _ -> TClassMethod
-  PatternBind {}           -> TVariable
-  ClassTyDecl _            -> TClassMethod
-  TyVarBind _ _            -> TTypeVariable
-  RecField _ _             -> TRecField
+  Use                      -> Nothing
+  MatchBind                -> Nothing
+  IEThing _                -> Nothing
+  TyDecl                   -> Nothing -- type signature
+  ValBind RegularBind _ _  -> Just TVariable
+  ValBind InstanceBind _ _ -> Just TClassMethod
+  PatternBind {}           -> Just TVariable
+  ClassTyDecl _            -> Just TClassMethod
+  TyVarBind _ _            -> Just TTypeVariable
+  RecField _ _             -> Just TRecField
   -- data constructor, type constructor, type synonym, type family
-  Decl ClassDec _          -> TClass
-  Decl DataDec _           -> TTypeCon
-  Decl ConDec _            -> TDataCon
-  Decl SynDec _            -> TTypeSyn
-  Decl FamDec _            -> TTypeFamily
+  Decl ClassDec _          -> Just TClass
+  Decl DataDec _           -> Just TTypeCon
+  Decl ConDec _            -> Just TDataCon
+  Decl SynDec _            -> Just TTypeSyn
+  Decl FamDec _            -> Just TTypeFamily
   -- instance dec is class method
-  Decl InstDec _           -> TClassMethod
-  Decl PatSynDec _         -> TPatternSyn
-  EvidenceVarUse           -> TNothing
-  EvidenceVarBind {}       -> TNothing
+  Decl InstDec _           -> Just TClassMethod
+  Decl PatSynDec _         -> Just TPatternSyn
+  EvidenceVarUse           -> Nothing
+  EvidenceVarBind {}       -> Nothing
 
 -- * 4. Mapping from LSP tokens to SemanticTokenOriginal.
 
@@ -172,7 +171,9 @@ recoverSemanticTokens sourceCode (SemanticTokens _ xs) = fmap (tokenOrigin sourc
 
     semanticTokenAbsoluteActualToken :: SemanticTokenAbsolute -> ActualToken
     semanticTokenAbsoluteActualToken (SemanticTokenAbsolute line startChar len tokenType _tokenModifiers) =
-      (line, startChar, len, fromLspTokenType tokenType, 0)
+        case fromLspTokenType tokenType of
+            Just t -> (line, startChar, len, t, 0)
+            Nothing -> error "semanticTokenAbsoluteActualToken: unknown token type"
 
     -- legends :: SemanticTokensLegend
     fromInt :: Int -> Maybe SemanticTokenTypes

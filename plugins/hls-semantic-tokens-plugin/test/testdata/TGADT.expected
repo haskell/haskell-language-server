@@ -1,13 +1,13 @@
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 5, _startChar = 6, _len = 3}, _name = "Lam"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 6, _startChar = 3, _len = 4}, _name = "Lift"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 6, _startChar = 11, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 6, _startChar = 36, _len = 3}, _name = "Lam"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 6, _startChar = 40, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 7, _startChar = 3, _len = 3}, _name = "Lam"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 7, _startChar = 12, _len = 3}, _name = "Lam"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 7, _startChar = 16, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 7, _startChar = 21, _len = 3}, _name = "Lam"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 7, _startChar = 25, _len = 1}, _name = "b"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 7, _startChar = 36, _len = 3}, _name = "Lam"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 7, _startChar = 41, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 7, _startChar = 46, _len = 1}, _name = "b"}
+5:6-9 TTypeCon "Lam"
+6:3-7 TDataCon "Lift"
+6:11-12 TTypeVariable "a"
+6:36-39 TTypeCon "Lam"
+6:40-41 TTypeVariable "a"
+7:3-6 TDataCon "Lam"
+7:12-15 TTypeCon "Lam"
+7:16-17 TTypeVariable "a"
+7:21-24 TTypeCon "Lam"
+7:25-26 TTypeVariable "b"
+7:36-39 TTypeCon "Lam"
+7:41-42 TTypeVariable "a"
+7:46-47 TTypeVariable "b"

@@ -1,7 +1,7 @@
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 4, _startChar = 6, _len = 3}, _name = "Foo"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 4, _startChar = 12, _len = 3}, _name = "Foo"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 4, _startChar = 16, _len = 3}, _name = "Int"}
-SemanticTokenOriginal {_tokenType = TClass, _loc = Loc {_line = 5, _startChar = 10, _len = 2}, _name = "Eq"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 5, _startChar = 13, _len = 3}, _name = "Foo"}
-SemanticTokenOriginal {_tokenType = TClassMethod, _loc = Loc {_line = 6, _startChar = 5, _len = 4}, _name = "(==)"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 6, _startChar = 12, _len = 9}, _name = "undefined"}
+4:6-9 TTypeCon "Foo"
+4:12-15 TDataCon "Foo"
+4:16-19 TTypeCon "Int"
+5:10-12 TClass "Eq"
+5:13-16 TTypeCon "Foo"
+6:5-9 TClassMethod "(==)"
+6:12-21 TFunction "undefined"

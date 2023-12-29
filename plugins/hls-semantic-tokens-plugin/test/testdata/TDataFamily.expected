@@ -1,12 +1,12 @@
-SemanticTokenOriginal {_tokenType = TTypeFamily, _loc = Loc {_line = 5, _startChar = 13, _len = 5}, _name = "XList"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 5, _startChar = 19, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TTypeFamily, _loc = Loc {_line = 8, _startChar = 15, _len = 5}, _name = "XList"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 8, _startChar = 21, _len = 4}, _name = "Char"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 8, _startChar = 28, _len = 5}, _name = "XCons"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 8, _startChar = 35, _len = 4}, _name = "Char"}
-SemanticTokenOriginal {_tokenType = TTypeFamily, _loc = Loc {_line = 8, _startChar = 42, _len = 5}, _name = "XList"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 8, _startChar = 48, _len = 4}, _name = "Char"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 8, _startChar = 56, _len = 4}, _name = "XNil"}
-SemanticTokenOriginal {_tokenType = TTypeFamily, _loc = Loc {_line = 11, _startChar = 15, _len = 5}, _name = "XList"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 11, _startChar = 26, _len = 9}, _name = "XListUnit"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 11, _startChar = 37, _len = 3}, _name = "Int"}
+5:13-18 TTypeFamily "XList"
+5:19-20 TTypeVariable "a"
+8:15-20 TTypeFamily "XList"
+8:21-25 TTypeCon "Char"
+8:28-33 TDataCon "XCons"
+8:35-39 TTypeCon "Char"
+8:42-47 TTypeFamily "XList"
+8:48-52 TTypeCon "Char"
+8:56-60 TDataCon "XNil"
+11:15-20 TTypeFamily "XList"
+11:26-35 TDataCon "XListUnit"
+11:37-40 TTypeCon "Int"

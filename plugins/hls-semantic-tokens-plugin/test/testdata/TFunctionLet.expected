@@ -1,5 +1,5 @@
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 3, _startChar = 1, _len = 1}, _name = "y"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 3, _startChar = 6, _len = 3}, _name = "Int"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 4, _startChar = 1, _len = 1}, _name = "y"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 4, _startChar = 9, _len = 1}, _name = "f"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 4, _startChar = 11, _len = 1}, _name = "x"}
+3:1-2 TVariable "y"
+3:6-9 TTypeCon "Int"
+4:1-2 TVariable "y"
+4:9-10 TFunction "f"
+4:11-12 TVariable "x"

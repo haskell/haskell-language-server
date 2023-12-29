@@ -1,81 +1,81 @@
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 6, _startChar = 18, _len = 3}, _name = "Set"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 6, _startChar = 23, _len = 6}, _name = "insert"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 9, _startChar = 6, _len = 3}, _name = "Foo"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 9, _startChar = 12, _len = 3}, _name = "Foo"}
-SemanticTokenOriginal {_tokenType = TRecField, _loc = Loc {_line = 9, _startChar = 18, _len = 3}, _name = "foo"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 9, _startChar = 25, _len = 3}, _name = "Int"}
-SemanticTokenOriginal {_tokenType = TClass, _loc = Loc {_line = 11, _startChar = 7, _len = 3}, _name = "Boo"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 11, _startChar = 11, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TClassMethod, _loc = Loc {_line = 12, _startChar = 3, _len = 3}, _name = "boo"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 12, _startChar = 10, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 12, _startChar = 15, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TClass, _loc = Loc {_line = 14, _startChar = 10, _len = 3}, _name = "Boo"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 14, _startChar = 14, _len = 3}, _name = "Int"}
-SemanticTokenOriginal {_tokenType = TClassMethod, _loc = Loc {_line = 15, _startChar = 5, _len = 3}, _name = "boo"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 15, _startChar = 9, _len = 1}, _name = "x"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 15, _startChar = 13, _len = 1}, _name = "x"}
-SemanticTokenOriginal {_tokenType = TClassMethod, _loc = Loc {_line = 15, _startChar = 15, _len = 1}, _name = "+"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 17, _startChar = 6, _len = 2}, _name = "Dd"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 17, _startChar = 11, _len = 2}, _name = "Dd"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 17, _startChar = 14, _len = 3}, _name = "Int"}
-SemanticTokenOriginal {_tokenType = TPatternSyn, _loc = Loc {_line = 19, _startChar = 9, _len = 3}, _name = "One"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 19, _startChar = 15, _len = 3}, _name = "Foo"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 21, _startChar = 1, _len = 3}, _name = "ggg"}
-SemanticTokenOriginal {_tokenType = TPatternSyn, _loc = Loc {_line = 21, _startChar = 7, _len = 3}, _name = "One"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 23, _startChar = 6, _len = 3}, _name = "Doo"}
-SemanticTokenOriginal {_tokenType = TDataCon, _loc = Loc {_line = 23, _startChar = 12, _len = 3}, _name = "Doo"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 23, _startChar = 16, _len = 11}, _name = "Prelude.Int"}
-SemanticTokenOriginal {_tokenType = TTypeSyn, _loc = Loc {_line = 24, _startChar = 6, _len = 4}, _name = "Bar1"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 24, _startChar = 13, _len = 3}, _name = "Int"}
-SemanticTokenOriginal {_tokenType = TTypeSyn, _loc = Loc {_line = 25, _startChar = 6, _len = 4}, _name = "Bar2"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 25, _startChar = 13, _len = 3}, _name = "Doo"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 27, _startChar = 1, _len = 2}, _name = "bb"}
-SemanticTokenOriginal {_tokenType = TClass, _loc = Loc {_line = 27, _startChar = 8, _len = 3}, _name = "Boo"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 27, _startChar = 12, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 27, _startChar = 18, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 27, _startChar = 23, _len = 1}, _name = "a"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 28, _startChar = 1, _len = 2}, _name = "bb"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 28, _startChar = 4, _len = 1}, _name = "x"}
-SemanticTokenOriginal {_tokenType = TClassMethod, _loc = Loc {_line = 28, _startChar = 9, _len = 3}, _name = "boo"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 28, _startChar = 13, _len = 1}, _name = "x"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 29, _startChar = 1, _len = 2}, _name = "aa"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 29, _startChar = 7, _len = 4}, _name = "cool"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 29, _startChar = 15, _len = 3}, _name = "Int"}
-SemanticTokenOriginal {_tokenType = TTypeVariable, _loc = Loc {_line = 29, _startChar = 22, _len = 4}, _name = "cool"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 30, _startChar = 1, _len = 2}, _name = "aa"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 30, _startChar = 4, _len = 1}, _name = "x"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 30, _startChar = 9, _len = 1}, _name = "c"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 30, _startChar = 14, _len = 2}, _name = "aa"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 30, _startChar = 17, _len = 1}, _name = "x"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 30, _startChar = 19, _len = 1}, _name = "c"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 31, _startChar = 12, _len = 2}, _name = "xx"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 31, _startChar = 16, _len = 2}, _name = "yy"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 32, _startChar = 11, _len = 2}, _name = "dd"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 34, _startChar = 2, _len = 2}, _name = "zz"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 34, _startChar = 6, _len = 2}, _name = "kk"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 35, _startChar = 1, _len = 2}, _name = "cc"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 35, _startChar = 7, _len = 3}, _name = "Foo"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 35, _startChar = 15, _len = 3}, _name = "Int"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 35, _startChar = 20, _len = 3}, _name = "Int"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 35, _startChar = 28, _len = 3}, _name = "Int"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 36, _startChar = 1, _len = 2}, _name = "cc"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 36, _startChar = 4, _len = 1}, _name = "f"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 36, _startChar = 7, _len = 2}, _name = "gg"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 36, _startChar = 11, _len = 2}, _name = "vv"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 37, _startChar = 10, _len = 2}, _name = "gg"}
-SemanticTokenOriginal {_tokenType = TRecField, _loc = Loc {_line = 38, _startChar = 14, _len = 3}, _name = "foo"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 38, _startChar = 18, _len = 1}, _name = "$"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 38, _startChar = 20, _len = 1}, _name = "f"}
-SemanticTokenOriginal {_tokenType = TRecField, _loc = Loc {_line = 38, _startChar = 24, _len = 3}, _name = "foo"}
-SemanticTokenOriginal {_tokenType = TRecField, _loc = Loc {_line = 39, _startChar = 14, _len = 3}, _name = "foo"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 39, _startChar = 18, _len = 1}, _name = "$"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 39, _startChar = 20, _len = 1}, _name = "f"}
-SemanticTokenOriginal {_tokenType = TRecField, _loc = Loc {_line = 39, _startChar = 24, _len = 3}, _name = "foo"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 41, _startChar = 1, _len = 2}, _name = "go"}
-SemanticTokenOriginal {_tokenType = TRecField, _loc = Loc {_line = 41, _startChar = 6, _len = 3}, _name = "foo"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 42, _startChar = 1, _len = 3}, _name = "add"}
-SemanticTokenOriginal {_tokenType = TClassMethod, _loc = Loc {_line = 42, _startChar = 7, _len = 11}, _name = "(Prelude.+)"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 47, _startChar = 1, _len = 4}, _name = "main"}
-SemanticTokenOriginal {_tokenType = TTypeCon, _loc = Loc {_line = 47, _startChar = 9, _len = 2}, _name = "IO"}
-SemanticTokenOriginal {_tokenType = TVariable, _loc = Loc {_line = 48, _startChar = 1, _len = 4}, _name = "main"}
-SemanticTokenOriginal {_tokenType = TFunction, _loc = Loc {_line = 48, _startChar = 8, _len = 8}, _name = "putStrLn"}
+6:18-21 TTypeCon "Set"
+6:23-29 TFunction "insert"
+9:6-9 TTypeCon "Foo"
+9:12-15 TDataCon "Foo"
+9:18-21 TRecField "foo"
+9:25-28 TTypeCon "Int"
+11:7-10 TClass "Boo"
+11:11-12 TTypeVariable "a"
+12:3-6 TClassMethod "boo"
+12:10-11 TTypeVariable "a"
+12:15-16 TTypeVariable "a"
+14:10-13 TClass "Boo"
+14:14-17 TTypeCon "Int"
+15:5-8 TClassMethod "boo"
+15:9-10 TVariable "x"
+15:13-14 TVariable "x"
+15:15-16 TClassMethod "+"
+17:6-8 TTypeCon "Dd"
+17:11-13 TDataCon "Dd"
+17:14-17 TTypeCon "Int"
+19:9-12 TPatternSyn "One"
+19:15-18 TDataCon "Foo"
+21:1-4 TVariable "ggg"
+21:7-10 TPatternSyn "One"
+23:6-9 TTypeCon "Doo"
+23:12-15 TDataCon "Doo"
+23:16-27 TTypeCon "Prelude.Int"
+24:6-10 TTypeSyn "Bar1"
+24:13-16 TTypeCon "Int"
+25:6-10 TTypeSyn "Bar2"
+25:13-16 TTypeCon "Doo"
+27:1-3 TFunction "bb"
+27:8-11 TClass "Boo"
+27:12-13 TTypeVariable "a"
+27:18-19 TTypeVariable "a"
+27:23-24 TTypeVariable "a"
+28:1-3 TFunction "bb"
+28:4-5 TVariable "x"
+28:9-12 TClassMethod "boo"
+28:13-14 TVariable "x"
+29:1-3 TFunction "aa"
+29:7-11 TTypeVariable "cool"
+29:15-18 TTypeCon "Int"
+29:22-26 TTypeVariable "cool"
+30:1-3 TFunction "aa"
+30:4-5 TVariable "x"
+30:9-10 TVariable "c"
+30:14-16 TFunction "aa"
+30:17-18 TVariable "x"
+30:19-20 TVariable "c"
+31:12-14 TVariable "xx"
+31:16-18 TVariable "yy"
+32:11-13 TVariable "dd"
+34:2-4 TVariable "zz"
+34:6-8 TVariable "kk"
+35:1-3 TFunction "cc"
+35:7-10 TTypeCon "Foo"
+35:15-18 TTypeCon "Int"
+35:20-23 TTypeCon "Int"
+35:28-31 TTypeCon "Int"
+36:1-3 TFunction "cc"
+36:4-5 TVariable "f"
+36:7-9 TVariable "gg"
+36:11-13 TVariable "vv"
+37:10-12 TVariable "gg"
+38:14-17 TRecField "foo"
+38:18-19 TFunction "$"
+38:20-21 TVariable "f"
+38:24-27 TRecField "foo"
+39:14-17 TRecField "foo"
+39:18-19 TFunction "$"
+39:20-21 TVariable "f"
+39:24-27 TRecField "foo"
+41:1-3 TFunction "go"
+41:6-9 TRecField "foo"
+42:1-4 TFunction "add"
+42:7-18 TClassMethod "(Prelude.+)"
+47:1-5 TVariable "main"
+47:9-11 TTypeCon "IO"
+48:1-5 TVariable "main"
+48:8-16 TFunction "putStrLn"
