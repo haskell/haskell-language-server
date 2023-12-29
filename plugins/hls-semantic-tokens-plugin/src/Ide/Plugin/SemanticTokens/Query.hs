@@ -119,8 +119,8 @@ extractSemanticTokensFromNames nsm =
             in SemanticTokenAbsolute (fromIntegral startLine) (fromIntegral startColumn)
                 (fromIntegral len) <$> toLspTokenType tokenType <*> return []
         getSemantic nameMap (span, name) = do
-            let tokenType = lookupNameEnv nameMap name
-            fmap (span,) tokenType
+            tokenType <- lookupNameEnv nameMap name
+            pure (span, tokenType)
 
 
 
