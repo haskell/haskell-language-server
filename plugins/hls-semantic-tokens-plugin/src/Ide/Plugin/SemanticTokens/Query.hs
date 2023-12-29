@@ -13,10 +13,10 @@ import           Data.Generics                      (everything)
 import qualified Data.List                          as List
 import qualified Data.List.NonEmpty                 as NE
 -- import HieDb.Types (DefRow (..))
+import           Data.Foldable                      (fold)
 import qualified Data.Map                           as M
 import qualified Data.Map                           as Map
-import           Data.Maybe                         (catMaybes, listToMaybe,
-                                                     mapMaybe)
+import           Data.Maybe                         (listToMaybe, mapMaybe)
 import qualified Data.Set                           as S
 import qualified Data.Set                           as Set
 import           Data.Text                          (Text)
@@ -68,12 +68,10 @@ nameNameSemanticFromHie hieKind rm ns = do
       let infos = S.unions $ map (identInfo . snd) spanInfos
       let typeTokenType = fmap (typeSemantic hieKind) $ listToMaybe $ mapMaybe (identType . snd) spanInfos
       let contextInfoTokenType = contextInfosMaybeTokenType infos
-      maximum <$> NE.nonEmpty (catMaybes [typeTokenType, contextInfoTokenType])
+      fold [typeTokenType, contextInfoTokenType]
 
     contextInfosMaybeTokenType :: Set.Set ContextInfo -> Maybe HsSemanticTokenType
-    contextInfosMaybeTokenType details = case NE.nonEmpty $ Set.toList details of
-      Just infos -> maximum $ NE.map infoTokenType infos
-      Nothing    -> Nothing
+    contextInfosMaybeTokenType details = foldMap infoTokenType (Set.toList details)
 
 -----------------------------------
 
@@ -81,28 +79,22 @@ nameNameSemanticFromHie hieKind rm ns = do
 
 -----------------------------------
 
-hieAstSpanNames :: NameSet -> HieAST a -> [(Range, Name)]
-hieAstSpanNames nameSet ast =
+hieAstSpanNames :: HieAST a -> M.Map Range NameSet
+hieAstSpanNames ast =
   if null (nodeChildren ast)
     then getIds ast
-    else concatMap (hieAstSpanNames nameSet) (nodeChildren ast)
+    else M.unionsWith unionNameSet $ map hieAstSpanNames (nodeChildren ast)
   where
-    getIds :: HieAST a -> [(Range, Name)]
-    getIds ast' =
-      [ (realSrcSpanToRange $ nodeSpan ast', c)
-        | (Right c) <- S.toList $ getNodeIds' ast,
-          elemNameSet c nameSet
-      ]
-    getNodeIds' :: HieAST a -> S.Set Identifier
+    getIds ast' =  M.singleton (realSrcSpanToRange $ nodeSpan ast') (getNodeIds' ast')
     getNodeIds' =
       Map.foldl' combineNodeIds mempty
         . Map.filterWithKey (\k _ -> k == SourceInfo)
         . getSourcedNodeInfo
         . sourcedNodeInfo
-    combineNodeIds :: S.Set Identifier -> NodeInfo a -> S.Set Identifier
-    ad `combineNodeIds` (NodeInfo _ _ bd) = ad `S.union` xs
-      where
-        xs = M.keysSet bd
+    combineNodeIds :: NameSet -> NodeInfo a -> NameSet
+    ad `combineNodeIds` (NodeInfo _ _ bd) = ad `unionNameSet` xs
+      where xs =  mkNameSet $ rights $ M.keys bd
+
 
 -------------------------------------------------
 
@@ -123,13 +115,6 @@ semanticTokenAbsoluteSemanticTokens = makeSemanticTokens defaultSemanticTokensLe
             (toLspTokenType tokenType)
             []
 
-extractSemanticTokensFromNames :: NameSemanticMap -> [(Range, Name)] -> [(Range, HsSemanticTokenType)]
-extractSemanticTokensFromNames nsm = mergeNameFromSamSpan . mapMaybe (getSemantic nsm)
-  where
-    -- merge all tokens with same span
-    -- mergeNameFromSamSpan :: [(Span, SemanticTokenType)] -> [(Span, SemanticTokenType)]
-    mergeNameFromSamSpan xs = Map.toList $ Map.fromListWith (<>) xs
-
-    getSemantic nameMap (span, name) = do
-      tokenType <- lookupNameEnv nameMap name
-      pure (span, tokenType)
+extractSemanticTokensFromNames :: NameSemanticMap -> M.Map Range NameSet -> [(Range, HsSemanticTokenType)]
+extractSemanticTokensFromNames nsm rnMap = xs
+    where xs = mapMaybe sequence (Map.toList $ Map.map (foldMap (lookupNameEnv nsm) . nameSetElemsStable) rnMap)

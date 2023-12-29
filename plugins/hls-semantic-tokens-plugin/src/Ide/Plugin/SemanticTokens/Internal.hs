@@ -16,7 +16,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, persistentSemanticMapRule) where
+module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, persistentGetSemanticTokensRule) where
 
 import           Control.Lens                         ((^.))
 import           Control.Monad.Except                 (ExceptT, MonadError (..),
@@ -96,29 +96,26 @@ semanticTokensFull state _ param = do
 getSemanticTokensRule :: Recorder (WithPriority Log) -> Rules ()
 getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> do
-    (TcModuleResult {..}) <- use_ TypeCheck nfp
     (hscEnv -> hsc) <- use_ GhcSessionDeps nfp
     (HAR {..}) <- use_ GetHieAst nfp
     Just (_, ast) <- return $ listToMaybe $ Map.toList $ getAsts hieAst
-    let nameSet = nameGetter tmrRenamed
-    -- get imported name semantic map
-    importedNameSemanticMap <- liftIO $ foldrM (getTypeExclude (tcg_type_env tmrTypechecked) hsc) emptyNameEnv $ nameSetElemsStable nameSet
     -- get current location from the old ones
-    let spanNames = hieAstSpanNames nameSet ast
+    let spanNamesMap = hieAstSpanNames ast
+    let nameSet = unionNameSets $ Map.elems spanNamesMap
+    -- get imported name semantic map
+    importedNameSemanticMap <- liftIO $ foldrM (getTypeExclude hsc) emptyNameEnv $ nameSetElemsStable nameSet
     let sMap = plusNameEnv_C (<>) importedNameSemanticMap $ mkLocalNameSemanticFromAst hieKind refMap
-    let rangeTokenType = extractSemanticTokensFromNames sMap spanNames
+    let rangeTokenType = extractSemanticTokensFromNames sMap spanNamesMap
     return ([], Just $ RangeHsSemanticTokenTypes rangeTokenType)
     where
         -- ignore one already in current module
-        getTypeExclude localMap env n nameMap
-            | Nothing <- lookupNameEnv localMap n =
+        getTypeExclude env n nameMap =
                 do  tyThing <- lookupImported env n
                     pure $ maybe nameMap (extendNameEnv nameMap n) (tyThing >>= tyThingSemantic)
-            | otherwise = pure nameMap
         lookupImported :: HscEnv -> Name -> IO (Maybe TyThing)
         lookupImported env = fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env
 
 
 -- | Persistent rule to ensure that semantic tokens doesn't block on startup
-persistentSemanticMapRule :: Rules ()
-persistentSemanticMapRule = addPersistentRule GetSemanticTokens $ \_ -> pure $ Just (RangeHsSemanticTokenTypes mempty, idDelta, Nothing)
+persistentGetSemanticTokensRule :: Rules ()
+persistentGetSemanticTokensRule = addPersistentRule GetSemanticTokens $ \_ -> pure $ Just (RangeHsSemanticTokenTypes mempty, idDelta, Nothing)
