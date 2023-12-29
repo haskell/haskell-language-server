@@ -32,23 +32,35 @@ It should be implemented in the future.
   * [ ] [textDocument/semanticTokens/full/delta](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#semanticTokens_deltaRequest)
   * [ ] [workspace/semanticTokens/refresh](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#semanticTokens_refreshRequest)
 
-* Supported semantic tokens:
+* Supported semantic tokens type:
   * [x] class and class method
-  * [x] type family name
-  * [x] data constructor name (not distinguishing record and normal data)
-  * [x] type constructor name
+  * [x] type family name (data family)
+  * [x] data constructor name (not distinguishing record and normal data, and GADT)
+  * [x] type constructor name (GADT)
   * [x] record field name
   * [x] type synonym
   * [x] pattern synonym
-  * [x] pattern bindings (map to parameters in standard token)
-  * [x] value bindings (map to functions in standard token)
+  * [x] ~~pattern bindings~~ In favor of differing functions and none-functions from its type
+  * [x] ~~value bindings~~ In favor of differing functions and none-functions from its type
+  * [x] functions
+  * [x] none-function variables
   * [x] imported name
 
-* Supported modifiers:
-  * [ ] declaration (as in class declarations and type family)
-  * [ ] definition (as in class instance declaration and type family instance)
-  * [ ] modification (as in rec field update)
+* Supported modifiers(planning):
+  * [future] declaration (as in class declearations, type definition and type family)
+  * [future] definition (as in class instance declaration, left hand side value binding, and type family instance)
+  * [future] modification (as in rec field update)
 
-## Semantic highlighting sample
+## Implementation details
 
-![semantic highlighting sample](https://private-user-images.githubusercontent.com/14073857/290981908-9619fae2-cb92-4d4e-b8f8-6507851ba9f3.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTEiLCJleHAiOjE3MDMyOTAzMjcsIm5iZiI6MTcwMzI5MDAyNywicGF0aCI6Ii8xNDA3Mzg1Ny8yOTA5ODE5MDgtOTYxOWZhZTItY2I5Mi00ZDRlLWI4ZjgtNjUwNzg1MWJhOWYzLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFJV05KWUFYNENTVkVINTNBJTJGMjAyMzEyMjMlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjMxMjIzVDAwMDcwN1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTNiODU1MTBhNTRhNTFhNmYzZjRjYTM1MzViZjNhMDgwYTZiODk3OTA4YzFmMTQ1ZjhhNDcyYWMyMjFlMDQwMDYmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0._lgQ0lAGUD5nUkRx_s2rWxTS81ezqKr71ad2fWHGDfk)
+* [x] Compute visible names from renamedsource
+* [x] Compute `NameSemanticMap` for imported and top level name tokens using `HscEnv`(with deps) and type checked result
+* [x] Compute current module `NameSemanticMap` using `RefMap a` from the result of `GetHieAst`
+* [x] Compute all visible `(Name, Span)` in current module, in turn compute their semantic token using the combination map of the above two `NameSemanticMap`
+* [x] use default legends, Candidates map of token type with default token type: [Maps to default token types](https://github.com/soulomoon/haskell-language-server/blob/master/plugins/hls-semantic-tokens-plugin/src/Ide/Plugin/SemanticTokens/Mappings.hs)
+* [x] add args support to turn the plugin on and off
+* [x] enhence test <https://github.com/haskell/haskell-language-server/pull/3892#discussion_r1427844520>
+* [x] enhence error reporting. <https://github.com/haskell/haskell-language-server/pull/3892#discussion_r1427955335>
+* [x] computation of semantic tokens is pushed into rule `getSemanticTokensRule`
+* [future] make use of modifiers
+* [future] hadling customize legends using server capabilities (how?)

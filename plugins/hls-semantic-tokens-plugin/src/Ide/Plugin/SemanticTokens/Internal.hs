@@ -68,17 +68,6 @@ logWith st prior = liftIO . logPriority (ideLogger st) prior . T.pack
 ---- the api
 -----------------------
 
--- | Compute semantic tokens for a Haskell source file.
---
--- This function collects information from various sources, including:
---
--- Imported name token type from Rule 'GetSemanticTokens'
--- Local names token type from 'hieAst'
--- Name locations from 'hieAst'
--- Visible names from 'tmrRenamed'
---
--- It then combines this information to compute the semantic tokens for the file.
---
 computeSemanticTokens :: IdeState -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
 computeSemanticTokens state nfp = do
     let dbg = logWith state Debug
@@ -93,10 +82,17 @@ semanticTokensFull state _ param = do
   items <- runActionE "SemanticTokens.semanticTokensFull" state $ computeSemanticTokens state nfp
   return $ InL items
 
--- x :: Int -> Int
--- x i = x i
-
--- | Defines the 'getSemanticTokensRule' function, which is used to record semantic tokens for imported names.
+-- | Defines the 'getSemanticTokensRule' function, compute semantic tokens for a Haskell source file.
+--
+-- This Rule collects information from various sources, including:
+--
+-- Imported name token type from Rule 'GetSemanticTokens'
+-- Local names token type from 'hieAst'
+-- Name locations from 'hieAst'
+-- Visible names from 'tmrRenamed'
+--
+-- It then combines this information to compute the semantic tokens for the file.
+--
 getSemanticTokensRule :: Recorder (WithPriority Log) -> Rules ()
 getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> do
