@@ -87,30 +87,22 @@ hieAstSpanNames nameSet ast =
     then getIds ast
     else concatMap (hieAstSpanNames nameSet) (nodeChildren ast)
   where
-    -- getIds :: HieAST a -> [(Span, Name)]
+    getIds :: HieAST a -> [(Range, Name)]
     getIds ast' =
       [ (realSrcSpanToRange $ nodeSpan ast', c)
-        | (Right c, d) <- Map.toList $ getNodeIds' ast,
-          elemNameSet c nameSet,
-          -- at least get one info
-          not $ any isEvidenceBind $ identInfo d,
-          not $ any isEvidenceUse $ identInfo d,
-          Set.size (identInfo d) > 0
-          -- some derived occName is visible (some fields)
-          -- , not $ isDerivedOccName (occName c)
+        | (Right c) <- S.toList $ getNodeIds' ast,
+          elemNameSet c nameSet
       ]
-    getNodeIds' :: HieAST a -> Map.Map Identifier (IdentifierDetails a)
+    getNodeIds' :: HieAST a -> S.Set Identifier
     getNodeIds' =
-      Map.foldl' combineNodeIds Map.empty
+      Map.foldl' combineNodeIds mempty
         . Map.filterWithKey (\k _ -> k == SourceInfo)
         . getSourcedNodeInfo
         . sourcedNodeInfo
-
-    combineNodeIds ::
-      Map.Map Identifier (IdentifierDetails a) ->
-      NodeInfo a ->
-      Map.Map Identifier (IdentifierDetails a)
-    ad `combineNodeIds` (NodeInfo _ _ bd) = Map.unionWith (<>) ad bd
+    combineNodeIds :: S.Set Identifier -> NodeInfo a -> S.Set Identifier
+    ad `combineNodeIds` (NodeInfo _ _ bd) = ad `S.union` xs
+      where
+        xs = M.keysSet bd
 
 -------------------------------------------------
 
