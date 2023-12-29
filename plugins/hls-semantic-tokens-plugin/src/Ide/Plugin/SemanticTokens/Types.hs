@@ -40,7 +40,6 @@ data SemanticTokenOriginal = SemanticTokenOriginal
   }
   deriving (Eq, Ord)
 
--- 6:23-6:29 TFunction "insert"
 --
 instance Show SemanticTokenOriginal where
   show (SemanticTokenOriginal tk loc name) = show loc <> " " <> show tk <> " " <> show name
@@ -57,19 +56,19 @@ instance Show Loc where
 
 type NameSemanticMap = NameEnv HsSemanticTokenType
 
-data GetGlobalNameSemantic = GetGlobalNameSemantic
+data GetSemanticTokens = GetSemanticTokens
   deriving (Eq, Show, Typeable, Generic)
 
-instance Hashable GetGlobalNameSemantic
+instance Hashable GetSemanticTokens
 
-instance NFData GetGlobalNameSemantic
+instance NFData GetSemanticTokens
 
-data GlobalTokenTypeMap = GTTMap {importedNameSemanticMap :: !NameSemanticMap}
+data RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {tokens :: [(Range, HsSemanticTokenType)]}
 
-instance NFData GlobalTokenTypeMap where
-  rnf (GTTMap a) = rwhnf a
+instance NFData RangeHsSemanticTokenTypes where
+  rnf (RangeHsSemanticTokenTypes a) = rwhnf a
 
-instance Show GlobalTokenTypeMap where
+instance Show RangeHsSemanticTokenTypes where
   show = const "GlobalNameMap"
 
-type instance RuleResult GetGlobalNameSemantic = GlobalTokenTypeMap
+type instance RuleResult GetSemanticTokens = RangeHsSemanticTokenTypes

@@ -50,23 +50,17 @@ toLspTokenType tk = case tk of
   TTypeSyn      -> SemanticTokenTypes_Type
   -- not sure if this is correct choice
   TTypeFamily   -> SemanticTokenTypes_Interface
+
 --   TNothing      -> Nothing
 
 lspTokenReverseMap :: Map.Map SemanticTokenTypes HsSemanticTokenType
-lspTokenReverseMap = Map.fromList $ map (\x -> (toLspTokenType x,x)) $ enumFrom minBound
+lspTokenReverseMap = Map.fromList $ map (\x -> (toLspTokenType x, x)) $ enumFrom minBound
 
 fromLspTokenType :: SemanticTokenTypes -> Maybe HsSemanticTokenType
 fromLspTokenType tk = Map.lookup tk lspTokenReverseMap
 
 -- * 2. Mapping from GHC type and tyThing to semantic token type.
 
-toTokenType :: Name -> HsSemanticTokenType
-toTokenType locName = case occNameSpace $ occName locName of
-  x | isDataConNameSpace x -> TDataCon
-  x | isTvNameSpace x      -> TTypeVariable
-  x | isTcClsNameSpace x   -> TTypeCon -- Type constructors and classes in the same name space for now
-  x | isVarNameSpace x     -> TVariable
-  _                        -> TVariable
 
 -- | tyThingSemantic
 tyThingSemantic :: TyThing -> Maybe HsSemanticTokenType
@@ -94,8 +88,8 @@ tyThingSemantic ty = case ty of
 
 isFunType :: Type -> Bool
 isFunType a = case a of
-    ForAllTy _ t -> isFunType t
-    _x           -> isFunTy a
+  ForAllTy _ t -> isFunType t
+  _x           -> isFunTy a
 
 typeSemantic :: HieKind hType -> hType -> HsSemanticTokenType
 typeSemantic kind t = case kind of
@@ -171,9 +165,9 @@ recoverSemanticTokens sourceCode (SemanticTokens _ xs) = fmap (tokenOrigin sourc
 
     semanticTokenAbsoluteActualToken :: SemanticTokenAbsolute -> ActualToken
     semanticTokenAbsoluteActualToken (SemanticTokenAbsolute line startChar len tokenType _tokenModifiers) =
-        case fromLspTokenType tokenType of
-            Just t -> (line, startChar, len, t, 0)
-            Nothing -> error "semanticTokenAbsoluteActualToken: unknown token type"
+      case fromLspTokenType tokenType of
+        Just t  -> (line, startChar, len, t, 0)
+        Nothing -> error "semanticTokenAbsoluteActualToken: unknown token type"
 
     -- legends :: SemanticTokensLegend
     fromInt :: Int -> Maybe SemanticTokenTypes

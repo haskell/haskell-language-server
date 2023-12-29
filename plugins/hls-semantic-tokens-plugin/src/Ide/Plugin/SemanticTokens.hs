@@ -14,7 +14,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId "Provides semantic toke
     { Ide.Types.pluginHandlers =
         mkPluginHandler SMethod_TextDocumentSemanticTokensFull Internal.semanticTokensFull
       , Ide.Types.pluginRules =
-        Internal.getImportedNameSemanticRule recorder
+        Internal.getSemanticTokensRule recorder
         <> Internal.persistentSemanticMapRule
     }
 

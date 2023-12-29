@@ -16,7 +16,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getImportedNameSemanticRule, persistentSemanticMapRule) where
+module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, persistentSemanticMapRule) where
 
 import           Control.Lens                         ((^.))
 import           Control.Monad.Except                 (ExceptT, MonadError (..),
@@ -38,7 +38,7 @@ import           Development.IDE                      (Action,
                                                        cmapWithPrio, define,
                                                        hieKind, ideLogger,
                                                        logPriority,
-                                                       useWithStale_)
+                                                       useWithStale_, use_)
 import           Development.IDE.Core.Compile         (TcModuleResult (..),
                                                        lookupName)
 import           Development.IDE.Core.PluginUtils     (runActionE,
@@ -64,9 +64,6 @@ import           Prelude                              hiding (span)
 logWith :: (MonadIO m) => IdeState -> Priority -> String -> m ()
 logWith st prior = liftIO . logPriority (ideLogger st) prior . T.pack
 
-liftMaybeEither :: (MonadError e m) => e -> Maybe a -> m a
-liftMaybeEither e = liftEither . maybe (Left e) Right
-
 -----------------------
 ---- the api
 -----------------------
@@ -75,7 +72,7 @@ liftMaybeEither e = liftEither . maybe (Left e) Right
 --
 -- This function collects information from various sources, including:
 --
--- Imported name token type from Rule 'GetGlobalNameSemantic'
+-- Imported name token type from Rule 'GetSemanticTokens'
 -- Local names token type from 'hieAst'
 -- Name locations from 'hieAst'
 -- Visible names from 'tmrRenamed'
@@ -86,21 +83,9 @@ computeSemanticTokens :: IdeState -> NormalizedFilePath -> ExceptT PluginError A
 computeSemanticTokens state nfp = do
     let dbg = logWith state Debug
     dbg $ "Computing semantic tokens for: " <> show nfp
-    (HAR {..}, mapping) <- useWithStaleE GetHieAst nfp
-    (TcModuleResult {..}, _) <- useWithStaleE TypeCheck nfp
-    (GTTMap {importedNameSemanticMap}, _) <- useWithStaleE GetGlobalNameSemantic nfp
-    (_, ast) <-
-        liftMaybeEither
-          (PluginRuleFailed $ "hieAst does not contains ast for:" <> T.pack (show nfp))
-        $ listToMaybe
-        $ Map.toList
-        $ getAsts hieAst
-    let nameSet = nameGetter tmrRenamed
-    -- get current location from the old ones
-    let spanNames = mapMaybe (\(span, name) -> (,name) <$> toCurrentRange mapping span) $ hieAstSpanNames nameSet ast
-    let sMap = plusNameEnv_C (<>) importedNameSemanticMap $ mkLocalNameSemanticFromAst hieKind refMap
-    let moduleAbsTks = extractSemanticTokensFromNames sMap spanNames
-    withExceptT PluginInternalError $ liftEither $ semanticTokenAbsoluteSemanticTokens moduleAbsTks
+    (RangeHsSemanticTokenTypes {tokens}, mapping) <- useWithStaleE GetSemanticTokens nfp
+    let rangeTokens = mapMaybe (\(span, name) -> (,name) <$> toCurrentRange mapping span) tokens
+    withExceptT PluginInternalError $ liftEither $ semanticTokenAbsoluteSemanticTokens rangeTokens
 
 semanticTokensFull :: PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull state _ param = do
@@ -108,15 +93,25 @@ semanticTokensFull state _ param = do
   items <- runActionE "SemanticTokens.semanticTokensFull" state $ computeSemanticTokens state nfp
   return $ InL items
 
--- | Defines the 'getImportedNameSemanticRule' function, which is used to record semantic tokens for imported names.
-getImportedNameSemanticRule :: Recorder (WithPriority Log) -> Rules ()
-getImportedNameSemanticRule recorder =
-  define (cmapWithPrio LogShake recorder) $ \GetGlobalNameSemantic nfp -> do
-    (TcModuleResult {..}, _) <- useWithStale_ TypeCheck nfp
-    (hscEnv -> hsc, _) <- useWithStale_ GhcSessionDeps nfp
+-- x :: Int -> Int
+-- x i = x i
+
+-- | Defines the 'getSemanticTokensRule' function, which is used to record semantic tokens for imported names.
+getSemanticTokensRule :: Recorder (WithPriority Log) -> Rules ()
+getSemanticTokensRule recorder =
+  define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> do
+    (TcModuleResult {..}) <- use_ TypeCheck nfp
+    (hscEnv -> hsc) <- use_ GhcSessionDeps nfp
+    (HAR {..}) <- use_ GetHieAst nfp
+    Just (_, ast) <- return $ listToMaybe $ Map.toList $ getAsts hieAst
     let nameSet = nameGetter tmrRenamed
-    tm <- liftIO $ foldrM (getTypeExclude (tcg_type_env tmrTypechecked) hsc) emptyNameEnv $ nameSetElemsStable nameSet
-    return ([], Just $ GTTMap tm)
+    -- get imported name semantic map
+    importedNameSemanticMap <- liftIO $ foldrM (getTypeExclude (tcg_type_env tmrTypechecked) hsc) emptyNameEnv $ nameSetElemsStable nameSet
+    -- get current location from the old ones
+    let spanNames = hieAstSpanNames nameSet ast
+    let sMap = plusNameEnv_C (<>) importedNameSemanticMap $ mkLocalNameSemanticFromAst hieKind refMap
+    let rangeTokenType = extractSemanticTokensFromNames sMap spanNames
+    return ([], Just $ RangeHsSemanticTokenTypes rangeTokenType)
     where
         -- ignore one already in current module
         getTypeExclude localMap env n nameMap
@@ -130,4 +125,4 @@ getImportedNameSemanticRule recorder =
 
 -- | Persistent rule to ensure that semantic tokens doesn't block on startup
 persistentSemanticMapRule :: Rules ()
-persistentSemanticMapRule = addPersistentRule GetGlobalNameSemantic $ \_ -> pure $ Just (GTTMap mempty, idDelta, Nothing)
+persistentSemanticMapRule = addPersistentRule GetSemanticTokens $ \_ -> pure $ Just (RangeHsSemanticTokenTypes mempty, idDelta, Nothing)
