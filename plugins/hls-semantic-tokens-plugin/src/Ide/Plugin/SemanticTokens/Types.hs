@@ -15,7 +15,7 @@ import           Language.LSP.Protocol.Types
 -- !!!! order of declarations matters deriving enum and ord
 -- since token may come from different source and we want to keep the most specific one
 -- and we might want to merge them.
-data SemanticTokenType
+data HsSemanticTokenType
   = TVariable -- none function variable
   | TFunction -- function
   | TDataCon -- Data constructor
@@ -29,12 +29,12 @@ data SemanticTokenType
   | TRecField -- from match bind
   deriving (Eq, Ord, Show, Enum, Bounded)
 
-instance Semigroup SemanticTokenType where
+instance Semigroup HsSemanticTokenType where
   -- one in higher enum is more specific
   a <> b = max a b
 
 data SemanticTokenOriginal = SemanticTokenOriginal
-  { _tokenType :: SemanticTokenType,
+  { _tokenType :: HsSemanticTokenType,
     _loc       :: Loc,
     _name      :: String
   }
@@ -55,7 +55,7 @@ data Loc = Loc
 instance Show Loc where
   show (Loc line startChar len) = show line <> ":" <> show startChar <> "-" <> show (startChar + len)
 
-type NameSemanticMap = NameEnv SemanticTokenType
+type NameSemanticMap = NameEnv HsSemanticTokenType
 
 data GetGlobalNameSemantic = GetGlobalNameSemantic
   deriving (Eq, Show, Typeable, Generic)

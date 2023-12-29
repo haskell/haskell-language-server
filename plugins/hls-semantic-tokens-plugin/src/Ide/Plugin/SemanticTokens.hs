@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Ide.Plugin.SemanticTokens (descriptor) where
 
-import           Data.List
 import           Development.IDE
 import           Development.IDE.Core.Rules         (Log)
 import qualified Ide.Plugin.SemanticTokens.Internal as Internal

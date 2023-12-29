@@ -24,8 +24,8 @@ import           Generics.SYB                       (mkQ)
 import qualified Data.Map                           as M
 import qualified Data.Set                           as S
 import           Ide.Plugin.SemanticTokens.Mappings
-import           Ide.Plugin.SemanticTokens.Types    (NameSemanticMap,
-                                                     SemanticTokenType)
+import           Ide.Plugin.SemanticTokens.Types    (HsSemanticTokenType,
+                                                     NameSemanticMap)
 import           Language.LSP.Protocol.Types
 import           Prelude                            hiding (span)
 
@@ -48,14 +48,14 @@ nameGetter =  everything unionNameSet (emptyNameSet `mkQ` nameToCollect)
 mkLocalNameSemanticFromAst :: HieKind a -> RefMap a -> NameSemanticMap
 mkLocalNameSemanticFromAst hieKind rm = mkNameEnv (mapMaybe (nameNameSemanticFromHie hieKind rm) ns)
     where ns = rights $ M.keys rm
-nameNameSemanticFromHie :: forall a. HieKind a -> RefMap a -> Name -> Maybe (Name,SemanticTokenType)
+nameNameSemanticFromHie :: forall a. HieKind a -> RefMap a -> Name -> Maybe (Name,HsSemanticTokenType)
 nameNameSemanticFromHie hieKind rm ns = do
     st <- -- traceShow ("to find Name", showName ns) $
         nameSemanticFromRefMap rm ns
     return -- $ traceShow (showName ns, st)
            (ns, st)
     where
-        nameSemanticFromRefMap :: RefMap a -> Name -> Maybe SemanticTokenType
+        nameSemanticFromRefMap :: RefMap a -> Name -> Maybe HsSemanticTokenType
         nameSemanticFromRefMap rm' name' = do
             spanInfos <- -- traceShow ("getting spans:", nameString) $
                  Map.lookup (Right name') rm'
@@ -64,7 +64,7 @@ nameNameSemanticFromHie hieKind rm ns = do
             let contextInfoTokenType = contextInfosMaybeTokenType infos
             maximum <$> NE.nonEmpty (catMaybes [typeTokenType, contextInfoTokenType])
 
-        contextInfosMaybeTokenType :: Set.Set ContextInfo -> Maybe SemanticTokenType
+        contextInfosMaybeTokenType :: Set.Set ContextInfo -> Maybe HsSemanticTokenType
         contextInfosMaybeTokenType details = case NE.nonEmpty $ Set.toList details of
             Just infos -> maximum $ NE.map infoTokenType infos
             Nothing    -> Nothing
@@ -113,7 +113,7 @@ extractSemanticTokensFromNames nsm =
         -- mergeNameFromSamSpan :: [(Span, SemanticTokenType)] -> [(Span, SemanticTokenType)]
         mergeNameFromSamSpan xs = Map.toList $ Map.fromListWith (<>) xs
 
-        toAbsSemanticToken :: Range -> SemanticTokenType -> SemanticTokenAbsolute
+        toAbsSemanticToken :: Range -> HsSemanticTokenType -> SemanticTokenAbsolute
         toAbsSemanticToken (Range (Position startLine startColumn) (Position _endLine endColumn)) tokenType =
             let len = endColumn - startColumn
             in SemanticTokenAbsolute (fromIntegral startLine) (fromIntegral startColumn)

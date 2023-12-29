@@ -29,7 +29,7 @@ import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
 -- * 1. Mapping semantic token type to and from the LSP default token type.
 
 -- | map from haskell semantic token type to LSP default token type
-toLspTokenType :: SemanticTokenType -> SemanticTokenTypes
+toLspTokenType :: HsSemanticTokenType -> SemanticTokenTypes
 toLspTokenType tk = case tk of
   -- TVariable     -> SemanticTokenTypes_Variable
   -- left hand side of none pattern bind
@@ -52,15 +52,15 @@ toLspTokenType tk = case tk of
   TTypeFamily   -> SemanticTokenTypes_Interface
 --   TNothing      -> Nothing
 
-lspTokenReverseMap :: Map.Map SemanticTokenTypes SemanticTokenType
+lspTokenReverseMap :: Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap = Map.fromList $ map (\x -> (toLspTokenType x,x)) $ enumFrom minBound
 
-fromLspTokenType :: SemanticTokenTypes -> Maybe SemanticTokenType
+fromLspTokenType :: SemanticTokenTypes -> Maybe HsSemanticTokenType
 fromLspTokenType tk = Map.lookup tk lspTokenReverseMap
 
 -- * 2. Mapping from GHC type and tyThing to semantic token type.
 
-toTokenType :: Name -> SemanticTokenType
+toTokenType :: Name -> HsSemanticTokenType
 toTokenType locName = case occNameSpace $ occName locName of
   x | isDataConNameSpace x -> TDataCon
   x | isTvNameSpace x      -> TTypeVariable
@@ -69,7 +69,7 @@ toTokenType locName = case occNameSpace $ occName locName of
   _                        -> TVariable
 
 -- | tyThingSemantic
-tyThingSemantic :: TyThing -> Maybe SemanticTokenType
+tyThingSemantic :: TyThing -> Maybe HsSemanticTokenType
 tyThingSemantic ty = case ty of
   AnId vid
     | isTyVar vid -> Just TTypeVariable
@@ -97,7 +97,7 @@ isFunType a = case a of
     ForAllTy _ t -> isFunType t
     _x           -> isFunTy a
 
-typeSemantic :: HieKind hType -> hType -> SemanticTokenType
+typeSemantic :: HieKind hType -> hType -> HsSemanticTokenType
 typeSemantic kind t = case kind of
   HieFresh -> if isFunType t then TFunction else TVariable
   HieFromDisk full_file ->
@@ -116,7 +116,7 @@ typeSemantic kind t = case kind of
 
 -- * 3. Mapping from hieAst ContextInfo to haskell semantic token type.
 
-infoTokenType :: ContextInfo -> Maybe SemanticTokenType
+infoTokenType :: ContextInfo -> Maybe HsSemanticTokenType
 infoTokenType x = case x of
   Use                      -> Nothing
   MatchBind                -> Nothing
@@ -143,7 +143,7 @@ infoTokenType x = case x of
 -- * 4. Mapping from LSP tokens to SemanticTokenOriginal.
 
 -- | line, startChar, len, tokenType, modifiers
-type ActualToken = (UInt, UInt, UInt, SemanticTokenType, UInt)
+type ActualToken = (UInt, UInt, UInt, HsSemanticTokenType, UInt)
 
 -- | recoverSemanticTokens
 -- for debug and test.
