@@ -1,5 +1,8 @@
 module Test.Hls.Command
-  ( hlsCommand
+  ( hlsExeCommand
+  , hlsLspCommand
+  , hlsWrapperLspCommand
+  , hlsWrapperExeCommand
   )
 where
 
@@ -12,8 +15,20 @@ import           System.IO.Unsafe   (unsafePerformIO)
 -- Both @stack test@ and @cabal new-test@ setup the environment so @hls@ is
 -- on PATH. Cabal seems to respond to @build-tool-depends@ specifically while
 -- stack just puts all project executables on PATH.
-hlsCommand :: String
-{-# NOINLINE hlsCommand #-}
-hlsCommand = unsafePerformIO $ do
+hlsExeCommand :: String
+{-# NOINLINE hlsExeCommand #-}
+hlsExeCommand = unsafePerformIO $ do
   testExe <- fromMaybe "haskell-language-server" <$> lookupEnv "HLS_TEST_EXE"
-  pure $ testExe ++ " --lsp -d -j4"
+  pure testExe
+
+hlsLspCommand :: String
+hlsLspCommand = hlsExeCommand ++ " --lsp -d -j4"
+
+hlsWrapperLspCommand :: String
+hlsWrapperLspCommand = hlsWrapperExeCommand ++ " --lsp -d -j4"
+
+hlsWrapperExeCommand :: String
+{-# NOINLINE hlsWrapperExeCommand #-}
+hlsWrapperExeCommand = unsafePerformIO $ do
+  testExe <- fromMaybe "haskell-language-server-wrapper" <$> lookupEnv "HLS_WRAPPER_TEST_EXE"
+  pure testExe
