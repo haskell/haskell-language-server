@@ -92,7 +92,7 @@ isFunType a = case a of
   ForAllTy _ t    -> isFunType t
 --   Development.IDE.GHC.Compat.Core.FunTy(pattern synonym), FunTyFlag which is used to distinguish
 --   (->, =>, etc..)
-  FunTy flg _ rhs-> if isVisibleFunArg flg then True else isFunType rhs
+  FunTy flg _ rhs-> isVisibleFunArg flg || isFunType rhs
   _x              -> isFunTy a
 
 hieKindFunMasksKind :: HieKind a -> HieFunMaskKind a

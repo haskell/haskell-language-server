@@ -61,7 +61,7 @@ testDataDir = "test" </> "testdata"
 mkFs :: [FS.FileTree] -> FS.VirtualFileTree
 mkFs = FS.mkVirtualFileTree testDataDir
 
-semanticTokensPlugin :: Test.Hls.PluginTestDescriptor Log
+semanticTokensPlugin :: Test.Hls.PluginTestDescriptor SemanticLog
 semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor Ide.Plugin.SemanticTokens.descriptor "SemanticTokens"
 
 mkSemanticTokensParams :: TextDocumentIdentifier -> SemanticTokensParams
@@ -160,7 +160,8 @@ semanticTokensTests =
           liftIO $ 1 @?= 1,
       goldenWithSemanticTokens "mixed constancy test result generated from one ghc version" "T1",
       goldenWithSemanticTokens "pattern bind" "TPatternSyn",
-      goldenWithSemanticTokens "type family" "TTypefamily"
+      goldenWithSemanticTokens "type family" "TTypefamily",
+      goldenWithSemanticTokens "TUnicodeSyntax" "TUnicodeSyntax"
     ]
 
 semanticTokensDataTypeTests =

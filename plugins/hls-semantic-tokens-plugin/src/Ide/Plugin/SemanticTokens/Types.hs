@@ -1,14 +1,16 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE GADTs         #-}
-{-# LANGUAGE StrictData    #-}
-{-# LANGUAGE TypeFamilies  #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StrictData        #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Ide.Plugin.SemanticTokens.Types where
 
 import           Control.DeepSeq               (NFData (rnf), rwhnf)
 import qualified Data.Array                    as A
 import           Data.Generics                 (Typeable)
-import           Development.IDE               (RuleResult)
+import           Development.IDE               (Pretty (pretty), RuleResult)
+import qualified Development.IDE.Core.Shake    as Shake
 import           Development.IDE.GHC.Compat    hiding (loc)
 import           Development.IDE.Graph.Classes (Hashable)
 import           GHC.Generics                  (Generic)
@@ -78,3 +80,13 @@ type instance RuleResult GetSemanticTokens = RangeHsSemanticTokenTypes
 data HieFunMaskKind kind where
     HieFreshFun :: HieFunMaskKind Type
     HieFromDiskFun :: A.Array TypeIndex Bool -> HieFunMaskKind TypeIndex
+
+data SemanticLog = LogShake Shake.Log
+    | LogNoAST
+      deriving Show
+
+instance Pretty SemanticLog where
+    pretty theLog = case theLog of
+        LogShake shakeLog -> pretty shakeLog
+        LogNoAST          -> "no HieAst exist for file"
+
