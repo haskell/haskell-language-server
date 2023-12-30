@@ -8,4 +8,4 @@
 6:1-2 TVariable "x"
 6:6-7 TTypeVariable "a"
 7:1-2 TVariable "x"
-7:5-14 TFunction "undefined"
+7:5-14 TVariable "undefined"

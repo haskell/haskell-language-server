@@ -431,13 +431,13 @@ import           GHC.Core.DataCon             hiding (dataConExTyCoVars)
 import qualified GHC.Core.DataCon             as DataCon
 import           GHC.Core.FamInstEnv          hiding (pprFamInst)
 import           GHC.Core.InstEnv
-import           GHC.Types.Unique.FM 
+import           GHC.Types.Unique.FM
 import           GHC.Core.PatSyn
 import           GHC.Core.Predicate
 import           GHC.Core.TyCo.Ppr
 import qualified GHC.Core.TyCo.Rep            as TyCoRep
 import           GHC.Core.TyCon
-import           GHC.Core.Type                
+import           GHC.Core.Type
 import           GHC.Core.Unify
 import           GHC.Core.Utils
 import           GHC.Driver.CmdLine           (Warn (..))
@@ -597,7 +597,7 @@ pattern RealSrcLoc x y = SrcLoc.RealSrcLoc x y
 pattern AvailTC :: Name -> [Name] -> [FieldLabel] -> Avail.AvailInfo
 #if __GLASGOW_HASKELL__ >= 907
 pattern AvailTC n names pieces <- Avail.AvailTC n ((,[]) -> (names,pieces))
-#else 
+#else
 pattern AvailTC n names pieces <- Avail.AvailTC n ((\gres -> foldr (\gre (names, pieces) -> case gre of
       Avail.NormalGreName name -> (name: names, pieces)
       Avail.FieldGreName label -> (names, label:pieces)) ([], []) gres) -> (names, pieces))
@@ -606,14 +606,14 @@ pattern AvailTC n names pieces <- Avail.AvailTC n ((\gres -> foldr (\gre (names,
 pattern AvailName :: Name -> Avail.AvailInfo
 #if __GLASGOW_HASKELL__ >= 907
 pattern AvailName n <- Avail.Avail n
-#else 
+#else
 pattern AvailName n <- Avail.Avail (Avail.NormalGreName n)
 #endif
 
 pattern AvailFL :: FieldLabel -> Avail.AvailInfo
 #if __GLASGOW_HASKELL__ >= 907
 pattern AvailFL fl <- (const Nothing -> Just fl) -- this pattern always fails as this field was removed in 9.7
-#else 
+#else
 pattern AvailFL fl <- Avail.Avail (Avail.FieldGreName fl)
 #endif
 
@@ -630,8 +630,8 @@ pattern ExposePackage s a mr <- DynFlags.ExposePackage s a _ mr
 pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
 #endif
 
-pattern FunTy :: Type -> Type -> Type
-pattern FunTy arg res <- TyCoRep.FunTy {ft_arg = arg, ft_res = res}
+pattern FunTy :: FunTyFlag -> Type -> Type -> Type
+pattern FunTy af arg res <- TyCoRep.FunTy {ft_af = af, ft_arg = arg, ft_res = res}
 
 -- type HasSrcSpan x a = (GenLocated SrcSpan a ~ x)
 -- type HasSrcSpan x = () :: Constraint

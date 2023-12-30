@@ -53,7 +53,6 @@ toLspTokenType tk = case tk of
   -- not sure if this is correct choice
   TTypeFamily   -> SemanticTokenTypes_Interface
 
---   TNothing      -> Nothing
 
 lspTokenReverseMap :: Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap = Map.fromList $ map (\x -> (toLspTokenType x, x)) $ enumFrom minBound
@@ -90,11 +89,12 @@ tyThingSemantic ty = case ty of
 
 isFunType :: Type -> Bool
 isFunType a = case a of
-  ForAllTy _ t -> isFunType t
---   Development.IDE.GHC.Compat.Core.FunTy(pattern synonym) hides FunTyFlag which is used to distinguish
+  ForAllTy _ t      -> isFunType t
+--   Development.IDE.GHC.Compat.Core.FunTy(pattern synonym), FunTyFlag which is used to distinguish
 --   (->, =>, etc..)
-  FunTy _ _    -> True
-  _x           -> isFunTy a
+  FunTy FTF_T_T _ _ -> True
+  FunTy _ _ rhs     -> isFunType rhs
+  _x                -> isFunTy a
 
 hieKindFunMasksKind :: HieKind a -> HieFunMaskKind a
 hieKindFunMasksKind hieKind = case hieKind of
