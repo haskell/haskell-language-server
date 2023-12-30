@@ -3,7 +3,6 @@
 -- This module provides the core functionality of the plugin.
 --
 -----------------------------------------------------------------------------
-
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -16,11 +15,13 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 
+-- |
+-- This module provides the core functionality of the plugin.
 module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, persistentGetSemanticTokensRule) where
 
 import           Control.Lens                         ((^.))
-import           Control.Monad.Except                 (ExceptT, MonadError (..),
-                                                       liftEither, withExceptT)
+import           Control.Monad.Except                 (ExceptT, liftEither,
+                                                       withExceptT)
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Data.Either                          (fromRight)
 import qualified Data.Map                             as Map
@@ -32,15 +33,12 @@ import           Development.IDE                      (Action,
                                                        HieAstResult (HAR, hieAst, hieModule, refMap),
                                                        IdeState, Priority (..),
                                                        Recorder, Rules,
-                                                       TypeCheck (TypeCheck),
                                                        WithPriority,
                                                        catchSrcErrors,
                                                        cmapWithPrio, define,
                                                        hieKind, ideLogger,
-                                                       logPriority,
-                                                       useWithStale_, use_)
-import           Development.IDE.Core.Compile         (TcModuleResult (..),
-                                                       lookupName)
+                                                       logPriority, use_)
+import           Development.IDE.Core.Compile         (lookupName)
 import           Development.IDE.Core.PluginUtils     (runActionE,
                                                        useWithStaleE)
 import           Development.IDE.Core.PositionMapping (idDelta, toCurrentRange)
@@ -48,7 +46,7 @@ import           Development.IDE.Core.Rules           (Log (LogShake))
 import           Development.IDE.Core.Shake           (addPersistentRule)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Types.HscEnvEq       (hscEnv)
-import           Ide.Plugin.Error                     (PluginError (PluginInternalError, PluginRuleFailed),
+import           Ide.Plugin.Error                     (PluginError (PluginInternalError),
                                                        getNormalizedFilePathE)
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Query
@@ -70,11 +68,11 @@ logWith st prior = liftIO . logPriority (ideLogger st) prior . T.pack
 
 computeSemanticTokens :: IdeState -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
 computeSemanticTokens state nfp = do
-    let dbg = logWith state Debug
-    dbg $ "Computing semantic tokens for: " <> show nfp
-    (RangeHsSemanticTokenTypes {tokens}, mapping) <- useWithStaleE GetSemanticTokens nfp
-    let rangeTokens = mapMaybe (\(span, name) -> (,name) <$> toCurrentRange mapping span) tokens
-    withExceptT PluginInternalError $ liftEither $ semanticTokenAbsoluteSemanticTokens rangeTokens
+  let dbg = logWith state Debug
+  dbg $ "Computing semantic tokens for: " <> show nfp
+  (RangeHsSemanticTokenTypes {tokens}, mapping) <- useWithStaleE GetSemanticTokens nfp
+  let rangeTokens = mapMaybe (\(span, name) -> (,name) <$> toCurrentRange mapping span) tokens
+  withExceptT PluginInternalError $ liftEither $ semanticTokenAbsoluteSemanticTokens rangeTokens
 
 semanticTokensFull :: PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull state _ param = do
@@ -92,7 +90,6 @@ semanticTokensFull state _ param = do
 -- Visible names from 'tmrRenamed'
 --
 -- It then combines this information to compute the semantic tokens for the file.
---
 getSemanticTokensRule :: Recorder (WithPriority Log) -> Rules ()
 getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> do
@@ -102,19 +99,24 @@ getSemanticTokensRule recorder =
     -- get current location from the old ones
     let spanNamesMap = hieAstSpanNames ast
     let nameSet = unionNameSets $ Map.elems spanNamesMap
+    let localSemanticMap = mkLocalNameSemanticFromAst nameSet hieKind refMap
     -- get imported name semantic map
-    importedNameSemanticMap <- liftIO $ foldrM (getTypeExclude hsc) emptyNameEnv $ nameSetElemsStable nameSet
-    let sMap = plusNameEnv_C (<>) importedNameSemanticMap $ mkLocalNameSemanticFromAst hieKind refMap
+    -- liftIO $ putStrLn $ unlines $ fmap showClearName $ nameSetElemsStable nameSet
+    importedNameSemanticMap <- liftIO $ foldrM (getTypeExclude localSemanticMap hsc) emptyNameEnv $ nameSetElemsStable nameSet
+    -- let importedNameSemanticMap = computeImportedNameSemanticMap $ nameSetElemsStable nameSet
+    let sMap = plusNameEnv_C (<>) importedNameSemanticMap localSemanticMap
     let rangeTokenType = extractSemanticTokensFromNames sMap spanNamesMap
     return ([], Just $ RangeHsSemanticTokenTypes rangeTokenType)
-    where
-        -- ignore one already in current module
-        getTypeExclude env n nameMap =
-                do  tyThing <- lookupImported env n
-                    pure $ maybe nameMap (extendNameEnv nameMap n) (tyThing >>= tyThingSemantic)
-        lookupImported :: HscEnv -> Name -> IO (Maybe TyThing)
-        lookupImported env = fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env
-
+  where
+    -- ignore one already in discovered in local
+    getTypeExclude localEnv env n nameMap
+      | n `elemNameEnv` localEnv = pure nameMap
+      | otherwise =
+          do
+            tyThing <- lookupImported env n
+            pure $ maybe nameMap (extendNameEnv nameMap n) (tyThing >>= tyThingSemantic)
+    lookupImported :: HscEnv -> Name -> IO (Maybe TyThing)
+    lookupImported env = fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env
 
 -- | Persistent rule to ensure that semantic tokens doesn't block on startup
 persistentGetSemanticTokensRule :: Rules ()

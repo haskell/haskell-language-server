@@ -89,15 +89,18 @@ tyThingSemantic ty = case ty of
 isFunType :: Type -> Bool
 isFunType a = case a of
   ForAllTy _ t -> isFunType t
+--   Development.IDE.GHC.Compat.Core.FunTy(pattern synonym) hides FunTyFlag which is used to distinguish
+--   (->, =>, etc..)
+--   FunTy _ _    -> True
   _x           -> isFunTy a
 
-typeSemantic :: HieKind hType -> hType -> HsSemanticTokenType
+typeSemantic :: HieKind hType -> hType -> Maybe HsSemanticTokenType
 typeSemantic kind t = case kind of
-  HieFresh -> if isFunType t then TFunction else TVariable
+  HieFresh -> if isFunType t then Just TFunction else Nothing
   HieFromDisk full_file ->
     if isFixFunction fullType
-      then TFunction
-      else TVariable
+      then Just TFunction
+      else Nothing
     where
       fullType = recoverFullType t (hie_types full_file)
   where

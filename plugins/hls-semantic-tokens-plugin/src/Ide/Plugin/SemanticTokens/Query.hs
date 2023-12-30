@@ -4,16 +4,14 @@
 {-# LANGUAGE ExplicitNamespaces  #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
+
 
 module Ide.Plugin.SemanticTokens.Query where
 
 import           Data.Either                        (rights)
+import           Data.Foldable                      (fold)
 import           Data.Generics                      (everything)
 import qualified Data.List                          as List
-import qualified Data.List.NonEmpty                 as NE
--- import HieDb.Types (DefRow (..))
-import           Data.Foldable                      (fold)
 import qualified Data.Map                           as M
 import qualified Data.Map                           as Map
 import           Data.Maybe                         (listToMaybe, mapMaybe)
@@ -30,28 +28,14 @@ import           Ide.Plugin.SemanticTokens.Types    (HsSemanticTokenType,
 import           Language.LSP.Protocol.Types
 import           Prelude                            hiding (span)
 
-------------------------------------------------
-
--- * extract names from RenamedSource
-
-------------------------------------------------
-
-nameToCollect :: Name -> NameSet
-nameToCollect = unitNameSet
-
-nameGetter :: RenamedSource -> NameSet
-nameGetter = everything unionNameSet (emptyNameSet `mkQ` nameToCollect)
-
 ---------------------------------------------------------
 
 -- * extract semantic map from HieAst for local variables
 
 ---------------------------------------------------------
 
-mkLocalNameSemanticFromAst :: HieKind a -> RefMap a -> NameSemanticMap
-mkLocalNameSemanticFromAst hieKind rm = mkNameEnv (mapMaybe (nameNameSemanticFromHie hieKind rm) ns)
-  where
-    ns = rights $ M.keys rm
+mkLocalNameSemanticFromAst :: NameSet -> HieKind a -> RefMap a -> NameSemanticMap
+mkLocalNameSemanticFromAst nameSet hieKind rm = mkNameEnv (mapMaybe (nameNameSemanticFromHie hieKind rm) $ nameSetElemsStable nameSet)
 
 nameNameSemanticFromHie :: forall a. HieKind a -> RefMap a -> Name -> Maybe (Name, HsSemanticTokenType)
 nameNameSemanticFromHie hieKind rm ns = do
@@ -66,9 +50,9 @@ nameNameSemanticFromHie hieKind rm ns = do
       spanInfos <- -- traceShow ("getting spans:", nameString) $
         Map.lookup (Right name') rm'
       let infos = S.unions $ map (identInfo . snd) spanInfos
-      let typeTokenType = fmap (typeSemantic hieKind) $ listToMaybe $ mapMaybe (identType . snd) spanInfos
-      let contextInfoTokenType = contextInfosMaybeTokenType infos
-      fold [typeTokenType, contextInfoTokenType]
+      let typeTokenType = foldMap (typeSemantic hieKind) $ listToMaybe $ mapMaybe (identType . snd) spanInfos
+      contextInfoTokenType <- contextInfosMaybeTokenType infos
+      fold [typeTokenType, Just contextInfoTokenType]
 
     contextInfosMaybeTokenType :: Set.Set ContextInfo -> Maybe HsSemanticTokenType
     contextInfosMaybeTokenType details = foldMap infoTokenType (Set.toList details)
@@ -79,6 +63,9 @@ nameNameSemanticFromHie hieKind rm ns = do
 
 -----------------------------------
 
+-- | get only visible names from HieAST
+-- we care only the leaf node of the AST
+-- and filter out the derived and evidence names
 hieAstSpanNames :: HieAST a -> M.Map Range NameSet
 hieAstSpanNames ast =
   if null (nodeChildren ast)
@@ -93,7 +80,16 @@ hieAstSpanNames ast =
         . sourcedNodeInfo
     combineNodeIds :: NameSet -> NodeInfo a -> NameSet
     ad `combineNodeIds` (NodeInfo _ _ bd) = ad `unionNameSet` xs
-      where xs =  mkNameSet $ rights $ M.keys bd
+      where
+        xs =  mkNameSet $ rights $ M.keys $ M.filterWithKey inclusion bd
+        inclusion :: Identifier -> IdentifierDetails a -> Bool
+        inclusion a b = not $ exclusion a b
+        exclusion :: Identifier -> IdentifierDetails a -> Bool
+        exclusion idt IdentifierDetails {identInfo = infos} = case idt of
+            Left _ -> True
+            Right name ->
+                isDerivedOccName (nameOccName name)
+                || any isEvidenceContext (S.toList infos)
 
 
 -------------------------------------------------

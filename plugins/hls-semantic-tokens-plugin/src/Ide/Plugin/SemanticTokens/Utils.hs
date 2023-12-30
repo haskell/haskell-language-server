@@ -62,10 +62,10 @@ showName name = showSDocUnsafe (ppr name) <> ":" <> showNameType name
 
 showNameType :: Name -> String
 showNameType name
+    | isWiredInName name  = "WiredInName"
+    | isSystemName name   = "SystemName"
     | isInternalName name = "InternalName"
     | isExternalName name = "ExternalName"
-    | isSystemName name   = "SystemName"
-    | isWiredInName name  = "WiredInName"
     | otherwise           = "UnknownName"
 
 bytestringString :: ByteString -> String
