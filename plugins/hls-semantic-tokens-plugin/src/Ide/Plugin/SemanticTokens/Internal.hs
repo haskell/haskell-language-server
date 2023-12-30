@@ -98,11 +98,11 @@ getSemanticTokensRule recorder =
     Just (_, ast) <- return $ listToMaybe $ Map.toList $ getAsts hieAst
     -- get current location from the old ones
     let spanNamesMap = hieAstSpanNames ast
-    let nameSet = unionNameSets $ Map.elems spanNamesMap
-    let localSemanticMap = mkLocalNameSemanticFromAst nameSet hieKind refMap
+    let names = nameSetElemsStable $ unionNameSets $ Map.elems spanNamesMap
+    let localSemanticMap = mkLocalNameSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
     -- get imported name semantic map
     -- liftIO $ putStrLn $ unlines $ fmap showClearName $ nameSetElemsStable nameSet
-    importedNameSemanticMap <- liftIO $ foldrM (getTypeExclude localSemanticMap hsc) emptyNameEnv $ nameSetElemsStable nameSet
+    importedNameSemanticMap <- liftIO $ foldrM (getTypeExclude localSemanticMap hsc) emptyNameEnv names
     -- let importedNameSemanticMap = computeImportedNameSemanticMap $ nameSetElemsStable nameSet
     let sMap = plusNameEnv_C (<>) importedNameSemanticMap localSemanticMap
     let rangeTokenType = extractSemanticTokensFromNames sMap spanNamesMap

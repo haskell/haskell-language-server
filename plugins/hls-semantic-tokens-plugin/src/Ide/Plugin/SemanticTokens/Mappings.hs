@@ -12,6 +12,7 @@
 -- 4. Mapping from LSP tokens to SemanticTokenOriginal.
 module Ide.Plugin.SemanticTokens.Mappings where
 
+import qualified Data.Array                      as A
 import           Data.List.Extra                 (chunksOf, (!?))
 import qualified Data.Map                        as Map
 import qualified Data.Set                        as Set
@@ -19,6 +20,7 @@ import           Data.Text                       (Text)
 import           Development.IDE                 (HieKind (HieFresh, HieFromDisk))
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.SemanticTokens.Types
+import           Ide.Plugin.SemanticTokens.Utils (recoverFunMaskArray)
 import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
                                                   SemanticTokenAbsolute (SemanticTokenAbsolute),
                                                   SemanticTokenRelative (SemanticTokenRelative),
@@ -91,25 +93,18 @@ isFunType a = case a of
   ForAllTy _ t -> isFunType t
 --   Development.IDE.GHC.Compat.Core.FunTy(pattern synonym) hides FunTyFlag which is used to distinguish
 --   (->, =>, etc..)
---   FunTy _ _    -> True
+  FunTy _ _    -> True
   _x           -> isFunTy a
 
-typeSemantic :: HieKind hType -> hType -> Maybe HsSemanticTokenType
+hieKindFunMasksKind :: HieKind a -> HieFunMaskKind a
+hieKindFunMasksKind hieKind = case hieKind of
+  HieFresh -> HieFreshFun
+  HieFromDisk full_file -> HieFromDiskFun $ recoverFunMaskArray (hie_types full_file)
+
+typeSemantic :: HieFunMaskKind hType -> hType -> Maybe HsSemanticTokenType
 typeSemantic kind t = case kind of
-  HieFresh -> if isFunType t then Just TFunction else Nothing
-  HieFromDisk full_file ->
-    if isFixFunction fullType
-      then Just TFunction
-      else Nothing
-    where
-      fullType = recoverFullType t (hie_types full_file)
-  where
-    isFixFunction :: HieTypeFix -> Bool
-    isFixFunction (Roll x) =
-      case x of
-        HForAllTy _ a -> isFixFunction a
-        HFunTy {}     -> True
-        _             -> False
+  HieFreshFun        -> if isFunType t then Just TFunction else Nothing
+  HieFromDiskFun arr -> if arr A.! t then Just TFunction else Nothing
 
 -- * 3. Mapping from hieAst ContextInfo to haskell semantic token type.
 

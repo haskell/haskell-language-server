@@ -23,7 +23,8 @@ import           Development.IDE                    (HieKind,
 import           Development.IDE.GHC.Compat
 import           Generics.SYB                       (mkQ)
 import           Ide.Plugin.SemanticTokens.Mappings
-import           Ide.Plugin.SemanticTokens.Types    (HsSemanticTokenType,
+import           Ide.Plugin.SemanticTokens.Types    (HieFunMaskKind,
+                                                     HsSemanticTokenType,
                                                      NameSemanticMap)
 import           Language.LSP.Protocol.Types
 import           Prelude                            hiding (span)
@@ -34,10 +35,10 @@ import           Prelude                            hiding (span)
 
 ---------------------------------------------------------
 
-mkLocalNameSemanticFromAst :: NameSet -> HieKind a -> RefMap a -> NameSemanticMap
-mkLocalNameSemanticFromAst nameSet hieKind rm = mkNameEnv (mapMaybe (nameNameSemanticFromHie hieKind rm) $ nameSetElemsStable nameSet)
+mkLocalNameSemanticFromAst :: [Name] -> HieFunMaskKind a -> RefMap a -> NameSemanticMap
+mkLocalNameSemanticFromAst names hieKind rm = mkNameEnv (mapMaybe (nameNameSemanticFromHie hieKind rm) names)
 
-nameNameSemanticFromHie :: forall a. HieKind a -> RefMap a -> Name -> Maybe (Name, HsSemanticTokenType)
+nameNameSemanticFromHie :: forall a. HieFunMaskKind a -> RefMap a -> Name -> Maybe (Name, HsSemanticTokenType)
 nameNameSemanticFromHie hieKind rm ns = do
   st <- -- traceShow ("to find Name", showName ns) $
     nameSemanticFromRefMap rm ns
@@ -49,9 +50,8 @@ nameNameSemanticFromHie hieKind rm ns = do
     nameSemanticFromRefMap rm' name' = do
       spanInfos <- -- traceShow ("getting spans:", nameString) $
         Map.lookup (Right name') rm'
-      let infos = S.unions $ map (identInfo . snd) spanInfos
       let typeTokenType = foldMap (typeSemantic hieKind) $ listToMaybe $ mapMaybe (identType . snd) spanInfos
-      contextInfoTokenType <- contextInfosMaybeTokenType infos
+      contextInfoTokenType <- foldMap (contextInfosMaybeTokenType . identInfo . snd) spanInfos
       fold [typeTokenType, Just contextInfoTokenType]
 
     contextInfosMaybeTokenType :: Set.Set ContextInfo -> Maybe HsSemanticTokenType

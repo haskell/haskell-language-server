@@ -49,6 +49,7 @@ library
     , transformers
     , bytestring
     , syb
+    , array
     , deepseq
     , hls-graph == 2.5.0.0
 

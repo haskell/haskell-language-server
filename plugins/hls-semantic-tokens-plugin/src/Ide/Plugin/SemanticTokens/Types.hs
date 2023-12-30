@@ -1,10 +1,12 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GADTs         #-}
 {-# LANGUAGE StrictData    #-}
 {-# LANGUAGE TypeFamilies  #-}
 
 module Ide.Plugin.SemanticTokens.Types where
 
 import           Control.DeepSeq               (NFData (rnf), rwhnf)
+import qualified Data.Array                    as A
 import           Data.Generics                 (Typeable)
 import           Development.IDE               (RuleResult)
 import           Development.IDE.GHC.Compat    hiding (loc)
@@ -72,3 +74,7 @@ instance Show RangeHsSemanticTokenTypes where
   show = const "GlobalNameMap"
 
 type instance RuleResult GetSemanticTokens = RangeHsSemanticTokenTypes
+
+data HieFunMaskKind kind where
+    HieFreshFun :: HieFunMaskKind Type
+    HieFromDiskFun :: A.Array TypeIndex Bool -> HieFunMaskKind TypeIndex
