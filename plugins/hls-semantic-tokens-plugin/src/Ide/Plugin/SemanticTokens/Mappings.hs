@@ -89,12 +89,11 @@ tyThingSemantic ty = case ty of
 
 isFunType :: Type -> Bool
 isFunType a = case a of
-  ForAllTy _ t      -> isFunType t
+  ForAllTy _ t    -> isFunType t
 --   Development.IDE.GHC.Compat.Core.FunTy(pattern synonym), FunTyFlag which is used to distinguish
 --   (->, =>, etc..)
-  FunTy FTF_T_T _ _ -> True
-  FunTy _ _ rhs     -> isFunType rhs
-  _x                -> isFunTy a
+  FunTy flg _ rhs-> if isVisibleFunArg flg then True else isFunType rhs
+  _x              -> isFunTy a
 
 hieKindFunMasksKind :: HieKind a -> HieFunMaskKind a
 hieKindFunMasksKind hieKind = case hieKind of

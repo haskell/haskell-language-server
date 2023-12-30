@@ -61,8 +61,7 @@ mkDocMap env rm this_mod =
       doc <- getDocumentationTryGhc env n
       pure $ extendNameEnv nameMap n doc
     getType n nameMap
-      | isTcOcc $ occName n
-      , Nothing <- lookupNameEnv nameMap n
+      | Nothing <- lookupNameEnv nameMap n
       = do kind <- lookupKind env n
            pure $ maybe nameMap (extendNameEnv nameMap n) kind
       | otherwise = pure nameMap

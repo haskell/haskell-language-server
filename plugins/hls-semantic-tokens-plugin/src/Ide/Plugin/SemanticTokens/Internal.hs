@@ -13,7 +13,6 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE ViewPatterns          #-}
 
 -- |
 -- This module provides the core functionality of the plugin.
@@ -28,24 +27,22 @@ import qualified Data.Map                             as Map
 import           Data.Maybe                           (listToMaybe, mapMaybe)
 import qualified Data.Text                            as T
 import           Development.IDE                      (Action,
+                                                       GetDocMap (GetDocMap),
                                                        GetHieAst (GetHieAst),
-                                                       GhcSessionDeps (GhcSessionDeps),
                                                        HieAstResult (HAR, hieAst, hieModule, refMap),
                                                        IdeState, Priority (..),
                                                        Recorder, Rules,
                                                        WithPriority,
-                                                       catchSrcErrors,
                                                        cmapWithPrio, define,
                                                        hieKind, ideLogger,
                                                        logPriority, use_)
-import           Development.IDE.Core.Compile         (lookupName)
 import           Development.IDE.Core.PluginUtils     (runActionE,
                                                        useWithStaleE)
 import           Development.IDE.Core.PositionMapping (idDelta, toCurrentRange)
 import           Development.IDE.Core.Rules           (Log (LogShake))
+import           Development.IDE.Core.RuleTypes       (DocAndKindMap (..))
 import           Development.IDE.Core.Shake           (addPersistentRule)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Types.HscEnvEq       (hscEnv)
 import           Ide.Plugin.Error                     (PluginError (PluginInternalError),
                                                        getNormalizedFilePathE)
 import           Ide.Plugin.SemanticTokens.Mappings
@@ -93,8 +90,9 @@ semanticTokensFull state _ param = do
 getSemanticTokensRule :: Recorder (WithPriority Log) -> Rules ()
 getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> do
-    (hscEnv -> hsc) <- use_ GhcSessionDeps nfp
+    -- (hscEnv -> hsc) <- use_ GhcSessionDeps nfp
     (HAR {..}) <- use_ GetHieAst nfp
+    (DKMap{getKindMap}) <- use_ GetDocMap nfp
     Just (_, ast) <- return $ listToMaybe $ Map.toList $ getAsts hieAst
     -- get current location from the old ones
     let spanNamesMap = hieAstSpanNames ast
@@ -102,21 +100,23 @@ getSemanticTokensRule recorder =
     let localSemanticMap = mkLocalNameSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
     -- get imported name semantic map
     -- liftIO $ putStrLn $ unlines $ fmap showClearName $ nameSetElemsStable nameSet
-    importedNameSemanticMap <- liftIO $ foldrM (getTypeExclude localSemanticMap hsc) emptyNameEnv names
+    let importedNameSemanticMap = foldr (getTypeExclude localSemanticMap getKindMap) emptyNameEnv names
     -- let importedNameSemanticMap = computeImportedNameSemanticMap $ nameSetElemsStable nameSet
     let sMap = plusNameEnv_C (<>) importedNameSemanticMap localSemanticMap
     let rangeTokenType = extractSemanticTokensFromNames sMap spanNamesMap
     return ([], Just $ RangeHsSemanticTokenTypes rangeTokenType)
   where
     -- ignore one already in discovered in local
-    getTypeExclude localEnv env n nameMap
-      | n `elemNameEnv` localEnv = pure nameMap
+    getTypeExclude :: NameEnv a
+        -> NameEnv TyThing
+        -> Name
+        -> NameEnv HsSemanticTokenType
+        -> NameEnv HsSemanticTokenType
+    getTypeExclude localEnv kindMap n nameMap
+      | n `elemNameEnv` localEnv = nameMap
       | otherwise =
-          do
-            tyThing <- lookupImported env n
-            pure $ maybe nameMap (extendNameEnv nameMap n) (tyThing >>= tyThingSemantic)
-    lookupImported :: HscEnv -> Name -> IO (Maybe TyThing)
-    lookupImported env = fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env
+            let tyThing = lookupNameEnv kindMap n in
+            maybe nameMap (extendNameEnv nameMap n) (tyThing >>= tyThingSemantic)
 
 -- | Persistent rule to ensure that semantic tokens doesn't block on startup
 persistentGetSemanticTokensRule :: Rules ()

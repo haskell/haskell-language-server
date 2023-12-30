@@ -407,6 +407,7 @@ module Development.IDE.GHC.Compat.Core (
     field_label,
 #endif
     groupOrigin,
+    isVisibleFunArg,
     ) where
 
 import qualified GHC
@@ -489,6 +490,8 @@ import qualified GHC.Types.SrcLoc             as SrcLoc
 import           GHC.Types.Unique.Supply
 import           GHC.Types.Var                (Var (varName), setTyVarUnique,
                                                setVarUnique)
+
+import qualified GHC.Types.Var                as TypesVar
 import           GHC.Unit.Info                (PackageName (..))
 import           GHC.Unit.Module              hiding (ModLocation (..), UnitId,
                                                moduleUnit,
@@ -630,8 +633,17 @@ pattern ExposePackage s a mr <- DynFlags.ExposePackage s a _ mr
 pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
 #endif
 
-pattern FunTy :: FunTyFlag -> Type -> Type -> Type
+#if __GLASGOW_HASKELL__ >= 906
+isVisibleFunArg = TypesVar.isVisibleFunArg
+type FunTyFlag = TypesVar.FunTyFlag
+#else
+isVisibleFunArg VisArg = True
+isVisibleFunArg _ = False
+type FunTyFlag = TypesVar.AnonArgFlag
+#endif
+pattern FunTy :: Development.IDE.GHC.Compat.Core.FunTyFlag -> Type -> Type -> Type
 pattern FunTy af arg res <- TyCoRep.FunTy {ft_af = af, ft_arg = arg, ft_res = res}
+
 
 -- type HasSrcSpan x a = (GenLocated SrcSpan a ~ x)
 -- type HasSrcSpan x = () :: Constraint
