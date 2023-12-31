@@ -11,7 +11,6 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UnicodeSyntax         #-}
 
@@ -25,6 +24,7 @@ import           Control.Monad.Except                 (ExceptT, liftEither,
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Control.Monad.Trans                  (lift)
 import           Control.Monad.Trans.Except           (runExceptT)
+import qualified Data.Map                             as M
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (listToMaybe, mapMaybe)
 import qualified Data.Text                            as T
@@ -74,9 +74,8 @@ computeSemanticTokens :: IdeState -> NormalizedFilePath -> ExceptT PluginError A
 computeSemanticTokens state nfp = do
   let dbg = logActionWith state Debug
   dbg $ "Computing semantic tokens for: " <> show nfp
-  (RangeHsSemanticTokenTypes {tokens}, mapping) <- useWithStaleE GetSemanticTokens nfp
-  let rangeTokens = mapMaybe (\(span, name) -> (,name) <$> toCurrentRange mapping span) tokens
-  withExceptT PluginInternalError $ liftEither $ semanticTokenAbsoluteSemanticTokens rangeTokens
+  (RangeHsSemanticTokenTypes {rangeSemanticMap}, mapping) <- useWithStaleE GetSemanticTokens nfp
+  withExceptT PluginInternalError $ liftEither $ rangeSemanticMapSemanticTokens mapping rangeSemanticMap
 
 semanticTokensFull :: PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull state _ param = do

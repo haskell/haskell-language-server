@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE GADTs             #-}
+{-# LANGUAGE InstanceSigs      #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StrictData        #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -9,6 +10,7 @@ module Ide.Plugin.SemanticTokens.Types where
 import           Control.DeepSeq               (NFData (rnf), rwhnf)
 import qualified Data.Array                    as A
 import           Data.Generics                 (Typeable)
+import qualified Data.Map                      as M
 import           Development.IDE               (Pretty (pretty), RuleResult)
 import qualified Development.IDE.Core.Shake    as Shake
 import           Development.IDE.GHC.Compat    hiding (loc)
@@ -67,9 +69,10 @@ instance Hashable GetSemanticTokens
 
 instance NFData GetSemanticTokens
 
-data RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {tokens :: [(Range, HsSemanticTokenType)]}
+data RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {rangeSemanticMap :: M.Map Range HsSemanticTokenType}
 
 instance NFData RangeHsSemanticTokenTypes where
+  rnf :: RangeHsSemanticTokenTypes -> ()
   rnf (RangeHsSemanticTokenTypes a) = rwhnf a
 
 instance Show RangeHsSemanticTokenTypes where
