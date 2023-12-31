@@ -42,7 +42,7 @@ import           Development.IDE.Core.PluginUtils     (runActionE,
                                                        useWithStaleE)
 import           Development.IDE.Core.PositionMapping (idDelta, toCurrentRange)
 import           Development.IDE.Core.Rules           (toIdeResult)
-import           Development.IDE.Core.RuleTypes       (DocAndKindMap (..))
+import           Development.IDE.Core.RuleTypes       (DocAndTyThingMap (..))
 import           Development.IDE.Core.Shake           (addPersistentRule,
                                                        getVirtualFile,
                                                        useWithStale_)
@@ -99,7 +99,7 @@ getSemanticTokensRule :: Recorder (WithPriority SemanticLog) ->  Rules ()
 getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> handleError recorder $ do
     (HAR {..}) <- lift $ use_ GetHieAst nfp
-    (DKMap{getKindMap}, _) <- lift $ useWithStale_ GetDocMap nfp
+    (DKMap{getTyThingMap}, _) <- lift $ useWithStale_ GetDocMap nfp
     (_, ast) <- handleMaybe LogNoAST $ listToMaybe $ Map.toList $ getAsts hieAst
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     -- get current location from the old ones
@@ -108,7 +108,7 @@ getSemanticTokensRule recorder =
     let localSemanticMap = mkLocalNameSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
     -- get imported name semantic map
     -- liftIO $ putStrLn $ unlines $ fmap showClearName $ nameSetElemsStable nameSet
-    let importedNameSemanticMap = foldr (getTypeExclude localSemanticMap getKindMap) emptyNameEnv names
+    let importedNameSemanticMap = foldr (getTypeExclude localSemanticMap getTyThingMap) emptyNameEnv names
     -- let importedNameSemanticMap = computeImportedNameSemanticMap $ nameSetElemsStable nameSet
     let sMap = plusNameEnv_C (<>) importedNameSemanticMap localSemanticMap
     let rangeTokenType = extractSemanticTokensFromNames sMap spanNamesMap
@@ -120,10 +120,10 @@ getSemanticTokensRule recorder =
         -> Name
         -> NameEnv HsSemanticTokenType
         -> NameEnv HsSemanticTokenType
-    getTypeExclude localEnv kindMap n nameMap
+    getTypeExclude localEnv tyThingMap n nameMap
       | n `elemNameEnv` localEnv = nameMap
       | otherwise =
-            let tyThing = lookupNameEnv kindMap n in
+            let tyThing = lookupNameEnv tyThingMap n in
             maybe nameMap (extendNameEnv nameMap n) (tyThing >>= tyThingSemantic)
 
 -- | Persistent rule to ensure that semantic tokens doesn't block on startup

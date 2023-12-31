@@ -209,7 +209,7 @@ gotoDefinition withHieDb getHieFile ideOpts imports srcSpans pos
 atPoint
   :: IdeOptions
   -> HieAstResult
-  -> DocAndKindMap
+  -> DocAndTyThingMap
   -> HscEnv
   -> Position
   -> IO (Maybe (Maybe Range, [T.Text]))

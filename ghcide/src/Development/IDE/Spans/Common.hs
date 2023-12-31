@@ -12,7 +12,7 @@ module Development.IDE.Spans.Common (
 , spanDocToMarkdown
 , spanDocToMarkdownForTest
 , DocMap
-, KindMap
+, TyThingMap
 ) where
 
 import           Control.DeepSeq
@@ -31,7 +31,7 @@ import qualified Documentation.Haddock.Parser as H
 import qualified Documentation.Haddock.Types  as H
 
 type DocMap = NameEnv SpanDoc
-type KindMap = NameEnv TyThing
+type TyThingMap = NameEnv TyThing
 
 -- | Shows IEWrappedName, without any modifier, qualifier or unique identifier.
 #if MIN_VERSION_ghc(9,5,0)

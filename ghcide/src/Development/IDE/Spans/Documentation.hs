@@ -39,7 +39,7 @@ mkDocMap
   :: HscEnv
   -> RefMap a
   -> TcGblEnv
-  -> IO DocAndKindMap
+  -> IO DocAndTyThingMap
 mkDocMap env rm this_mod =
   do
 #if MIN_VERSION_ghc(9,3,0)
