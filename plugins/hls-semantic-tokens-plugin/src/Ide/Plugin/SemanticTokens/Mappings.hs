@@ -20,7 +20,7 @@ import qualified Data.Set                        as Set
 import           Data.Text                       (Text, unpack)
 import           Development.IDE                 (HieKind (HieFresh, HieFromDisk))
 import           Development.IDE.GHC.Compat
-import           Ide.Plugin.SemanticTokens.Types hiding (tokens)
+import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Plugin.SemanticTokens.Utils (mkRange, recoverFunMaskArray)
 import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
                                                   SemanticTokenAbsolute (SemanticTokenAbsolute),

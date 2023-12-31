@@ -94,7 +94,7 @@ semanticTokensFull state _ param = do
 -- Visible names from 'tmrRenamed'
 --
 -- It then combines this information to compute the semantic tokens for the file.
-getSemanticTokensRule :: Recorder (WithPriority SemanticLog) ->  Rules ()
+getSemanticTokensRule :: Recorder (WithPriority SemanticLog) -> Rules ()
 getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> handleError recorder $ do
     (HAR {..}) <- lift $ use_ GetHieAst nfp

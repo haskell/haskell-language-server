@@ -19,11 +19,11 @@ import           Data.Text                            (Text)
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Error            (realSrcSpanToCodePointRange)
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
                                                        HsSemanticTokenType,
                                                        NameSemanticMap)
-import           Ide.Plugin.SemanticTokens.Utils      (realSrcSpanToCodePointRange)
 import           Language.LSP.Protocol.Types
 import           Language.LSP.VFS                     (VirtualFile,
                                                        codePointRangeToRange)
@@ -50,6 +50,8 @@ nameNameSemanticFromHie hieKind rm ns = do
     nameSemanticFromRefMap rm' name' = do
       spanInfos <- -- traceShow ("getting spans:", nameString) $
         Map.lookup (Right name') rm'
+    --   let combinedFunction x = (identType . snd) x <|> (identInfo . snd) x
+    --   let result = foldMap (typeSemantic hieKind) $ listToMaybe $ mapMaybe combinedFunction spanInfos
       let typeTokenType = foldMap (typeSemantic hieKind) $ listToMaybe $ mapMaybe (identType . snd) spanInfos
       contextInfoTokenType <- foldMap (contextInfosMaybeTokenType . identInfo . snd) spanInfos
       fold [typeTokenType, Just contextInfoTokenType]
