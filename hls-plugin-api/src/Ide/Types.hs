@@ -348,7 +348,7 @@ pluginEnabledGlobally desc conf = if plcGlobalOn (configForPlugin conf desc)
                            then HandlesRequest
                            else DoesNotHandleRequest DisabledGlobally
 
--- | Checks that a specific feature for a given plugin is both enabled order
+-- | Checks that a specific feature for a given plugin is enabled in order
 -- to respond to requests
 pluginFeatureEnabled :: (PluginConfig -> Bool) -> PluginDescriptor c -> Config -> HandleRequestResult
 pluginFeatureEnabled f desc conf = if f (configForPlugin conf desc)
