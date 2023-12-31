@@ -31,12 +31,10 @@ import           Development.IDE.GHC.Error      (realSrcSpanToRange)
 import           GHC.Generics                   (Generic)
 import           Ide.Plugin.Config
 import           Ide.Types                      (PluginDescriptor (..),
-                                                 PluginId, PluginStatus (..),
-                                                 configHasDiagnostics,
+                                                 PluginId, configHasDiagnostics,
                                                  configInitialGenericConfig,
                                                  defaultConfigDescriptor,
-                                                 defaultPluginDescriptor,
-                                                 pluginEnabledConfig)
+                                                 defaultPluginDescriptor)
 import qualified Language.LSP.Protocol.Types    as LSP
 import           Stan.Analysis                  (Analysis (..), runAnalysis)
 import           Stan.Category                  (Category (..))
@@ -81,7 +79,7 @@ rules recorder plId = do
   define (cmapWithPrio LogShake recorder) $
     \GetStanDiagnostics file -> do
       config <- getPluginConfigAction plId
-      if pluginEnabledConfig plcDiagnosticsOn config  == PluginEnabled then do
+      if plcGlobalOn config && plcDiagnosticsOn config then do
           maybeHie <- getHieFile file
           case maybeHie of
             Nothing -> return ([], Nothing)

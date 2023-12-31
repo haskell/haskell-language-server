@@ -30,7 +30,7 @@ providerTests = testGroup "lsp formatting provider"
         liftIO $ case resp ^. L.result of
           result@(Left (ResponseError reason message Nothing)) -> case reason of
             (InR ErrorCodes_MethodNotFound) -> pure () -- No formatter
-            (InR ErrorCodes_InvalidRequest) | "No plugin enabled for SMethod_TextDocumentFormatting" `T.isPrefixOf` message -> pure ()
+            (InR ErrorCodes_InvalidRequest) | "No plugin" `T.isPrefixOf` message -> pure ()
             _ -> assertFailure $ "strange response from formatting provider:" ++ show result
           result -> assertFailure $ "strange response from formatting provider:" ++ show result
 

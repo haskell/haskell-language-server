@@ -226,8 +226,8 @@ rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plugin = do
   define (cmapWithPrio LogShake recorder) $ \GetHlintDiagnostics file -> do
     config <- getPluginConfigAction plugin
-    let hlintOn = pluginEnabledConfig plcDiagnosticsOn config
-    ideas <- if hlintOn == PluginEnabled then getIdeas recorder file else return (Right [])
+    let hlintOn = plcGlobalOn config && plcDiagnosticsOn config
+    ideas <- if hlintOn then getIdeas recorder file else return (Right [])
     return (diagnostics file ideas, Just ())
 
   defineNoFile (cmapWithPrio LogShake recorder) $ \GetHlintSettings -> do

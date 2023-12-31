@@ -32,7 +32,7 @@ module Ide.Types
 , IdePlugins(IdePlugins, ipMap)
 , DynFlagsModifications(..)
 , Config(..), PluginConfig(..), CheckParents(..)
-, ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin, pluginEnabledConfig
+, ConfigDescriptor(..), defaultConfigDescriptor, configForPlugin
 , CustomConfig(..), mkCustomConfig
 , FallbackCodeActionParams(..)
 , FormattingType(..), FormattingMethod, FormattingHandler, mkFormattingHandlers
@@ -51,8 +51,6 @@ module Ide.Types
 , lookupCommandProvider
 , ResolveFunction
 , mkResolveHandler
-, DisabledReason (..)
-, PluginStatus (..)
 )
     where
 
@@ -69,7 +67,8 @@ import           System.Posix.Signals
 
 import           Control.Applicative           ((<|>))
 import           Control.Arrow                 ((&&&))
-import           Control.Lens                  (_Just, (.~), (?~), (^.), (^?))
+import           Control.Lens                  (_Just, view, (.~), (?~), (^.),
+                                                (^?))
 import           Control.Monad                 (void)
 import           Control.Monad.Error.Class     (MonadError (throwError))
 import           Control.Monad.Trans.Class     (MonadTrans (lift))
@@ -98,6 +97,7 @@ import           Development.IDE.Graph
 import           GHC                           (DynFlags)
 import           GHC.Generics
 import           Ide.Plugin.Error
+import           Ide.Plugin.HandleRequestTypes
 import           Ide.Plugin.Properties
 import qualified Language.LSP.Protocol.Lens    as L
 import           Language.LSP.Protocol.Message
@@ -245,7 +245,7 @@ instance Default PluginConfig where
       , plcCompletionOn     = True
       , plcRenameOn         = True
       , plcSelectionRangeOn = True
-      , plcFoldingRangeOn = True
+      , plcFoldingRangeOn   = True
       , plcConfig           = mempty
       }
 
@@ -295,16 +295,6 @@ describePlugin p =
     pdesc = pluginDescription p
   in pretty pid <> ":" <> nest 4 (PP.line <> pretty pdesc)
 
--- | Check whether the given plugin descriptor is responsible for the file with the given path.
---   Compares the file extension of the file at the given path with the file extension
---   the plugin is responsible for.
-pluginResponsible :: Uri -> PluginDescriptor c -> PluginStatus
-pluginResponsible uri pluginDesc
-    | Just fp <- mfp
-    , T.pack (takeExtension fp) `elem` pluginFileType pluginDesc = PluginEnabled
-    | otherwise = PluginDisabled $ DisabledByFileType (maybe "" (T.pack . takeExtension) mfp)
-    where
-      mfp = uriToFilePath uri
 
 -- | An existential wrapper of 'Properties'
 data CustomConfig = forall r. CustomConfig (Properties r)
@@ -346,47 +336,71 @@ defaultConfigDescriptor :: ConfigDescriptor
 defaultConfigDescriptor =
     ConfigDescriptor Data.Default.def False (mkCustomConfig emptyProperties)
 
--- | Reasons why a plugin could be disabled for a request
-data DisabledReason = PluginRejected T.Text | NotResolveOwner T.Text | DisabledByConfig | DisabledByFileType T.Text
-  deriving (Eq)
+-- | Lookup the current config for a plugin
+configForPlugin :: Config -> PluginDescriptor c -> PluginConfig
+configForPlugin config PluginDescriptor{..}
+    = Map.findWithDefault (configInitialGenericConfig pluginConfigDescriptor) pluginId (plugins config)
 
--- | Whether a plugin is enabled or not
-data PluginStatus = PluginEnabled | PluginDisabled DisabledReason
-  deriving (Eq)
+-- | Checks that a specific plugin is globally enabled in order to respond to
+-- requests
+pluginEnabledGlobally :: PluginDescriptor c -> Config -> HandleRequestResult
+pluginEnabledGlobally desc conf = if plcGlobalOn (configForPlugin conf desc)
+                           then HandlesRequest
+                           else DoesNotHandleRequest DisabledGlobally
 
-instance Pretty PluginStatus where
-  pretty PluginEnabled = "is enabled"
-  pretty (PluginDisabled (PluginRejected t)) = "rejected the request with: " <> pretty t
-  pretty (PluginDisabled (NotResolveOwner s)) = "does not respond to resolve requests for " <> pretty s <> ")"
-  pretty (PluginDisabled DisabledByConfig) = "is disabled from the config"
-  pretty (PluginDisabled (DisabledByFileType s)) = "does not respond to requests for " <> pretty s <> " filetypes)"
+-- | Checks that a specific feature for a given plugin is both enabled order
+-- to respond to requests
+pluginFeatureEnabled :: (PluginConfig -> Bool) -> PluginDescriptor c -> Config -> HandleRequestResult
+pluginFeatureEnabled f desc conf = if f (configForPlugin conf desc)
+                                      then HandlesRequest
+                                      else DoesNotHandleRequest FeatureDisabled
 
--- We always want to keep the leftmost disabled reason
-instance Semigroup PluginStatus where
-  PluginEnabled <> PluginEnabled = PluginEnabled
-  PluginDisabled r <> _          = PluginDisabled r
-  _ <> PluginDisabled r          = PluginDisabled r
+-- |Determine whether this request should be routed to the plugin. Fails closed
+-- if we can't determine which plugin it should be routed to.
+pluginResolverResponsible :: L.HasData_ m (Maybe Value) => m -> PluginDescriptor c -> HandleRequestResult
+pluginResolverResponsible
+  (view L.data_ -> (Just (fromJSON -> (Success (PluginResolveData o@(PluginId ot) _ _)))))
+  pluginDesc =
+  if pluginId pluginDesc == o
+    then HandlesRequest
+    else DoesNotHandleRequest $ NotResolveOwner ot
+-- We want to fail closed
+pluginResolverResponsible _ _ = DoesNotHandleRequest $ NotResolveOwner "(unable to determine resolve owner)"
+
+-- | Check whether the given plugin descriptor is responsible for the file with
+--   the given path. Compares the file extension from the msgParams with the
+--   file extension the plugin is responsible for.
+--   We are passing the msgParams here even though we only need the URI to allow
+--   us to extract the URI here. If in the future we need to be able to provide
+--   an URI it can be separated again.
+pluginSupportsFileType :: (L.HasTextDocument m doc, L.HasUri doc Uri) => m -> PluginDescriptor c -> HandleRequestResult
+pluginSupportsFileType msgParams pluginDesc =
+  case uriToFilePath uri of
+    Just fp | T.pack (takeExtension fp) `elem` pluginFileType pluginDesc -> HandlesRequest
+    _ -> DoesNotHandleRequest $ DoesNotSupportFileType (maybe "(unable to determine file type)" (T.pack . takeExtension) mfp)
+    where
+      mfp = uriToFilePath uri
+      uri = msgParams ^. L.textDocument . L.uri
 
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
 -- Only methods for which we know how to combine responses can be instances of 'PluginMethod'
 class HasTracing (MessageParams m) => PluginMethod (k :: MessageKind) (m :: Method ClientToServer k) where
 
-  -- | Parse the configuration to check if this plugin is enabled.
-  -- Perform sanity checks on the message to see whether the plugin is enabled
-  -- for this message in particular.
-  -- If a plugin is not enabled, its handlers, commands, etc. will not be
-  -- run for the given message.
+  -- | Parse the configuration to check if this plugin is globally enabled, and
+  -- if the feature which handles this method is enabled. Perform sanity checks
+  -- on the message to see whether the plugin handles this message in particular.
+  -- This class is only used to determine whether a plugin can handle a specific
+  -- request. Commands and rules do not use this logic to determine whether or
+  -- not they are run.
   --
-  -- Semantically, this method describes whether a plugin is enabled configuration wise
-  -- and is allowed to respond to the message. This might depend on the URI that is
-  -- associated to the Message Parameters. There are requests
-  -- with no associated URI that, consequentially, cannot inspect the URI.
   --
-  -- A common reason why a plugin might not be allowed to respond although it is enabled:
+  -- A common reason why a plugin won't handle a request even though it is enabled:
   --   * The plugin cannot handle requests associated with the specific URI
   --     * Since the implementation of [cabal plugins](https://github.com/haskell/haskell-language-server/issues/2940)
   --       HLS knows plugins specific to Haskell and specific to [Cabal file descriptions](https://cabal.readthedocs.io/en/3.6/cabal-package.html)
+  --   * The resolve request is not routed to that specific plugin. Each resolve
+  --     request needs to be routed to only one plugin.
   --
   -- Strictly speaking, we are conflating two concepts here:
   --   * Dynamically enabled (e.g. on a per-message basis)
@@ -394,7 +408,7 @@ class HasTracing (MessageParams m) => PluginMethod (k :: MessageKind) (m :: Meth
   --     * Strictly speaking, this might also change dynamically
   --
   -- But there is no use to split it up into two different methods for now.
-  pluginEnabled
+  handlesRequest
     :: SMethod m
     -- ^ Method type.
     -> MessageParams m
@@ -406,146 +420,125 @@ class HasTracing (MessageParams m) => PluginMethod (k :: MessageKind) (m :: Meth
     -> Config
     -- ^ Generic config description, expected to contain 'PluginConfig' configuration
     -- for this plugin
-    -> PluginStatus
+    -> HandleRequestResult
     -- ^ Is this plugin enabled and allowed to respond to the given request
     -- with the given parameters?
 
-  default pluginEnabled :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
-                              => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> PluginStatus
-  pluginEnabled _ params desc conf =
-    pluginGlobalEnabled (configForPlugin conf desc) <> pluginResponsible uri desc
-    where
-        uri = params ^. L.textDocument . L.uri
-
--- | Only check if the file type is supported
-pluginEnabledOnlyFileType :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
-                              => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> PluginStatus
-pluginEnabledOnlyFileType  _ msgParams pluginDesc _ = pluginResponsible uri pluginDesc
-    where
-      uri = msgParams ^. L.textDocument . L.uri
-
--- | Only check if the plugin is enabled globally
-pluginEnabledOnlyGlobalOn :: SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> PluginStatus
-pluginEnabledOnlyGlobalOn _ _ desc conf = pluginGlobalEnabled (configForPlugin conf desc)
+  default handlesRequest :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
+                              => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> HandleRequestResult
+  handlesRequest _ params desc conf =
+    pluginEnabledGlobally desc conf <> pluginSupportsFileType params desc
 
 -- | Check if a plugin is enabled, if one of it's specific config's is enabled,
 -- and if it supports the file
 pluginEnabledWithFeature :: (L.HasTextDocument (MessageParams m) doc, L.HasUri doc Uri)
                               => (PluginConfig -> Bool) -> SMethod m -> MessageParams m
-                              -> PluginDescriptor c -> Config -> PluginStatus
+                              -> PluginDescriptor c -> Config -> HandleRequestResult
 pluginEnabledWithFeature feature _ msgParams pluginDesc config =
-  pluginEnabledConfig feature (configForPlugin config pluginDesc)
-    <> pluginResponsible uri pluginDesc
-    where
-      uri = msgParams ^. L.textDocument . L.uri
+  pluginEnabledGlobally pluginDesc config
+  <> pluginFeatureEnabled feature pluginDesc config
+  <> pluginSupportsFileType msgParams pluginDesc
 
 -- | Check if a plugin is enabled, if one of it's specific configs is enabled,
 -- and if it's the plugin responsible for a resolve request.
-pluginEnabledResolve :: L.HasData_ s (Maybe Value) => (PluginConfig -> Bool) -> p -> s -> PluginDescriptor c -> Config -> PluginStatus
+pluginEnabledResolve :: L.HasData_ s (Maybe Value) => (PluginConfig -> Bool) -> p -> s -> PluginDescriptor c -> Config -> HandleRequestResult
 pluginEnabledResolve feature _ msgParams pluginDesc config =
-    pluginEnabledConfig feature (configForPlugin config pluginDesc)
-    <> pluginResolverResponsible (msgParams ^. L.data_) pluginDesc
+    pluginEnabledGlobally pluginDesc config
+    <> pluginFeatureEnabled feature pluginDesc config
+    <> pluginResolverResponsible msgParams pluginDesc
 
 instance PluginMethod Request Method_TextDocumentCodeAction where
-  pluginEnabled = pluginEnabledWithFeature plcCodeActionsOn
+  handlesRequest = pluginEnabledWithFeature plcCodeActionsOn
 
 instance PluginMethod Request Method_CodeActionResolve where
   -- See Note [Resolve in PluginHandlers]
-  pluginEnabled = pluginEnabledResolve plcCodeActionsOn
+  handlesRequest = pluginEnabledResolve plcCodeActionsOn
 
 instance PluginMethod Request Method_TextDocumentDefinition where
-  pluginEnabled = pluginEnabledOnlyFileType
+  handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
 
 instance PluginMethod Request Method_TextDocumentTypeDefinition where
-  pluginEnabled = pluginEnabledOnlyFileType
-
+  handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
 
 instance PluginMethod Request Method_TextDocumentDocumentHighlight where
-  pluginEnabled = pluginEnabledOnlyFileType
-
+  handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
 
 instance PluginMethod Request Method_TextDocumentReferences where
-  pluginEnabled = pluginEnabledOnlyFileType
+  handlesRequest _ msgParams pluginDesc _ = pluginSupportsFileType msgParams pluginDesc
 
 instance PluginMethod Request Method_WorkspaceSymbol where
   -- Unconditionally enabled, but should it really be?
-  pluginEnabled _ _ _ _ = PluginEnabled
+  handlesRequest _ _ _ _ = HandlesRequest
 
 instance PluginMethod Request Method_TextDocumentCodeLens where
-  pluginEnabled = pluginEnabledWithFeature plcCodeLensOn
+  handlesRequest = pluginEnabledWithFeature plcCodeLensOn
 
 instance PluginMethod Request Method_CodeLensResolve where
   -- See Note [Resolve in PluginHandlers]
-  pluginEnabled = pluginEnabledResolve plcCodeLensOn
+  handlesRequest = pluginEnabledResolve plcCodeLensOn
 
 instance PluginMethod Request Method_TextDocumentRename where
-  pluginEnabled = pluginEnabledWithFeature plcRenameOn
+  handlesRequest = pluginEnabledWithFeature plcRenameOn
 
 instance PluginMethod Request Method_TextDocumentHover where
-
-  pluginEnabled = pluginEnabledWithFeature plcHoverOn
+  handlesRequest = pluginEnabledWithFeature plcHoverOn
 
 instance PluginMethod Request Method_TextDocumentDocumentSymbol where
-
-  pluginEnabled = pluginEnabledWithFeature plcSymbolsOn
+  handlesRequest = pluginEnabledWithFeature plcSymbolsOn
 
 instance PluginMethod Request Method_CompletionItemResolve where
   -- See Note [Resolve in PluginHandlers]
-  pluginEnabled _ (CompletionItem {_data_=Nothing}) (PluginDescriptor {pluginId=PluginId "ghcide-completions-bounce"}) _ = PluginEnabled
-  pluginEnabled method params desc conf = pluginEnabledResolve plcCompletionOn method params desc conf
+  handlesRequest = pluginEnabledResolve plcCompletionOn
 
 instance PluginMethod Request Method_TextDocumentCompletion where
-
-  pluginEnabled = pluginEnabledWithFeature plcCompletionOn
+  handlesRequest = pluginEnabledWithFeature plcCompletionOn
 
 instance PluginMethod Request Method_TextDocumentFormatting where
-  pluginEnabled SMethod_TextDocumentFormatting msgParams pluginDesc conf =
+  handlesRequest _ msgParams pluginDesc conf =
     if PluginId (formattingProvider conf) == pid
           || PluginId (cabalFormattingProvider conf) == pid
-        then PluginEnabled
-        else PluginDisabled DisabledByConfig
-    <> pluginResponsible uri pluginDesc
+        then HandlesRequest
+        else DoesNotHandleRequest FeatureDisabled
+    <> pluginSupportsFileType msgParams pluginDesc
     where
-      uri = msgParams ^. L.textDocument . L.uri
       pid = pluginId pluginDesc
 
 instance PluginMethod Request Method_TextDocumentRangeFormatting where
-  pluginEnabled _ msgParams pluginDesc conf =
+  handlesRequest _ msgParams pluginDesc conf =
     if PluginId (formattingProvider conf) == pid
           || PluginId (cabalFormattingProvider conf) == pid
-        then PluginEnabled
-        else PluginDisabled DisabledByConfig
-    <> pluginResponsible uri pluginDesc
+        then HandlesRequest
+        else DoesNotHandleRequest FeatureDisabled
+    <> pluginSupportsFileType msgParams pluginDesc
     where
-      uri = msgParams ^. L.textDocument . L.uri
       pid = pluginId pluginDesc
 
 instance PluginMethod Request Method_TextDocumentPrepareCallHierarchy where
-
-  pluginEnabled = pluginEnabledWithFeature plcCallHierarchyOn
+  handlesRequest = pluginEnabledWithFeature plcCallHierarchyOn
 
 instance PluginMethod Request Method_TextDocumentSelectionRange where
-
-  pluginEnabled = pluginEnabledWithFeature plcSelectionRangeOn
+  handlesRequest = pluginEnabledWithFeature plcSelectionRangeOn
 
 instance PluginMethod Request Method_TextDocumentFoldingRange where
-
-  pluginEnabled = pluginEnabledWithFeature plcFoldingRangeOn
+  handlesRequest = pluginEnabledWithFeature plcFoldingRangeOn
 
 instance PluginMethod Request Method_CallHierarchyIncomingCalls where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'
-  pluginEnabled _ _ pluginDesc conf =
-    pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
+  handlesRequest _ _ pluginDesc conf =
+      pluginEnabledGlobally pluginDesc conf
+    <> pluginFeatureEnabled plcCallHierarchyOn pluginDesc conf
 
 instance PluginMethod Request Method_CallHierarchyOutgoingCalls where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'
-  pluginEnabled _ _ pluginDesc conf =
-    pluginEnabledConfig plcCallHierarchyOn (configForPlugin conf pluginDesc)
+  handlesRequest _ _ pluginDesc conf =
+      pluginEnabledGlobally pluginDesc conf
+    <> pluginFeatureEnabled plcCallHierarchyOn pluginDesc conf
+
 instance PluginMethod Request Method_WorkspaceExecuteCommand where
-  pluginEnabled _ _ _ _= PluginEnabled
+  handlesRequest _ _ _ _= HandlesRequest
 
 instance PluginMethod Request (Method_CustomMethod m) where
-  pluginEnabled _ _ _ _ = PluginEnabled
+  handlesRequest _ _ _ _ = HandlesRequest
 
 -- Plugin Notifications
 
@@ -559,19 +552,19 @@ instance PluginMethod Notification Method_TextDocumentDidClose where
 
 instance PluginMethod Notification Method_WorkspaceDidChangeWatchedFiles where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled = pluginEnabledOnlyGlobalOn
+  handlesRequest _ _ desc conf = pluginEnabledGlobally desc conf
 
 instance PluginMethod Notification Method_WorkspaceDidChangeWorkspaceFolders where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled = pluginEnabledOnlyGlobalOn
+  handlesRequest _ _ desc conf = pluginEnabledGlobally desc conf
 
 instance PluginMethod Notification Method_WorkspaceDidChangeConfiguration where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled = pluginEnabledOnlyGlobalOn
+  handlesRequest _ _ desc conf = pluginEnabledGlobally desc conf
 
 instance PluginMethod Notification Method_Initialized where
   -- This method has no URI parameter, thus no call to 'pluginResponsible'.
-  pluginEnabled = pluginEnabledOnlyGlobalOn
+  handlesRequest _ _ desc conf = pluginEnabledGlobally desc conf
 
 
 -- ---------------------------------------------------------------------
@@ -1008,7 +1001,7 @@ mkResolveHandler
   -> PluginHandlers ideState
 mkResolveHandler m f = mkPluginHandler m $ \ideState plId params -> do
   case fromJSON <$> (params ^. L.data_) of
-    (Just (Success (PluginResolveData owner uri value) )) -> do
+    (Just (Success (PluginResolveData owner@(PluginId ownerName) uri value) )) -> do
       if owner == plId
       then
         case fromJSON value of
@@ -1018,7 +1011,8 @@ mkResolveHandler m f = mkPluginHandler m $ \ideState plId params -> do
           Error msg ->
             -- We are assuming that if we can't decode the data, that this
             -- request belongs to another resolve handler for this plugin.
-            throwError (PluginRequestRefused (T.pack ("Unable to decode payload for handler, assuming that it's for a different handler" <> msg)))
+            throwError (PluginRequestRefused
+                           (NotResolveOwner (ownerName <> ": error decoding payload:" <> T.pack msg)))
       -- If we are getting an owner that isn't us, this means that there is an
       -- error, as we filter these our in `pluginEnabled`
       else throwError $ PluginInternalError invalidRequest
@@ -1054,23 +1048,6 @@ newtype PluginId = PluginId T.Text
 instance IsString PluginId where
   fromString = PluginId . T.pack
 
--- | Lookup the current config for a plugin
-configForPlugin :: Config -> PluginDescriptor c -> PluginConfig
-configForPlugin config PluginDescriptor{..}
-    = Map.findWithDefault (configInitialGenericConfig pluginConfigDescriptor) pluginId (plugins config)
-
--- | Checks that a specific plugin is enabled
-pluginGlobalEnabled :: PluginConfig -> PluginStatus
-pluginGlobalEnabled pc = if plcGlobalOn pc
-                           then PluginEnabled
-                           else PluginDisabled DisabledByConfig
-
--- | Checks that a given plugin is both enabled and the specific feature is
--- enabled
-pluginEnabledConfig :: (PluginConfig -> Bool) -> PluginConfig -> PluginStatus
-pluginEnabledConfig f pluginConfig = if plcGlobalOn pluginConfig && f pluginConfig
-                                      then PluginEnabled
-                                      else PluginDisabled DisabledByConfig
 
 -- ---------------------------------------------------------------------
 
@@ -1194,16 +1171,6 @@ getProcessID = fromIntegral <$> P.getProcessID
 
 installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 #endif
-
--- |Determine whether this request should be routed to the plugin. Fails closed
--- if we can't determine which plugin it should be routed to.
-pluginResolverResponsible :: Maybe Value -> PluginDescriptor c -> PluginStatus
-pluginResolverResponsible (Just (fromJSON -> (Success (PluginResolveData o@(PluginId ot) _ _)))) pluginDesc =
-  if pluginId pluginDesc == o
-    then PluginEnabled
-    else PluginDisabled $ NotResolveOwner ot
--- We want to fail closed
-pluginResolverResponsible _ _ = PluginDisabled $ NotResolveOwner ""
 
 {- Note [Resolve in PluginHandlers]
   Resolve methods have a few guarantees that need to be made by HLS,
