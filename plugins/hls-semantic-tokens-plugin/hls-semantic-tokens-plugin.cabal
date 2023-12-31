@@ -76,6 +76,7 @@ test-suite tests
     , lens
     , lsp
     , ghc
+    , text-rope
     , lsp-test
     , text
     , data-default

@@ -10,23 +10,25 @@ module Ide.Plugin.SemanticTokens.Query where
 
 import           Data.Either                        (rights)
 import           Data.Foldable                      (fold)
-import           Data.Generics                      (everything)
 import qualified Data.List                          as List
 import qualified Data.Map                           as M
 import qualified Data.Map                           as Map
-import           Data.Maybe                         (listToMaybe, mapMaybe)
+import           Data.Maybe                         (fromMaybe, listToMaybe,
+                                                     mapMaybe)
 import qualified Data.Set                           as S
 import qualified Data.Set                           as Set
 import           Data.Text                          (Text)
-import           Development.IDE                    (HieKind,
-                                                     realSrcSpanToRange)
+import           Development.IDE                    (realSrcSpanToRange)
 import           Development.IDE.GHC.Compat
-import           Generics.SYB                       (mkQ)
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types    (HieFunMaskKind,
                                                      HsSemanticTokenType,
                                                      NameSemanticMap)
+import           Ide.Plugin.SemanticTokens.Utils    (realSrcSpanToCodePointRange)
 import           Language.LSP.Protocol.Types
+import           Language.LSP.VFS                   (CodePointRange,
+                                                     VirtualFile,
+                                                     codePointRangeToRange)
 import           Prelude                            hiding (span)
 
 ---------------------------------------------------------
@@ -66,13 +68,15 @@ nameNameSemanticFromHie hieKind rm ns = do
 -- | get only visible names from HieAST
 -- we care only the leaf node of the AST
 -- and filter out the derived and evidence names
-hieAstSpanNames :: HieAST a -> M.Map Range NameSet
-hieAstSpanNames ast =
+hieAstSpanNames :: VirtualFile -> HieAST a -> M.Map Range NameSet
+hieAstSpanNames vf ast =
   if null (nodeChildren ast)
     then getIds ast
-    else M.unionsWith unionNameSet $ map hieAstSpanNames (nodeChildren ast)
+    else M.unionsWith unionNameSet $ map (hieAstSpanNames vf) (nodeChildren ast)
   where
-    getIds ast' =  M.singleton (realSrcSpanToRange $ nodeSpan ast') (getNodeIds' ast')
+    getIds ast' =  fromMaybe mempty $ do
+        range <- codePointRangeToRange vf $ realSrcSpanToCodePointRange $ nodeSpan ast'
+        return $ M.singleton range (getNodeIds' ast')
     getNodeIds' =
       Map.foldl' combineNodeIds mempty
         . Map.filterWithKey (\k _ -> k == SourceInfo)

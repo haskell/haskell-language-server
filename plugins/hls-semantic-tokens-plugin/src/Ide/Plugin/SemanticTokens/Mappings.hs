@@ -15,18 +15,20 @@ module Ide.Plugin.SemanticTokens.Mappings where
 import qualified Data.Array                      as A
 import           Data.List.Extra                 (chunksOf, (!?))
 import qualified Data.Map                        as Map
+import           Data.Maybe                      (mapMaybe)
 import qualified Data.Set                        as Set
-import           Data.Text                       (Text)
+import           Data.Text                       (Text, unpack)
 import           Development.IDE                 (HieKind (HieFresh, HieFromDisk))
 import           Development.IDE.GHC.Compat
-import           Ide.Plugin.SemanticTokens.Types
-import           Ide.Plugin.SemanticTokens.Utils (recoverFunMaskArray)
+import           Ide.Plugin.SemanticTokens.Types hiding (tokens)
+import           Ide.Plugin.SemanticTokens.Utils (mkRange, recoverFunMaskArray)
 import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
                                                   SemanticTokenAbsolute (SemanticTokenAbsolute),
                                                   SemanticTokenRelative (SemanticTokenRelative),
                                                   SemanticTokenTypes (..),
                                                   SemanticTokens (SemanticTokens),
                                                   UInt, absolutizeTokens)
+import           Language.LSP.VFS                hiding (line)
 
 -- * 1. Mapping semantic token type to and from the LSP default token type.
 
@@ -140,16 +142,23 @@ type ActualToken = (UInt, UInt, UInt, HsSemanticTokenType, UInt)
 -- for debug and test.
 -- this function is used to recover the original tokens(with token in haskell token type zoon)
 -- from the lsp semantic tokens(with token in lsp token type zoon)
-recoverSemanticTokens :: String -> SemanticTokens -> Either Text [SemanticTokenOriginal]
-recoverSemanticTokens sourceCode (SemanticTokens _ xs) = fmap (tokenOrigin sourceCode) <$> dataActualToken xs
+recoverSemanticTokens :: VirtualFile -> SemanticTokens -> Either Text [SemanticTokenOriginal]
+recoverSemanticTokens vsf (SemanticTokens _ xs) = do
+    tokens <- dataActualToken xs
+    return $ mapMaybe (tokenOrigin sourceCode) tokens
   where
-    tokenOrigin :: [Char] -> ActualToken -> SemanticTokenOriginal
-    tokenOrigin sourceCode' (line, startChar, len, tokenType, _) =
-      -- convert back to count from 1
-      SemanticTokenOriginal tokenType (Loc (line + 1) (startChar + 1) len) name
-      where
-        tLine = lines sourceCode' !? fromIntegral line
-        name = maybe "no source" (take (fromIntegral len) . drop (fromIntegral startChar)) tLine
+    sourceCode = unpack $ virtualFileText vsf
+    tokenOrigin :: [Char] -> ActualToken -> Maybe SemanticTokenOriginal
+    tokenOrigin sourceCode' (line, startChar, len, tokenType, _) = do
+        -- convert back to count from 1
+        let range = mkRange line startChar len
+        CodePointRange (CodePointPosition x y)  (CodePointPosition _ y1) <- rangeToCodePointRange vsf range
+        let line' = x
+        let startChar' = y
+        let len' = y1 - y
+        let tLine = lines sourceCode' !? fromIntegral line'
+        let name = maybe "no source" (take (fromIntegral len') . drop (fromIntegral startChar')) tLine
+        return $ SemanticTokenOriginal tokenType (Loc (line' + 1) (startChar' + 1) len') name
 
     dataActualToken :: [UInt] -> Either Text [ActualToken]
     dataActualToken dt =

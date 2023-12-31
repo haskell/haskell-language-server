@@ -9,8 +9,12 @@ import qualified Data.Array                      as A
 import           Data.ByteString                 (ByteString)
 import           Data.ByteString.Char8           (unpack)
 import qualified Data.Map                        as Map
+import           Development.IDE                 (Position (..), Range (..))
 import           Development.IDE.GHC.Compat
+import qualified Development.IDE.GHC.Compat      as Compat
 import           Ide.Plugin.SemanticTokens.Types
+import           Language.LSP.VFS                (CodePointPosition (..),
+                                                  CodePointRange (..))
 import           Prelude                         hiding (span)
 
 deriving instance Show DeclType
@@ -119,4 +123,18 @@ recoverFunMaskArray flattened = unflattened
     go (HTyConApp _ _)             = False
 
 
+realSrcSpanToCodePointRange :: RealSrcSpan -> CodePointRange
+realSrcSpanToCodePointRange real =
+  CodePointRange (realSrcLocToCodePointPosition $ Compat.realSrcSpanStart real)
+        (realSrcLocToCodePointPosition $ Compat.realSrcSpanEnd   real)
 
+
+realSrcLocToCodePointPosition :: RealSrcLoc -> CodePointPosition
+realSrcLocToCodePointPosition real =
+  CodePointPosition (fromIntegral $ srcLocLine real - 1) (fromIntegral $ srcLocCol real - 1)
+
+-- rangeToCodePointRange
+-- mkRange :: Int -> Int -> Int -> Range
+mkRange :: (Integral a1, Integral a2) => a1 -> a2 -> a2 -> Range
+mkRange startLine startCol len =
+    Range (Position (fromIntegral startLine) (fromIntegral startCol)) (Position (fromIntegral startLine) (fromIntegral $ startCol + len))

@@ -83,10 +83,12 @@ data HieFunMaskKind kind where
 
 data SemanticLog = LogShake Shake.Log
     | LogNoAST
+    | LogNoVF
       deriving Show
 
 instance Pretty SemanticLog where
     pretty theLog = case theLog of
         LogShake shakeLog -> pretty shakeLog
         LogNoAST          -> "no HieAst exist for file"
+        LogNoVF           -> "no VirtualSourceFile exist for file"
 

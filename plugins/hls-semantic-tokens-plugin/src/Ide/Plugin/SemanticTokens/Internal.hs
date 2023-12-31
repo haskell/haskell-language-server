@@ -25,7 +25,6 @@ import           Control.Monad.Except                 (ExceptT, liftEither,
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Control.Monad.Trans                  (lift)
 import           Control.Monad.Trans.Except           (runExceptT)
-import           Data.Either                          (fromRight)
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (listToMaybe, mapMaybe)
 import qualified Data.Text                            as T
@@ -34,7 +33,6 @@ import           Development.IDE                      (Action,
                                                        GetHieAst (GetHieAst),
                                                        HieAstResult (HAR, hieAst, hieModule, refMap),
                                                        IdeResult, IdeState,
-                                                       Pretty (pretty),
                                                        Priority (..), Recorder,
                                                        Rules, WithPriority,
                                                        cmapWithPrio, define,
@@ -46,12 +44,14 @@ import           Development.IDE.Core.PositionMapping (idDelta, toCurrentRange)
 import           Development.IDE.Core.Rules           (toIdeResult)
 import           Development.IDE.Core.RuleTypes       (DocAndKindMap (..))
 import           Development.IDE.Core.Shake           (addPersistentRule,
+                                                       getVirtualFile,
                                                        useWithStale_)
 import           Development.IDE.GHC.Compat           hiding (Warning)
 import           Ide.Logger                           (logWith)
 import           Ide.Plugin.Error                     (PluginError (PluginInternalError),
                                                        getNormalizedFilePathE,
-                                                       handleMaybe)
+                                                       handleMaybe,
+                                                       handleMaybeM)
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Query
 import           Ide.Plugin.SemanticTokens.Types
@@ -101,8 +101,9 @@ getSemanticTokensRule recorder =
     (HAR {..}) <- lift $ use_ GetHieAst nfp
     (DKMap{getKindMap}, _) <- lift $ useWithStale_ GetDocMap nfp
     (_, ast) <- handleMaybe LogNoAST $ listToMaybe $ Map.toList $ getAsts hieAst
+    virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     -- get current location from the old ones
-    let spanNamesMap = hieAstSpanNames ast
+    let spanNamesMap = hieAstSpanNames virtualFile ast
     let names = nameSetElemsStable $ unionNameSets $ Map.elems spanNamesMap
     let localSemanticMap = mkLocalNameSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
     -- get imported name semantic map

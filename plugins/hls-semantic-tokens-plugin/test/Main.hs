@@ -23,8 +23,11 @@ import qualified Data.Set                           as Set
 import           Data.String                        (fromString)
 import           Data.Text                          hiding (length, map,
                                                      unlines)
-import           Development.IDE                    (getFileContents, runAction)
+import qualified Data.Text.Utf16.Rope               as Rope
+import           Development.IDE                    (getFileContents, runAction,
+                                                     toNormalizedUri)
 import           Development.IDE.Core.Rules         (Log)
+import           Development.IDE.Core.Shake         (getVirtualFile)
 import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
 import           Development.IDE.Test               (waitForBuildQueue)
 import           Ide.Plugin.Error                   (getNormalizedFilePathE)
@@ -36,12 +39,14 @@ import qualified Language.LSP.Protocol.Lens         as L
 import           Language.LSP.Protocol.Types        (SemanticTokens (..),
                                                      SemanticTokensParams (..),
                                                      _L, type (|?) (..))
-import           Language.LSP.Test                  (openDoc)
+import qualified Language.LSP.Server                as Lsp
+import           Language.LSP.Test                  (Session (..), openDoc)
 import qualified Language.LSP.Test                  as Test
+import           Language.LSP.VFS                   (VirtualFile (..))
 import           System.Environment.Blank
 import           System.FilePath
 import           Test.Hls                           (PluginTestDescriptor,
-                                                     Session, TestName,
+                                                     Session (..), TestName,
                                                      TestTree,
                                                      TextDocumentIdentifier,
                                                      defaultTestRunner,
@@ -90,11 +95,12 @@ goldenWithSemanticTokens title path =
 docSemanticTokensString :: TextDocumentIdentifier -> Session String
 docSemanticTokensString doc = do
   res <- Test.getSemanticTokens doc
-  content <- unpack <$> documentContents doc
+  textContent <- documentContents doc
+  let vfs = VirtualFile 0 0 (Rope.fromText textContent)
   let expect = []
   case res ^? _L of
     Just tokens -> do
-      either (error . show) (return . unlines . map show) $ recoverSemanticTokens content tokens
+      either (error . show) (return . unlines . map show) $ recoverSemanticTokens vfs tokens
     _noTokens -> error "No tokens found"
 
 semanticTokensImportedTests :: TestTree
@@ -130,8 +136,6 @@ semanticTokensTests =
     [ testCase "module import test" $ do
         let filePath1 = "./test/testdata/TModuleA.hs"
         let filePath2 = "./test/testdata/TModuleB.hs"
-        content1 <- liftIO $ Prelude.readFile filePath1
-        content2 <- liftIO $ Prelude.readFile filePath2
 
         let file1 = "TModuleA.hs"
         let file2 = "TModuleB.hs"
@@ -149,12 +153,14 @@ semanticTokensTests =
             Left y                         -> error "TypeCheck2 failed"
 
           res2 <- Test.getSemanticTokens doc2
+          textContent2 <- documentContents doc2
+          let vfs = VirtualFile 0 0 (Rope.fromText textContent2)
           case res2 ^? _L of
             Just tokens -> do
               either
                 (error . show)
                 (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens content2 tokens
+                $ recoverSemanticTokens vfs tokens
               return ()
             _ -> error "No tokens found"
           liftIO $ 1 @?= 1,
