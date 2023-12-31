@@ -35,9 +35,9 @@ import           Language.LSP.VFS                hiding (line)
 -- | map from haskell semantic token type to LSP default token type
 toLspTokenType :: HsSemanticTokenType -> SemanticTokenTypes
 toLspTokenType tk = case tk of
-  -- TVariable     -> SemanticTokenTypes_Variable
-  -- left hand side of none pattern bind
+  -- Function type variable
   TFunction     -> SemanticTokenTypes_Function
+  -- None function type variable
   TVariable     -> SemanticTokenTypes_Variable
   TClass        -> SemanticTokenTypes_Class
   TClassMethod  -> SemanticTokenTypes_Method
@@ -48,7 +48,7 @@ toLspTokenType tk = case tk of
   TTypeCon      -> SemanticTokenTypes_Enum
   TDataCon      -> SemanticTokenTypes_EnumMember
   TRecField     -> SemanticTokenTypes_Property
-  -- pattern syn is like a limited version of macro of constructing a data type
+  -- pattern syn is like a limited version of macro of constructing a term
   TPatternSyn   -> SemanticTokenTypes_Macro
   -- saturated type
   TTypeSyn      -> SemanticTokenTypes_Type
@@ -178,3 +178,21 @@ recoverSemanticTokens vsf (SemanticTokens _ xs) = do
     -- legends :: SemanticTokensLegend
     fromInt :: Int -> Maybe SemanticTokenTypes
     fromInt i = Set.toAscList knownValues !? i
+
+
+-- Note [Semantic information from Multiple Sources]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- We group Name into 2 categories since the information source is different:
+-- 1. Locally defined Name
+-- Information source is current module's HieAst,
+-- Either from ContextInfo(all except differing function and none-function)
+-- or from Hie Type(Differing Function and Non-function Variable)
+-- 2. Imported Name
+-- Information source is `TyThing` for the `Name`, looked up in `HscEnv`(with all imported things loaded).
+-- `TyThing` is information rich, since it is used to represent the things that a name can refer to in ghc.
+-- The reason why we need special handling for imported name is that
+-- Up to 9.8
+-- 1. For Hie Type, IfaceTyCon in hie type does not contain enough information to distinguish class, type syn, type family etc..
+-- 2. Most imported name is only annotated as [Use] in the ContextInfo from hie.
+-- 3. `namespace` in `Name` is limited, we can only classify `VarName, FldName, DataName, TvNamem, TcClsName`.
+-- 4. WiredIn `Name` have `TyThing` attached, but not many are WiredIn names.
