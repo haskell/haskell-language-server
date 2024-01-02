@@ -99,30 +99,6 @@ showSpan :: RealSrcSpan -> String
 showSpan x = show (srcSpanStartLine x) <> ":" <> show (srcSpanStartCol x) <> "-" <> show (srcSpanEndCol x)
 
 
--- idea from https://gitlab.haskell.org/ghc/haddock/-/blob/b0b0e0366457c9aefebcc94df74e5de4d00e17b7/haddock-api/src/Haddock/Backends/Hyperlinker/Utils.hs#L107
-recoverFunMaskArray
-  :: A.Array TypeIndex HieTypeFlat -- ^ flat types
-  -> A.Array TypeIndex Bool-- ^ full AST
-recoverFunMaskArray flattened = unflattened
-    where
-    -- The recursion in 'unflattened' is crucial - it's what gives us sharing
-    -- between the IfaceType's produced
-    unflattened :: A.Array TypeIndex Bool
-    unflattened = fmap (\flatTy -> go (fmap (unflattened A.!) flatTy)) flattened
-
-    -- Unfold an 'HieType' whose subterms have already been unfolded
-    go :: HieType Bool -> Bool
-    go (HTyVarTy _name)            = False
-    go (HAppTy _f _x)              = False
-    go (HLitTy _lit)               = False
-    go (HForAllTy ((_n,_k),_af) b) = b
-    go (HFunTy _ _ _)              = True
-    go (HQualTy _constraint b)     = b
-    go (HCastTy b)                 = b
-    go HCoercionTy                 = False
-    go (HTyConApp _ _)             = False
-
-
 -- rangeToCodePointRange
 mkRange :: (Integral a1, Integral a2) => a1 -> a2 -> a2 -> Range
 mkRange startLine startCol len =

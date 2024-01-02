@@ -21,7 +21,7 @@ import           Data.Text                       (Text, unpack)
 import           Development.IDE                 (HieKind (HieFresh, HieFromDisk))
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.SemanticTokens.Types
-import           Ide.Plugin.SemanticTokens.Utils (mkRange, recoverFunMaskArray)
+import           Ide.Plugin.SemanticTokens.Utils (mkRange)
 import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
                                                   SemanticTokenAbsolute (SemanticTokenAbsolute),
                                                   SemanticTokenRelative (SemanticTokenRelative),
@@ -62,6 +62,7 @@ lspTokenReverseMap = Map.fromList $ map (\x -> (toLspTokenType x, x)) $ enumFrom
 fromLspTokenType :: SemanticTokenTypes -> Maybe HsSemanticTokenType
 fromLspTokenType tk = Map.lookup tk lspTokenReverseMap
 
+
 -- * 2. Mapping from GHC type and tyThing to semantic token type.
 
 
@@ -101,6 +102,30 @@ hieKindFunMasksKind :: HieKind a -> HieFunMaskKind a
 hieKindFunMasksKind hieKind = case hieKind of
   HieFresh -> HieFreshFun
   HieFromDisk full_file -> HieFromDiskFun $ recoverFunMaskArray (hie_types full_file)
+
+-- wz1000 offered
+-- the idea from https://gitlab.haskell.org/ghc/haddock/-/blob/b0b0e0366457c9aefebcc94df74e5de4d00e17b7/haddock-api/src/Haddock/Backends/Hyperlinker/Utils.hs#L107
+recoverFunMaskArray
+  :: A.Array TypeIndex HieTypeFlat -- ^ flat types
+  -> A.Array TypeIndex Bool-- ^ full AST
+recoverFunMaskArray flattened = unflattened
+    where
+    -- The recursion in 'unflattened' is crucial - it's what gives us sharing
+    -- between the IfaceType's produced
+    unflattened :: A.Array TypeIndex Bool
+    unflattened = fmap (\flatTy -> go (fmap (unflattened A.!) flatTy)) flattened
+
+    -- Unfold an 'HieType' whose subterms have already been unfolded
+    go :: HieType Bool -> Bool
+    go (HTyVarTy _name)            = False
+    go (HAppTy _f _x)              = False
+    go (HLitTy _lit)               = False
+    go (HForAllTy ((_n,_k),_af) b) = b
+    go (HFunTy _ _ _)              = True
+    go (HQualTy _constraint b)     = b
+    go (HCastTy b)                 = b
+    go HCoercionTy                 = False
+    go (HTyConApp _ _)             = False
 
 typeSemantic :: HieFunMaskKind hType -> hType -> Maybe HsSemanticTokenType
 typeSemantic kind t = case kind of
@@ -147,6 +172,7 @@ recoverSemanticTokens vsf (SemanticTokens _ xs) = do
     tokens <- dataActualToken xs
     return $ mapMaybe (tokenOrigin sourceCode) tokens
   where
+    -- xxxxx
     sourceCode = unpack $ virtualFileText vsf
     tokenOrigin :: [Char] -> ActualToken -> Maybe SemanticTokenOriginal
     tokenOrigin sourceCode' (line, startChar, len, tokenType, _) = do
