@@ -364,18 +364,19 @@ pluginResolverResponsible
   if pluginId pluginDesc == o
     then HandlesRequest
     else DoesNotHandleRequest $ NotResolveOwner ot
--- We want to fail closed
+-- If we can't determine who this request belongs to, then we don't want any plugin
+-- to handle it.
 pluginResolverResponsible _ _ = DoesNotHandleRequest $ NotResolveOwner "(unable to determine resolve owner)"
 
--- | Check whether the given plugin descriptor is responsible for the file with
---   the given path. Compares the file extension from the msgParams with the
---   file extension the plugin is responsible for.
---   We are passing the msgParams here even though we only need the URI to allow
---   us to extract the URI here. If in the future we need to be able to provide
---   an URI it can be separated again.
+-- | Check whether the given plugin descriptor supports the file with
+-- the given path. Compares the file extension from the msgParams with the
+-- file extension the plugin is responsible for.
+-- We are passing the msgParams here even though we only need the URI URI here.
+-- If in the future we need to be able to provide only an URI it can be
+-- separated again.
 pluginSupportsFileType :: (L.HasTextDocument m doc, L.HasUri doc Uri) => m -> PluginDescriptor c -> HandleRequestResult
 pluginSupportsFileType msgParams pluginDesc =
-  case uriToFilePath uri of
+  case mfp of
     Just fp | T.pack (takeExtension fp) `elem` pluginFileType pluginDesc -> HandlesRequest
     _ -> DoesNotHandleRequest $ DoesNotSupportFileType (maybe "(unable to determine file type)" (T.pack . takeExtension) mfp)
     where
@@ -495,20 +496,20 @@ instance PluginMethod Request Method_TextDocumentCompletion where
 
 instance PluginMethod Request Method_TextDocumentFormatting where
   handlesRequest _ msgParams pluginDesc conf =
-    if PluginId (formattingProvider conf) == pid
+    (if PluginId (formattingProvider conf) == pid
           || PluginId (cabalFormattingProvider conf) == pid
         then HandlesRequest
-        else DoesNotHandleRequest FeatureDisabled
+        else DoesNotHandleRequest (NotFormattingProvider (formattingProvider conf)) )
     <> pluginSupportsFileType msgParams pluginDesc
     where
       pid = pluginId pluginDesc
 
 instance PluginMethod Request Method_TextDocumentRangeFormatting where
   handlesRequest _ msgParams pluginDesc conf =
-    if PluginId (formattingProvider conf) == pid
+    (if PluginId (formattingProvider conf) == pid
           || PluginId (cabalFormattingProvider conf) == pid
         then HandlesRequest
-        else DoesNotHandleRequest FeatureDisabled
+        else DoesNotHandleRequest (NotFormattingProvider (formattingProvider conf)))
     <> pluginSupportsFileType msgParams pluginDesc
     where
       pid = pluginId pluginDesc

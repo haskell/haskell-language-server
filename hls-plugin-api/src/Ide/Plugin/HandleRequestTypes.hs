@@ -16,6 +16,9 @@ data RejectionReason =
   -- | The feature in the plugin that responds to this request is disabled in
   -- the users config
   | FeatureDisabled
+  -- | This plugin is not the formatting provider selected in the users config.
+  -- The text should be the formatting provider in your config.
+  | NotFormattingProvider Text
   -- | This plugin does not support the file type. The text field here should
   -- contain the filetype of the rejected request.
   | DoesNotSupportFileType Text
@@ -33,6 +36,7 @@ instance Pretty RejectionReason where
   pretty (NotResolveOwner s) = "does not handle resolve requests for " <> pretty s <> ")."
   pretty DisabledGlobally = "is disabled globally in your config."
   pretty FeatureDisabled = "'s feature that handles this request is disabled in your config."
+  pretty (NotFormattingProvider s) = "is not the formatting provider ("<> pretty s<>") you chose in your config."
   pretty (DoesNotSupportFileType s) = "does not support " <> pretty s <> " filetypes)."
 
 -- We always want to keep the leftmost disabled reason
