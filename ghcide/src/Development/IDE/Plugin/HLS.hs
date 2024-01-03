@@ -81,7 +81,7 @@ noPluginHandles recorder m fs' = do
       msg = noPluginHandlesMsg m fs'
   return $ Left err
   where noPluginHandlesMsg :: SMethod m -> [(PluginId, HandleRequestResult)] -> Text
-        noPluginHandlesMsg method [] = "No plugin installed for this " <> T.pack (show method) <> " request."
+        noPluginHandlesMsg method [] = "No plugins are available to handle this " <> T.pack (show method) <> " request."
         noPluginHandlesMsg method availPlugins =
             "No plugins are available to handle this " <> T.pack (show method) <> " request.\n Plugins installed for this method, but not available to handle this request are:\n"
                 <> (T.intercalate "\n" $
