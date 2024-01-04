@@ -23,7 +23,7 @@ tests = testGroup "format document"
 
 providerTests :: TestTree
 providerTests = testGroup "lsp formatting provider"
-    [ testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsCommand fullCaps "test/testdata/format" $ do
+    [ testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullCaps "test/testdata/format" $ do
         void configurationRequest
         doc <- openDoc "Format.hs" "haskell"
         resp <- request SMethod_TextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
@@ -34,7 +34,7 @@ providerTests = testGroup "lsp formatting provider"
             _ -> assertFailure $ "strange response from formatting provider:" ++ show result
           result -> assertFailure $ "strange response from formatting provider:" ++ show result
 
-    , requiresOrmoluPlugin . requiresFloskellPlugin $ testCase "can change on the fly" $ runSessionWithConfig (formatConfig "none") hlsCommand fullCaps "test/testdata/format" $ do
+    , requiresOrmoluPlugin . requiresFloskellPlugin $ testCase "can change on the fly" $ runSessionWithConfig (formatConfig "none") hlsLspCommand fullCaps "test/testdata/format" $ do
         void configurationRequest
         formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
         formattedFloskell <- liftIO $ T.readFile "test/testdata/format/Format.floskell.formatted.hs"
