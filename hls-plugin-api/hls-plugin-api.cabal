@@ -38,6 +38,7 @@ library
     Ide.Plugin.Config
     Ide.Plugin.ConfigUtils
     Ide.Plugin.Error
+    Ide.Plugin.HandleRequestTypes
     Ide.Plugin.Properties
     Ide.Plugin.RangeMap
     Ide.Plugin.Resolve

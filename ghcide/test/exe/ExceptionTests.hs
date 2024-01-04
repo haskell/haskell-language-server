@@ -18,6 +18,7 @@ import           GHC.Base                          (coerce)
 import           Ide.Logger                        (Logger, Recorder,
                                                     WithPriority, cmapWithPrio)
 import           Ide.Plugin.Error
+import           Ide.Plugin.HandleRequestTypes     (RejectionReason (DisabledGlobally))
 import           Ide.PluginUtils                   (idePluginsToPluginDesc,
                                                     pluginDescToIdePlugins)
 import           Ide.Types
@@ -106,9 +107,9 @@ tests recorder logger = do
                 _ -> liftIO $ assertFailure $ "We should have had an empty list" <> show lens]
 
    , testGroup "Testing PluginError order..."
-      [ pluginOrderTestCase recorder logger  "InternalError over InvalidParams" PluginInternalError PluginInvalidParams
-      , pluginOrderTestCase recorder logger  "InvalidParams over InvalidUserState" PluginInvalidParams PluginInvalidUserState
-      , pluginOrderTestCase recorder logger  "InvalidUserState over RequestRefused" PluginInvalidUserState PluginRequestRefused
+      [ pluginOrderTestCase recorder logger  "InternalError over InvalidParams" (PluginInternalError "error test") (PluginInvalidParams "error test")
+      , pluginOrderTestCase recorder logger  "InvalidParams over InvalidUserState" (PluginInvalidParams "error test") (PluginInvalidUserState "error test")
+      , pluginOrderTestCase recorder logger  "InvalidUserState over RequestRefused" (PluginInvalidUserState "error test") (PluginRequestRefused DisabledGlobally)
       ]
    ]
 
@@ -132,7 +133,7 @@ testingLite recorder logger plugins =
       , IDE.argsIdeOptions = ideOptions
       }
 
-pluginOrderTestCase :: Recorder (WithPriority Log) -> Logger -> TestName -> (T.Text -> PluginError) -> (T.Text -> PluginError) -> TestTree
+pluginOrderTestCase :: Recorder (WithPriority Log) -> Logger -> TestName -> PluginError -> PluginError -> TestTree
 pluginOrderTestCase recorder logger msg err1 err2 =
   testCase msg $ do
       let pluginId = "error-order-test"
@@ -140,9 +141,9 @@ pluginOrderTestCase recorder logger msg err1 err2 =
               [ (defaultPluginDescriptor pluginId "")
                   { pluginHandlers = mconcat
                       [ mkPluginHandler SMethod_TextDocumentCodeLens $ \_ _ _-> do
-                          throwError $ err1 "error test"
+                          throwError err1
                         ,mkPluginHandler SMethod_TextDocumentCodeLens $ \_ _ _-> do
-                          throwError $ err2 "error test"
+                          throwError err2
                       ]
                   }]
       testIde recorder (testingLite recorder logger plugins) $ do
@@ -150,6 +151,6 @@ pluginOrderTestCase recorder logger msg err1 err2 =
           waitForProgressDone
           (view L.result -> lens) <- request SMethod_TextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
           case lens of
-            Left re | toResponseError (pluginId, err1 "error test") == re -> pure ()
+            Left re | toResponseError (pluginId, err1) == re -> pure ()
                     | otherwise -> liftIO $ assertFailure "We caught an error, but it wasn't ours!"
             _ -> liftIO $ assertFailure $ show lens
