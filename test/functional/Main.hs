@@ -1,6 +1,7 @@
 module Main where
 
 import           Config
+import           ConfigSchema
 import           Format
 import           FunctionalBadProject
 import           HieBios
@@ -10,6 +11,7 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner $ testGroup "haskell-language-server"
     [ Config.tests
+    , ConfigSchema.tests
     , ignoreInEnv [HostOS Windows, GhcVer GHC90, GhcVer GHC92] "Tests gets stuck in ci" $ Format.tests
     , FunctionalBadProject.tests
     , HieBios.tests
