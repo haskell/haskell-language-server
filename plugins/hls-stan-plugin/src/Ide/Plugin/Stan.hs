@@ -34,8 +34,7 @@ import           Ide.Types                      (PluginDescriptor (..),
                                                  PluginId, configHasDiagnostics,
                                                  configInitialGenericConfig,
                                                  defaultConfigDescriptor,
-                                                 defaultPluginDescriptor,
-                                                 pluginEnabledConfig)
+                                                 defaultPluginDescriptor)
 import qualified Language.LSP.Protocol.Types    as LSP
 import           Stan.Analysis                  (Analysis (..), runAnalysis)
 import           Stan.Category                  (Category (..))
@@ -80,7 +79,7 @@ rules recorder plId = do
   define (cmapWithPrio LogShake recorder) $
     \GetStanDiagnostics file -> do
       config <- getPluginConfigAction plId
-      if pluginEnabledConfig plcDiagnosticsOn config then do
+      if plcGlobalOn config && plcDiagnosticsOn config then do
           maybeHie <- getHieFile file
           case maybeHie of
             Nothing -> return ([], Nothing)
