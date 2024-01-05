@@ -79,6 +79,9 @@
         "qualifyImportedNames": {
             "globalOn": true
         },
+        "semanticTokens": {
+            "globalOn": false
+        },
         "stan": {
             "globalOn": false
         }
