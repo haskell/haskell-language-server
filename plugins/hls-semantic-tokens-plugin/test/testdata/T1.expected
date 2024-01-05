@@ -1,5 +1,3 @@
-6:18-21 TTypeCon "Set"
-6:23-29 TFunction "insert"
 9:6-9 TTypeCon "Foo"
 9:12-15 TDataCon "Foo"
 9:18-21 TRecField "foo"

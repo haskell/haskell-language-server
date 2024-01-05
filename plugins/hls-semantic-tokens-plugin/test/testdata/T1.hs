@@ -3,7 +3,7 @@
 
 module Main where
 
-import Data.Set (Set, insert)
+-- import Data.Set (Set, insert)
 
 
 data Foo = Foo { foo :: Int }
