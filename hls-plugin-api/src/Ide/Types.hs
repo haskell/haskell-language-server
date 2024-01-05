@@ -517,6 +517,9 @@ instance PluginMethod Request Method_TextDocumentRangeFormatting where
     where
       pid = pluginId pluginDesc
 
+instance PluginMethod Request Method_TextDocumentSemanticTokensFull where
+  handlesRequest = pluginEnabledWithFeature plcCallHierarchyOn
+
 instance PluginMethod Request Method_TextDocumentPrepareCallHierarchy where
   handlesRequest = pluginEnabledWithFeature plcCallHierarchyOn
 
