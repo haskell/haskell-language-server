@@ -100,6 +100,7 @@ hieKindFunMasksKind hieKind = case hieKind of
 
 -- wz1000 offered
 -- the idea from https://gitlab.haskell.org/ghc/haddock/-/blob/b0b0e0366457c9aefebcc94df74e5de4d00e17b7/haddock-api/src/Haddock/Backends/Hyperlinker/Utils.hs#L107
+-- optimize version of looking for which types are functions without unfolding the whole type
 recoverFunMaskArray ::
   -- | flat types
   A.Array TypeIndex HieTypeFlat ->
@@ -108,7 +109,7 @@ recoverFunMaskArray ::
 recoverFunMaskArray flattened = unflattened
   where
     -- The recursion in 'unflattened' is crucial - it's what gives us sharing
-    -- between the elements of the array.
+    -- function indicator check.
     unflattened :: A.Array TypeIndex Bool
     unflattened = fmap (\flatTy -> go (fmap (unflattened A.!) flatTy)) flattened
 
