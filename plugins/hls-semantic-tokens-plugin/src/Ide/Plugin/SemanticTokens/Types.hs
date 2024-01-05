@@ -85,13 +85,13 @@ data HieFunMaskKind kind where
     HieFromDiskFun :: A.Array TypeIndex Bool -> HieFunMaskKind TypeIndex
 
 data SemanticLog = LogShake Shake.Log
-    | LogNoAST
+    | LogNoAST FilePath
     | LogNoVF
       deriving Show
 
 instance Pretty SemanticLog where
     pretty theLog = case theLog of
         LogShake shakeLog -> pretty shakeLog
-        LogNoAST          -> "no HieAst exist for file"
+        LogNoAST path     -> "no HieAst exist for file" <> pretty path
         LogNoVF           -> "no VirtualSourceFile exist for file"
 

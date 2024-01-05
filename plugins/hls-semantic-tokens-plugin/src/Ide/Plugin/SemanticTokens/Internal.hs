@@ -23,7 +23,7 @@ import           Control.Monad.Except                 (ExceptT, liftEither,
                                                        withExceptT)
 import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Control.Monad.Trans                  (lift)
-import           Control.Monad.Trans.Except           (runExceptT)
+import           Control.Monad.Trans.Except           (runExceptT, throwE)
 import qualified Data.Map                             as M
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (listToMaybe, mapMaybe)
@@ -36,6 +36,7 @@ import           Development.IDE                      (Action,
                                                        Priority (..), Recorder,
                                                        Rules, WithPriority,
                                                        cmapWithPrio, define,
+                                                       fromNormalizedFilePath,
                                                        hieKind, ideLogger,
                                                        logPriority, use_)
 import           Development.IDE.Core.PluginUtils     (runActionE,
@@ -47,6 +48,7 @@ import           Development.IDE.Core.Shake           (addPersistentRule,
                                                        getVirtualFile,
                                                        useWithStale_)
 import           Development.IDE.GHC.Compat           hiding (Warning)
+import           Development.IDE.GHC.Compat.Util      (mkFastString)
 import           Ide.Logger                           (logWith)
 import           Ide.Plugin.Error                     (PluginError (PluginInternalError),
                                                        getNormalizedFilePathE,
@@ -71,9 +73,7 @@ logActionWith st prior = liftIO . logPriority (ideLogger st) prior . T.pack
 -----------------------
 
 computeSemanticTokens :: IdeState -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
-computeSemanticTokens state nfp = do
-  let dbg = logActionWith state Debug
-  dbg $ "Computing semantic tokens for: " <> show nfp
+computeSemanticTokens _ nfp = do
   (RangeHsSemanticTokenTypes {rangeSemanticMap}, mapping) <- useWithStaleE GetSemanticTokens nfp
   withExceptT PluginInternalError $ liftEither $ rangeSemanticMapSemanticTokens mapping rangeSemanticMap
 
@@ -99,7 +99,7 @@ getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> handleError recorder $ do
     (HAR {..}) <- lift $ use_ GetHieAst nfp
     (DKMap{getTyThingMap}, _) <- lift $ useWithStale_ GetDocMap nfp
-    (_, ast) <- handleMaybe LogNoAST $ listToMaybe $ Map.toList $ getAsts hieAst
+    ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst Map.!? (HiePath. mkFastString . fromNormalizedFilePath) nfp
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     -- get current location from the old ones
     let spanNamesMap = hieAstSpanNames virtualFile ast
