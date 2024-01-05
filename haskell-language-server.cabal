@@ -319,12 +319,12 @@ common floskell
     cpp-options: -Dhls_floskell
 
 common fourmolu
-  if flag(fourmolu) 
+  if flag(fourmolu)
     build-depends: hls-fourmolu-plugin == 2.5.0.0
     cpp-options: -Dhls_fourmolu
 
 common ormolu
-  if flag(ormolu) 
+  if flag(ormolu)
     build-depends: hls-ormolu-plugin == 2.5.0.0
     cpp-options: -Dhls_ormolu
 
@@ -534,7 +534,6 @@ test-suite func-test
     , data-default
     , deepseq
     , hashable
-    , hspec-expectations
     , lens
     , lens-aeson
     , ghcide
@@ -553,6 +552,7 @@ test-suite func-test
   main-is:            Main.hs
   other-modules:
     Config
+    ConfigSchema
     Format
     FunctionalBadProject
     HieBios
@@ -568,7 +568,7 @@ test-suite func-test
   if flag(eval)
     cpp-options: -Dhls_eval
 -- formatters
-  if flag(floskell) 
+  if flag(floskell)
     cpp-options: -Dhls_floskell
   if flag(fourmolu)
     cpp-options: -Dhls_fourmolu

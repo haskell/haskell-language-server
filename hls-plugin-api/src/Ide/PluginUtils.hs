@@ -20,7 +20,7 @@ module Ide.PluginUtils
     getClientConfig,
     getPluginConfig,
     configForPlugin,
-    pluginEnabled,
+    handlesRequest,
     extractTextInRange,
     fullRange,
     mkLspCommand,

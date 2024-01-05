@@ -11,11 +11,12 @@ module Ide.Plugin.Error (
     getNormalizedFilePathE,
 ) where
 
-import           Control.Monad.Extra         (maybeM)
-import           Control.Monad.Trans.Class   (lift)
-import           Control.Monad.Trans.Except  (ExceptT (..), throwE)
-import qualified Data.Text                   as T
+import           Control.Monad.Extra           (maybeM)
+import           Control.Monad.Trans.Class     (lift)
+import           Control.Monad.Trans.Except    (ExceptT (..), throwE)
+import qualified Data.Text                     as T
 import           Ide.Logger
+import           Ide.Plugin.HandleRequestTypes (RejectionReason)
 import           Language.LSP.Protocol.Types
 
 -- ----------------------------------------------------------------------------
@@ -79,13 +80,13 @@ data PluginError
   | PluginInvalidUserState T.Text
     -- |PluginRequestRefused allows your handler to inspect a request before
     -- rejecting it. In effect it allows your plugin to act make a secondary
-    -- `pluginEnabled` decision after receiving the request. This should only be
+    -- `handlesRequest` decision after receiving the request. This should only be
     -- used if the decision to accept the request can not be made in
-    -- `pluginEnabled`.
+    -- `handlesRequest`.
     --
     -- This error will be with Debug. If it's the only response to a request,
-    -- HLS will respond as if no plugins passed the `pluginEnabled` stage.
-  | PluginRequestRefused T.Text
+    -- HLS will respond as if no plugins passed the `handlesRequest` stage.
+  | PluginRequestRefused RejectionReason
     -- |PluginRuleFailed should be thrown when a Rule your response depends on
     -- fails.
     --
