@@ -40,18 +40,12 @@ mkLocalNameSemanticFromAst names hieKind rm = mkNameEnv (mapMaybe (nameNameSeman
 
 nameNameSemanticFromHie :: forall a. HieFunMaskKind a -> RefMap a -> Name -> Maybe (Name, HsSemanticTokenType)
 nameNameSemanticFromHie hieKind rm ns = do
-  st <- -- traceShow ("to find Name", showName ns) $
-    nameSemanticFromRefMap rm ns
-  return
-    -- \$ traceShow (showName ns, st)
-    (ns, st)
+  st <- nameSemanticFromRefMap rm ns
+  return (ns, st)
   where
     nameSemanticFromRefMap :: RefMap a -> Name -> Maybe HsSemanticTokenType
     nameSemanticFromRefMap rm' name' = do
-      spanInfos <- -- traceShow ("getting spans:", nameString) $
-        Map.lookup (Right name') rm'
-    --   let combinedFunction x = (identType . snd) x <|> (identInfo . snd) x
-    --   let result = foldMap (typeSemantic hieKind) $ listToMaybe $ mapMaybe combinedFunction spanInfos
+      spanInfos <- Map.lookup (Right name') rm'
       let typeTokenType = foldMap (typeSemantic hieKind) $ listToMaybe $ mapMaybe (identType . snd) spanInfos
       contextInfoTokenType <- foldMap (contextInfosMaybeTokenType . identInfo . snd) spanInfos
       fold [typeTokenType, Just contextInfoTokenType]
@@ -103,7 +97,6 @@ hieAstSpanNames vf ast =
 
 extractSemanticTokensFromNames :: NameSemanticMap -> M.Map Range NameSet -> M.Map Range HsSemanticTokenType
 extractSemanticTokensFromNames nsm rnMap = Map.mapMaybe (foldMap (lookupNameEnv nsm) . nameSetElemsStable) rnMap
-
 
 rangeSemanticMapSemanticTokens :: PositionMapping -> M.Map Range HsSemanticTokenType -> Either Text SemanticTokens
 rangeSemanticMapSemanticTokens mapping =

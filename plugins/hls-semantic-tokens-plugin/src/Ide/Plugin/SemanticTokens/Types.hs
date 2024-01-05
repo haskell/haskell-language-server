@@ -81,17 +81,17 @@ instance Show RangeHsSemanticTokenTypes where
 type instance RuleResult GetSemanticTokens = RangeHsSemanticTokenTypes
 
 data HieFunMaskKind kind where
-    HieFreshFun :: HieFunMaskKind Type
-    HieFromDiskFun :: A.Array TypeIndex Bool -> HieFunMaskKind TypeIndex
+  HieFreshFun :: HieFunMaskKind Type
+  HieFromDiskFun :: A.Array TypeIndex Bool -> HieFunMaskKind TypeIndex
 
-data SemanticLog = LogShake Shake.Log
-    | LogNoAST FilePath
-    | LogNoVF
-      deriving Show
+data SemanticLog
+  = LogShake Shake.Log
+  | LogNoAST FilePath
+  | LogNoVF
+  deriving (Show)
 
 instance Pretty SemanticLog where
-    pretty theLog = case theLog of
-        LogShake shakeLog -> pretty shakeLog
-        LogNoAST path     -> "no HieAst exist for file" <> pretty path
-        LogNoVF           -> "no VirtualSourceFile exist for file"
-
+  pretty theLog = case theLog of
+    LogShake shakeLog -> pretty shakeLog
+    LogNoAST path     -> "no HieAst exist for file" <> pretty path
+    LogNoVF           -> "no VirtualSourceFile exist for file"

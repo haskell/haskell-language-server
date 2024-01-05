@@ -185,8 +185,8 @@ semanticTokensFunctionTests =
     "get semantic of functions"
     [ goldenWithSemanticTokens "functions" "TFunction",
       goldenWithSemanticTokens "local functions" "TFunctionLocal",
-      goldenWithSemanticTokens "function in let binding" "TFunctionLet"
-      , goldenWithSemanticTokens "negative case non-function with constraint" "TNoneFunctionWithConstraint"
+      goldenWithSemanticTokens "function in let binding" "TFunctionLet",
+      goldenWithSemanticTokens "negative case non-function with constraint" "TNoneFunctionWithConstraint"
     ]
 
 main :: IO ()

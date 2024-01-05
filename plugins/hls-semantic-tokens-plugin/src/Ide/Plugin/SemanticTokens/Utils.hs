@@ -5,16 +5,12 @@
 
 module Ide.Plugin.SemanticTokens.Utils where
 
-import qualified Data.Array                      as A
 import           Data.ByteString                 (ByteString)
 import           Data.ByteString.Char8           (unpack)
 import qualified Data.Map                        as Map
 import           Development.IDE                 (Position (..), Range (..))
 import           Development.IDE.GHC.Compat
-import qualified Development.IDE.GHC.Compat      as Compat
 import           Ide.Plugin.SemanticTokens.Types
-import           Language.LSP.VFS                (CodePointPosition (..),
-                                                  CodePointRange (..))
 import           Prelude                         hiding (span)
 
 deriving instance Show DeclType

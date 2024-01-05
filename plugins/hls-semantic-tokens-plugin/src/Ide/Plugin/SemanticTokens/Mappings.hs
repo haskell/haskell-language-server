@@ -1,6 +1,5 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 -- |
@@ -55,16 +54,13 @@ toLspTokenType tk = case tk of
   -- not sure if this is correct choice
   TTypeFamily   -> SemanticTokenTypes_Interface
 
-
 lspTokenReverseMap :: Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap = Map.fromList $ map (\x -> (toLspTokenType x, x)) $ enumFrom minBound
 
 fromLspTokenType :: SemanticTokenTypes -> Maybe HsSemanticTokenType
 fromLspTokenType tk = Map.lookup tk lspTokenReverseMap
 
-
 -- * 2. Mapping from GHC type and tyThing to semantic token type.
-
 
 -- | tyThingSemantic
 tyThingSemantic :: TyThing -> Maybe HsSemanticTokenType
@@ -74,7 +70,6 @@ tyThingSemantic ty = case ty of
     | isRecordSelector vid -> Just TRecField
     | isClassOpId vid -> Just TClassMethod
     | isFunVar vid -> Just TFunction
-    -- \| isDFunId vid -> TClassMethod
     | otherwise -> Just TVariable
   AConLike con -> case con of
     RealDataCon _ -> Just TDataCon
@@ -93,9 +88,9 @@ tyThingSemantic ty = case ty of
 isFunType :: Type -> Bool
 isFunType a = case a of
   ForAllTy _ t    -> isFunType t
---   Development.IDE.GHC.Compat.Core.FunTy(pattern synonym), FunTyFlag which is used to distinguish
---   (->, =>, etc..)
-  FunTy flg _ rhs-> isVisibleFunArg flg || isFunType rhs
+  --   Development.IDE.GHC.Compat.Core.FunTy(pattern synonym), FunTyFlag which is used to distinguish
+  --   (->, =>, etc..)
+  FunTy flg _ rhs -> isVisibleFunArg flg || isFunType rhs
   _x              -> isFunTy a
 
 hieKindFunMasksKind :: HieKind a -> HieFunMaskKind a
@@ -105,27 +100,29 @@ hieKindFunMasksKind hieKind = case hieKind of
 
 -- wz1000 offered
 -- the idea from https://gitlab.haskell.org/ghc/haddock/-/blob/b0b0e0366457c9aefebcc94df74e5de4d00e17b7/haddock-api/src/Haddock/Backends/Hyperlinker/Utils.hs#L107
-recoverFunMaskArray
-  :: A.Array TypeIndex HieTypeFlat -- ^ flat types
-  -> A.Array TypeIndex Bool-- ^ full AST
+recoverFunMaskArray ::
+  -- | flat types
+  A.Array TypeIndex HieTypeFlat ->
+  -- | array of bool indicating whether the type is a function
+  A.Array TypeIndex Bool
 recoverFunMaskArray flattened = unflattened
-    where
+  where
     -- The recursion in 'unflattened' is crucial - it's what gives us sharing
-    -- between the IfaceType's produced
+    -- between the elements of the array.
     unflattened :: A.Array TypeIndex Bool
     unflattened = fmap (\flatTy -> go (fmap (unflattened A.!) flatTy)) flattened
 
     -- Unfold an 'HieType' whose subterms have already been unfolded
     go :: HieType Bool -> Bool
-    go (HTyVarTy _name)            = False
-    go (HAppTy _f _x)              = False
-    go (HLitTy _lit)               = False
-    go (HForAllTy ((_n,_k),_af) b) = b
-    go (HFunTy _ _ _)              = True
-    go (HQualTy _constraint b)     = b
-    go (HCastTy b)                 = b
-    go HCoercionTy                 = False
-    go (HTyConApp _ _)             = False
+    go (HTyVarTy _name)              = False
+    go (HAppTy _f _x)                = False
+    go (HLitTy _lit)                 = False
+    go (HForAllTy ((_n, _k), _af) b) = b
+    go (HFunTy _ _ _)                = True
+    go (HQualTy _constraint b)       = b
+    go (HCastTy b)                   = b
+    go HCoercionTy                   = False
+    go (HTyConApp _ _)               = False
 
 typeSemantic :: HieFunMaskKind hType -> hType -> Maybe HsSemanticTokenType
 typeSemantic kind t = case kind of
@@ -169,22 +166,21 @@ type ActualToken = (UInt, UInt, UInt, HsSemanticTokenType, UInt)
 -- from the lsp semantic tokens(with token in lsp token type zoon)
 recoverSemanticTokens :: VirtualFile -> SemanticTokens -> Either Text [SemanticTokenOriginal]
 recoverSemanticTokens vsf (SemanticTokens _ xs) = do
-    tokens <- dataActualToken xs
-    return $ mapMaybe (tokenOrigin sourceCode) tokens
+  tokens <- dataActualToken xs
+  return $ mapMaybe (tokenOrigin sourceCode) tokens
   where
-    -- xxxxx
     sourceCode = unpack $ virtualFileText vsf
     tokenOrigin :: [Char] -> ActualToken -> Maybe SemanticTokenOriginal
     tokenOrigin sourceCode' (line, startChar, len, tokenType, _) = do
-        -- convert back to count from 1
-        let range = mkRange line startChar len
-        CodePointRange (CodePointPosition x y)  (CodePointPosition _ y1) <- rangeToCodePointRange vsf range
-        let line' = x
-        let startChar' = y
-        let len' = y1 - y
-        let tLine = lines sourceCode' !? fromIntegral line'
-        let name = maybe "no source" (take (fromIntegral len') . drop (fromIntegral startChar')) tLine
-        return $ SemanticTokenOriginal tokenType (Loc (line' + 1) (startChar' + 1) len') name
+      -- convert back to count from 1
+      let range = mkRange line startChar len
+      CodePointRange (CodePointPosition x y) (CodePointPosition _ y1) <- rangeToCodePointRange vsf range
+      let line' = x
+      let startChar' = y
+      let len' = y1 - y
+      let tLine = lines sourceCode' !? fromIntegral line'
+      let name = maybe "no source" (take (fromIntegral len') . drop (fromIntegral startChar')) tLine
+      return $ SemanticTokenOriginal tokenType (Loc (line' + 1) (startChar' + 1) len') name
 
     dataActualToken :: [UInt] -> Either Text [ActualToken]
     dataActualToken dt =
@@ -204,7 +200,6 @@ recoverSemanticTokens vsf (SemanticTokens _ xs) = do
     -- legends :: SemanticTokensLegend
     fromInt :: Int -> Maybe SemanticTokenTypes
     fromInt i = Set.toAscList knownValues !? i
-
 
 -- Note [Semantic information from Multiple Sources]
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
