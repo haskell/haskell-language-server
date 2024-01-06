@@ -66,6 +66,7 @@ parsePluginConfig :: PluginConfig -> Value -> A.Parser PluginConfig
 parsePluginConfig def = A.withObject "PluginConfig" $ \o  -> PluginConfig
       <$> o .:? "globalOn"         .!= plcGlobalOn def
       <*> o .:? "callHierarchyOn"  .!= plcCallHierarchyOn def
+      <*> o .:? "semanticTokensOn" .!= plcSemanticTokensOn def
       <*> o .:? "codeActionsOn"    .!= plcCodeActionsOn def
       <*> o .:? "codeLensOn"       .!= plcCodeLensOn    def
       <*> o .:? "diagnosticsOn"    .!= plcDiagnosticsOn def -- AZ

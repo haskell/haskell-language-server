@@ -1,0 +1,4 @@
+3:6-9 TTypeCon "Foo"
+3:12-15 TDataCon "Foo"
+3:16-19 TTypeCon "Int"
+3:30-32 TClass "Eq"

@@ -120,6 +120,11 @@ import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 import qualified Development.IDE.Plugin.CodeAction as Refactor
 #endif
 
+#if hls_semanticTokens
+import qualified Ide.Plugin.SemanticTokens         as SemanticTokens
+#endif
+
+
 data Log = forall a. (Pretty a) => Log PluginId a
 
 instance Pretty Log where
@@ -171,6 +176,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_callHierarchy
       CallHierarchy.descriptor "callHierarchy" :
+#endif
+#if hls_semanticTokens
+      let pId = "semanticTokens" in SemanticTokens.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_class
       let pId = "class" in Class.descriptor (pluginRecorder pId) pId:
