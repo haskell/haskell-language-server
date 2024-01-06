@@ -1,10 +1,9 @@
-{-
-    The query module is used to query the semantic tokens from the AST
--}
 {-# LANGUAGE ExplicitNamespaces  #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-- |
+-- The query module is used to query the semantic tokens from the AST
 module Ide.Plugin.SemanticTokens.Query where
 
 import           Data.Either                          (rights)
