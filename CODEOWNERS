@@ -15,7 +15,7 @@
 /plugins/hls-class-plugin @Ailrun
 /plugins/hls-eval-plugin
 /plugins/hls-explicit-imports-plugin @pepeiborra
-/plugins/hls-floskell-plugin @Ailrun
+/plugins/hls-floskell-plugin @Ailrun @peterbecich
 /plugins/hls-fourmolu-plugin @georgefst
 /plugins/hls-gadt-plugin @July541
 /plugins/hls-hlint-plugin @eddiemundo
