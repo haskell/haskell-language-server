@@ -1,7 +1,7 @@
 cabal-version:      3.0
 category:           Development
 name:               haskell-language-server
-version:            2.5.0.0
+version:            2.5.0.1
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -315,7 +315,7 @@ common overloadedRecordDot
 
 common floskell
   if flag(floskell) && (impl(ghc < 9.7) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-floskell-plugin == 2.5.0.0
+    build-depends: hls-floskell-plugin == 2.5.*
     cpp-options: -Dhls_floskell
 
 common fourmolu
