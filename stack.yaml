@@ -59,7 +59,7 @@ extra-deps:
 - optparse-applicative-0.17.1.0
 
 # stan and friends
-- stan-0.1.1.0
+- stan-0.1.2.0
 - clay-0.14.0
 - colourista-0.1.0.2
 - dir-traverse-0.2.3.0
