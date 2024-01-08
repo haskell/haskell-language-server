@@ -1,0 +1,7 @@
+4:6-9 TTypeCon "Foo"
+4:12-15 TDataCon "Foo"
+4:16-19 TTypeCon "Int"
+5:10-12 TClass "Eq"
+5:13-16 TTypeCon "Foo"
+6:5-9 TClassMethod "(==)"
+6:12-21 TVariable "undefined"

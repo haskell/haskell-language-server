@@ -17,6 +17,8 @@ module Development.IDE.GHC.Error
   , realSrcSpanToRange
   , realSrcLocToPosition
   , realSrcSpanToLocation
+  , realSrcSpanToCodePointRange
+  , realSrcLocToCodePointPosition
   , srcSpanToFilename
   , rangeToSrcSpan
   , rangeToRealSrcSpan
@@ -45,6 +47,8 @@ import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           GHC
 import           Language.LSP.Protocol.Types       (isSubrangeOf)
+import           Language.LSP.VFS                  (CodePointPosition (CodePointPosition),
+                                                    CodePointRange (CodePointRange))
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
@@ -85,6 +89,28 @@ realSrcSpanToRange real =
 realSrcLocToPosition :: RealSrcLoc -> Position
 realSrcLocToPosition real =
   Position (fromIntegral $ srcLocLine real - 1) (fromIntegral $ srcLocCol real - 1)
+
+-- Note [Unicode support]
+-- the current situation is:
+-- LSP Positions use UTF-16 code units(Unicode may count as variable columns);
+-- GHC use Unicode code points(Unicode count as one column).
+-- To support unicode, ideally range should be in lsp standard,
+-- and codePoint should be in ghc standard.
+-- see https://github.com/haskell/lsp/pull/407
+
+-- | Convert a GHC SrcSpan to CodePointRange
+-- see Note [Unicode support]
+realSrcSpanToCodePointRange :: RealSrcSpan -> CodePointRange
+realSrcSpanToCodePointRange real =
+  CodePointRange
+    (realSrcLocToCodePointPosition $ Compat.realSrcSpanStart real)
+    (realSrcLocToCodePointPosition $ Compat.realSrcSpanEnd real)
+
+-- | Convert a GHC RealSrcLoc to CodePointPosition
+-- see Note [Unicode support]
+realSrcLocToCodePointPosition :: RealSrcLoc -> CodePointPosition
+realSrcLocToCodePointPosition real =
+  CodePointPosition (fromIntegral $ srcLocLine real - 1) (fromIntegral $ srcLocCol real - 1)
 
 -- | Extract a file name from a GHC SrcSpan (use message for unhelpful ones)
 -- FIXME This may not be an _absolute_ file name, needs fixing.

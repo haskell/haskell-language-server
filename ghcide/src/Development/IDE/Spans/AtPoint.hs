@@ -209,7 +209,7 @@ gotoDefinition withHieDb getHieFile ideOpts imports srcSpans pos
 atPoint
   :: IdeOptions
   -> HieAstResult
-  -> DocAndKindMap
+  -> DocAndTyThingMap
   -> HscEnv
   -> Position
   -> IO (Maybe (Maybe Range, [T.Text]))
@@ -346,7 +346,7 @@ namesInType (TyVarTy n)      = [varName n]
 namesInType (AppTy a b)      = getTypes [a,b]
 namesInType (TyConApp tc ts) = tyConName tc : getTypes ts
 namesInType (ForAllTy b t)   = varName (binderVar b) : namesInType t
-namesInType (FunTy a b)      = getTypes [a,b]
+namesInType (FunTy _ a b)    = getTypes [a,b]
 namesInType (CastTy t _)     = namesInType t
 namesInType (LitTy _)        = []
 namesInType _                = []

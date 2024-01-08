@@ -230,6 +230,7 @@ data PluginConfig =
       , plcRenameOn         :: !Bool
       , plcSelectionRangeOn :: !Bool
       , plcFoldingRangeOn   :: !Bool
+      , plcSemanticTokensOn :: !Bool
       , plcConfig           :: !Object
       } deriving (Show,Eq)
 
@@ -246,11 +247,12 @@ instance Default PluginConfig where
       , plcRenameOn         = True
       , plcSelectionRangeOn = True
       , plcFoldingRangeOn   = True
+      , plcSemanticTokensOn = True
       , plcConfig           = mempty
       }
 
 instance ToJSON PluginConfig where
-    toJSON (PluginConfig g ch ca cl d h s c rn sr fr cfg) = r
+    toJSON (PluginConfig g ch ca cl d h s c rn sr fr st cfg) = r
       where
         r = object [ "globalOn"         .= g
                    , "callHierarchyOn"  .= ch
@@ -263,6 +265,7 @@ instance ToJSON PluginConfig where
                    , "renameOn"         .= rn
                    , "selectionRangeOn" .= sr
                    , "foldingRangeOn"   .= fr
+                   , "semanticTokensOn" .= st
                    , "config"           .= cfg
                    ]
 
@@ -514,6 +517,9 @@ instance PluginMethod Request Method_TextDocumentRangeFormatting where
     where
       pid = pluginId pluginDesc
 
+instance PluginMethod Request Method_TextDocumentSemanticTokensFull where
+  handlesRequest = pluginEnabledWithFeature plcSemanticTokensOn
+
 instance PluginMethod Request Method_TextDocumentPrepareCallHierarchy where
   handlesRequest = pluginEnabledWithFeature plcCallHierarchyOn
 
@@ -749,6 +755,9 @@ instance PluginRequestMethod Method_CallHierarchyIncomingCalls where
 instance PluginRequestMethod Method_CallHierarchyOutgoingCalls where
 
 instance PluginRequestMethod (Method_CustomMethod m) where
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod Method_TextDocumentSemanticTokensFull where
   combineResponses _ _ _ _ (x :| _) = x
 
 takeLefts :: [a |? b] -> [a]

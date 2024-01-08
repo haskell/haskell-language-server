@@ -114,6 +114,9 @@
         "retrie": {
             "globalOn": true
         },
+        "semanticTokens": {
+            "globalOn": false
+        },
         "splice": {
             "globalOn": true
         },
