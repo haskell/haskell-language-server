@@ -121,8 +121,7 @@ import           Development.IDE.GHC.Compat.CmdLine
 import qualified Data.Set                             as OS
 
 import           GHC.Data.Bag
-import           GHC.Driver.Env                       (hscSetActiveUnitId,
-                                                       hsc_all_home_unit_ids)
+import           GHC.Driver.Env                       (hsc_all_home_unit_ids)
 import           GHC.Driver.Errors.Types
 import           GHC.Driver.Make                      (checkHomeUnitsClosed)
 import           GHC.Types.Error                      (errMsgDiagnostic)
