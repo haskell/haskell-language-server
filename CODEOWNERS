@@ -2,49 +2,57 @@
 /ghcide @pepeiborra
 /ghcide/session-loader @pepeiborra @fendor
 /hls-graph @pepeiborra
-/hls-plugin-api @berberman
+/hls-plugin-api @michaelpj @fendor
 /hls-test-utils @fendor
+/hie-compat @wz1000
+
+# HLS main
+/src @fendor
+/exe @fendor
 /test @fendor
-/hie-compat
 
 # Plugins
 /plugins/hls-alternate-number-format-plugin @drsooch
-/plugins/hls-cabal-plugin @fendor
 /plugins/hls-cabal-fmt-plugin @VeryMilkyJoe @fendor
+/plugins/hls-cabal-plugin @fendor
 /plugins/hls-call-hierarchy-plugin @July541
-/plugins/hls-class-plugin @Ailrun
+/plugins/hls-change-type-signature-plugin
+/plugins/hls-class-plugin 
+/plugins/hls-code-range-plugin @kokobd
 /plugins/hls-eval-plugin
+/plugins/hls-explicit-fixity-plugin
 /plugins/hls-explicit-imports-plugin @pepeiborra
-/plugins/hls-floskell-plugin @Ailrun @peterbecich
+/plugins/hls-explicit-record-fields-plugin @ozkutuk
+/plugins/hls-floskell-plugin @peterbecich
 /plugins/hls-fourmolu-plugin @georgefst
 /plugins/hls-gadt-plugin @July541
 /plugins/hls-hlint-plugin @eddiemundo
 /plugins/hls-module-name-plugin
 /plugins/hls-ormolu-plugin @georgefst
-/plugins/hls-pragmas-plugin @berberman @Ailrun @eddiemundo
-/plugins/hls-qualify-imported-names-plugin @eddiemundo
-/plugins/hls-rename-plugin @OliverMadine
-/plugins/hls-refactor-plugin @santiweight
-/plugins/hls-retrie-plugin @pepeiborra
-/plugins/hls-code-range-plugin @kokobd
-/plugins/hls-splice-plugin @konn
-/plugins/hls-stylish-haskell-plugin @Ailrun
-/plugins/hls-stan-plugin @0rphee
-/plugins/hls-explicit-record-fields-plugin @ozkutuk
 /plugins/hls-overloaded-record-dot-plugin @joyfulmantis
+/plugins/hls-pragmas-plugin @eddiemundo
+/plugins/hls-qualify-imported-names-plugin @eddiemundo
+/plugins/hls-refactor-plugin @santiweight
+/plugins/hls-rename-plugin 
+/plugins/hls-retrie-plugin @pepeiborra
+/plugins/hls-semantic-tokens-plugin @soulomoon
+/plugins/hls-splice-plugin @konn
+/plugins/hls-stan-plugin @0rphee
+/plugins/hls-stylish-haskell-plugin @michaelpj
 
 # Benchmarking
 /shake-bench @pepeiborra
+/bench @pepeiborra
 
 # Docs
 /docs @michaelpj
 
 # CI
-/.circleci @Anton-Latukha
-/.github @Anton-Latukha @Ailrun
-/.gitlab @hasufell
+/.circleci 
+/.github @michaelpj @fendor
 
 # Build
 *.nix @berberman @michaelpj @guibou
-*.project
+*.project @michaelpj
+*.stack* @michaelpj
 .gitpod.* @kokobd
