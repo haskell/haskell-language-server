@@ -21,7 +21,7 @@ jobs:
       uses: rwe/actions-hlint-run@v2
       with:
         # Ignore testdata directories to silence hlint warnings for test data files.
-        hlint-bin: "hlint --with-group=extra --ignore-glob='**/testdata/**/*.hs' --ignore-glob='**/test/data/**/*.hs'"
+        hlint-bin: "hlint --with-group=extra --ignore-glob=**/testdata/** --ignore-glob=**/test/data/**"
         fail-on: error
         path: .
 
