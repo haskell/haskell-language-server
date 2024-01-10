@@ -37,14 +37,14 @@ instance Pretty Log where
     LogUseWithStaleFastNoResult -> "Package description couldn't be read"
     LogMapLookUpOfKnownKeyFailed key -> "Lookup of key in map failed even though it should exist" <+> pretty key
 
-type instance RuleResult ParseCabal = Parse.GenericPackageDescription
+type instance RuleResult GetCabalDiagnostics = Parse.GenericPackageDescription
 
-data ParseCabal = ParseCabal
+data GetCabalDiagnostics = GetCabalDiagnostics
   deriving (Eq, Show, Typeable, Generic)
 
-instance Hashable ParseCabal
+instance Hashable GetCabalDiagnostics
 
-instance NFData ParseCabal
+instance NFData GetCabalDiagnostics
 
 -- | The context a cursor can be in within a cabal file.
 --

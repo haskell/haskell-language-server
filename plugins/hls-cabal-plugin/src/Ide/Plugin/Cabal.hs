@@ -81,7 +81,7 @@ instance Pretty Log where
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
   (defaultCabalPluginDescriptor plId "Provides a variety of IDE features in cabal files")
-    { pluginRules = cabalRules recorder
+    { pluginRules = cabalRules recorder plId
     , pluginHandlers =
         mconcat
           [ mkPluginHandler LSP.SMethod_TextDocumentCodeAction licenseSuggestCodeAction
@@ -139,31 +139,35 @@ restartCabalShakeSession shakeExtras vfs file actionMsg = do
 -- Plugin Rules
 -- ----------------------------------------------------------------
 
-cabalRules :: Recorder (WithPriority Log) -> Rules ()
-cabalRules recorder = do
+cabalRules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
+cabalRules recorder plId = do
   -- Make sure we initialise the cabal files-of-interest.
   ofInterestRules recorder
   -- Rule to produce diagnostics for cabal files.
-  define (cmapWithPrio LogShake recorder) $ \Types.ParseCabal file -> do
-    -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
-    -- we rerun this rule because this rule *depends* on GetModificationTime.
-    (t, mCabalSource) <- use_ GetFileContents file
-    log' Debug $ LogModificationTime file t
-    contents <- case mCabalSource of
-      Just sources ->
-        pure $ Encoding.encodeUtf8 sources
-      Nothing -> do
-        liftIO $ BS.readFile $ fromNormalizedFilePath file
+  define (cmapWithPrio LogShake recorder) $ \Types.GetCabalDiagnostics file -> do
+    config <- getPluginConfigAction plId
+    if not (plcGlobalOn config && plcDiagnosticsOn config)
+        then pure ([], Nothing)
+        else do
+          -- whenever this key is marked as dirty (e.g., when a user writes stuff to it),
+          -- we rerun this rule because this rule *depends* on GetModificationTime.
+          (t, mCabalSource) <- use_ GetFileContents file
+          log' Debug $ LogModificationTime file t
+          contents <- case mCabalSource of
+            Just sources ->
+              pure $ Encoding.encodeUtf8 sources
+            Nothing -> do
+              liftIO $ BS.readFile $ fromNormalizedFilePath file
 
-    (pWarnings, pm) <- liftIO $ Parse.parseCabalFileContents contents
-    let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
-    case pm of
-      Left (_cabalVersion, pErrorNE) -> do
-        let errorDiags = NE.toList $ NE.map (Diagnostics.errorDiagnostic file) pErrorNE
-            allDiags = errorDiags <> warningDiags
-        pure (allDiags, Nothing)
-      Right gpd -> do
-        pure (warningDiags, Just gpd)
+          (pWarnings, pm) <- liftIO $ Parse.parseCabalFileContents contents
+          let warningDiags = fmap (Diagnostics.warningDiagnostic file) pWarnings
+          case pm of
+            Left (_cabalVersion, pErrorNE) -> do
+              let errorDiags = NE.toList $ NE.map (Diagnostics.errorDiagnostic file) pErrorNE
+                  allDiags = errorDiags <> warningDiags
+              pure (allDiags, Nothing)
+            Right gpd -> do
+              pure (warningDiags, Just gpd)
 
   action $ do
     -- Run the cabal kick. This code always runs when 'shakeRestart' is run.
@@ -183,7 +187,7 @@ function invocation.
 kick :: Action ()
 kick = do
   files <- HashMap.keys <$> getCabalFilesOfInterestUntracked
-  void $ uses Types.ParseCabal files
+  void $ uses Types.GetCabalDiagnostics files
 
 -- ----------------------------------------------------------------
 -- Code Actions
@@ -292,7 +296,7 @@ completion recorder ide _ complParams = do
         let completer = Completions.contextToCompleter ctx
         let completerData = CompleterTypes.CompleterData
               { getLatestGPD = do
-                mGPD <- runIdeAction "cabal-plugin.modulesCompleter.gpd" (shakeExtras ide) $ useWithStaleFast Types.ParseCabal $ toNormalizedFilePath fp
+                mGPD <- runIdeAction "cabal-plugin.modulesCompleter.gpd" (shakeExtras ide) $ useWithStaleFast Types.GetCabalDiagnostics $ toNormalizedFilePath fp
                 pure $ fmap fst mGPD
               , cabalPrefixInfo = prefInfo
               , stanzaName =
