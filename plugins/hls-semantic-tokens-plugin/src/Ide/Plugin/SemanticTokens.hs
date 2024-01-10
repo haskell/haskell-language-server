@@ -1,7 +1,4 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeData          #-}
 
 module Ide.Plugin.SemanticTokens (descriptor) where
 

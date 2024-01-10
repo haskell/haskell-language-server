@@ -1,0 +1,104 @@
+{
+    "checkParents": "CheckOnSave",
+    "checkProject": true,
+    "formattingProvider": "ormolu",
+    "maxCompletions": 40,
+    "plugin": {
+        "alternateNumberFormat": {
+            "globalOn": true
+        },
+        "cabal": {
+            "codeActionsOn": true,
+            "completionOn": true
+        },
+        "callHierarchy": {
+            "globalOn": true
+        },
+        "changeTypeSignature": {
+            "globalOn": true
+        },
+        "eval": {
+            "config": {
+                "diff": true,
+                "exception": false
+            },
+            "globalOn": true
+        },
+        "explicit-fields": {
+            "globalOn": true
+        },
+        "explicit-fixity": {
+            "globalOn": true
+        },
+        "fourmolu": {
+            "config": {
+                "external": false
+            }
+        },
+        "ghcide-completions": {
+            "config": {
+                "autoExtendOn": true,
+                "snippetsOn": true
+            },
+            "globalOn": true
+        },
+        "ghcide-hover-and-symbols": {
+            "hoverOn": true,
+            "symbolsOn": true
+        },
+        "ghcide-type-lenses": {
+            "config": {
+                "mode": "always"
+            },
+            "globalOn": true
+        },
+        "importLens": {
+            "codeActionsOn": true,
+            "codeLensOn": true
+        },
+        "moduleName": {
+            "globalOn": true
+        },
+        "ormolu": {
+            "config": {
+                "external": false
+            }
+        },
+        "overloaded-record-dot": {
+            "globalOn": true
+        },
+        "pragmas-completion": {
+            "globalOn": true
+        },
+        "pragmas-disable": {
+            "globalOn": true
+        },
+        "pragmas-suggest": {
+            "globalOn": true
+        },
+        "qualifyImportedNames": {
+            "globalOn": true
+        },
+        "semanticTokens": {
+            "config": {
+                "tokenMapping": {
+                    "class": "class",
+                    "classmethod": "method",
+                    "datacon": "enumMember",
+                    "function": "function",
+                    "patternsyn": "macro",
+                    "recfield": "property",
+                    "typecon": "enum",
+                    "typefamily": "interface",
+                    "typesyn": "type",
+                    "typevariable": "typeParameter",
+                    "variable": "variable"
+                }
+            },
+            "globalOn": false
+        },
+        "stan": {
+            "globalOn": false
+        }
+    }
+}
