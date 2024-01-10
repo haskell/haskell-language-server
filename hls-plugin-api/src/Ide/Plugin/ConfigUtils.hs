@@ -108,29 +108,29 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
         (PluginId pId) = pluginId
         genericSchema =
           let x =
-                [toKey' "diagnosticsOn" A..= schemaEntry "diagnostics" | configHasDiagnostics]
-                  <> nubOrd (mconcat (handlersToGenericSchema <$> handlers))
+                [toKey' "diagnosticsOn" A..= schemaEntry "diagnostics" True | configHasDiagnostics]
+                  <> nubOrd (mconcat (handlersToGenericSchema configInitialGenericConfig <$> handlers))
            in case x of
                 -- If the plugin has only one capability, we produce globalOn instead of the specific one;
                 -- otherwise we don't produce globalOn at all
-                [_] -> [toKey' "globalOn" A..= schemaEntry "plugin"]
+                [_] -> [toKey' "globalOn" A..= schemaEntry "plugin" (plcGlobalOn configInitialGenericConfig)]
                 _   -> x
         dedicatedSchema = customConfigToDedicatedSchema configCustomConfig
-        handlersToGenericSchema (IdeMethod m DSum.:=> _) = case m of
-          SMethod_TextDocumentCodeAction -> [toKey' "codeActionsOn" A..= schemaEntry "code actions"]
-          SMethod_TextDocumentCodeLens -> [toKey' "codeLensOn" A..= schemaEntry "code lenses"]
-          SMethod_TextDocumentRename -> [toKey' "renameOn" A..= schemaEntry "rename"]
-          SMethod_TextDocumentHover -> [toKey' "hoverOn" A..= schemaEntry "hover"]
-          SMethod_TextDocumentDocumentSymbol -> [toKey' "symbolsOn" A..= schemaEntry "symbols"]
-          SMethod_TextDocumentCompletion -> [toKey' "completionOn" A..= schemaEntry "completions"]
-          SMethod_TextDocumentPrepareCallHierarchy -> [toKey' "callHierarchyOn" A..= schemaEntry "call hierarchy"]
-          SMethod_TextDocumentSemanticTokensFull -> [toKey' "semanticTokensOn" A..= schemaEntry "semantic tokens"]
-          _ -> []
-        schemaEntry desc =
+        handlersToGenericSchema PluginConfig{..} (IdeMethod m DSum.:=> _) = case m of
+          SMethod_TextDocumentCodeAction           -> [toKey' "codeActionsOn" A..= schemaEntry "code actions" plcCodeActionsOn]
+          SMethod_TextDocumentCodeLens             -> [toKey' "codeLensOn" A..= schemaEntry "code lenses" plcCodeLensOn]
+          SMethod_TextDocumentRename               -> [toKey' "renameOn" A..= schemaEntry "rename" plcRenameOn]
+          SMethod_TextDocumentHover                -> [toKey' "hoverOn" A..= schemaEntry "hover" plcHoverOn]
+          SMethod_TextDocumentDocumentSymbol       -> [toKey' "symbolsOn" A..= schemaEntry "symbols" plcSymbolsOn]
+          SMethod_TextDocumentCompletion           -> [toKey' "completionOn" A..= schemaEntry "completions" plcCompletionOn]
+          SMethod_TextDocumentPrepareCallHierarchy -> [toKey' "callHierarchyOn" A..= schemaEntry "call hierarchy" plcCallHierarchyOn]
+          SMethod_TextDocumentSemanticTokensFull   -> [toKey' "semanticTokensOn" A..= schemaEntry "semantic tokens" plcSemanticTokensOn]
+          _                                        -> []
+        schemaEntry desc defaultVal =
           A.object
             [ "scope" A..= A.String "resource",
               "type" A..= A.String "boolean",
-              "default" A..= True,
+              "default" A..= A.Bool defaultVal,
               "description" A..= A.String ("Enables " <> pId <> " " <> desc)
             ]
         withIdPrefix x = "haskell.plugin." <> pId <> "." <> x

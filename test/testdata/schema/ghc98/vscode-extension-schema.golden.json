@@ -172,13 +172,13 @@
         "type": "boolean"
     },
     "haskell.plugin.semanticTokens.globalOn": {
-        "default": true,
+        "default": false,
         "description": "Enables semanticTokens plugin",
         "scope": "resource",
         "type": "boolean"
     },
     "haskell.plugin.stan.globalOn": {
-        "default": true,
+        "default": false,
         "description": "Enables stan plugin",
         "scope": "resource",
         "type": "boolean"
