@@ -52,12 +52,15 @@ library
     , array
     , deepseq
     , hls-graph == 2.5.0.0
+    , data-default
+    , rank2classes
 
   default-language:   Haskell2010
   default-extensions: DataKinds
 
 test-suite tests
   type:             exitcode-stdio-1.0
+  ghc-options: -Wall
   default-language: Haskell2010
   hs-source-dirs:   test
   main-is:          Main.hs
@@ -83,3 +86,5 @@ test-suite tests
     , bytestring
     , ghcide                == 2.5.0.0
     , hls-plugin-api        == 2.5.0.0
+    , rank2classes
+    , data-default

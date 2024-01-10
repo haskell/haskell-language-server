@@ -22,7 +22,8 @@ import           Development.IDE.GHC.Error            (realSrcSpanToCodePointRan
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
                                                        HsSemanticTokenType,
-                                                       NameSemanticMap)
+                                                       NameSemanticMap,
+                                                       SemanticTokensConfig)
 import           Language.LSP.Protocol.Types
 import           Language.LSP.VFS                     (VirtualFile,
                                                        codePointRangeToRange)
@@ -95,14 +96,14 @@ hieAstSpanNames vf ast =
 -------------------------------------------------
 
 extractSemanticTokensFromNames :: NameSemanticMap -> M.Map Range NameSet -> M.Map Range HsSemanticTokenType
-extractSemanticTokensFromNames nsm rnMap = Map.mapMaybe (foldMap (lookupNameEnv nsm) . nameSetElemsStable) rnMap
+extractSemanticTokensFromNames nsm = Map.mapMaybe (foldMap (lookupNameEnv nsm) . nameSetElemsStable)
 
-rangeSemanticMapSemanticTokens :: PositionMapping -> M.Map Range HsSemanticTokenType -> Either Text SemanticTokens
-rangeSemanticMapSemanticTokens mapping =
+rangeSemanticMapSemanticTokens :: SemanticTokensConfig -> PositionMapping -> M.Map Range HsSemanticTokenType -> Either Text SemanticTokens
+rangeSemanticMapSemanticTokens stc mapping =
   makeSemanticTokens defaultSemanticTokensLegend
     . mapMaybe (\(range, ty) -> flip toAbsSemanticToken ty <$> range)
     . Map.toAscList
-    . M.mapKeys (\r -> toCurrentRange mapping r)
+    . M.mapKeys (toCurrentRange mapping)
   where
     toAbsSemanticToken :: Range -> HsSemanticTokenType -> SemanticTokenAbsolute
     toAbsSemanticToken (Range (Position startLine startColumn) (Position _endLine endColumn)) tokenType =
@@ -111,5 +112,5 @@ rangeSemanticMapSemanticTokens mapping =
             (fromIntegral startLine)
             (fromIntegral startColumn)
             (fromIntegral len)
-            (toLspTokenType tokenType)
+            (toLspTokenType stc tokenType)
             []

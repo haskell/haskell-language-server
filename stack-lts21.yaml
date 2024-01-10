@@ -54,6 +54,8 @@ extra-deps:
 - lsp-2.3.0.0
 - lsp-test-0.16.0.1
 - lsp-types-2.1.0.0
+- rank2classes-1.5.3
+- data-functor-logistic-0.0
 
 # stan dependencies not found in the stackage snapshot
 - stan-0.1.2.0

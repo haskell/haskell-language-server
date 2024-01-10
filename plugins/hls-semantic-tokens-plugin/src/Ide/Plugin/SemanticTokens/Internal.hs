@@ -1,10 +1,9 @@
------------------------------------------------------------------------------
------------------------------------------------------------------------------
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
@@ -18,11 +17,10 @@ module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokens
 import           Control.Lens                         ((^.))
 import           Control.Monad.Except                 (ExceptT, liftEither,
                                                        withExceptT)
-import           Control.Monad.IO.Class               (MonadIO, liftIO)
 import           Control.Monad.Trans                  (lift)
 import           Control.Monad.Trans.Except           (runExceptT)
+import           Data.Aeson                           (ToJSON (toJSON))
 import qualified Data.Map                             as Map
-import qualified Data.Text                            as T
 import           Development.IDE                      (Action,
                                                        GetDocMap (GetDocMap),
                                                        GetHieAst (GetHieAst),
@@ -32,8 +30,8 @@ import           Development.IDE                      (Action,
                                                        Rules, WithPriority,
                                                        cmapWithPrio, define,
                                                        fromNormalizedFilePath,
-                                                       hieKind, ideLogger,
-                                                       logPriority, use_)
+                                                       hieKind, logPriority,
+                                                       usePropertyAction, use_)
 import           Development.IDE.Core.PluginUtils     (runActionE,
                                                        useWithStaleE)
 import           Development.IDE.Core.PositionMapping (idDelta)
@@ -60,23 +58,24 @@ import           Language.LSP.Protocol.Types          (NormalizedFilePath,
                                                        type (|?) (InL))
 import           Prelude                              hiding (span)
 
-logActionWith :: (MonadIO m) => IdeState -> Priority -> String -> m ()
-logActionWith st prior = liftIO . logPriority (ideLogger st) prior . T.pack
 
 -----------------------
 ---- the api
 -----------------------
 
-computeSemanticTokens :: IdeState -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
-computeSemanticTokens st nfp = do
-  logActionWith st Debug $ "Computing semantic tokens:" <> show nfp
+computeSemanticTokens :: Recorder (WithPriority SemanticLog) -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
+computeSemanticTokens recorder pid _ nfp = do
+  logWith recorder Debug (LogMsg "computeSemanticTokens start")
+  config :: SemanticTokensConfig  <- lift $ usePropertyAction #tokenMapping pid semanticConfigProperties
+  logWith recorder Debug (LogMsg $ show $ toJSON config)
+  logWith recorder Debug (LogConfig config)
   (RangeHsSemanticTokenTypes {rangeSemanticMap}, mapping) <- useWithStaleE GetSemanticTokens nfp
-  withExceptT PluginInternalError $ liftEither $ rangeSemanticMapSemanticTokens mapping rangeSemanticMap
+  withExceptT PluginInternalError $ liftEither $ rangeSemanticMapSemanticTokens config mapping rangeSemanticMap
 
-semanticTokensFull :: PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
-semanticTokensFull state _ param = do
+semanticTokensFull :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
+semanticTokensFull recorder state pid param = do
   nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
-  items <- runActionE "SemanticTokens.semanticTokensFull" state $ computeSemanticTokens state nfp
+  items <- runActionE "SemanticTokens.semanticTokensFull" state $ computeSemanticTokens recorder pid state nfp
   return $ InL items
 
 -- | Defines the 'getSemanticTokensRule' function, compute semantic tokens for a Haskell source file.

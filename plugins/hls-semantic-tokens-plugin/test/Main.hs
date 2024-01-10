@@ -5,60 +5,48 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-import           Control.Arrow                      (Arrow ((***)), (&&&),
-                                                     (+++))
-import           Control.Lens                       hiding (use, (<.>))
-import           Control.Monad                      (forM)
+import           Control.Lens                       ((^?))
 import           Control.Monad.IO.Class             (liftIO)
-import           Data.Bifunctor
-import qualified Data.ByteString                    as BS
-import           Data.Data
+import           Data.Aeson                         (KeyValue (..), Value (..),
+                                                     object)
 import           Data.Default
 import           Data.Functor                       (void)
-import qualified Data.List                          as List
 import           Data.Map                           as Map hiding (map)
-import           Data.Maybe                         (fromJust)
-import qualified Data.Maybe
-import qualified Data.Set                           as Set
 import           Data.String                        (fromString)
 import           Data.Text                          hiding (length, map,
                                                      unlines)
+import qualified Data.Text                          as Text
 import qualified Data.Text.Utf16.Rope               as Rope
-import           Development.IDE                    (getFileContents, runAction,
-                                                     toNormalizedUri)
-import           Development.IDE.Core.Rules         (Log)
-import           Development.IDE.Core.Shake         (getVirtualFile)
 import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
 import           Development.IDE.Test               (waitForBuildQueue)
-import           Ide.Plugin.Error                   (getNormalizedFilePathE)
 import           Ide.Plugin.SemanticTokens
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens         as L
-import           Language.LSP.Protocol.Types        (SemanticTokens (..),
+import           Language.LSP.Protocol.Types        (SemanticTokenTypes (..),
                                                      SemanticTokensParams (..),
-                                                     _L, type (|?) (..))
-import qualified Language.LSP.Server                as Lsp
-import           Language.LSP.Test                  (Session (..), openDoc)
+                                                     _L)
+import           Language.LSP.Test                  (Session (..),
+                                                     SessionConfig (ignoreConfigurationRequests),
+                                                     openDoc)
 import qualified Language.LSP.Test                  as Test
 import           Language.LSP.VFS                   (VirtualFile (..))
-import           System.Environment.Blank
 import           System.FilePath
+import qualified Test.Hls                           as Test
 import           Test.Hls                           (PluginTestDescriptor,
-                                                     Session (..), TestName,
-                                                     TestTree,
+                                                     TestName, TestTree,
                                                      TextDocumentIdentifier,
                                                      defaultTestRunner,
-                                                     documentContents,
+                                                     documentContents, fullCaps,
                                                      goldenGitDiff,
                                                      mkPluginTestDescriptor,
-                                                     mkPluginTestDescriptor',
+                                                     pluginTestRecorder,
                                                      runSessionWithServerInTmpDir,
+                                                     runSessionWithServerInTmpDir',
                                                      testCase, testGroup,
                                                      waitForAction, (@?=))
 import qualified Test.Hls.FileSystem                as FS
-import           Test.Hls.Util                      (withCanonicalTempDir)
+import           Test.Hls.FileSystem                (file, text)
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
@@ -81,17 +69,13 @@ semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor enabledSemanticDescriptor
                   }
             }
 
-mkSemanticTokensParams :: TextDocumentIdentifier -> SemanticTokensParams
-mkSemanticTokensParams = SemanticTokensParams Nothing Nothing
-
 goldenWithHaskellAndCapsOutPut config plugin title tree path desc act =
   goldenGitDiff title (FS.vftOriginalRoot tree </> path <.> desc) $
     runSessionWithServerInTmpDir config plugin tree $
       fromString <$> do
         doc <- openDoc (path <.> "hs") "haskell"
         void waitForBuildQueue
-        r <- act doc
-        return r
+        act doc
 
 goldenWithSemanticTokens :: TestName -> FilePath -> TestTree
 goldenWithSemanticTokens title path =
@@ -106,13 +90,18 @@ goldenWithSemanticTokens title path =
 
 docSemanticTokensString :: TextDocumentIdentifier -> Session String
 docSemanticTokensString doc = do
+  xs  <- map fromLspTokenTypeStrict <$> docLspSemanticTokensString doc
+  return $ unlines . map show $ xs
+
+docLspSemanticTokensString :: TextDocumentIdentifier -> Session [SemanticTokenOriginal Language.LSP.Protocol.Types.SemanticTokenTypes]
+docLspSemanticTokensString doc = do
   res <- Test.getSemanticTokens doc
   textContent <- documentContents doc
   let vfs = VirtualFile 0 0 (Rope.fromText textContent)
   let expect = []
-  case res ^? _L of
+  case res ^? Language.LSP.Protocol.Types._L of
     Just tokens -> do
-      either (error . show) (return . unlines . map show) $ recoverSemanticTokens vfs tokens
+      either (error . show) pure $ recoverLspSemanticTokens vfs tokens
     _noTokens -> error "No tokens found"
 
 semanticTokensImportedTests :: TestTree
@@ -141,14 +130,49 @@ semanticTokensValuePatternTests =
       goldenWithSemanticTokens "pattern bind" "TPatternbind"
     ]
 
+mkSemanticConfig :: Value -> Config
+mkSemanticConfig setting = def{plugins = Map.insert "SemanticTokens" conf (plugins def)}
+    where
+      conf = def{plcConfig = (\(Object obj) -> obj) setting }
+
+modifySemantic :: Value -> Session ()
+modifySemantic setting = Test.setHlsConfig $ mkSemanticConfig setting
+
+
+directFile :: FilePath -> Text -> [FS.FileTree]
+directFile fp content =
+  [ FS.directCradle [Text.pack fp]
+  , file fp (text content)
+  ]
+
+semanticTokensConfigTest :: TestTree
+semanticTokensConfigTest = testGroup "semantic token config test" [
+        testCase "function to variable" $ do
+            let content = Text.unlines ["module Hello where", "go _ = 1"]
+            let fs = mkFs $ directFile "Hello.hs" content
+            let funcVar = object [ "tokenMapping" .= object ["function" .= var] ]
+                var :: String
+                var = "variable"
+            do
+                recorder <- pluginTestRecorder
+                Test.Hls.runSessionWithServerInTmpDir' (semanticTokensPlugin recorder)
+                    (mkSemanticConfig funcVar)
+                    def {ignoreConfigurationRequests = False}
+                    fullCaps
+                    fs $ do
+                    -- modifySemantic funcVar
+                    void waitForBuildQueue
+                    doc <- openDoc "Hello.hs" "haskell"
+                    void waitForBuildQueue
+                    result1 <- docLspSemanticTokensString doc
+                    liftIO $ unlines (map show result1) @?= "2:1-3 SemanticTokenTypes_Variable \"go\"\n"
+    ]
+
 semanticTokensTests :: TestTree
 semanticTokensTests =
   testGroup
     "other semantic Token test"
     [ testCase "module import test" $ do
-        let filePath1 = "./test/testdata/TModuleA.hs"
-        let filePath2 = "./test/testdata/TModuleB.hs"
-
         let file1 = "TModuleA.hs"
         let file2 = "TModuleB.hs"
         let expect =
@@ -158,16 +182,16 @@ semanticTokensTests =
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
           doc1 <- openDoc file1 "haskell"
           doc2 <- openDoc file2 "haskell"
-          check1 <- waitForAction "TypeCheck" doc1
+          _check1 <- waitForAction "TypeCheck" doc1
           check2 <- waitForAction "TypeCheck" doc2
           case check2 of
-            Right (WaitForIdeRuleResult x) -> return ()
-            Left y                         -> error "TypeCheck2 failed"
+            Right (WaitForIdeRuleResult _) -> return ()
+            Left _                         -> error "TypeCheck2 failed"
 
-          res2 <- Test.getSemanticTokens doc2
           textContent2 <- documentContents doc2
           let vfs = VirtualFile 0 0 (Rope.fromText textContent2)
-          case res2 ^? _L of
+          res2 <- Test.getSemanticTokens doc2
+          case res2 ^? Language.LSP.Protocol.Types._L of
             Just tokens -> do
               either
                 (error . show)
@@ -182,6 +206,7 @@ semanticTokensTests =
       goldenWithSemanticTokens "TUnicodeSyntax" "TUnicodeSyntax"
     ]
 
+semanticTokensDataTypeTests :: TestTree
 semanticTokensDataTypeTests =
   testGroup
     "get semantic Tokens"
@@ -192,6 +217,7 @@ semanticTokensDataTypeTests =
       goldenWithSemanticTokens "GADT" "TGADT"
     ]
 
+semanticTokensFunctionTests :: TestTree
 semanticTokensFunctionTests =
   testGroup
     "get semantic of functions"
@@ -210,5 +236,6 @@ main =
         semanticTokensClassTests,
         semanticTokensDataTypeTests,
         semanticTokensValuePatternTests,
-        semanticTokensFunctionTests
+        semanticTokensFunctionTests,
+        semanticTokensConfigTest
       ]

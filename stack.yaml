@@ -57,6 +57,8 @@ extra-deps:
 - monad-dijkstra-0.1.1.4
 - hw-prim-0.6.3.2
 - optparse-applicative-0.17.1.0
+- rank2classes-1.5.3
+- data-functor-logistic-0.0
 
 # stan and friends
 - stan-0.1.2.0
