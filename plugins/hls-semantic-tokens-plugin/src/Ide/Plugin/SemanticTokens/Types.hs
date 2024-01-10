@@ -111,7 +111,7 @@ semanticConfigProperties =
   emptyProperties
     & defineObjectProperty
       #tokenMapping
-      "Configuration of map from hs semantic token type to LSP default token type"
+      "Configuration of the map from hs semantic token type to LSP default token type"
       def
 deriving instance Show SemanticTokensConfig
 
