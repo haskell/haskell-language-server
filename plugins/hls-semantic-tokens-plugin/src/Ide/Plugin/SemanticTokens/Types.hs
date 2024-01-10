@@ -100,8 +100,11 @@ $(Rank2.TH.deriveAll ''SemanticTokensConfig_)
 withDef :: SemanticTokensConfig  -> SemanticTokensConfig_ Maybe -> SemanticTokensConfig
 withDef = Rank2.liftA2 (\x y -> Identity (fromMaybe (runIdentity x) y))
 instance FromJSON SemanticTokensConfig where parseJSON = fmap (withDef def) . parseJSON
+lowerFirst :: String -> String
+lowerFirst []     = []
+lowerFirst (x:xs) = toLower x : xs
 stOption :: Options
-stOption = defaultOptions { fieldLabelModifier = map toLower . drop 2 }
+stOption = defaultOptions { fieldLabelModifier = lowerFirst . drop 2 }
 instance FromJSON (SemanticTokensConfig_ Maybe) where parseJSON = genericParseJSON stOption
 instance ToJSON (SemanticTokensConfig_ Maybe) where toJSON = genericToJSON stOption
 instance ToJSON SemanticTokensConfig where toJSON = genericToJSON stOption

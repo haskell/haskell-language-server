@@ -252,15 +252,15 @@
     "haskell.plugin.semanticTokens.config.tokenMapping": {
         "default": {
             "class": "class",
-            "classmethod": "method",
-            "datacon": "enumMember",
+            "classMethod": "method",
+            "dataCon": "enumMember",
             "function": "function",
-            "patternsyn": "macro",
-            "recfield": "property",
-            "typecon": "enum",
-            "typefamily": "interface",
-            "typesyn": "type",
-            "typevariable": "typeParameter",
+            "patternSyn": "macro",
+            "recField": "property",
+            "typeCon": "enum",
+            "typeFamily": "interface",
+            "typeSyn": "type",
+            "typeVariable": "typeParameter",
             "variable": "variable"
         },
         "markdownDescription": "Configuration of the map from hs semantic token type to LSP default token type",

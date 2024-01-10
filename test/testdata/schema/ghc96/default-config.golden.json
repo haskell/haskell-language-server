@@ -118,15 +118,15 @@
             "config": {
                 "tokenMapping": {
                     "class": "class",
-                    "classmethod": "method",
-                    "datacon": "enumMember",
+                    "classMethod": "method",
+                    "dataCon": "enumMember",
                     "function": "function",
-                    "patternsyn": "macro",
-                    "recfield": "property",
-                    "typecon": "enum",
-                    "typefamily": "interface",
-                    "typesyn": "type",
-                    "typevariable": "typeParameter",
+                    "patternSyn": "macro",
+                    "recField": "property",
+                    "typeCon": "enum",
+                    "typeFamily": "interface",
+                    "typeSyn": "type",
+                    "typeVariable": "typeParameter",
                     "variable": "variable"
                 }
             },

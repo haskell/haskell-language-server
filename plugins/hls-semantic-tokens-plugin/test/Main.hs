@@ -24,7 +24,6 @@ import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 import           Language.LSP.Protocol.Types        (SemanticTokenTypes (..),
-                                                     SemanticTokensParams (..),
                                                      _L)
 import           Language.LSP.Test                  (Session (..),
                                                      SessionConfig (ignoreConfigurationRequests),
@@ -98,18 +97,10 @@ docLspSemanticTokensString doc = do
   res <- Test.getSemanticTokens doc
   textContent <- documentContents doc
   let vfs = VirtualFile 0 0 (Rope.fromText textContent)
-  let expect = []
   case res ^? Language.LSP.Protocol.Types._L of
     Just tokens -> do
       either (error . show) pure $ recoverLspSemanticTokens vfs tokens
     _noTokens -> error "No tokens found"
-
-semanticTokensImportedTests :: TestTree
-semanticTokensImportedTests =
-  testGroup
-    "imported test"
-    [ goldenWithSemanticTokens "type class" "TClass"
-    ]
 
 semanticTokensClassTests :: TestTree
 semanticTokensClassTests =
