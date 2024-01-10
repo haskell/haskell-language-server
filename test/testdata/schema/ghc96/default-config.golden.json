@@ -115,6 +115,21 @@
             "globalOn": true
         },
         "semanticTokens": {
+            "config": {
+                "tokenMapping": {
+                    "class": "class",
+                    "classmethod": "method",
+                    "datacon": "enumMember",
+                    "function": "function",
+                    "patternsyn": "macro",
+                    "recfield": "property",
+                    "typecon": "enum",
+                    "typefamily": "interface",
+                    "typesyn": "type",
+                    "typevariable": "typeParameter",
+                    "variable": "variable"
+                }
+            },
             "globalOn": false
         },
         "splice": {
