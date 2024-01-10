@@ -57,6 +57,8 @@ module Development.IDE.GHC.Compat.Env (
     Development.IDE.GHC.Compat.Env.platformDefaultBackend,
     workingDirectory,
     setWorkingDirectory,
+    hscSetActiveUnitId,
+    reexportedModules,
     ) where
 
 import           GHC                 (setInteractiveDynFlags)
@@ -78,10 +80,20 @@ import           GHC.Utils.TmpFs
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Driver.Env      (HscEnv, hsc_EPS)
+import qualified Data.Set            as S
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
-import           GHC.Driver.Env      (HscEnv)
+import           GHC.Driver.Env      (HscEnv, hscSetActiveUnitId)
+#endif
+
+
+#if !MIN_VERSION_ghc(9,3,0)
+hscSetActiveUnitId :: UnitId -> HscEnv -> HscEnv
+hscSetActiveUnitId _ env = env
+
+reexportedModules :: HscEnv -> S.Set a
+reexportedModules _ = S.empty
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
