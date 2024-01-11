@@ -48,11 +48,15 @@ toLspTokenType conf tk = case tk of
   TRecField     -> runIdentity $ stRecField conf
   TPatternSyn   -> runIdentity $ stPatternSyn conf
 
-lspTokenReverseMap :: Map.Map SemanticTokenTypes HsSemanticTokenType
-lspTokenReverseMap = Map.fromList $ map (\x -> (toLspTokenType def x, x)) $ enumFrom minBound
+lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
+lspTokenReverseMap config
+    | length xs /= Map.size mr = error "lspTokenReverseMap: token type mapping is not bijection"
+    | otherwise = mr
+    where xs = enumFrom minBound
+          mr = Map.fromList $ map (\x -> (toLspTokenType config x, x)) xs
 
-fromLspTokenType :: SemanticTokenTypes -> Maybe HsSemanticTokenType
-fromLspTokenType tk = Map.lookup tk lspTokenReverseMap
+fromLspTokenType :: SemanticTokensConfig -> SemanticTokenTypes -> Maybe HsSemanticTokenType
+fromLspTokenType cf tk = Map.lookup tk (lspTokenReverseMap cf)
 
 -- * 2. Mapping from GHC type and tyThing to semantic token type.
 
@@ -156,18 +160,19 @@ infoTokenType x = case x of
 -- for debug and test.
 -- this function is used to recover the original tokens(with token in haskell token type zoon)
 -- from the lsp semantic tokens(with token in lsp token type zoon)
--- this use the default token type mapping
-recoverSemanticTokens :: VirtualFile -> SemanticTokens -> Either Text [SemanticTokenOriginal HsSemanticTokenType]
-recoverSemanticTokens v s = do
+-- the `SemanticTokensConfig` used should be a map with bijection property
+recoverSemanticTokens :: SemanticTokensConfig -> VirtualFile -> SemanticTokens -> Either Text [SemanticTokenOriginal HsSemanticTokenType]
+recoverSemanticTokens config v s = do
     tks <- recoverLspSemanticTokens v s
-    return $ map fromLspTokenTypeStrict tks
+    return $ map (lspTokenHsToken config) tks
 
--- | fromLspTokenTypeStrict
+-- | lspTokenHsToken
 -- for debug and test.
--- use the default token type mapping to convert lsp token type to haskell token type
-fromLspTokenTypeStrict :: SemanticTokenOriginal SemanticTokenTypes -> SemanticTokenOriginal HsSemanticTokenType
-fromLspTokenTypeStrict (SemanticTokenOriginal tokenType location name) =
-        case fromLspTokenType tokenType of
+-- use the `SemanticTokensConfig` to convert lsp token type to haskell token type
+-- the `SemanticTokensConfig` used should be a map with bijection property
+lspTokenHsToken :: SemanticTokensConfig -> SemanticTokenOriginal SemanticTokenTypes -> SemanticTokenOriginal HsSemanticTokenType
+lspTokenHsToken config (SemanticTokenOriginal tokenType location name) =
+        case fromLspTokenType config tokenType of
         Just t  -> SemanticTokenOriginal t location name
         Nothing -> error "recoverSemanticTokens: unknown lsp token type"
 

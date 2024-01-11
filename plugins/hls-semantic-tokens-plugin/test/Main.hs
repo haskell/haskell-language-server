@@ -76,8 +76,8 @@ goldenWithHaskellAndCapsOutPut config plugin title tree path desc act =
         void waitForBuildQueue
         act doc
 
-goldenWithSemanticTokens :: TestName -> FilePath -> TestTree
-goldenWithSemanticTokens title path =
+goldenWithSemanticTokensWithDefaultConfig :: TestName -> FilePath -> TestTree
+goldenWithSemanticTokensWithDefaultConfig title path =
   goldenWithHaskellAndCapsOutPut
     def
     semanticTokensPlugin
@@ -85,11 +85,11 @@ goldenWithSemanticTokens title path =
     (mkFs $ FS.directProject (path <.> "hs"))
     path
     "expected"
-    docSemanticTokensString
+    (docSemanticTokensString def)
 
-docSemanticTokensString :: TextDocumentIdentifier -> Session String
-docSemanticTokensString doc = do
-  xs  <- map fromLspTokenTypeStrict <$> docLspSemanticTokensString doc
+docSemanticTokensString :: SemanticTokensConfig-> TextDocumentIdentifier -> Session String
+docSemanticTokensString cf doc = do
+  xs  <- map (lspTokenHsToken cf) <$> docLspSemanticTokensString doc
   return $ unlines . map show $ xs
 
 docLspSemanticTokensString :: TextDocumentIdentifier -> Session [SemanticTokenOriginal Language.LSP.Protocol.Types.SemanticTokenTypes]
@@ -106,19 +106,19 @@ semanticTokensClassTests :: TestTree
 semanticTokensClassTests =
   testGroup
     "type class"
-    [ goldenWithSemanticTokens "golden type class" "TClass",
-      goldenWithSemanticTokens "imported class method InstanceClassMethodBind" "TInstanceClassMethodBind",
-      goldenWithSemanticTokens "imported class method TInstanceClassMethodUse" "TInstanceClassMethodUse",
-      goldenWithSemanticTokens "imported deriving" "TClassImportedDeriving"
+    [ goldenWithSemanticTokensWithDefaultConfig "golden type class" "TClass",
+      goldenWithSemanticTokensWithDefaultConfig "imported class method InstanceClassMethodBind" "TInstanceClassMethodBind",
+      goldenWithSemanticTokensWithDefaultConfig "imported class method TInstanceClassMethodUse" "TInstanceClassMethodUse",
+      goldenWithSemanticTokensWithDefaultConfig "imported deriving" "TClassImportedDeriving"
     ]
 
 semanticTokensValuePatternTests :: TestTree
 semanticTokensValuePatternTests =
   testGroup
     "value and patterns "
-    [ goldenWithSemanticTokens "value bind" "TValBind",
-      goldenWithSemanticTokens "pattern match" "TPatternMatch",
-      goldenWithSemanticTokens "pattern bind" "TPatternbind"
+    [ goldenWithSemanticTokensWithDefaultConfig "value bind" "TValBind",
+      goldenWithSemanticTokensWithDefaultConfig "pattern match" "TPatternMatch",
+      goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternbind"
     ]
 
 mkSemanticConfig :: Value -> Config
@@ -187,35 +187,35 @@ semanticTokensTests =
               either
                 (error . show)
                 (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens vfs tokens
+                $ recoverSemanticTokens def vfs tokens
               return ()
             _ -> error "No tokens found"
           liftIO $ 1 @?= 1,
-      goldenWithSemanticTokens "mixed constancy test result generated from one ghc version" "T1",
-      goldenWithSemanticTokens "pattern bind" "TPatternSyn",
-      goldenWithSemanticTokens "type family" "TTypefamily",
-      goldenWithSemanticTokens "TUnicodeSyntax" "TUnicodeSyntax"
+      goldenWithSemanticTokensWithDefaultConfig "mixed constancy test result generated from one ghc version" "T1",
+      goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternSyn",
+      goldenWithSemanticTokensWithDefaultConfig "type family" "TTypefamily",
+      goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax"
     ]
 
 semanticTokensDataTypeTests :: TestTree
 semanticTokensDataTypeTests =
   testGroup
     "get semantic Tokens"
-    [ goldenWithSemanticTokens "simple datatype" "TDataType",
-      goldenWithSemanticTokens "record" "TRecord",
-      goldenWithSemanticTokens "datatype import" "TDatatypeImported",
-      goldenWithSemanticTokens "datatype family" "TDataFamily",
-      goldenWithSemanticTokens "GADT" "TGADT"
+    [ goldenWithSemanticTokensWithDefaultConfig "simple datatype" "TDataType",
+      goldenWithSemanticTokensWithDefaultConfig "record" "TRecord",
+      goldenWithSemanticTokensWithDefaultConfig "datatype import" "TDatatypeImported",
+      goldenWithSemanticTokensWithDefaultConfig "datatype family" "TDataFamily",
+      goldenWithSemanticTokensWithDefaultConfig "GADT" "TGADT"
     ]
 
 semanticTokensFunctionTests :: TestTree
 semanticTokensFunctionTests =
   testGroup
     "get semantic of functions"
-    [ goldenWithSemanticTokens "functions" "TFunction",
-      goldenWithSemanticTokens "local functions" "TFunctionLocal",
-      goldenWithSemanticTokens "function in let binding" "TFunctionLet",
-      goldenWithSemanticTokens "negative case non-function with constraint" "TNoneFunctionWithConstraint"
+    [ goldenWithSemanticTokensWithDefaultConfig "functions" "TFunction",
+      goldenWithSemanticTokensWithDefaultConfig "local functions" "TFunctionLocal",
+      goldenWithSemanticTokensWithDefaultConfig "function in let binding" "TFunctionLet",
+      goldenWithSemanticTokensWithDefaultConfig "negative case non-function with constraint" "TNoneFunctionWithConstraint"
     ]
 
 main :: IO ()
