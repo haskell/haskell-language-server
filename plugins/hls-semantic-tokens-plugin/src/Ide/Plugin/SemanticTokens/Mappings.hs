@@ -55,8 +55,8 @@ lspTokenReverseMap config
     where xs = enumFrom minBound
           mr = Map.fromList $ map (\x -> (toLspTokenType config x, x)) xs
 
-fromLspTokenType :: SemanticTokensConfig -> SemanticTokenTypes -> Maybe HsSemanticTokenType
-fromLspTokenType cf tk = Map.lookup tk (lspTokenReverseMap cf)
+lspTokenTypeHsTokenType :: SemanticTokensConfig -> SemanticTokenTypes -> Maybe HsSemanticTokenType
+lspTokenTypeHsTokenType cf tk = Map.lookup tk (lspTokenReverseMap cf)
 
 -- * 2. Mapping from GHC type and tyThing to semantic token type.
 
@@ -172,7 +172,7 @@ recoverSemanticTokens config v s = do
 -- the `SemanticTokensConfig` used should be a map with bijection property
 lspTokenHsToken :: SemanticTokensConfig -> SemanticTokenOriginal SemanticTokenTypes -> SemanticTokenOriginal HsSemanticTokenType
 lspTokenHsToken config (SemanticTokenOriginal tokenType location name) =
-        case fromLspTokenType config tokenType of
+        case lspTokenTypeHsTokenType config tokenType of
         Just t  -> SemanticTokenOriginal t location name
         Nothing -> error "recoverSemanticTokens: unknown lsp token type"
 
