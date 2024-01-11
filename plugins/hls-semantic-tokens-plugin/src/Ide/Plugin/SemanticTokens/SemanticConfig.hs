@@ -49,7 +49,10 @@ semanticDef :: SemanticTokensConfig
 semanticDef = def
 
 -- | it produces the following functions:
--- semanticConfigProperties :: SemanticConfigProperties
+-- semanticConfigProperties :: Properties '[
+-- 'PropertyKey "Variable" ('TEnum SemanticTokenTypes),
+-- ...
+-- ]
 -- useSemanticConfigAction :: PluginId -> Action SemanticTokensConfig
 mkSemanticConfigFunctions :: Q [Dec]
 mkSemanticConfigFunctions = do

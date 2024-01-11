@@ -59,7 +59,6 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
 import           Language.LSP.Protocol.Message            (Method (Method_TextDocumentSemanticTokensFull))
 import           Language.LSP.Protocol.Types              (NormalizedFilePath,
-                                                           SemanticTokenTypes,
                                                            SemanticTokens,
                                                            type (|?) (InL))
 import           Prelude                                  hiding (span)
