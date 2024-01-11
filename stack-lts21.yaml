@@ -56,7 +56,7 @@ extra-deps:
 - lsp-types-2.1.0.0
 
 # stan dependencies not found in the stackage snapshot
-- stan-0.1.0.2
+- stan-0.1.2.0
 - clay-0.14.0
 - dir-traverse-0.2.3.0
 - extensions-0.1.0.0
