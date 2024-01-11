@@ -46,7 +46,9 @@ library
     , text
     , transformers
     , unordered-containers
-    , stan >= 0.1.1.0
+    , stan >= 0.1.2.0
+    , trial
+    , directory
 
   default-language:   Haskell2010
   default-extensions:
