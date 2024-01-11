@@ -28,6 +28,7 @@ library
     Ide.Plugin.SemanticTokens.Mappings
   other-modules:
     Ide.Plugin.SemanticTokens.Query
+    Ide.Plugin.SemanticTokens.SemanticConfig
     Ide.Plugin.SemanticTokens.Utils
     Ide.Plugin.SemanticTokens.Internal
 
@@ -52,8 +53,8 @@ library
     , array
     , deepseq
     , hls-graph == 2.5.0.0
+    , template-haskell
     , data-default
-    , rank2classes
 
   default-language:   Haskell2010
   default-extensions: DataKinds
@@ -86,5 +87,5 @@ test-suite tests
     , bytestring
     , ghcide                == 2.5.0.0
     , hls-plugin-api        == 2.5.0.0
-    , rank2classes
+    , template-haskell
     , data-default

@@ -3,45 +3,37 @@
 {-# LANGUAGE DerivingVia         #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE GADTs               #-}
-{-# LANGUAGE ImportQualifiedPost #-}
+
 {-# LANGUAGE InstanceSigs        #-}
-{-# LANGUAGE OverloadedLabels    #-}
+
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE StandaloneDeriving  #-}
+
+
 {-# LANGUAGE StrictData          #-}
-{-# LANGUAGE TemplateHaskell     #-}
+
 {-# LANGUAGE TypeFamilies        #-}
+
+
+{-# LANGUAGE DeriveLift          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Ide.Plugin.SemanticTokens.Types where
 
 import           Control.DeepSeq               (NFData (rnf), rwhnf)
-import           Control.Monad.Identity        (Identity (..))
-import           Data.Aeson                    (FromJSON (parseJSON),
-                                                Options (..), ToJSON,
-                                                defaultOptions,
-                                                genericParseJSON, genericToJSON)
-import           Data.Aeson.Types              (ToJSON (toJSON))
 import qualified Data.Array                    as A
-import           Data.Char                     (toLower)
 import           Data.Default                  (Default (def))
 import           Data.Generics                 (Typeable)
 import qualified Data.Map                      as M
-import           Data.Maybe                    (fromMaybe)
 import           Development.IDE               (Pretty (pretty), RuleResult)
 import qualified Development.IDE.Core.Shake    as Shake
 import           Development.IDE.GHC.Compat    hiding (loc)
 import           Development.IDE.Graph.Classes (Hashable)
 import           GHC.Generics                  (Generic)
-import           Ide.Plugin.Properties         (Properties,
-                                                PropertyKey (PropertyKey),
-                                                PropertyType (TObject),
-                                                defineObjectProperty,
-                                                emptyProperties, (&))
 import           Language.LSP.Protocol.Types
-import qualified Rank2
-import qualified Rank2.TH
+-- import template haskell
+import           Language.Haskell.TH.Syntax    (Lift)
+
 
 -- !!!! order of declarations matters deriving enum and ord
 -- since token may come from different source and we want to keep the most specific one
@@ -58,64 +50,43 @@ data HsSemanticTokenType
   | TTypeSyn -- Type synonym
   | TTypeFamily -- type family
   | TRecField -- from match bind
-  deriving (Eq, Ord, Show, Enum, Bounded)
+  deriving (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
 
-type SemanticTokensConfig = SemanticTokensConfig_ Identity
+-- type SemanticTokensConfig = SemanticTokensConfig_ Identity
 instance Default SemanticTokensConfig where
   def = STC
-      { stFunction = Identity SemanticTokenTypes_Function
-      , stVariable = Identity SemanticTokenTypes_Variable
-      , stDataCon = Identity SemanticTokenTypes_EnumMember
-      , stTypeVariable = Identity SemanticTokenTypes_TypeParameter
-      , stClassMethod = Identity SemanticTokenTypes_Method
+      { stFunction = SemanticTokenTypes_Function
+      , stVariable = SemanticTokenTypes_Variable
+      , stDataCon = SemanticTokenTypes_EnumMember
+      , stTypeVariable = SemanticTokenTypes_TypeParameter
+      , stClassMethod = SemanticTokenTypes_Method
       -- pattern syn is like a limited version of macro of constructing a term
-      , stPatternSyn = Identity SemanticTokenTypes_Macro
+      , stPatternSyn = SemanticTokenTypes_Macro
         -- normal data type is a tagged union type look like enum type
         -- and a record is a product type like struct
         -- but we don't distinguish them yet
-      , stTypeCon = Identity SemanticTokenTypes_Enum
-      , stClass = Identity SemanticTokenTypes_Class
-      , stTypeSyn = Identity SemanticTokenTypes_Type
-      , stTypeFamily = Identity SemanticTokenTypes_Interface
-      , stRecField = Identity SemanticTokenTypes_Property
+      , stTypeCon = SemanticTokenTypes_Enum
+      , stClass = SemanticTokenTypes_Class
+      , stTypeSyn = SemanticTokenTypes_Type
+      , stTypeFamily = SemanticTokenTypes_Interface
+      , stRecField = SemanticTokenTypes_Property
       }
 -- | SemanticTokensConfig_ is a configuration for the semantic tokens plugin.
 -- it contains map between the hs semantic token type and default token type.
-data SemanticTokensConfig_ f = STC
-  { stFunction     :: !(f SemanticTokenTypes)
-  , stVariable     :: !(f SemanticTokenTypes)
-  , stDataCon      :: !(f SemanticTokenTypes)
-  , stTypeVariable :: !(f SemanticTokenTypes)
-  , stClassMethod  :: !(f SemanticTokenTypes)
-  , stPatternSyn   :: !(f SemanticTokenTypes)
-  , stTypeCon      :: !(f SemanticTokenTypes)
-  , stClass        :: !(f SemanticTokenTypes)
-  , stTypeSyn      :: !(f SemanticTokenTypes)
-  , stTypeFamily   :: !(f SemanticTokenTypes)
-  , stRecField     :: !(f SemanticTokenTypes)
-  } deriving Generic
-$(Rank2.TH.deriveAll ''SemanticTokensConfig_)
+data SemanticTokensConfig = STC
+  { stFunction     :: !SemanticTokenTypes
+  , stVariable     :: !SemanticTokenTypes
+  , stDataCon      :: !SemanticTokenTypes
+  , stTypeVariable :: !SemanticTokenTypes
+  , stClassMethod  :: !SemanticTokenTypes
+  , stPatternSyn   :: !SemanticTokenTypes
+  , stTypeCon      :: !SemanticTokenTypes
+  , stClass        :: !SemanticTokenTypes
+  , stTypeSyn      :: !SemanticTokenTypes
+  , stTypeFamily   :: !SemanticTokenTypes
+  , stRecField     :: !SemanticTokenTypes
+  } deriving (Generic, Show)
 
-withDef :: SemanticTokensConfig  -> SemanticTokensConfig_ Maybe -> SemanticTokensConfig
-withDef = Rank2.liftA2 (\x y -> Identity (fromMaybe (runIdentity x) y))
-instance FromJSON SemanticTokensConfig where parseJSON = fmap (withDef def) . parseJSON
-lowerFirst :: String -> String
-lowerFirst []     = []
-lowerFirst (x:xs) = toLower x : xs
-stOption :: Options
-stOption = defaultOptions { fieldLabelModifier = lowerFirst . drop 2 }
-instance FromJSON (SemanticTokensConfig_ Maybe) where parseJSON = genericParseJSON stOption
-instance ToJSON (SemanticTokensConfig_ Maybe) where toJSON = genericToJSON stOption
-instance ToJSON SemanticTokensConfig where toJSON = genericToJSON stOption
-
-semanticConfigProperties :: Properties '[ 'PropertyKey "tokenMapping" ('TObject SemanticTokensConfig)]
-semanticConfigProperties =
-  emptyProperties
-    & defineObjectProperty
-      #tokenMapping
-      "Configuration of the map from hs semantic token type to LSP default token type"
-      def
-deriving instance Show SemanticTokensConfig
 
 instance Semigroup HsSemanticTokenType where
   -- one in higher enum is more specific
@@ -169,7 +140,7 @@ data HieFunMaskKind kind where
 data SemanticLog
   = LogShake Shake.Log
   | LogNoAST FilePath
-  | LogConfig (SemanticTokensConfig )
+  | LogConfig SemanticTokensConfig
   | LogMsg String
   | LogNoVF
   deriving (Show)

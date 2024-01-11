@@ -2,6 +2,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 
+
+
 -- |
 -- This module provides mappings to convert token type information in the Haskell IDE plugin. It includes functions for:
 --
@@ -12,8 +14,6 @@
 module Ide.Plugin.SemanticTokens.Mappings where
 
 import qualified Data.Array                      as A
-import           Data.Default                    (def)
-import           Data.Functor.Identity           (Identity (runIdentity))
 import           Data.List.Extra                 (chunksOf, (!?))
 import qualified Data.Map                        as Map
 import           Data.Maybe                      (mapMaybe)
@@ -36,17 +36,17 @@ import           Language.LSP.VFS                hiding (line)
 -- | map from haskell semantic token type to LSP default token type
 toLspTokenType :: SemanticTokensConfig  -> HsSemanticTokenType -> SemanticTokenTypes
 toLspTokenType conf tk = case tk of
-  TFunction     -> runIdentity $ stFunction conf
-  TVariable     -> runIdentity $ stVariable conf
-  TClassMethod  -> runIdentity $ stClassMethod conf
-  TTypeVariable -> runIdentity $ stTypeVariable conf
-  TDataCon      -> runIdentity $ stDataCon conf
-  TClass        -> runIdentity $ stClass conf
-  TTypeCon      -> runIdentity $ stTypeCon conf
-  TTypeSyn      -> runIdentity $ stTypeSyn conf
-  TTypeFamily   -> runIdentity $ stTypeFamily conf
-  TRecField     -> runIdentity $ stRecField conf
-  TPatternSyn   -> runIdentity $ stPatternSyn conf
+  TFunction     -> stFunction conf
+  TVariable     -> stVariable conf
+  TClassMethod  -> stClassMethod conf
+  TTypeVariable -> stTypeVariable conf
+  TDataCon      -> stDataCon conf
+  TClass        -> stClass conf
+  TTypeCon      -> stTypeCon conf
+  TTypeSyn      -> stTypeSyn conf
+  TTypeFamily   -> stTypeFamily conf
+  TRecField     -> stRecField conf
+  TPatternSyn   -> stPatternSyn conf
 
 lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap config

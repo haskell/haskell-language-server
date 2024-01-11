@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Ide.Plugin.SemanticTokens (descriptor) where
 
@@ -16,6 +17,6 @@ descriptor recorder plId =
       pluginConfigDescriptor =
         defaultConfigDescriptor
           { configInitialGenericConfig = (configInitialGenericConfig defaultConfigDescriptor) {plcGlobalOn = False}
-          , configCustomConfig = mkCustomConfig semanticConfigProperties
+          , configCustomConfig = mkCustomConfig Internal.semanticConfigProperties
           }
     }
