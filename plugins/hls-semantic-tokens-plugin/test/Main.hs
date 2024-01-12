@@ -168,7 +168,7 @@ semanticTokensTests =
         let file2 = "TModuleB.hs"
         let expect =
               [ SemanticTokenOriginal TVariable (Loc 5 1 2) "go",
-                SemanticTokenOriginal TDataCon (Loc 5 6 4) "Game"
+                SemanticTokenOriginal TDataConstructor (Loc 5 6 4) "Game"
               ]
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
           doc1 <- openDoc file1 "haskell"
@@ -192,7 +192,7 @@ semanticTokensTests =
             _ -> error "No tokens found"
           liftIO $ 1 @?= 1,
       goldenWithSemanticTokensWithDefaultConfig "mixed constancy test result generated from one ghc version" "T1",
-      goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternSyn",
+      goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternSynonym",
       goldenWithSemanticTokensWithDefaultConfig "type family" "TTypefamily",
       goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax"
     ]

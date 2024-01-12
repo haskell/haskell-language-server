@@ -19,17 +19,32 @@ import           Language.Haskell.TH
 import           Language.LSP.Protocol.Types     (LspEnum (..),
                                                   SemanticTokenTypes)
 
+
+
+docName :: HsSemanticTokenType -> T.Text
+docName tt = case tt of
+    TVariable        -> "variables"
+    TFunction        -> "functions"
+    TDataConstructor -> "data constructors"
+    TTypeVariable    -> "type variables"
+    TClassMethod     -> "typeclass methods"
+    TPatternSynonym  -> "pattern synonyms"
+    TTypeConstructor -> "type constructors"
+    TClass           -> "typeclasses"
+    TTypeSynonym     -> "type synonyms"
+    TTypeFamily      -> "type families"
+    TRecordField     -> "record fields"
+
 toConfigName :: String -> String
 toConfigName = ("st" <>)
 
--- lspTokenTypeDescription :: [(SemanticTokenTypes, String)]
 type LspTokenTypeDescriptions = [(SemanticTokenTypes, T.Text)]
 
 lspTokenTypeDescriptions :: LspTokenTypeDescriptions
 lspTokenTypeDescriptions =
   map
     ( \x ->
-        (x, "LSP Semantic Token Type:" <> toEnumBaseType x)
+        (x, "LSP Semantic Token Type: " <> toEnumBaseType x)
     )
     $ S.toList knownValues
 
@@ -64,8 +79,7 @@ mkSemanticConfigFunctions = do
   let pid = mkName "pid"
   let semanticConfigPropertiesName = mkName "semanticConfigProperties"
   let useSemanticConfigActionName = mkName "useSemanticConfigAction"
-  let
-      allLabels = map (LabelE . lowerFirst) allHsTokenNameStrings
+  let allLabels = map (LabelE . lowerFirst) allHsTokenNameStrings
       allFieldsNames = map (mkName . toConfigName) allHsTokenNameStrings
       allVariableNames = map (mkName . ("_variable_" <>) . toConfigName) allHsTokenNameStrings
       --   <- useSemanticConfigAction label pid config
@@ -85,7 +99,7 @@ mkSemanticConfigFunctions = do
   nameAndDescList <-
     mapM
       ( \(lb, x) -> do
-          desc <- [|"LSP semantic token type to use for " <> T.pack (drop 1 $ show x)|]
+          desc <- [|"LSP semantic token type to use for " <> docName x|]
           lspToken <- [|toLspTokenType def x|]
           return $ TupE [Just lb, Just desc, Just lspToken]
       )

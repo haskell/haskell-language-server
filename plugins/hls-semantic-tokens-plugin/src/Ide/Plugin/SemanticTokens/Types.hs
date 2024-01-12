@@ -1,22 +1,15 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE DeriveLift          #-}
 {-# LANGUAGE DerivingVia         #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE GADTs               #-}
-
 {-# LANGUAGE InstanceSigs        #-}
-
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
-
-
-{-# LANGUAGE StrictData          #-}
-
-{-# LANGUAGE TypeFamilies        #-}
-
-
-{-# LANGUAGE DeriveLift          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StrictData          #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Ide.Plugin.SemanticTokens.Types where
 
@@ -41,50 +34,52 @@ import           Language.Haskell.TH.Syntax    (Lift)
 data HsSemanticTokenType
   = TVariable -- none function variable
   | TFunction -- function
-  | TDataCon -- Data constructor
+  | TDataConstructor -- Data constructor
   | TTypeVariable -- Type variable
   | TClassMethod -- Class method
-  | TPatternSyn -- Pattern synonym
-  | TTypeCon -- Type (Type constructor)
+  | TPatternSynonym -- Pattern synonym
+  | TTypeConstructor -- Type (Type constructor)
   | TClass -- Type class
-  | TTypeSyn -- Type synonym
+  | TTypeSynonym -- Type synonym
   | TTypeFamily -- type family
-  | TRecField -- from match bind
+  | TRecordField -- from match bind
   deriving (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
+
+
 
 -- type SemanticTokensConfig = SemanticTokensConfig_ Identity
 instance Default SemanticTokensConfig where
   def = STC
       { stFunction = SemanticTokenTypes_Function
       , stVariable = SemanticTokenTypes_Variable
-      , stDataCon = SemanticTokenTypes_EnumMember
+      , stDataConstructor = SemanticTokenTypes_EnumMember
       , stTypeVariable = SemanticTokenTypes_TypeParameter
       , stClassMethod = SemanticTokenTypes_Method
       -- pattern syn is like a limited version of macro of constructing a term
-      , stPatternSyn = SemanticTokenTypes_Macro
+      , stPatternSynonym = SemanticTokenTypes_Macro
         -- normal data type is a tagged union type look like enum type
         -- and a record is a product type like struct
         -- but we don't distinguish them yet
-      , stTypeCon = SemanticTokenTypes_Enum
+      , stTypeConstructor = SemanticTokenTypes_Enum
       , stClass = SemanticTokenTypes_Class
-      , stTypeSyn = SemanticTokenTypes_Type
+      , stTypeSynonym = SemanticTokenTypes_Type
       , stTypeFamily = SemanticTokenTypes_Interface
-      , stRecField = SemanticTokenTypes_Property
+      , stRecordField = SemanticTokenTypes_Property
       }
 -- | SemanticTokensConfig_ is a configuration for the semantic tokens plugin.
 -- it contains map between the hs semantic token type and default token type.
 data SemanticTokensConfig = STC
-  { stFunction     :: !SemanticTokenTypes
-  , stVariable     :: !SemanticTokenTypes
-  , stDataCon      :: !SemanticTokenTypes
-  , stTypeVariable :: !SemanticTokenTypes
-  , stClassMethod  :: !SemanticTokenTypes
-  , stPatternSyn   :: !SemanticTokenTypes
-  , stTypeCon      :: !SemanticTokenTypes
-  , stClass        :: !SemanticTokenTypes
-  , stTypeSyn      :: !SemanticTokenTypes
-  , stTypeFamily   :: !SemanticTokenTypes
-  , stRecField     :: !SemanticTokenTypes
+  { stFunction        :: !SemanticTokenTypes
+  , stVariable        :: !SemanticTokenTypes
+  , stDataConstructor :: !SemanticTokenTypes
+  , stTypeVariable    :: !SemanticTokenTypes
+  , stClassMethod     :: !SemanticTokenTypes
+  , stPatternSynonym  :: !SemanticTokenTypes
+  , stTypeConstructor :: !SemanticTokenTypes
+  , stClass           :: !SemanticTokenTypes
+  , stTypeSynonym     :: !SemanticTokenTypes
+  , stTypeFamily      :: !SemanticTokenTypes
+  , stRecordField     :: !SemanticTokenTypes
   } deriving (Generic, Show)
 
 

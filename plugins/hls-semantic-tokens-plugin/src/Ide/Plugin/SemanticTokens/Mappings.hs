@@ -34,17 +34,17 @@ import           Language.LSP.VFS                hiding (line)
 -- | map from haskell semantic token type to LSP default token type
 toLspTokenType :: SemanticTokensConfig  -> HsSemanticTokenType -> SemanticTokenTypes
 toLspTokenType conf tk = case tk of
-  TFunction     -> stFunction conf
-  TVariable     -> stVariable conf
-  TClassMethod  -> stClassMethod conf
-  TTypeVariable -> stTypeVariable conf
-  TDataCon      -> stDataCon conf
-  TClass        -> stClass conf
-  TTypeCon      -> stTypeCon conf
-  TTypeSyn      -> stTypeSyn conf
-  TTypeFamily   -> stTypeFamily conf
-  TRecField     -> stRecField conf
-  TPatternSyn   -> stPatternSyn conf
+  TFunction        -> stFunction conf
+  TVariable        -> stVariable conf
+  TClassMethod     -> stClassMethod conf
+  TTypeVariable    -> stTypeVariable conf
+  TDataConstructor -> stDataConstructor conf
+  TClass           -> stClass conf
+  TTypeConstructor -> stTypeConstructor conf
+  TTypeSynonym     -> stTypeSynonym conf
+  TTypeFamily      -> stTypeFamily conf
+  TRecordField     -> stRecordField conf
+  TPatternSynonym  -> stPatternSynonym conf
 
 lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap config
@@ -63,19 +63,19 @@ tyThingSemantic :: TyThing -> Maybe HsSemanticTokenType
 tyThingSemantic ty = case ty of
   AnId vid
     | isTyVar vid -> Just TTypeVariable
-    | isRecordSelector vid -> Just TRecField
+    | isRecordSelector vid -> Just TRecordField
     | isClassOpId vid -> Just TClassMethod
     | isFunVar vid -> Just TFunction
     | otherwise -> Just TVariable
   AConLike con -> case con of
-    RealDataCon _ -> Just TDataCon
-    PatSynCon _   -> Just TPatternSyn
+    RealDataCon _ -> Just TDataConstructor
+    PatSynCon _   -> Just TPatternSynonym
   ATyCon tyCon
-    | isTypeSynonymTyCon tyCon -> Just TTypeSyn
+    | isTypeSynonymTyCon tyCon -> Just TTypeSynonym
     | isTypeFamilyTyCon tyCon -> Just TTypeFamily
     | isClassTyCon tyCon -> Just TClass
-    -- fall back to TTypeCon the result
-    | otherwise -> Just TTypeCon
+    -- fall back to TTypeConstructor the result
+    | otherwise -> Just TTypeConstructor
   ACoAxiom _ -> Nothing
   where
     isFunVar :: Var -> Bool
@@ -139,16 +139,16 @@ infoTokenType x = case x of
   PatternBind {}           -> Just TVariable
   ClassTyDecl _            -> Just TClassMethod
   TyVarBind _ _            -> Just TTypeVariable
-  RecField _ _             -> Just TRecField
+  RecField _ _             -> Just TRecordField
   -- data constructor, type constructor, type synonym, type family
   Decl ClassDec _          -> Just TClass
-  Decl DataDec _           -> Just TTypeCon
-  Decl ConDec _            -> Just TDataCon
-  Decl SynDec _            -> Just TTypeSyn
+  Decl DataDec _           -> Just TTypeConstructor
+  Decl ConDec _            -> Just TDataConstructor
+  Decl SynDec _            -> Just TTypeSynonym
   Decl FamDec _            -> Just TTypeFamily
   -- instance dec is class method
   Decl InstDec _           -> Just TClassMethod
-  Decl PatSynDec _         -> Just TPatternSyn
+  Decl PatSynDec _         -> Just TPatternSynonym
   EvidenceVarUse           -> Nothing
   EvidenceVarBind {}       -> Nothing
 

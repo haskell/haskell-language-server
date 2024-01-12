@@ -83,13 +83,13 @@
             "config": {
                 "class": "class",
                 "classMethod": "method",
-                "dataCon": "enumMember",
+                "dataConstructor": "enumMember",
                 "function": "function",
-                "patternSyn": "macro",
-                "recField": "property",
-                "typeCon": "enum",
+                "patternSynonym": "macro",
+                "recordField": "property",
+                "typeConstructor": "enum",
                 "typeFamily": "interface",
-                "typeSyn": "type",
+                "typeSynonym": "type",
                 "typeVariable": "typeParameter",
                 "variable": "variable"
             },
