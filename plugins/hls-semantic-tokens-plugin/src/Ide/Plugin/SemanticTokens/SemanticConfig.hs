@@ -7,6 +7,7 @@
 
 module Ide.Plugin.SemanticTokens.SemanticConfig where
 
+import           Data.Char                       (toLower)
 import           Data.Default                    (def)
 import qualified Data.Set                        as S
 import qualified Data.Text                       as T
@@ -35,6 +36,10 @@ lspTokenTypeDescriptions =
 allHsTokenTypes :: [HsSemanticTokenType]
 allHsTokenTypes = enumFrom minBound
 
+lowerFirst :: String -> String
+lowerFirst []     = []
+lowerFirst (x:xs) = toLower x : xs
+
 allHsTokenNameStrings :: [String]
 allHsTokenNameStrings = map (drop 1 . show) allHsTokenTypes
 
@@ -60,9 +65,9 @@ mkSemanticConfigFunctions = do
   let semanticConfigPropertiesName = mkName "semanticConfigProperties"
   let useSemanticConfigActionName = mkName "useSemanticConfigAction"
   let
-      allLabels = map LabelE allHsTokenNameStrings
+      allLabels = map (LabelE . lowerFirst) allHsTokenNameStrings
       allFieldsNames = map (mkName . toConfigName) allHsTokenNameStrings
-      allVariableNames = map (mkName . ("variable_" <>) . toConfigName) allHsTokenNameStrings
+      allVariableNames = map (mkName . ("_variable_" <>) . toConfigName) allHsTokenNameStrings
       --   <- useSemanticConfigAction label pid config
       mkGetProperty (variable, label) =
         BindS
