@@ -11,8 +11,7 @@ module Ide.Plugin.CallHierarchy.Query (
 import qualified Data.Text                      as T
 import           Database.SQLite.Simple
 import           Development.IDE.GHC.Compat
-import           HieDb                          (HieDb (getConn), Symbol (..),
-                                                 toNsChar)
+import           HieDb                          (HieDb (getConn), Symbol (..))
 import           Ide.Plugin.CallHierarchy.Types
 
 incomingCalls :: HieDb -> Symbol -> IO [Vertex]
@@ -73,9 +72,9 @@ getSymbolPosition (getConn -> conn) Vertex{..} = do
             ]
         ) (occ, sl, sc, sl, el, ec, el)
 
-parseSymbol :: Symbol -> (String, String, String)
+parseSymbol :: Symbol -> (OccName, ModuleName, Unit)
 parseSymbol Symbol{..} =
-    let o = toNsChar (occNameSpace symName) : occNameString symName
-        m = moduleNameString $ moduleName symModule
-        u = unitString $ moduleUnit symModule
+    let o = symName
+        m = moduleName symModule
+        u = moduleUnit symModule
     in  (o, m, u)
