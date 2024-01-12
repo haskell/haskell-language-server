@@ -80,6 +80,19 @@
             "globalOn": true
         },
         "semanticTokens": {
+            "config": {
+                "class": "class",
+                "classMethod": "method",
+                "dataCon": "enumMember",
+                "function": "function",
+                "patternSyn": "macro",
+                "recField": "property",
+                "typeCon": "enum",
+                "typeFamily": "interface",
+                "typeSyn": "type",
+                "typeVariable": "typeParameter",
+                "variable": "variable"
+            },
             "globalOn": false
         },
         "stan": {
