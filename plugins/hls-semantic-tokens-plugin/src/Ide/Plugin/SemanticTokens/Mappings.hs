@@ -2,8 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 
-
-
 -- |
 -- This module provides mappings to convert token type information in the Haskell IDE plugin. It includes functions for:
 --
