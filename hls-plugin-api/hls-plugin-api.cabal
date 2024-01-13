@@ -112,6 +112,7 @@ test-suite tests
     Ide.TypesTests
 
   build-depends:
+    , aeson
     , base
     , containers
     , data-default

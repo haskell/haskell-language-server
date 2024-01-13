@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TypeApplications  #-}
 
 module Ide.PluginUtilsTest
@@ -16,6 +17,11 @@ import           Language.LSP.Protocol.Types (Position (..), Range (Range),
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
+import           Ide.Plugin.Properties (emptyProperties, definePropertiesProperty, defineStringProperty, toVSCodeExtensionSchema, KeyNamePath (..))
+import           Data.Function ((&))
+import qualified Data.Aeson           as A
+import Ide.Plugin.Properties (toDefaultJSON, usePropertyByPathEither, usePropertyByPath)
+import qualified Data.Aeson.Types as A
 
 tests :: TestTree
 tests = testGroup "PluginUtils"
@@ -24,6 +30,7 @@ tests = testGroup "PluginUtils"
     , localOption (QuickCheckMaxSize 10000) $
         testProperty "RangeMap-List filtering identical" $
           prop_rangemapListEq @Int
+    , propertyTest
     ]
 
 unescapeTest :: TestTree
@@ -137,3 +144,42 @@ prop_rangemapListEq r xs =
       cover 5 (length filteredList == 1) "1 match" $
       cover 2 (length filteredList > 1) ">1 matches" $
       Set.fromList filteredList === Set.fromList filteredRangeMap
+
+
+propertyTest :: TestTree
+propertyTest = testGroup "property api tests" [
+    testCase "property toVSCodeExtensionSchema" $ do
+        let expect = "[(\"top.baz\",Object (fromList [(\"default\",String \"baz\"),(\"markdownDescription\",String \"baz\"),(\"scope\",String \"resource\"),(\"type\",String \"string\")])),(\"top.parent.foo\",Object (fromList [(\"default\",String \"foo\"),(\"markdownDescription\",String \"foo\"),(\"scope\",String \"resource\"),(\"type\",String \"string\")]))]"
+        let result = toVSCodeExtensionSchema "top." nestedPropertiesExample
+        show result @?= expect
+    , testCase "property toDefaultJSON" $ do
+        let expect = "[(\"baz\",String \"baz\"),(\"parent\",Object (fromList [(\"foo\",String \"foo\")]))]"
+        let result = toDefaultJSON nestedPropertiesExample
+        show result @?= expect
+    , testCase "parsePropertyPath single key path" $ do
+        let obj = A.object (toDefaultJSON nestedPropertiesExample)
+        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+                let (Right key1) = usePropertyByPathEither examplePath1 nestedPropertiesExample o
+                return key1) obj
+        key1 @?= "baz"
+
+    , testCase "parsePropertyPath two key path" $ do
+        let obj = A.object (toDefaultJSON nestedPropertiesExample)
+        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+                let (Right key1) = usePropertyByPathEither examplePath2 nestedPropertiesExample o
+                return key1) obj
+        key1 @?= "foo"
+    , testCase "parsePropertyPath two key path default" $ do
+        let obj = A.object []
+        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+                let key1 = usePropertyByPath examplePath2 nestedPropertiesExample o
+                return key1) obj
+        key1 @?= "foo"
+    ]
+    where
+    nestedPropertiesExample = emptyProperties
+        & definePropertiesProperty #parent "parent" (emptyProperties & defineStringProperty #foo "foo" "foo")
+        & defineStringProperty #baz "baz" "baz"
+
+    examplePath1 = SingleKey #baz
+    examplePath2 = ConsKeysPath #parent (SingleKey #foo)
