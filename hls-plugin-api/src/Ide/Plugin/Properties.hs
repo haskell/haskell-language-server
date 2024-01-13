@@ -159,10 +159,10 @@ instance (HasProperty s k t r) => ParsePropertyPath r (NE s) where
     usePropertyByPathEither (SingleKey kn) sm x = parseProperty kn (find kn sm) x
     useDefault (SingleKey kn) sm = defaultValue metadata
         where (_, metadata) = find kn sm
-instance ( ToHsType (FindByKeyPath ss r2) ~ ToHsType (FindByKeyPath (s1 :| ss) r)
-          ,HasProperty s1 ('PropertyKey s1 ('TProperties r2)) t2 r
+instance ( ToHsType (FindByKeyPath ss r2) ~ ToHsType (FindByKeyPath (s :| ss) r)
+          ,HasProperty s ('PropertyKey s ('TProperties r2)) t2 r
           , ParsePropertyPath r2 ss)
-          => ParsePropertyPath r (s1 :| ss) where
+          => ParsePropertyPath r (s :| ss) where
     usePropertyByPathEither (ConsKeysPath kn p) sm x = do
         let (key, meta) = find kn sm
         interMedia <- parseProperty kn (key, meta) x
