@@ -152,10 +152,7 @@ type family NotElem (s :: Symbol) (r :: [PropertyKey]) :: Constraint where
 type HasProperty s k t r = (k ~ 'PropertyKey s t, Elem s r, FindByKeyName s r ~ t, KnownSymbol s, FindPropertyMeta s r t)
 class FindPropertyMeta (s :: Symbol) (r :: [PropertyKey]) t where
     findSomePropertyKeyWithMetaData :: KeyNameProxy s -> Properties r -> (SPropertyKey ('PropertyKey s t), MetaData t)
-instance
-  (FindPropertyMetaIf (IsPropertySymbol symbol k) symbol k ks t) =>
-  FindPropertyMeta symbol (k : ks) t
-  where
+instance (FindPropertyMetaIf (IsPropertySymbol symbol k) symbol k ks t) => FindPropertyMeta symbol (k : ks) t where
   findSomePropertyKeyWithMetaData = findSomePropertyKeyWithMetaDataIf
 class (bool ~ IsPropertySymbol symbol k) => FindPropertyMetaIf bool symbol k ks t where
   findSomePropertyKeyWithMetaDataIf :: KeyNameProxy symbol -> Properties (k : ks) -> (SPropertyKey ('PropertyKey symbol t), MetaData t)
