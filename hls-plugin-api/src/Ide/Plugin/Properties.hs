@@ -188,7 +188,6 @@ type family FindByKeyPath (ne :: NonEmptyList Symbol) (r :: [PropertyKey]) :: Pr
   FindByKeyPath (NE s) ('PropertyKey s t ': _) = t
   FindByKeyPath (NE s) (_ ': ys) = FindByKeyPath (NE s) ys
   FindByKeyPath (NE s) '[] = TypeError ('Text "The key ‘" ':<>: 'Text s ':<>: 'Text "’ is missing")
-  FindByKeyPath (s :| xs) '[] = TypeError ('Text "The key ‘" ':<>: 'Text s ':<>: 'Text "’ is missing")
 
 type family FindByKeyName (s :: Symbol) (r :: [PropertyKey]) :: PropertyType where
   FindByKeyName s ('PropertyKey s t ': _) = t
