@@ -142,24 +142,27 @@ data KeyNameProxy (s :: Symbol) = KnownSymbol s => KeyNameProxy
 instance (KnownSymbol s', s ~ s') => IsLabel s (KeyNameProxy s') where
   fromLabel = KeyNameProxy
 
--- | a path to a property in a json object
-data KeyNamePath (r :: [Symbol]) where
-   SingleKey :: KeyNameProxy s -> KeyNamePath '[s]
-   ConsKeysPath :: KeyNameProxy s1 -> KeyNamePath (s2 ': ss) -> KeyNamePath (s1 ': s2 ': ss)
+data NonEmptyList a =
+    a :| NonEmptyList a | NE a
 
-class ParsePropertyPath (rs :: [PropertyKey]) (r :: [Symbol]) where
+-- | a path to a property in a json object
+data KeyNamePath (r :: NonEmptyList Symbol) where
+   SingleKey :: KeyNameProxy s -> KeyNamePath (NE s)
+   ConsKeysPath :: KeyNameProxy s1 -> KeyNamePath ss -> KeyNamePath (s1 :| ss)
+
+class ParsePropertyPath (rs :: [PropertyKey]) (r :: NonEmptyList Symbol) where
     usePropertyByPathEither :: KeyNamePath r -> Properties rs -> A.Object -> Either String (ToHsType (FindByKeyPath r rs))
     useDefault :: KeyNamePath r -> Properties rs -> ToHsType (FindByKeyPath r rs)
     usePropertyByPath :: KeyNamePath r -> Properties rs -> A.Object -> ToHsType (FindByKeyPath r rs)
     usePropertyByPath p ps x = fromRight (useDefault p ps) $ usePropertyByPathEither p ps x
-instance (HasProperty s k t r) => ParsePropertyPath r '[s] where
+instance (HasProperty s k t r) => ParsePropertyPath r (NE s) where
     usePropertyByPathEither (SingleKey kn) sm x = parseProperty kn (find kn sm) x
     useDefault (SingleKey kn) sm = defaultValue metadata
         where (_, metadata) = find kn sm
-instance ( ToHsType (FindByKeyPath (s2 : ss) r2) ~ ToHsType (FindByKeyPath (s1 : s2 : ss) r)
+instance ( ToHsType (FindByKeyPath ss r2) ~ ToHsType (FindByKeyPath (s1 :| ss) r)
           ,HasProperty s1 ('PropertyKey s1 ('TProperties r2)) t2 r
-          , ParsePropertyPath r2 (s2 : ss))
-          => ParsePropertyPath r (s1 ': s2 ': ss) where
+          , ParsePropertyPath r2 ss)
+          => ParsePropertyPath r (s1 :| ss) where
     usePropertyByPathEither (ConsKeysPath kn p) sm x = do
         let (key, meta) = find kn sm
         interMedia <- parseProperty kn (key, meta) x
@@ -179,10 +182,13 @@ type family IsTEnum (t :: PropertyType) :: Bool where
   IsTEnum ('TEnum _) = 'True
   IsTEnum _ = 'False
 
-type family FindByKeyPath (s :: [Symbol]) (r :: [PropertyKey]) :: PropertyType where
-  FindByKeyPath (s ': '[]) ('PropertyKey s t ': _) = t
-  FindByKeyPath (s ': xs) ('PropertyKey s ('TProperties rs) ': _) = FindByKeyPath xs rs
-  FindByKeyPath (s ': xs) (_ ': ys) = FindByKeyPath (s ': xs) ys
+type family FindByKeyPath (ne :: NonEmptyList Symbol) (r :: [PropertyKey]) :: PropertyType where
+  FindByKeyPath (s :| xs) ('PropertyKey s ('TProperties rs) ': _) = FindByKeyPath xs rs
+  FindByKeyPath (s :| xs) (_ ': ys) = FindByKeyPath (s :| xs) ys
+  FindByKeyPath (NE s) ('PropertyKey s t ': _) = t
+  FindByKeyPath (NE s) (_ ': ys) = FindByKeyPath (NE s) ys
+  FindByKeyPath (NE s) '[] = TypeError ('Text "The key ‘" ':<>: 'Text s ':<>: 'Text "’ is missing")
+  FindByKeyPath (s :| xs) '[] = TypeError ('Text "The key ‘" ':<>: 'Text s ':<>: 'Text "’ is missing")
 
 type family FindByKeyName (s :: Symbol) (r :: [PropertyKey]) :: PropertyType where
   FindByKeyName s ('PropertyKey s t ': _) = t
@@ -204,7 +210,7 @@ type family NotElem (s :: Symbol) (r :: [PropertyKey]) :: Constraint where
 
 
 -- | In row @r@, there is a 'PropertyKey' @k@, which has name @s@ and carries haskell type @t@
-type HasProperty s k t r = (k ~ 'PropertyKey s t, Elem s r, FindByKeyPath '[s] r ~ t, FindByKeyName s r ~ t, KnownSymbol s, FindPropertyMeta s r t)
+type HasProperty s k t r = (k ~ 'PropertyKey s t, Elem s r, FindByKeyPath (NE s) r ~ t, FindByKeyName s r ~ t, KnownSymbol s, FindPropertyMeta s r t)
 -- similar to HasProperty, but the path is given as a type-level list of symbols
 type HasPropertyByPath props path t = (t ~ FindByKeyPath path props, ParsePropertyPath props path)
 class FindPropertyMeta (s :: Symbol) (r :: [PropertyKey]) t where
