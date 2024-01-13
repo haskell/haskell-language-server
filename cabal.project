@@ -36,7 +36,7 @@ packages:
          ./plugins/hls-overloaded-record-dot-plugin
          ./plugins/hls-semantic-tokens-plugin
 
-index-state: 2024-01-05T19:06:05Z
+index-state: 2024-01-13T19:06:05Z
 
 tests: True
 test-show-details: direct
