@@ -143,6 +143,7 @@ import           System.Directory                             (makeAbsolute, doe
 import           Data.Default                                 (def, Default)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
+                                                               KeyNamePath,
                                                                Properties,
                                                                ToHsType,
                                                                useProperty,
@@ -173,7 +174,6 @@ import GHC (mgModSummaries)
 
 #if MIN_VERSION_ghc(9,3,0)
 import qualified Data.IntMap as IM
-import Ide.Plugin.Properties (KeyNamePath)
 #endif
 
 
