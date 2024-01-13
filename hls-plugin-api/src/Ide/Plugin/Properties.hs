@@ -138,13 +138,18 @@ type family IsPropertySymbol (s :: Symbol) (r :: PropertyKey) :: Bool where
     IsPropertySymbol s ('PropertyKey s _) = 'True
     IsPropertySymbol s _ = 'False
 
+type family Elem (s :: Symbol) (r :: [PropertyKey]) :: Constraint where
+  Elem s ('PropertyKey s _ ': _) = ()
+  Elem s (_ ': xs) = Elem s xs
+  Elem s '[] = TypeError ('Text "The key ‘" ':<>: 'Text s ':<>: 'Text "’ is missing")
+
 type family NotElem (s :: Symbol) (r :: [PropertyKey]) :: Constraint where
   NotElem s ('PropertyKey s _ ': _) = TypeError ('Text "The key ‘" ':<>: 'Text s ':<>: 'Text "’ is already defined")
   NotElem s (_ ': xs) = NotElem s xs
   NotElem s '[] = ()
 
 -- | In row @r@, there is a 'PropertyKey' @k@, which has name @s@ and carries haskell type @t@
-type HasProperty s k t r = (k ~ 'PropertyKey s t, FindByKeyName s r ~ t, KnownSymbol s, FindPropertyMeta s r t)
+type HasProperty s k t r = (k ~ 'PropertyKey s t, Elem s r, FindByKeyName s r ~ t, KnownSymbol s, FindPropertyMeta s r t)
 class FindPropertyMeta (s :: Symbol) (r :: [PropertyKey]) t where
     findSomePropertyKeyWithMetaData :: KeyNameProxy s -> Properties r -> (SPropertyKey ('PropertyKey s t), MetaData t)
 instance
