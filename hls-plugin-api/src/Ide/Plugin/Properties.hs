@@ -13,6 +13,7 @@
 {-# LANGUAGE UndecidableInstances  #-}
 {-# LANGUAGE RankNTypes #-}
 
+
 module Ide.Plugin.Properties
   ( PropertyType (..),
     ToHsType,
@@ -53,6 +54,7 @@ import qualified Data.Text            as T
 import           GHC.OverloadedLabels (IsLabel (..))
 import           GHC.TypeLits
 import           Control.Arrow (first)
+
 
 -- | Types properties may have
 data PropertyType
