@@ -21,8 +21,10 @@ module Ide.Plugin.Properties
     PropertyKey (..),
     SPropertyKey (..),
     KeyNameProxy (..),
+    KeyNamePath (..),
     Properties,
     HasProperty,
+    HasPropertyByPath,
     emptyProperties,
     defineNumberProperty,
     defineIntegerProperty,
@@ -36,10 +38,8 @@ module Ide.Plugin.Properties
     toVSCodeExtensionSchema,
     usePropertyEither,
     useProperty,
-    KeyNamePath (..),
     usePropertyByPathEither,
     usePropertyByPath,
-    HasPropertyByPath,
     (&),
   )
 where
