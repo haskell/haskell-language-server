@@ -11,8 +11,6 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
--- See Note [Constraints]
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module Ide.Plugin.Properties
   ( PropertyType (..),
