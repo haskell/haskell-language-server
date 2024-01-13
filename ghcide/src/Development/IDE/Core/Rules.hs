@@ -27,6 +27,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleWithComments,
     getClientConfigAction,
     usePropertyAction,
+    usePropertyByPathAction,
     getHieFile,
     -- * Rules
     CompiledLinkables(..),
@@ -144,7 +145,10 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
                                                                Properties,
                                                                ToHsType,
-                                                               useProperty)
+                                                               useProperty,
+                                                               usePropertyByPath,
+                                                               HasPropertyByPath
+                                                               )
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
 import Control.Concurrent.STM.Stats (atomically)
@@ -169,6 +173,7 @@ import GHC (mgModSummaries)
 
 #if MIN_VERSION_ghc(9,3,0)
 import qualified Data.IntMap as IM
+import Ide.Plugin.Properties (KeyNamePath)
 #endif
 
 
@@ -538,7 +543,7 @@ reportImportCyclesRule recorder =
                   let cycles = mapMaybe (cycleErrorInFile fileId) (toList errs)
                   -- Convert cycles of files into cycles of module names
                   forM cycles $ \(imp, files) -> do
-                      modNames <- forM files $ 
+                      modNames <- forM files $
                           getModuleName . idToPath depPathIdMap
                       pure $ toDiag imp $ sort modNames
     where cycleErrorInFile f (PartOfCycle imp fs)
@@ -1107,6 +1112,16 @@ usePropertyAction ::
 usePropertyAction kn plId p = do
   pluginConfig <- getPluginConfigAction plId
   pure $ useProperty kn p $ plcConfig pluginConfig
+
+usePropertyByPathAction ::
+  (HasPropertyByPath props path t) =>
+  KeyNamePath path ->
+  PluginId ->
+  Properties props ->
+  Action (ToHsType t)
+usePropertyByPathAction path plId p = do
+  pluginConfig <- getPluginConfigAction plId
+  pure $ usePropertyByPath path p $ plcConfig pluginConfig
 
 -- ---------------------------------------------------------------------
 

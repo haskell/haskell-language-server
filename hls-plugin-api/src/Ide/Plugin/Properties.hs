@@ -35,10 +35,11 @@ module Ide.Plugin.Properties
     toDefaultJSON,
     toVSCodeExtensionSchema,
     usePropertyEither,
+    useProperty,
     KeyNamePath (..),
     usePropertyByPathEither,
     usePropertyByPath,
-    useProperty,
+    HasPropertyByPath,
     (&),
   )
 where
@@ -201,8 +202,11 @@ type family NotElem (s :: Symbol) (r :: [PropertyKey]) :: Constraint where
   NotElem s (_ ': xs) = NotElem s xs
   NotElem s '[] = ()
 
+
 -- | In row @r@, there is a 'PropertyKey' @k@, which has name @s@ and carries haskell type @t@
 type HasProperty s k t r = (k ~ 'PropertyKey s t, Elem s r, FindByKeyPath '[s] r ~ t, FindByKeyName s r ~ t, KnownSymbol s, FindPropertyMeta s r t)
+-- similar to HasProperty, but the path is given as a type-level list of symbols
+type HasPropertyByPath props path t = (t ~ FindByKeyPath path props, ParsePropertyPath props path)
 class FindPropertyMeta (s :: Symbol) (r :: [PropertyKey]) t where
    findSomePropertyKeyWithMetaData :: KeyNameProxy s -> Properties r -> (SPropertyKey ('PropertyKey s t), MetaData t)
 instance (FindPropertyMetaIf (IsPropertySymbol symbol k) symbol k ks t) => FindPropertyMeta symbol (k : ks) t where
