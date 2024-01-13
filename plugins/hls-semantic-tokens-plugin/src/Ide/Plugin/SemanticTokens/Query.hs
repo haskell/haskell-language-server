@@ -83,7 +83,7 @@ hieAstSpanNames vf ast =
         inclusion a b = not $ exclusion a b
         exclusion :: Identifier -> IdentifierDetails a -> Bool
         exclusion idt IdentifierDetails {identInfo = infos} = case idt of
-          Left _ -> True
+          Left _  -> True
           Right _ -> any isEvidenceContext (S.toList infos)
 
 -------------------------------------------------
