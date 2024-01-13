@@ -112,7 +112,6 @@ data SomePropertyKeyWithMetaData
 -- A property is an immediate child of the json object in each plugin's "config" section.
 -- It was designed to be compatible with vscode's settings UI.
 -- Use 'emptyProperties' and 'useProperty' to create and consume 'Properties'.
--- newtype Properties (r :: [PropertyKey]) = Properties (Map.Map String SomePropertyKeyWithMetaData)
 data Properties (r :: [PropertyKey]) where
     ConsProperties :: (k ~ 'PropertyKey s t, KnownSymbol s, NotElem s ks)
         => KeyNameProxy s -> (SPropertyKey k) -> (MetaData t) -> Properties ks -> Properties (k : ks)
