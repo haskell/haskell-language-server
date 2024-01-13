@@ -84,9 +84,7 @@ hieAstSpanNames vf ast =
         exclusion :: Identifier -> IdentifierDetails a -> Bool
         exclusion idt IdentifierDetails {identInfo = infos} = case idt of
           Left _ -> True
-          Right name ->
-            isDerivedOccName (nameOccName name)
-              || any isEvidenceContext (S.toList infos)
+          Right _ -> any isEvidenceContext (S.toList infos)
 
 -------------------------------------------------
 
