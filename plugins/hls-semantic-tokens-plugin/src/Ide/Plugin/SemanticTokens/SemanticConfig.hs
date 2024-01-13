@@ -79,7 +79,7 @@ mkSemanticConfigFunctions = do
   let pid = mkName "pid"
   let semanticConfigPropertiesName = mkName "semanticConfigProperties"
   let useSemanticConfigActionName = mkName "useSemanticConfigAction"
-  let allLabels = map (LabelE . lowerFirst) allHsTokenNameStrings
+  let allLabels = map (LabelE . (<> "Token"). lowerFirst) allHsTokenNameStrings
       allFieldsNames = map (mkName . toConfigName) allHsTokenNameStrings
       allVariableNames = map (mkName . ("_variable_" <>) . toConfigName) allHsTokenNameStrings
       --   <- useSemanticConfigAction label pid config

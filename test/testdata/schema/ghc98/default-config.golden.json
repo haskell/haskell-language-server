@@ -81,17 +81,17 @@
         },
         "semanticTokens": {
             "config": {
-                "class": "class",
-                "classMethod": "method",
-                "dataConstructor": "enumMember",
-                "function": "function",
-                "patternSynonym": "macro",
-                "recordField": "property",
-                "typeConstructor": "enum",
-                "typeFamily": "interface",
-                "typeSynonym": "type",
-                "typeVariable": "typeParameter",
-                "variable": "variable"
+                "classMethodToken": "method",
+                "classToken": "class",
+                "dataConstructorToken": "enumMember",
+                "functionToken": "function",
+                "patternSynonymToken": "macro",
+                "recordFieldToken": "property",
+                "typeConstructorToken": "enum",
+                "typeFamilyToken": "interface",
+                "typeSynonymToken": "type",
+                "typeVariableToken": "typeParameter",
+                "variableToken": "variable"
             },
             "globalOn": false
         },

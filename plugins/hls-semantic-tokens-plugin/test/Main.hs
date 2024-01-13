@@ -141,7 +141,7 @@ semanticTokensConfigTest = testGroup "semantic token config test" [
         testCase "function to variable" $ do
             let content = Text.unlines ["module Hello where", "go _ = 1"]
             let fs = mkFs $ directFile "Hello.hs" content
-            let funcVar = object ["function" .= var]
+            let funcVar = object ["functionToken" .= var]
                 var :: String
                 var = "variable"
             do
