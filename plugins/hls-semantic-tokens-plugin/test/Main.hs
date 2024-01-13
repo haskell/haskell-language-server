@@ -187,6 +187,7 @@ semanticTokensDataTypeTests =
     "get semantic Tokens"
     [ goldenWithSemanticTokens "simple datatype" "TDataType",
       goldenWithSemanticTokens "record" "TRecord",
+      goldenWithSemanticTokens "record" "TRecordDuplicateRecordFields",
       goldenWithSemanticTokens "datatype import" "TDatatypeImported",
       goldenWithSemanticTokens "datatype family" "TDataFamily",
       goldenWithSemanticTokens "GADT" "TGADT"

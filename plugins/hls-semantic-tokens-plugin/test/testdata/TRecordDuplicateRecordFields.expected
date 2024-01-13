@@ -1,0 +1,4 @@
+5:6-9 TTypeCon "Foo"
+5:12-15 TDataCon "Foo"
+5:18-21 TRecField "boo"
+5:26-32 TTypeSyn "String"
