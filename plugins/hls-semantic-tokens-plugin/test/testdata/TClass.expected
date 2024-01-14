@@ -2,4 +2,4 @@
 4:11-12 TTypeVariable "a"
 5:3-6 TClassMethod "foo"
 5:10-11 TTypeVariable "a"
-5:15-18 TTypeCon "Int"
+5:15-18 TTypeConstructor "Int"

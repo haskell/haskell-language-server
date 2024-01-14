@@ -32,33 +32,29 @@ import           Language.LSP.VFS                hiding (line)
 -- * 1. Mapping semantic token type to and from the LSP default token type.
 
 -- | map from haskell semantic token type to LSP default token type
-toLspTokenType :: HsSemanticTokenType -> SemanticTokenTypes
-toLspTokenType tk = case tk of
-  -- Function type variable
-  TFunction     -> SemanticTokenTypes_Function
-  -- None function type variable
-  TVariable     -> SemanticTokenTypes_Variable
-  TClass        -> SemanticTokenTypes_Class
-  TClassMethod  -> SemanticTokenTypes_Method
-  TTypeVariable -> SemanticTokenTypes_TypeParameter
-  -- normal data type is a tagged union type look like enum type
-  -- and a record is a product type like struct
-  -- but we don't distinguish them yet
-  TTypeCon      -> SemanticTokenTypes_Enum
-  TDataCon      -> SemanticTokenTypes_EnumMember
-  TRecField     -> SemanticTokenTypes_Property
-  -- pattern syn is like a limited version of macro of constructing a term
-  TPatternSyn   -> SemanticTokenTypes_Macro
-  -- saturated type
-  TTypeSyn      -> SemanticTokenTypes_Type
-  -- not sure if this is correct choice
-  TTypeFamily   -> SemanticTokenTypes_Interface
+toLspTokenType :: SemanticTokensConfig  -> HsSemanticTokenType -> SemanticTokenTypes
+toLspTokenType conf tk = case tk of
+  TFunction        -> stFunction conf
+  TVariable        -> stVariable conf
+  TClassMethod     -> stClassMethod conf
+  TTypeVariable    -> stTypeVariable conf
+  TDataConstructor -> stDataConstructor conf
+  TClass           -> stClass conf
+  TTypeConstructor -> stTypeConstructor conf
+  TTypeSynonym     -> stTypeSynonym conf
+  TTypeFamily      -> stTypeFamily conf
+  TRecordField     -> stRecordField conf
+  TPatternSynonym  -> stPatternSynonym conf
 
-lspTokenReverseMap :: Map.Map SemanticTokenTypes HsSemanticTokenType
-lspTokenReverseMap = Map.fromList $ map (\x -> (toLspTokenType x, x)) $ enumFrom minBound
+lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
+lspTokenReverseMap config
+    | length xs /= Map.size mr = error "lspTokenReverseMap: token type mapping is not bijection"
+    | otherwise = mr
+    where xs = enumFrom minBound
+          mr = Map.fromList $ map (\x -> (toLspTokenType config x, x)) xs
 
-fromLspTokenType :: SemanticTokenTypes -> Maybe HsSemanticTokenType
-fromLspTokenType tk = Map.lookup tk lspTokenReverseMap
+lspTokenTypeHsTokenType :: SemanticTokensConfig -> SemanticTokenTypes -> Maybe HsSemanticTokenType
+lspTokenTypeHsTokenType cf tk = Map.lookup tk (lspTokenReverseMap cf)
 
 -- * 2. Mapping from GHC type and tyThing to semantic token type.
 
@@ -67,19 +63,19 @@ tyThingSemantic :: TyThing -> Maybe HsSemanticTokenType
 tyThingSemantic ty = case ty of
   AnId vid
     | isTyVar vid -> Just TTypeVariable
-    | isRecordSelector vid -> Just TRecField
+    | isRecordSelector vid -> Just TRecordField
     | isClassOpId vid -> Just TClassMethod
     | isFunVar vid -> Just TFunction
     | otherwise -> Just TVariable
   AConLike con -> case con of
-    RealDataCon _ -> Just TDataCon
-    PatSynCon _   -> Just TPatternSyn
+    RealDataCon _ -> Just TDataConstructor
+    PatSynCon _   -> Just TPatternSynonym
   ATyCon tyCon
-    | isTypeSynonymTyCon tyCon -> Just TTypeSyn
+    | isTypeSynonymTyCon tyCon -> Just TTypeSynonym
     | isTypeFamilyTyCon tyCon -> Just TTypeFamily
     | isClassTyCon tyCon -> Just TClass
-    -- fall back to TTypeCon the result
-    | otherwise -> Just TTypeCon
+    -- fall back to TTypeConstructor the result
+    | otherwise -> Just TTypeConstructor
   ACoAxiom _ -> Nothing
   where
     isFunVar :: Var -> Bool
@@ -143,36 +139,53 @@ infoTokenType x = case x of
   PatternBind {}           -> Just TVariable
   ClassTyDecl _            -> Just TClassMethod
   TyVarBind _ _            -> Just TTypeVariable
-  RecField _ _             -> Just TRecField
+  RecField _ _             -> Just TRecordField
   -- data constructor, type constructor, type synonym, type family
   Decl ClassDec _          -> Just TClass
-  Decl DataDec _           -> Just TTypeCon
-  Decl ConDec _            -> Just TDataCon
-  Decl SynDec _            -> Just TTypeSyn
+  Decl DataDec _           -> Just TTypeConstructor
+  Decl ConDec _            -> Just TDataConstructor
+  Decl SynDec _            -> Just TTypeSynonym
   Decl FamDec _            -> Just TTypeFamily
   -- instance dec is class method
   Decl InstDec _           -> Just TClassMethod
-  Decl PatSynDec _         -> Just TPatternSyn
+  Decl PatSynDec _         -> Just TPatternSynonym
   EvidenceVarUse           -> Nothing
   EvidenceVarBind {}       -> Nothing
 
 -- * 4. Mapping from LSP tokens to SemanticTokenOriginal.
 
--- | line, startChar, len, tokenType, modifiers
-type ActualToken = (UInt, UInt, UInt, HsSemanticTokenType, UInt)
-
 -- | recoverSemanticTokens
 -- for debug and test.
 -- this function is used to recover the original tokens(with token in haskell token type zoon)
 -- from the lsp semantic tokens(with token in lsp token type zoon)
-recoverSemanticTokens :: VirtualFile -> SemanticTokens -> Either Text [SemanticTokenOriginal]
-recoverSemanticTokens vsf (SemanticTokens _ xs) = do
+-- the `SemanticTokensConfig` used should be a map with bijection property
+recoverSemanticTokens :: SemanticTokensConfig -> VirtualFile -> SemanticTokens -> Either Text [SemanticTokenOriginal HsSemanticTokenType]
+recoverSemanticTokens config v s = do
+    tks <- recoverLspSemanticTokens v s
+    return $ map (lspTokenHsToken config) tks
+
+-- | lspTokenHsToken
+-- for debug and test.
+-- use the `SemanticTokensConfig` to convert lsp token type to haskell token type
+-- the `SemanticTokensConfig` used should be a map with bijection property
+lspTokenHsToken :: SemanticTokensConfig -> SemanticTokenOriginal SemanticTokenTypes -> SemanticTokenOriginal HsSemanticTokenType
+lspTokenHsToken config (SemanticTokenOriginal tokenType location name) =
+        case lspTokenTypeHsTokenType config tokenType of
+        Just t  -> SemanticTokenOriginal t location name
+        Nothing -> error "recoverSemanticTokens: unknown lsp token type"
+
+-- | recoverLspSemanticTokens
+-- for debug and test.
+-- this function is used to recover the original tokens(with token in standard lsp token type zoon)
+-- from the lsp semantic tokens(with token in lsp token type zoon)
+recoverLspSemanticTokens :: VirtualFile -> SemanticTokens -> Either Text [SemanticTokenOriginal SemanticTokenTypes]
+recoverLspSemanticTokens vsf (SemanticTokens _ xs) = do
   tokens <- dataActualToken xs
   return $ mapMaybe (tokenOrigin sourceCode) tokens
   where
     sourceCode = unpack $ virtualFileText vsf
-    tokenOrigin :: [Char] -> ActualToken -> Maybe SemanticTokenOriginal
-    tokenOrigin sourceCode' (line, startChar, len, tokenType, _) = do
+    tokenOrigin :: [Char] -> SemanticTokenAbsolute -> Maybe (SemanticTokenOriginal SemanticTokenTypes)
+    tokenOrigin sourceCode' (SemanticTokenAbsolute line startChar len tokenType _tokenModifiers) = do
       -- convert back to count from 1
       let range = mkRange line startChar len
       CodePointRange (CodePointPosition x y) (CodePointPosition _ y1) <- rangeToCodePointRange vsf range
@@ -183,20 +196,15 @@ recoverSemanticTokens vsf (SemanticTokens _ xs) = do
       let name = maybe "no source" (take (fromIntegral len') . drop (fromIntegral startChar')) tLine
       return $ SemanticTokenOriginal tokenType (Loc (line' + 1) (startChar' + 1) len') name
 
-    dataActualToken :: [UInt] -> Either Text [ActualToken]
+    dataActualToken :: [UInt] -> Either Text [SemanticTokenAbsolute]
     dataActualToken dt =
-      maybe decodeError (Right . fmap semanticTokenAbsoluteActualToken . absolutizeTokens) $
+      maybe decodeError (Right . absolutizeTokens) $
         mapM fromTuple (chunksOf 5 $ map fromIntegral dt)
       where
         decodeError = Left "recoverSemanticTokenRelative: wrong token data"
         fromTuple [a, b, c, d, _] = SemanticTokenRelative a b c <$> fromInt (fromIntegral d) <*> return []
         fromTuple _ = Nothing
 
-    semanticTokenAbsoluteActualToken :: SemanticTokenAbsolute -> ActualToken
-    semanticTokenAbsoluteActualToken (SemanticTokenAbsolute line startChar len tokenType _tokenModifiers) =
-      case fromLspTokenType tokenType of
-        Just t  -> (line, startChar, len, t, 0)
-        Nothing -> error "semanticTokenAbsoluteActualToken: unknown token type"
 
     -- legends :: SemanticTokensLegend
     fromInt :: Int -> Maybe SemanticTokenTypes

@@ -1,14 +1,21 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE GADTs             #-}
-{-# LANGUAGE InstanceSigs      #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE StrictData        #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE DeriveLift          #-}
+{-# LANGUAGE DerivingVia         #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE InstanceSigs        #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StrictData          #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Ide.Plugin.SemanticTokens.Types where
 
 import           Control.DeepSeq               (NFData (rnf), rwhnf)
 import qualified Data.Array                    as A
+import           Data.Default                  (Default (def))
 import           Data.Generics                 (Typeable)
 import qualified Data.Map                      as M
 import           Development.IDE               (Pretty (pretty), RuleResult)
@@ -17,6 +24,9 @@ import           Development.IDE.GHC.Compat    hiding (loc)
 import           Development.IDE.Graph.Classes (Hashable)
 import           GHC.Generics                  (Generic)
 import           Language.LSP.Protocol.Types
+-- import template haskell
+import           Language.Haskell.TH.Syntax    (Lift)
+
 
 -- !!!! order of declarations matters deriving enum and ord
 -- since token may come from different source and we want to keep the most specific one
@@ -24,30 +34,68 @@ import           Language.LSP.Protocol.Types
 data HsSemanticTokenType
   = TVariable -- none function variable
   | TFunction -- function
-  | TDataCon -- Data constructor
+  | TDataConstructor -- Data constructor
   | TTypeVariable -- Type variable
   | TClassMethod -- Class method
-  | TPatternSyn -- Pattern synonym
-  | TTypeCon -- Type (Type constructor)
+  | TPatternSynonym -- Pattern synonym
+  | TTypeConstructor -- Type (Type constructor)
   | TClass -- Type class
-  | TTypeSyn -- Type synonym
+  | TTypeSynonym -- Type synonym
   | TTypeFamily -- type family
-  | TRecField -- from match bind
-  deriving (Eq, Ord, Show, Enum, Bounded)
+  | TRecordField -- from match bind
+  deriving (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
+
+
+
+-- type SemanticTokensConfig = SemanticTokensConfig_ Identity
+instance Default SemanticTokensConfig where
+  def = STC
+      { stFunction = SemanticTokenTypes_Function
+      , stVariable = SemanticTokenTypes_Variable
+      , stDataConstructor = SemanticTokenTypes_EnumMember
+      , stTypeVariable = SemanticTokenTypes_TypeParameter
+      , stClassMethod = SemanticTokenTypes_Method
+      -- pattern syn is like a limited version of macro of constructing a term
+      , stPatternSynonym = SemanticTokenTypes_Macro
+        -- normal data type is a tagged union type look like enum type
+        -- and a record is a product type like struct
+        -- but we don't distinguish them yet
+      , stTypeConstructor = SemanticTokenTypes_Enum
+      , stClass = SemanticTokenTypes_Class
+      , stTypeSynonym = SemanticTokenTypes_Type
+      , stTypeFamily = SemanticTokenTypes_Interface
+      , stRecordField = SemanticTokenTypes_Property
+      }
+-- | SemanticTokensConfig_ is a configuration for the semantic tokens plugin.
+-- it contains map between the hs semantic token type and default token type.
+data SemanticTokensConfig = STC
+  { stFunction        :: !SemanticTokenTypes
+  , stVariable        :: !SemanticTokenTypes
+  , stDataConstructor :: !SemanticTokenTypes
+  , stTypeVariable    :: !SemanticTokenTypes
+  , stClassMethod     :: !SemanticTokenTypes
+  , stPatternSynonym  :: !SemanticTokenTypes
+  , stTypeConstructor :: !SemanticTokenTypes
+  , stClass           :: !SemanticTokenTypes
+  , stTypeSynonym     :: !SemanticTokenTypes
+  , stTypeFamily      :: !SemanticTokenTypes
+  , stRecordField     :: !SemanticTokenTypes
+  } deriving (Generic, Show)
+
 
 instance Semigroup HsSemanticTokenType where
   -- one in higher enum is more specific
   a <> b = max a b
 
-data SemanticTokenOriginal = SemanticTokenOriginal
-  { _tokenType :: HsSemanticTokenType,
+data SemanticTokenOriginal tokenType = SemanticTokenOriginal
+  { _tokenType :: tokenType,
     _loc       :: Loc,
     _name      :: String
   }
   deriving (Eq, Ord)
 
 --
-instance Show SemanticTokenOriginal where
+instance (Show tokenType) => Show (SemanticTokenOriginal tokenType) where
   show (SemanticTokenOriginal tk loc name) = show loc <> " " <> show tk <> " " <> show name
 
 data Loc = Loc
@@ -87,6 +135,8 @@ data HieFunMaskKind kind where
 data SemanticLog
   = LogShake Shake.Log
   | LogNoAST FilePath
+  | LogConfig SemanticTokensConfig
+  | LogMsg String
   | LogNoVF
   deriving (Show)
 
@@ -95,3 +145,6 @@ instance Pretty SemanticLog where
     LogShake shakeLog -> pretty shakeLog
     LogNoAST path     -> "no HieAst exist for file" <> pretty path
     LogNoVF           -> "no VirtualSourceFile exist for file"
+    LogConfig config  -> "SemanticTokensConfig_: " <> pretty (show config)
+    LogMsg msg        -> "SemanticLog Debug Message: " <> pretty msg
+

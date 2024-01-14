@@ -1,82 +1,86 @@
------------------------------------------------------------------------------
------------------------------------------------------------------------------
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UnicodeSyntax         #-}
 
 -- |
 -- This module provides the core functionality of the plugin.
-module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, persistentGetSemanticTokensRule) where
+module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, persistentGetSemanticTokensRule, semanticConfigProperties) where
 
-import           Control.Lens                         ((^.))
-import           Control.Monad.Except                 (ExceptT, liftEither,
-                                                       withExceptT)
-import           Control.Monad.IO.Class               (MonadIO, liftIO)
-import           Control.Monad.Trans                  (lift)
-import           Control.Monad.Trans.Except           (runExceptT)
-import qualified Data.Map                             as Map
-import qualified Data.Text                            as T
-import           Development.IDE                      (Action,
-                                                       GetDocMap (GetDocMap),
-                                                       GetHieAst (GetHieAst),
-                                                       HieAstResult (HAR, hieAst, hieModule, refMap),
-                                                       IdeResult, IdeState,
-                                                       Priority (..), Recorder,
-                                                       Rules, WithPriority,
-                                                       cmapWithPrio, define,
-                                                       fromNormalizedFilePath,
-                                                       hieKind, ideLogger,
-                                                       logPriority, use_)
-import           Development.IDE.Core.PluginUtils     (runActionE,
-                                                       useWithStaleE)
-import           Development.IDE.Core.PositionMapping (idDelta)
-import           Development.IDE.Core.Rules           (toIdeResult)
-import           Development.IDE.Core.RuleTypes       (DocAndTyThingMap (..))
-import           Development.IDE.Core.Shake           (addPersistentRule,
-                                                       getVirtualFile,
-                                                       useWithStale_)
-import           Development.IDE.GHC.Compat           hiding (Warning)
-import           Development.IDE.GHC.Compat.Util      (mkFastString)
-import           Ide.Logger                           (logWith)
-import           Ide.Plugin.Error                     (PluginError (PluginInternalError),
-                                                       getNormalizedFilePathE,
-                                                       handleMaybe,
-                                                       handleMaybeM)
+import           Control.Lens                             ((^.))
+import           Control.Monad.Except                     (ExceptT, liftEither,
+                                                           withExceptT)
+import           Control.Monad.Trans                      (lift)
+import           Control.Monad.Trans.Except               (runExceptT)
+import           Data.Aeson                               (ToJSON (toJSON))
+import qualified Data.Map                                 as Map
+import           Development.IDE                          (Action,
+                                                           GetDocMap (GetDocMap),
+                                                           GetHieAst (GetHieAst),
+                                                           HieAstResult (HAR, hieAst, hieModule, refMap),
+                                                           IdeResult, IdeState,
+                                                           Priority (..),
+                                                           Recorder, Rules,
+                                                           WithPriority,
+                                                           cmapWithPrio, define,
+                                                           fromNormalizedFilePath,
+                                                           hieKind, logPriority,
+                                                           usePropertyAction,
+                                                           use_)
+import           Development.IDE.Core.PluginUtils         (runActionE,
+                                                           useWithStaleE)
+import           Development.IDE.Core.PositionMapping     (idDelta)
+import           Development.IDE.Core.Rules               (toIdeResult)
+import           Development.IDE.Core.RuleTypes           (DocAndTyThingMap (..))
+import           Development.IDE.Core.Shake               (addPersistentRule,
+                                                           getVirtualFile,
+                                                           useWithStale_)
+import           Development.IDE.GHC.Compat               hiding (Warning)
+import           Development.IDE.GHC.Compat.Util          (mkFastString)
+import           Ide.Logger                               (logWith)
+import           Ide.Plugin.Error                         (PluginError (PluginInternalError),
+                                                           getNormalizedFilePathE,
+                                                           handleMaybe,
+                                                           handleMaybeM)
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Query
+import           Ide.Plugin.SemanticTokens.SemanticConfig (mkSemanticConfigFunctions)
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens           as L
-import           Language.LSP.Protocol.Message        (Method (Method_TextDocumentSemanticTokensFull))
-import           Language.LSP.Protocol.Types          (NormalizedFilePath,
-                                                       SemanticTokens,
-                                                       type (|?) (InL))
-import           Prelude                              hiding (span)
+import qualified Language.LSP.Protocol.Lens               as L
+import           Language.LSP.Protocol.Message            (Method (Method_TextDocumentSemanticTokensFull))
+import           Language.LSP.Protocol.Types              (NormalizedFilePath,
+                                                           SemanticTokens,
+                                                           type (|?) (InL))
+import           Prelude                                  hiding (span)
 
-logActionWith :: (MonadIO m) => IdeState -> Priority -> String -> m ()
-logActionWith st prior = liftIO . logPriority (ideLogger st) prior . T.pack
+
+$mkSemanticConfigFunctions
 
 -----------------------
 ---- the api
 -----------------------
 
-computeSemanticTokens :: IdeState -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
-computeSemanticTokens st nfp = do
-  logActionWith st Debug $ "Computing semantic tokens:" <> show nfp
+computeSemanticTokens :: Recorder (WithPriority SemanticLog) -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action SemanticTokens
+computeSemanticTokens recorder pid _ nfp = do
+  config <- lift $ useSemanticConfigAction pid
+  logWith recorder Debug (LogConfig config)
   (RangeHsSemanticTokenTypes {rangeSemanticMap}, mapping) <- useWithStaleE GetSemanticTokens nfp
-  withExceptT PluginInternalError $ liftEither $ rangeSemanticMapSemanticTokens mapping rangeSemanticMap
+  withExceptT PluginInternalError $ liftEither $ rangeSemanticMapSemanticTokens config mapping rangeSemanticMap
 
-semanticTokensFull :: PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
-semanticTokensFull state _ param = do
+semanticTokensFull :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
+semanticTokensFull recorder state pid param = do
   nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
-  items <- runActionE "SemanticTokens.semanticTokensFull" state $ computeSemanticTokens state nfp
+  items <- runActionE "SemanticTokens.semanticTokensFull" state $ computeSemanticTokens recorder pid state nfp
   return $ InL items
 
 -- | Defines the 'getSemanticTokensRule' function, compute semantic tokens for a Haskell source file.
