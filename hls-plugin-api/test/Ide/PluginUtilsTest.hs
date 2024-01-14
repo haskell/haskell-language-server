@@ -197,11 +197,3 @@ propertyTest = testGroup "property api tests" [
 
     examplePath1 = SingleKey #baz
     examplePath2 = ConsKeysPath #parent (SingleKey #foo)
-
-
-sieve = sx [2..]
-  where
-    sx (p:xs) = p : sx [x| x <- xs, x `mod` p > 0]
-
-main = do
-  print (take 10000 sieve)
