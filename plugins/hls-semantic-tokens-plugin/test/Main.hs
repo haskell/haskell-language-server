@@ -201,12 +201,12 @@ semanticTokensDataTypeTests :: TestTree
 semanticTokensDataTypeTests =
   testGroup
     "get semantic Tokens"
-    [ goldenWithSemanticTokens "simple datatype" "TDataType",
-      goldenWithSemanticTokens "record" "TRecord",
-      goldenWithSemanticTokens "record With DuplicateRecordFields" "TRecordDuplicateRecordFields",
-      goldenWithSemanticTokens "datatype import" "TDatatypeImported",
-      goldenWithSemanticTokens "datatype family" "TDataFamily",
-      goldenWithSemanticTokens "GADT" "TGADT"
+    [ goldenWithSemanticTokensWithDefaultConfig "simple datatype" "TDataType",
+      goldenWithSemanticTokensWithDefaultConfig "record" "TRecord",
+      goldenWithSemanticTokensWithDefaultConfig "record With DuplicateRecordFields" "TRecordDuplicateRecordFields",
+      goldenWithSemanticTokensWithDefaultConfig "datatype import" "TDatatypeImported",
+      goldenWithSemanticTokensWithDefaultConfig "datatype family" "TDataFamily",
+      goldenWithSemanticTokensWithDefaultConfig "GADT" "TGADT"
     ]
 
 semanticTokensFunctionTests :: TestTree
