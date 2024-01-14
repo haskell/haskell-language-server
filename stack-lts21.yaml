@@ -45,7 +45,7 @@ allow-newer: true
 
 extra-deps:
 - floskell-0.11.1
-- hiedb-0.4.4.0
+- hiedb-0.5.0.1
 - hie-bios-0.13.1
 - implicit-hie-0.1.4.0
 - monad-dijkstra-0.1.1.3
