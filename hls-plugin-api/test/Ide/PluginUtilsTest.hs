@@ -1,14 +1,24 @@
+{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TypeApplications  #-}
 
 module Ide.PluginUtilsTest
     ( tests
     ) where
 
+import qualified Data.Aeson                  as A
+import qualified Data.Aeson.Types            as A
 import           Data.Char                   (isPrint)
+import           Data.Function               ((&))
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as T
+import           Ide.Plugin.Properties       (KeyNamePath (..),
+                                              definePropertiesProperty,
+                                              defineStringProperty,
+                                              emptyProperties, toDefaultJSON,
+                                              toVSCodeExtensionSchema,
+                                              usePropertyByPath,
+                                              usePropertyByPathEither)
 import qualified Ide.Plugin.RangeMap         as RangeMap
 import           Ide.PluginUtils             (extractTextInRange,
                                               positionInRange, unescape)
@@ -17,11 +27,6 @@ import           Language.LSP.Protocol.Types (Position (..), Range (Range),
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck
-import           Ide.Plugin.Properties (emptyProperties, definePropertiesProperty, defineStringProperty, toVSCodeExtensionSchema, KeyNamePath (..))
-import           Data.Function ((&))
-import qualified Data.Aeson           as A
-import Ide.Plugin.Properties (toDefaultJSON, usePropertyByPathEither, usePropertyByPath)
-import qualified Data.Aeson.Types as A
 
 tests :: TestTree
 tests = testGroup "PluginUtils"
