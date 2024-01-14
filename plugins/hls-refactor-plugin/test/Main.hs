@@ -2388,7 +2388,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = 1"
                ])
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
     [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable") ]
 #else
     [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the following constraint") ]
@@ -2409,7 +2409,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = 3"
                , "    in x"
                ])
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
     [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable") ]
 #else
     [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the following constraint") ]
@@ -2431,7 +2431,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = let y = 5 in y"
                , "    in x"
                ])
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
     [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable") ]
 #else
     [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the following constraint") ]
@@ -2454,7 +2454,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = seq \"debug\" traceShow \"debug\""
                ])
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
     [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable")
     , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable")
     ]
@@ -2482,7 +2482,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f a = traceShow \"debug\" a"
                ])
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
     [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable") ]
 #else
     [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint") ]
@@ -2506,7 +2506,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
                ])
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,4,0,0)
     [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable") ]
 #else
     [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint") ]

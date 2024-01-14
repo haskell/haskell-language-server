@@ -66,7 +66,6 @@ library
     ViewPatterns
   hs-source-dirs:   src
   build-depends:
-    , aeson
     , base                  >=4.12 && <5
     , ghc
     , bytestring
@@ -116,25 +115,17 @@ test-suite tests
     , lens
     , lsp-types
     , text
-    , aeson
     , hls-plugin-api
     , parser-combinators
     , data-default
     , extra
-    , text-rope
-    , containers
-    -- ghc is included to enable the MIN_VERSION_ghc macro
-    , ghc
     , ghcide
     , ghcide-test-utils
     , shake
     , hls-plugin-api
     , lsp-test
-    , network-uri
     , directory
-    , async
     , regex-tdfa
-    , tasty-rerun
     , tasty-hunit
     , tasty-expected-failure
     , tasty
