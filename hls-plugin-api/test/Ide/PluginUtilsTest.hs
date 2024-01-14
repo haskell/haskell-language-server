@@ -167,7 +167,6 @@ propertyTest = testGroup "property api tests" [
                 let (Right key1) = usePropertyByPathEither examplePath1 nestedPropertiesExample o
                 return key1) obj
         key1 @?= "baz"
-
     , testCase "parsePropertyPath two key path" $ do
         let obj = A.object (toDefaultJSON nestedPropertiesExample)
         let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
@@ -180,10 +179,20 @@ propertyTest = testGroup "property api tests" [
                 let key1 = usePropertyByPath examplePath2 nestedPropertiesExample o
                 return key1) obj
         key1 @?= "foo"
+    , testCase "parsePropertyPath two key path not default" $ do
+        let obj = A.object (toDefaultJSON nestedPropertiesExample2)
+        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+                let (Right key1) = usePropertyByPathEither examplePath2 nestedPropertiesExample o
+                return key1) obj
+        key1 @?= "xxx"
     ]
     where
     nestedPropertiesExample = emptyProperties
         & definePropertiesProperty #parent "parent" (emptyProperties & defineStringProperty #foo "foo" "foo")
+        & defineStringProperty #baz "baz" "baz"
+
+    nestedPropertiesExample2 = emptyProperties
+        & definePropertiesProperty #parent "parent" (emptyProperties & defineStringProperty #foo "foo" "xxx")
         & defineStringProperty #baz "baz" "baz"
 
     examplePath1 = SingleKey #baz
