@@ -185,9 +185,7 @@ type family IsTEnum (t :: PropertyType) :: Bool where
 type family FindByKeyPath (ne :: NonEmptyList Symbol) (r :: [PropertyKey]) :: PropertyType where
   FindByKeyPath (s :| xs) ('PropertyKey s ('TProperties rs) ': _) = FindByKeyPath xs rs
   FindByKeyPath (s :| xs) (_ ': ys) = FindByKeyPath (s :| xs) ys
-  FindByKeyPath (NE s) ('PropertyKey s t ': _) = t
-  FindByKeyPath (NE s) (_ ': ys) = FindByKeyPath (NE s) ys
-  FindByKeyPath (NE s) '[] = TypeError ('Text "The key ‘" ':<>: 'Text s ':<>: 'Text "’ is missing")
+  FindByKeyPath (NE s) ys = FindByKeyName s ys
 
 type family FindByKeyName (s :: Symbol) (r :: [PropertyKey]) :: PropertyType where
   FindByKeyName s ('PropertyKey s t ': _) = t
