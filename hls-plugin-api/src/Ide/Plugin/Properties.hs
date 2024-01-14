@@ -6,12 +6,12 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
-{-# LANGUAGE RankNTypes #-}
 
 
 module Ide.Plugin.Properties
@@ -44,6 +44,7 @@ module Ide.Plugin.Properties
   )
 where
 
+import           Control.Arrow        (first)
 import qualified Data.Aeson           as A
 import qualified Data.Aeson.Types     as A
 import           Data.Either          (fromRight)
@@ -54,7 +55,6 @@ import           Data.String          (IsString (fromString))
 import qualified Data.Text            as T
 import           GHC.OverloadedLabels (IsLabel (..))
 import           GHC.TypeLits
-import           Control.Arrow (first)
 
 
 -- | Types properties may have
