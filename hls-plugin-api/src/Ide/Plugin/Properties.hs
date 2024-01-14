@@ -169,8 +169,8 @@ instance ( ToHsType (FindByKeyPath ss r2) ~ ToHsType (FindByKeyPath (s :| ss) r)
         case meta of
             PropertiesMetaData {..}
                 -> usePropertyByPathEither p childrenProperties interMedia
-    useDefault (ConsKeysPath kn p) sm = useDefault p childrenProperties
-        where (_, PropertiesMetaData {..}) = find kn sm
+    useDefault (ConsKeysPath kn p) sm = case find kn sm of
+            (_, PropertiesMetaData {..}) -> useDefault p childrenProperties
 
 -- ---------------------------------------------------------------------
 
