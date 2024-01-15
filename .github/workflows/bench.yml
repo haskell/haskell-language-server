@@ -156,7 +156,7 @@ jobs:
       run:  find bench-results -name "*.csv" -or -name "*.svg" -or -name "*.html" | xargs tar -czf benchmark-artifacts.tar.gz
 
     - name: Archive benchmarking artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v4444
       with:
         name: bench-results-${{ matrix.example }}-${{ runner.os }}-${{ matrix.ghc }}
         path: benchmark-artifacts.tar.gz
