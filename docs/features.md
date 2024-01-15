@@ -399,7 +399,7 @@ Rewrites record selectors to use overloaded dot syntax
 
 ![Explicit Wildcard Demo](../plugins/hls-overloaded-record-dot-plugin/example.gif)
 
-### Missing features
+## Missing features
 
 The following features are supported by the LSP specification but not implemented in HLS.
 Contributions welcome!

@@ -115,6 +115,19 @@
             "globalOn": true
         },
         "semanticTokens": {
+            "config": {
+                "classMethodToken": "method",
+                "classToken": "class",
+                "dataConstructorToken": "enumMember",
+                "functionToken": "function",
+                "patternSynonymToken": "macro",
+                "recordFieldToken": "property",
+                "typeConstructorToken": "enum",
+                "typeFamilyToken": "interface",
+                "typeSynonymToken": "type",
+                "typeVariableToken": "typeParameter",
+                "variableToken": "variable"
+            },
             "globalOn": false
         },
         "splice": {
