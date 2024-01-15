@@ -183,7 +183,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           if-no-files-found: error
           retention-days: 2
@@ -244,7 +244,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           if-no-files-found: error
           retention-days: 2
@@ -288,7 +288,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           if-no-files-found: error
           retention-days: 2
@@ -335,7 +335,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           if-no-files-found: error
           retention-days: 2
@@ -388,7 +388,7 @@ jobs:
 
       - if: always()
         name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           if-no-files-found: error
           retention-days: 2
@@ -485,7 +485,7 @@ jobs:
 
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v3
         with:
           name: artifacts-${{ matrix.ARTIFACT }}
           path: ./
@@ -502,7 +502,7 @@ jobs:
           ARTIFACT: ${{ matrix.ARTIFACT }}
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           if-no-files-found: error
           name: bindists-${{ matrix.ARTIFACT }}
@@ -537,7 +537,7 @@ jobs:
 
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v3
         with:
           name: artifacts-arm
           path: ./
@@ -553,7 +553,7 @@ jobs:
           args: bash .github/scripts/bindist.sh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           if-no-files-found: error
           name: bindists-arm
@@ -576,7 +576,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v3
         with:
           name: artifacts-mac-x86_64
           path: ./
@@ -591,7 +591,7 @@ jobs:
           bash .github/scripts/bindist.sh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           if-no-files-found: error
           name: bindists-mac-x86_64
@@ -614,7 +614,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v3
         with:
           name: artifacts-mac-aarch64
           path: ./
@@ -635,7 +635,7 @@ jobs:
           bash .github/scripts/bindist.sh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           if-no-files-found: error
           name: bindists-mac-aarch64
@@ -666,7 +666,7 @@ jobs:
 
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v3
         with:
           name: artifacts-win
           path: ./out
@@ -679,7 +679,7 @@ jobs:
         shell: pwsh
 
       - name: Upload bindist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           if-no-files-found: error
           name: bindists-win
@@ -780,7 +780,7 @@ jobs:
 
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v3
         with:
           name: bindists-${{ matrix.ARTIFACT }}
           path: ./out
@@ -816,7 +816,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v3
         with:
           name: bindists-arm
           path: ./out
