@@ -1,5 +1,87 @@
 # Changelog for haskell-language-server
 
+## 2.6.0.0
+
+- Bindists for GHC 9.6.4
+- A new semantic tokens plugin (#3892, @soulomoon).
+- Improvements to multiple home unit support with GHC 9.4. Using cabal 3.11+ will
+  load proper multiple home unit sessions by default, fixing a lot of issues with
+  loading and reloading projects that have more than one component (#3462, @wz1000).
+- Removed implicit-hie, resulting in better behaviour for projects without cradles.
+- Don't produce diagnostics for disabled plugins (#3941, @fendor).
+- Many other bug fixes.
+
+### Pull Requests
+
+- fix: semantic token omitting record field in `{-# LANGUAGE DuplicateRecordFields  #-}` #3950
+  ([#3951](https://github.com/haskell/haskell-language-server/pull/3951)) by @soulomoon
+- Properties API: Remove unsafe coerce in favor of type class based method in 
+  ([#3947](https://github.com/haskell/haskell-language-server/pull/3947)) by @soulomoon
+- Bump to hiedb 0.5.0.0 to fix #3542
+  ([#3943](https://github.com/haskell/haskell-language-server/pull/3943)) by @wz1000
+- Don't produce diagnostics if plugin is turned off
+  ([#3941](https://github.com/haskell/haskell-language-server/pull/3941)) by @fendor
+- add config  for semantic-tokens-plugin for mapping from hs token type to LSP default token type
+  ([#3940](https://github.com/haskell/haskell-language-server/pull/3940)) by @soulomoon
+- add doc and ci test for semantic tokens
+  ([#3938](https://github.com/haskell/haskell-language-server/pull/3938)) by @soulomoon
+- update Floskell to 0.11.*
+  ([#3933](https://github.com/haskell/haskell-language-server/pull/3933)) by @peterbecich
+- Remove some people from CODEOWNERS
+  ([#3930](https://github.com/haskell/haskell-language-server/pull/3930)) by @michaelpj
+- Adapt to minor API change for 9.6.4 compatibility
+  ([#3929](https://github.com/haskell/haskell-language-server/pull/3929)) by @wz1000
+- Fix multi unit session when some packages have reexported modules.
+  ([#3928](https://github.com/haskell/haskell-language-server/pull/3928)) by @wz1000
+- Switch to haskell-actions/setup since haskell/actions is deprecated
+  ([#3926](https://github.com/haskell/haskell-language-server/pull/3926)) by @fendor
+- Make vscode-extension-schema honour default values
+  ([#3925](https://github.com/haskell/haskell-language-server/pull/3925)) by @fendor
+- Add golden tests for public configs
+  ([#3922](https://github.com/haskell/haskell-language-server/pull/3922)) by @fendor
+- Bump geekyeggo/delete-artifact from 2 to 4
+  ([#3921](https://github.com/haskell/haskell-language-server/pull/3921)) by @dependabot[bot]
+- Fix positionMapping in stale data
+  ([#3920](https://github.com/haskell/haskell-language-server/pull/3920)) by @soulomoon
+- Disable stan plugin by default
+  ([#3917](https://github.com/haskell/haskell-language-server/pull/3917)) by @fendor
+- Use stan config files for stan plugin (#3904)
+  ([#3914](https://github.com/haskell/haskell-language-server/pull/3914)) by @0rphee
+- Bump both upload and download artifact
+  ([#3913](https://github.com/haskell/haskell-language-server/pull/3913)) by @michaelpj
+- Update ghc-version-support.md for 2.5.0
+  ([#3909](https://github.com/haskell/haskell-language-server/pull/3909)) by @lehmacdj
+- Give plugins descriptions, include versions of key dependencies 
+  ([#3903](https://github.com/haskell/haskell-language-server/pull/3903)) by @michaelpj
+- Remove some buildability blockers that aren't needed
+  ([#3899](https://github.com/haskell/haskell-language-server/pull/3899)) by @michaelpj
+- Bump actions/setup-python from 4 to 5
+  ([#3895](https://github.com/haskell/haskell-language-server/pull/3895)) by @dependabot[bot]
+- Update index-state to get latest stan version
+  ([#3894](https://github.com/haskell/haskell-language-server/pull/3894)) by @0rphee
+- Generate FileTarget for all possible targetLocations
+  ([#3893](https://github.com/haskell/haskell-language-server/pull/3893)) by @fendor
+- Implement semantic tokens plugin to support semantic highlighting(textDocument/semanticTokens/full)
+  ([#3892](https://github.com/haskell/haskell-language-server/pull/3892)) by @soulomoon
+- session-loader: Set working directory on GHC 9.4+
+  ([#3891](https://github.com/haskell/haskell-language-server/pull/3891)) by @wz1000
+- Demote home unit closure errors to warnings.
+  ([#3890](https://github.com/haskell/haskell-language-server/pull/3890)) by @wz1000
+- Bump cachix/install-nix-action from 23 to 24
+  ([#3889](https://github.com/haskell/haskell-language-server/pull/3889)) by @dependabot[bot]
+- Bump cachix/cachix-action from 12 to 13
+  ([#3888](https://github.com/haskell/haskell-language-server/pull/3888)) by @dependabot[bot]
+- Add more docs for implicit discovery
+  ([#3887](https://github.com/haskell/haskell-language-server/pull/3887)) by @fendor
+- Prepare release 2.5.0.0
+  ([#3879](https://github.com/haskell/haskell-language-server/pull/3879)) by @wz1000
+- Improve no plugin messages
+  ([#3864](https://github.com/haskell/haskell-language-server/pull/3864)) by @joyfulmantis
+- Add support for multi unit argument syntax
+  ([#3462](https://github.com/haskell/haskell-language-server/pull/3462)) by @wz1000
+- Fix completion for qualified import
+  ([#2838](https://github.com/haskell/haskell-language-server/pull/2838)) by @xsebek
+
 ## 2.5.0.0
 
 - Bindists for GHC 9.4.8
