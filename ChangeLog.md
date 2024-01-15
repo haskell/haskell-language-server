@@ -4,7 +4,7 @@
 
 - Bindists for GHC 9.6.4
 - A new semantic tokens plugin (#3892, @soulomoon).
-- Improvements to multiple home unit support with GHC 9.4. Using cabal 3.11+ will
+- Improvements to multiple home unit support with GHC 9.4. When HLS is used with cabal 3.11+ it will
   load proper multiple home unit sessions by default, fixing a lot of issues with
   loading and reloading projects that have more than one component (#3462, @wz1000).
 - Removed implicit-hie, resulting in better behaviour for projects without cradles.
