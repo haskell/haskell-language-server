@@ -35,7 +35,7 @@ library
   hs-source-dirs:     src
   build-depends:
     , aeson
-    , base
+    , base                  >=4.12 && <5
     , containers
     , extra
     , hiedb
