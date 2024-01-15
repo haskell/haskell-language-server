@@ -5,12 +5,12 @@
 
 module Ide.Plugin.SemanticTokens.Utils where
 
-import           Data.ByteString                 (ByteString)
-import           Data.ByteString.Char8           (unpack)
-import qualified Data.Map                        as Map
-import           Development.IDE                 (Position (..), Range (..))
+import           Data.ByteString            (ByteString)
+import           Data.ByteString.Char8      (unpack)
+import qualified Data.Map                   as Map
+import           Development.IDE            (Position (..), Range (..))
 import           Development.IDE.GHC.Compat
-import           Prelude                         hiding (span)
+import           Prelude                    hiding (span)
 
 deriving instance Show DeclType
 deriving instance Show BindType

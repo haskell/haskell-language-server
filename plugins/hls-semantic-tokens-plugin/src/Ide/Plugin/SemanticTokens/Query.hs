@@ -12,6 +12,7 @@ import qualified Data.Map                             as M
 import qualified Data.Map                             as Map
 import           Data.Maybe                           (fromMaybe, listToMaybe,
                                                        mapMaybe)
+import           Data.Set                             (Set)
 import qualified Data.Set                             as S
 import qualified Data.Set                             as Set
 import           Data.Text                            (Text)
@@ -28,7 +29,6 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.VFS                     (VirtualFile,
                                                        codePointRangeToRange)
 import           Prelude                              hiding (span)
-import           Data.Set (Set)
 
 ---------------------------------------------------------
 

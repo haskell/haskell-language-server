@@ -45,7 +45,7 @@ toLspTokenType conf tk = case tk of
   TTypeFamily      -> stTypeFamily conf
   TRecordField     -> stRecordField conf
   TPatternSynonym  -> stPatternSynonym conf
-  TModuleName       -> stModuleName conf
+  TModuleName      -> stModuleName conf
 
 lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap config
@@ -123,7 +123,7 @@ recoverFunMaskArray flattened = unflattened
     go (HAppTy _f _x)                = False
     go (HLitTy _lit)                 = False
     go (HForAllTy ((_n, _k), _af) b) = b
-    go (HFunTy {})                = True
+    go (HFunTy {})                   = True
     go (HQualTy _constraint b)       = b
     go (HCastTy b)                   = b
     go HCoercionTy                   = False

@@ -21,7 +21,10 @@ import           Control.Monad.Except                     (ExceptT, liftEither,
                                                            withExceptT)
 import           Control.Monad.Trans                      (lift)
 import           Control.Monad.Trans.Except               (runExceptT)
+import           Data.Map                                 (Map)
+import qualified Data.Map                                 as M
 import qualified Data.Map                                 as Map
+import qualified Data.Set                                 as S
 import           Development.IDE                          (Action,
                                                            GetDocMap (GetDocMap),
                                                            GetHieAst (GetHieAst),
@@ -60,9 +63,6 @@ import           Language.LSP.Protocol.Types              (NormalizedFilePath,
                                                            SemanticTokens,
                                                            type (|?) (InL))
 import           Prelude                                  hiding (span)
-import qualified Data.Set as S
-import Data.Map (Map)
-import qualified Data.Map as M
 
 
 $mkSemanticConfigFunctions

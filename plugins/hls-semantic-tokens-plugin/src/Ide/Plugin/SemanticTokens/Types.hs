@@ -25,8 +25,8 @@ import           Development.IDE.Graph.Classes (Hashable)
 import           GHC.Generics                  (Generic)
 import           Language.LSP.Protocol.Types
 -- import template haskell
+import           Data.Map                      (Map)
 import           Language.Haskell.TH.Syntax    (Lift)
-import           Data.Map (Map)
 
 
 -- !!!! order of declarations matters deriving enum and ord
