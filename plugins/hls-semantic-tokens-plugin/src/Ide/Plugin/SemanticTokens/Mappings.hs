@@ -45,6 +45,7 @@ toLspTokenType conf tk = case tk of
   TTypeFamily      -> stTypeFamily conf
   TRecordField     -> stRecordField conf
   TPatternSynonym  -> stPatternSynonym conf
+  TModuleName       -> stModuleName conf
 
 lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap config

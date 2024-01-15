@@ -167,7 +167,9 @@ semanticTokensTests =
         let file1 = "TModuleA.hs"
         let file2 = "TModuleB.hs"
         let expect =
-              [ SemanticTokenOriginal TVariable (Loc 5 1 2) "go",
+              [
+                SemanticTokenOriginal TModuleName (Loc 3 8 8) "TModuleA",
+                SemanticTokenOriginal TVariable (Loc 5 1 2) "go",
                 SemanticTokenOriginal TDataConstructor (Loc 5 6 4) "Game"
               ]
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do

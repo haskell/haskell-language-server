@@ -83,12 +83,12 @@ nameTypesString xs = unlines
     | (span, name) <- xs]
 
 
-nameMapString :: NameSemanticMap -> [Name] -> String
-nameMapString nsm  names = unlines
-    [ showSDocUnsafe (ppr name) ++ " " ++ show tokenType
-    | name <- names
-    , let tokenType = lookupNameEnv nsm name
-    ]
+-- nameMapString :: NameSemanticMap -> [Name] -> String
+-- nameMapString nsm  names = unlines
+--     [ showSDocUnsafe (ppr name) ++ " " ++ show tokenType
+--     | name <- names
+--     , let tokenType = lookupNameEnv nsm name
+--     ]
 
 
 showSpan :: RealSrcSpan -> String

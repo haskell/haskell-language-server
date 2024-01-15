@@ -26,6 +26,7 @@ import           GHC.Generics                  (Generic)
 import           Language.LSP.Protocol.Types
 -- import template haskell
 import           Language.Haskell.TH.Syntax    (Lift)
+import           Data.Map (Map)
 
 
 -- !!!! order of declarations matters deriving enum and ord
@@ -43,6 +44,7 @@ data HsSemanticTokenType
   | TTypeSynonym -- Type synonym
   | TTypeFamily -- type family
   | TRecordField -- from match bind
+  | TModuleName -- from match bind
   deriving (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
 
 
@@ -65,6 +67,7 @@ instance Default SemanticTokensConfig where
       , stTypeSynonym = SemanticTokenTypes_Type
       , stTypeFamily = SemanticTokenTypes_Interface
       , stRecordField = SemanticTokenTypes_Property
+      , stModuleName = SemanticTokenTypes_Namespace
       }
 -- | SemanticTokensConfig_ is a configuration for the semantic tokens plugin.
 -- it contains map between the hs semantic token type and default token type.
@@ -80,6 +83,7 @@ data SemanticTokensConfig = STC
   , stTypeSynonym     :: !SemanticTokenTypes
   , stTypeFamily      :: !SemanticTokenTypes
   , stRecordField     :: !SemanticTokenTypes
+  , stModuleName      :: !SemanticTokenTypes
   } deriving (Generic, Show)
 
 
@@ -108,7 +112,7 @@ data Loc = Loc
 instance Show Loc where
   show (Loc line startChar len) = show line <> ":" <> show startChar <> "-" <> show (startChar + len)
 
-type NameSemanticMap = NameEnv HsSemanticTokenType
+type NameSemanticMap = Map Identifier HsSemanticTokenType
 
 data GetSemanticTokens = GetSemanticTokens
   deriving (Eq, Show, Typeable, Generic)
@@ -124,7 +128,7 @@ instance NFData RangeHsSemanticTokenTypes where
   rnf (RangeHsSemanticTokenTypes a) = rwhnf a
 
 instance Show RangeHsSemanticTokenTypes where
-  show = const "GlobalNameMap"
+  show = const "RangeHsSemanticTokenTypes"
 
 type instance RuleResult GetSemanticTokens = RangeHsSemanticTokenTypes
 

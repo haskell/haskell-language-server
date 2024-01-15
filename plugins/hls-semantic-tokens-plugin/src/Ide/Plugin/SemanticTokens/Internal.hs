@@ -21,7 +21,6 @@ import           Control.Monad.Except                     (ExceptT, liftEither,
                                                            withExceptT)
 import           Control.Monad.Trans                      (lift)
 import           Control.Monad.Trans.Except               (runExceptT)
-import           Data.Aeson                               (ToJSON (toJSON))
 import qualified Data.Map                                 as Map
 import           Development.IDE                          (Action,
                                                            GetDocMap (GetDocMap),
@@ -34,7 +33,6 @@ import           Development.IDE                          (Action,
                                                            cmapWithPrio, define,
                                                            fromNormalizedFilePath,
                                                            hieKind, logPriority,
-                                                           usePropertyAction,
                                                            use_)
 import           Development.IDE.Core.PluginUtils         (runActionE,
                                                            useWithStaleE)
@@ -62,6 +60,9 @@ import           Language.LSP.Protocol.Types              (NormalizedFilePath,
                                                            SemanticTokens,
                                                            type (|?) (InL))
 import           Prelude                                  hiding (span)
+import qualified Data.Set as S
+import Data.Map (Map)
+import qualified Data.Map as M
 
 
 $mkSemanticConfigFunctions
@@ -101,27 +102,28 @@ getSemanticTokensRule recorder =
     ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst Map.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     -- get current location from the old ones
-    let spanNamesMap = hieAstSpanNames virtualFile ast
-    let names = nameSetElemsStable $ unionNameSets $ Map.elems spanNamesMap
+    let spanIdMap = M.filter (not . null) $ hieAstSpanIdentifiers virtualFile ast
+    let names = S.toList $ S.unions $ Map.elems spanIdMap
     let localSemanticMap = mkLocalNameSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
     -- get imported name semantic map
-    let importedNameSemanticMap = foldr (getTypeExclude localSemanticMap getTyThingMap) emptyNameEnv names
-    let sMap = plusNameEnv_C (<>) importedNameSemanticMap localSemanticMap
-    let rangeTokenType = extractSemanticTokensFromNames sMap spanNamesMap
+    let importedNameSemanticMap = foldr (getTypeExclude localSemanticMap getTyThingMap) mempty names
+    let sMap = M.unionWith (<>) importedNameSemanticMap localSemanticMap
+    let rangeTokenType = extractSemanticTokensFromNames sMap spanIdMap
     return $ RangeHsSemanticTokenTypes rangeTokenType
   where
     -- ignore one already in discovered in local
     getTypeExclude ::
-      NameEnv a ->
+      Map Identifier a ->
       NameEnv TyThing ->
-      Name ->
-      NameEnv HsSemanticTokenType ->
-      NameEnv HsSemanticTokenType
+      Identifier ->
+      Map Identifier HsSemanticTokenType ->
+      Map Identifier HsSemanticTokenType
     getTypeExclude localEnv tyThingMap n nameMap
-      | n `elemNameEnv` localEnv = nameMap
-      | otherwise =
-          let tyThing = lookupNameEnv tyThingMap n
-           in maybe nameMap (extendNameEnv nameMap n) (tyThing >>= tyThingSemantic)
+      | n `M.member` localEnv = nameMap
+      | (Right name) <- n =
+          let tyThing =  lookupNameEnv tyThingMap name
+           in maybe nameMap (\k -> M.insert n k nameMap) (tyThing >>= tyThingSemantic)
+     | otherwise = nameMap
 
 -- | Persistent rule to ensure that semantic tokens doesn't block on startup
 persistentGetSemanticTokensRule :: Rules ()

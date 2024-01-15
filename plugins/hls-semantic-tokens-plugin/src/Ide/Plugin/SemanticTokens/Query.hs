@@ -21,13 +21,14 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error            (realSrcSpanToCodePointRange)
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
-                                                       HsSemanticTokenType,
+                                                       HsSemanticTokenType (TModuleName),
                                                        NameSemanticMap,
                                                        SemanticTokensConfig)
 import           Language.LSP.Protocol.Types
 import           Language.LSP.VFS                     (VirtualFile,
                                                        codePointRangeToRange)
 import           Prelude                              hiding (span)
+import           Data.Set (Set)
 
 ---------------------------------------------------------
 
@@ -35,17 +36,18 @@ import           Prelude                              hiding (span)
 
 ---------------------------------------------------------
 
-mkLocalNameSemanticFromAst :: [Name] -> HieFunMaskKind a -> RefMap a -> NameSemanticMap
-mkLocalNameSemanticFromAst names hieKind rm = mkNameEnv (mapMaybe (nameNameSemanticFromHie hieKind rm) names)
+mkLocalNameSemanticFromAst :: [Identifier] -> HieFunMaskKind a -> RefMap a -> NameSemanticMap
+mkLocalNameSemanticFromAst names hieKind rm = M.fromList (mapMaybe (nameNameSemanticFromHie hieKind rm) names)
 
-nameNameSemanticFromHie :: forall a. HieFunMaskKind a -> RefMap a -> Name -> Maybe (Name, HsSemanticTokenType)
-nameNameSemanticFromHie hieKind rm ns = do
+nameNameSemanticFromHie :: forall a. HieFunMaskKind a -> RefMap a -> Identifier -> Maybe (Identifier, HsSemanticTokenType)
+nameNameSemanticFromHie _ _ ns@(Left _) = Just (ns, TModuleName)
+nameNameSemanticFromHie hieKind rm ns@(Right _) = do
   st <- nameSemanticFromRefMap rm ns
   return (ns, st)
   where
-    nameSemanticFromRefMap :: RefMap a -> Name -> Maybe HsSemanticTokenType
+    nameSemanticFromRefMap :: RefMap a -> Identifier -> Maybe HsSemanticTokenType
     nameSemanticFromRefMap rm' name' = do
-      spanInfos <- Map.lookup (Right name') rm'
+      spanInfos <- Map.lookup name' rm'
       let typeTokenType = foldMap (typeSemantic hieKind) $ listToMaybe $ mapMaybe (identType . snd) spanInfos
       contextInfoTokenType <- foldMap (contextInfosMaybeTokenType . identInfo . snd) spanInfos
       fold [typeTokenType, Just contextInfoTokenType]
@@ -62,11 +64,11 @@ nameNameSemanticFromHie hieKind rm ns = do
 -- | get only visible names from HieAST
 -- we care only the leaf node of the AST
 -- and filter out the derived and evidence names
-hieAstSpanNames :: VirtualFile -> HieAST a -> M.Map Range NameSet
-hieAstSpanNames vf ast =
+hieAstSpanIdentifiers :: VirtualFile -> HieAST a -> M.Map Range (Set Identifier)
+hieAstSpanIdentifiers vf ast =
   if null (nodeChildren ast)
     then getIds ast
-    else M.unionsWith unionNameSet $ map (hieAstSpanNames vf) (nodeChildren ast)
+    else M.unionsWith S.union $ map (hieAstSpanIdentifiers vf) (nodeChildren ast)
   where
     getIds ast' = fromMaybe mempty $ do
       range <- codePointRangeToRange vf $ realSrcSpanToCodePointRange $ nodeSpan ast'
@@ -76,15 +78,15 @@ hieAstSpanNames vf ast =
         . Map.filterWithKey (\k _ -> k == SourceInfo)
         . getSourcedNodeInfo
         . sourcedNodeInfo
-    combineNodeIds :: NameSet -> NodeInfo a -> NameSet
-    ad `combineNodeIds` (NodeInfo _ _ bd) = ad `unionNameSet` xs
+    combineNodeIds :: Set Identifier -> NodeInfo a -> Set Identifier
+    ad `combineNodeIds` (NodeInfo _ _ bd) = ad `S.union` xs
       where
-        xs = mkNameSet $ rights $ M.keys $ M.filterWithKey inclusion bd
+        xs = S.fromList $ M.keys $ M.filterWithKey inclusion bd
         inclusion :: Identifier -> IdentifierDetails a -> Bool
         inclusion a b = not $ exclusion a b
         exclusion :: Identifier -> IdentifierDetails a -> Bool
         exclusion idt IdentifierDetails {identInfo = infos} = case idt of
-          Left _  -> True
+          Left _  -> False
           Right _ -> any isEvidenceContext (S.toList infos)
 
 -------------------------------------------------
@@ -93,8 +95,8 @@ hieAstSpanNames vf ast =
 
 -------------------------------------------------
 
-extractSemanticTokensFromNames :: NameSemanticMap -> M.Map Range NameSet -> M.Map Range HsSemanticTokenType
-extractSemanticTokensFromNames nsm = Map.mapMaybe (foldMap (lookupNameEnv nsm) . nameSetElemsStable)
+extractSemanticTokensFromNames :: NameSemanticMap -> M.Map Range (Set Identifier) -> M.Map Range HsSemanticTokenType
+extractSemanticTokensFromNames nsm = Map.mapMaybe (foldMap (flip M.lookup nsm))
 
 rangeSemanticMapSemanticTokens :: SemanticTokensConfig -> PositionMapping -> M.Map Range HsSemanticTokenType -> Either Text SemanticTokens
 rangeSemanticMapSemanticTokens stc mapping =
