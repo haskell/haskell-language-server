@@ -10,7 +10,6 @@ import           Data.ByteString.Char8           (unpack)
 import qualified Data.Map                        as Map
 import           Development.IDE                 (Position (..), Range (..))
 import           Development.IDE.GHC.Compat
-import           Ide.Plugin.SemanticTokens.Types
 import           Prelude                         hiding (span)
 
 deriving instance Show DeclType
@@ -81,14 +80,6 @@ nameTypesString :: [(Name, Type)] -> String
 nameTypesString xs = unlines
     [ showSDocUnsafe (ppr span) ++ " " ++ showSDocUnsafe (ppr name)
     | (span, name) <- xs]
-
-
--- nameMapString :: NameSemanticMap -> [Name] -> String
--- nameMapString nsm  names = unlines
---     [ showSDocUnsafe (ppr name) ++ " " ++ show tokenType
---     | name <- names
---     , let tokenType = lookupNameEnv nsm name
---     ]
 
 
 showSpan :: RealSrcSpan -> String

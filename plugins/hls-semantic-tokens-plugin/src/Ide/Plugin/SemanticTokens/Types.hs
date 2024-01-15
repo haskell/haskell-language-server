@@ -121,7 +121,7 @@ instance Hashable GetSemanticTokens
 
 instance NFData GetSemanticTokens
 
-data RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {rangeSemanticMap :: M.Map Range HsSemanticTokenType}
+newtype RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {rangeSemanticMap :: M.Map Range HsSemanticTokenType}
 
 instance NFData RangeHsSemanticTokenTypes where
   rnf :: RangeHsSemanticTokenTypes -> ()

@@ -115,9 +115,9 @@ recoverFunMaskArray flattened = unflattened
     -- The recursion in 'unflattened' is crucial - it's what gives us sharing
     -- function indicator check.
     unflattened :: A.Array TypeIndex Bool
-    unflattened = fmap (\flatTy -> go (fmap (unflattened A.!) flatTy)) flattened
+    unflattened = fmap (go . fmap (unflattened A.!)) flattened
 
-    -- Unfold an 'HieType' whose subterms have already been unfolded
+    -- Unfold an 'HieType' whose sub-terms have already been unfolded
     go :: HieType Bool -> Bool
     go (HTyVarTy _name)              = False
     go (HAppTy _f _x)                = False
