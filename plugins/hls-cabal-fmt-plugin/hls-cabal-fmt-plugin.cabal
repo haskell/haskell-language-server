@@ -23,7 +23,7 @@ flag isolateTests
   manual:      True
 
 common warnings
-  ghc-options: -Wall
+  ghc-options: -Wall -Wunused-packages
 
 library
   import:           warnings
@@ -40,7 +40,6 @@ library
     , mtl
     , process-extras
     , text
-    , transformers
 
   default-language: Haskell2010
 

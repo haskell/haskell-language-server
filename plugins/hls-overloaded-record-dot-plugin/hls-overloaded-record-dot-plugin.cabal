@@ -23,10 +23,6 @@ common warnings
 
 library
     import:           warnings
-    if impl(ghc < 9.2)
-      buildable: False
-    else
-      buildable: True
     exposed-modules:  Ide.Plugin.OverloadedRecordDot
     build-depends:
       , base                  >=4.16 && <5
@@ -48,10 +44,6 @@ library
 
 test-suite tests
     import:           warnings
-    if impl(ghc < 9.2)
-      buildable: False
-    else
-      buildable: True
     default-language: GHC2021
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test
