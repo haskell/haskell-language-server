@@ -46,7 +46,7 @@ codeActionHandler plId ideState _ CodeActionParams {_textDocument = TextDocument
 getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m [LHsDecl GhcPs]
 getDecls (PluginId changeTypeSignatureId) state =
     runActionE (T.unpack changeTypeSignatureId <> ".GetParsedModule") state
-    . (fmap (hsmodDecls . unLoc . pm_parsed_source))
+    . fmap (hsmodDecls . unLoc . pm_parsed_source)
     . useE GetParsedModule
 
 -- | Text representing a Declaration's Name
