@@ -6,14 +6,14 @@ module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 
 import           Control.Lens                     ((^.))
 import           Control.Monad.Except             (ExceptT)
-import           Control.Monad.IO.Class           (MonadIO, liftIO)
+import           Control.Monad.IO.Class           (MonadIO)
 import qualified Data.Map                         as Map
 import           Data.Text                        (Text, unpack)
 import qualified Data.Text                        as T
 import           Development.IDE                  (GetParsedModule (GetParsedModule),
                                                    IdeState, RuleResult, Rules,
                                                    define, realSrcSpanToRange,
-                                                   runAction, use)
+                                                   use)
 import           Development.IDE.Core.PluginUtils
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       hiding (getSrcSpan)
@@ -35,7 +35,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-
+import           Prelude                          hiding (log)
 
 newtype Log = LogShake Shake.Log deriving Show
 
@@ -93,7 +93,7 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
         literalPairs = map (\lit -> (lit, alternateFormat lit)) litsInRange
         -- make a code action for every literal and its' alternates (then flatten the result)
         actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit enabledExtensions pragma) alts) literalPairs
-    pure $ InL $ actions
+    pure $ InL actions
     where
         mkCodeAction :: NormalizedFilePath -> Literal -> [GhcExtension] -> NextPragmaInfo -> AlternateFormat -> Command |? CodeAction
         mkCodeAction nfp lit enabled npi af@(alt, ext) = InR CodeAction {

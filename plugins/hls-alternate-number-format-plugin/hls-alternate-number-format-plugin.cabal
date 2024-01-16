@@ -64,7 +64,6 @@ test-suite tests
     , filepath
     , hls-alternate-number-format-plugin
     , hls-test-utils       == 2.6.0.0
-    , lsp
     , regex-tdfa
     , tasty-quickcheck
     , text
