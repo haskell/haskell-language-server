@@ -21,7 +21,11 @@ source-repository head
     type:     git
     location: https://github.com/haskell/haskell-language-server.git
 
+common warnings
+    ghc-options: -Wall -Wunused-packages
+
 library
+  import: warnings
   -- Plugins that need exactprint have not been updated for 9.8 yet
   if impl(ghc >= 9.8)
     buildable: False
@@ -93,10 +97,11 @@ library
     -- FIXME: Only needed to workaround for qualified imports in GHC 9.4
     , regex-applicative
     , parser-combinators
-  ghc-options: -Wall -Wno-name-shadowing
+  ghc-options: -Wno-name-shadowing
   default-language: Haskell2010
 
 test-suite tests
+  import: warnings
   if impl(ghc >= 9.8)
     buildable: False
   else
