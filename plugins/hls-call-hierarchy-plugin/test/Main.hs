@@ -1,8 +1,7 @@
-{-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TupleSections      #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TupleSections     #-}
 
 module Main (main) where
 
@@ -17,11 +16,8 @@ import           Development.IDE.Test
 import           Ide.Plugin.CallHierarchy
 import qualified Language.LSP.Protocol.Lens as L
 import qualified Language.LSP.Test          as Test
-import           System.Directory.Extra
 import           System.FilePath
-import qualified System.IO.Extra
 import           Test.Hls
-import           Test.Hls.Util              (withCanonicalTempDir)
 
 plugin :: PluginTestDescriptor ()
 plugin = mkPluginTestDescriptor' descriptor "call-hierarchy"
@@ -205,11 +201,11 @@ incomingCallsTests =
           let expected = [CallHierarchyIncomingCall item [mkRange 1 2 1 3]]
           Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 0) >>=
             \case
-              [item] -> do
-                let itemNoData = set L.data_ Nothing item
+              [item'] -> do
+                let itemNoData = set L.data_ Nothing item'
                 Test.incomingCalls (mkIncomingCallsParam itemNoData) >>=
                   \res -> liftIO $ sort expected @=? sort res
-              _      -> liftIO $ assertFailure "Not exactly one element"
+              _        -> liftIO $ assertFailure "Not exactly one element"
           closeDoc doc
     , testCase "xdata available" $ do
         let contents = T.unlines ["a=3","b=a"]
@@ -330,8 +326,8 @@ outgoingCallsTests =
           let expected = [CallHierarchyOutgoingCall item [mkRange 1 2 1 3]]
           Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0) >>=
             \case
-              [item] -> do
-                let itemNoData = set L.data_ Nothing item
+              [item'] -> do
+                let itemNoData = set L.data_ Nothing item'
                 Test.outgoingCalls (mkOutgoingCallsParam itemNoData) >>=
                   \res -> liftIO $ sort expected @=? sort res
               _      -> liftIO $ assertFailure "Not exactly one element"
@@ -513,7 +509,7 @@ oneCaseWithCreate contents queryX queryY expected = withCanonicalTempDir $ \dir 
     Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
       \case
         [item] -> liftIO $ expected (doc ^. L.uri) item
-        res    -> liftIO $ assertFailure "Not one element"
+        _      -> liftIO $ assertFailure "Not one element"
     closeDoc doc
 
 mkCallHierarchyItem' :: String -> T.Text -> SymbolKind -> Range -> Range -> Uri -> CallHierarchyItem -> Assertion
@@ -528,7 +524,7 @@ mkCallHierarchyItem' prefix name kind range selRange uri c@(CallHierarchyItem na
     case xdata' of
       Nothing -> assertFailure ("In " ++ show c ++ ", got Nothing for data but wanted " ++ show xdata)
       Just v -> case Aeson.fromJSON v of
-        Aeson.Success v -> assertBool ("In " ++ show c ++ " wanted data prefix: " ++ show xdata) (xdata `T.isPrefixOf` v)
+        Aeson.Success v' -> assertBool ("In " ++ show c ++ " wanted data prefix: " ++ show xdata) (xdata `T.isPrefixOf` v')
         Aeson.Error err -> assertFailure ("In " ++ show c ++ " wanted data prefix: " ++ show xdata ++ " but json parsing failed with " ++ show err)
   where
     tags = Nothing
@@ -570,6 +566,6 @@ waitForIndex fp1 = skipManyTill anyMessage $ void $ referenceReady lenientEquals
     -- filepath from the message
     lenientEquals :: FilePath -> Bool
     lenientEquals fp2
-      | isRelative fp1 = any (equalFilePath fp1) (map (foldr (</>) "") $ tails $ splitDirectories fp2)
+      | isRelative fp1 = any (equalFilePath fp1 . joinPath) $ tails $ splitDirectories fp2
       | otherwise = equalFilePath fp1 fp2
 

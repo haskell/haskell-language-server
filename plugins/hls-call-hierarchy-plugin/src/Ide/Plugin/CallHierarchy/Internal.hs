@@ -3,6 +3,7 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE Rank2Types          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving  #-}
@@ -13,43 +14,45 @@ module Ide.Plugin.CallHierarchy.Internal (
 , outgoingCalls
 ) where
 
-import           Control.Lens                     ((^.))
+import           Control.Lens                   (Lens', (^.))
 import           Control.Monad.IO.Class
-import           Data.Aeson                       as A
-import           Data.List                        (groupBy, sortBy)
-import qualified Data.Map                         as M
+import           Data.Aeson                     as A
+import           Data.Functor                   ((<&>))
+import           Data.List                      (groupBy, sortBy)
+import qualified Data.Map                       as M
 import           Data.Maybe
-import qualified Data.Set                         as S
-import qualified Data.Text                        as T
+import           Data.Ord                       (comparing)
+import qualified Data.Set                       as S
+import qualified Data.Text                      as T
 import           Data.Tuple.Extra
 import           Development.IDE
-import qualified Development.IDE.Core.PluginUtils as PluginUtils
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat       as Compat
+import           Development.IDE.GHC.Compat     as Compat
 import           Development.IDE.Spans.AtPoint
-import           HieDb                            (Symbol (Symbol))
-import qualified Ide.Plugin.CallHierarchy.Query   as Q
+import           HieDb                          (Symbol (Symbol))
+import qualified Ide.Plugin.CallHierarchy.Query as Q
 import           Ide.Plugin.CallHierarchy.Types
 import           Ide.Plugin.Error
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens       as L
+import qualified Language.LSP.Protocol.Lens     as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Text.Read                        (readMaybe)
+import           Prelude                        hiding (mod, span)
+import           Text.Read                      (readMaybe)
 
 -- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState Method_TextDocumentPrepareCallHierarchy
 prepareCallHierarchy state _ param = do
-    nfp <-  getNormalizedFilePathE (param ^. L.textDocument ^. L.uri)
+    nfp <- getNormalizedFilePathE (param ^. (L.textDocument . L.uri))
     items <- liftIO
         $ runAction "CallHierarchy.prepareHierarchy" state
         $ prepareCallHierarchyItem nfp (param ^. L.position)
     pure $ InL items
 
 prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action [CallHierarchyItem]
-prepareCallHierarchyItem nfp pos = use GetHieAst nfp >>= \case
-    Nothing               -> pure mempty
-    Just (HAR _ hf _ _ _) -> pure $ prepareByAst hf pos nfp
+prepareCallHierarchyItem nfp pos = use GetHieAst nfp <&> \case
+    Nothing               -> mempty
+    Just (HAR _ hf _ _ _) -> prepareByAst hf pos nfp
 
 prepareByAst :: HieASTs a -> Position -> NormalizedFilePath -> [CallHierarchyItem]
 prepareByAst hf pos nfp =
@@ -173,7 +176,7 @@ deriving instance Ord Value
 
 -- | Render incoming calls request.
 incomingCalls :: PluginMethodHandler IdeState Method_CallHierarchyIncomingCalls
-incomingCalls state pluginId param = do
+incomingCalls state _pluginId param = do
     calls <- liftIO
         $ runAction "CallHierarchy.incomingCalls" state
         $ queryCalls
@@ -181,14 +184,14 @@ incomingCalls state pluginId param = do
             Q.incomingCalls
             mkCallHierarchyIncomingCall
             (mergeCalls CallHierarchyIncomingCall L.from)
-    pure $ InL $ calls
+    pure $ InL calls
     where
         mkCallHierarchyIncomingCall :: Vertex -> Action (Maybe CallHierarchyIncomingCall)
         mkCallHierarchyIncomingCall = mkCallHierarchyCall CallHierarchyIncomingCall
 
 -- | Render outgoing calls request.
 outgoingCalls :: PluginMethodHandler IdeState Method_CallHierarchyOutgoingCalls
-outgoingCalls state pluginId param = do
+outgoingCalls state _pluginId param = do
     calls <- liftIO
         $ runAction "CallHierarchy.outgoingCalls" state
         $ queryCalls
@@ -196,15 +199,22 @@ outgoingCalls state pluginId param = do
             Q.outgoingCalls
             mkCallHierarchyOutgoingCall
             (mergeCalls CallHierarchyOutgoingCall L.to)
-    pure $ InL $ calls
+    pure $ InL calls
     where
         mkCallHierarchyOutgoingCall :: Vertex -> Action (Maybe CallHierarchyOutgoingCall)
         mkCallHierarchyOutgoingCall = mkCallHierarchyCall CallHierarchyOutgoingCall
+
 -- | Merge calls from the same place
+mergeCalls ::
+    L.HasFromRanges s [Range]
+    => (CallHierarchyItem -> [Range] -> s)
+    -> Lens' s CallHierarchyItem
+    -> [s]
+    -> [s]
 mergeCalls constructor target =
     concatMap merge
         . groupBy (\a b -> a ^. target == b ^. target)
-        . sortBy (\a b -> (a ^. target) `compare` (b ^. target))
+        . sortBy (comparing (^. target))
     where
         merge [] = []
         merge calls@(call:_) =
@@ -235,7 +245,7 @@ mkCallHierarchyCall mk v@Vertex{..} = do
                         case items of
                             [item] -> pure $ Just $ mk item [range]
                             _      -> pure Nothing
-                    _     -> pure Nothing
+                    []     -> pure Nothing
 
 -- | Unified queries include incoming calls and outgoing calls.
 queryCalls :: (Show a)
@@ -257,7 +267,6 @@ queryCalls item queryFunc makeFunc merge
     | otherwise = pure mempty
     where
         uri = item ^. L.uri
-        xdata = item ^. L.data_
         pos = item ^. (L.selectionRange . L.start)
 
         getSymbol nfp = case item ^. L.data_ of
@@ -267,9 +276,9 @@ queryCalls item queryFunc makeFunc merge
             Nothing -> getSymbolFromAst nfp pos -- Fallback if xdata lost, some editor(VSCode) will drop it
 
         getSymbolFromAst :: NormalizedFilePath -> Position -> Action (Maybe Symbol)
-        getSymbolFromAst nfp pos = use GetHieAst nfp >>= \case
-            Nothing -> pure Nothing
+        getSymbolFromAst nfp pos_ = use GetHieAst nfp <&> \case
+            Nothing -> Nothing
             Just (HAR _ hf _ _ _) -> do
-                case listToMaybe $ pointCommand hf pos extract of
-                    Just infos -> maybe (pure Nothing) pure $ mkSymbol . fst3 <$> listToMaybe infos
-                    Nothing -> pure Nothing
+                case listToMaybe $ pointCommand hf pos_ extract of
+                    Just infos -> mkSymbol . fst3 =<< listToMaybe infos
+                    Nothing    -> Nothing
