@@ -232,12 +232,7 @@ library
       -Wwarn=duplicate-exports -Wwarn=dodgy-exports
       -Wwarn=incomplete-patterns -Wwarn=overlapping-patterns
       -Wwarn=incomplete-record-updates
-
-  -- ambiguous-fields is only understood by GHC >= 9.2, so we only disable it
-  -- then. The above comment goes for here too -- this should be understood to
-  -- be temporary until we can remove these warnings.
-  if (impl(ghc >=9.2) && flag(pedantic))
-    ghc-options: -Wwarn=ambiguous-fields
+      -Wwarn=ambiguous-fields
 
   if flag(ekg)
     build-depends:
@@ -269,7 +264,7 @@ executable ghcide
   hs-source-dirs:     exe
   ghc-options:
     -threaded -Wall -Wincomplete-uni-patterns -Wno-name-shadowing
-    -rtsopts "-with-rtsopts=-I0 -A128M -T"
+    -rtsopts "-with-rtsopts=-I0 -A128M -T" -Wunused-packages
 
   -- allow user RTS overrides
   -- disable idle GC
@@ -318,9 +313,6 @@ executable ghcide
 
     cpp-options:   -DMONITORING_EKG
 
-  if impl(ghc >=9)
-    ghc-options: -Wunused-packages
-
 test-suite ghcide-tests
   type:               exitcode-stdio-1.0
   default-language:   Haskell2010
@@ -340,6 +332,13 @@ test-suite ghcide-tests
     , extra
     , filepath
     , fuzzy
+  --------------------------------------------------------------
+  -- The MIN_VERSION_ghc macro relies on MIN_VERSION pragmas
+  -- which require depending on ghc. So the tests need to depend
+  -- on ghc if they need to use MIN_VERSION_ghc. Maybe a
+  -- better solution can be found, but this is a quick solution
+  -- which works for now.
+  --------------------------------------------------------------
     , ghc
     , ghcide
     , hls-plugin-api
@@ -367,18 +366,6 @@ test-suite ghcide-tests
     , text
     , text-rope
     , unordered-containers
-
-  --------------------------------------------------------------
-  -- The MIN_VERSION_ghc macro relies on MIN_VERSION pragmas
-  -- which require depending on ghc. So the tests need to depend
-  -- on ghc if they need to use MIN_VERSION_ghc. Maybe a
-  -- better solution can be found, but this is a quick solution
-  -- which works for now.
-  --------------------------------------------------------------
-  if impl(ghc <9.2)
-    build-depends:
-      , record-dot-preprocessor
-      , record-hasfield
 
   if impl(ghc <9.3)
     build-depends: ghc-typelits-knownnat
