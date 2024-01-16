@@ -35,13 +35,12 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens       as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
-import           Prelude                          hiding (log)
 
 newtype Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogShake log -> pretty log
+    LogShake msg -> pretty msg
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder pId = (defaultPluginDescriptor pId "Provides code actions to convert numeric literals to different formats")
