@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name:          hls-stan-plugin
-version:       2.5.0.0
+version:       2.6.0.0
 synopsis:      Stan integration plugin with Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -77,7 +77,7 @@ test-suite test
     , filepath
     , hls-stan-plugin
     , hls-plugin-api
-    , hls-test-utils      == 2.5.0.0
+    , hls-test-utils      == 2.6.0.0
     , lens
     , lsp-types
     , text

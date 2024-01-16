@@ -75,9 +75,7 @@ jobs:
       - name: Build `ghcide` with flags
         run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe ekg"
 
-      # wingman fails with flags on 9.0, so this can be removed when that's gone
-      - if: matrix.ghc != '9.0'
-        name: Build with pedantic (-WError)
+      - name: Build with pedantic (-WError)
         run: cabal v2-build --flags="pedantic"
 
   flags_post_job:
