@@ -21,7 +21,11 @@ source-repository head
     type:     git
     location: https://github.com/haskell/haskell-language-server.git
 
+common warnings
+    ghc-options: -Wall -Wunused-packages
+
 library
+  import: warnings
   -- Plugins that need exactprint have not been updated for 9.8 yet
   if impl(ghc >= 9.8)
     buildable: False
@@ -66,7 +70,6 @@ library
     ViewPatterns
   hs-source-dirs:   src
   build-depends:
-    , aeson
     , base                  >=4.12 && <5
     , ghc
     , bytestring
@@ -94,10 +97,11 @@ library
     -- FIXME: Only needed to workaround for qualified imports in GHC 9.4
     , regex-applicative
     , parser-combinators
-  ghc-options: -Wall -Wno-name-shadowing
+  ghc-options: -Wno-name-shadowing
   default-language: Haskell2010
 
 test-suite tests
+  import: warnings
   if impl(ghc >= 9.8)
     buildable: False
   else
@@ -116,25 +120,17 @@ test-suite tests
     , lens
     , lsp-types
     , text
-    , aeson
     , hls-plugin-api
     , parser-combinators
     , data-default
     , extra
-    , text-rope
-    , containers
-    -- ghc is included to enable the MIN_VERSION_ghc macro
-    , ghc
     , ghcide
     , ghcide-test-utils
     , shake
     , hls-plugin-api
     , lsp-test
-    , network-uri
     , directory
-    , async
     , regex-tdfa
-    , tasty-rerun
     , tasty-hunit
     , tasty-expected-failure
     , tasty
