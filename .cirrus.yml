@@ -21,15 +21,18 @@ build_task:
     GITHUB_WORKSPACE: ${CIRRUS_WORKING_DIR}
     CABAL_CACHE_NONFATAL: "yes"
   matrix:
-    - name: build-ghc-9.0.2
+    - name: build-ghc-9.2.8
       env:
-        GHC_VERSION: 9.0.2
-    - name: build-ghc-9.2.5
+        GHC_VERSION: 9.2.8
+    - name: build-ghc-9.4.8
       env:
-        GHC_VERSION: 9.2.5
-    - name: build-ghc-9.2.7
+        GHC_VERSION: 9.4.8
+    - name: build-ghc-9.6.4
       env:
-        GHC_VERSION: 9.2.7
+        GHC_VERSION: 9.6.4
+    - name: build-ghc-9.8.1
+      env:
+        GHC_VERSION: 9.8.1
   install_script: pkg install -y hs-cabal-install git bash misc/compat10x misc/compat11x misc/compat12x gmake patchelf tree gmp libiconv
   script:
     - tzsetup Etc/GMT
@@ -43,9 +46,10 @@ build_task:
 bindist_task:
   name: bindist
   depends_on:
-    - build-ghc-9.0.2
-    - build-ghc-9.2.5
-    - build-ghc-9.2.7
+    - build-ghc-9.2.8
+    - build-ghc-9.4.8
+    - build-ghc-9.6.4
+    - build-ghc-9.8.1
   timeout_in: 120m
   only_if: $CIRRUS_TAG != ''
   env:
@@ -60,17 +64,21 @@ bindist_task:
     - tzsetup Etc/GMT
     - adjkerntz -a
 
-    - curl -o binaries-9.0.2.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.0.2/binaries/out.tar.xz
-    - tar xvf binaries-9.0.2.tar.xz
-    - rm -f binaries-9.0.2.tar.xz
+    - curl -o binaries-9.2.8.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.2.8/binaries/out.tar.xz
+    - tar xvf binaries-9.2.8.tar.xz
+    - rm -f binaries-9.2.8.tar.xz
 
-    - curl -o binaries-9.2.5.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.2.5/binaries/out.tar.xz
-    - tar xvf binaries-9.2.5.tar.xz
-    - rm -f binaries-9.2.5.tar.xz
+    - curl -o binaries-9.4.8.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.4.8/binaries/out.tar.xz
+    - tar xvf binaries-9.4.8.tar.xz
+    - rm -f binaries-9.4.8.tar.xz
 
-    - curl -o binaries-9.2.7.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.2.7/binaries/out.tar.xz
-    - tar xvf binaries-9.2.7.tar.xz
-    - rm -f binaries-9.2.7.tar.xz
+    - curl -o binaries-9.6.4.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.6.4/binaries/out.tar.xz
+    - tar xvf binaries-9.6.4.tar.xz
+    - rm -f binaries-9.6.4.tar.xz
+
+    - curl -o binaries-9.8.1.tar.xz -L https://api.cirrus-ci.com/v1/artifact/build/${CIRRUS_BUILD_ID}/build-ghc-9.8.1/binaries/out.tar.xz
+    - tar xvf binaries-9.8.1.tar.xz
+    - rm -f binaries-9.8.1.tar.xz
 
     - bash .github/scripts/bindist.sh
   bindist_artifacts:

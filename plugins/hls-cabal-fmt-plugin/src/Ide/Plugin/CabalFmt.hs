@@ -39,7 +39,7 @@ instance Pretty Log where
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-  (defaultCabalPluginDescriptor plId)
+  (defaultCabalPluginDescriptor plId "Provides formatting of cabal files with cabal-fmt")
     { pluginHandlers = mkFormattingHandlers (provider recorder)
     }
 

@@ -238,14 +238,14 @@ type instance RuleResult GetHieAst = HieAstResult
 -- | A IntervalMap telling us what is in scope at each point
 type instance RuleResult GetBindings = Bindings
 
-data DocAndKindMap = DKMap {getDocMap :: !DocMap, getKindMap :: !KindMap}
-instance NFData DocAndKindMap where
+data DocAndTyThingMap = DKMap {getDocMap :: !DocMap, getTyThingMap :: !TyThingMap}
+instance NFData DocAndTyThingMap where
     rnf (DKMap a b) = rwhnf a `seq` rwhnf b
 
-instance Show DocAndKindMap where
+instance Show DocAndTyThingMap where
     show = const "docmap"
 
-type instance RuleResult GetDocMap = DocAndKindMap
+type instance RuleResult GetDocMap = DocAndTyThingMap
 
 -- | A GHC session that we reuse.
 type instance RuleResult GhcSession = HscEnvEq

@@ -17,7 +17,7 @@ import           GHC.Generics
 type KnownTargets = HashMap Target (HashSet NormalizedFilePath)
 
 data Target = TargetModule ModuleName | TargetFile NormalizedFilePath
-  deriving ( Eq, Generic, Show )
+  deriving ( Eq, Ord, Generic, Show )
   deriving anyclass (Hashable, NFData)
 
 toKnownFiles :: KnownTargets -> HashSet NormalizedFilePath

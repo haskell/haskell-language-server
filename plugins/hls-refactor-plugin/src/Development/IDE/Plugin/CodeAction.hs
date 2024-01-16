@@ -76,6 +76,15 @@ import qualified Text.Regex.Applicative                            as RE
 #if MIN_VERSION_ghc(9,4,0)
 import           GHC.Parser.Annotation                             (TokenLocation (..))
 #endif
+import           GHC                                               (AddEpAnn (AddEpAnn),
+                                                                    Anchor (anchor_op),
+                                                                    AnchorOperation (..),
+                                                                    AnnsModule (am_main),
+                                                                    DeltaPos (..),
+                                                                    EpAnn (..),
+                                                                    EpaLocation (..),
+                                                                    LEpaComment,
+                                                                    hsmodAnn)
 import           Ide.PluginUtils                                   (extractTextInRange,
                                                                     subRange)
 import           Ide.Types
@@ -102,23 +111,6 @@ import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import qualified Text.Fuzzy.Parallel                               as TFP
 import           Text.Regex.TDFA                                   ((=~), (=~~))
-#if MIN_VERSION_ghc(9,2,0)
-import           GHC                                               (AddEpAnn (AddEpAnn),
-                                                                    Anchor (anchor_op),
-                                                                    AnchorOperation (..),
-                                                                    AnnsModule (am_main),
-                                                                    DeltaPos (..),
-                                                                    EpAnn (..),
-                                                                    EpaLocation (..),
-                                                                    LEpaComment,
-                                                                    hsmodAnn)
-#else
-import           Language.Haskell.GHC.ExactPrint.Types             (Annotation (annsDP),
-                                                                    DeltaPos,
-                                                                    KeywordId (G),
-                                                                    deltaRow,
-                                                                    mkAnnKey)
-#endif
 
 -------------------------------------------------------------------------------------------------
 
@@ -153,6 +145,7 @@ iePluginDescriptor recorder plId =
           , wrap suggestAddRecordFieldImport
           ]
           plId
+          "Provides various quick fixes"
    in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler SMethod_TextDocumentCodeAction codeAction }
 
 typeSigsPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
@@ -165,6 +158,7 @@ typeSigsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestConstraint
     ]
     plId
+    "Provides various quick fixes for type signatures"
 
 bindingsPluginDescriptor :: Recorder (WithPriority E.Log) ->  PluginId -> PluginDescriptor IdeState
 bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
@@ -176,12 +170,13 @@ bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestDeleteUnusedBinding
     ]
     plId
+    "Provides various quick fixes for bindings"
 
 fillHolePluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-fillHolePluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder (mkGhcideCAPlugin (wrap suggestFillHole) plId)
+fillHolePluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder (mkGhcideCAPlugin (wrap suggestFillHole) plId "Provides a code action to fill a hole")
 
 extendImportPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-extendImportPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor plId)
+extendImportPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor plId "Provides a command to extend the import list")
   { pluginCommands = [extendImportCommand] }
 
 
@@ -235,9 +230,6 @@ extendImportHandler' ideState ExtendImport {..}
         Just imp -> do
             fmap (nfp,) $ liftEither $
               rewriteToWEdit df doc
-#if !MIN_VERSION_ghc(9,2,0)
-                (annsA ps)
-#endif
                 $
                   extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
 
@@ -308,16 +300,6 @@ findSigOfBind range bind =
     findSigOfLMatch ls = do
       match <- findDeclContainingLoc (_start range) ls
       let grhs = m_grhss $ unLoc match
-#if !MIN_VERSION_ghc(9,2,0)
-          span = getLoc $ reLoc $ grhssLocalBinds grhs
-      if _start range `isInsideSrcSpan` span
-        then findSigOfBinds range (unLoc (grhssLocalBinds grhs)) -- where clause
-        else do
-          grhs <- findDeclContainingLoc (_start range) (map reLocA $ grhssGRHSs grhs)
-          case unLoc grhs of
-            GRHS _ _ bd -> findSigOfExpr (unLoc bd)
-            _           -> Nothing
-#else
       msum
         [findSigOfBinds range (grhssLocalBinds grhs) -- where clause
         , do
@@ -329,7 +311,6 @@ findSigOfBind range bind =
           case unLoc grhs of
             GRHS _ _ bd -> findSigOfExpr (unLoc bd)
         ]
-#endif
 
     findSigOfExpr :: HsExpr p -> Maybe (Sig p)
     findSigOfExpr = go
@@ -360,23 +341,12 @@ findSigOfBinds range = go
 findInstanceHead :: (Outputable (HsType p), p ~ GhcPass p0) => DynFlags -> String -> [LHsDecl p] -> Maybe (LHsType p)
 findInstanceHead df instanceHead decls =
   listToMaybe
-#if !MIN_VERSION_ghc(9,2,0)
-    [ hsib_body
-      | L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = HsIB {hsib_body}})) <- decls,
-        showSDoc df (ppr hsib_body) == instanceHead
-    ]
-#else
     [ hsib_body
       | L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig {sig_body = hsib_body})})) <- decls,
         showSDoc df (ppr hsib_body) == instanceHead
     ]
-#endif
 
-#if MIN_VERSION_ghc(9,2,0)
 findDeclContainingLoc :: Foldable t => Position -> t (GenLocated (SrcSpanAnn' a) e) -> Maybe (GenLocated (SrcSpanAnn' a) e)
-#else
-findDeclContainingLoc :: Foldable t => Position -> t (GenLocated SrcSpan e) -> Maybe (GenLocated SrcSpan e)
-#endif
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 
 -- Single:
@@ -668,15 +638,9 @@ suggestDeleteUnusedBinding
                 if isEmptyBag bag
                 then []
                 else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
-#if !MIN_VERSION_ghc(9,2,0)
-        case grhssLocalBinds of
-          (L _ (HsValBinds _ (ValBinds _ bag lsigs))) -> go bag lsigs
-          _                                           -> []
-#else
         case grhssLocalBinds of
           (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
           _                                     -> []
-#endif
       findRelatedSpanForMatch _ _ _ = []
 
       findRelatedSpanForHsBind
@@ -1283,11 +1247,7 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         --       (Pair x x') == (Pair y y') = x == y && x' == y'
         | Just [instanceLineStr, constraintFirstCharStr]
             <- matchRegexUnifySpaces _message "bound by the instance declaration at .+:([0-9]+):([0-9]+)"
-#if !MIN_VERSION_ghc(9,2,0)
-        , Just (L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = HsIB{hsib_body}})))
-#else
         , Just (L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig{sig_body = hsib_body})})))
-#endif
             <- findDeclContainingLoc (Position (readPositionNumber instanceLineStr) (readPositionNumber constraintFirstCharStr)) hsmodDecls
         = Just hsib_body
         | otherwise
@@ -1307,11 +1267,7 @@ suggestImplicitParameter ::
 suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _range}
   | Just [implicitT] <- matchRegexUnifySpaces _message "Unbound implicit parameter \\(([^:]+::.+)\\) arising",
     Just (L _ (ValD _ FunBind {fun_id = L _ funId})) <- findDeclContainingLoc (_start _range) hsmodDecls,
-#if !MIN_VERSION_ghc(9,2,0)
-    Just (TypeSig _ _ HsWC {hswc_body = HsIB {hsib_body}})
-#else
     Just (TypeSig _ _ HsWC {hswc_body = (unLoc -> HsSig {sig_body = hsib_body})})
-#endif
       <- findSigOfDecl (== funId) hsmodDecls
     =
       [( "Add " <> implicitT <> " to the context of " <> T.pack (printRdrName funId)
@@ -1347,11 +1303,7 @@ suggestFunctionConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
 --   In an equation for ‘eq’:
 --       eq (Pair x y) (Pair x' y') = x == x' && y == y'
   | Just typeSignatureName <- findTypeSignatureName _message
-#if !MIN_VERSION_ghc(9,2,0)
-  , Just (TypeSig _ _ HsWC{hswc_body = HsIB {hsib_body = sig}})
-#else
   , Just (TypeSig _ _ HsWC{hswc_body = (unLoc -> HsSig {sig_body = sig})})
-#endif
     <- findSigOfDecl ((T.unpack typeSignatureName ==) . showSDoc df . ppr) hsmodDecls
   , title <- actionTitle missingConstraint typeSignatureName
   = [(title, appendConstraint (T.unpack missingConstraint) sig)]
@@ -1374,11 +1326,7 @@ removeRedundantConstraints df (makeDeltaAst -> L _ HsModule {hsmodDecls}) Diagno
   -- Account for both "Redundant constraint" and "Redundant constraints".
   | "Redundant constraint" `T.isInfixOf` _message
   , Just typeSignatureName <- findTypeSignatureName _message
-#if !MIN_VERSION_ghc(9,2,0)
-  , Just (TypeSig _ _ HsWC{hswc_body = HsIB {hsib_body = sig}})
-#else
   , Just (TypeSig _ _ HsWC{hswc_body = (unLoc -> HsSig {sig_body = sig})})
-#endif
     <- fmap(traceAst "redundantConstraint") $ findSigOfDeclRanged _range hsmodDecls
   , Just redundantConstraintList <- findRedundantConstraints _message
   , rewrite <- removeConstraint (toRemove df redundantConstraintList) sig
@@ -1683,7 +1631,6 @@ findPositionAfterModuleName ps hsmodName' = do
     -- The relative position of 'where' keyword (in lines, relative to the previous AST node).
     -- The exact-print API changed a lot in ghc-9.2, so we need to handle it separately for different compiler versions.
     whereKeywordLineOffset :: Maybe Int
-#if MIN_VERSION_ghc(9,2,0)
 #if MIN_VERSION_ghc(9,5,0)
     whereKeywordLineOffset = case hsmodAnn hsmodExt of
 #else
@@ -1718,17 +1665,6 @@ findPositionAfterModuleName ps hsmodName' = do
     anchorOpLine UnchangedAnchor                      = 0
     anchorOpLine (MovedAnchor (SameLine _))           = 0
     anchorOpLine (MovedAnchor (DifferentLine line _)) = line
-#else
-    whereKeywordLineOffset = do
-        ann <- annsA ps M.!? mkAnnKey (astA ps)
-        deltaPos <- fmap NE.head . NE.nonEmpty .mapMaybe filterWhere $ annsDP ann
-        pure $ deltaRow deltaPos
-
-    -- Before ghc 9.2, DeltaPos doesn't take comment into account, so we don't need to sum line offset of comments.
-    filterWhere :: (KeywordId, DeltaPos) -> Maybe DeltaPos
-    filterWhere (keywordId, deltaPos) =
-        if keywordId == G AnnWhere then Just deltaPos else Nothing
-#endif
 
 findPositionFromImports :: HasSrcSpan a => t -> (t -> a) -> Maybe ((Int, Int), Int)
 findPositionFromImports hsField f = case getLoc (f hsField) of
@@ -1977,47 +1913,25 @@ smallerRangesForBindingExport lies b =
   where
     unqualify = snd . breakOnEnd "."
     b' = wrapOperatorInParens . unqualify $ b
-#if !MIN_VERSION_ghc(9,2,0)
-    ranges' (L _ (IEThingWith _ thing _  inners labels))
-      | T.unpack (printOutputable thing) == b' = []
-      | otherwise =
-          [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
-          ++ [ l' | L l' x <- labels, T.unpack (printOutputable x) == b']
-#else
     ranges' (L _ (IEThingWith _ thing _  inners))
       | T.unpack (printOutputable thing) == b' = []
       | otherwise =
           [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
-#endif
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
-#if !MIN_VERSION_ghc(9,2,0)
-rangesForBinding' b (L (locA -> l) (IEVar _ nm))
-  | L _ (IEPattern (L _ b')) <- nm
-  , T.unpack (printOutputable b') == b
-  = [l]
-#else
 rangesForBinding' b (L (locA -> l) (IEVar _ nm))
   | L _ (IEPattern _ (L _ b')) <- nm
   , T.unpack (printOutputable b') == b
   = [l]
-#endif
 rangesForBinding' b (L (locA -> l) x@IEVar{})
   | T.unpack (printOutputable x) == b = [l]
 rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | T.unpack (printOutputable x) == b = [l]
 rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | T.unpack (printOutputable x) == b = [l]
-#if !MIN_VERSION_ghc(9,2,0)
-rangesForBinding' b (L l (IEThingWith _ thing _  inners labels))
-#else
 rangesForBinding' b (L (locA -> l) (IEThingWith _ thing _  inners))
-#endif
     | T.unpack (printOutputable thing) == b = [l]
     | otherwise =
         [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b]
-#if !MIN_VERSION_ghc(9,2,0)
-        ++ [ l' | L l' x <- labels, T.unpack (printOutputable x) == b]
-#endif
 rangesForBinding' _ _ = []
 
 -- | 'allMatchRegex' combined with 'unifySpaces'

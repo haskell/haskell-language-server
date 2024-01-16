@@ -39,15 +39,13 @@ mkDocMap
   :: HscEnv
   -> RefMap a
   -> TcGblEnv
-  -> IO DocAndKindMap
+  -> IO DocAndTyThingMap
 mkDocMap env rm this_mod =
   do
 #if MIN_VERSION_ghc(9,3,0)
      (Just Docs{docs_decls = UniqMap this_docs}) <- extractDocs (hsc_dflags env) this_mod
-#elif MIN_VERSION_ghc(9,2,0)
-     (_ , DeclDocMap this_docs, _) <- extractDocs this_mod
 #else
-     let (_ , DeclDocMap this_docs, _) = extractDocs this_mod
+     (_ , DeclDocMap this_docs, _) <- extractDocs this_mod
 #endif
 #if MIN_VERSION_ghc(9,3,0)
      d <- foldrM getDocs (fmap (\(_, x) -> (map hsDocString x) `SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
@@ -63,8 +61,7 @@ mkDocMap env rm this_mod =
       doc <- getDocumentationTryGhc env n
       pure $ extendNameEnv nameMap n doc
     getType n nameMap
-      | isTcOcc $ occName n
-      , Nothing <- lookupNameEnv nameMap n
+      | Nothing <- lookupNameEnv nameMap n
       = do kind <- lookupKind env n
            pure $ maybe nameMap (extendNameEnv nameMap n) kind
       | otherwise = pure nameMap
@@ -121,75 +118,7 @@ getDocumentation
  => [ParsedModule] -- ^ All of the possible modules it could be defined in.
  ->  name -- ^ The name you want documentation for.
  -> [T.Text]
-#if MIN_VERSION_ghc(9,2,0)
 getDocumentation _sources _targetName = []
-#else
--- This finds any documentation between the name you want
--- documentation for and the one before it. This is only an
--- approximately correct algorithm and there are easily constructed
--- cases where it will be wrong (if so then usually slightly but there
--- may be edge cases where it is very wrong).
--- TODO : Build a version of GHC exactprint to extract this information
--- more accurately.
--- TODO : Implement this for GHC 9.2 with in-tree annotations
---        (alternatively, just remove it and rely solely on GHC's parsing)
-getDocumentation sources targetName = fromMaybe [] $ do
-    -- Find the module the target is defined in.
-  targetNameSpan <- realSpan $ getLoc targetName
-  tc <-
-    find ((==) (Just $ srcSpanFile targetNameSpan) . annotationFileName)
-      $ reverse sources -- TODO : Is reversing the list here really necessary?
-
-  -- Top level names bound by the module
-  let bs = [ n | let L _ HsModule{hsmodDecls} = pm_parsed_source tc
-           , L _ (ValD _ hsbind) <- hsmodDecls
-           , Just n <- [name_of_bind hsbind]
-           ]
-  -- Sort the names' source spans.
-  let sortedSpans = sortedNameSpans bs
-  -- Now go ahead and extract the docs.
-  let docs = ann tc
-  nameInd <- elemIndex targetNameSpan sortedSpans
-  let prevNameSpan =
-        if nameInd >= 1
-        then sortedSpans !! (nameInd - 1)
-        else zeroSpan $ srcSpanFile targetNameSpan
-  -- Annoyingly "-- |" documentation isn't annotated with a location,
-  -- so you have to pull it out from the elements.
-  pure
-      $ docHeaders
-      $ filter (\(L target _) -> isBetween target prevNameSpan targetNameSpan)
-      $ fold
-      docs
-  where
-    -- Get the name bound by a binding. We only concern ourselves with
-    -- @FunBind@ (which covers functions and variables).
-    name_of_bind :: HsBind GhcPs -> Maybe (Located RdrName)
-    name_of_bind FunBind {fun_id} = Just fun_id
-    name_of_bind _                = Nothing
-    -- Get source spans from names, discard unhelpful spans, remove
-    -- duplicates and sort.
-    sortedNameSpans :: [Located RdrName] -> [RealSrcSpan]
-    sortedNameSpans ls = nubSort (mapMaybe (realSpan . getLoc) ls)
-    isBetween target before after = before <= target && target <= after
-    ann = apiAnnComments . pm_annotations
-    annotationFileName :: ParsedModule -> Maybe FastString
-    annotationFileName = fmap srcSpanFile . listToMaybe . map getRealSrcSpan . fold . ann
-
--- | Shows this part of the documentation
-docHeaders :: [RealLocated AnnotationComment]
-           -> [T.Text]
-docHeaders = mapMaybe (\(L _ x) -> wrk x)
-  where
-  wrk = \case
-    -- When `Opt_Haddock` is enabled.
-    AnnDocCommentNext s -> Just $ T.pack s
-    -- When `Opt_KeepRawTokenStream` enabled.
-    AnnLineComment s  -> if "-- |" `isPrefixOf` s
-                            then Just $ T.pack s
-                            else Nothing
-    _ -> Nothing
-#endif
 
 -- These are taken from haskell-ide-engine's Haddock plugin
 

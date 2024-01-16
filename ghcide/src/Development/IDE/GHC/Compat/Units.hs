@@ -5,9 +5,7 @@
 module Development.IDE.GHC.Compat.Units (
     -- * UnitState
     UnitState,
-#if MIN_VERSION_ghc(9,3,0)
     initUnits,
-#endif
     oldInitUnits,
     unitState,
     getUnitName,
@@ -61,6 +59,7 @@ import           Prelude                               hiding (mod)
 import           GHC.Types.Unique.Set
 import qualified GHC.Unit.Info                         as UnitInfo
 import           GHC.Unit.State                        (LookupResult, UnitInfo,
+                                                        UnitInfoMap,
                                                         UnitState (unitInfoMap),
                                                         lookupUnit', mkUnit,
                                                         unitDepends,
@@ -71,25 +70,17 @@ import qualified GHC.Unit.State                        as State
 import           GHC.Unit.Types
 import qualified GHC.Unit.Types                        as Unit
 
-#if !MIN_VERSION_ghc(9,2,0)
-import           Data.Map                              (Map)
-import qualified GHC.Driver.Finder                     as GHC
-import qualified GHC.Driver.Session                    as DynFlags
-import           GHC.Driver.Types
-#endif
 
 #if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Data.FastString
 
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Data.ShortText                    as ST
 import           GHC.Unit.External
 import qualified GHC.Unit.Finder                       as GHC
-#endif
 
-#if MIN_VERSION_ghc(9,2,0) && !MIN_VERSION_ghc(9,3,0)
+#if !MIN_VERSION_ghc(9,3,0)
 import           GHC.Unit.Env
 import           GHC.Unit.Finder                       hiding
                                                        (findImportedModule)
@@ -107,18 +98,9 @@ import           GHC.Unit.Home.ModInfo
 
 
 type PreloadUnitClosure = UniqSet UnitId
-#if MIN_VERSION_ghc(9,2,0)
-type UnitInfoMap = State.UnitInfoMap
-#else
-type UnitInfoMap = Map UnitId UnitInfo
-#endif
 
 unitState :: HscEnv -> UnitState
-#if MIN_VERSION_ghc(9,2,0)
 unitState = ue_units . hsc_unit_env
-#else
-unitState = DynFlags.unitState . hsc_dflags
-#endif
 
 #if MIN_VERSION_ghc(9,3,0)
 createUnitEnvFromFlags :: NE.NonEmpty DynFlags -> HomeUnitGraph
@@ -160,19 +142,17 @@ initUnits unitDflags env = do
         , ue_eps             = ue_eps (hsc_unit_env env)
         }
   pure $ hscSetFlags dflags1 $ hscSetUnitEnv unit_env env
+#else
+initUnits :: [DynFlags] -> HscEnv -> IO HscEnv
+initUnits _df env = pure env -- Can't do anything here, oldInitUnits should already be called
 #endif
+
 
 -- | oldInitUnits only needs to modify DynFlags for GHC <9.2
 -- For GHC >= 9.2, we need to set the hsc_unit_env also, that is
 -- done later by initUnits
 oldInitUnits :: DynFlags -> IO DynFlags
-#if MIN_VERSION_ghc(9,2,0)
 oldInitUnits = pure
-#else
-oldInitUnits dflags = do
-  newFlags <- State.initUnits dflags
-  pure newFlags
-#endif
 
 explicitUnits :: UnitState -> [Unit]
 explicitUnits ue =
@@ -204,11 +184,7 @@ lookupModuleWithSuggestions env modname mpkg =
 
 getUnitInfoMap :: HscEnv -> UnitInfoMap
 getUnitInfoMap =
-#if MIN_VERSION_ghc(9,2,0)
   unitInfoMap . ue_units . hsc_unit_env
-#else
-  unitInfoMap . unitState
-#endif
 
 lookupUnit :: HscEnv -> Unit -> Maybe UnitInfo
 lookupUnit env pid = State.lookupUnit (unitState env) pid
@@ -218,11 +194,7 @@ preloadClosureUs = State.preloadClosure . unitState
 
 unitHaddockInterfaces :: UnitInfo -> [FilePath]
 unitHaddockInterfaces =
-#if MIN_VERSION_ghc(9,2,0)
   fmap ST.unpack . UnitInfo.unitHaddockInterfaces
-#else
-  UnitInfo.unitHaddockInterfaces
-#endif
 
 -- ------------------------------------------------------------------
 -- Backwards Compatible UnitState
@@ -232,7 +204,6 @@ unitHaddockInterfaces =
 -- Patterns and helpful definitions
 -- ------------------------------------------------------------------
 
-#if MIN_VERSION_ghc(9,2,0)
 definiteUnitId :: Definite uid -> GenUnit uid
 definiteUnitId         = RealUnit
 defUnitId :: unit -> Definite unit
@@ -240,12 +211,6 @@ defUnitId              = Definite
 installedModule :: unit -> ModuleName -> GenModule unit
 installedModule        = Module
 
-#else
-definiteUnitId         = RealUnit
-defUnitId              = Definite
-installedModule        = Module
-
-#endif
 
 moduleUnitId :: Module -> UnitId
 moduleUnitId =
@@ -263,11 +228,7 @@ filterInplaceUnits us packageFlags =
     isInplace p = Right p
 
 showSDocForUser' :: HscEnv -> PrintUnqualified -> SDoc -> String
-#if MIN_VERSION_ghc(9,2,0)
 showSDocForUser' env = showSDocForUser (hsc_dflags env) (unitState env)
-#else
-showSDocForUser' env = showSDocForUser (hsc_dflags env)
-#endif
 
 findImportedModule :: HscEnv -> ModuleName -> IO (Maybe Module)
 findImportedModule env mn = do

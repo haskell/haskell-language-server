@@ -50,6 +50,10 @@ import qualified Ide.Plugin.Retrie                 as Retrie
 import qualified Ide.Plugin.Hlint                  as Hlint
 #endif
 
+#if hls_stan
+import qualified Ide.Plugin.Stan                   as Stan
+#endif
+
 #if hls_moduleName
 import qualified Ide.Plugin.ModuleName             as ModuleName
 #endif
@@ -116,6 +120,11 @@ import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 import qualified Development.IDE.Plugin.CodeAction as Refactor
 #endif
 
+#if hls_semanticTokens
+import qualified Ide.Plugin.SemanticTokens         as SemanticTokens
+#endif
+
+
 data Log = forall a. (Pretty a) => Log PluginId a
 
 instance Pretty Log where
@@ -168,6 +177,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #if hls_callHierarchy
       CallHierarchy.descriptor "callHierarchy" :
 #endif
+#if hls_semanticTokens
+      let pId = "semanticTokens" in SemanticTokens.descriptor (pluginRecorder pId) pId:
+#endif
 #if hls_class
       let pId = "class" in Class.descriptor (pluginRecorder pId) pId:
 #endif
@@ -185,6 +197,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_hlint
       let pId = "hlint" in Hlint.descriptor (pluginRecorder pId) pId:
+#endif
+#if hls_stan
+      let pId = "stan" in Stan.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_splice
       Splice.descriptor "splice" :

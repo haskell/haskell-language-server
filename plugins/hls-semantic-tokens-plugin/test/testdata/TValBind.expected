@@ -1,0 +1,4 @@
+4:1-6 TVariable "hello"
+4:10-13 TTypeConstructor "Int"
+5:1-6 TVariable "hello"
+5:9-15 TClassMethod "length"

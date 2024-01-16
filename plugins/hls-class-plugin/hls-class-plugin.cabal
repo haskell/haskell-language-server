@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-class-plugin
-version:            2.4.0.0
+version:            2.6.0.0
 synopsis:
   Class/instance management plugin for Haskell Language Server
 
@@ -44,20 +44,16 @@ library
     , deepseq
     , extra
     , ghc
-    , ghcide          == 2.4.0.0
+    , ghc-exactprint  >= 1.5
+    , ghcide          == 2.6.0.0
     , ghc-boot-th
     , hls-graph
-    , hls-plugin-api  == 2.4.0.0
+    , hls-plugin-api  == 2.6.0.0
     , lens
     , lsp
     , mtl
     , text
     , transformers
-
-  if impl(ghc >=9.2.1)
-    build-depends: ghc-exactprint >= 1.5
-  else
-    build-depends: ghc-exactprint >= 0.6.4 && <1.1
 
   default-language:   Haskell2010
   default-extensions:
@@ -84,7 +80,7 @@ test-suite tests
     , ghcide
     , hls-class-plugin
     , hls-plugin-api
-    , hls-test-utils     == 2.4.0.0
+    , hls-test-utils     == 2.6.0.0
     , lens
     , lsp-types
     , row-types

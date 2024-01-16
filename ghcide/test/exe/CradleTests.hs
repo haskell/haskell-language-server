@@ -40,8 +40,12 @@ tests = testGroup "cradle"
     [testGroup "dependencies" [sessionDepsArePickedUp]
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
-    ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2, simpleMultiTest3, simpleMultiDefTest]
+    ,testGroup "multi"   (multiTests "multi")
+    ,ignoreFor (BrokenForGHC [GHC92]) "multiple units not supported on 9.2"
+       $ testGroup "multi-unit" (multiTests "multi-unit")
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
+    ,ignoreFor (BrokenForGHC [GHC92]) "multiple units not supported on 9.2"
+      $ testGroup "multi-unit-rexport" [multiRexportTest]
     ]
 
 loadCradleOnlyonce :: TestTree
@@ -113,8 +117,15 @@ simpleSubDirectoryTest =
       ]
     expectNoMoreDiagnostics 0.5
 
-simpleMultiTest :: TestTree
-simpleMultiTest = testCase "simple-multi-test" $ withLongTimeout $ runWithExtraFiles "multi" $ \dir -> do
+multiTests :: FilePath -> [TestTree]
+multiTests dir =
+  [simpleMultiTest dir, simpleMultiTest2 dir, simpleMultiTest3 dir, simpleMultiDefTest dir]
+
+multiTestName :: FilePath -> String -> String
+multiTestName dir name = "simple-" ++ dir ++ "-" ++ name
+
+simpleMultiTest :: FilePath -> TestTree
+simpleMultiTest variant = testCase (multiTestName variant "test") $ withLongTimeout $ runWithExtraFiles variant $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- openDoc aPath "haskell"
@@ -129,8 +140,8 @@ simpleMultiTest = testCase "simple-multi-test" $ withLongTimeout $ runWithExtraF
     expectNoMoreDiagnostics 0.5
 
 -- Like simpleMultiTest but open the files in the other order
-simpleMultiTest2 :: TestTree
-simpleMultiTest2 = testCase "simple-multi-test2" $ runWithExtraFiles "multi" $ \dir -> do
+simpleMultiTest2 :: FilePath -> TestTree
+simpleMultiTest2 variant = testCase (multiTestName variant "test2") $ runWithExtraFiles variant $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     bdoc <- openDoc bPath "haskell"
@@ -143,9 +154,9 @@ simpleMultiTest2 = testCase "simple-multi-test2" $ runWithExtraFiles "multi" $ \
     expectNoMoreDiagnostics 0.5
 
 -- Now with 3 components
-simpleMultiTest3 :: TestTree
-simpleMultiTest3 =
-  testCase "simple-multi-test3" $ runWithExtraFiles "multi" $ \dir -> do
+simpleMultiTest3 :: FilePath -> TestTree
+simpleMultiTest3 variant =
+  testCase (multiTestName variant "test3") $ runWithExtraFiles variant $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
         cPath = dir </> "c/C.hs"
@@ -161,8 +172,8 @@ simpleMultiTest3 =
     expectNoMoreDiagnostics 0.5
 
 -- Like simpleMultiTest but open the files in component 'a' in a separate session
-simpleMultiDefTest :: TestTree
-simpleMultiDefTest = testCase "simple-multi-def-test" $ runWithExtraFiles "multi" $ \dir -> do
+simpleMultiDefTest :: FilePath -> TestTree
+simpleMultiDefTest variant = testCase (multiTestName variant "def-test") $ runWithExtraFiles variant $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- liftIO $ runInDir dir $ do
@@ -178,6 +189,17 @@ simpleMultiDefTest = testCase "simple-multi-def-test" $ runWithExtraFiles "multi
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
 
+multiRexportTest :: TestTree
+multiRexportTest =
+  testCase "multi-unit-reexport-test"  $ runWithExtraFiles "multi-unit-reexport" $ \dir -> do
+    let cPath = dir </> "c/C.hs"
+    cdoc <- openDoc cPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" cdoc
+    locs <- getDefinitions cdoc (Position 3 7)
+    let aPath = dir </> "a/A.hs"
+    let fooL = mkL (filePathToUri aPath) 2 0 2 3
+    checkDefs locs (pure [fooL])
+    expectNoMoreDiagnostics 0.5
 
 sessionDepsArePickedUp :: TestTree
 sessionDepsArePickedUp = testSession'

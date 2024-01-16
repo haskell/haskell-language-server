@@ -43,7 +43,6 @@ import           Language.LSP.Protocol.Types              hiding
 import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
-import           System.Info.Extra                        (isMac, isWindows)
 import qualified System.IO.Extra
 import           System.IO.Extra                          hiding (withTempDir)
 import           System.Time.Extra
@@ -177,6 +176,25 @@ completionTests =
             "join"
             ["{-# LANGUAGE NoImplicitPrelude #-}",
             "module A where", "import Control.Monad as M ()", "import Control.Monad as N (join)", "f = N.joi"]
+        -- Regression test for https://github.com/haskell/haskell-language-server/issues/2824
+        , completionNoCommandTest
+            "explicit qualified"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import qualified Control.Monad as M (j)"]
+            (Position 2 38)
+            "join"
+        , completionNoCommandTest
+            "explicit qualified post"
+            ["{-# LANGUAGE NoImplicitPrelude, ImportQualifiedPost #-}",
+            "module A where", "import Control.Monad qualified as M (j)"]
+            (Position 2 38)
+            "join"
+        , completionNoCommandTest
+            "multiline import"
+            [ "{-# LANGUAGE NoImplicitPrelude #-}"
+            , "module A where", "import Control.Monad", "    (fore)"]
+            (Position 3 9)
+            "forever"
         ]
       , testGroup "Data constructor"
         [ completionCommandTest
@@ -289,11 +307,8 @@ completionNoCommandTest name src pos wanted = testSession name $ do
   docId <- createDoc "A.hs" "haskell" (T.unlines src)
   _ <- waitForDiagnostics
   compls <- getCompletions docId pos
-  let wantedC = find ( \case
-            CompletionItem {_insertText = Just x} -> wanted `T.isPrefixOf` x
-            _                                     -> False
-            ) compls
-  case wantedC of
+  let isPrefixOfInsertOrLabel ci = any (wanted `T.isPrefixOf`) [fromMaybe "" (ci ^. L.insertText), ci ^. L.label]
+  case find isPrefixOfInsertOrLabel compls of
     Nothing ->
       liftIO $ assertFailure $ "Cannot find expected completion in: " <> show [_label | CompletionItem {_label} <- compls]
     Just CompletionItem{..} -> liftIO . assertBool ("Expected no command but got: " <> show _command) $ null _command
@@ -325,9 +340,7 @@ codeActionTests = testGroup "code actions"
   , exportUnusedTests
   , addImplicitParamsConstraintTests
   , removeExportTests
-#if MIN_VERSION_ghc(9,2,1)
   , Test.AddArgument.tests
-#endif
   ]
 
 insertImportTests :: TestTree
@@ -1315,7 +1328,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
-        , ignoreForGHC94 "On GHC 9.4, the error messages with -fdefer-type-errors don't have necessary imported target srcspan info." $
+        , brokenForGHC94 "On GHC 9.4, the error messages with -fdefer-type-errors don't have necessary imported target srcspan info." $
           testSession "extend single line qualified import with value" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
@@ -1487,7 +1500,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
-        , ignoreFor (BrokenForGHC [GHC92, GHC94]) "Diagnostic message has no suggestions" $
+        , ignoreForGhcVersions [GHC92, GHC94] "Diagnostic message has no suggestions" $
           testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
@@ -1753,7 +1766,7 @@ suggestImportTests = testGroup "suggest import actions"
 suggestAddRecordFieldImportTests :: TestTree
 suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields when using OverloadedRecordDot"
   [ testGroup "The field is suggested when an instance resolution failure occurs"
-    [ ignoreFor (BrokenForGHC [GHC90, GHC94, GHC96]) "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
+    [ ignoreForGhcVersions [GHC90, GHC94, GHC96] "Extension not present <9.2, and the assist is derived from the help message in >=9.4" theTest
     ]
   ]
   where
@@ -2221,9 +2234,6 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
         ]
         ++ txtB')
   ]
-
-#if MIN_VERSION_ghc(9,2,1)
-#endif
 
 deleteUnusedDefinitionTests :: TestTree
 deleteUnusedDefinitionTests = testGroup "delete unused definition action"
@@ -3195,7 +3205,7 @@ exportUnusedTests = testGroup "export unused actions"
         (R 2 0 2 11)
         "Export ‘bar’"
         Nothing
-    , ignoreFor (BrokenForGHC [GHC92, GHC94]) "Diagnostic message has no suggestions" $
+    , ignoreForGhcVersions [GHC92, GHC94] "Diagnostic message has no suggestions" $
       testSession "type is exported but not the constructor of same name" $ template
         (T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
@@ -3845,45 +3855,10 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
   f dir'
 
 ignoreForGHC92 :: String -> TestTree -> TestTree
-ignoreForGHC92 = ignoreFor (BrokenForGHC [GHC92])
+ignoreForGHC92 = ignoreForGhcVersions [GHC92]
 
-ignoreForGHC94 :: String -> TestTree -> TestTree
-ignoreForGHC94 = knownIssueFor Broken (BrokenForGHC [GHC94])
-
-data BrokenTarget =
-    BrokenSpecific OS [GhcVersion]
-    -- ^Broken for `BrokenOS` with `GhcVersion`
-    | BrokenForOS OS
-    -- ^Broken for `BrokenOS`
-    | BrokenForGHC [GhcVersion]
-    -- ^Broken for `GhcVersion`
-    deriving (Show)
-
--- | Ignore test for specific os and ghc with reason.
-ignoreFor :: BrokenTarget -> String -> TestTree -> TestTree
-ignoreFor = knownIssueFor Ignore
-
--- | Deal with `IssueSolution` for specific OS and GHC.
-knownIssueFor :: IssueSolution -> BrokenTarget -> String -> TestTree -> TestTree
-knownIssueFor solution = go . \case
-    BrokenSpecific bos vers -> isTargetOS bos && isTargetGhc vers
-    BrokenForOS bos         -> isTargetOS bos
-    BrokenForGHC vers       -> isTargetGhc vers
-    where
-        isTargetOS = \case
-            Windows -> isWindows
-            MacOS   -> isMac
-            Linux   -> not isWindows && not isMac
-
-        isTargetGhc = elem ghcVersion
-
-        go True = case solution of
-            Broken -> expectFailBecause
-            Ignore -> ignoreTestBecause
-        go False = \_ -> id
-
-
-data IssueSolution = Broken | Ignore deriving (Show)
+brokenForGHC94 :: String -> TestTree -> TestTree
+brokenForGHC94 = knownBrokenForGhcVersions [GHC94]
 
 -- | Assert that a value is not 'Nothing', and extract the value.
 assertJust :: MonadIO m => String -> Maybe a -> m a

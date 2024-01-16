@@ -12,10 +12,8 @@
 
 module Ide.Plugin.Rename (descriptor, E.Log) where
 
-#if MIN_VERSION_ghc(9,2,1)
 import           GHC.Parser.Annotation                 (AnnContext, AnnList,
                                                         AnnParen, AnnPragma)
-#endif
 
 import           Compat.HieTypes
 import           Control.Lens                          ((^.))
@@ -65,7 +63,7 @@ import           Language.LSP.Server
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
 descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor pluginId)
+descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers")
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentRename renameProvider
     , pluginConfigDescriptor = defaultConfigDescriptor
         { configCustomConfig = mkCustomConfig properties }
@@ -139,13 +137,8 @@ getSrcEdit state verTxtDocId updatePs = do
     annAst <- runActionE "Rename.GetAnnotatedParsedSource" state
         (useE GetAnnotatedParsedSource nfp)
     let (ps, anns) = (astA annAst, annsA annAst)
-#if !MIN_VERSION_ghc(9,2,1)
-    let src = T.pack $ exactPrint ps anns
-        res = T.pack $ exactPrint (updatePs ps) anns
-#else
     let src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
-#endif
     pure $ diffText ccs (verTxtDocId, src) res IncludeDeletions
 
 -- | Replace names at every given `Location` (in a given `ParsedSource`) with a given new name.
@@ -154,7 +147,6 @@ replaceRefs ::
     HashSet Location ->
     ParsedSource ->
     ParsedSource
-#if MIN_VERSION_ghc(9,2,1)
 replaceRefs newName refs = everywhere $
     -- there has to be a better way...
     mkT (replaceLoc @AnnListItem) `extT`
@@ -169,14 +161,6 @@ replaceRefs newName refs = everywhere $
         replaceLoc (L srcSpan oldRdrName)
             | isRef (locA srcSpan) = L srcSpan $ replace oldRdrName
         replaceLoc lOldRdrName = lOldRdrName
-#else
-replaceRefs newName refs = everywhere $ mkT replaceLoc
-    where
-        replaceLoc :: Located RdrName -> Located RdrName
-        replaceLoc (L srcSpan oldRdrName)
-            | isRef srcSpan = L srcSpan $ replace oldRdrName
-        replaceLoc lOldRdrName = lOldRdrName
-#endif
         replace :: RdrName -> RdrName
         replace (Qual modName _) = Qual modName newName
         replace _                = Unqual newName
@@ -238,12 +222,8 @@ removeGenerated HAR{..} = HAR{hieAst = go hieAst,..}
   where
     go :: HieASTs a -> HieASTs a
     go hf =
-#if MIN_VERSION_ghc(9,2,1)
       HieASTs (fmap goAst (getAsts hf))
     goAst (Node nsi sp xs) = Node (SourcedNodeInfo $ M.restrictKeys (getSourcedNodeInfo nsi) (S.singleton SourceInfo)) sp (map goAst xs)
-#else
-      hf
-#endif
 
 -- head is safe since groups are non-empty
 collectWith :: (Hashable a, Eq a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]

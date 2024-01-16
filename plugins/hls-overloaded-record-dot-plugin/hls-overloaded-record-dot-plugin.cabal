@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               hls-overloaded-record-dot-plugin
-version:            2.4.0.0
+version:            2.6.0.0
 synopsis:           Overloaded record dot plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -22,10 +22,6 @@ common warnings
     ghc-options: -Wall
 
 library
-    if impl(ghc < 9.2)
-      buildable: False
-    else
-      buildable: True
     import:           warnings
     exposed-modules:  Ide.Plugin.OverloadedRecordDot
     build-depends:
@@ -48,10 +44,6 @@ library
 
 test-suite tests
     import:           warnings
-    if impl(ghc < 9.2)
-      buildable: False
-    else
-      buildable: True
     default-language: GHC2021
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test

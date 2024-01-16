@@ -95,8 +95,6 @@ import qualified Development.IDE.GHC.Compat.Core              as Compat (Interac
 import qualified Development.IDE.GHC.Compat.Core              as SrcLoc (HasSrcSpan (getLoc),
                                                                          unLoc)
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (hscEnv))
-#if MIN_VERSION_ghc(9,2,0)
-#endif
 import qualified GHC.LanguageExtensions.Type                  as LangExt (Extension (..))
 
 import           Development.IDE.Core.FileStore               (setSomethingModified)
@@ -118,7 +116,8 @@ import           Ide.Plugin.Eval.Config                       (EvalConfig (..),
 import           Ide.Plugin.Eval.GHC                          (addImport,
                                                                addPackages,
                                                                hasPackage,
-                                                               showDynFlags)
+                                                               showDynFlags,
+                                                               setSessionAndInteractiveDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments               (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option                 (parseSetFlags)
 import           Ide.Plugin.Eval.Rules                        (queueForEvaluation,
@@ -467,9 +466,7 @@ evals mark_exception (st, fp) df stmts = do
                                 <> T.pack (intercalate ", " $ map SrcLoc.unLoc ignoreds)
                                 ]
                     dbg "post set" $ showDynFlags df'
-                    _ <- setSessionDynFlags df'
-                    sessDyns <- getSessionDynFlags
-                    setInteractiveDynFlags sessDyns
+                    setSessionAndInteractiveDynFlags df'
                     pure $ warnings <> igns
         | -- A type/kind command
           Just (cmd, arg) <- parseGhciLikeCmd $ T.pack stmt =
@@ -664,9 +661,6 @@ doTypeCmd dflags arg = do
 
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
 parseExprMode rawArg = case T.break isSpace rawArg of
-#if !MIN_VERSION_ghc(9,2,0)
-    ("+v", rest) -> (TM_NoInst, T.strip rest)
-#endif
     ("+d", rest) -> (TM_Default, T.strip rest)
     _            -> (TM_Inst, rawArg)
 
@@ -694,4 +688,3 @@ parseGhciLikeCmd :: Text -> Maybe (Text, Text)
 parseGhciLikeCmd input = do
     (':', rest) <- T.uncons $ T.stripStart input
     pure $ second T.strip $ T.break isSpace rest
-

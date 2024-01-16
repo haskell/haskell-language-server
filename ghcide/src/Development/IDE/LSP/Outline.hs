@@ -30,10 +30,8 @@ import          Language.LSP.Protocol.Message
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
-#if MIN_VERSION_ghc(9,2,0)
 import           Data.List.NonEmpty             (nonEmpty)
 import           Data.Foldable                  (toList)
-#endif
 
 #if !MIN_VERSION_ghc(9,3,0)
 import qualified Data.Text                      as T
@@ -110,7 +108,6 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
     , _kind     = SymbolKind_Struct
     , _children =
       Just $
-#if MIN_VERSION_ghc(9,2,0)
           [ (defDocumentSymbol l'' :: DocumentSymbol)
             { _name           = printOutputable n
             , _kind           = SymbolKind_Constructor
@@ -141,29 +138,6 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
                 , _kind = SymbolKind_Field
                 }
     cvtFld _  = Nothing
-#else
-          [ (defDocumentSymbol l'' :: DocumentSymbol)
-            { _name           = printOutputable n
-            , _kind           = SymbolKind_Constructor
-            , _selectionRange = realSrcSpanToRange l'
-           , _children       = conArgRecordFields (con_args x)
-            }
-        | L (locA -> (RealSrcSpan l'' _ )) x <- dd_cons
-        , L (locA -> (RealSrcSpan l' _)) n <- getConNames' x
-        ]
-    }
-  where
-    -- | Extract the record fields of a constructor
-    conArgRecordFields (RecCon (L _ lcdfs)) = Just
-      [ (defDocumentSymbol l' :: DocumentSymbol)
-          { _name = printOutputable n
-          , _kind = SymbolKind_Field
-          }
-      | L _ cdf <- lcdfs
-      , L (locA -> (RealSrcSpan l' _)) n <- rdrNameFieldOcc . unLoc <$> cd_fld_names cdf
-      ]
-    conArgRecordFields _ = Nothing
-#endif
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ SynDecl { tcdLName = L (locA -> (RealSrcSpan l' _)) n })) = Just
   (defDocumentSymbol l :: DocumentSymbol) { _name           = printOutputable n
                                           , _kind           = SymbolKind_TypeParameter
@@ -173,11 +147,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ ClsInstD { cid_ins
   = Just (defDocumentSymbol l :: DocumentSymbol) { _name = printOutputable cid_poly_ty
                                                  , _kind = SymbolKind_Interface
                                                  }
-#if MIN_VERSION_ghc(9,2,0)
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl FamEqn { feqn_tycon, feqn_pats } }))
-#else
-documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
-#endif
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name =
 #if MIN_VERSION_ghc(9,3,0)
@@ -188,11 +158,7 @@ documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ DataFamInstD { dfid_inst = D
 #endif
     , _kind = SymbolKind_Interface
     }
-#if MIN_VERSION_ghc(9,2,0)
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl _ FamEqn { feqn_tycon, feqn_pats } }))
-#else
-documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
-#endif
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name =
 #if MIN_VERSION_ghc(9,3,0)
@@ -276,11 +242,6 @@ defDocumentSymbol l = DocumentSymbol { .. } where
   _tags           = Nothing
 
 -- the version of getConNames for ghc9 is restricted to only the renaming phase
-#if !MIN_VERSION_ghc(9,2,0)
-getConNames' :: ConDecl GhcPs -> [Located (IdP GhcPs)]
-getConNames' ConDeclH98  {con_name  = name}  = [name]
-getConNames' ConDeclGADT {con_names = names} = names
-#else
 hsConDeclsBinders :: LConDecl GhcPs
                   -> ([LIdP GhcPs], [LFieldOcc GhcPs])
    -- See hsLTyClDeclBinders for what this does
@@ -324,6 +285,5 @@ hsConDeclsBinders cons
     get_flds :: Located [LConDeclField GhcPs]
              -> ([LFieldOcc GhcPs])
     get_flds flds = concatMap (cd_fld_names . unLoc) (unLoc flds)
-#endif
 
 

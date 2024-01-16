@@ -11,9 +11,10 @@ fi
 export PATH="$HOME/.local/bin:$PATH"
 
 export BOOTSTRAP_HASKELL_NONINTERACTIVE=1
-export BOOTSTRAP_HASKELL_CABAL_VERSION="${CABAL_VER:-3.8.1.0}"
+export BOOTSTRAP_HASKELL_CABAL_VERSION="${CABAL_VER:-3.10.2.0}"
 export BOOTSTRAP_HASKELL_ADJUST_CABAL_CONFIG=no
 export BOOTSTRAP_HASKELL_INSTALL_NO_STACK=yes
+export BOOTSTRAP_HASKELL_ADJUST_BASHRC=1
 
 if [ "${RUNNER_OS}" = "Windows" ] ; then
     # on windows use pwd to get unix style path

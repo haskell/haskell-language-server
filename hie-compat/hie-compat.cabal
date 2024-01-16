@@ -1,6 +1,6 @@
 cabal-version:       1.22
 name:                hie-compat
-version:             0.3.1.1
+version:             0.3.1.2
 synopsis:            HIE files for GHC 8.8 and other HIE file backports
 license:             Apache-2.0
 description:
@@ -24,7 +24,7 @@ source-repository head
 library
   default-language:    Haskell2010
   build-depends:
-     base < 4.19, array, bytestring, containers, directory, filepath, transformers
+     base < 4.20, array, bytestring, containers, directory, filepath, transformers
   build-depends: ghc >= 8.10, ghc-boot
   ghc-options: -Wall -Wno-name-shadowing
 
@@ -35,8 +35,6 @@ library
     Compat.HieDebug
     Compat.HieUtils
 
-  if (impl(ghc >= 9.0) && impl(ghc < 9.1))
-    hs-source-dirs: src-ghc90 src-reexport-ghc9
   if (impl(ghc >= 9.2) && impl(ghc < 9.3))
     hs-source-dirs: src-ghc92 src-reexport-ghc9
   if (impl(ghc >= 9.4))

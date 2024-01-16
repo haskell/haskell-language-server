@@ -1,0 +1,86 @@
+cabal-version: 2.4
+name:          hls-stan-plugin
+version:       2.6.0.0
+synopsis:      Stan integration plugin with Haskell Language Server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
+license:       Apache-2.0
+license-file:  LICENSE
+author:        The Haskell IDE Team
+maintainer:    uhbif19@gmail.com
+copyright:     The Haskell IDE Team
+category:      Development
+build-type:    Simple
+extra-source-files:
+  LICENSE
+  test/testdata/*.hs
+
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
+flag pedantic
+  description: Enable -Werror
+  default:     False
+  manual:      True
+
+library
+  if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
+    buildable: True
+  else
+    buildable: False
+  exposed-modules:    Ide.Plugin.Stan
+  hs-source-dirs:     src
+  build-depends:
+      base
+    , containers
+    , data-default
+    , deepseq
+    , hashable
+    , hie-compat
+    , hls-plugin-api
+    , ghc
+    , ghcide
+    , lsp-types
+    , text
+    , transformers
+    , unordered-containers
+    , stan >= 0.1.2.0
+    , trial
+    , directory
+
+  default-language:   Haskell2010
+  default-extensions:
+    LambdaCase
+    NamedFieldPuns
+    DeriveGeneric
+    TypeFamilies
+    StandaloneDeriving
+    DuplicateRecordFields
+    OverloadedStrings
+
+test-suite test
+  if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
+    buildable: True
+  else
+    buildable: False
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson
+    , base
+    , containers
+    , filepath
+    , hls-stan-plugin
+    , hls-plugin-api
+    , hls-test-utils      == 2.6.0.0
+    , lens
+    , lsp-types
+    , text
+ default-extensions:
+    NamedFieldPuns
+    OverloadedStrings
