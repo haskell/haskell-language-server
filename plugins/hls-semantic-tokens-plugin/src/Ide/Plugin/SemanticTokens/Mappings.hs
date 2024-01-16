@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 -- |
@@ -82,13 +83,13 @@ tyThingSemantic ty = case ty of
     isFunVar var = isFunType $ varType var
 
 -- expand the type synonym https://hackage.haskell.org/package/ghc-9.8.1/docs/src/GHC.Core.Type.html
-coreFullView :: Type -> Type
-coreFullView ty
-  | Just ty' <- coreView ty = coreFullView ty'
+expandTypeSyn :: Type -> Type
+expandTypeSyn ty
+  | Just ty' <- coreView ty = expandTypeSyn ty'
   | otherwise               = ty
 
 isFunType :: Type -> Bool
-isFunType a = case coreFullView a of
+isFunType a = case expandTypeSyn a of
   ForAllTy _ t    -> isFunType t
   --   Development.IDE.GHC.Compat.Core.FunTy(pattern synonym), FunTyFlag which is used to distinguish
   --   (->, =>, etc..)
