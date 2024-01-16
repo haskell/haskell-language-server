@@ -286,7 +286,7 @@ completion recorder ide _ complParams = do
     (Just cnts, Just path) -> do
       pref <- VFS.getCompletionPrefix position cnts
       let res = result pref path cnts
-      liftIO $ fmap (InL) res
+      liftIO $ fmap InL res
     _ -> pure . InR $ InR Null
  where
   result :: Maybe VFS.PosPrefixInfo -> FilePath -> VFS.VirtualFile -> IO [CompletionItem]
