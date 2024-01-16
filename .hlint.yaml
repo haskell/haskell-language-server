@@ -5,6 +5,10 @@
 # To run HLint do:
 # $ hlint --git -j4
 
+# Ignore all lints in testdata directories, as they are distracting.
+- ignore: { "within": '**/testdata/**' }
+- ignore: { "within": '**/test/data/**' }
+
 # Warnings currently triggered by our code
 - ignore: {name: "Use <$>"}
 - ignore: {name: "Use :"}
