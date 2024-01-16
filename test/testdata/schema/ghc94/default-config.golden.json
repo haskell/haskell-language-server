@@ -9,7 +9,8 @@
         },
         "cabal": {
             "codeActionsOn": true,
-            "completionOn": true
+            "completionOn": true,
+            "diagnosticsOn": true
         },
         "callHierarchy": {
             "globalOn": true
