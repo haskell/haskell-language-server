@@ -81,13 +81,20 @@ tyThingSemantic ty = case ty of
     isFunVar :: Var -> Bool
     isFunVar var = isFunType $ varType var
 
+-- expand the type synonym https://hackage.haskell.org/package/ghc-9.8.1/docs/src/GHC.Core.Type.html
+expandTypeSyn :: Type -> Type
+expandTypeSyn ty
+  | Just ty' <- coreView ty = expandTypeSyn ty'
+  | otherwise               = ty
+
 isFunType :: Type -> Bool
-isFunType a = case a of
+isFunType a = case expandTypeSyn a of
   ForAllTy _ t    -> isFunType t
   --   Development.IDE.GHC.Compat.Core.FunTy(pattern synonym), FunTyFlag which is used to distinguish
   --   (->, =>, etc..)
   FunTy flg _ rhs -> isVisibleFunArg flg || isFunType rhs
   _x              -> isFunTy a
+
 
 hieKindFunMasksKind :: HieKind a -> HieFunMaskKind a
 hieKindFunMasksKind hieKind = case hieKind of
@@ -119,6 +126,7 @@ recoverFunMaskArray flattened = unflattened
     go (HQualTy _constraint b)       = b
     go (HCastTy b)                   = b
     go HCoercionTy                   = False
+    -- we have no enough information to expand the type synonym
     go (HTyConApp _ _)               = False
 
 typeSemantic :: HieFunMaskKind hType -> hType -> Maybe HsSemanticTokenType
