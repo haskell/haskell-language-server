@@ -95,8 +95,8 @@ goldenChangeSignature fp = goldenWithHaskellDoc def changeTypeSignaturePlugin (f
 
 codeActionTest :: FilePath -> Int -> Int -> TestTree
 codeActionTest fp line col = goldenChangeSignature fp $ \doc -> do
-    void $ waitForDiagnostics  -- code actions are triggered from Diagnostics
-    void $ waitForAllProgressDone  -- apparently some tests need this to get the CodeAction to show up
+    void waitForDiagnostics  -- code actions are triggered from Diagnostics
+    void waitForAllProgressDone  -- apparently some tests need this to get the CodeAction to show up
     actions <- getCodeActions doc (pointRange line col)
     foundActions <- findChangeTypeActions actions
     liftIO $ length foundActions @?= 1
