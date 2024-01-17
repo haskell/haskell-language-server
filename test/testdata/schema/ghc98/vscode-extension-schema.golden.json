@@ -61,9 +61,15 @@
     },
     "haskell.plugin.fourmolu.config.external": {
         "default": false,
-        "markdownDescription": "Call out to an external \"fourmolu\" executable, rather than using the bundled library",
+        "markdownDescription": "Call out to an external \"fourmolu\" executable, rather than using the bundled library.",
         "scope": "resource",
         "type": "boolean"
+    },
+    "haskell.plugin.fourmolu.config.path": {
+        "default": "fourmolu",
+        "markdownDescription": "Set path to executable (for \"external\" mode).",
+        "scope": "resource",
+        "type": "string"
     },
     "haskell.plugin.ghcide-completions.config.autoExtendOn": {
         "default": true,
