@@ -96,6 +96,8 @@ hieAstSpanIdentifiers vf ast =
         exclusion :: Identifier -> IdentifierDetails a -> Bool
         exclusion idt IdentifierDetails {identInfo = infos} = case idt of
           Left _moduleName  -> False
+          -- filter out the evidence names since they are visible,
+          -- derived names are not filtered out since they are not visible at use site.
           Right _name -> any isEvidenceContext (S.toList infos)
 
 
