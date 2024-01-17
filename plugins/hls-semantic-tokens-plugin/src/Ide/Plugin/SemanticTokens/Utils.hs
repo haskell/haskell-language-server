@@ -111,27 +111,37 @@ mkRange startLine startCol len =
 splitModuleNameAndOccName :: VirtualFile -> Range -> Identifier -> [(Range,Identifier)]
 splitModuleNameAndOccName _ ran (Left m) = [(ran, Left m)]
 splitModuleNameAndOccName vf ran@(Range (Position startLine startColumn) (Position _endLine endColumn)) (Right name)
-    | nameLength name < fromIntegral (endColumn - startColumn), (Just (prefixLen, stripFlag)) <- peekPrefixModuleNameLength vf ran =
-        [(Range (Position startLine (startColumn + bool 0 1 stripFlag))
-                (Position startLine (startColumn + fromIntegral prefixLen)) , Left (mkModuleName "")), -- we do not need the module name, only tis range
-        (Range (Position startLine (startColumn + fromIntegral prefixLen))
-                 (Position startLine (endColumn + bool 0 (-1) stripFlag)), Right name)]
+    | nameLength name < fromIntegral (endColumn - startColumn), (Just text) <- getTextByCodePointRangeFromVfs vf ran =
+        let stripFlag = peekStripFlag text
+        in case peekPrefixModuleNameLength text of
+                Just prefixLen ->
+                    [(Range (Position startLine (startColumn + bool 0 1 stripFlag))
+                            (Position startLine (startColumn + fromIntegral prefixLen)) , Left (mkModuleName "")), -- we do not need the module name, only tis range
+                    (Range (Position startLine (startColumn + fromIntegral prefixLen))
+                            (Position startLine (endColumn + bool 0 (-1) stripFlag)), Right name)]
+                Nothing -> if stripFlag
+                    then [(Range (Position startLine (startColumn+1)) (Position _endLine (endColumn-1)), Right name)]
+                    else [(ran, Right name)]
     | otherwise = [(ran, Right name)]
 
 nameLength :: Name -> Int
 nameLength = lengthFS . occNameFS . nameOccName
 
+peekStripFlag :: Text -> Bool
+peekStripFlag token =
+    case T.uncons token of
+    Just (c, _) -> c `elem` strippedChars
+    Nothing     -> False
+    where strippedChars = ['`', '(']
+
 -- | peek at the prefix of a range,
 -- if it is a qualified name, return the length of the module name.
 -- module name everything before the last dot.
-peekPrefixModuleNameLength :: VirtualFile -> Range -> Maybe (Int, Bool)
-peekPrefixModuleNameLength rp ran = do
-  token <- getTextByCodePointRangeFromVfs rp ran
-  (c, _) <- T.uncons token
+peekPrefixModuleNameLength :: Text -> Maybe Int
+peekPrefixModuleNameLength token = do
   let prefixLen = length $ fst $ breakOnEnd "." token
   guard $ prefixLen > 0
-  return (prefixLen, c `elem` strippedChars)
-  where strippedChars = ['`', '(']
+  return prefixLen
 
 -- | get the text from a range in a virtual file
 getTextByCodePointRangeFromVfs :: VirtualFile -> Range -> Maybe Text
