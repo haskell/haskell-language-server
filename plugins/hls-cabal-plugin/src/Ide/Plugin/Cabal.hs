@@ -114,6 +114,9 @@ descriptor recorder plId =
                   deleteFileOfInterest recorder ide file
                   restartCabalShakeSession (shakeExtras ide) vfs file "(closed)"
           ]
+    , pluginConfigDescriptor = defaultConfigDescriptor
+      { configHasDiagnostics = True
+      }
     }
  where
   log' = logWith recorder
