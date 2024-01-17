@@ -34,7 +34,7 @@ docName tt = case tt of
     TTypeSynonym     -> "type synonyms"
     TTypeFamily      -> "type families"
     TRecordField     -> "record fields"
-    TModule      -> "modules"
+    TModule          -> "modules"
 
 toConfigName :: String -> String
 toConfigName = ("st" <>)

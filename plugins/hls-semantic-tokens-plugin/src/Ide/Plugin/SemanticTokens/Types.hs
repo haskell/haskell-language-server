@@ -83,7 +83,7 @@ data SemanticTokensConfig = STC
   , stTypeSynonym     :: !SemanticTokenTypes
   , stTypeFamily      :: !SemanticTokenTypes
   , stRecordField     :: !SemanticTokenTypes
-  , stModule      :: !SemanticTokenTypes
+  , stModule          :: !SemanticTokenTypes
   } deriving (Generic, Show)
 
 
