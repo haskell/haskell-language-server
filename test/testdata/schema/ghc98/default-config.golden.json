@@ -77,7 +77,7 @@
             "codeActionsOn": true,
             "codeLensOn": true
         },
-        "moduleName": {
+        "moduleToken": {
             "globalOn": true
         },
         "ormolu": {
@@ -115,7 +115,7 @@
                 "classToken": "class",
                 "dataConstructorToken": "enumMember",
                 "functionToken": "function",
-                "moduleName": "namespace",
+                "moduleToken": "namespace",
                 "patternSynonymToken": "macro",
                 "recordFieldToken": "property",
                 "typeConstructorToken": "enum",
