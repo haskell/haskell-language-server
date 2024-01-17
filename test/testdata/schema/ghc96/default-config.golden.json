@@ -37,7 +37,8 @@
         },
         "fourmolu": {
             "config": {
-                "external": false
+                "external": false,
+                "path": "fourmolu"
             }
         },
         "gadt": {
