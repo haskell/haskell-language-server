@@ -32,7 +32,11 @@ makeMethodDecl df (mName, sig) = do
     sig' <- eitherToMaybe $ parseDecl df (T.unpack sig) $ T.unpack sig
     pure (name, sig')
 
+#if MIN_VERSION_ghc(9,5,0)
+addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located (HsModule GhcPs))
+#else
 addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located HsModule)
+#endif
 addMethodDecls ps mDecls range withSig
     | withSig = go (concatMap (\(decl, sig) -> [sig, decl]) mDecls)
     | otherwise = go (map fst mDecls)
