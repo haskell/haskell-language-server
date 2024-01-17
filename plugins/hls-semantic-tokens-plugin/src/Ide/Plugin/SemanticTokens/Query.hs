@@ -1,49 +1,40 @@
-{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE ExplicitNamespaces  #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
 -- The query module is used to query the semantic tokens from the AST
 module Ide.Plugin.SemanticTokens.Query where
 
-import Data.Foldable (fold)
-import qualified Data.Map as M
-import qualified Data.Map as Map
-import Data.Maybe
-  ( fromMaybe,
-    listToMaybe,
-    mapMaybe,
-  )
-import Data.Set (Set)
-import qualified Data.Set as S
-import qualified Data.Set as Set
-import Data.Text (Text)
-import Development.IDE.Core.PositionMapping
-  ( PositionMapping,
-    toCurrentRange,
-  )
-import Development.IDE.GHC.Compat
-import Development.IDE.GHC.Error (realSrcSpanToCodePointRange)
-import Ide.Plugin.SemanticTokens.Mappings
-import Ide.Plugin.SemanticTokens.Types
-  ( HieFunMaskKind,
-    HsSemanticTokenType (TModuleName),
-    NameSemanticMap,
-    SemanticTokensConfig,
-  )
-import Ide.Plugin.SemanticTokens.Utils (splitModuleNameAndOccName)
-import Language.LSP.Protocol.Types
-  ( Position (Position),
-    Range (Range),
-    SemanticTokenAbsolute (SemanticTokenAbsolute),
-    SemanticTokens,
-    defaultSemanticTokensLegend,
-    makeSemanticTokens,
-  )
-import Language.LSP.VFS
-import Prelude hiding (length, span)
+import           Data.Foldable                        (fold)
+import qualified Data.Map                             as M
+import qualified Data.Map                             as Map
+import           Data.Maybe                           (fromMaybe, listToMaybe,
+                                                       mapMaybe)
+import           Data.Set                             (Set)
+import qualified Data.Set                             as S
+import qualified Data.Set                             as Set
+import           Data.Text                            (Text)
+import           Development.IDE.Core.PositionMapping (PositionMapping,
+                                                       toCurrentRange)
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Error            (realSrcSpanToCodePointRange)
+import           Ide.Plugin.SemanticTokens.Mappings
+import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
+                                                       HsSemanticTokenType (TModuleName),
+                                                       NameSemanticMap,
+                                                       SemanticTokensConfig)
+import           Ide.Plugin.SemanticTokens.Utils      (splitModuleNameAndOccName)
+import           Language.LSP.Protocol.Types          (Position (Position),
+                                                       Range (Range),
+                                                       SemanticTokenAbsolute (SemanticTokenAbsolute),
+                                                       SemanticTokens,
+                                                       defaultSemanticTokensLegend,
+                                                       makeSemanticTokens)
+import           Language.LSP.VFS
+import           Prelude                              hiding (length, span)
 
 ---------------------------------------------------------
 
@@ -104,7 +95,7 @@ hieAstSpanIdentifiers vf ast =
         inclusion a b = not $ exclusion a b
         exclusion :: Identifier -> IdentifierDetails a -> Bool
         exclusion idt IdentifierDetails {identInfo = infos} = case idt of
-          Left _ -> False
+          Left _  -> False
           Right _ -> any isEvidenceContext (S.toList infos)
 
 

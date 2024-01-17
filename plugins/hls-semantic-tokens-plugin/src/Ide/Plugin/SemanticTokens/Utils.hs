@@ -1,28 +1,27 @@
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE TypeFamilies       #-}
-{-# LANGUAGE PatternGuards #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternGuards       #-}
+{-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE TypeFamilies        #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 
 module Ide.Plugin.SemanticTokens.Utils where
 
-import           Data.ByteString            (ByteString)
-import           Data.ByteString.Char8      (unpack)
-import qualified Data.Map                   as Map
-import           Development.IDE            (Position (..), Range (..))
+import           Control.Monad                   (guard)
+import           Data.Bool                       (bool)
+import           Data.ByteString                 (ByteString)
+import           Data.ByteString.Char8           (unpack)
+import qualified Data.Map                        as Map
+import           Data.Text                       (Text, breakOnEnd, length)
+import qualified Data.Text                       as T
+import           Data.Text.Utf16.Rope            (Rope, splitAtPosition)
+import qualified Data.Text.Utf16.Rope            as Rope
+import           Development.IDE                 (Position (..), Range (..))
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Util (mkFastString)
+import           Language.LSP.VFS                (VirtualFile, _file_text)
 import           Prelude                         hiding (length, span)
-import Development.IDE.GHC.Compat.Util (mkFastString)
-import Language.LSP.VFS (_file_text, VirtualFile)
-import qualified Data.Text.Utf16.Rope as Rope
-import Data.Text.Utf16.Rope (Rope, splitAtPosition)
-import Data.Text (breakOnEnd, length, Text)
-import Control.Monad (guard)
-import qualified Data.Text as T
-import Data.Bool (bool)
 
 deriving instance Show DeclType
 deriving instance Show BindType
