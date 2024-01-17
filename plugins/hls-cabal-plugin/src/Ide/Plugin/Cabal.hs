@@ -114,6 +114,9 @@ descriptor recorder plId =
                   deleteFileOfInterest recorder ide file
                   restartCabalShakeSession (shakeExtras ide) vfs file "(closed)"
           ]
+    , pluginConfigDescriptor = defaultConfigDescriptor
+      { configHasDiagnostics = True
+      }
     }
  where
   log' = logWith recorder
@@ -283,7 +286,7 @@ completion recorder ide _ complParams = do
     (Just cnts, Just path) -> do
       pref <- VFS.getCompletionPrefix position cnts
       let res = result pref path cnts
-      liftIO $ fmap (InL) res
+      liftIO $ fmap InL res
     _ -> pure . InR $ InR Null
  where
   result :: Maybe VFS.PosPrefixInfo -> FilePath -> VFS.VirtualFile -> IO [CompletionItem]

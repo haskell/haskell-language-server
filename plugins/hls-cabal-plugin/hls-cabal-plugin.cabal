@@ -20,7 +20,7 @@ extra-source-files:
   test/testdata/simple-cabal/simple-cabal.cabal
 
 common warnings
-  ghc-options: -Wall
+  ghc-options: -Wall -Wunused-packages
 
 library
   import:           warnings
@@ -80,15 +80,12 @@ test-suite tests
     , base
     , bytestring
     , Cabal-syntax          >= 3.7
-    , directory
     , filepath
-    , ghcide
     , hls-cabal-plugin
     , hls-test-utils    == 2.6.0.0
     , lens
     , lsp
     , lsp-types
-    , tasty-hunit
     , text
     , text-rope
     , transformers

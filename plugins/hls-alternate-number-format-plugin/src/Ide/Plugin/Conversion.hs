@@ -21,7 +21,6 @@ module Ide.Plugin.Conversion (
     , ExtensionNeeded(..)
 ) where
 
-import           Data.Char                     (toUpper)
 import           Data.List                     (delete)
 import           Data.List.Extra               (enumerate, upper)
 import           Data.Maybe                    (mapMaybe)
@@ -168,10 +167,10 @@ toDecimal :: Integral a => a -> String
 toDecimal = toBase showInt ""
 
 toBinary :: (Integral a, Show a) => a -> String
-toBinary = toBase showBin "0b"
+toBinary = toBase showBin_ "0b"
   where
     -- this is not defined in versions of Base < 4.16-ish
-    showBin = showIntAtBase 2 intToDigit
+    showBin_ = showIntAtBase 2 intToDigit
 
 toHex :: (Integral a, Show a) => a  -> String
 toHex = toBase showHex "0x"

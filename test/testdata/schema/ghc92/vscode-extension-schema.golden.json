@@ -17,6 +17,12 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.cabal.diagnosticsOn": {
+        "default": true,
+        "description": "Enables cabal diagnostics",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.callHierarchy.globalOn": {
         "default": true,
         "description": "Enables callHierarchy plugin",

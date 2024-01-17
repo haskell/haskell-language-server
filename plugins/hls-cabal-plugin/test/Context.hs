@@ -78,7 +78,7 @@ getContextTests =
         , testCase "Cabal version keyword - no value, many spaces" $ do
             -- on a file, where the "cabal-version:" keyword is already written
             -- the context should still be top level but the keyword should be recognized
-            ctx <- callGetContext (Position 0 45) ("") ["cabal-version:" <> T.replicate 50 " "]
+            ctx <- callGetContext (Position 0 45) "" ["cabal-version:" <> T.replicate 50 " "]
             ctx @?= (TopLevel, KeyWord "cabal-version:")
         , testCase "Cabal version keyword - keyword partly written" $ do
             -- in the first line of the file, if the keyword
