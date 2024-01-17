@@ -196,7 +196,8 @@ semanticTokensTests =
       goldenWithSemanticTokensWithDefaultConfig "mixed constancy test result generated from one ghc version" "T1",
       goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternSynonym",
       goldenWithSemanticTokensWithDefaultConfig "type family" "TTypefamily",
-      goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax"
+      goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax",
+      goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName"
     ]
 
 semanticTokensDataTypeTests :: TestTree
