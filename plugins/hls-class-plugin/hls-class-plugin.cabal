@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-class-plugin
-version:            2.5.0.0
+version:            2.6.0.0
 synopsis:
   Class/instance management plugin for Haskell Language Server
 
@@ -24,7 +24,11 @@ source-repository head
     type:     git
     location: https://github.com/haskell/haskell-language-server.git
 
+common warnings
+  ghc-options: -Wall -Wno-unticked-promoted-constructors -Wno-name-shadowing -Wunused-packages
+
 library
+  import: warnings
   -- Plugins that need exactprint have not been updated for 9.8 yet
   if impl(ghc >= 9.8)
     buildable: False
@@ -44,20 +48,15 @@ library
     , deepseq
     , extra
     , ghc
-    , ghcide          == 2.5.0.0
-    , ghc-boot-th
+    , ghc-exactprint  >= 1.5
+    , ghcide          == 2.6.0.0
     , hls-graph
-    , hls-plugin-api  == 2.5.0.0
+    , hls-plugin-api  == 2.6.0.0
     , lens
     , lsp
     , mtl
     , text
     , transformers
-
-  if impl(ghc >=9.2.1)
-    build-depends: ghc-exactprint >= 1.5
-  else
-    build-depends: ghc-exactprint >= 0.6.4 && <1.1
 
   default-language:   Haskell2010
   default-extensions:
@@ -65,9 +64,8 @@ library
     TypeOperators
     OverloadedStrings
 
-  ghc-options:        -Wall -Wno-unticked-promoted-constructors -Wno-name-shadowing
-
 test-suite tests
+  import: warnings
   if impl(ghc >= 9.8)
     buildable: False
   else
@@ -78,13 +76,11 @@ test-suite tests
   main-is:          Main.hs
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-    , aeson
     , base
     , filepath
     , ghcide
     , hls-class-plugin
-    , hls-plugin-api
-    , hls-test-utils     == 2.5.0.0
+    , hls-test-utils     == 2.6.0.0
     , lens
     , lsp-types
     , row-types

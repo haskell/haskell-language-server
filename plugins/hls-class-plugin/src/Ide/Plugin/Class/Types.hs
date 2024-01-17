@@ -190,7 +190,6 @@ getInstanceBindLensRule recorder = do
                     (locA l) -- bindSpan
                     (locA l') -- bindNameSpan
             in toBindInfo <$> filter (\(L _ name) -> unLoc name `notElem` sigNames) bindNames
-        getBindSpanWithoutSig _ = []
 
         -- Get bind definition range with its rendered signature text
         getRangeWithSig :: Maybe (InstanceBindTypeSig, SrcSpan) -> IO (Maybe (Range, Int, Name, Type))

@@ -236,7 +236,7 @@ jobs:
         name: Test hls-retrie-plugin test suite
         run: cabal test hls-retrie-plugin --test-options="$TEST_OPTS" || cabal test hls-retrie-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.0'
+      - if: matrix.test
         name: Test hls-overloaded-record-dot-plugin test suite
         run: cabal test hls-overloaded-record-dot-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-overloaded-record-dot-plugin --test-options="$TEST_OPTS"
 
