@@ -24,7 +24,11 @@ source-repository head
     type:     git
     location: https://github.com/haskell/haskell-language-server.git
 
+common warnings
+  ghc-options: -Wall -Wno-unticked-promoted-constructors -Wno-name-shadowing -Wunused-packages
+
 library
+  import: warnings
   -- Plugins that need exactprint have not been updated for 9.8 yet
   if impl(ghc >= 9.8)
     buildable: False
@@ -46,7 +50,6 @@ library
     , ghc
     , ghc-exactprint  >= 1.5
     , ghcide          == 2.6.0.0
-    , ghc-boot-th
     , hls-graph
     , hls-plugin-api  == 2.6.0.0
     , lens
@@ -61,9 +64,8 @@ library
     TypeOperators
     OverloadedStrings
 
-  ghc-options:        -Wall -Wno-unticked-promoted-constructors -Wno-name-shadowing
-
 test-suite tests
+  import: warnings
   if impl(ghc >= 9.8)
     buildable: False
   else
@@ -74,12 +76,10 @@ test-suite tests
   main-is:          Main.hs
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-    , aeson
     , base
     , filepath
     , ghcide
     , hls-class-plugin
-    , hls-plugin-api
     , hls-test-utils     == 2.6.0.0
     , lens
     , lsp-types
