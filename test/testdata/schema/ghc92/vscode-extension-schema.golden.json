@@ -485,7 +485,7 @@
         "scope": "resource",
         "type": "string"
     },
-    "haskell.plugin.semanticTokens.config.moduleNameToken": {
+    "haskell.plugin.semanticTokens.config.module": {
         "default": "namespace",
         "description": "LSP semantic token type to use for module names",
         "enum": [
