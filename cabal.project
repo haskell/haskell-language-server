@@ -9,7 +9,6 @@ packages:
          ./hls-plugin-api
          ./hls-test-utils
          ./plugins/hls-cabal-plugin
-         ./plugins/hls-cabal-fmt-plugin
          ./plugins/hls-stylish-haskell-plugin
          ./plugins/hls-fourmolu-plugin
          ./plugins/hls-class-plugin

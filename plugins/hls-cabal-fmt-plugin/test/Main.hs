@@ -57,4 +57,4 @@ cabalFmtGolden Found title path desc act = goldenWithCabalDocFormatter def cabal
     conf = def
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-cabal-fmt-plugin" </> "test" </> "testdata"

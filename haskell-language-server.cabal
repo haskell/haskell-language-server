@@ -83,8 +83,49 @@ flag cabalfmt
 
 common cabalfmt
   if flag(cabalfmt)
-    build-depends: hls-cabal-fmt-plugin == 2.6.0.0
+    build-depends: hls-cabal-fmt-plugin
     cpp-options: -Dhls_cabalfmt
+
+flag isolateCabalfmtTests
+  description: Should tests search for 'cabal-fmt' on the $PATH or shall we install it via build-tool-depends?
+  -- By default, search on the PATH
+  default:     False
+  manual:      True
+
+library hls-cabal-fmt-plugin
+  import:           warnings
+  exposed-modules:  Ide.Plugin.CabalFmt
+  hs-source-dirs:   plugins/hls-cabal-fmt-plugin/src
+  build-depends:
+    , base            >=4.12 && <5
+    , directory
+    , filepath
+    , ghcide          == 2.6.0.0
+    , hls-plugin-api  == 2.6.0.0
+    , lens
+    , lsp-types
+    , mtl
+    , process-extras
+    , text
+
+  default-language: Haskell2010
+
+test-suite hls-cabal-fmt-plugin-tests
+  import:             warnings
+  type:               exitcode-stdio-1.0
+  default-language:   Haskell2010
+  hs-source-dirs:     plugins/hls-cabal-fmt-plugin/test
+  main-is:            Main.hs
+  ghc-options:        -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    , base
+    , directory
+    , filepath
+    , hls-cabal-fmt-plugin
+    , hls-test-utils        == 2.6.0.0
+
+  if flag(isolateCabalfmtTests)
+    build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6
 
 -----------------------------
 -- cabal plugin
