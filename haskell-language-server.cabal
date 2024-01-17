@@ -28,11 +28,6 @@ extra-source-files:
 
   bindist/wrapper.in
 
-flag pedantic
-  description: Enable -Werror
-  default:     False
-  manual:      True
-
 source-repository head
   type:     git
   location: https://github.com/haskell/haskell-language-server
@@ -49,6 +44,11 @@ common common-deps
 -- Default warnings in HLS
 common warnings
   ghc-options: -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
+
+flag pedantic
+  description: Enable -Werror
+  default:     False
+  manual:      True
 
 -- Allow compiling in pedantic mode
 common pedantic
@@ -265,8 +265,59 @@ flag alternateNumberFormat
 
 common alternateNumberFormat
   if flag(alternateNumberFormat)
-    build-depends: hls-alternate-number-format-plugin == 2.6.0.0
+    build-depends: hls-alternate-number-format-plugin
     cpp-options: -Dhls_alternateNumberFormat
+
+library hls-alternate-number-format-plugin
+  import:           warnings
+  exposed-modules:  Ide.Plugin.AlternateNumberFormat, Ide.Plugin.Conversion
+  other-modules:    Ide.Plugin.Literals
+  hs-source-dirs:   plugins/hls-alternate-number-format-plugin/src
+  ghc-options:      -Wall
+  build-depends:
+    , base                 >=4.12 && < 5
+    , containers
+    , extra
+    , ghcide               == 2.6.0.0
+    , ghc-boot-th
+    , hls-graph
+    , hls-plugin-api       == 2.6.0.0
+    , lens
+    , lsp                  ^>=2.3.0.0
+    , mtl
+    , regex-tdfa
+    , syb
+    , text
+
+  default-language: Haskell2010
+  default-extensions:
+    LambdaCase
+    NamedFieldPuns
+    OverloadedStrings
+    RecordWildCards
+
+test-suite hls-alternate-number-format-plugin-tests
+  import:           warnings
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   plugins/hls-alternate-number-format-plugin/test
+  other-modules: Properties.Conversion
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts
+  build-depends:
+    , base                 >=4.12 && < 5
+    , filepath
+    , hls-alternate-number-format-plugin
+    , hls-test-utils       == 2.6.0.0
+    , regex-tdfa
+    , tasty-quickcheck
+    , text
+
+  default-extensions:
+    LambdaCase
+    NamedFieldPuns
+    OverloadedStrings
+    RecordWildCards
 
 -----------------------------
 -- qualify imported names plugin

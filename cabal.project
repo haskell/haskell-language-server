@@ -24,7 +24,6 @@ packages:
          ./plugins/hls-module-name-plugin
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
-         ./plugins/hls-alternate-number-format-plugin
          ./plugins/hls-qualify-imported-names-plugin
          ./plugins/hls-code-range-plugin
          ./plugins/hls-change-type-signature-plugin
