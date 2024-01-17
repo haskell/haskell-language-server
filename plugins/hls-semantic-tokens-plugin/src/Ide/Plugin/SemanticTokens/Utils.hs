@@ -16,12 +16,11 @@ import           Development.IDE            (Position (..), Range (..))
 import           Development.IDE.GHC.Compat
 import           Prelude                         hiding (length, span)
 import Development.IDE.GHC.Compat.Util (mkFastString)
-import Language.LSP.VFS (VirtualFile (VirtualFile), _file_text)
+import Language.LSP.VFS (_file_text, VirtualFile)
 import qualified Data.Text.Utf16.Rope as Rope
 import Data.Text.Utf16.Rope (Rope, splitAtPosition)
 import Data.Text (breakOnEnd, length, Text)
 import Control.Monad (guard)
-import qualified Data.List
 
 deriving instance Show DeclType
 deriving instance Show BindType
@@ -111,7 +110,7 @@ mkRange startLine startCol len =
 splitModuleNameAndOccName :: VirtualFile -> Range -> Identifier -> [(Range,Identifier)]
 splitModuleNameAndOccName _ ran (Left m) = [(ran, Left m)]
 splitModuleNameAndOccName vf ran@(Range (Position startLine startColumn) (Position _endLine endColumn)) (Right name)
-    | nameLength name < fromIntegral (endColumn - startColumn), (Just prefixLen) <- peekPrefix vf ran =
+    | nameLength name < fromIntegral (endColumn - startColumn), (Just prefixLen) <- peekPrefixModuleNameLength vf ran =
         [(Range (Position startLine startColumn) (Position startLine (startColumn + fromIntegral prefixLen))
             , Left (ModuleName $ mkFastString "")), -- we do not need the module name
         (Range (Position startLine (startColumn + fromIntegral prefixLen)) (Position startLine endColumn), Right name)]
@@ -123,8 +122,8 @@ nameLength = lengthFS . occNameFS . nameOccName
 -- | peek at the prefix of a range,
 -- if it is a qualified name, return the length of the module name.
 -- module name everything before the last dot.
-peekPrefix :: VirtualFile -> Range -> Maybe Int
-peekPrefix rp ran = do
+peekPrefixModuleNameLength :: VirtualFile -> Range -> Maybe Int
+peekPrefixModuleNameLength rp ran = do
   token <- getTextByCodePointRangeFromVfs rp ran
   let prefixLen = length $ fst $ breakOnEnd "." token
   guard $ prefixLen > 0
