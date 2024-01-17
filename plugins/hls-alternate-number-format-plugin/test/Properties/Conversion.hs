@@ -7,17 +7,22 @@ import           Test.Tasty.QuickCheck (testProperty)
 import           Text.Regex.TDFA       ((=~))
 
 conversions :: TestTree
-conversions = testGroup "Conversions" $ map (uncurry testProperty) [("Match NumDecimal", prop_regexMatchesNumDecimal)
+conversions = testGroup "Conversions" $
+    map (uncurry testProperty)
+    [ ("Match NumDecimal", prop_regexMatchesNumDecimal)
     , ("Match Hex", prop_regexMatchesHex)
     , ("Match Octal", prop_regexMatchesOctal)
     , ("Match Binary", prop_regexMatchesBinary)
-    ] <> map (uncurry testProperty) [("Match HexFloat", prop_regexMatchesHexFloat @Double)
+    ]
+    <>
+    map (uncurry testProperty)
+    [ ("Match HexFloat", prop_regexMatchesHexFloat @Double)
     , ("Match FloatDecimal", prop_regexMatchesFloatDecimal)
     , ("Match FloatExpDecimal", prop_regexMatchesFloatExpDecimal)
     ]
 
 prop_regexMatchesNumDecimal :: Integer -> Bool
-prop_regexMatchesNumDecimal = (=~ numDecimalRegex) . toFloatExpDecimal . fromInteger
+prop_regexMatchesNumDecimal = (=~ numDecimalRegex) . toFloatExpDecimal @Double . fromInteger
 
 prop_regexMatchesHex :: (Integral a, Show a) => a -> Bool
 prop_regexMatchesHex = (=~ hexRegex ) . toHex

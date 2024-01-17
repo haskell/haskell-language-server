@@ -36,7 +36,7 @@ packages:
          ./plugins/hls-overloaded-record-dot-plugin
          ./plugins/hls-semantic-tokens-plugin
 
-index-state: 2024-01-13T19:06:05Z
+index-state: 2024-01-17T16:04:21Z
 
 tests: True
 test-show-details: direct
@@ -91,10 +91,6 @@ if impl(ghc >= 9.1)
 if impl(ghc >= 9.7)
   allow-newer:
     ekg-core:text,
-    -- https://github.com/maoe/ghc-trace-events/issues/12
-    ghc-trace-events:base,
-    ghc-trace-events:bytestring,
-    ghc-trace-events:text,
     -- https://github.com/haskell-primitive/primitive-unlifted/issues/39
     primitive-unlifted:bytestring,
     -- https://github.com/obsidiansystems/commutative-semigroups/issues/13
