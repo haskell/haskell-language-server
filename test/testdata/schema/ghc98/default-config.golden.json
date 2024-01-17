@@ -77,7 +77,7 @@
             "codeActionsOn": true,
             "codeLensOn": true
         },
-        "moduleToken": {
+        "moduleName": {
             "globalOn": true
         },
         "ormolu": {
