@@ -9,8 +9,6 @@ import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import qualified Ide.Plugin.AlternateNumberFormat as AlternateNumberFormat
 import qualified Ide.Plugin.Conversion            as Conversion
-import           Language.LSP.Protocol.Lens       (kind)
-import           Language.LSP.Protocol.Types      (toEither)
 import           Properties.Conversion            (conversions)
 import           System.FilePath                  ((<.>), (</>))
 import           Test.Hls
@@ -110,20 +108,11 @@ codeActionTitle :: (Command |? CodeAction) -> Maybe Text
 codeActionTitle (InR CodeAction {_title}) = Just _title
 codeActionTitle _                         = Nothing
 
-codeActionTitle' :: CodeAction -> Text
-codeActionTitle' CodeAction{_title} = _title
-
 pointRange :: Int -> Int -> Range
 pointRange
   (subtract 1 -> fromIntegral -> line)
   (subtract 1 -> fromIntegral -> col) =
     Range (Position line col) (Position line $ col + 1)
-
-contains :: [CodeAction] -> Text -> Bool
-acts `contains` regex = any (\action -> codeActionTitle' action =~ regex) acts
-
-doesNotContain :: [CodeAction] -> Text -> Bool
-acts `doesNotContain` regex = not $ acts `contains` regex
 
 convertPrefix, intoInfix, maybeExtension, hexRegex, hexFloatRegex, binaryRegex, octalRegex, numDecimalRegex, decimalRegex :: Text
 convertPrefix = "Convert (" <> T.intercalate "|" [Conversion.hexRegex, Conversion.hexFloatRegex, Conversion.binaryRegex, Conversion.octalRegex, Conversion.numDecimalRegex, Conversion.decimalRegex] <> ")"
