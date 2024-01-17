@@ -23,7 +23,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error            (realSrcSpanToCodePointRange)
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
-                                                       HsSemanticTokenType (TModuleName),
+                                                       HsSemanticTokenType (TModule),
                                                        NameSemanticMap,
                                                        SemanticTokensConfig)
 import           Ide.Plugin.SemanticTokens.Utils      (splitAndBreakModuleNameAndOccName)
@@ -46,7 +46,7 @@ mkLocalNameSemanticFromAst :: [Identifier] -> HieFunMaskKind a -> RefMap a -> Na
 mkLocalNameSemanticFromAst names hieKind rm = M.fromList (mapMaybe (nameNameSemanticFromHie hieKind rm) names)
 
 nameNameSemanticFromHie :: forall a. HieFunMaskKind a -> RefMap a -> Identifier -> Maybe (Identifier, HsSemanticTokenType)
-nameNameSemanticFromHie _ _ ns@(Left _) = Just (ns, TModuleName)
+nameNameSemanticFromHie _ _ ns@(Left _) = Just (ns, TModule)
 nameNameSemanticFromHie hieKind rm ns@(Right _) = do
   st <- nameSemanticFromRefMap rm ns
   return (ns, st)

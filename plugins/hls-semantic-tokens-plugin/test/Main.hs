@@ -168,7 +168,7 @@ semanticTokensTests =
         let file2 = "TModuleB.hs"
         let expect =
               [
-                SemanticTokenOriginal TModuleName (Loc 3 8 8) "TModuleA",
+                SemanticTokenOriginal TModule (Loc 3 8 8) "TModuleA",
                 SemanticTokenOriginal TVariable (Loc 5 1 2) "go",
                 SemanticTokenOriginal TDataConstructor (Loc 5 6 4) "Game"
               ]
