@@ -183,7 +183,7 @@ codeLensResolveProvider ideState pId lens@CodeLens{_range} uri TypeLensesResolve
 
 generateLensCommand :: PluginId -> Uri -> T.Text -> TextEdit -> Command
 generateLensCommand pId uri title edit =
-  let wEdit = WorkspaceEdit (Just $ Map.singleton uri $ [edit]) Nothing Nothing
+  let wEdit = WorkspaceEdit (Just $ Map.singleton uri [edit]) Nothing Nothing
   in mkLspCommand pId (CommandId typeLensCommandId) title (Just [toJSON wEdit])
 
 -- Since the lenses are created with diagnostics, and since the globalTypeSig

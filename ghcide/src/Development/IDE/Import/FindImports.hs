@@ -93,7 +93,7 @@ locateModuleFile import_dirss exts targetFor isSource modName = do
     Nothing ->
       case find (\(_ , _, reexports) -> S.member modName reexports) import_dirss of
         Just (uid,_,_) -> pure $ LocateFoundReexport uid
-        Nothing -> pure $ LocateNotFound
+        Nothing -> pure LocateNotFound
     Just (uid,file) -> pure $ LocateFoundFile uid file
   where
     go (uid, candidate) = fmap ((uid,) <$>) $ targetFor modName candidate

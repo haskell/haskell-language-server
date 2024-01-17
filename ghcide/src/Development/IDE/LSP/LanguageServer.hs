@@ -110,7 +110,7 @@ runLanguageServer recorder options inH outH defaultConfig parseConfig onConfigCh
             -- TODO: magic string
             , LSP.configSection = "haskell"
             , LSP.doInitialize = doInitialize
-            , LSP.staticHandlers = (const staticHandlers)
+            , LSP.staticHandlers = const staticHandlers
             , LSP.interpretHandler = interpretHandler
             , LSP.options = modifyOptions options
             }

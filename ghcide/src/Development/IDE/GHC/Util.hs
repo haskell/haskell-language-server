@@ -168,7 +168,7 @@ cgGutsToCoreModule safeMode guts modDetails = CoreModule
 --   Will produce an 8 byte unreadable ByteString.
 fingerprintToBS :: Fingerprint -> BS.ByteString
 fingerprintToBS (Fingerprint a b) = BS.unsafeCreate 8 $ \ptr -> do
-    ptr' <- pure $ castPtr ptr
+    let ptr' = castPtr ptr
     pokeElemOff ptr' 0 a
     pokeElemOff ptr' 1 b
 

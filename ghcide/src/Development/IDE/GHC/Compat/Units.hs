@@ -1,5 +1,4 @@
-{-# LANGUAGE CPP             #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE CPP #-}
 
 -- | Compat module for 'UnitState' and 'UnitInfo'.
 module Development.IDE.GHC.Compat.Units (
