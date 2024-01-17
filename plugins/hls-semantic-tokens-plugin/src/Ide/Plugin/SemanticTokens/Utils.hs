@@ -112,7 +112,7 @@ splitModuleNameAndOccName _ ran (Left m) = [(ran, Left m)]
 splitModuleNameAndOccName vf ran@(Range (Position startLine startColumn) (Position _endLine endColumn)) (Right name)
     | nameLength name < fromIntegral (endColumn - startColumn), (Just prefixLen) <- peekPrefixModuleNameLength vf ran =
         [(Range (Position startLine startColumn) (Position startLine (startColumn + fromIntegral prefixLen))
-            , Left (ModuleName $ mkFastString "")), -- we do not need the module name
+            , Left (mkModuleName "")), -- we do not need the module name
         (Range (Position startLine (startColumn + fromIntegral prefixLen)) (Position startLine endColumn), Right name)]
     | otherwise = [(ran, Right name)]
 
