@@ -43,7 +43,7 @@ import           Language.LSP.Server
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
-    caps <- lift $ getClientCapabilities
+    caps <- lift getClientCapabilities
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     pm <- runActionE "classplugin.addMethodPlaceholders.GetParsedModule" state
         $ useE GetParsedModule nfp
@@ -239,6 +239,6 @@ minDefToMethodGroups hsc gblEnv range sigs minDef = makeMethodGroup <$> go minDe
 
         go (Var mn)   = pure $ makeMethodDefinitions hsc gblEnv range $ filter ((==) (printOutputable mn) . signatureToName) sigs
         go (Or ms)    = concatMap (go . unLoc) ms
-        go (And ms)   = foldr (liftA2 (<>)) [[]] (fmap (go . unLoc) ms)
+        go (And ms)   = foldr (liftA2 (<>) . go . unLoc) [[]] ms
         go (Parens m) = go (unLoc m)
 
