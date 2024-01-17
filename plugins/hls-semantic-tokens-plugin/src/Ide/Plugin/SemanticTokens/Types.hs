@@ -44,7 +44,7 @@ data HsSemanticTokenType
   | TTypeSynonym -- Type synonym
   | TTypeFamily -- type family
   | TRecordField -- from match bind
-  | TModuleName -- from match bind
+  | TModuleName -- module name
   deriving (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
 
 

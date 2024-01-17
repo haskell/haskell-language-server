@@ -26,7 +26,7 @@ import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
                                                        HsSemanticTokenType (TModuleName),
                                                        NameSemanticMap,
                                                        SemanticTokensConfig)
-import           Ide.Plugin.SemanticTokens.Utils      (splitModuleNameAndOccName)
+import           Ide.Plugin.SemanticTokens.Utils      (splitAndBreakModuleNameAndOccName)
 import           Language.LSP.Protocol.Types          (Position (Position),
                                                        Range (Range),
                                                        SemanticTokenAbsolute (SemanticTokenAbsolute),
@@ -81,7 +81,7 @@ hieAstSpanIdentifiers vf ast =
       return $
         M.fromListWith
           (<>)
-          [S.singleton <$> ri | idt <- S.toList (getNodeIds' ast'), ri <- splitModuleNameAndOccName vf range idt]
+          [S.singleton <$> ri | idt <- S.toList (getNodeIds' ast'), ri <- splitAndBreakModuleNameAndOccName vf range idt]
     getNodeIds' =
       Map.foldl' combineNodeIds mempty
         . Map.filterWithKey (\k _ -> k == SourceInfo)

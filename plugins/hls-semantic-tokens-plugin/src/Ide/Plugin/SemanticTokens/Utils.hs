@@ -103,17 +103,20 @@ mkRange startLine startCol len =
     Range (Position (fromIntegral startLine) (fromIntegral startCol)) (Position (fromIntegral startLine) (fromIntegral $ startCol + len))
 
 
--- nameLength is in code points unit.
--- while Range might not in code points unit.
--- but we can still use it to get the length
--- since it is only used to exclude some names
--- currently, we only break `(ModuleA.b)` into `(ModuleA` and `.b)`
-splitModuleNameAndOccName :: VirtualFile -> Range -> Identifier -> [(Range,Identifier)]
-splitModuleNameAndOccName _ ran (Left m) = [(ran, Left m)]
-splitModuleNameAndOccName vf ran@(Range (Position startLine startColumn) (Position _endLine endColumn)) (Right name)
-    | nameLength name < fromIntegral (endColumn - startColumn), (Just text) <- getTextByCodePointRangeFromVfs vf ran =
-        let stripFlag = peekStripFlag text
-        in case peekPrefixModuleNameLength text of
+-- | split a qualified identifier into module name and identifier and/or strip the (), ``
+-- for `ModuleA.b`, break it into `ModuleA.` and `b`
+-- for `(b)`, strip `()`, and get `b`
+-- for `(ModuleA.b)`, strip `()` and break it into `ModuleA.` and `b`
+-- nameLength get the length of the `b` in code points unit
+-- while Range might not be in code points unit.
+-- but the comparison is still valid since we only want to know if it is potentially a qualified identifier
+-- or an identifier that is wrapped in () or ``
+splitAndBreakModuleNameAndOccName :: VirtualFile -> Range -> Identifier -> [(Range,Identifier)]
+splitAndBreakModuleNameAndOccName _ ran (Left m) = [(ran, Left m)]
+splitAndBreakModuleNameAndOccName vf ran@(Range (Position startLine startColumn) (Position _endLine endColumn)) (Right name)
+    | nameLength name < fromIntegral (endColumn - startColumn), (Just txt) <- getTextByCodePointRangeFromVfs vf ran =
+        let stripFlag = peekStripFlag txt
+        in case peekPrefixModuleNameLength txt of
                 Just prefixLen ->
                     [(Range (Position startLine (startColumn + bool 0 1 stripFlag))
                             (Position startLine (startColumn + fromIntegral prefixLen)) , Left (mkModuleName "")), -- we do not need the module name, only tis range
@@ -139,9 +142,9 @@ peekStripFlag token =
 -- module name everything before the last dot.
 peekPrefixModuleNameLength :: Text -> Maybe Int
 peekPrefixModuleNameLength token = do
-  let prefixLen = length $ fst $ breakOnEnd "." token
-  guard $ prefixLen > 0
-  return prefixLen
+    let prefixLen = length $ fst $ breakOnEnd "." token
+    guard $ prefixLen > 0
+    return prefixLen
 
 -- | get the text from a range in a virtual file
 getTextByCodePointRangeFromVfs :: VirtualFile -> Range -> Maybe Text
