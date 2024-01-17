@@ -1,34 +1,49 @@
-{-# LANGUAGE ExplicitNamespaces  #-}
-{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
 -- The query module is used to query the semantic tokens from the AST
 module Ide.Plugin.SemanticTokens.Query where
 
-import           Data.Either                          (rights)
-import           Data.Foldable                        (fold)
-import qualified Data.Map                             as M
-import qualified Data.Map                             as Map
-import           Data.Maybe                           (fromMaybe, listToMaybe,
-                                                       mapMaybe)
-import           Data.Set                             (Set)
-import qualified Data.Set                             as S
-import qualified Data.Set                             as Set
-import           Data.Text                            (Text)
-import           Development.IDE.Core.PositionMapping (PositionMapping,
-                                                       toCurrentRange)
-import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error            (realSrcSpanToCodePointRange)
-import           Ide.Plugin.SemanticTokens.Mappings
-import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
-                                                       HsSemanticTokenType (TModuleName),
-                                                       NameSemanticMap,
-                                                       SemanticTokensConfig)
-import           Language.LSP.Protocol.Types
-import           Language.LSP.VFS                     (VirtualFile,
-                                                       codePointRangeToRange)
-import           Prelude                              hiding (span)
+import Data.Foldable (fold)
+import qualified Data.Map as M
+import qualified Data.Map as Map
+import Data.Maybe
+  ( fromMaybe,
+    listToMaybe,
+    mapMaybe,
+  )
+import Data.Set (Set)
+import qualified Data.Set as S
+import qualified Data.Set as Set
+import Data.Text (Text)
+import Development.IDE.Core.PositionMapping
+  ( PositionMapping,
+    toCurrentRange,
+  )
+import Development.IDE.GHC.Compat
+import Development.IDE.GHC.Error (realSrcSpanToCodePointRange)
+import Ide.Plugin.SemanticTokens.Mappings
+import Ide.Plugin.SemanticTokens.Types
+  ( HieFunMaskKind,
+    HsSemanticTokenType (TModuleName),
+    NameSemanticMap,
+    SemanticTokensConfig,
+  )
+import Ide.Plugin.SemanticTokens.Utils (splitModuleNameAndOccName)
+import Language.LSP.Protocol.Types
+  ( Position (Position),
+    Range (Range),
+    SemanticTokenAbsolute (SemanticTokenAbsolute),
+    SemanticTokens,
+    defaultSemanticTokensLegend,
+    makeSemanticTokens,
+  )
+import Language.LSP.VFS
+import Prelude hiding (length, span)
 
 ---------------------------------------------------------
 
@@ -72,7 +87,10 @@ hieAstSpanIdentifiers vf ast =
   where
     getIds ast' = fromMaybe mempty $ do
       range <- codePointRangeToRange vf $ realSrcSpanToCodePointRange $ nodeSpan ast'
-      return $ M.singleton range (getNodeIds' ast')
+      return $
+        M.fromListWith
+          (<>)
+          [S.singleton <$> ri | idt <- S.toList (getNodeIds' ast'), ri <- splitModuleNameAndOccName vf range idt]
     getNodeIds' =
       Map.foldl' combineNodeIds mempty
         . Map.filterWithKey (\k _ -> k == SourceInfo)
@@ -86,8 +104,9 @@ hieAstSpanIdentifiers vf ast =
         inclusion a b = not $ exclusion a b
         exclusion :: Identifier -> IdentifierDetails a -> Bool
         exclusion idt IdentifierDetails {identInfo = infos} = case idt of
-          Left _  -> False
+          Left _ -> False
           Right _ -> any isEvidenceContext (S.toList infos)
+
 
 -------------------------------------------------
 
@@ -96,7 +115,7 @@ hieAstSpanIdentifiers vf ast =
 -------------------------------------------------
 
 extractSemanticTokensFromNames :: NameSemanticMap -> M.Map Range (Set Identifier) -> M.Map Range HsSemanticTokenType
-extractSemanticTokensFromNames nsm = Map.mapMaybe (foldMap (flip M.lookup nsm))
+extractSemanticTokensFromNames nsm = Map.mapMaybe (foldMap (`M.lookup` nsm))
 
 rangeSemanticMapSemanticTokens :: SemanticTokensConfig -> PositionMapping -> M.Map Range HsSemanticTokenType -> Either Text SemanticTokens
 rangeSemanticMapSemanticTokens stc mapping =
@@ -106,7 +125,9 @@ rangeSemanticMapSemanticTokens stc mapping =
     . M.mapKeys (toCurrentRange mapping)
   where
     toAbsSemanticToken :: Range -> HsSemanticTokenType -> SemanticTokenAbsolute
-    toAbsSemanticToken (Range (Position startLine startColumn) (Position _endLine endColumn)) tokenType =
+    toAbsSemanticToken (Range (Language.LSP.Protocol.Types.Position startLine startColumn)
+                              (Language.LSP.Protocol.Types.Position _endLine endColumn))
+                              tokenType =
       let len = endColumn - startColumn
        in SemanticTokenAbsolute
             (fromIntegral startLine)

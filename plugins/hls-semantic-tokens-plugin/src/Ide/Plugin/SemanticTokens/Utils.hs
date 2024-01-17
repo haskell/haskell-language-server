@@ -1,5 +1,9 @@
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 
@@ -10,7 +14,14 @@ import           Data.ByteString.Char8      (unpack)
 import qualified Data.Map                   as Map
 import           Development.IDE            (Position (..), Range (..))
 import           Development.IDE.GHC.Compat
-import           Prelude                    hiding (span)
+import           Prelude                         hiding (length, span)
+import Development.IDE.GHC.Compat.Util (mkFastString)
+import Language.LSP.VFS (VirtualFile (VirtualFile), _file_text)
+import qualified Data.Text.Utf16.Rope as Rope
+import Data.Text.Utf16.Rope (Rope, splitAtPosition)
+import Data.Text (breakOnEnd, length, Text)
+import Control.Monad (guard)
+import qualified Data.List
 
 deriving instance Show DeclType
 deriving instance Show BindType
@@ -90,3 +101,50 @@ showSpan x = show (srcSpanStartLine x) <> ":" <> show (srcSpanStartCol x) <> "-"
 mkRange :: (Integral a1, Integral a2) => a1 -> a2 -> a2 -> Range
 mkRange startLine startCol len =
     Range (Position (fromIntegral startLine) (fromIntegral startCol)) (Position (fromIntegral startLine) (fromIntegral $ startCol + len))
+
+
+-- nameLength is in code points unit.
+-- while Range might not in code points unit.
+-- but we can still use it to get the length
+-- since it is only used to exclude some names
+-- currently, we only break `(ModuleA.b)` into `(ModuleA` and `.b)`
+splitModuleNameAndOccName :: VirtualFile -> Range -> Identifier -> [(Range,Identifier)]
+splitModuleNameAndOccName _ ran (Left m) = [(ran, Left m)]
+splitModuleNameAndOccName vf ran@(Range (Position startLine startColumn) (Position _endLine endColumn)) (Right name)
+    | nameLength name < fromIntegral (endColumn - startColumn), (Just prefixLen) <- peekPrefix vf ran =
+        [(Range (Position startLine startColumn) (Position startLine (startColumn + fromIntegral prefixLen))
+            , Left (ModuleName $ mkFastString "")), -- we do not need the module name
+        (Range (Position startLine (startColumn + fromIntegral prefixLen)) (Position startLine endColumn), Right name)]
+    | otherwise = [(ran, Right name)]
+
+nameLength :: Name -> Int
+nameLength = lengthFS . occNameFS . nameOccName
+
+-- | peek at the prefix of a range,
+-- if it is a qualified name, return the length of the module name.
+-- module name everything before the last dot.
+peekPrefix :: VirtualFile -> Range -> Maybe Int
+peekPrefix rp ran = do
+  token <- getTextByCodePointRangeFromVfs rp ran
+  let prefixLen = length $ fst $ breakOnEnd "." token
+  guard $ prefixLen > 0
+  return prefixLen
+
+-- | get the text from a range in a virtual file
+getTextByCodePointRangeFromVfs :: VirtualFile -> Range -> Maybe Text
+getTextByCodePointRangeFromVfs vf ra = do
+    let rp = vf._file_text
+    let (pos, len) = rangeToPositionLength ra
+    (_, suffix) <- splitAtPosition (codePointPositionRopePosition pos) rp
+    (prefix, _) <- Rope.splitAt len suffix
+    let token = Rope.toText prefix
+    return token
+    where
+    rangeToPositionLength :: (Integral l) => Range -> (Position, l)
+    rangeToPositionLength (Range beginPos@(Position _ startColumn) (Position _ endColumn)) =
+        (beginPos, fromIntegral $ endColumn - startColumn)
+    codePointPositionRopePosition :: Position -> Rope.Position
+    codePointPositionRopePosition (Position line column) = do
+        let line' = fromIntegral line
+        let column' = fromIntegral column
+        Rope.Position line' column'

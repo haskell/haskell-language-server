@@ -38,6 +38,7 @@ module Development.IDE.GHC.Compat(
     FastStringCompat,
     bytesFS,
     mkFastStringByteString,
+    lengthFS,
     nodeInfo',
     getNodeIds,
     sourceNodeInfo,

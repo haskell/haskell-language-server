@@ -1,16 +1,19 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DerivingStrategies    #-}
-{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE PolyKinds      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UnicodeSyntax         #-}
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 -- |
 -- This module provides the core functionality of the plugin.
@@ -92,6 +95,7 @@ semanticTokensFull recorder state pid param = do
 -- Local names token type from 'hieAst'
 -- Name locations from 'hieAst'
 -- Visible names from 'tmrRenamed'
+
 --
 -- It then combines this information to compute the semantic tokens for the file.
 getSemanticTokensRule :: Recorder (WithPriority SemanticLog) -> Rules ()
