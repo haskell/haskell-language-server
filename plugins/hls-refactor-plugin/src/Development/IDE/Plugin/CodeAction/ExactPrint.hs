@@ -398,7 +398,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
                                              noExtField
 #endif
                                              childRdr
-#if MIN_VERSION_ghc(9,5,0)
+#if MIN_VERSION_ghc(9,7,0)
           listAnn = (Nothing, epAnn srcParent [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)])
 #else
           listAnn = epAnn srcParent [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)]
