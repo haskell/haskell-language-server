@@ -18,6 +18,10 @@
         "changeTypeSignature": {
             "globalOn": true
         },
+        "class": {
+            "codeActionsOn": true,
+            "codeLensOn": true
+        },
         "eval": {
             "config": {
                 "diff": true,
@@ -36,6 +40,21 @@
                 "external": false,
                 "path": "fourmolu"
             }
+        },
+        "gadt": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-bindings": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-fill-holes": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-imports-exports": {
+            "globalOn": true
+        },
+        "ghcide-code-actions-type-signatures": {
+            "globalOn": true
         },
         "ghcide-completions": {
             "config": {
@@ -81,6 +100,15 @@
         "qualifyImportedNames": {
             "globalOn": true
         },
+        "rename": {
+            "config": {
+                "crossModule": false
+            },
+            "globalOn": true
+        },
+        "retrie": {
+            "globalOn": true
+        },
         "semanticTokens": {
             "config": {
                 "classMethodToken": "method",
@@ -96,6 +124,9 @@
                 "variableToken": "variable"
             },
             "globalOn": false
+        },
+        "splice": {
+            "globalOn": true
         },
         "stan": {
             "globalOn": false
