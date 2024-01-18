@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
@@ -63,11 +62,11 @@ descriptor recorder plId = (defaultPluginDescriptor plId "Provides selection and
     , pluginRules = codeRangeRule (cmapWithPrio LogRules recorder)
     }
 
-data Log = LogRules Rules.Log
+newtype Log = LogRules Rules.Log
 
 instance Pretty Log where
-    pretty log = case log of
-        LogRules codeRangeLog -> pretty codeRangeLog
+    pretty (LogRules codeRangeLog) = pretty codeRangeLog
+
 
 foldingRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentFoldingRange
 foldingRangeHandler _ ide _ FoldingRangeParams{..} =
