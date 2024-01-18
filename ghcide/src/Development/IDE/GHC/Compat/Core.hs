@@ -408,6 +408,7 @@ module Development.IDE.GHC.Compat.Core (
 #endif
     groupOrigin,
     isVisibleFunArg,
+    lookupGlobalRdrEnv,
     ) where
 
 import qualified GHC
@@ -824,4 +825,8 @@ mkSimpleTarget :: DynFlags -> FilePath -> Target
 mkSimpleTarget df fp = Target (TargetFile fp Nothing) True (homeUnitId_ df) Nothing
 #else
 mkSimpleTarget _ fp = Target (TargetFile fp Nothing) True Nothing
+#endif
+
+#if MIN_VERSION_ghc(9,7,0)
+lookupGlobalRdrEnv gre_env occ = lookupGRE gre_env (LookupOccName occ AllRelevantGREs)
 #endif
