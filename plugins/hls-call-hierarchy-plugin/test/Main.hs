@@ -1,8 +1,7 @@
-{-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TupleSections      #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TupleSections     #-}
 
 module Main (main) where
 
@@ -17,11 +16,8 @@ import           Development.IDE.Test
 import           Ide.Plugin.CallHierarchy
 import qualified Language.LSP.Protocol.Lens as L
 import qualified Language.LSP.Test          as Test
-import           System.Directory.Extra
 import           System.FilePath
-import qualified System.IO.Extra
 import           Test.Hls
-import           Test.Hls.Util              (withCanonicalTempDir)
 
 plugin :: PluginTestDescriptor ()
 plugin = mkPluginTestDescriptor' descriptor "call-hierarchy"
@@ -196,20 +192,16 @@ incomingCallsTests :: TestTree
 incomingCallsTests =
   testGroup "Incoming Calls"
   [ testGroup "single file"
-    [
-      testCase "xdata unavailable" $
+    [ testCase "xdata unavailable" $
         runSessionWithServer def plugin testDataDir $ do
           doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
           waitForIndex (testDataDir </> "A.hs")
-          [item] <- Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0)
+          item <- expectOneElement =<< Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0)
           let expected = [CallHierarchyIncomingCall item [mkRange 1 2 1 3]]
-          Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 0) >>=
-            \case
-              [item] -> do
-                let itemNoData = set L.data_ Nothing item
-                Test.incomingCalls (mkIncomingCallsParam itemNoData) >>=
-                  \res -> liftIO $ sort expected @=? sort res
-              _      -> liftIO $ assertFailure "Not exactly one element"
+          item' <- expectOneElement =<< Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 0)
+          let itemNoData = set L.data_ Nothing item'
+          res <- Test.incomingCalls (mkIncomingCallsParam itemNoData)
+          liftIO $ sort expected @=? sort res
           closeDoc doc
     , testCase "xdata available" $ do
         let contents = T.unlines ["a=3","b=a"]
@@ -321,20 +313,16 @@ outgoingCallsTests :: TestTree
 outgoingCallsTests =
   testGroup "Outgoing Calls"
   [ testGroup "single file"
-    [
-      testCase "xdata unavailable" $ withCanonicalTempDir $ \dir ->
+    [ testCase "xdata unavailable" $ withCanonicalTempDir $ \dir ->
         runSessionWithServer def plugin dir $ do
           doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
           waitForIndex (dir </> "A.hs")
-          [item] <- Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 1)
+          item <- expectOneElement =<< Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 1)
           let expected = [CallHierarchyOutgoingCall item [mkRange 1 2 1 3]]
-          Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0) >>=
-            \case
-              [item] -> do
-                let itemNoData = set L.data_ Nothing item
-                Test.outgoingCalls (mkOutgoingCallsParam itemNoData) >>=
-                  \res -> liftIO $ sort expected @=? sort res
-              _      -> liftIO $ assertFailure "Not exactly one element"
+          item' <- expectOneElement =<< Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0)
+          let itemNoData = set L.data_ Nothing item'
+          res <- Test.outgoingCalls (mkOutgoingCallsParam itemNoData)
+          liftIO $ sort expected @=? sort res
           closeDoc doc
     , testCase "xdata available" $ do
         let contents = T.unlines ["a=3", "b=a"]
@@ -434,13 +422,9 @@ incomingCallTestCase contents queryX queryY positions ranges = withCanonicalTemp
       )
       (zip positions ranges)
     let expected = map mkCallHierarchyIncomingCall items
-    -- liftIO delay
-    Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
-      \case
-        [item] -> do
-          Test.incomingCalls (mkIncomingCallsParam item) >>=
-                    \res -> liftIO $ sort expected @=? sort res
-        _      -> liftIO $ assertFailure "Not one element"
+    item <- expectOneElement =<< Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY)
+    res <- Test.incomingCalls (mkIncomingCallsParam item)
+    liftIO $ sort expected @=? sort res
     closeDoc doc
 
 incomingCallMultiFileTestCase :: FilePath -> Int -> Int -> M.Map FilePath [((Int, Int), Range)] -> Assertion
@@ -456,13 +440,9 @@ incomingCallMultiFileTestCase filepath queryX queryY mp =
                     <&> map (, range)
                 ) pr) mp
     let expected = map mkCallHierarchyIncomingCall items
-    -- liftIO delay
-    Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
-      \case
-        [item] -> do
-          Test.incomingCalls (mkIncomingCallsParam item) >>=
-                    \res -> liftIO $ sort expected @=? sort res
-        _      -> liftIO $ assertFailure "Not one element"
+    item <- expectOneElement =<< Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY)
+    res <- Test.incomingCalls (mkIncomingCallsParam item)
+    liftIO $ sort expected @=? sort res
     closeDoc doc
 
 outgoingCallTestCase :: T.Text -> Int -> Int -> [(Int, Int)] -> [Range] -> Assertion
@@ -476,12 +456,9 @@ outgoingCallTestCase contents queryX queryY positions ranges = withCanonicalTemp
       )
       (zip positions ranges)
     let expected = map mkCallHierarchyOutgoingCall items
-    Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
-      \case
-        [item] -> do
-          Test.outgoingCalls (mkOutgoingCallsParam item) >>=
-                    \res -> liftIO $ sort expected @=? sort res
-        _      -> liftIO $ assertFailure "Not one element"
+    item <- expectOneElement =<< Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY)
+    res <- Test.outgoingCalls (mkOutgoingCallsParam item)
+    liftIO $ sort expected @=? sort res
     closeDoc doc
 
 outgoingCallMultiFileTestCase :: FilePath -> Int -> Int -> M.Map FilePath [((Int, Int), Range)] -> Assertion
@@ -497,12 +474,9 @@ outgoingCallMultiFileTestCase filepath queryX queryY mp =
                     <&> map (, range)
                 ) pr) mp
     let expected = map mkCallHierarchyOutgoingCall items
-    Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
-      \case
-        [item] -> do
-          Test.outgoingCalls (mkOutgoingCallsParam item) >>=
-                    \res -> liftIO $ sort expected @=? sort res
-        _      -> liftIO $ assertFailure "Not one element"
+    item <- expectOneElement =<< Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY)
+    res <- Test.outgoingCalls (mkOutgoingCallsParam item)
+    liftIO $ sort expected @=? sort res
     closeDoc doc
 
 oneCaseWithCreate :: T.Text -> Int -> Int -> (Uri -> CallHierarchyItem -> Assertion) -> Assertion
@@ -510,11 +484,14 @@ oneCaseWithCreate contents queryX queryY expected = withCanonicalTempDir $ \dir 
   runSessionWithServer def plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
     waitForIndex (dir </> "A.hs")
-    Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
-      \case
-        [item] -> liftIO $ expected (doc ^. L.uri) item
-        res    -> liftIO $ assertFailure "Not one element"
+    item <- expectOneElement =<< Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY)
+    liftIO $ expected (doc ^. L.uri) item
     closeDoc doc
+
+expectOneElement :: [a] -> Session a
+expectOneElement = \case
+    [x] -> pure x
+    xs  -> liftIO . assertFailure $ "Expecting exactly one element, but got " ++ show (length xs)
 
 mkCallHierarchyItem' :: String -> T.Text -> SymbolKind -> Range -> Range -> Uri -> CallHierarchyItem -> Assertion
 mkCallHierarchyItem' prefix name kind range selRange uri c@(CallHierarchyItem name' kind' tags' detail' uri' range' selRange' xdata') = do
@@ -528,7 +505,7 @@ mkCallHierarchyItem' prefix name kind range selRange uri c@(CallHierarchyItem na
     case xdata' of
       Nothing -> assertFailure ("In " ++ show c ++ ", got Nothing for data but wanted " ++ show xdata)
       Just v -> case Aeson.fromJSON v of
-        Aeson.Success v -> assertBool ("In " ++ show c ++ " wanted data prefix: " ++ show xdata) (xdata `T.isPrefixOf` v)
+        Aeson.Success v' -> assertBool ("In " ++ show c ++ " wanted data prefix: " ++ show xdata) (xdata `T.isPrefixOf` v')
         Aeson.Error err -> assertFailure ("In " ++ show c ++ " wanted data prefix: " ++ show xdata ++ " but json parsing failed with " ++ show err)
   where
     tags = Nothing
@@ -570,6 +547,6 @@ waitForIndex fp1 = skipManyTill anyMessage $ void $ referenceReady lenientEquals
     -- filepath from the message
     lenientEquals :: FilePath -> Bool
     lenientEquals fp2
-      | isRelative fp1 = any (equalFilePath fp1) (map (foldr (</>) "") $ tails $ splitDirectories fp2)
+      | isRelative fp1 = any (equalFilePath fp1 . joinPath) $ tails $ splitDirectories fp2
       | otherwise = equalFilePath fp1 fp2
 
