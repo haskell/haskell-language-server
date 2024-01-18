@@ -274,7 +274,7 @@ hsConDeclsBinders cons
     get_flds_h98 _ = []
 
     get_flds_gadt :: HsConDeclGADTDetails GhcPs
-                  -> ([LFieldOcc GhcPs])
+                  -> [LFieldOcc GhcPs]
 #if MIN_VERSION_ghc(9,3,0)
     get_flds_gadt (RecConGADT flds _) = get_flds (reLoc flds)
 #else
@@ -283,7 +283,7 @@ hsConDeclsBinders cons
     get_flds_gadt _ = []
 
     get_flds :: Located [LConDeclField GhcPs]
-             -> ([LFieldOcc GhcPs])
+             -> [LFieldOcc GhcPs]
     get_flds flds = concatMap (cd_fld_names . unLoc) (unLoc flds)
 
 
