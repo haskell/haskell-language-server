@@ -1673,6 +1673,7 @@ suggestImportTests :: TestTree
 suggestImportTests = testGroup "suggest import actions"
   [ testGroup "Dont want suggestion"
     [ -- extend import
+      -- We don't want to suggest a new import, but extend existing imports
       test False ["Data.List.NonEmpty ()"] "f = nonEmpty" []                "import Data.List.NonEmpty (nonEmpty)"
       -- data constructor
     , test False []                        "f = First"    []                "import Data.Monoid (First)"

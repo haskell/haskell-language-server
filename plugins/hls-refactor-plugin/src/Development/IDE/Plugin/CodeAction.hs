@@ -1453,7 +1453,11 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
             *> extractQualifiedModuleNameFromMissingName (extractTextInRange _range fileContents)
   , Just (range, indent) <- newImportInsertRange ps fileContents
   , extendImportSuggestions <- matchRegexUnifySpaces msg
+#if MIN_VERSION_ghc(9,7,0)
+    "Add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
+#else
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
+#endif
   = let qis = qualifiedImportStyle df
         -- FIXME: we can use thingMissing once the support for GHC 9.4 is dropped.
         -- In what fllows, @missing@ is assumed to be qualified name.
