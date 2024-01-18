@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes   #-}
-{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
@@ -701,11 +700,9 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x y = x + y"
         ]
-#if MIN_VERSION_ghc(9,7,0)
-        [ "func :: a -> a -> a" -- 9.8 has a different suggestion
-#else
-        [ "func :: Integer -> Integer -> Integer"
-#endif
+        [ if ghcVersion >= GHC98
+          then "func :: a -> a -> a" -- 9.8 has a different suggestion
+          else "func :: Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testUseTypeSignature "type in parentheses"
@@ -733,11 +730,9 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func::_"
         , "func x y = x + y"
         ]
-#if MIN_VERSION_ghc(9,7,0)
-        [ "func::a -> a -> a" -- 9.8 has a different suggestion
-#else
-        [ "func::Integer -> Integer -> Integer"
-#endif
+        [ if ghcVersion >= GHC98
+          then "func::a -> a -> a" -- 9.8 has a different suggestion
+          else "func::Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testGroup "add parens if hole is part of bigger type"

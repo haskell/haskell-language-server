@@ -110,8 +110,6 @@ test-suite tests
     , hls-test-utils      == 2.6.0.0
     , lens
     , lsp-types
-    -- for MIN_VERSION_ghc
-    , ghc
     , text
     , hls-plugin-api
     , parser-combinators
