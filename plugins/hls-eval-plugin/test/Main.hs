@@ -8,25 +8,25 @@ module Main
   ( main
   ) where
 
-import           Control.Lens                  (_Just, folded, preview,
-                                                view, (^..), (^.))
-import           Data.Aeson                    (Value (Object), fromJSON,
-                                                object, (.=))
-import           Data.Aeson.Types              (Pair, Result (Success))
-import           Data.List                     (isInfixOf)
-import           Data.List.Extra               (nubOrdOn)
-import qualified Data.Map                      as Map
+import           Control.Lens               (_Just, folded, preview, view, (^.),
+                                             (^..))
+import           Data.Aeson                 (Value (Object), fromJSON, object,
+                                             (.=))
+import           Data.Aeson.Types           (Pair, Result (Success))
+import           Data.List                  (isInfixOf)
+import           Data.List.Extra            (nubOrdOn)
+import qualified Data.Map                   as Map
 import           Data.Row
-import qualified Data.Text                     as T
-import           Ide.Plugin.Config             (Config)
-import qualified Ide.Plugin.Config             as Plugin
-import qualified Ide.Plugin.Eval               as Eval
-import           Ide.Plugin.Eval.Types         (EvalParams (..), Section (..),
-                                                testOutput)
-import           Language.LSP.Protocol.Lens    (command, range, title)
-import           System.FilePath               ((<.>), (</>))
+import qualified Data.Text                  as T
+import           Ide.Plugin.Config          (Config)
+import qualified Ide.Plugin.Config          as Plugin
+import qualified Ide.Plugin.Eval            as Eval
+import           Ide.Plugin.Eval.Types      (EvalParams (..), Section (..),
+                                             testOutput)
+import           Language.LSP.Protocol.Lens (command, range, title)
+import           System.FilePath            ((<.>), (</>))
 import           Test.Hls
-import qualified Test.Hls.FileSystem           as FS
+import qualified Test.Hls.FileSystem        as FS
 
 main :: IO ()
 main = defaultTestRunner tests
