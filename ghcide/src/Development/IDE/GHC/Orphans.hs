@@ -98,7 +98,7 @@ instance Ord FastString where
 instance NFData (SrcSpanAnn' a) where
     rnf = rwhnf
 
-instance Bifunctor (GenLocated) where
+instance Bifunctor GenLocated where
     bimap f g (L l x) = L (f l) (g x)
 
 deriving instance Functor SrcSpanAnn'

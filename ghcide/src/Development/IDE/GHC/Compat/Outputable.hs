@@ -137,11 +137,11 @@ pprNoLocMsgEnvelope (MsgEnvelope { errMsgDiagnostic = e
   = sdocWithContext $ \_ctx ->
     withErrStyle unqual $
 #if MIN_VERSION_ghc(9,7,0)
-      (formatBulleted e)
+      formatBulleted e
 #elif MIN_VERSION_ghc(9,3,0)
-      (formatBulleted _ctx $ e)
+      formatBulleted _ctx $ e
 #else
-      (formatBulleted _ctx $ Error.renderDiagnostic e)
+      formatBulleted _ctx $ Error.renderDiagnostic e
 #endif
 
 

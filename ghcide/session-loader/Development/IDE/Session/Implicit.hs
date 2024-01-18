@@ -3,26 +3,27 @@ module Development.IDE.Session.Implicit
   ) where
 
 
-import           Control.Applicative               ((<|>))
+import           Control.Applicative       ((<|>))
+import           Control.Exception         (handleJust)
 import           Control.Monad
-import           Control.Monad.Trans.Maybe
 import           Control.Monad.IO.Class
-import           Control.Exception (handleJust)
+import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor
+import           Data.Functor              ((<&>))
 import           Data.Maybe
 import           Data.Void
+import           System.Directory          hiding (findFile)
 import           System.FilePath
-import           System.Directory                  hiding (findFile)
 import           System.IO.Error
 
-import           Colog.Core                        (LogAction (..), WithSeverity (..))
-import           HIE.Bios.Cradle                   (getCradle, defaultCradle)
+import           Colog.Core                (LogAction (..), WithSeverity (..))
 import           HIE.Bios.Config
-import           HIE.Bios.Types                    hiding (ActionName(..))
+import           HIE.Bios.Cradle           (defaultCradle, getCradle)
+import           HIE.Bios.Types            hiding (ActionName (..))
 
-import           Hie.Locate
 import           Hie.Cabal.Parser
-import qualified Hie.Yaml                          as Implicit
+import           Hie.Locate
+import qualified Hie.Yaml                  as Implicit
 
 loadImplicitCradle :: Show a => LogAction IO (WithSeverity Log) -> FilePath -> IO (Cradle a)
 loadImplicitCradle l wfile = do
@@ -50,11 +51,11 @@ inferCradleTree start_dir =
    <|> (cabalExecutable >> cabalConfigDir start_dir >>= \dir -> cabalWorkDir dir >> pure (simpleCabalCradle dir))
    <|> (stackExecutable >> stackConfigDir start_dir >>= \dir -> stackWorkDir dir >> stackCradle dir)
    -- If we have a cabal.project OR we have a .cabal and dist-newstyle, prefer cabal
-   <|> (cabalExecutable >> (cabalConfigDir start_dir <|> cabalFileAndWorkDir) >>= pure . simpleCabalCradle)
+   <|> (cabalExecutable >> (cabalConfigDir start_dir <|> cabalFileAndWorkDir) <&> simpleCabalCradle)
    -- If we have a stack.yaml, use stack
    <|> (stackExecutable >> stackConfigDir start_dir >>= stackCradle)
    -- If we have a cabal file, use cabal
-   <|> (cabalExecutable >> cabalFileDir start_dir >>= pure . simpleCabalCradle)
+   <|> (cabalExecutable >> cabalFileDir start_dir <&> simpleCabalCradle)
 
   where
   maybeItsBios = (\wdir -> (Bios (Program $ wdir </> ".hie-bios") Nothing Nothing, wdir)) <$> biosWorkDir start_dir

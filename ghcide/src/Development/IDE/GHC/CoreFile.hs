@@ -124,7 +124,7 @@ codeGutsToCoreFile hash CgGuts{..} = CoreFile (map (toIfaceTopBind1 cg_module) $
 -- | Implicit binds can be generated from the interface and are not tidied,
 -- so we must filter them out
 isNotImplictBind :: CoreBind -> Bool
-isNotImplictBind bind = any (not . isImplicitId) $ bindBindings bind
+isNotImplictBind bind = not . all isImplicitId $ bindBindings bind
 
 bindBindings :: CoreBind -> [Var]
 bindBindings (NonRec b _) = [b]
@@ -189,7 +189,7 @@ tcTopIfaceBindings1 :: IORef TypeEnv -> [TopIfaceBinding IfaceId]
           -> IfL [CoreBind]
 tcTopIfaceBindings1 ty_var ver_decls
    = do
-     int <- mapM (traverse $ tcIfaceId) ver_decls
+     int <- mapM (traverse tcIfaceId) ver_decls
      let all_ids = concatMap toList int
      liftIO $ modifyIORef ty_var (flip extendTypeEnvList $ map AnId all_ids)
      extendIfaceIdEnv all_ids $ mapM tc_iface_bindings int
@@ -212,7 +212,7 @@ tc_iface_bindings (TopIfaceNonRec v e) = do
   e' <- tcIfaceExpr e
   pure $ NonRec v e'
 tc_iface_bindings (TopIfaceRec vs) = do
-  vs' <- traverse (\(v, e) -> (,) <$> pure v <*> tcIfaceExpr e) vs
+  vs' <- traverse (\(v, e) -> (v,) <$> tcIfaceExpr e) vs
   pure $ Rec vs'
 
 -- | Prefixes that can occur in a GHC OccName
