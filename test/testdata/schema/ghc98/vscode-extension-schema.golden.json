@@ -35,6 +35,18 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.class.codeActionsOn": {
+        "default": true,
+        "description": "Enables class code actions",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.class.codeLensOn": {
+        "default": true,
+        "description": "Enables class code lenses",
+        "scope": "resource",
+        "type": "boolean"
+    },
     "haskell.plugin.eval.config.diff": {
         "default": true,
         "markdownDescription": "Enable the diff output (WAS/NOW) of eval lenses",
@@ -76,6 +88,36 @@
         "markdownDescription": "Set path to executable (for \"external\" mode).",
         "scope": "resource",
         "type": "string"
+    },
+    "haskell.plugin.gadt.globalOn": {
+        "default": true,
+        "description": "Enables gadt plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.ghcide-code-actions-bindings.globalOn": {
+        "default": true,
+        "description": "Enables ghcide-code-actions-bindings plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.ghcide-code-actions-fill-holes.globalOn": {
+        "default": true,
+        "description": "Enables ghcide-code-actions-fill-holes plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.ghcide-code-actions-imports-exports.globalOn": {
+        "default": true,
+        "description": "Enables ghcide-code-actions-imports-exports plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.ghcide-code-actions-type-signatures.globalOn": {
+        "default": true,
+        "description": "Enables ghcide-code-actions-type-signatures plugin",
+        "scope": "resource",
+        "type": "boolean"
     },
     "haskell.plugin.ghcide-completions.config.autoExtendOn": {
         "default": true,
@@ -180,6 +222,24 @@
     "haskell.plugin.qualifyImportedNames.globalOn": {
         "default": true,
         "description": "Enables qualifyImportedNames plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.rename.config.crossModule": {
+        "default": false,
+        "markdownDescription": "Enable experimental cross-module renaming",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.rename.globalOn": {
+        "default": true,
+        "description": "Enables rename plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.retrie.globalOn": {
+        "default": true,
+        "description": "Enables retrie plugin",
         "scope": "resource",
         "type": "boolean"
     },
@@ -802,6 +862,12 @@
     "haskell.plugin.semanticTokens.globalOn": {
         "default": false,
         "description": "Enables semanticTokens plugin",
+        "scope": "resource",
+        "type": "boolean"
+    },
+    "haskell.plugin.splice.globalOn": {
+        "default": true,
+        "description": "Enables splice plugin",
         "scope": "resource",
         "type": "boolean"
     },
