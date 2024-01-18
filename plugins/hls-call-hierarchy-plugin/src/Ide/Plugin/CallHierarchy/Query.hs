@@ -13,6 +13,7 @@ import           Database.SQLite.Simple
 import           Development.IDE.GHC.Compat
 import           HieDb                          (HieDb (getConn), Symbol (..))
 import           Ide.Plugin.CallHierarchy.Types
+import           Prelude                        hiding (mod)
 
 incomingCalls :: HieDb -> Symbol -> IO [Vertex]
 incomingCalls (getConn -> conn) symbol = do
