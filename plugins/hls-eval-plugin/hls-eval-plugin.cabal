@@ -38,7 +38,7 @@ source-repository head
 
 common warnings
   ghc-options:
-    -Wall -Wunused-packages -Wno-name-shadowing -fno-ignore-asserts
+    -Wall -Wunused-packages -Wno-name-shadowing -Wno-unticked-promoted-constructors -fno-ignore-asserts
 
 library
   import: warnings
