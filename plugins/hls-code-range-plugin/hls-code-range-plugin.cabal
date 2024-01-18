@@ -22,17 +22,19 @@ source-repository head
     type:     git
     location: https://github.com/haskell/haskell-language-server.git
 
+common warnings
+  ghc-options: -Wall -Wunused-packages
+
 library
+  import: warnings
   exposed-modules:
     Ide.Plugin.CodeRange
     Ide.Plugin.CodeRange.Rules
   other-modules:
     Ide.Plugin.CodeRange.ASTPreProcess
-  ghc-options: -Wall
   hs-source-dirs: src
   default-language:   Haskell2010
   build-depends:
-    , aeson
     , base             >=4.12 && <5
     , containers
     , deepseq
@@ -44,11 +46,11 @@ library
     , lsp
     , mtl
     , semigroupoids
-    , text
     , transformers
     , vector
 
 test-suite tests
+  import:           warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
@@ -60,16 +62,11 @@ test-suite tests
   build-depends:
     , base
     , bytestring
-    , containers
     , filepath
-    , ghcide                     == 2.6.0.0
     , hls-code-range-plugin
-    , hls-plugin-api
     , hls-test-utils             == 2.6.0.0
     , lens
     , lsp
     , lsp-test
-    , tasty-hunit
-    , text
     , transformers
     , vector
