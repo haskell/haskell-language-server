@@ -23,9 +23,9 @@ import           Development.IDE.Types.Location
 -- standard imports
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import           Data.List                         (isSuffixOf, find)
-import qualified Data.Set                          as S
+import           Data.List                         (find, isSuffixOf)
 import           Data.Maybe
+import qualified Data.Set                          as S
 import           System.FilePath
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
@@ -93,7 +93,7 @@ locateModuleFile import_dirss exts targetFor isSource modName = do
     Nothing ->
       case find (\(_ , _, reexports) -> S.member modName reexports) import_dirss of
         Just (uid,_,_) -> pure $ LocateFoundReexport uid
-        Nothing -> pure LocateNotFound
+        Nothing        -> pure LocateNotFound
     Just (uid,file) -> pure $ LocateFoundFile uid file
   where
     go (uid, candidate) = fmap ((uid,) <$>) $ targetFor modName candidate
