@@ -3736,12 +3736,15 @@ extendImportTestsRegEx = testGroup "regex parsing"
                   "\n\8226 Perhaps you want to add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217)"
                   Nothing
     , testCase "parse multiple imports" $ template
-                 "\n\8226 Perhaps you want to add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217 (app/testlsp.hs:7:1-18)\n    \8216Data.HashMap.Strict\8217 (app/testlsp.hs:8:1-29)"
+                 (if ghcVersion >= GHC98
+                 then "\n\8226 Add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217 (at app/testlsp.hs:7:1-18)\n    \8216Data.HashMap.Strict\8217 (at app/testlsp.hs:8:1-29)"
+                 else "\n\8226 Perhaps you want to add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217 (app/testlsp.hs:7:1-18)\n    \8216Data.HashMap.Strict\8217 (app/testlsp.hs:8:1-29)"
+                 )
                  $ Just ("fromList",[("Data.Map","app/testlsp.hs:7:1-18"),("Data.HashMap.Strict","app/testlsp.hs:8:1-29")])
     ]
     where
         template message expected = do
-            liftIO $ matchRegExMultipleImports message @=? expected
+            liftIO $ expected @=? matchRegExMultipleImports message
 
 pickActionWithTitle :: T.Text -> [Command |? CodeAction] -> IO CodeAction
 pickActionWithTitle title actions = do
