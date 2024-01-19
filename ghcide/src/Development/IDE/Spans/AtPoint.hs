@@ -315,16 +315,18 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
             where
                 instancesForName :: IO (Maybe [ClsInst])
                 instancesForName = runMaybeT $ do
-                    typ <- MaybeT . pure $ lookupNameEnv km n >>= tyThingToType
+                    typ <- MaybeT . pure $ lookupNameEnv km n >>= tyThingAsDataType
                     liftIO $ evalGhcEnv env $ getInstancesForType typ
 
-                tyThingToType :: TyThing -> Maybe Type
-                tyThingToType (AnId _)      = Nothing
-                tyThingToType (ACoAxiom _)  = Nothing
-                tyThingToType (AConLike cl) = case cl of
+                -- | Gets the datatype `Type` corresponding to a TyThing, if it repressents a datatype or
+                -- a data constructor.
+                tyThingAsDataType :: TyThing -> Maybe Type
+                tyThingAsDataType (AnId _)      = Nothing
+                tyThingAsDataType (ACoAxiom _)  = Nothing
+                tyThingAsDataType (AConLike cl) = case cl of
                     PatSynCon   _  -> Nothing
                     RealDataCon dc -> Just $ mkTyConTy $ dataConTyCon dc
-                tyThingToType (ATyCon tc)   = Just $ mkTyConTy tc
+                tyThingAsDataType (ATyCon tc)   = Just $ mkTyConTy tc
         prettyInstances (Left _, _) = pure Nothing
 
 typeLocationsAtPoint
