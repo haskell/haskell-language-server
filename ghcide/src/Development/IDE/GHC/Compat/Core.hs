@@ -315,6 +315,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.HsToCore.Monad,
 
     module GHC.Iface.Syntax,
+    module GHC.Iface.Recomp,
 
     module GHC.Hs.Decls,
     module GHC.Hs.Expr,
@@ -340,7 +341,6 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Id,
     module GHC.Types.Name,
     module GHC.Types.Name.Set,
-
     module GHC.Types.Name.Cache,
     module GHC.Types.Name.Env,
     module GHC.Types.Name.Reader,
@@ -355,12 +355,14 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Unique.Supply,
     module GHC.Types.Var,
     module GHC.Unit.Module,
+    module GHC.Unit.Module.Graph,
     -- * Syntax re-exports
     module GHC.Hs,
     module GHC.Hs.Binds,
     module GHC.Parser,
     module GHC.Parser.Header,
     module GHC.Parser.Lexer,
+    module GHC.Utils.Panic,
 #if MIN_VERSION_ghc(9,3,0)
     CompileReason(..),
     hsc_type_env_vars,
@@ -368,12 +370,9 @@ module Development.IDE.GHC.Compat.Core (
     GhcMessage(..),
     getKey,
     module GHC.Driver.Env.KnotVars,
-    module GHC.Iface.Recomp,
     module GHC.Linker.Types,
-    module GHC.Unit.Module.Graph,
     module GHC.Types.Unique.Map,
     module GHC.Utils.TmpFs,
-    module GHC.Utils.Panic,
     module GHC.Unit.Finder.Types,
     module GHC.Unit.Env,
     module GHC.Driver.Phases,
@@ -534,7 +533,7 @@ import           GHC.Unit.Home.ModInfo
 import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
-import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface (..),
+import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface,
                                                ModIface_ (..), mi_fix)
 import           GHC.Unit.Module.ModSummary   (ModSummary (..))
 import           Language.Haskell.Syntax hiding (FunDep)
