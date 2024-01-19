@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP              #-}
 {-# LANGUAGE DeriveAnyClass   #-}
 {-# LANGUAGE DeriveGeneric    #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -5,7 +6,6 @@
 {-# LANGUAGE RecordWildCards  #-}
 {-# LANGUAGE TypeFamilies     #-}
 {-# LANGUAGE ViewPatterns     #-}
-{-# LANGUAGE CPP              #-}
 
 module Ide.Plugin.Class.Types where
 

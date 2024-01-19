@@ -8,28 +8,25 @@ module Main
   ( main
   ) where
 
-import           Control.Lens                  (_Just, folded, preview,
-                                                toListOf, view, (^..))
-import           Data.Aeson                    (Value (Object), fromJSON,
-                                                object, toJSON, (.=))
-import           Data.Aeson.Types              (Pair, Result (Success))
-import           Data.List                     (isInfixOf)
-import           Data.List.Extra               (nubOrdOn)
-import qualified Data.Map                      as Map
+import           Control.Lens               (_Just, folded, preview, view, (^.),
+                                             (^..))
+import           Data.Aeson                 (Value (Object), fromJSON, object,
+                                             (.=))
+import           Data.Aeson.Types           (Pair, Result (Success))
+import           Data.List                  (isInfixOf)
+import           Data.List.Extra            (nubOrdOn)
+import qualified Data.Map                   as Map
 import           Data.Row
-import qualified Data.Text                     as T
-import           Ide.Plugin.Config             (Config)
-import qualified Ide.Plugin.Config             as Plugin
-import qualified Ide.Plugin.Eval               as Eval
-import           Ide.Plugin.Eval.Types         (EvalParams (..), Section (..),
-                                                testOutput)
-import           Ide.Types                     (IdePlugins (IdePlugins))
-import           Language.LSP.Protocol.Lens    (arguments, command, range,
-                                                title)
-import           Language.LSP.Protocol.Message hiding (error)
-import           System.FilePath               ((<.>), (</>))
+import qualified Data.Text                  as T
+import           Ide.Plugin.Config          (Config)
+import qualified Ide.Plugin.Config          as Plugin
+import qualified Ide.Plugin.Eval            as Eval
+import           Ide.Plugin.Eval.Types      (EvalParams (..), Section (..),
+                                             testOutput)
+import           Language.LSP.Protocol.Lens (command, range, title)
+import           System.FilePath            ((<.>), (</>))
 import           Test.Hls
-import qualified Test.Hls.FileSystem           as FS
+import qualified Test.Hls.FileSystem        as FS
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -215,16 +212,17 @@ tests =
   , testCase "Interfaces are reused after Eval" $ do
       runSessionWithServerInTmpDir def evalPlugin (mkFs $ FS.directProjectMulti ["TLocalImport.hs", "Util.hs"]) $ do
         doc <- openDoc "TLocalImport.hs" "haskell"
-        waitForTypecheck doc
+        _ <- waitForTypecheck doc
         lenses <- getCodeLenses doc
-        let ~cmds@[cmd] = lenses^..folded.command._Just
-        liftIO $ cmds^..folded.title @?= ["Evaluate..."]
+        cmd <- liftIO $ case lenses^..folded.command._Just of
+          [cmd] -> (cmd^.title @?= "Evaluate...") >> pure cmd
+          cmds -> assertFailure $ "Expected a single command, got " <> show (length cmds)
 
         executeCmd cmd
 
         -- trigger a rebuild and check that dependency interfaces are not rebuilt
         changeDoc doc []
-        waitForTypecheck doc
+        _ <- waitForTypecheck doc
         Right keys <- getLastBuildKeys
         let ifaceKeys = filter ("GetModIface" `T.isPrefixOf`) keys
         liftIO $ ifaceKeys @?= []
