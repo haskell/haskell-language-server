@@ -44,7 +44,6 @@ errorBusy = SQLite.SQLError{ sqlError = SQLite.ErrorBusy, sqlErrorDetails = "", 
 isErrorCall :: ErrorCall -> Maybe ErrorCall
 isErrorCall e
   | ErrorCall _ <- e = Just e
-  | otherwise = Nothing
 
 tests :: TestTree
 tests = testGroup "RetryHieDb"

@@ -2,7 +2,7 @@
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms   #-}
-{-# LANGUAGE ViewPatterns   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 -- | Compat Core module that handles the GHC module hierarchy re-organization
 -- by re-exporting everything we care about.
@@ -85,7 +85,6 @@ module Development.IDE.GHC.Compat.Core (
     RecompileRequired(..),
     mkPartialIface,
     mkFullIface,
-    checkOldIface,
     IsBootInterface(..),
     -- * Fixity
     LexicalFixity(..),
@@ -120,14 +119,14 @@ module Development.IDE.GHC.Compat.Core (
     pattern ConPatIn,
     conPatDetails,
     mapConPatDetail,
+#if MIN_VERSION_ghc(9,5,0)
     mkVisFunTys,
+#endif
     -- * Specs
     ImpDeclSpec(..),
     ImportSpec(..),
     -- * SourceText
     SourceText(..),
-    -- * Name
-    tyThingParent_maybe,
     -- * Ways
     Way,
     wayGeneralFlags,
@@ -168,6 +167,7 @@ module Development.IDE.GHC.Compat.Core (
     hscInteractive,
     hscSimplify,
     hscTypecheckRename,
+    hscUpdateHPT,
     Development.IDE.GHC.Compat.Core.makeSimpleDetails,
     -- * Typecheck utils
     tcSplitForAllTyVars,
@@ -176,7 +176,6 @@ module Development.IDE.GHC.Compat.Core (
     Development.IDE.GHC.Compat.Core.mkIfaceTc,
     Development.IDE.GHC.Compat.Core.mkBootModDetailsTc,
     Development.IDE.GHC.Compat.Core.initTidyOpts,
-    hscUpdateHPT,
     driverNoStop,
     tidyProgram,
     ImportedModsVal(..),
@@ -204,7 +203,6 @@ module Development.IDE.GHC.Compat.Core (
     pattern RealSrcLoc,
     SrcLoc.SrcLoc(SrcLoc.UnhelpfulLoc),
     BufSpan,
-    SrcSpanAnn',
     GHC.SrcAnn,
     SrcLoc.leftmost_smallest,
     SrcLoc.containsSpan,
@@ -236,7 +234,6 @@ module Development.IDE.GHC.Compat.Core (
     -- * Finder
     FindResult(..),
     mkHomeModLocation,
-    addBootSuffixLocnOut,
     findObjectLinkableMaybe,
     InstalledFindResult(..),
     -- * Module and Package
@@ -263,7 +260,6 @@ module Development.IDE.GHC.Compat.Core (
     Target(..),
     TargetId(..),
     mkSimpleTarget,
-    mkModuleGraph,
     -- * GHCi
     initObjLinker,
     loadDLL,
@@ -285,8 +281,6 @@ module Development.IDE.GHC.Compat.Core (
     Role(..),
     -- * Panic
     Plain.PlainGhcException,
-    panic,
-    panicDoc,
     -- * Other
     GHC.CoreModule(..),
     GHC.SafeHaskellMode(..),
@@ -344,7 +338,7 @@ module Development.IDE.GHC.Compat.Core (
 
     module GHC.Types.Basic,
     module GHC.Types.Id,
-    module GHC.Types.Name            ,
+    module GHC.Types.Name,
     module GHC.Types.Name.Set,
 
     module GHC.Types.Name.Cache,
@@ -370,7 +364,7 @@ module Development.IDE.GHC.Compat.Core (
 #if MIN_VERSION_ghc(9,3,0)
     CompileReason(..),
     hsc_type_env_vars,
-    hscUpdateHUG, hscUpdateHPT, hsc_HUG,
+    hscUpdateHUG, hsc_HUG,
     GhcMessage(..),
     getKey,
     module GHC.Driver.Env.KnotVars,
@@ -396,19 +390,20 @@ module Development.IDE.GHC.Compat.Core (
 #else
     Extension(..),
 #endif
-    UniqFM,
     mkCgInteractiveGuts,
     justBytecode,
     justObjects,
     emptyHomeModInfoLinkable,
     homeModInfoByteCode,
     homeModInfoObject,
-# if !MIN_VERSION_ghc(9,5,0)
+#if !MIN_VERSION_ghc(9,5,0)
     field_label,
 #endif
     groupOrigin,
     isVisibleFunArg,
-    lookupGlobalRdrEnv,
+#if MIN_VERSION_ghc(9,8,0)
+    lookupGlobalRdrEnv
+#endif
     ) where
 
 import qualified GHC

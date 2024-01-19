@@ -550,7 +550,6 @@ completionDocTests =
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
   ]
   where
-    brokenForGhc9 = knownBrokenFor (BrokenForGHC [GHC90, GHC92, GHC94, GHC96]) "Completion doc doesn't support ghc9"
     brokenForWinGhc90 = knownBrokenFor (BrokenSpecific Windows [GHC90]) "Extern doc doesn't support Windows for ghc9.2"
     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
     brokenForMacGhc9 = knownBrokenFor (BrokenSpecific MacOS [GHC90, GHC92, GHC94, GHC96]) "Extern doc doesn't support MacOS for ghc9"

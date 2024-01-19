@@ -3,7 +3,7 @@ module HighlightTests (tests) where
 
 import           Control.Monad.IO.Class         (liftIO)
 import qualified Data.Text                      as T
-import           Development.IDE.GHC.Compat     (GhcVersion (..), ghcVersion)
+import           Development.IDE.GHC.Compat     (GhcVersion (..))
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types    hiding
                                                 (SemanticTokenAbsolute (..),
