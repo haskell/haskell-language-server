@@ -27,13 +27,13 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogFileSplitError pos -> "An error occured when trying to separate the lines of the cabal file at position:" <+> pretty pos
+    LogFileSplitError pos -> "An error occurred when trying to separate the lines of the cabal file at position:" <+> pretty pos
     LogUnknownKeyWordInContextError kw ->
       "Lookup of key word failed for:" <+> viaShow kw
     LogUnknownStanzaNameInContextError sn ->
       "Lookup of stanza name failed for:" <+> viaShow sn
     LogFilePathCompleterIOError fp ioErr ->
-      "When trying to complete the file path:" <+> pretty fp <+> "the following unexpected IO error occured" <+> viaShow ioErr
+      "When trying to complete the file path:" <+> pretty fp <+> "the following unexpected IO error occurred" <+> viaShow ioErr
     LogUseWithStaleFastNoResult -> "Package description couldn't be read"
     LogMapLookUpOfKnownKeyFailed key -> "Lookup of key in map failed even though it should exist" <+> pretty key
 
