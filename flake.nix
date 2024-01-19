@@ -100,6 +100,7 @@
           shell-ghc92 = mkDevShell pkgs.haskell.packages.ghc92;
           shell-ghc94 = mkDevShell pkgs.haskell.packages.ghc94;
           shell-ghc96 = mkDevShell pkgs.haskell.packages.ghc96;
+          shell-ghc98 = mkDevShell pkgs.haskell.packages.ghc98;
         };
 
         packages = {
