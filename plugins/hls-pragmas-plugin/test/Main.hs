@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+
 module Main
   ( main
   ) where
@@ -12,7 +12,6 @@ import           Ide.Plugin.Pragmas
 import qualified Language.LSP.Protocol.Lens as L
 import           System.FilePath
 import           Test.Hls
-import           Test.Hls.Util              (onlyWorkForGhcVersions)
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -80,9 +79,6 @@ codeActionTests =
   , codeActionTestWithDisableWarning "before doc comments" "UnusedImports" [("Disable \"unused-imports\" warnings", "Contains unused-imports code action")]
   ]
 
-ghc94regression :: String
-ghc94regression = "to be reported"
-
 codeActionTestWithPragmasSuggest :: String -> FilePath -> [(T.Text, String)] -> TestTree
 codeActionTestWithPragmasSuggest = codeActionTestWith pragmasSuggestPlugin
 
@@ -105,8 +101,7 @@ codeActionTestWith descriptor testComment fp actions =
 codeActionTests' :: TestTree
 codeActionTests' =
   testGroup "additional code actions"
-  [
- goldenWithPragmas pragmasSuggestPlugin "no duplication" "NamedFieldPuns" $ \doc -> do
+  [ goldenWithPragmas pragmasSuggestPlugin "no duplication" "NamedFieldPuns" $ \doc -> do
       _ <- waitForDiagnosticsFrom doc
       cas <- map fromAction <$> getCodeActions doc (Range (Position 8 9) (Position 8 9))
       ca <- liftIO $ case cas of
@@ -124,18 +119,17 @@ codeActionTests' =
 completionTests :: TestTree
 completionTests =
   testGroup "completions"
-  [ completionTest "completes pragmas" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension} #-}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 34, 0, 4]
-  , completionTest "completes pragmas with existing closing pragma bracket" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 31, 0, 4]
-  , completionTest "completes pragmas with existing closing comment bracket" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension} #") (Just "{-# LANGUAGE #-}") [0, 4, 0, 32, 0, 4]
-  , completionTest "completes pragmas with existing closing bracket" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension} #-") (Just "{-# LANGUAGE #-}") [0, 4, 0, 33, 0, 4]
-  , completionTest "completes options pragma" "Completion.hs" "OPTIONS" "OPTIONS_GHC" (Just InsertTextFormat_Snippet) (Just "OPTIONS_GHC -${1:option} #-}") (Just "{-# OPTIONS_GHC #-}") [0, 4, 0, 34, 0, 4]
-  , completionTest "completes ghc options pragma values" "Completion.hs" "{-# OPTIONS_GHC -Wno-red  #-}\n" "Wno-redundant-constraints" Nothing Nothing Nothing [0, 0, 0, 0, 0, 24]
-  , completionTest "completes language extensions" "Completion.hs" "" "OverloadedStrings" Nothing Nothing Nothing [0, 24, 0, 31, 0, 24]
-  , completionTest "completes language extensions case insensitive" "Completion.hs" "lAnGuaGe Overloaded" "OverloadedStrings" Nothing Nothing Nothing [0, 4, 0, 34, 0, 24]
-  , completionTest "completes the Strict language extension" "Completion.hs" "Str" "Strict" Nothing Nothing Nothing [0, 13, 0, 31, 0, 16]
-  , completionTest "completes No- language extensions" "Completion.hs" "NoOverload" "NoOverloadedStrings" Nothing Nothing Nothing [0, 13, 0, 31, 0, 23]
-  , onlyWorkForGhcVersions (>=GHC92) "GHC2021 flag introduced since ghc9.2" $
-    completionTest "completes GHC2021 extensions" "Completion.hs" "ghc" "GHC2021" Nothing Nothing Nothing [0, 13, 0, 31, 0, 16]
+  [ completionTest "completes pragmas" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension} #-}") (Just "{-# LANGUAGE #-}") (0, 4, 0, 34, 0, 4)
+  , completionTest "completes pragmas with existing closing pragma bracket" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension}") (Just "{-# LANGUAGE #-}") (0, 4, 0, 31, 0, 4)
+  , completionTest "completes pragmas with existing closing comment bracket" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension} #") (Just "{-# LANGUAGE #-}") (0, 4, 0, 32, 0, 4)
+  , completionTest "completes pragmas with existing closing bracket" "Completion.hs" "" "LANGUAGE" (Just InsertTextFormat_Snippet) (Just "LANGUAGE ${1:extension} #-") (Just "{-# LANGUAGE #-}") (0, 4, 0, 33, 0, 4)
+  , completionTest "completes options pragma" "Completion.hs" "OPTIONS" "OPTIONS_GHC" (Just InsertTextFormat_Snippet) (Just "OPTIONS_GHC -${1:option} #-}") (Just "{-# OPTIONS_GHC #-}") (0, 4, 0, 34, 0, 4)
+  , completionTest "completes ghc options pragma values" "Completion.hs" "{-# OPTIONS_GHC -Wno-red  #-}\n" "Wno-redundant-constraints" Nothing Nothing Nothing (0, 0, 0, 0, 0, 24)
+  , completionTest "completes language extensions" "Completion.hs" "" "OverloadedStrings" Nothing Nothing Nothing (0, 24, 0, 31, 0, 24)
+  , completionTest "completes language extensions case insensitive" "Completion.hs" "lAnGuaGe Overloaded" "OverloadedStrings" Nothing Nothing Nothing (0, 4, 0, 34, 0, 24)
+  , completionTest "completes the Strict language extension" "Completion.hs" "Str" "Strict" Nothing Nothing Nothing (0, 13, 0, 31, 0, 16)
+  , completionTest "completes No- language extensions" "Completion.hs" "NoOverload" "NoOverloadedStrings" Nothing Nothing Nothing (0, 13, 0, 31, 0, 23)
+  , completionTest "completes GHC2021 extensions" "Completion.hs" "ghc" "GHC2021" Nothing Nothing Nothing (0, 13, 0, 31, 0, 16)
   ]
 
 completionSnippetTests :: TestTree
@@ -151,7 +145,7 @@ completionSnippetTests =
         in completionTest (T.unpack label)
             "Completion.hs" input label (Just InsertTextFormat_Snippet)
             (Just $ "{-# " <> insertText <> " #-}") (Just detail)
-            [0, 0, 0, 34, 0, fromIntegral $ T.length input])
+            (0, 0, 0, 34, 0, fromIntegral $ T.length input))
 
 dontSuggestCompletionTests :: TestTree
 dontSuggestCompletionTests =
@@ -162,7 +156,7 @@ dontSuggestCompletionTests =
                      , provideNoCompletionsTest "when no word has been typed" "Completion.hs" Nothing (Position 3 0)
                      , provideNoCompletionsTest "when expecting auto complete on modules" "Completion.hs" (Just $ mkEdit (8,6) (8,8) "Data.Maybe.WA") (Position 8 19)
                      ]
-      individualPragmaTests = validPragmas <&> \(insertText,label,detail,appearWhere) ->
+      individualPragmaTests = validPragmas <&> \(_insertText,label,_detail,appearWhere) ->
           let completionPrompt = T.toLower $ T.init label
               promptLen = fromIntegral (T.length completionPrompt)
           in case appearWhere of
@@ -176,8 +170,8 @@ mkEdit :: (UInt,UInt) -> (UInt,UInt) -> T.Text -> TextEdit
 mkEdit (startLine, startCol) (endLine, endCol) newText =
     TextEdit (Range (Position startLine startCol) (Position endLine endCol)) newText
 
-completionTest :: String -> FilePath -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> [UInt] -> TestTree
-completionTest testComment fileName replacementText expectedLabel expectedFormat expectedInsertText detail [delFromLine, delFromCol, delToLine, delToCol, completeAtLine, completeAtCol] =
+completionTest :: String -> FilePath -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> (UInt, UInt, UInt, UInt, UInt, UInt) -> TestTree
+completionTest testComment fileName replacementText expectedLabel expectedFormat expectedInsertText detail (delFromLine, delFromCol, delToLine, delToCol, completeAtLine, completeAtCol) =
   testCase testComment $ runSessionWithServer def pragmasCompletionPlugin testDataDir $ do
     doc <- openDoc fileName "haskell"
     _ <- waitForDiagnostics
