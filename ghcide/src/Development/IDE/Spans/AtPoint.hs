@@ -220,7 +220,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
     hoverInfo :: HieAST hietype -> IO (Maybe Range, [T.Text])
     hoverInfo ast = do
         prettyNames <- mapM prettyName filteredNames
-        instances <- catMaybes <$> mapM prettyInstances filteredNames
+        instances <- catMaybes <$> mapM (either (const $ pure Nothing) prettyInstances . fst) filteredNames
         pure (Just range, prettyNames ++ pTypes ++ instances)
       where
         pTypes :: [T.Text]
@@ -309,8 +309,8 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
             UnhelpfulLoc {} | isInternalName name || isSystemName name -> Nothing
             _ -> Just $ "*Defined " <> printOutputable (pprNameDefnLoc name) <> "*"
 
-        prettyInstances :: (Either ModuleName Name, IdentifierDetails hietype) -> IO (Maybe T.Text)
-        prettyInstances (Right n, _) =
+        prettyInstances :: Name -> IO (Maybe T.Text)
+        prettyInstances n =
             fmap (wrapHaskell . T.unlines . fmap printOutputable) <$> instancesForName
             where
                 instancesForName :: IO (Maybe [ClsInst])
@@ -327,7 +327,6 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
                     PatSynCon   _  -> Nothing
                     RealDataCon dc -> Just $ mkTyConTy $ dataConTyCon dc
                 tyThingAsDataType (ATyCon tc)   = Just $ mkTyConTy tc
-        prettyInstances (Left _, _) = pure Nothing
 
 typeLocationsAtPoint
   :: forall m
