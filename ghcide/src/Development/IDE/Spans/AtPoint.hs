@@ -316,7 +316,10 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
                 instancesForName :: IO (Maybe [ClsInst])
                 instancesForName = runMaybeT $ do
                     typ <- MaybeT . pure $ lookupNameEnv km n >>= tyThingAsDataType
-                    liftIO $ evalGhcEnv env $ getInstancesForType typ
+                    clsInst <- liftIO $ evalGhcEnv env $ getInstancesForType typ
+                    -- Avoid creating an empty wrapped section if no instances are found
+                    guard $ not $ null clsInst
+                    return clsInst
 
                 -- | Gets the datatype `Type` corresponding to a TyThing, if it repressents a datatype or
                 -- a data constructor.
