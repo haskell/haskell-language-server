@@ -534,7 +534,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   -- compilation but these are the true source of
                   -- information.
                   new_deps = fmap (\(df, targets) -> RawComponentInfo (homeUnitId_ df) df targets cfp opts dep_info) newTargetDfs
-                  all_deps = new_deps `NE.appendList` maybe [] id oldDeps
+                  all_deps = new_deps `NE.appendList` fromMaybe [] oldDeps
                   -- Get all the unit-ids for things in this component
                   _inplace = map rawComponentUnitId $ NE.toList all_deps
 
@@ -594,7 +594,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
           void $ modifyVar' fileToFlags $
               Map.insert hieYaml this_flags_map
           void $ modifyVar' filesMap $
-              flip HM.union (HM.fromList (zip (map fst $ concatMap toFlagsMap all_targets) (repeat hieYaml)))
+              flip HM.union (HM.fromList (map ((,hieYaml) . fst) $ concatMap toFlagsMap all_targets))
 
           void $ extendKnownTargets all_targets
 
@@ -685,7 +685,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   -- again.
                   modifyVar_ fileToFlags (const (return Map.empty))
                   -- Keep the same name cache
-                  modifyVar_ hscEnvs (return . Map.adjust (\_ -> []) hieYaml )
+                  modifyVar_ hscEnvs (return . Map.adjust (const []) hieYaml )
                   consultCradle hieYaml cfp
                 else return (opts, Map.keys old_di)
             Nothing -> consultCradle hieYaml cfp

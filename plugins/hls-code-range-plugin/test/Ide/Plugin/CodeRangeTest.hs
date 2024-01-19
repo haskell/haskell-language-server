@@ -6,7 +6,6 @@ import qualified Data.Vector                as V
 import           Ide.Plugin.CodeRange
 import           Ide.Plugin.CodeRange.Rules
 import           Test.Hls
-import           Test.Tasty.HUnit
 
 testTree :: TestTree
 testTree =

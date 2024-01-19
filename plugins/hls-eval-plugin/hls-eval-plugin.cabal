@@ -36,7 +36,12 @@ source-repository head
   type:     git
   location: https://github.com/haskell/haskell-language-server
 
+common warnings
+  ghc-options:
+    -Wall -Wunused-packages -Wno-name-shadowing -Wno-unticked-promoted-constructors -fno-ignore-asserts
+
 library
+  import: warnings
   exposed-modules:
     Ide.Plugin.Eval
     Ide.Plugin.Eval.Types
@@ -57,18 +62,14 @@ library
     , base                  >=4.12  && <5
     , bytestring
     , containers
-    , data-default
     , deepseq
     , Diff                  ^>=0.4.0
-    , directory
     , dlist
     , extra
     , filepath
     , ghc
     , ghc-boot-th
-    , ghc-paths
     , ghcide                == 2.6.0.0
-    , hashable
     , hls-graph
     , hls-plugin-api        == 2.6.0.0
     , lens
@@ -77,17 +78,10 @@ library
     , megaparsec            >=9.0
     , mtl
     , parser-combinators    >=1.2
-    , pretty-simple
-    , QuickCheck
-    , safe-exceptions
     , text
-    , time
     , transformers
     , unliftio
     , unordered-containers
-
-  ghc-options:
-    -Wall -Wno-name-shadowing -Wno-unticked-promoted-constructors -fno-ignore-asserts
 
   if flag(pedantic)
     ghc-options: -Werror
@@ -98,6 +92,7 @@ library
     TypeOperators
 
 test-suite tests
+  import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
@@ -107,7 +102,6 @@ test-suite tests
     , aeson
     , base
     , containers
-    , directory
     , extra
     , filepath
     , hls-eval-plugin

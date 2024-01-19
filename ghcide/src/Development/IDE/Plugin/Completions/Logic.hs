@@ -704,7 +704,7 @@ getCompletions
               pn = showForSnippet name
               ty = showForSnippet <$> typ
               thisModName = Local $ nameSrcSpan name
-              dets = NameDetails <$> (nameModule_maybe name) <*> pure (nameOccName name)
+              dets = NameDetails <$> nameModule_maybe name <*> pure (nameOccName name)
 
           -- When record-dot-syntax completions are available, we return them exclusively.
           -- They are only available when we write i.e. `myrecord.` with OverloadedRecordDot enabled.
@@ -762,7 +762,7 @@ uniqueCompl candidate unique =
     EQ ->
       -- preserve completions for duplicate record fields where the only difference is in the type
       -- remove redundant completions with less type info than the previous
-      if (isLocalCompletion unique)
+      if isLocalCompletion unique
         -- filter global completions when we already have a local one
         || not(isLocalCompletion candidate) && isLocalCompletion unique
         then EQ

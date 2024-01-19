@@ -217,7 +217,7 @@ common cabal
     cpp-options: -Dhls_cabal
 
 common class
-  if flag(class) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
+  if flag(class)
     build-depends: hls-class-plugin == 2.6.0.0
     cpp-options: -Dhls_class
 
@@ -237,12 +237,12 @@ common importLens
     cpp-options: -Dhls_importLens
 
 common rename
-  if flag(rename) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
+  if flag(rename)
     build-depends: hls-rename-plugin == 2.6.0.0
     cpp-options: -Dhls_rename
 
 common retrie
-  if flag(retrie) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
+  if flag(retrie)
     build-depends: hls-retrie-plugin == 2.6.0.0
     cpp-options: -Dhls_retrie
 
@@ -267,7 +267,7 @@ common pragmas
     cpp-options: -Dhls_pragmas
 
 common splice
-  if flag(splice) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
+  if flag(splice)
     build-depends: hls-splice-plugin == 2.6.0.0
     cpp-options: -Dhls_splice
 
@@ -292,7 +292,7 @@ common changeTypeSignature
     cpp-options: -Dhls_changeTypeSignature
 
 common gadt
-  if flag(gadt) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
+  if flag(gadt)
     build-depends: hls-gadt-plugin == 2.6.0.0
     cpp-options: -Dhls_gadt
 
@@ -334,7 +334,7 @@ common stylishHaskell
     cpp-options: -Dhls_stylishHaskell
 
 common refactor
-  if flag(refactor) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
+  if flag(refactor)
     build-depends: hls-refactor-plugin == 2.6.0.0
     cpp-options: -Dhls_refactor
 

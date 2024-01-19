@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes   #-}
-{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
@@ -701,7 +700,9 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x y = x + y"
         ]
-        [ "func :: Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC98
+          then "func :: a -> a -> a" -- 9.8 has a different suggestion
+          else "func :: Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testUseTypeSignature "type in parentheses"
@@ -729,7 +730,9 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func::_"
         , "func x y = x + y"
         ]
-        [ "func::Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC98
+          then "func::a -> a -> a" -- 9.8 has a different suggestion
+          else "func::Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testGroup "add parens if hole is part of bigger type"
@@ -1665,6 +1668,7 @@ suggestImportTests :: TestTree
 suggestImportTests = testGroup "suggest import actions"
   [ testGroup "Dont want suggestion"
     [ -- extend import
+      -- We don't want to suggest a new import, but extend existing imports
       test False ["Data.List.NonEmpty ()"] "f = nonEmpty" []                "import Data.List.NonEmpty (nonEmpty)"
       -- data constructor
     , test False []                        "f = First"    []                "import Data.Monoid (First)"
@@ -3732,12 +3736,15 @@ extendImportTestsRegEx = testGroup "regex parsing"
                   "\n\8226 Perhaps you want to add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217)"
                   Nothing
     , testCase "parse multiple imports" $ template
-                 "\n\8226 Perhaps you want to add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217 (app/testlsp.hs:7:1-18)\n    \8216Data.HashMap.Strict\8217 (app/testlsp.hs:8:1-29)"
+                 (if ghcVersion >= GHC98
+                 then "\n\8226 Add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217 (at app/testlsp.hs:7:1-18)\n    \8216Data.HashMap.Strict\8217 (at app/testlsp.hs:8:1-29)"
+                 else "\n\8226 Perhaps you want to add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217 (app/testlsp.hs:7:1-18)\n    \8216Data.HashMap.Strict\8217 (app/testlsp.hs:8:1-29)"
+                 )
                  $ Just ("fromList",[("Data.Map","app/testlsp.hs:7:1-18"),("Data.HashMap.Strict","app/testlsp.hs:8:1-29")])
     ]
     where
         template message expected = do
-            liftIO $ matchRegExMultipleImports message @=? expected
+            liftIO $ expected @=? matchRegExMultipleImports message
 
 pickActionWithTitle :: T.Text -> [Command |? CodeAction] -> IO CodeAction
 pickActionWithTitle title actions = do

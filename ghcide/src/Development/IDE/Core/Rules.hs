@@ -377,7 +377,7 @@ getLocatedImportsRule recorder =
         let import_dirs = deps env_eq
         let dflags = hsc_dflags env
             isImplicitCradle = isNothing $ envImportPaths env_eq
-        dflags' <- return $ if isImplicitCradle
+        let dflags' = if isImplicitCradle
                     then addRelativeImport file (moduleName $ ms_mod ms) dflags
                     else dflags
         opt <- getIdeOptions
@@ -706,7 +706,7 @@ dependencyInfoForFiles fs = do
         -- 'extendModSummaryNoDeps'.
         -- This may have to change in the future.
           map extendModSummaryNoDeps $
-          (catMaybes mss)
+          catMaybes mss
 #endif
   pure (fingerprintToBS $ Util.fingerprintFingerprints $ map (maybe fingerprint0 msrFingerprint) msrs, processDependencyInformation rawDepInfo bm mg)
 
@@ -1185,7 +1185,7 @@ getLinkableType f = use_ NeedsCompilation f
 -- needsCompilationRule :: Rules ()
 needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
 needsCompilationRule file
-  | "boot" `isSuffixOf` (fromNormalizedFilePath file) =
+  | "boot" `isSuffixOf` fromNormalizedFilePath file =
     pure (Just $ encodeLinkableType Nothing, Just Nothing)
 needsCompilationRule file = do
   graph <- useNoFile GetModuleGraph

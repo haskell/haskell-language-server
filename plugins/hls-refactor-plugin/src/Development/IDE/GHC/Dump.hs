@@ -123,7 +123,11 @@ showAstDataHtml a0 = html $
 
             sourceText :: SourceText -> SDoc
             sourceText NoSourceText     = text "NoSourceText"
+#if MIN_VERSION_ghc(9,7,0)
+            sourceText (SourceText src) = text "SourceText" <+> ftext src
+#else
             sourceText (SourceText src) = text "SourceText" <+> text src
+#endif
 
             epaAnchor :: EpaLocation -> SDoc
 #if MIN_VERSION_ghc(9,5,0)
