@@ -62,7 +62,7 @@ For example, a plugin to provide a formatter which has itself been abandoned has
 | `hls-stylish-haskell-plugin`        | 2    |                          |
 | `hls-overloaded-record-dot-plugin`  | 2    |                          |
 | `hls-semantic-tokens-plugin`        | 2    |                          |
-| `hls-floskell-plugin`               | 3    | 9.8                      |
+| `hls-floskell-plugin`               | 3    |                          |
 | `hls-stan-plugin`                   | 3    | 9.2.(4-8)                |
 | `hls-retrie-plugin`                 | 3    |                          |
 | `hls-splice-plugin`                 | 3    |                          |

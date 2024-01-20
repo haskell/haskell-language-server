@@ -139,7 +139,7 @@ jobs:
         name: Test hls-refactor-plugin
         run: cabal test hls-refactor-plugin --test-options="$TEST_OPTS" || cabal test hls-refactor-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.6' && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test 
         name: Test hls-floskell-plugin
         run: cabal test hls-floskell-plugin --test-options="$TEST_OPTS" || cabal test hls-floskell-plugin --test-options="$TEST_OPTS"
 
