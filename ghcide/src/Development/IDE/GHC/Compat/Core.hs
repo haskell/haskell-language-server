@@ -377,7 +377,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Unit.Env,
     module GHC.Driver.Phases,
 #endif
-# if !MIN_VERSION_ghc(9,4,0)
+#if !MIN_VERSION_ghc(9,4,0)
     pattern HsFieldBind,
     hfbAnn,
     hfbLHS,
