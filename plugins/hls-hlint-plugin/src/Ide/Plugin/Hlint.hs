@@ -268,7 +268,7 @@ rules recorder plugin = do
           ideaSeverityToDiagnosticSeverity :: Hlint.Severity -> Maybe LSP.DiagnosticSeverity
           ideaSeverityToDiagnosticSeverity Hlint.Ignore = Nothing
           ideaSeverityToDiagnosticSeverity Hlint.Suggestion = Just LSP.DiagnosticSeverity_Information
-          ideaSeverityToDiagnosticSeverity Hlint.Warning = Just LSP.DiagnosticSeverity_Warning
+          ideaSeverityToDiagnosticSeverity Hlint.Warning = Just LSP.DiagnosticSeverity_Information
           ideaSeverityToDiagnosticSeverity Hlint.Error = Just LSP.DiagnosticSeverity_Error
 
       idea2Message :: Idea -> T.Text
@@ -285,7 +285,7 @@ rules recorder plugin = do
       parseErrorToDiagnostic (Hlint.ParseError l msg contents) =
         LSP.Diagnostic {
             _range    = srcSpanToRange l
-          , _severity = Just LSP.DiagnosticSeverity_Warning
+          , _severity = Just LSP.DiagnosticSeverity_Information
           , _code     = Just (InR sourceParser)
           , _source   = Just "hlint"
           , _message  = T.unlines [T.pack msg,T.pack contents]

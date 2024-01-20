@@ -96,7 +96,7 @@ suggestionsTests =
         liftIO $ do
             length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
             reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
-            reduceDiag ^. L.severity @?= Just DiagnosticSeverity_Warning
+            reduceDiag ^. L.severity @?= Just DiagnosticSeverity_Information
             reduceDiag ^. L.code @?= Just (InR "refact:Eta reduce")
             reduceDiag ^. L.source @?= Just "hlint"
 
@@ -346,7 +346,7 @@ configTests = testGroup "hlint plugin config" [
         liftIO $ do
             length diags' @?= 1
             d ^. L.range @?= Range (Position 1 10) (Position 1 21)
-            d ^. L.severity @?= Just DiagnosticSeverity_Warning
+            d ^. L.severity @?= Just DiagnosticSeverity_Information
     ]
 
 testDir :: FilePath
