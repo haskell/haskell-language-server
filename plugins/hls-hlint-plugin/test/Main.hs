@@ -202,13 +202,8 @@ suggestionsTests =
         doc <- openDoc "IgnoreAnnHlint.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
-    , knownBrokenForGhcVersions [GHC92, GHC94, GHC96] "apply-refact has different behavior on v0.10" $
-      testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
+    , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "Comments.hs" "Redundant bracket" expectedComments
-
-    , onlyRunForGhcVersions [GHC92, GHC94, GHC96] "only run test for apply-refact-0.10" $
-      testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
-        testRefactor "Comments.hs" "Redundant bracket" expectedComments'
 
     , testCase "[#2290] apply all hints works with a trailing comment" $ runHlintSession "" $ do
         testRefactor "TwoHintsAndComment.hs" "Apply all hints" expectedComments2
@@ -275,15 +270,7 @@ suggestionsTests =
                              , "g = 2"
                              , "#endif", ""
                              ]
-        expectedComments =   [ "-- comment before header"
-                             , "module Comments where", ""
-                             , "{-# standalone annotation #-}", ""
-                             , "-- standalone comment", ""
-                             , "-- | haddock comment"
-                             , "f = {- inline comment -}{- inline comment inside refactored code -} 1 -- ending comment", ""
-                             , "-- final comment"
-                             ]
-        expectedComments' =  [ "-- comment before header"
+        expectedComments =  [ "-- comment before header"
                              , "module Comments where", ""
                              , "{-# standalone annotation #-}", ""
                              , "-- standalone comment", ""

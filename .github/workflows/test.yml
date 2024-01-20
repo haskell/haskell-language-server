@@ -187,7 +187,7 @@ jobs:
         name: Test hls-rename-plugin test suite
         run: cabal test hls-rename-plugin --test-options="$TEST_OPTS" || cabal test hls-rename-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test 
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin --test-options="$TEST_OPTS" || cabal test hls-hlint-plugin --test-options="$TEST_OPTS"
 
