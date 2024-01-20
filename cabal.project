@@ -36,7 +36,7 @@ packages:
          ./plugins/hls-overloaded-record-dot-plugin
          ./plugins/hls-semantic-tokens-plugin
 
-index-state: 2024-01-17T16:04:21Z
+index-state: 2024-01-19T00:00:00Z
 
 tests: True
 test-show-details: direct
@@ -89,10 +89,10 @@ if impl(ghc >= 9.1)
     ekg-core:ghc-prim
 
 if impl(ghc >= 9.7)
+  -- ekg packagess are old and unmaintained, but we
+  -- don't rely on them for the mainline build, so
+  -- this is okay
   allow-newer:
     ekg-core:text,
     -- https://github.com/haskell-primitive/primitive-unlifted/issues/39
     primitive-unlifted:bytestring,
-    -- https://github.com/obsidiansystems/commutative-semigroups/issues/13
-    commutative-semigroups:base,
-    commutative-semigroups:template-haskell,

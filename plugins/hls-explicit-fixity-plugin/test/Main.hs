@@ -56,11 +56,10 @@ hoverTest' docName title pos expected = testCase title $ runSessionWithServer de
     doc <- openDoc docName "haskell"
     waitForKickDone
     h <- getHover doc pos
-    let expected' = "\n" <> sectionSeparator <> expected
     case h of
         Nothing -> liftIO $ assertFailure "No hover"
         Just (Hover contents _) -> case contents of
-          InL (MarkupContent mk txt) -> do
+          InL (MarkupContent _ txt) -> do
               liftIO
                 $ assertBool ("Failed to find `" <> T.unpack expected <> "` in hover message: " <> T.unpack txt)
                 $ expected `T.isInfixOf` txt
