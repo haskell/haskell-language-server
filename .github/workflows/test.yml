@@ -163,7 +163,7 @@ jobs:
         name: Test hls-stan-plugin
         run: cabal test hls-stan-plugin --test-options="$TEST_OPTS" || cabal test hls-stan-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-stylish-haskell-plugin
         run: cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS" || cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS"
 
