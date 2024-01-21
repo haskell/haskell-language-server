@@ -38,7 +38,7 @@ reportProgressTests = testGroup "recordProgress"
             model state $ \st -> recordProgress st key change
         model stateModelIO k = do
             state <- fromModel =<< stateModelIO
-            k state
+            _ <- k state
             toModel state
         test name p = testCase name $ do
             InProgressModel{..} <- p

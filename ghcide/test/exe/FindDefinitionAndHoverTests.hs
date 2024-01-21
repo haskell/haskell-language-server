@@ -22,7 +22,7 @@ import           Language.LSP.Protocol.Types    hiding
 import           Language.LSP.Test
 import           System.FilePath
 import           System.Info.Extra              (isWindows)
--- import Test.QuickCheck.Instances ()
+
 import           Control.Lens                   ((^.))
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -240,7 +240,7 @@ tests = let
         yes    = Just -- test should run and pass
         broken = Just . (`xfail` "known broken")
         no = const Nothing -- don't run this test at all
-        skip = const Nothing -- unreliable, don't run
+        --skip = const Nothing -- unreliable, don't run
 
 checkFileCompiles :: FilePath -> Session () -> TestTree
 checkFileCompiles fp diag =
