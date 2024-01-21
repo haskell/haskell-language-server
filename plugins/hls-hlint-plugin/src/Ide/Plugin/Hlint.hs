@@ -265,6 +265,10 @@ rules recorder plugin = do
         where
           codePre = if null $ ideaRefactoring idea then "" else "refact:"
 
+          -- We only propogate error severity of hlint and downgrade other severities to Info.
+          -- Currently, there are just 2 error level serverities present in hlint by default: https://github.com/ndmitchell/hlint/issues/1549#issuecomment-1892701824.
+          -- And according to ndmitchell: The default error level severities of the two hints are justified and it's fairly uncommon to happen.
+          -- GH Issue about discussion on this: https://github.com/ndmitchell/hlint/issues/1549
           ideaSeverityToDiagnosticSeverity :: Hlint.Severity -> Maybe LSP.DiagnosticSeverity
           ideaSeverityToDiagnosticSeverity Hlint.Ignore = Nothing
           ideaSeverityToDiagnosticSeverity Hlint.Suggestion = Just LSP.DiagnosticSeverity_Information
