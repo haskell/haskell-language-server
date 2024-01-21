@@ -14,7 +14,7 @@ homepage:
   https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC ==9.0.2 || ==9.2.5
+tested-with:        GHC == 9.8.1 || ==9.6.4 || ==9.4.8 || ==9.2.8
 extra-source-files:
   CHANGELOG.md
   README.md
@@ -52,7 +52,7 @@ library
     , aeson
     , array
     , async
-    , base                         >=4        && <5
+    , base                         >=4.16     && <5
     , base16-bytestring            >=0.1.1    && <1.1
     , binary
     , bytestring
@@ -275,7 +275,7 @@ executable ghcide
   -- Enable collection of heap statistics
   main-is:            Main.hs
   build-depends:
-    , base                  >=4 && <5
+    , base                  >=4.16 && <5
     , data-default
     , extra
     , ghcide
