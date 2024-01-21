@@ -7,8 +7,8 @@ module TestUtils where
 
 import           Control.Applicative.Combinators
 import           Control.Concurrent.Async
-import           Control.Exception               (bracket_, finally, throw)
-import           Control.Lens                    ((.~), (^.))
+import           Control.Exception               (bracket_, finally)
+import           Control.Lens                    ((.~))
 import qualified Control.Lens                    as Lens
 import qualified Control.Lens.Extras             as Lens
 import           Control.Monad
@@ -47,8 +47,6 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 
 import           LogType
-
-import           Data.Traversable                (for)
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
