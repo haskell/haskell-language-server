@@ -1,14 +1,13 @@
-{-# LANGUAGE DataKinds                #-}
-{-# LANGUAGE DisambiguateRecordFields #-}
-{-# LANGUAGE DuplicateRecordFields    #-}
-{-# LANGUAGE GADTs                    #-}
-{-# LANGUAGE LambdaCase               #-}
-{-# LANGUAGE NamedFieldPuns           #-}
-{-# LANGUAGE OverloadedLists          #-}
-{-# LANGUAGE OverloadedStrings        #-}
-{-# LANGUAGE PolyKinds                #-}
-{-# LANGUAGE RankNTypes               #-}
-{-# LANGUAGE TypeApplications         #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedLists       #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE TypeApplications      #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
@@ -440,12 +439,12 @@ runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = withLock loc
           | val /= "0" -> \action -> do
             (tempDir, _) <- newTempDir
             a <- action tempDir
-            logWith recorder Debug $ LogNoCleanup
+            logWith recorder Debug LogNoCleanup
             pure a
 
         _ -> \action -> do
           a <- withTempDir action
-          logWith recorder Debug $ LogCleanup
+          logWith recorder Debug LogCleanup
           pure a
 
   runTestInDir $ \tmpDir -> do
