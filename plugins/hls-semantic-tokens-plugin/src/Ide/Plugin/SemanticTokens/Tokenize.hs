@@ -194,8 +194,7 @@ splitRangeByText tk ran = do
         Just ('`', xs) -> (subOneRange ran, T.takeWhile (/= '`') xs)
         _              -> (ran, tk)
   let (prefix, tk'') = T.breakOnEnd "." tk'
-  spr <- splitRange tk'' (fromIntegral $ Rope.utf16Length $ Rope.fromText prefix) ran'
-  return spr
+  splitRange tk'' (fromIntegral $ Rope.utf16Length $ Rope.fromText prefix) ran'
   where
     splitRange :: Text -> UInt -> Range -> Maybe SplitResult
     splitRange tx n r@(Range (Position l1 c1) (Position l2 c2))
