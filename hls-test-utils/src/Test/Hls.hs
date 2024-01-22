@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds                #-}
-{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE DuplicateRecordFields    #-}
 {-# LANGUAGE GADTs                    #-}
 {-# LANGUAGE LambdaCase               #-}
@@ -440,12 +439,12 @@ runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = withLock loc
           | val /= "0" -> \action -> do
             (tempDir, _) <- newTempDir
             a <- action tempDir
-            logWith recorder Debug $ LogNoCleanup
+            logWith recorder Debug LogNoCleanup
             pure a
 
         _ -> \action -> do
           a <- withTempDir action
-          logWith recorder Debug $ LogCleanup
+          logWith recorder Debug LogCleanup
           pure a
 
   runTestInDir $ \tmpDir -> do

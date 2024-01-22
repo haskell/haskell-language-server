@@ -304,7 +304,7 @@ waitForDiagnosticsFromSourceWithTimeout timeout document source = do
     handleDiagnostic testId = do
         diagsNot <- Test.message SMethod_TextDocumentPublishDiagnostics
         let fileUri = diagsNot ^. L.params . L.uri
-            ( diags) = diagsNot ^. L.params . L.diagnostics
+            diags = diagsNot ^. L.params . L.diagnostics
             res = filter matches diags
         if fileUri == document ^. L.uri && not (null res)
             then return res else handleMessages testId
