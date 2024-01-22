@@ -1,16 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Ide.PluginUtilsTest
     ( tests
     ) where
 
-import           Data.Char                   (isPrint)
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as T
 import qualified Ide.Plugin.RangeMap         as RangeMap
-import           Ide.PluginUtils             (extractTextInRange,
-                                              positionInRange, unescape)
+import           Ide.PluginUtils             (extractTextInRange,                                  unescape)
 import           Language.LSP.Protocol.Types (Position (..), Range (Range),
                                               UInt, isSubrangeOf)
 import           Test.Tasty
@@ -106,7 +105,7 @@ genRangeInline = do
   pure $ Range x1 x2
   where
     genRangeLength :: Gen UInt
-    genRangeLength = fromInteger <$> chooseInteger (5, 50)
+    genRangeLength = uInt (5, 50)
 
 genRangeMultiline :: Gen Range
 genRangeMultiline = do
@@ -119,17 +118,20 @@ genRangeMultiline = do
   pure $ Range x1 x2
   where
     genSecond :: Gen UInt
-    genSecond = fromInteger <$> chooseInteger (0, 10)
+    genSecond = uInt (0, 10)
 
 genPosition :: Gen Position
 genPosition = Position
-  <$> (fromInteger <$> chooseInteger (0, 1000))
-  <*> (fromInteger <$> chooseInteger (0, 150))
+  <$> uInt (0, 1000)
+  <*> uInt (0, 150)
+
+uInt :: (Integer, Integer) -> Gen UInt
+uInt (a, b) = fromInteger <$> chooseInteger (a, b)
 
 instance Arbitrary Range where
   arbitrary = genRange
 
-prop_rangemapListEq :: (Show a, Eq a, Ord a) => Range -> [(Range, a)] -> Property
+prop_rangemapListEq :: (Show a, Ord a) => Range -> [(Range, a)] -> Property
 prop_rangemapListEq r xs =
   let filteredList = (map snd . filter (isSubrangeOf r . fst)) xs
       filteredRangeMap = RangeMap.filterByRange r (RangeMap.fromList' xs)

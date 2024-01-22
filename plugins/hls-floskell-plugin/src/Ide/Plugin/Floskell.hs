@@ -10,7 +10,6 @@ import           Control.Monad.Except        (throwError)
 import           Control.Monad.IO.Class
 import qualified Data.Text                   as T
 import qualified Data.Text.Lazy              as TL
-import qualified Data.Text.Lazy.Encoding     as TL
 import           Development.IDE             hiding (pluginHandlers)
 import           Floskell
 import           Ide.Plugin.Error
