@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 
@@ -5,9 +6,19 @@ module Ide.PluginUtilsTest
     ( tests
     ) where
 
+import qualified Data.Aeson                  as A
+import qualified Data.Aeson.Types            as A
 import           Data.Char                   (isPrint)
+import           Data.Function               ((&))
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as T
+import           Ide.Plugin.Properties       (KeyNamePath (..),
+                                              definePropertiesProperty,
+                                              defineStringProperty,
+                                              emptyProperties, toDefaultJSON,
+                                              toVSCodeExtensionSchema,
+                                              usePropertyByPath,
+                                              usePropertyByPathEither)
 import qualified Ide.Plugin.RangeMap         as RangeMap
 import           Ide.PluginUtils             (extractTextInRange,
                                               positionInRange, unescape)
@@ -24,6 +35,7 @@ tests = testGroup "PluginUtils"
     , localOption (QuickCheckMaxSize 10000) $
         testProperty "RangeMap-List filtering identical" $
           prop_rangemapListEq @Int
+    , propertyTest
     ]
 
 unescapeTest :: TestTree
@@ -137,3 +149,51 @@ prop_rangemapListEq r xs =
       cover 5 (length filteredList == 1) "1 match" $
       cover 2 (length filteredList > 1) ">1 matches" $
       Set.fromList filteredList === Set.fromList filteredRangeMap
+
+
+propertyTest :: TestTree
+propertyTest = testGroup "property api tests" [
+    testCase "property toVSCodeExtensionSchema" $ do
+        let expect = "[(\"top.baz\",Object (fromList [(\"default\",String \"baz\"),(\"markdownDescription\",String \"baz\"),(\"scope\",String \"resource\"),(\"type\",String \"string\")])),(\"top.parent.foo\",Object (fromList [(\"default\",String \"foo\"),(\"markdownDescription\",String \"foo\"),(\"scope\",String \"resource\"),(\"type\",String \"string\")]))]"
+        let result = toVSCodeExtensionSchema "top." nestedPropertiesExample
+        show result @?= expect
+    , testCase "property toDefaultJSON" $ do
+        let expect = "[(\"baz\",String \"baz\"),(\"parent\",Object (fromList [(\"foo\",String \"foo\")]))]"
+        let result = toDefaultJSON nestedPropertiesExample
+        show result @?= expect
+    , testCase "parsePropertyPath single key path" $ do
+        let obj = A.object (toDefaultJSON nestedPropertiesExample)
+        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+                let (Right key1) = usePropertyByPathEither examplePath1 nestedPropertiesExample o
+                return key1) obj
+        key1 @?= "baz"
+    , testCase "parsePropertyPath two key path" $ do
+        let obj = A.object (toDefaultJSON nestedPropertiesExample)
+        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+                let (Right key1) = usePropertyByPathEither examplePath2 nestedPropertiesExample o
+                return key1) obj
+        key1 @?= "foo"
+    , testCase "parsePropertyPath two key path default" $ do
+        let obj = A.object []
+        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+                let key1 = usePropertyByPath examplePath2 nestedPropertiesExample o
+                return key1) obj
+        key1 @?= "foo"
+    , testCase "parsePropertyPath two key path not default" $ do
+        let obj = A.object (toDefaultJSON nestedPropertiesExample2)
+        let (Right key1) = A.parseEither (A.withObject "test parsePropertyPath" $ \o -> do
+                let (Right key1) = usePropertyByPathEither examplePath2 nestedPropertiesExample o
+                return key1) obj
+        key1 @?= "xxx"
+    ]
+    where
+    nestedPropertiesExample = emptyProperties
+        & definePropertiesProperty #parent "parent" (emptyProperties & defineStringProperty #foo "foo" "foo")
+        & defineStringProperty #baz "baz" "baz"
+
+    nestedPropertiesExample2 = emptyProperties
+        & definePropertiesProperty #parent "parent" (emptyProperties & defineStringProperty #foo "foo" "xxx")
+        & defineStringProperty #baz "baz" "baz"
+
+    examplePath1 = SingleKey #baz
+    examplePath2 = ConsKeysPath #parent (SingleKey #foo)

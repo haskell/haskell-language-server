@@ -27,6 +27,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleWithComments,
     getClientConfigAction,
     usePropertyAction,
+    usePropertyByPathAction,
     getHieFile,
     -- * Rules
     CompiledLinkables(..),
@@ -142,9 +143,13 @@ import           System.Directory                             (makeAbsolute, doe
 import           Data.Default                                 (def, Default)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
+                                                               KeyNamePath,
                                                                Properties,
                                                                ToHsType,
-                                                               useProperty)
+                                                               useProperty,
+                                                               usePropertyByPath,
+                                                               HasPropertyByPath
+                                                               )
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
 import Control.Concurrent.STM.Stats (atomically)
@@ -1107,6 +1112,16 @@ usePropertyAction ::
 usePropertyAction kn plId p = do
   pluginConfig <- getPluginConfigAction plId
   pure $ useProperty kn p $ plcConfig pluginConfig
+
+usePropertyByPathAction ::
+  (HasPropertyByPath props path t) =>
+  KeyNamePath path ->
+  PluginId ->
+  Properties props ->
+  Action (ToHsType t)
+usePropertyByPathAction path plId p = do
+  pluginConfig <- getPluginConfigAction plId
+  pure $ usePropertyByPath path p $ plcConfig pluginConfig
 
 -- ---------------------------------------------------------------------
 
