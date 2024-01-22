@@ -9,7 +9,7 @@ module Ide.PluginUtilsTest
 import qualified Data.Set                    as Set
 import qualified Data.Text                   as T
 import qualified Ide.Plugin.RangeMap         as RangeMap
-import           Ide.PluginUtils             (extractTextInRange,                                  unescape)
+import           Ide.PluginUtils             (extractTextInRange, unescape)
 import           Language.LSP.Protocol.Types (Position (..), Range (Range),
                                               UInt, isSubrangeOf)
 import           Test.Tasty
