@@ -1,45 +1,45 @@
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFunctor       #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
 
 module Ide.Plugin.SemanticTokens.Tokenize (hieAstSpanIdentifiers) where
 
-import Control.Lens (Identity (runIdentity))
-import Control.Monad (forM_, guard)
-import Control.Monad.State (MonadState (get), MonadTrans (lift), execState, execStateT, gets, modify, put, runStateT)
-import Control.Monad.Trans.State (StateT)
-import qualified Data.Map as M
-import qualified Data.Map as Map
-import Data.Set (Set)
-import qualified Data.Set as S
-import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.Rope as Char
-import Data.Text.Utf16.Rope (toText)
-import Data.Text.Utf16.Rope.Mixed (Rope)
-import qualified Data.Text.Utf16.Rope.Mixed as Rope
-import Development.IDE.GHC.Compat
-import Development.IDE.GHC.Error (realSrcSpanToCodePointRange)
-import Language.LSP.Protocol.Types
-  ( Position (Position),
-    Range (Range),
-    UInt,
-  )
-import Language.LSP.VFS hiding (line)
-import Prelude hiding (length, span)
+import           Control.Lens                (Identity (runIdentity))
+import           Control.Monad               (forM_, guard)
+import           Control.Monad.State         (MonadState (get),
+                                              MonadTrans (lift), execState,
+                                              execStateT, gets, modify, put,
+                                              runStateT)
+import           Control.Monad.Trans.State   (StateT)
+import qualified Data.Map                    as M
+import qualified Data.Map                    as Map
+import           Data.Set                    (Set)
+import qualified Data.Set                    as S
+import           Data.Text                   (Text)
+import qualified Data.Text                   as T
+import qualified Data.Text.Rope              as Char
+import           Data.Text.Utf16.Rope        (toText)
+import           Data.Text.Utf16.Rope.Mixed  (Rope)
+import qualified Data.Text.Utf16.Rope.Mixed  as Rope
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Error   (realSrcSpanToCodePointRange)
+import           Language.LSP.Protocol.Types (Position (Position),
+                                              Range (Range), UInt)
+import           Language.LSP.VFS            hiding (line)
+import           Prelude                     hiding (length, span)
 
 type Tokenizer m a = forall t. StateT (PTokenState t) m a
 
 type RangeIdSetMap = Map.Map Range (Set Identifier)
 
 data PTokenState t = PTokenState
-  { rangeIdSetMap :: RangeIdSetMap,
-    rope :: Rope,
-    cursor :: Char.Position,
-    currentAst :: HieAST t,
-    columnsInUtf16 :: UInt,
-    currentRange :: Range,
+  { rangeIdSetMap       :: RangeIdSetMap,
+    rope                :: Rope,
+    cursor              :: Char.Position,
+    currentAst          :: HieAST t,
+    columnsInUtf16      :: UInt,
+    currentRange        :: Range,
     currentRangeContext :: SplitResult
   }
 
@@ -117,10 +117,10 @@ visitLeafIds = liftMaybeM $ do
           occStr <- lift $ case (occNameString . nameOccName) name of
             -- the generated selector name with {-# LANGUAGE DuplicateRecordFields #-}
             '$' : 's' : 'e' : 'l' : ':' : xs -> Just $ takeWhile (/= ':') xs
-            ['$'] -> Just "$"
+            ['$']                            -> Just "$"
             -- other generated names that should not be visible
-            '$' : _ -> Nothing
-            ns -> Just ns
+            '$' : _                          -> Nothing
+            ns                               -> Just ns
           case ranSplit of
             (NoSplit (tk, r)) -> do
               guard $ T.unpack tk == occStr
@@ -174,7 +174,7 @@ focusTokenAt leaf = do
     newColumn :: UInt -> Text -> UInt
     newColumn n rp = case T.breakOnEnd "\n" rp of
       ("", nEnd) -> n + fromIntegral (Rope.utf16Length $ Rope.fromText nEnd)
-      (_, nEnd) -> fromIntegral (Rope.utf16Length $ Rope.fromText nEnd)
+      (_, nEnd)  -> fromIntegral (Rope.utf16Length $ Rope.fromText nEnd)
     codePointRangeToRangeWith :: UInt -> UInt -> CodePointRange -> Range
     codePointRangeToRangeWith newStartCol newEndCol (CodePointRange (CodePointPosition startLine _) (CodePointPosition endLine _)) =
       Range (Position startLine newStartCol) (Position endLine newEndCol)
@@ -193,7 +193,7 @@ splitRangeByText tk ran = do
   let (ran', tk') = case T.uncons tk of
         Just ('(', xs) -> (subOneRange ran, T.takeWhile (/= ')') xs)
         Just ('`', xs) -> (subOneRange ran, T.takeWhile (/= '`') xs)
-        _ -> (ran, tk)
+        _              -> (ran, tk)
   let (prefix, tk'') = T.breakOnEnd "." tk'
   spr <- splitRange tk'' (fromIntegral $ Rope.utf16Length $ Rope.fromText prefix) ran'
   return spr

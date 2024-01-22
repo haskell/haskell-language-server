@@ -58,6 +58,7 @@ import           Ide.Plugin.Error                         (PluginError (PluginIn
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Query
 import           Ide.Plugin.SemanticTokens.SemanticConfig (mkSemanticConfigFunctions)
+import           Ide.Plugin.SemanticTokens.Tokenize       (hieAstSpanIdentifiers)
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
@@ -66,7 +67,6 @@ import           Language.LSP.Protocol.Types              (NormalizedFilePath,
                                                            SemanticTokens,
                                                            type (|?) (InL))
 import           Prelude                                  hiding (span)
-import Ide.Plugin.SemanticTokens.Tokenize (hieAstSpanIdentifiers)
 
 
 $mkSemanticConfigFunctions

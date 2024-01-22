@@ -26,7 +26,8 @@ import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
                                                        HsSemanticTokenType (TModule),
                                                        NameSemanticMap,
                                                        SemanticTokensConfig)
-import           Ide.Plugin.SemanticTokens.Utils      (splitAndBreakModuleNameAndOccName, getTextByCodePointRangeFromVfs)
+import           Ide.Plugin.SemanticTokens.Utils      (getTextByCodePointRangeFromVfs,
+                                                       splitAndBreakModuleNameAndOccName)
 import           Language.LSP.Protocol.Types          (Position (Position),
                                                        Range (Range),
                                                        SemanticTokenAbsolute (SemanticTokenAbsolute),
