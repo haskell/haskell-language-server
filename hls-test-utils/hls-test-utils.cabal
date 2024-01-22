@@ -35,7 +35,6 @@ library
     , aeson
     , async
     , base                    >=4.12 && <5
-    , blaze-markup
     , bytestring
     , containers
     , data-default
@@ -43,10 +42,8 @@ library
     , extra
     , filepath
     , ghcide                  == 2.6.0.0
-    , hls-graph
     , hls-plugin-api          == 2.6.0.0
     , lens
-    , lsp                     ^>=2.3
     , lsp-test                ^>=0.16
     , lsp-types               ^>=2.1
     , tasty
@@ -56,9 +53,8 @@ library
     , tasty-rerun
     , temporary
     , text
-    , unordered-containers
     , row-types
-  ghc-options:      -Wall
+  ghc-options:      -Wall -Wunused-packages
 
   if flag(pedantic)
     ghc-options: -Werror
