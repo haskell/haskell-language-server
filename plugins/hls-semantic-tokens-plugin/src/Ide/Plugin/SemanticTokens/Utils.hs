@@ -8,20 +8,12 @@
 
 module Ide.Plugin.SemanticTokens.Utils where
 
-import           Control.Monad                   (guard)
-import           Data.Bool                       (bool)
-import           Data.ByteString                 (ByteString)
-import           Data.ByteString.Char8           (unpack)
-import qualified Data.Map                        as Map
-import           Data.Text                       (Text, breakOnEnd, length)
-import qualified Data.Text                       as T
-import           Data.Text.Utf16.Rope            (Rope, splitAtPosition)
-import qualified Data.Text.Utf16.Rope            as Rope
-import           Development.IDE                 (Position (..), Range (..))
+import           Data.ByteString            (ByteString)
+import           Data.ByteString.Char8      (unpack)
+import qualified Data.Map                   as Map
+import           Development.IDE            (Position (..), Range (..))
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.Util (mkFastString)
-import           Language.LSP.VFS                (VirtualFile, _file_text)
-import           Prelude                         hiding (length, span)
+import           Prelude                    hiding (length, span)
 
 deriving instance Show DeclType
 deriving instance Show BindType
@@ -102,68 +94,6 @@ mkRange :: (Integral a1, Integral a2) => a1 -> a2 -> a2 -> Range
 mkRange startLine startCol len =
     Range (Position (fromIntegral startLine) (fromIntegral startCol)) (Position (fromIntegral startLine) (fromIntegral $ startCol + len))
 
-
--- | split a qualified identifier into module name and identifier and/or strip the (), ``
--- for `ModuleA.b`, break it into `ModuleA.` and `b`
--- for `(b)`, strip `()`, and get `b`
--- for `(ModuleA.b)`, strip `()` and break it into `ModuleA.` and `b`
--- nameLength get the length of the `b` in code points unit
--- while Range might not be in code points unit.
--- but the comparison is still valid since we only want to know if it is potentially a qualified identifier
--- or an identifier that is wrapped in () or ``
-splitAndBreakModuleNameAndOccName :: Text -> Range -> Identifier -> [(Range,Identifier)]
-splitAndBreakModuleNameAndOccName _ ran (Left m) = [(ran, Left m)]
-splitAndBreakModuleNameAndOccName txt ran@(Range (Position startLine startColumn) (Position _endLine endColumn)) (Right name)
-    | nameLength name < fromIntegral (endColumn - startColumn) =
-        let stripFlag = peekStripFlag txt
-        in case peekPrefixModuleNameLength txt of
-                Just prefixLen ->
-                    [(Range (Position startLine (startColumn + bool 0 1 stripFlag))
-                            (Position startLine (startColumn + fromIntegral prefixLen)) , Left (mkModuleName "")), -- we do not need the module name, only tis range
-                    (Range (Position startLine (startColumn + fromIntegral prefixLen))
-                            (Position startLine (endColumn + bool 0 (-1) stripFlag)), Right name)]
-                Nothing -> if stripFlag
-                    then [(Range (Position startLine (startColumn+1)) (Position _endLine (endColumn-1)), Right name)]
-                    else [(ran, Right name)]
-    | otherwise = [(ran, Right name)]
-
-nameLength :: Name -> Int
-nameLength = lengthFS . occNameFS . nameOccName
-
-peekStripFlag :: Text -> Bool
-peekStripFlag token =
-    case T.uncons token of
-    Just (c, _) -> c `elem` strippedChars
-    Nothing     -> False
-    where strippedChars = ['`', '(']
-
--- | peek at the prefix of a range,
--- if it is a qualified name, return the length of the module name.
--- module name everything before the last dot.
-peekPrefixModuleNameLength :: Text -> Maybe Int
-peekPrefixModuleNameLength token = do
-    let prefixLen = length $ fst $ breakOnEnd "." token
-    guard $ prefixLen > 0
-    return prefixLen
-
--- | get the text from a range in a virtual file
-getTextByCodePointRangeFromVfs :: VirtualFile -> Range -> Maybe Text
-getTextByCodePointRangeFromVfs vf ra = do
-    let rp = vf._file_text
-    let (pos, len) = rangeToPositionLength ra
-    (_, suffix) <- splitAtPosition (codePointPositionRopePosition pos) rp
-    (prefix, _) <- Rope.splitAt len suffix
-    let token = Rope.toText prefix
-    return token
-    where
-    rangeToPositionLength :: (Integral l) => Range -> (Position, l)
-    rangeToPositionLength (Range beginPos@(Position _ startColumn) (Position _ endColumn)) =
-        (beginPos, fromIntegral $ endColumn - startColumn)
-    codePointPositionRopePosition :: Position -> Rope.Position
-    codePointPositionRopePosition (Position line column) = do
-        let line' = fromIntegral line
-        let column' = fromIntegral column
-        Rope.Position line' column'
 
 rangeShortStr :: Range -> String
 rangeShortStr (Range (Position startLine startColumn) (Position endLine endColumn)) =

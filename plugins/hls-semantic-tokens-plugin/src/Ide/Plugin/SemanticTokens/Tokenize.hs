@@ -8,9 +8,8 @@ module Ide.Plugin.SemanticTokens.Tokenize (hieAstSpanIdentifiers) where
 import           Control.Lens                (Identity (runIdentity))
 import           Control.Monad               (forM_, guard)
 import           Control.Monad.State         (MonadState (get),
-                                              MonadTrans (lift), execState,
-                                              execStateT, gets, modify, put,
-                                              runStateT)
+                                              MonadTrans (lift), execStateT,
+                                              gets, modify, put)
 import           Control.Monad.Trans.State   (StateT)
 import qualified Data.Map                    as M
 import qualified Data.Map                    as Map
