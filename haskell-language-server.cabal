@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 9.0.2 || ==9.2.5
+tested-with:        GHC == 9.8.1 || ==9.6.4 || ==9.4.8 || ==9.2.8
 extra-source-files:
   README.md
   ChangeLog.md
@@ -35,7 +35,7 @@ source-repository head
 
 common common-deps
   build-depends:
-    , base       >=4.12 && <5
+    , base       >=4.16 && <5
     , directory
     , extra
     , filepath
@@ -593,6 +593,7 @@ test-suite wrapper-test
   main-is:            Main.hs
 
 benchmark benchmark
+    import:           common-deps
     -- Depends on shake-bench which is unbuildable after this point
     if impl(ghc >= 9.5)
       buildable: False
@@ -622,12 +623,8 @@ benchmark benchmark
 
     build-depends:
         aeson,
-        base == 4.*,
         containers,
         data-default,
-        directory,
-        extra,
-        filepath,
         ghcide-bench,
         haskell-language-server,
         hls-plugin-api,
@@ -636,5 +633,4 @@ benchmark benchmark
         optparse-applicative,
         shake,
         shake-bench == 0.2.*,
-        text,
         yaml
