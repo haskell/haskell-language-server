@@ -168,3 +168,4 @@ getTextByCodePointRangeFromVfs vf ra = do
 rangeShortStr :: Range -> String
 rangeShortStr (Range (Position startLine startColumn) (Position endLine endColumn)) =
     show startLine <> ":" <> show startColumn <> "-" <> show endLine <> ":" <> show endColumn
+
