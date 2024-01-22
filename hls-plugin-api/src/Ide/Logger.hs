@@ -178,7 +178,7 @@ withFileRecorder path columns action = do
   fileHandle :: Either IOException Handle <- liftIO $ try (openFile path AppendMode)
   case fileHandle of
     Left e -> action $ Left e
-    Right fileHandle -> finally ((Right <$> makeHandleRecorder fileHandle) >>= action) (liftIO $ hClose fileHandle)
+    Right fileHandle -> finally (makeHandleRecorder fileHandle >>= action . Right) (liftIO $ hClose fileHandle)
 
 makeDefaultHandleRecorder
   :: MonadIO m
