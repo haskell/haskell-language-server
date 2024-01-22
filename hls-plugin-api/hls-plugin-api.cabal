@@ -32,7 +32,13 @@ source-repository head
   type:     git
   location: https://github.com/haskell/haskell-language-server
 
+common warnings
+  ghc-options:
+    -Wall -Wredundant-constraints -Wunused-packages
+    -Wno-name-shadowing -Wno-unticked-promoted-constructors
+
 library
+  import: warnings
   exposed-modules:
     Ide.Logger
     Ide.Plugin.Config
@@ -84,10 +90,6 @@ library
   else
     build-depends: unix
 
-  ghc-options:
-    -Wall -Wredundant-constraints -Wno-name-shadowing
-    -Wno-unticked-promoted-constructors -Wunused-packages
-
   if flag(pedantic)
     ghc-options: -Werror
 
@@ -102,6 +104,7 @@ library
     TypeOperators
 
 test-suite tests
+  import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
@@ -125,6 +128,7 @@ test-suite tests
     , text
 
 benchmark rangemap-benchmark
+  import: warnings
   -- Benchmark doesn't make sense if fingertree implementation
   -- is not used.
   if !flag(use-fingertree)
@@ -134,7 +138,7 @@ benchmark rangemap-benchmark
   default-language: Haskell2010
   hs-source-dirs:   bench
   main-is:          Main.hs
-  ghc-options:      -threaded -Wall
+  ghc-options:      -threaded
   build-depends:
     , base
     , criterion
