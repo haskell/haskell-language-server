@@ -164,7 +164,7 @@ semanticTokensTests =
   testGroup
     "other semantic Token test"
     [ testCase "module import test" $ do
-        let file1 = "TModuleA.hs"
+        let file1 = "TModula𐐀bA.hs"
         let file2 = "TModuleB.hs"
         let expect =
               [
@@ -175,24 +175,32 @@ semanticTokensTests =
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
           doc1 <- openDoc file1 "haskell"
           doc2 <- openDoc file2 "haskell"
-          _check1 <- waitForAction "TypeCheck" doc1
+          check1 <- waitForAction "TypeCheck" doc1
           check2 <- waitForAction "TypeCheck" doc2
+          case check1 of
+            Right (WaitForIdeRuleResult _) -> return ()
+            Left _                         -> error "TypeCheck1 failed"
           case check2 of
             Right (WaitForIdeRuleResult _) -> return ()
             Left _                         -> error "TypeCheck2 failed"
 
+
+
           textContent2 <- documentContents doc2
           let vfs = VirtualFile 0 0 (Rope.fromText textContent2)
           res2 <- Test.getSemanticTokens doc2
-          case res2 ^? Language.LSP.Protocol.Types._L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens def vfs tokens
-              return ()
-            _ -> error "No tokens found"
-          liftIO $ 1 @?= 1,
+          result <- docSemanticTokensString def doc2
+          let expect = unlines [
+                    "3:8-18 TModule \"TModula\\66560bA\""
+                    , "4:18-28 TModule \"TModula\\66560bA\""
+                    , "6:1-3 TVariable \"go\""
+                    , "6:6-10 TDataConstructor \"Game\""
+                    , "8:1-5 TVariable \"a\\66560bb\""
+                    , "8:8-19 TModule \"TModula\\66560bA.\""
+                    , "8:19-22 TRecordField \"a\\66560b\""
+                    , "8:23-25 TVariable \"go\""
+                ]
+          liftIO $ result @?= expect,
       goldenWithSemanticTokensWithDefaultConfig "mixed constancy test result generated from one ghc version" "T1",
       goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternSynonym",
       goldenWithSemanticTokensWithDefaultConfig "type family" "TTypefamily",

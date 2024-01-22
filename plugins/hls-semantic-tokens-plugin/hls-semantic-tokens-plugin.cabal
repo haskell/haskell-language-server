@@ -30,6 +30,7 @@ library
     Ide.Plugin.SemanticTokens.Query
     Ide.Plugin.SemanticTokens.SemanticConfig
     Ide.Plugin.SemanticTokens.Utils
+    Ide.Plugin.SemanticTokens.Tokenize
     Ide.Plugin.SemanticTokens.Internal
 
   hs-source-dirs:     src

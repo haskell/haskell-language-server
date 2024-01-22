@@ -111,10 +111,10 @@ mkRange startLine startCol len =
 -- while Range might not be in code points unit.
 -- but the comparison is still valid since we only want to know if it is potentially a qualified identifier
 -- or an identifier that is wrapped in () or ``
-splitAndBreakModuleNameAndOccName :: VirtualFile -> Range -> Identifier -> [(Range,Identifier)]
+splitAndBreakModuleNameAndOccName :: Text -> Range -> Identifier -> [(Range,Identifier)]
 splitAndBreakModuleNameAndOccName _ ran (Left m) = [(ran, Left m)]
-splitAndBreakModuleNameAndOccName vf ran@(Range (Position startLine startColumn) (Position _endLine endColumn)) (Right name)
-    | nameLength name < fromIntegral (endColumn - startColumn), (Just txt) <- getTextByCodePointRangeFromVfs vf ran =
+splitAndBreakModuleNameAndOccName txt ran@(Range (Position startLine startColumn) (Position _endLine endColumn)) (Right name)
+    | nameLength name < fromIntegral (endColumn - startColumn) =
         let stripFlag = peekStripFlag txt
         in case peekPrefixModuleNameLength txt of
                 Just prefixLen ->
@@ -164,3 +164,7 @@ getTextByCodePointRangeFromVfs vf ra = do
         let line' = fromIntegral line
         let column' = fromIntegral column
         Rope.Position line' column'
+
+rangeShortStr :: Range -> String
+rangeShortStr (Range (Position startLine startColumn) (Position endLine endColumn)) =
+    show startLine <> ":" <> show startColumn <> "-" <> show endLine <> ":" <> show endColumn

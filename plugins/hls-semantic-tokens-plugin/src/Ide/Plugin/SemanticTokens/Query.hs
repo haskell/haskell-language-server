@@ -26,7 +26,7 @@ import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
                                                        HsSemanticTokenType (TModule),
                                                        NameSemanticMap,
                                                        SemanticTokensConfig)
-import           Ide.Plugin.SemanticTokens.Utils      (splitAndBreakModuleNameAndOccName)
+import           Ide.Plugin.SemanticTokens.Utils      (splitAndBreakModuleNameAndOccName, getTextByCodePointRangeFromVfs)
 import           Language.LSP.Protocol.Types          (Position (Position),
                                                        Range (Range),
                                                        SemanticTokenAbsolute (SemanticTokenAbsolute),
@@ -60,45 +60,6 @@ nameNameSemanticFromHie hieKind rm ns@(Right _) = do
 
     contextInfosMaybeTokenType :: Set.Set ContextInfo -> Maybe HsSemanticTokenType
     contextInfosMaybeTokenType details = foldMap infoTokenType (Set.toList details)
-
------------------------------------
-
--- * extract location from HieAST a
-
------------------------------------
-
--- | get only visible names from HieAST
--- we care only the leaf node of the AST
--- and filter out the derived and evidence names
-hieAstSpanIdentifiers :: VirtualFile -> HieAST a -> M.Map Range (Set Identifier)
-hieAstSpanIdentifiers vf ast =
-  if null (nodeChildren ast)
-    then getIds ast
-    else M.unionsWith S.union $ map (hieAstSpanIdentifiers vf) (nodeChildren ast)
-  where
-    getIds ast' = fromMaybe mempty $ do
-      range <- codePointRangeToRange vf $ realSrcSpanToCodePointRange $ nodeSpan ast'
-      return $
-        M.fromListWith
-          (<>)
-          [S.singleton <$> ri | idt <- S.toList (getNodeIds' ast'), ri <- splitAndBreakModuleNameAndOccName vf range idt]
-    getNodeIds' =
-      Map.foldl' combineNodeIds mempty
-        . Map.filterWithKey (\k _ -> k == SourceInfo)
-        . getSourcedNodeInfo
-        . sourcedNodeInfo
-    combineNodeIds :: Set Identifier -> NodeInfo a -> Set Identifier
-    ad `combineNodeIds` (NodeInfo _ _ bd) = ad `S.union` xs
-      where
-        xs = S.fromList $ M.keys $ M.filterWithKey inclusion bd
-        inclusion :: Identifier -> IdentifierDetails a -> Bool
-        inclusion a b = not $ exclusion a b
-        exclusion :: Identifier -> IdentifierDetails a -> Bool
-        exclusion idt IdentifierDetails {identInfo = infos} = case idt of
-          Left _moduleName -> False
-          -- filter out the evidence names since they are visible,
-          -- derived names are not filtered out since they are not visible at use site.
-          Right _name      -> any isEvidenceContext (S.toList infos)
 
 
 -------------------------------------------------
