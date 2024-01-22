@@ -1,13 +1,13 @@
 {-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DataKinds #-}
 module Test.Hls.Util
   (  -- * Test Capabilities
       codeActionResolveCaps
@@ -54,22 +54,22 @@ where
 
 import           Control.Applicative.Combinators (skipManyTill, (<|>))
 import           Control.Exception               (catch, throwIO)
-import           Control.Lens                    ((&), (?~), (^.), _Just, (.~))
+import           Control.Lens                    (_Just, (&), (.~), (?~), (^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Data.Aeson                      as A
 import           Data.Bool                       (bool)
 import           Data.Default
-import           Data.Row
-import           Data.Proxy
 import           Data.List.Extra                 (find)
+import           Data.Proxy
+import           Data.Row
 import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
 import           Development.IDE                 (GhcVersion (..), ghcVersion)
-import qualified Language.LSP.Test               as Test
-import           Language.LSP.Protocol.Types
+import qualified Language.LSP.Protocol.Lens      as L
 import           Language.LSP.Protocol.Message
-import qualified Language.LSP.Protocol.Lens         as L
+import           Language.LSP.Protocol.Types
+import qualified Language.LSP.Test               as Test
 import           System.Directory
 import           System.FilePath
 import           System.Info.Extra               (isMac, isWindows)
