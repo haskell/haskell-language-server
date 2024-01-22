@@ -253,7 +253,13 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
                                 noExtField
 #endif
                                 rdr
-        x = reLocA $ L top $ IEVar noExtField lie
+        x = reLocA $ L top $ IEVar
+#if MIN_VERSION_ghc(9,8,0)
+                               Nothing -- no deprecated
+#else
+                               noExtField
+#endif
+                               lie
 
     if x `elem` lies
       then TransformT $ lift (Left $ thing <> " already imported")
@@ -311,7 +317,13 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
                                              noExtField
 #endif
                                              childRdr
-          x :: LIE GhcPs = L ll' $ IEThingWith (addAnns mempty [AddEpAnn AnnOpenP (EpaDelta (SameLine 1) []), AddEpAnn AnnCloseP def] emptyComments) absIE NoIEWildcard [childLIE]
+          x :: LIE GhcPs = L ll' $ IEThingWith
+#if MIN_VERSION_ghc(9,7,0)
+                                     (Nothing, addAnns mempty [AddEpAnn AnnOpenP (EpaDelta (SameLine 1) []), AddEpAnn AnnCloseP def] emptyComments)
+#else
+                                     (addAnns mempty [AddEpAnn AnnOpenP (EpaDelta (SameLine 1) []), AddEpAnn AnnCloseP def] emptyComments)
+#endif
+                                     absIE NoIEWildcard [childLIE]
 
 #if MIN_VERSION_ghc(9,5,0)
       return $ L l it{ideclImportList = Just (hide, L l' $ reverse pre ++ [x] ++ xs)}
@@ -329,7 +341,11 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
         let it' = it{ideclHiding = Just (hide, lies)}
 #endif
             thing = IEThingWith newl twIE (IEWildcard 2) []
+#if MIN_VERSION_ghc(9,7,0)
+            newl = fmap (\ann -> ann ++ [(AddEpAnn AnnDotdot d0)]) <$> l'''
+#else
             newl = (\ann -> ann ++ [(AddEpAnn AnnDotdot d0)]) <$> l'''
+#endif
             lies = L l' $ reverse pre ++ [L l'' thing] ++ xs
         return $ L l it'
     | parent == unIEWrappedName ie
@@ -382,7 +398,11 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
                                              noExtField
 #endif
                                              childRdr
+#if MIN_VERSION_ghc(9,7,0)
+          listAnn = (Nothing, epAnn srcParent [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)])
+#else
           listAnn = epAnn srcParent [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)]
+#endif
           x :: LIE GhcPs = reLocA $ L l'' $ IEThingWith listAnn parentLIE NoIEWildcard [childLIE]
 
           lies' = addCommaInImportList (reverse pre) x
@@ -486,7 +506,13 @@ extendHiding symbol (L l idecls) mlies df = do
                                noExtField
 #endif
                                rdr
-      x = reLocA $ L top $ IEVar noExtField lie
+      x = reLocA $ L top $ IEVar
+#if MIN_VERSION_ghc(9,7,0)
+                             Nothing
+#else
+                             noExtField
+#endif
+                             lie
   x <- pure $ if hasSibling then first addComma x else x
   lies <- pure $ over _head (`setEntryDP` SameLine 1) lies
 #if MIN_VERSION_ghc(9,5,0)

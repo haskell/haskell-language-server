@@ -44,6 +44,8 @@ tests = testGroup "cradle"
     ,ignoreFor (BrokenForGHC [GHC92]) "multiple units not supported on 9.2"
        $ testGroup "multi-unit" (multiTests "multi-unit")
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
+    ,ignoreFor (BrokenForGHC [GHC92]) "multiple units not supported on 9.2"
+      $ testGroup "multi-unit-rexport" [multiRexportTest]
     ]
 
 loadCradleOnlyonce :: TestTree
@@ -187,6 +189,17 @@ simpleMultiDefTest variant = testCase (multiTestName variant "def-test") $ runWi
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
 
+multiRexportTest :: TestTree
+multiRexportTest =
+  testCase "multi-unit-reexport-test"  $ runWithExtraFiles "multi-unit-reexport" $ \dir -> do
+    let cPath = dir </> "c/C.hs"
+    cdoc <- openDoc cPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" cdoc
+    locs <- getDefinitions cdoc (Position 3 7)
+    let aPath = dir </> "a/A.hs"
+    let fooL = mkL (filePathToUri aPath) 2 0 2 3
+    checkDefs locs (pure [fooL])
+    expectNoMoreDiagnostics 0.5
 
 sessionDepsArePickedUp :: TestTree
 sessionDepsArePickedUp = testSession'

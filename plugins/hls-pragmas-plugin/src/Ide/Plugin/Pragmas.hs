@@ -22,9 +22,9 @@ import           Control.Monad.IO.Class             (MonadIO (liftIO))
 import           Control.Monad.Trans.Class          (lift)
 import           Data.List.Extra                    (nubOrdOn)
 import qualified Data.Map                           as M
-import           Data.Maybe                         (catMaybes)
+import           Data.Maybe                         (mapMaybe)
 import qualified Data.Text                          as T
-import           Development.IDE
+import           Development.IDE                    hiding (line)
 import           Development.IDE.Core.Compile       (sourceParser,
                                                      sourceTypecheck)
 import           Development.IDE.Core.PluginUtils
@@ -43,19 +43,19 @@ import qualified Text.Fuzzy                         as Fuzzy
 -- ---------------------------------------------------------------------
 
 suggestPragmaDescriptor :: PluginId -> PluginDescriptor IdeState
-suggestPragmaDescriptor plId = (defaultPluginDescriptor plId)
+suggestPragmaDescriptor plId = (defaultPluginDescriptor plId "Provides a code action to add missing LANGUAGE pragmas")
   { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction suggestPragmaProvider
   , pluginPriority = defaultPluginPriority + 1000
   }
 
 completionDescriptor :: PluginId -> PluginDescriptor IdeState
-completionDescriptor plId = (defaultPluginDescriptor plId)
+completionDescriptor plId = (defaultPluginDescriptor plId "Provides completion of LANGAUGE pragmas")
   { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCompletion completion
   , pluginPriority = ghcideCompletionsPluginPriority + 1
   }
 
 suggestDisableWarningDescriptor :: PluginId -> PluginDescriptor IdeState
-suggestDisableWarningDescriptor plId = (defaultPluginDescriptor plId)
+suggestDisableWarningDescriptor plId = (defaultPluginDescriptor plId "Provides a code action to disable warnings")
   { pluginHandlers = mkPluginHandler LSP.SMethod_TextDocumentCodeAction suggestDisableWarningProvider
     -- #3636 Suggestions to disable warnings should appear last.
   , pluginPriority = 0
@@ -85,7 +85,7 @@ mkCodeActionProvider mkSuggest state _plId
     parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
     let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
         nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
-        pedits = (nubOrdOn snd . concat $ mkSuggest parsedModuleDynFlags <$> diags)
+        pedits = nubOrdOn snd $ concatMap (mkSuggest parsedModuleDynFlags) diags
     pure  $ LSP.InL $ pragmaEditToAction uri nextPragmaInfo <$> pedits
 
 
@@ -146,7 +146,7 @@ suggestAddPragma mDynflags Diagnostic {_message, _source}
     disabled
       | Just dynFlags <- mDynflags =
         -- GHC does not export 'OnOff', so we have to view it as string
-        catMaybes $ T.stripPrefix "Off " . printOutputable <$> extensions dynFlags
+        mapMaybe (T.stripPrefix "Off " . printOutputable) (extensions dynFlags)
       | otherwise =
         -- When the module failed to parse, we don't have access to its
         -- dynFlags. In that case, simply don't disable any pragmas.
@@ -201,7 +201,7 @@ completion _ide _ complParams = do
     let (LSP.TextDocumentIdentifier uri) = complParams ^. L.textDocument
         position = complParams ^. L.position
     contents <- lift $ LSP.getVirtualFile $ toNormalizedUri uri
-    fmap (LSP.InL) $ case (contents, uriToFilePath' uri) of
+    fmap LSP.InL $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
             result <$> VFS.getCompletionPrefix position cnts
             where
@@ -252,7 +252,7 @@ completion _ide _ complParams = do
                             | "}"    `T.isSuffixOf` line = " #-"
                             | otherwise                 = " #-}"
                 result Nothing = []
-        _ -> return $ []
+        _ -> return []
 
 -----------------------------------------------------------------------
 

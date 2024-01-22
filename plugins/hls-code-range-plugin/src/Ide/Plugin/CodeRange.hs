@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
@@ -57,17 +56,17 @@ import           Language.LSP.Protocol.Types          (FoldingRange (..),
 import           Prelude                              hiding (log, span)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId)
+descriptor recorder plId = (defaultPluginDescriptor plId "Provides selection and folding ranges for Haskell")
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentSelectionRange (selectionRangeHandler recorder)
     <> mkPluginHandler SMethod_TextDocumentFoldingRange (foldingRangeHandler recorder)
     , pluginRules = codeRangeRule (cmapWithPrio LogRules recorder)
     }
 
-data Log = LogRules Rules.Log
+newtype Log = LogRules Rules.Log
 
 instance Pretty Log where
-    pretty log = case log of
-        LogRules codeRangeLog -> pretty codeRangeLog
+    pretty (LogRules codeRangeLog) = pretty codeRangeLog
+
 
 foldingRangeHandler :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState 'Method_TextDocumentFoldingRange
 foldingRangeHandler _ ide _ FoldingRangeParams{..} =

@@ -145,6 +145,7 @@ iePluginDescriptor recorder plId =
           , wrap suggestAddRecordFieldImport
           ]
           plId
+          "Provides various quick fixes"
    in mkExactprintPluginDescriptor recorder $ old {pluginHandlers = pluginHandlers old <> mkPluginHandler SMethod_TextDocumentCodeAction codeAction }
 
 typeSigsPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
@@ -157,6 +158,7 @@ typeSigsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestConstraint
     ]
     plId
+    "Provides various quick fixes for type signatures"
 
 bindingsPluginDescriptor :: Recorder (WithPriority E.Log) ->  PluginId -> PluginDescriptor IdeState
 bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
@@ -168,12 +170,13 @@ bindingsPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $
     , wrap suggestDeleteUnusedBinding
     ]
     plId
+    "Provides various quick fixes for bindings"
 
 fillHolePluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-fillHolePluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder (mkGhcideCAPlugin (wrap suggestFillHole) plId)
+fillHolePluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder (mkGhcideCAPlugin (wrap suggestFillHole) plId "Provides a code action to fill a hole")
 
 extendImportPluginDescriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-extendImportPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor plId)
+extendImportPluginDescriptor recorder plId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor plId "Provides a command to extend the import list")
   { pluginCommands = [extendImportCommand] }
 
 
@@ -935,7 +938,11 @@ suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, Cod
 suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
       matchRegexUnifySpaces _message
+#if MIN_VERSION_ghc(9,7,0)
+      "Add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\(at (.*)\\)."
+#else
       "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\)."
+#endif
     = suggestions hsmodImports binding mod srcspan
     | Just (binding, mod_srcspan) <-
       matchRegExMultipleImports _message
@@ -962,9 +969,13 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
           | otherwise = []
         lookupExportMap binding mod
           | let em = getExportsMap exportsMap
+#if MIN_VERSION_ghc(9,7,0)
+                match = mconcat $ lookupOccEnv_AllNameSpaces em (mkVarOrDataOcc binding)
+#else
                 match1 = lookupOccEnv em (mkVarOrDataOcc binding)
                 match2 = lookupOccEnv em (mkTypeOcc binding)
           , Just match <- match1 <> match2
+#endif
           -- Only for the situation that data constructor name is same as type constructor name,
           -- let ident with parent be in front of the one without.
           , sortedMatch <- sortBy (\ident1 ident2 -> parent ident2 `compare` parent ident1) (Set.toList match)
@@ -1162,9 +1173,20 @@ suggestFixConstructorImport Diagnostic{_range=_range,..}
     -- import Data.Aeson.Types( Result( Success ) )
     -- or
     -- import Data.Aeson.Types( Result(..) ) (lsp-ui)
+    --
+    -- On 9.8+
+    --
+    -- In the import of ‘ModuleA’:
+    -- an item called ‘Constructor’
+    -- is exported, but it is a data constructor of
+    -- ‘A’.
   | Just [constructor, typ] <-
     matchRegexUnifySpaces _message
+#if MIN_VERSION_ghc(9,7,0)
+    "an item called ‘([^’]*)’ is exported, but it is a data constructor of ‘([^’]*)’"
+#else
     "‘([^’]*)’ is a data constructor of ‘([^’]*)’ To import it use"
+#endif
   = let fixedImport = typ <> "(" <> constructor <> ")"
     in [("Fix import of " <> fixedImport, TextEdit _range fixedImport)]
   | otherwise = []
@@ -1431,7 +1453,11 @@ suggestNewImport df packageExportsMap ps fileContents Diagnostic{..}
             *> extractQualifiedModuleNameFromMissingName (extractTextInRange _range fileContents)
   , Just (range, indent) <- newImportInsertRange ps fileContents
   , extendImportSuggestions <- matchRegexUnifySpaces msg
+#if MIN_VERSION_ghc(9,7,0)
+    "Add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
+#else
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
+#endif
   = let qis = qualifiedImportStyle df
         -- FIXME: we can use thingMissing once the support for GHC 9.4 is dropped.
         -- In what fllows, @missing@ is assumed to be qualified name.
@@ -1949,30 +1975,32 @@ regexSingleMatch msg regex = case matchRegexUnifySpaces msg regex of
     Just (h:_) -> Just h
     _          -> Nothing
 
--- | Parses tuples like (‘Data.Map’, (app/ModuleB.hs:2:1-18)) and
--- | return (Data.Map, app/ModuleB.hs:2:1-18)
-regExPair :: (T.Text, T.Text) -> Maybe (T.Text, T.Text)
-regExPair (modname, srcpair) = do
-  x <- regexSingleMatch modname "‘([^’]*)’"
-  y <- regexSingleMatch srcpair "\\((.*)\\)"
-  return (x, y)
-
 -- | Process a list of (module_name, filename:src_span) values
 -- | Eg. [(Data.Map, app/ModuleB.hs:2:1-18), (Data.HashMap.Strict, app/ModuleB.hs:3:1-29)]
 regExImports :: T.Text -> Maybe [(T.Text, T.Text)]
-regExImports msg = result
-  where
-    parts = T.words msg
-    isPrefix = not . T.isPrefixOf "("
-    (mod, srcspan) = partition isPrefix  parts
-    -- check we have matching pairs like (Data.Map, (app/src.hs:1:2-18))
-    result = if length mod == length srcspan then
-               regExPair `traverse` zip mod srcspan
-             else Nothing
+regExImports msg
+    | Just mods' <- allMatchRegex msg "‘([^’]*)’"
+    , Just srcspans' <- allMatchRegex msg
+#if MIN_VERSION_ghc(9,7,0)
+                          "\\(at ([^)]*)\\)"
+#else
+                          "\\(([^)]*)\\)"
+#endif
+    , mods <- [mod | [_,mod] <- mods']
+    , srcspans <- [srcspan | [_,srcspan] <- srcspans']
+      -- check we have matching pairs like (Data.Map, (app/src.hs:1:2-18))
+    , let result = if length mods == length srcspans then
+                   Just (zip mods srcspans) else Nothing
+    = result
+    | otherwise = Nothing
 
 matchRegExMultipleImports :: T.Text -> Maybe (T.Text, [(T.Text, T.Text)])
 matchRegExMultipleImports message = do
+#if MIN_VERSION_ghc(9,7,0)
+  let pat = T.pack "Add ‘([^’]*)’ to one of these import lists: *(‘.*\\))$"
+#else
   let pat = T.pack "Perhaps you want to add ‘([^’]*)’ to one of these import lists: *(‘.*\\))$"
+#endif
   (binding, imports) <- case matchRegexUnifySpaces message pat of
                             Just [x, xs] -> Just (x, xs)
                             _            -> Nothing

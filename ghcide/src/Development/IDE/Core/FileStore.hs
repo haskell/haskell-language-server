@@ -265,7 +265,7 @@ registerFileWatches globs = do
           -- our purposes.
           registration = LSP.TRegistration { _id ="globalFileWatches"
                                            , _method = LSP.SMethod_WorkspaceDidChangeWatchedFiles
-                                           , _registerOptions = Just $ regOptions}
+                                           , _registerOptions = Just regOptions}
           regOptions =
             DidChangeWatchedFilesRegistrationOptions { _watchers = watchers }
           -- See Note [File existence cache and LSP file watchers] for why this exists, and the choice of watch kind

@@ -49,18 +49,20 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - uses: cachix/install-nix-action@v24
+    - uses: cachix/install-nix-action@v25
       with:
         extra_nix_config: |
           experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
-    - uses: cachix/cachix-action@v13
+    - uses: cachix/cachix-action@v14
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
+    # Don't try and run the build (although that would be a good
+    # test), it takes a long time and we have sometimes had
+    # glibc incompatibilities with the runners
     - run: |
-        nix develop --print-build-logs --command cabal update
-        nix develop --print-build-logs --command cabal build
+        nix develop --print-build-logs --command true
 
   nix_post_job:
     if: always()

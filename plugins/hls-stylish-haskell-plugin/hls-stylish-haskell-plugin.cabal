@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-stylish-haskell-plugin
-version:            2.5.0.0
+version:            2.6.0.0
 synopsis:           Integration with the Stylish Haskell code formatter
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -20,11 +20,6 @@ source-repository head
     location: https://github.com/haskell/haskell-language-server.git
 
 library
-  -- Plugins that need exactprint have not been updated for 9.8 yet
-  if impl(ghc >= 9.8)
-    buildable: False
-  else
-    buildable: True
   exposed-modules:  Ide.Plugin.StylishHaskell
   hs-source-dirs:   src
   build-depends:
@@ -33,8 +28,8 @@ library
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide           == 2.5.0.0
-    , hls-plugin-api   == 2.5.0.0
+    , ghcide           == 2.6.0.0
+    , hls-plugin-api   == 2.6.0.0
     , lsp-types
     , mtl
     , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14.2
@@ -43,10 +38,6 @@ library
   default-language: Haskell2010
 
 test-suite tests
-  if impl(ghc >= 9.8)
-    buildable: False
-  else
-    buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
@@ -56,4 +47,4 @@ test-suite tests
     , base
     , filepath
     , hls-stylish-haskell-plugin
-    , hls-test-utils              == 2.5.0.0
+    , hls-test-utils              == 2.6.0.0

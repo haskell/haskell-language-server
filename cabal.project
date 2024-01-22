@@ -34,8 +34,9 @@ packages:
          ./plugins/hls-explicit-record-fields-plugin
          ./plugins/hls-refactor-plugin
          ./plugins/hls-overloaded-record-dot-plugin
+         ./plugins/hls-semantic-tokens-plugin
 
-index-state: 2023-12-13T00:00:00Z
+index-state: 2024-01-21T00:00:00Z
 
 tests: True
 test-show-details: direct
@@ -55,8 +56,8 @@ constraints:
   text -simdutf,
   ghc-check -ghc-check-use-package-abis,
   ghc-lib-parser-ex -auto,
-  -- This is only present in some versions, and it's on by default since 
-  -- 0.14.5.0, but there are some versions we allow that need this 
+  -- This is only present in some versions, and it's on by default since
+  -- 0.14.5.0, but there are some versions we allow that need this
   -- setting
   stylish-haskell +ghc-lib,
   -- Centos 7 comes with an old gcc version that doesn't know about
@@ -79,8 +80,8 @@ source-repository-package
 -- END DELETE
 
 if impl(ghc >= 9.1)
-  -- ekg packagess are old and unmaintained, but we 
-  -- don't rely on them for the mainline build, so 
+  -- ekg packagess are old and unmaintained, but we
+  -- don't rely on them for the mainline build, so
   -- this is okay
   allow-newer:
     ekg-json:base,
@@ -88,14 +89,10 @@ if impl(ghc >= 9.1)
     ekg-core:ghc-prim
 
 if impl(ghc >= 9.7)
+  -- ekg packagess are old and unmaintained, but we
+  -- don't rely on them for the mainline build, so
+  -- this is okay
   allow-newer:
     ekg-core:text,
-    -- https://github.com/maoe/ghc-trace-events/issues/12
-    ghc-trace-events:base,
-    ghc-trace-events:bytestring,
-    ghc-trace-events:text,
     -- https://github.com/haskell-primitive/primitive-unlifted/issues/39
     primitive-unlifted:bytestring,
-    -- https://github.com/obsidiansystems/commutative-semigroups/issues/13
-    commutative-semigroups:base,
-    commutative-semigroups:template-haskell,

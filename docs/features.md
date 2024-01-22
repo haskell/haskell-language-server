@@ -20,6 +20,7 @@ Many of these are standard LSP features, but a lot of special features are provi
 | [Code lenses](#code-lenses)                         | `textDocument/codeLens`                                                                           |
 | [Selection range](#selection-range)                 | `textDocument/selectionRange`                                                                     |
 | [Rename](#rename)                                   | `textDocument/rename`                                                                             |
+| [Semantic tokens](#semantic-tokens)                 | `textDocument/semanticTokens/full`                                                                |
 
 The individual sections below also identify which [HLS plugin](./what-is-hls.md#hls-plugins) is responsible for providing the given functionality, which is useful if you want to raise an issue report or contribute!
 Additionally, not all plugins are supported on all versions of GHC, see the [plugin support page](./support/plugin-support.md) for details.
@@ -380,7 +381,15 @@ Known limitations:
 
 - Cross-module renaming requires all components to be indexed, which sometimes causes [partial renames in multi-component projects](https://github.com/haskell/haskell-language-server/issues/2193).
 
-### Rewrite to overloaded record syntax
+## Semantic tokens
+
+Provided by: `hls-semantic-tokens-plugin`
+
+Provides semantic tokens for each token to support semantic highlighting.
+
+![Semantic Tokens Demo](https://private-user-images.githubusercontent.com/14073857/290981908-9619fae2-cb92-4d4e-b8f8-6507851ba9f3.png?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MDQ4MjgwODYsIm5iZiI6MTcwNDgyNzc4NiwicGF0aCI6Ii8xNDA3Mzg1Ny8yOTA5ODE5MDgtOTYxOWZhZTItY2I5Mi00ZDRlLWI4ZjgtNjUwNzg1MWJhOWYzLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDAxMDklMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQwMTA5VDE5MTYyNlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTBjOTUxNTM0ZDcyNmFmZjEyN2JlNzkwNWNjZjA4NTAzNDVkMzdlNmMxNDNiMzgxNGMzMTQ1NDRiMzUxZjM5OWQmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0JmFjdG9yX2lkPTAma2V5X2lkPTAmcmVwb19pZD0wIn0.n-CL6e2R0TWHpmzVo1i60QEDczTEJ-8zvQWxjaBsnks)
+
+## Rewrite to overloaded record syntax
 
 Provided by: `hls-overloaded-record-dot-plugin`
 
@@ -389,6 +398,7 @@ Code action kind: `refactor.rewrite`
 Rewrites record selectors to use overloaded dot syntax
 
 ![Explicit Wildcard Demo](../plugins/hls-overloaded-record-dot-plugin/example.gif)
+
 ## Missing features
 
 The following features are supported by the LSP specification but not implemented in HLS.
@@ -399,7 +409,6 @@ Contributions welcome!
 | Signature help         | Unimplemented     | `textDocument/signatureHelp`                   |
 | Jump to declaration    | Unclear if useful | `textDocument/declaration`                     |
 | Jump to implementation | Unclear if useful | `textDocument/implementation`                  |
-| Semantic tokens        | Unimplemented     | `textDocument/semanticTokens`                  |
 | Linked editing         | Unimplemented     | `textDocument/linkedEditingRange`              |
 | Document links         | Unimplemented     | `textDocument/documentLink`                    |
 | Document color         | Unclear if useful | `textDocument/documentColor`                   |

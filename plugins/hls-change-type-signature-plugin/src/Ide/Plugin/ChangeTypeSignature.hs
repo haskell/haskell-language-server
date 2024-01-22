@@ -33,7 +33,8 @@ import           Language.LSP.Protocol.Types
 import           Text.Regex.TDFA                  ((=~))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction (codeActionHandler plId) }
+descriptor plId = (defaultPluginDescriptor plId "Provides a code action to change the type signature of a binding if it is wrong")
+  { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction (codeActionHandler plId) }
 
 codeActionHandler :: PluginId -> PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeActionHandler plId ideState _ CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext diags _ _} = do
@@ -45,7 +46,7 @@ codeActionHandler plId ideState _ CodeActionParams {_textDocument = TextDocument
 getDecls :: MonadIO m => PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError m [LHsDecl GhcPs]
 getDecls (PluginId changeTypeSignatureId) state =
     runActionE (T.unpack changeTypeSignatureId <> ".GetParsedModule") state
-    . (fmap (hsmodDecls . unLoc . pm_parsed_source))
+    . fmap (hsmodDecls . unLoc . pm_parsed_source)
     . useE GetParsedModule
 
 -- | Text representing a Declaration's Name

@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-call-hierarchy-plugin
-version:            2.5.0.0
+version:            2.6.0.0
 synopsis:           Call hierarchy plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-call-hierarchy-plugin#readme>
@@ -19,7 +19,11 @@ source-repository head
     type:     git
     location: https://github.com/haskell/haskell-language-server.git
 
+common warnings
+    ghc-options: -Wall -Wunused-packages
+
 library
+  import: warnings
   buildable: True
   exposed-modules:    Ide.Plugin.CallHierarchy
   other-modules:
@@ -33,19 +37,19 @@ library
     , base                  >=4.12 && <5
     , containers
     , extra
-    , ghcide                == 2.5.0.0
+    , ghcide                == 2.6.0.0
     , hiedb
-    , hls-plugin-api        == 2.5.0.0
+    , hls-plugin-api        == 2.6.0.0
     , lens
     , lsp                    >=2.3
     , sqlite-simple
     , text
-    , unordered-containers
 
   default-language:   Haskell2010
   default-extensions: DataKinds
 
 test-suite tests
+  import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
@@ -58,7 +62,7 @@ test-suite tests
     , extra
     , filepath
     , hls-call-hierarchy-plugin
-    , hls-test-utils              == 2.5.0.0
+    , hls-test-utils              == 2.6.0.0
     , ghcide-test-utils
     , lens
     , lsp

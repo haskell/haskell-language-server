@@ -1,11 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes   #-}
-{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE ImplicitParams        #-}
 {-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PatternSynonyms       #-}
@@ -703,7 +700,9 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x y = x + y"
         ]
-        [ "func :: Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC98
+          then "func :: a -> a -> a" -- 9.8 has a different suggestion
+          else "func :: Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testUseTypeSignature "type in parentheses"
@@ -731,7 +730,9 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func::_"
         , "func x y = x + y"
         ]
-        [ "func::Integer -> Integer -> Integer"
+        [ if ghcVersion >= GHC98
+          then "func::a -> a -> a" -- 9.8 has a different suggestion
+          else "func::Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testGroup "add parens if hole is part of bigger type"
@@ -1667,6 +1668,7 @@ suggestImportTests :: TestTree
 suggestImportTests = testGroup "suggest import actions"
   [ testGroup "Dont want suggestion"
     [ -- extend import
+      -- We don't want to suggest a new import, but extend existing imports
       test False ["Data.List.NonEmpty ()"] "f = nonEmpty" []                "import Data.List.NonEmpty (nonEmpty)"
       -- data constructor
     , test False []                        "f = First"    []                "import Data.Monoid (First)"
@@ -2388,11 +2390,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = 1"
                ])
-#if MIN_VERSION_ghc(9,4,0)
-    [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable") ]
-#else
-    [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the following constraint") ]
-#endif
+    (if ghcVersion >= GHC94
+      then [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable") ]
+      else [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the following constraint") ])
     "Add type annotation ‘Integer’ to ‘1’"
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A (f) where"
@@ -2409,11 +2409,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = 3"
                , "    in x"
                ])
-#if MIN_VERSION_ghc(9,4,0)
-    [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable") ]
-#else
-    [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the following constraint") ]
-#endif
+    (if ghcVersion >= GHC94
+      then [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable") ]
+      else [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the following constraint") ])
     "Add type annotation ‘Integer’ to ‘3’"
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A where"
@@ -2431,11 +2429,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = let y = 5 in y"
                , "    in x"
                ])
-#if MIN_VERSION_ghc(9,4,0)
-    [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable") ]
-#else
-    [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the following constraint") ]
-#endif
+    (if ghcVersion >= GHC94
+      then [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable") ]
+      else [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the following constraint") ])
     "Add type annotation ‘Integer’ to ‘5’"
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A where"
@@ -2454,15 +2450,15 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = seq \"debug\" traceShow \"debug\""
                ])
-#if MIN_VERSION_ghc(9,4,0)
-    [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable")
-    , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable")
-    ]
-#else
-    [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint")
-    , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint")
-    ]
-#endif
+    (if ghcVersion >= GHC94
+      then
+        [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable")
+        , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable")
+        ]
+      else
+        [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint")
+        , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint")
+        ])
     ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2482,11 +2478,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f a = traceShow \"debug\" a"
                ])
-#if MIN_VERSION_ghc(9,4,0)
-    [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable") ]
-#else
-    [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint") ]
-#endif
+    (if ghcVersion >= GHC94
+      then [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable") ]
+      else [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint") ])
     ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2506,11 +2500,9 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
                ])
-#if MIN_VERSION_ghc(9,4,0)
-    [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable") ]
-#else
-    [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint") ]
-#endif
+    (if ghcVersion >= GHC94
+      then [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable") ]
+      else [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint") ])
     ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -3744,12 +3736,15 @@ extendImportTestsRegEx = testGroup "regex parsing"
                   "\n\8226 Perhaps you want to add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217)"
                   Nothing
     , testCase "parse multiple imports" $ template
-                 "\n\8226 Perhaps you want to add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217 (app/testlsp.hs:7:1-18)\n    \8216Data.HashMap.Strict\8217 (app/testlsp.hs:8:1-29)"
+                 (if ghcVersion >= GHC98
+                 then "\n\8226 Add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217 (at app/testlsp.hs:7:1-18)\n    \8216Data.HashMap.Strict\8217 (at app/testlsp.hs:8:1-29)"
+                 else "\n\8226 Perhaps you want to add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217 (app/testlsp.hs:7:1-18)\n    \8216Data.HashMap.Strict\8217 (app/testlsp.hs:8:1-29)"
+                 )
                  $ Just ("fromList",[("Data.Map","app/testlsp.hs:7:1-18"),("Data.HashMap.Strict","app/testlsp.hs:8:1-29")])
     ]
     where
         template message expected = do
-            liftIO $ matchRegExMultipleImports message @=? expected
+            liftIO $ expected @=? matchRegExMultipleImports message
 
 pickActionWithTitle :: T.Text -> [Command |? CodeAction] -> IO CodeAction
 pickActionWithTitle title actions = do

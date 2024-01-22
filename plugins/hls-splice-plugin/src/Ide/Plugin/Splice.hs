@@ -80,7 +80,7 @@ import Ide.Plugin.Error (PluginError(PluginInternalError))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
-    (defaultPluginDescriptor plId)
+    (defaultPluginDescriptor plId "Provides a code action to evaluate a TemplateHaskell splice")
         { pluginCommands = commands
         , pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeAction codeAction
         }

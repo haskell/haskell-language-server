@@ -2,7 +2,7 @@
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms   #-}
-{-# LANGUAGE ViewPatterns   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 -- | Compat Core module that handles the GHC module hierarchy re-organization
 -- by re-exporting everything we care about.
@@ -85,7 +85,6 @@ module Development.IDE.GHC.Compat.Core (
     RecompileRequired(..),
     mkPartialIface,
     mkFullIface,
-    checkOldIface,
     IsBootInterface(..),
     -- * Fixity
     LexicalFixity(..),
@@ -120,14 +119,14 @@ module Development.IDE.GHC.Compat.Core (
     pattern ConPatIn,
     conPatDetails,
     mapConPatDetail,
+#if MIN_VERSION_ghc(9,5,0)
     mkVisFunTys,
+#endif
     -- * Specs
     ImpDeclSpec(..),
     ImportSpec(..),
     -- * SourceText
     SourceText(..),
-    -- * Name
-    tyThingParent_maybe,
     -- * Ways
     Way,
     wayGeneralFlags,
@@ -168,6 +167,7 @@ module Development.IDE.GHC.Compat.Core (
     hscInteractive,
     hscSimplify,
     hscTypecheckRename,
+    hscUpdateHPT,
     Development.IDE.GHC.Compat.Core.makeSimpleDetails,
     -- * Typecheck utils
     tcSplitForAllTyVars,
@@ -176,7 +176,6 @@ module Development.IDE.GHC.Compat.Core (
     Development.IDE.GHC.Compat.Core.mkIfaceTc,
     Development.IDE.GHC.Compat.Core.mkBootModDetailsTc,
     Development.IDE.GHC.Compat.Core.initTidyOpts,
-    hscUpdateHPT,
     driverNoStop,
     tidyProgram,
     ImportedModsVal(..),
@@ -204,7 +203,6 @@ module Development.IDE.GHC.Compat.Core (
     pattern RealSrcLoc,
     SrcLoc.SrcLoc(SrcLoc.UnhelpfulLoc),
     BufSpan,
-    SrcSpanAnn',
     GHC.SrcAnn,
     SrcLoc.leftmost_smallest,
     SrcLoc.containsSpan,
@@ -236,7 +234,6 @@ module Development.IDE.GHC.Compat.Core (
     -- * Finder
     FindResult(..),
     mkHomeModLocation,
-    addBootSuffixLocnOut,
     findObjectLinkableMaybe,
     InstalledFindResult(..),
     -- * Module and Package
@@ -263,7 +260,6 @@ module Development.IDE.GHC.Compat.Core (
     Target(..),
     TargetId(..),
     mkSimpleTarget,
-    mkModuleGraph,
     -- * GHCi
     initObjLinker,
     loadDLL,
@@ -285,8 +281,6 @@ module Development.IDE.GHC.Compat.Core (
     Role(..),
     -- * Panic
     Plain.PlainGhcException,
-    panic,
-    panicDoc,
     -- * Other
     GHC.CoreModule(..),
     GHC.SafeHaskellMode(..),
@@ -321,6 +315,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.HsToCore.Monad,
 
     module GHC.Iface.Syntax,
+    module GHC.Iface.Recomp,
 
     module GHC.Hs.Decls,
     module GHC.Hs.Expr,
@@ -344,9 +339,8 @@ module Development.IDE.GHC.Compat.Core (
 
     module GHC.Types.Basic,
     module GHC.Types.Id,
-    module GHC.Types.Name            ,
+    module GHC.Types.Name,
     module GHC.Types.Name.Set,
-
     module GHC.Types.Name.Cache,
     module GHC.Types.Name.Env,
     module GHC.Types.Name.Reader,
@@ -361,30 +355,29 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Unique.Supply,
     module GHC.Types.Var,
     module GHC.Unit.Module,
+    module GHC.Unit.Module.Graph,
     -- * Syntax re-exports
     module GHC.Hs,
     module GHC.Hs.Binds,
     module GHC.Parser,
     module GHC.Parser.Header,
     module GHC.Parser.Lexer,
+    module GHC.Utils.Panic,
 #if MIN_VERSION_ghc(9,3,0)
     CompileReason(..),
     hsc_type_env_vars,
-    hscUpdateHUG, hscUpdateHPT, hsc_HUG,
+    hscUpdateHUG, hsc_HUG,
     GhcMessage(..),
     getKey,
     module GHC.Driver.Env.KnotVars,
-    module GHC.Iface.Recomp,
     module GHC.Linker.Types,
-    module GHC.Unit.Module.Graph,
     module GHC.Types.Unique.Map,
     module GHC.Utils.TmpFs,
-    module GHC.Utils.Panic,
     module GHC.Unit.Finder.Types,
     module GHC.Unit.Env,
     module GHC.Driver.Phases,
 #endif
-# if !MIN_VERSION_ghc(9,4,0)
+#if !MIN_VERSION_ghc(9,4,0)
     pattern HsFieldBind,
     hfbAnn,
     hfbLHS,
@@ -396,17 +389,20 @@ module Development.IDE.GHC.Compat.Core (
 #else
     Extension(..),
 #endif
-    UniqFM,
     mkCgInteractiveGuts,
     justBytecode,
     justObjects,
     emptyHomeModInfoLinkable,
     homeModInfoByteCode,
     homeModInfoObject,
-# if !MIN_VERSION_ghc(9,5,0)
+#if !MIN_VERSION_ghc(9,5,0)
     field_label,
 #endif
     groupOrigin,
+    isVisibleFunArg,
+#if MIN_VERSION_ghc(9,8,0)
+    lookupGlobalRdrEnv
+#endif
     ) where
 
 import qualified GHC
@@ -431,13 +427,13 @@ import           GHC.Core.DataCon             hiding (dataConExTyCoVars)
 import qualified GHC.Core.DataCon             as DataCon
 import           GHC.Core.FamInstEnv          hiding (pprFamInst)
 import           GHC.Core.InstEnv
-import           GHC.Types.Unique.FM 
+import           GHC.Types.Unique.FM
 import           GHC.Core.PatSyn
 import           GHC.Core.Predicate
 import           GHC.Core.TyCo.Ppr
 import qualified GHC.Core.TyCo.Rep            as TyCoRep
 import           GHC.Core.TyCon
-import           GHC.Core.Type                
+import           GHC.Core.Type
 import           GHC.Core.Unify
 import           GHC.Core.Utils
 import           GHC.Driver.CmdLine           (Warn (..))
@@ -489,6 +485,8 @@ import qualified GHC.Types.SrcLoc             as SrcLoc
 import           GHC.Types.Unique.Supply
 import           GHC.Types.Var                (Var (varName), setTyVarUnique,
                                                setVarUnique)
+
+import qualified GHC.Types.Var                as TypesVar
 import           GHC.Unit.Info                (PackageName (..))
 import           GHC.Unit.Module              hiding (ModLocation (..), UnitId,
                                                moduleUnit,
@@ -535,7 +533,7 @@ import           GHC.Unit.Home.ModInfo
 import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
-import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface (..),
+import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface,
                                                ModIface_ (..), mi_fix)
 import           GHC.Unit.Module.ModSummary   (ModSummary (..))
 import           Language.Haskell.Syntax hiding (FunDep)
@@ -597,7 +595,7 @@ pattern RealSrcLoc x y = SrcLoc.RealSrcLoc x y
 pattern AvailTC :: Name -> [Name] -> [FieldLabel] -> Avail.AvailInfo
 #if __GLASGOW_HASKELL__ >= 907
 pattern AvailTC n names pieces <- Avail.AvailTC n ((,[]) -> (names,pieces))
-#else 
+#else
 pattern AvailTC n names pieces <- Avail.AvailTC n ((\gres -> foldr (\gre (names, pieces) -> case gre of
       Avail.NormalGreName name -> (name: names, pieces)
       Avail.FieldGreName label -> (names, label:pieces)) ([], []) gres) -> (names, pieces))
@@ -606,14 +604,14 @@ pattern AvailTC n names pieces <- Avail.AvailTC n ((\gres -> foldr (\gre (names,
 pattern AvailName :: Name -> Avail.AvailInfo
 #if __GLASGOW_HASKELL__ >= 907
 pattern AvailName n <- Avail.Avail n
-#else 
+#else
 pattern AvailName n <- Avail.Avail (Avail.NormalGreName n)
 #endif
 
 pattern AvailFL :: FieldLabel -> Avail.AvailInfo
 #if __GLASGOW_HASKELL__ >= 907
 pattern AvailFL fl <- (const Nothing -> Just fl) -- this pattern always fails as this field was removed in 9.7
-#else 
+#else
 pattern AvailFL fl <- Avail.Avail (Avail.FieldGreName fl)
 #endif
 
@@ -630,8 +628,17 @@ pattern ExposePackage s a mr <- DynFlags.ExposePackage s a _ mr
 pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
 #endif
 
-pattern FunTy :: Type -> Type -> Type
-pattern FunTy arg res <- TyCoRep.FunTy {ft_arg = arg, ft_res = res}
+#if __GLASGOW_HASKELL__ >= 906
+isVisibleFunArg = TypesVar.isVisibleFunArg
+type FunTyFlag = TypesVar.FunTyFlag
+#else
+isVisibleFunArg VisArg = True
+isVisibleFunArg _ = False
+type FunTyFlag = TypesVar.AnonArgFlag
+#endif
+pattern FunTy :: Development.IDE.GHC.Compat.Core.FunTyFlag -> Type -> Type -> Type
+pattern FunTy af arg res <- TyCoRep.FunTy {ft_af = af, ft_arg = arg, ft_res = res}
+
 
 -- type HasSrcSpan x a = (GenLocated SrcSpan a ~ x)
 -- type HasSrcSpan x = () :: Constraint
@@ -812,4 +819,8 @@ mkSimpleTarget :: DynFlags -> FilePath -> Target
 mkSimpleTarget df fp = Target (TargetFile fp Nothing) True (homeUnitId_ df) Nothing
 #else
 mkSimpleTarget _ fp = Target (TargetFile fp Nothing) True Nothing
+#endif
+
+#if MIN_VERSION_ghc(9,7,0)
+lookupGlobalRdrEnv gre_env occ = lookupGRE gre_env (LookupOccName occ AllRelevantGREs)
 #endif

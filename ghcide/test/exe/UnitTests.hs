@@ -80,7 +80,7 @@ tests recorder logger = do
                     }
                     | i <- [1..20]
                 ] ++ Ghcide.descriptors (cmapWithPrio LogGhcIde recorder)
-            priorityPluginDescriptor i = (defaultPluginDescriptor $ fromString $ show i){pluginPriority = i}
+            priorityPluginDescriptor i = (defaultPluginDescriptor (fromString $ show i) ""){pluginPriority = i}
 
         testIde recorder (IDE.testing (cmapWithPrio LogIDEMain recorder) logger plugins) $ do
             _ <- createDoc "A.hs" "haskell" "module A where"

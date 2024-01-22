@@ -6,15 +6,10 @@ import           Control.Lens                   hiding (List, (<.>))
 import           Data.ByteString.Lazy           (ByteString)
 import qualified Data.ByteString.Lazy.Char8     as LBSChar8
 import           Data.String                    (fromString)
-import           Ide.Logger                     (Priority (Debug),
-                                                 Recorder (Recorder),
-                                                 WithPriority (WithPriority),
-                                                 makeDefaultStderrRecorder,
-                                                 pretty)
 import           Ide.Plugin.CodeRange           (Log, descriptor)
 import qualified Ide.Plugin.CodeRange.RulesTest
 import qualified Ide.Plugin.CodeRangeTest
-import           Language.LSP.Protocol.Lens
+import           Language.LSP.Protocol.Lens     (result)
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           System.FilePath                ((<.>), (</>))
@@ -89,7 +84,10 @@ foldingRangeGoldenTest testName = goldenGitDiff  testName (testDataDir </> testN
         showFoldingRangesForTest foldingRanges = (LBSChar8.intercalate "\n" $ fmap showFoldingRangeForTest foldingRanges) `LBSChar8.snoc` '\n'
 
         showFoldingRangeForTest :: FoldingRange -> ByteString
-        showFoldingRangeForTest f@(FoldingRange sl (Just sc) el (Just ec) (Just frk) _) = "((" <> showLBS sl <>", "<> showLBS sc <> ")" <> " : " <> "(" <> showLBS el <>", "<> showLBS ec<> ")) : " <> showFRK frk
+        showFoldingRangeForTest (FoldingRange sl (Just sc) el (Just ec) (Just frk) _) =
+            "((" <> showLBS sl <> ", " <> showLBS sc <> ") : (" <> showLBS el <> ", " <> showLBS ec <> ")) : " <> showFRK frk
+        showFoldingRangeForTest fr =
+            "unexpected FoldingRange: " <> fromString (show fr)
 
         showLBS = fromString . show
         showFRK = fromString . show

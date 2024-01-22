@@ -49,17 +49,23 @@ import           Text.Read                       (readMaybe)
 
 descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-    (defaultPluginDescriptor plId)
+    (defaultPluginDescriptor plId desc)
         { pluginHandlers = mkFormattingHandlers $ provider recorder plId
         , pluginConfigDescriptor = defaultConfigDescriptor{configCustomConfig = mkCustomConfig properties}
         }
+  where
+    desc = "Provides formatting of Haskell files via fourmolu. Built with fourmolu-" <> VERSION_fourmolu
 
-properties :: Properties '[ 'PropertyKey "external" 'TBoolean]
+properties :: Properties '[ 'PropertyKey "external" 'TBoolean, 'PropertyKey "path" 'TString]
 properties =
     emptyProperties
+        & defineStringProperty
+            #path
+            "Set path to executable (for \"external\" mode)."
+            "fourmolu"
         & defineBooleanProperty
             #external
-            "Call out to an external \"fourmolu\" executable, rather than using the bundled library"
+            "Call out to an external \"fourmolu\" executable, rather than using the bundled library."
             False
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
@@ -68,10 +74,11 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
         maybe [] (convertDynFlags . hsc_dflags . hscEnv)
             <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
     useCLI <- liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #external plId properties
+    fourmoluExePath <- fmap T.unpack $ liftIO $ runAction "Fourmolu" ideState $ usePropertyAction #path plId properties
     if useCLI
         then ExceptT . liftIO $
                 handle @IOException (pure . Left . PluginInternalError . T.pack . show) $
-                    runExceptT (cliHandler fileOpts)
+                    runExceptT (cliHandler fourmoluExePath fileOpts)
         else do
             logWith recorder Debug $ LogCompiledInVersion VERSION_fourmolu
             FourmoluConfig{..} <-
@@ -115,10 +122,10 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
             RegionIndices Nothing Nothing
         FormatRange (Range (Position sl _) (Position el _)) ->
             RegionIndices (Just $ fromIntegral $ sl + 1) (Just $ fromIntegral $ el + 1)
-    cliHandler :: [String] -> ExceptT PluginError IO ([TextEdit] |? Null)
-    cliHandler fileOpts = do
+    cliHandler :: FilePath -> [String] -> ExceptT PluginError IO ([TextEdit] |? Null)
+    cliHandler path fileOpts = do
         CLIVersionInfo{noCabal} <- do -- check Fourmolu version so that we know which flags to use
-            (exitCode, out, _err) <- liftIO $ readCreateProcessWithExitCode ( proc "fourmolu" ["-v"] ) ""
+            (exitCode, out, _err) <- liftIO $ readCreateProcessWithExitCode ( proc path ["-v"] ) ""
             let version = do
                     guard $ exitCode == ExitSuccess
                     "fourmolu" : v : _ <- pure $ T.words out
@@ -137,7 +144,7 @@ provider recorder plId ideState typ contents fp fo = ExceptT $ withIndefinitePro
                         }
         (exitCode, out, err) <- -- run Fourmolu
             liftIO $ readCreateProcessWithExitCode
-                ( proc "fourmolu" $
+                ( proc path $
                     map ("-o" <>) fileOpts
                         <> mwhen noCabal ["--no-cabal"]
                         <> catMaybes

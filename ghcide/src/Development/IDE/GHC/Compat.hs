@@ -5,19 +5,15 @@
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms   #-}
-{-# OPTIONS -Wno-incomplete-uni-patterns -Wno-dodgy-imports #-}
 
 -- | Attempt at hiding the GHC version differences we can.
 module Development.IDE.GHC.Compat(
-    mkHomeModLocation,
     hPutStringBuffer,
     addIncludePathsQuote,
     getModuleHash,
     setUpTypedHoles,
     NameCacheUpdater(..),
 #if MIN_VERSION_ghc(9,3,0)
-    getMessages,
-    renderDiagnosticMessageWithHints,
     nameEnvElts,
 #else
     upNameCache,
@@ -26,10 +22,8 @@ module Development.IDE.GHC.Compat(
     disableWarningsAsErrors,
     reLoc,
     reLocA,
-    getPsMessages,
     renderMessages,
     pattern PFailedWithErrorMessages,
-    isObjectLinkable,
 
 #if !MIN_VERSION_ghc(9,3,0)
     extendModSummaryNoDeps,
@@ -53,8 +47,9 @@ module Development.IDE.GHC.Compat(
     nodeAnnotations,
     mkAstNode,
     combineRealSrcSpans,
-
+#if !MIN_VERSION_ghc(9,3,0)
     nonDetOccEnvElts,
+#endif
     nonDetFoldOccEnv,
 
     isQualifiedImport,
@@ -94,7 +89,9 @@ module Development.IDE.GHC.Compat(
     simplifyExpr,
     tidyExpr,
     emptyTidyEnv,
+#if MIN_VERSION_ghc(9,7,0)
     tcInitTidyEnv,
+#endif
     corePrepExpr,
     corePrepPgm,
     lintInteractiveExpr,
@@ -160,11 +157,6 @@ import           Data.List                             (foldl')
 import qualified Data.Map                              as Map
 import qualified Data.Set                              as S
 
--- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
-
-#if MIN_VERSION_ghc(9,7,0)
-import           GHC.Tc.Zonk.TcType                    (tcInitTidyEnv)
-#endif
 import qualified GHC.Core.Opt.Pipeline                 as GHC
 import           GHC.Core.Tidy                         (tidyExpr)
 import           GHC.CoreToStg.Prep                    (corePrepPgm)
@@ -187,15 +179,8 @@ import           GHC.Iface.Make                        (mkIfaceExports)
 import           GHC.SysTools.Tasks                    (runUnlit, runPp)
 import qualified GHC.Types.Avail                       as Avail
 
-
-#if !MIN_VERSION_ghc(9,5,0)
-import           GHC.Core.Lint                         (lintInteractiveExpr)
-#endif
-
-
 import           GHC.Iface.Env
 import           GHC.Types.SrcLoc                      (combineRealSrcSpans)
-import           GHC.Linker.Loader                     (loadExpr)
 import           GHC.Runtime.Context                   (icInteractiveModule)
 import           GHC.Unit.Home.ModInfo                 (HomePackageTable,
                                                         lookupHpt)
@@ -205,27 +190,29 @@ import           GHC.Builtin.Uniques
 import           GHC.ByteCode.Types
 import           GHC.CoreToStg
 import           GHC.Data.Maybe
-import           GHC.Linker.Loader                     (loadDecls)
+import           GHC.Linker.Loader                     (loadDecls, loadExpr)
 import           GHC.Stg.Pipeline
 import           GHC.Stg.Syntax
 import           GHC.StgToByteCode
 import           GHC.Types.CostCentre
 import           GHC.Types.IPE
 
-#if !MIN_VERSION_ghc(9,3,0)
-import           GHC.Unit.Module.Deps (Dependencies(dep_mods), Usage(..))
-import           GHC.Linker.Types                      (isObjectLinkable)
-import           GHC.Unit.Module.ModSummary
-import           GHC.Runtime.Interpreter
-#endif
+-- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
+import           GHC.Unit.Module.Deps (Dependencies(dep_mods), Usage(..))
+import           GHC.Unit.Module.ModSummary
+import           GHC.Runtime.Interpreter
 import           Data.IORef
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
 import GHC.Unit.Module.Deps (Dependencies(dep_direct_mods), Usage(..))
 import GHC.Driver.Config.Stg.Pipeline
+#endif
+
+#if !MIN_VERSION_ghc(9,5,0)
+import           GHC.Core.Lint                         (lintInteractiveExpr)
 #endif
 
 #if MIN_VERSION_ghc(9,5,0)
@@ -236,12 +223,14 @@ import           GHC.Driver.Config.CoreToStg                         (initCoreTo
 import           GHC.Driver.Config.CoreToStg.Prep                    (initCorePrepConfig)
 #endif
 
-#if !MIN_VERSION_ghc(9,7,0)
-liftZonkM :: a -> a
-liftZonkM = id
+#if MIN_VERSION_ghc(9,7,0)
+import           GHC.Tc.Zonk.TcType                    (tcInitTidyEnv)
 #endif
 
 #if !MIN_VERSION_ghc(9,7,0)
+liftZonkM :: a -> a
+liftZonkM = id
+
 nonDetFoldOccEnv :: (a -> b -> b) -> b -> OccEnv a -> b
 nonDetFoldOccEnv = foldOccEnv
 #endif

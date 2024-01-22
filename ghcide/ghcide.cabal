@@ -2,7 +2,7 @@ cabal-version:      3.0
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            2.5.0.0
+version:            2.6.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -14,7 +14,7 @@ homepage:
   https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC ==9.0.2 || ==9.2.5
+tested-with:        GHC == 9.8.1 || ==9.6.4 || ==9.4.8 || ==9.2.8
 extra-source-files:
   CHANGELOG.md
   README.md
@@ -40,13 +40,19 @@ flag pedantic
   default:     False
   manual:      True
 
+common warnings
+  ghc-options:
+    -Wall -Wincomplete-uni-patterns -Wunused-packages
+    -Wno-unticked-promoted-constructors
+    -fno-ignore-asserts
+
 library
   default-language:   Haskell2010
   build-depends:
     , aeson
     , array
     , async
-    , base                         >=4        && <5
+    , base                         >=4.16     && <5
     , base16-bytestring            >=0.1.1    && <1.1
     , binary
     , bytestring
@@ -67,7 +73,7 @@ library
     , filepath
     , fingertree
     , focus                        >=1.0.3.2
-    , ghc                          >=9.0
+    , ghc                          >=9.2
     , ghc-boot
     , ghc-boot-th
     , ghc-check                    >=0.5.0.8
@@ -78,9 +84,9 @@ library
     , hashable
     , hie-bios                     ==0.13.1
     , hie-compat                   ^>=0.3.0.0
-    , hiedb                        >=0.4.4    && <0.4.5
-    , hls-graph                    == 2.5.0.0
-    , hls-plugin-api               == 2.5.0.0
+    , hiedb                        ^>= 0.5.0.1
+    , hls-graph                    == 2.6.0.0
+    , hls-plugin-api               == 2.6.0.0
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5
     , lens
     , list-t
@@ -218,10 +224,6 @@ library
     Development.IDE.Session.VersionCheck
     Development.IDE.Types.Action
 
-  ghc-options:
-    -Wall -Wincomplete-uni-patterns -Wno-unticked-promoted-constructors
-    -Wunused-packages -fno-ignore-asserts
-
   if flag(pedantic)
     -- We eventually want to build with Werror fully, but we haven't
     -- finished purging the warnings, so some are set to not be errors
@@ -232,12 +234,7 @@ library
       -Wwarn=duplicate-exports -Wwarn=dodgy-exports
       -Wwarn=incomplete-patterns -Wwarn=overlapping-patterns
       -Wwarn=incomplete-record-updates
-
-  -- ambiguous-fields is only understood by GHC >= 9.2, so we only disable it
-  -- then. The above comment goes for here too -- this should be understood to
-  -- be temporary until we can remove these warnings.
-  if (impl(ghc >=9.2) && flag(pedantic))
-    ghc-options: -Wwarn=ambiguous-fields
+      -Wwarn=ambiguous-fields
 
   if flag(ekg)
     build-depends:
@@ -251,9 +248,10 @@ flag test-exe
   default:     True
 
 executable ghcide-test-preprocessor
+  import: warnings
   default-language: Haskell2010
   hs-source-dirs:   test/preprocessor
-  ghc-options:      -Wall -Wno-name-shadowing
+  ghc-options:      -Wno-name-shadowing
   main-is:          Main.hs
   build-depends:    base >=4 && <5
 
@@ -265,11 +263,11 @@ flag executable
   default:     True
 
 executable ghcide
+  import: warnings
   default-language:   Haskell2010
   hs-source-dirs:     exe
-  ghc-options:
-    -threaded -Wall -Wincomplete-uni-patterns -Wno-name-shadowing
-    -rtsopts "-with-rtsopts=-I0 -A128M -T"
+  ghc-options:        -threaded -rtsopts "-with-rtsopts=-I0 -A128M -T" -Wno-name-shadowing
+
 
   -- allow user RTS overrides
   -- disable idle GC
@@ -277,7 +275,7 @@ executable ghcide
   -- Enable collection of heap statistics
   main-is:            Main.hs
   build-depends:
-    , base                  >=4 && <5
+    , base                  >=4.16 && <5
     , data-default
     , extra
     , ghcide
@@ -318,10 +316,8 @@ executable ghcide
 
     cpp-options:   -DMONITORING_EKG
 
-  if impl(ghc >=9)
-    ghc-options: -Wunused-packages
-
 test-suite ghcide-tests
+  import: warnings
   type:               exitcode-stdio-1.0
   default-language:   Haskell2010
   build-tool-depends:
@@ -336,9 +332,17 @@ test-suite ghcide-tests
     , containers
     , data-default
     , directory
+    , enummapset
     , extra
     , filepath
     , fuzzy
+  --------------------------------------------------------------
+  -- The MIN_VERSION_ghc macro relies on MIN_VERSION pragmas
+  -- which require depending on ghc. So the tests need to depend
+  -- on ghc if they need to use MIN_VERSION_ghc. Maybe a
+  -- better solution can be found, but this is a quick solution
+  -- which works for now.
+  --------------------------------------------------------------
     , ghc
     , ghcide
     , hls-plugin-api
@@ -367,25 +371,11 @@ test-suite ghcide-tests
     , text-rope
     , unordered-containers
 
-  --------------------------------------------------------------
-  -- The MIN_VERSION_ghc macro relies on MIN_VERSION pragmas
-  -- which require depending on ghc. So the tests need to depend
-  -- on ghc if they need to use MIN_VERSION_ghc. Maybe a
-  -- better solution can be found, but this is a quick solution
-  -- which works for now.
-  --------------------------------------------------------------
-  if impl(ghc <9.2)
-    build-depends:
-      , record-dot-preprocessor
-      , record-hasfield
-
   if impl(ghc <9.3)
     build-depends: ghc-typelits-knownnat
 
   hs-source-dirs:     test/cabal test/exe test/src
-  ghc-options:
-    -threaded -Wall -Wno-name-shadowing -O0
-    -Wno-unticked-promoted-constructors -Wunused-packages
+  ghc-options:        -threaded -O0 -Wno-name-shadowing
 
   main-is:            Main.hs
   other-modules:

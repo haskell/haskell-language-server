@@ -87,7 +87,7 @@ thenCmp EQ       ordering = ordering
 thenCmp ordering _        = ordering
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor pluginId = (defaultPluginDescriptor pluginId) {
+descriptor pluginId = (defaultPluginDescriptor pluginId "Provides a code action to qualify imported names") {
   pluginHandlers = mconcat
     [ mkPluginHandler SMethod_TextDocumentCodeAction codeActionProvider
     ]

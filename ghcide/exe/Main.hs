@@ -1,6 +1,5 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
 {-# LANGUAGE TemplateHaskell #-}
 
 module Main(main) where
@@ -100,7 +99,7 @@ main = withTelemetryLogger $ \telemetryLogger -> do
     (lspMessageRecorder, cb2) <- Logger.withBacklog Logger.lspClientMessageRecorder
     -- This plugin just installs a handler for the `initialized` notification, which then
     -- picks up the LSP environment and feeds it to our recorders
-    let lspRecorderPlugin = (defaultPluginDescriptor "LSPRecorderCallback")
+    let lspRecorderPlugin = (defaultPluginDescriptor "LSPRecorderCallback" "Internal plugin")
           { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SMethod_Initialized $ \_ _ _ _ -> do
               env <- LSP.getLspEnv
               liftIO $ (cb1 <> cb2) env

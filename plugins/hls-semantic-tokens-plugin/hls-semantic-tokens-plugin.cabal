@@ -1,0 +1,91 @@
+cabal-version:      2.4
+name:               hls-semantic-tokens-plugin
+version:            2.6.0.0
+synopsis:           Call hierarchy plugin for Haskell Language Server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-call-hierarchy-plugin#readme>
+
+license:            Apache-2.0
+license-file:       LICENSE
+author:             Patrick Wales
+maintainer:         patrickwalesss@gmail.com
+category:           Development
+build-type:         Simple
+extra-source-files:
+  LICENSE
+  test/testdata/*.hs
+
+source-repository head
+    type:     git
+    location: https://github.com/haskell/haskell-language-server.git
+
+library
+  ghc-options: -Wall
+  buildable: True
+  exposed-modules:
+    Ide.Plugin.SemanticTokens
+    Ide.Plugin.SemanticTokens.Types
+    Ide.Plugin.SemanticTokens.Mappings
+  other-modules:
+    Ide.Plugin.SemanticTokens.Query
+    Ide.Plugin.SemanticTokens.SemanticConfig
+    Ide.Plugin.SemanticTokens.Utils
+    Ide.Plugin.SemanticTokens.Internal
+
+  hs-source-dirs:     src
+  build-depends:
+    , aeson
+    , base                  >=4.12 && <5
+    , containers
+    , extra
+    , hiedb
+    , mtl                   >= 2.2
+    , ghcide                == 2.6.0.0
+    , hls-plugin-api        == 2.6.0.0
+    , lens
+    , lsp                    >=2.3
+    , sqlite-simple
+    , text
+    , unordered-containers
+    , transformers
+    , bytestring
+    , syb
+    , array
+    , deepseq
+    , hls-graph == 2.6.0.0
+    , template-haskell
+    , data-default
+
+  default-language:   Haskell2010
+  default-extensions: DataKinds
+
+test-suite tests
+  type:             exitcode-stdio-1.0
+  ghc-options: -Wall
+  default-language: Haskell2010
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+
+  build-depends:
+    , aeson
+    , base
+    , containers
+    , extra
+    , filepath
+    , hls-semantic-tokens-plugin
+    , hls-test-utils              == 2.6.0.0
+    , ghcide-test-utils
+    , hls-plugin-api
+    , lens
+    , lsp
+    , ghc
+    , text-rope
+    , lsp-test
+    , text
+    , data-default
+    , bytestring
+    , ghcide                == 2.6.0.0
+    , hls-plugin-api        == 2.6.0.0
+    , template-haskell
+    , data-default

@@ -40,6 +40,8 @@ import           Development.IDE.Core.RuleTypes   (TcModuleResult (..),
                                                    TypeCheck (..))
 import qualified Development.IDE.Core.Shake       as Shake
 import           Development.IDE.GHC.Compat       (HsConDetails (RecCon),
+                                                   HsExpansion (HsExpanded),
+                                                   HsExpr (XExpr),
                                                    HsRecFields (..), LPat,
                                                    Outputable, getLoc,
                                                    recDotDot, unLoc)
@@ -85,8 +87,6 @@ import           Language.LSP.Protocol.Types      (CodeAction (..),
                                                    WorkspaceEdit (WorkspaceEdit),
                                                    type (|?) (InL, InR))
 
-import           Development.IDE.GHC.Compat       (HsExpansion (HsExpanded),
-                                                   HsExpr (XExpr))
 
 data Log
   = LogShake Shake.Log
@@ -106,7 +106,7 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId =
   let resolveRecorder = cmapWithPrio LogResolve recorder
       (carCommands, caHandlers) = mkCodeActionWithResolveAndCommand resolveRecorder plId codeActionProvider codeActionResolveProvider
-  in (defaultPluginDescriptor plId)
+  in (defaultPluginDescriptor plId "Provides a code action to make record wildcards explicit")
   { pluginHandlers = caHandlers
   , pluginCommands = carCommands
   , pluginRules = collectRecordsRule recorder *> collectNamesRule

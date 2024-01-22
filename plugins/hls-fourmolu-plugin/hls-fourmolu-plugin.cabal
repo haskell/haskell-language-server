@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-fourmolu-plugin
-version:            2.5.0.0
+version:            2.6.0.0
 synopsis:           Integration with the Fourmolu code formatter
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -30,10 +30,11 @@ library
   build-depends:
     , base            >=4.12 && <5
     , filepath
+    , fourmolu        ^>= 0.14
     , ghc
     , ghc-boot-th
-    , ghcide          == 2.5.0.0
-    , hls-plugin-api  == 2.5.0.0
+    , ghcide          == 2.6.0.0
+    , hls-plugin-api  == 2.6.0.0
     , lens
     , lsp
     , mtl
@@ -41,14 +42,6 @@ library
     , text
     , transformers
 
-  if impl(ghc >= 9.0) && impl(ghc < 9.2)
-    build-depends: fourmolu ^>= 0.11
-  else 
-    build-depends: fourmolu ^>= 0.14
-
-  -- fourmolu 0.9.0 fails to build on Windows CI for reasons unknown
-  if impl(ghc >= 9.2) && os(windows) && impl(ghc < 9.4)
-     build-depends: fourmolu > 0.9.0.0 || < 0.9.0.0
   default-language: Haskell2010
 
 test-suite tests
@@ -66,5 +59,5 @@ test-suite tests
     , filepath
     , hls-fourmolu-plugin
     , hls-plugin-api
-    , hls-test-utils       == 2.5.0.0
+    , hls-test-utils       == 2.6.0.0
     , lsp-test

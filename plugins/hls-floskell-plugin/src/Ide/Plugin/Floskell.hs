@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Ide.Plugin.Floskell
@@ -20,9 +21,11 @@ import           Language.LSP.Protocol.Types
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
+descriptor plId = (defaultPluginDescriptor plId desc)
   { pluginHandlers = mkFormattingHandlers provider
   }
+  where
+    desc = "Provides formatting of Haskell files via floskell. Built with floskell-" <> VERSION_floskell
 
 -- ---------------------------------------------------------------------
 
@@ -36,10 +39,10 @@ provider _ideState typ contents fp _ = do
     let (range, selectedContents) = case typ of
           FormatText    -> (fullRange contents, contents)
           FormatRange r -> (normalize r, extractTextInRange (extendToFullLines r) contents)
-        result = reformat config (Just file) . TL.encodeUtf8 $ TL.fromStrict selectedContents
+        result = reformat config (Just file) $ TL.fromStrict selectedContents
     case result of
       Left  err -> throwError $ PluginInternalError $ T.pack $ "floskellCmd: " ++ err
-      Right new -> pure $ InL [TextEdit range . TL.toStrict $ TL.decodeUtf8 new]
+      Right new -> pure $ InL [TextEdit range $ TL.toStrict new]
 
 -- | Find Floskell Config, user and system wide or provides a default style.
 -- Every directory of the filepath will be searched to find a user configuration.

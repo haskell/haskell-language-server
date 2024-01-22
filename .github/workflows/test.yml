@@ -135,15 +135,15 @@ jobs:
           HLS_WRAPPER_TEST_EXE: hls-wrapper
         run: cabal test wrapper-test --test-options="$TEST_OPTS --rerun-log-file .tasty-rerun-log-wrapper"
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-refactor-plugin
         run: cabal test hls-refactor-plugin --test-options="$TEST_OPTS" || cabal test hls-refactor-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.6' && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test 
         name: Test hls-floskell-plugin
         run: cabal test hls-floskell-plugin --test-options="$TEST_OPTS" || cabal test hls-floskell-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-class-plugin
         run: cabal test hls-class-plugin --test-options="$TEST_OPTS" || cabal test hls-class-plugin --test-options="$TEST_OPTS"
 
@@ -155,7 +155,7 @@ jobs:
         name: Test hls-eval-plugin
         run: cabal test hls-eval-plugin --test-options="$TEST_OPTS" || cabal test hls-eval-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin --test-options="$TEST_OPTS" || cabal test hls-splice-plugin --test-options="$TEST_OPTS"
 
@@ -163,15 +163,15 @@ jobs:
         name: Test hls-stan-plugin
         run: cabal test hls-stan-plugin --test-options="$TEST_OPTS" || cabal test hls-stan-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-stylish-haskell-plugin
         run: cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS" || cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test 
         name: Test hls-ormolu-plugin
         run: cabal test hls-ormolu-plugin --test-options="$TEST_OPTS" || cabal test hls-ormolu-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test 
         name: Test hls-fourmolu-plugin
         run: cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS" || cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS"
 
@@ -183,11 +183,11 @@ jobs:
         name: Test hls-call-hierarchy-plugin test suite
         run: cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS" || cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.os != 'windows-latest' && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test && matrix.os != 'windows-latest'
         name: Test hls-rename-plugin test suite
         run: cabal test hls-rename-plugin --test-options="$TEST_OPTS" || cabal test hls-rename-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test 
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin --test-options="$TEST_OPTS" || cabal test hls-hlint-plugin --test-options="$TEST_OPTS"
 
@@ -211,7 +211,7 @@ jobs:
         name: Test hls-change-type-signature test suite
         run: cabal test hls-change-type-signature-plugin --test-options="$TEST_OPTS" || cabal test hls-change-type-signature-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-gadt-plugin test suit
         run: cabal test hls-gadt-plugin --test-options="$TEST_OPTS" || cabal test hls-gadt-plugin --test-options="$TEST_OPTS"
 
@@ -232,14 +232,17 @@ jobs:
         name: Test hls-cabal-plugin test suite
         run: cabal test hls-cabal-plugin --test-options="$TEST_OPTS" || cabal test hls-cabal-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && !startsWith(matrix.ghc,'9.8')
+      - if: matrix.test
         name: Test hls-retrie-plugin test suite
         run: cabal test hls-retrie-plugin --test-options="$TEST_OPTS" || cabal test hls-retrie-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.0'
+      - if: matrix.test
         name: Test hls-overloaded-record-dot-plugin test suite
         run: cabal test hls-overloaded-record-dot-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-overloaded-record-dot-plugin --test-options="$TEST_OPTS"
 
+      - if: matrix.test
+        name: Test hls-semantic-tokens-plugin test suite
+        run: cabal test hls-semantic-tokens-plugin --test-options="$TEST_OPTS" || cabal test hls-semantic-tokens-plugin --test-options="$TEST_OPTS"
 
 
   test_post_job:

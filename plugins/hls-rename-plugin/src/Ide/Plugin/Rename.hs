@@ -63,7 +63,7 @@ import           Language.LSP.Server
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
 descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor pluginId)
+descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers")
     { pluginHandlers = mkPluginHandler SMethod_TextDocumentRename renameProvider
     , pluginConfigDescriptor = defaultConfigDescriptor
         { configCustomConfig = mkCustomConfig properties }

@@ -69,7 +69,7 @@ import           System.FilePath                      (dropExtension, normalise,
 -- |Plugin descriptor
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-    (defaultPluginDescriptor plId)
+    (defaultPluginDescriptor plId "Provides a code action to alter the module name if it is wrong")
         { pluginHandlers = mkPluginHandler SMethod_TextDocumentCodeLens (codeLens recorder)
         , pluginCommands = [PluginCommand updateModuleNameCommand "set name of module to match with file path" (command recorder)]
         }

@@ -297,8 +297,8 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
 #endif
 
                                          | n <- concatMap (uniqDSetToList . bcoFreeNames) $ bc_bcos bcos
-                                         , Just mod <- [nameModule_maybe n] -- Names from other modules
                                          , not (isWiredInName n) -- Exclude wired-in names
+                                         , Just mod <- [nameModule_maybe n] -- Names from other modules
                                          , moduleUnitId mod `elem` home_unit_ids -- Only care about stuff from the home package set
                                          ]
                  home_unit_ids =
@@ -340,7 +340,7 @@ captureSplicesAndDeps TypecheckHelpers{..} env k = do
 #else
              {- load it -}
            ; fv_hvs <- loadDecls (hscInterp hsc_env') hsc_env' srcspan bcos
-           ; let hval = (expectJust "hscCompileCoreExpr'" $ lookup (idName binding_id) fv_hvs)
+           ; let hval = expectJust "hscCompileCoreExpr'" $ lookup (idName binding_id) fv_hvs
 #endif
 
            ; modifyIORef' var (flip extendModuleEnvList [(mi_module $ hm_iface hm, linkableHash lb) | lb <- lbs, let hm = linkableHomeMod lb])
@@ -595,7 +595,7 @@ mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
           -- SYB is slow but fine given that this is only used for testing
           noUnfoldings = everywhere $ mkT $ \v -> if isId v
             then
-              let v' = if isOtherUnfolding (realIdUnfolding v) then (setIdUnfolding v noUnfolding) else v
+              let v' = if isOtherUnfolding (realIdUnfolding v) then setIdUnfolding v noUnfolding else v
                 in setIdOccInfo v' noOccInfo
             else v
           isOtherUnfolding (OtherCon _) = True
@@ -1256,9 +1256,9 @@ parseHeader
        -> FilePath  -- ^ the filename (for source locations)
        -> Util.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
 #if MIN_VERSION_ghc(9,5,0)
-       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule GhcPs))
+       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located (HsModule GhcPs))
 #else
-       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule))
+       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located HsModule)
 #endif
 parseHeader dflags filename contents = do
    let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
@@ -1748,19 +1748,19 @@ pathToModuleName = mkModuleName . map rep
 
   - CPP clauses should be placed at the end of the imports section. The clauses
   should be ordered by the GHC version they target from earlier to later versions,
-  with negative if clauses coming before positive if clauses of the same 
-  version. (If you think about which GHC version a clause activates for this 
+  with negative if clauses coming before positive if clauses of the same
+  version. (If you think about which GHC version a clause activates for this
   should make sense `!MIN_VERSION_GHC(9,0,0)` refers to 8.10 and lower which is
-  a earlier version than `MIN_VERSION_GHC(9,0,0)` which refers to versions 9.0 
+  a earlier version than `MIN_VERSION_GHC(9,0,0)` which refers to versions 9.0
   and later). In addition there should be a space before and after each CPP
   clause.
 
-  - In if clauses that use `&&` and depend on more than one statement, the 
+  - In if clauses that use `&&` and depend on more than one statement, the
   positive statement should come before the negative statement. In addition the
   clause should come after the single positive clause for that GHC version.
 
-  - There shouldn't be multiple identical CPP statements. The use of odd or even 
+  - There shouldn't be multiple identical CPP statements. The use of odd or even
   GHC numbers is identical, with the only preference being to use what is
-  already there. (i.e. (`MIN_VERSION_GHC(9,2,0)` and `MIN_VERSION_GHC(9,1,0)` 
+  already there. (i.e. (`MIN_VERSION_GHC(9,2,0)` and `MIN_VERSION_GHC(9,1,0)`
   are functionally equivalent)
 -}

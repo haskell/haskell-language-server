@@ -35,14 +35,8 @@ tests = testGroup "GADT"
     , runTest "ConstructorContext" "ConstructorContext" 2 0 2 38
     , runTest "Context" "Context" 2 0 4 41
     , runTest "Pragma" "Pragma" 2 0 3 29
-    , onlyWorkForGhcVersions (`elem`[GHC92, GHC94, GHC96]) "Single deriving has different output on ghc9.2+" $
-        runTest "SingleDerivingGHC92" "SingleDerivingGHC92" 2 0 3 14
-    , knownBrokenForGhcVersions [GHC92,GHC94,GHC96] "Single deriving has different output on ghc9.2+" $
-        runTest "SingleDeriving" "SingleDeriving" 2 0 3 14
-    , onlyWorkForGhcVersions (`elem`[GHC92, GHC94, GHC96]) "only ghc-9.2+ enabled GADTs pragma implicitly" $
-        gadtPragmaTest "ghc-9.2 don't need to insert GADTs pragma" False
-    , knownBrokenForGhcVersions [GHC92,GHC94,GHC96] "ghc-9.2 has enabled GADTs pragma implicitly" $
-        gadtPragmaTest "insert pragma" True
+    , runTest "SingleDerivingGHC92" "SingleDerivingGHC92" 2 0 3 14
+    , gadtPragmaTest "ghc-9.2 don't need to insert GADTs pragma" False
     ]
 
 gadtPragmaTest :: TestName -> Bool -> TestTree

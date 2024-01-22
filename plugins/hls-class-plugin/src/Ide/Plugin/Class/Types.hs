@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP              #-}
 {-# LANGUAGE DeriveAnyClass   #-}
 {-# LANGUAGE DeriveGeneric    #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -190,7 +191,6 @@ getInstanceBindLensRule recorder = do
                     (locA l) -- bindSpan
                     (locA l') -- bindNameSpan
             in toBindInfo <$> filter (\(L _ name) -> unLoc name `notElem` sigNames) bindNames
-        getBindSpanWithoutSig _ = []
 
         -- Get bind definition range with its rendered signature text
         getRangeWithSig :: Maybe (InstanceBindTypeSig, SrcSpan) -> IO (Maybe (Range, Int, Name, Type))
@@ -208,7 +208,11 @@ getInstanceBindTypeSigsRule recorder = do
         (hscEnv -> hsc) <- useMT GhcSession nfp
         let binds = collectHsBindsBinders $ tcg_binds gblEnv
         (_, maybe [] catMaybes -> instanceBinds) <- liftIO $
-            initTcWithGbl hsc gblEnv ghostSpan $ traverse bindToSig binds
+            initTcWithGbl hsc gblEnv ghostSpan
+#if MIN_VERSION_ghc(9,7,0)
+              $ liftZonkM
+#endif
+              $ traverse bindToSig binds
         pure $ InstanceBindTypeSigsResult instanceBinds
     where
         bindToSig id = do

@@ -194,7 +194,8 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId =
   let resolveRecorder = cmapWithPrio LogResolve recorder
       (pluginCommands, pluginHandlers) = mkCodeActionWithResolveAndCommand resolveRecorder plId codeActionProvider (resolveProvider recorder)
-  in (defaultPluginDescriptor plId)
+      desc = "Provides HLint diagnostics and code actions. Built with hlint-" <> VERSION_hlint
+  in (defaultPluginDescriptor plId desc)
   { pluginRules = rules recorder plId
   , pluginCommands = pluginCommands
   , pluginHandlers = pluginHandlers
@@ -224,7 +225,7 @@ rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plugin = do
   define (cmapWithPrio LogShake recorder) $ \GetHlintDiagnostics file -> do
     config <- getPluginConfigAction plugin
-    let hlintOn = pluginEnabledConfig plcDiagnosticsOn config
+    let hlintOn = plcGlobalOn config && plcDiagnosticsOn config
     ideas <- if hlintOn then getIdeas recorder file else return (Right [])
     return (diagnostics file ideas, Just ())
 

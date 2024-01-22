@@ -17,7 +17,7 @@ import           Language.LSP.Protocol.Types       hiding
                                                     SemanticTokensEdit (..),
                                                     mkRange)
 import           Language.LSP.Test
--- import Test.QuickCheck.Instances ()
+
 import           Control.Lens                      ((^.))
 import           Development.IDE.Plugin.Test       (blockCommandId)
 import           Test.Tasty

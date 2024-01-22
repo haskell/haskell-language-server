@@ -160,7 +160,7 @@ descriptor :: Recorder (WithPriority Log) -> PluginId
 descriptor recorder plId =
   let resolveRecorder = cmapWithPrio LogResolve recorder
       pluginHandler = mkCodeActionHandlerWithResolve resolveRecorder codeActionProvider resolveProvider
-  in (defaultPluginDescriptor plId)
+  in (defaultPluginDescriptor plId "Provides a code action to convert record selector usage to use overloaded record dot syntax")
     { pluginHandlers = pluginHandler
     , pluginRules = collectRecSelsRule recorder
     }

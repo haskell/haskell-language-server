@@ -71,13 +71,15 @@ ghcideCompletionsPluginPriority :: Natural
 ghcideCompletionsPluginPriority = defaultPluginPriority
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId)
+descriptor recorder plId = (defaultPluginDescriptor plId desc)
   { pluginRules = produceCompletions recorder
   , pluginHandlers = mkPluginHandler SMethod_TextDocumentCompletion getCompletionsLSP
                      <> mkResolveHandler SMethod_CompletionItemResolve resolveCompletion
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   , pluginPriority = ghcideCompletionsPluginPriority
   }
+  where
+    desc = "Provides Haskell completions"
 
 
 produceCompletions :: Recorder (WithPriority Log) -> Rules ()
@@ -142,8 +144,8 @@ resolveCompletion ide _pid comp@CompletionItem{_detail,_documentation,_data_} ur
 #endif
     mdkm <- liftIO $ runIdeAction "CompletionResolve.GetDocMap" (shakeExtras ide) $ useWithStaleFast GetDocMap file
     let (dm,km) = case mdkm of
-          Just (DKMap docMap kindMap, _) -> (docMap,kindMap)
-          Nothing                        -> (mempty, mempty)
+          Just (DKMap docMap tyThingMap, _) -> (docMap,tyThingMap)
+          Nothing                           -> (mempty, mempty)
     doc <- case lookupNameEnv dm name of
       Just doc -> pure $ spanDocToMarkdown doc
       Nothing -> liftIO $ spanDocToMarkdown <$> getDocumentationTryGhc (hscEnv sess) name
