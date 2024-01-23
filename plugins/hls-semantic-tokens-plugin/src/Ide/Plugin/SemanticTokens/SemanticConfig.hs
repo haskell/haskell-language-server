@@ -1,10 +1,10 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE TypeOperators     #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Ide.Plugin.SemanticTokens.SemanticConfig where
 
@@ -13,13 +13,23 @@ import           Data.Default                    (def)
 import qualified Data.Set                        as S
 import qualified Data.Text                       as T
 import           Development.IDE                 (usePropertyAction, Action)
-import           Ide.Plugin.Properties           (defineEnumProperty,
-                                                  emptyProperties, Properties, PropertyType(type TEnum), PropertyKey(type PropertyKey))
+import Ide.Plugin.Properties
+    ( defineEnumProperty,
+      emptyProperties,
+      Properties,
+      PropertyType(type TEnum),
+      PropertyKey(type PropertyKey),
+      KeyNameProxy,
+      HasProperty,
+      NotElem )
 import           Ide.Plugin.SemanticTokens.Types
 import           Language.Haskell.TH
 import           Language.LSP.Protocol.Types     (LspEnum (..),
                                                   SemanticTokenTypes)
 import Ide.Types (PluginId)
+import Data.Text (Text)
+import GHC.TypeLits (KnownSymbol, Symbol)
+import Data.Aeson (ToJSON, FromJSON)
 
 
 
@@ -61,6 +71,10 @@ lowerFirst (x:xs) = toLower x : xs
 allHsTokenNameStrings :: [String]
 allHsTokenNameStrings = map (drop 1 . show) allHsTokenTypes
 
+defineSemanticProperty :: (NotElem s r, KnownSymbol s)
+    => (KeyNameProxy s, Text, SemanticTokenTypes)
+    -> Properties r
+    -> Properties ('PropertyKey s (TEnum SemanticTokenTypes) : r)
 defineSemanticProperty (lb, tokenType, st) =
   defineEnumProperty
     lb
