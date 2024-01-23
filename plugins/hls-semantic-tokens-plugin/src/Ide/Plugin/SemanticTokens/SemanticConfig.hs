@@ -121,23 +121,3 @@ mkSemanticConfigFunctions = do
   let semanticConfigPropertiesSig = SigD semanticConfigPropertiesName (AppT (ConT ''Properties) propertiesType)
   return [semanticConfigPropertiesSig, semanticConfigProperties, useSemanticConfigActionSig, useSemanticConfigAction]
 
-go :: Properties
-  '[ 'PropertyKey "variableToken" ('TEnum SemanticTokenTypes),
-     'PropertyKey "functionToken" ('TEnum SemanticTokenTypes),
-     'PropertyKey "dataConstructorToken" ('TEnum SemanticTokenTypes),
-     'PropertyKey "typeVariableToken" ('TEnum SemanticTokenTypes),
-     'PropertyKey "classMethodToken" ('TEnum SemanticTokenTypes),
-     'PropertyKey "patternSynonymToken" ('TEnum SemanticTokenTypes),
-     'PropertyKey "typeConstructorToken" ('TEnum SemanticTokenTypes),
-     'PropertyKey "classToken" ('TEnum SemanticTokenTypes),
-     'PropertyKey "typeSynonymToken" ('TEnum SemanticTokenTypes),
-     'PropertyKey "typeFamilyToken" ('TEnum SemanticTokenTypes),
-     'PropertyKey "recordFieldToken" ('TEnum SemanticTokenTypes),
-     'PropertyKey "moduleToken" ('TEnum SemanticTokenTypes)]
-go = undefined
-
--- mkSemanticConfigPropertiesType :: Q [Dec]
--- mkSemanticConfigPropertiesType = do
---   let propertiesType = AppT (PromotedConsT `AppT` (AppT (ConT ''PropertyKey) (LitT (StrTyLit "Variable")) `AppT`
---                         (AppT (ConT ''TEnum) (ConT ''SemanticTokenTypes))) (PromotedNilT))
---   return [SigD (mkName "semanticConfigProperties") (AppT (ConT ''Properties) propertiesType)]
