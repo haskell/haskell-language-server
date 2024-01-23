@@ -115,10 +115,9 @@ mkSemanticConfigFunctions = do
       )
       $ zip allLabels allHsTokenTypes
   let body = foldr (AppE . AppE (VarE 'defineSemanticProperty)) (VarE 'emptyProperties) nameAndDescList
-  let propertiesType = foldr (\la rest ->
-            (PromotedConsT `AppT`
-                (AppT (ConT 'PropertyKey) (LitT (StrTyLit la)) `AppT` AppT (ConT 'TEnum) (ConT ''SemanticTokenTypes)))
-            `AppT` rest)
+  let propertiesType = foldr (\la ->
+            AppT (PromotedConsT `AppT`
+                (AppT (ConT 'PropertyKey) (LitT (StrTyLit la)) `AppT` AppT (ConT 'TEnum) (ConT ''SemanticTokenTypes))))
             PromotedNilT allLabelStrs
   let semanticConfigProperties = FunD semanticConfigPropertiesName [Clause [] (NormalB body) []]
   let semanticConfigPropertiesSig = SigD semanticConfigPropertiesName (AppT (ConT ''Properties) propertiesType)
