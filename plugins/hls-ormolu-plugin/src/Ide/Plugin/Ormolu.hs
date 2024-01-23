@@ -16,13 +16,10 @@ where
 import           Control.Exception               (Handler (..), IOException,
                                                   SomeException (..), catches,
                                                   handle)
-import           Control.Monad.Except            (ExceptT (ExceptT), runExceptT,
-                                                  throwError)
+import           Control.Monad.Except            (runExceptT, throwError)
 import           Control.Monad.Extra
-import           Control.Monad.IO.Class          (liftIO)
 import           Control.Monad.Trans
-import           Control.Monad.Trans.Except      (ExceptT (..), mapExceptT,
-                                                  runExceptT)
+import           Control.Monad.Trans.Except      (ExceptT (..), mapExceptT)
 import           Data.Functor                    ((<&>))
 import           Data.List                       (intercalate)
 import           Data.Maybe                      (catMaybes)
@@ -38,7 +35,6 @@ import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types                       hiding (Config)
 import qualified Ide.Types                       as Types
-import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Ormolu
