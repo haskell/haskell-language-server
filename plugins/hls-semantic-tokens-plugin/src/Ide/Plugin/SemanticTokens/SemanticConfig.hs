@@ -28,22 +28,20 @@ import           Language.Haskell.TH
 import           Language.LSP.Protocol.Types     (LspEnum (..),
                                                   SemanticTokenTypes)
 
-
-
 docName :: HsSemanticTokenType -> T.Text
 docName tt = case tt of
-    TVariable        -> "variables"
-    TFunction        -> "functions"
-    TDataConstructor -> "data constructors"
-    TTypeVariable    -> "type variables"
-    TClassMethod     -> "typeclass methods"
-    TPatternSynonym  -> "pattern synonyms"
-    TTypeConstructor -> "type constructors"
-    TClass           -> "typeclasses"
-    TTypeSynonym     -> "type synonyms"
-    TTypeFamily      -> "type families"
-    TRecordField     -> "record fields"
-    TModule          -> "modules"
+  TVariable        -> "variables"
+  TFunction        -> "functions"
+  TDataConstructor -> "data constructors"
+  TTypeVariable    -> "type variables"
+  TClassMethod     -> "typeclass methods"
+  TPatternSynonym  -> "pattern synonyms"
+  TTypeConstructor -> "type constructors"
+  TClass           -> "typeclasses"
+  TTypeSynonym     -> "type synonyms"
+  TTypeFamily      -> "type families"
+  TRecordField     -> "record fields"
+  TModule          -> "modules"
 
 toConfigName :: String -> String
 toConfigName = ("st" <>)
@@ -62,16 +60,17 @@ allHsTokenTypes :: [HsSemanticTokenType]
 allHsTokenTypes = enumFrom minBound
 
 lowerFirst :: String -> String
-lowerFirst []     = []
-lowerFirst (x:xs) = toLower x : xs
+lowerFirst []       = []
+lowerFirst (x : xs) = toLower x : xs
 
 allHsTokenNameStrings :: [String]
 allHsTokenNameStrings = map (drop 1 . show) allHsTokenTypes
 
-defineSemanticProperty :: (NotElem s r, KnownSymbol s)
-    => (KeyNameProxy s, Text, SemanticTokenTypes)
-    -> Properties r
-    -> Properties ('PropertyKey s (TEnum SemanticTokenTypes) : r)
+defineSemanticProperty ::
+  (NotElem s r, KnownSymbol s) =>
+  (KeyNameProxy s, Text, SemanticTokenTypes) ->
+  Properties r ->
+  Properties ('PropertyKey s (TEnum SemanticTokenTypes) : r)
 defineSemanticProperty (lb, tokenType, st) =
   defineEnumProperty
     lb
@@ -81,8 +80,6 @@ defineSemanticProperty (lb, tokenType, st) =
 
 semanticDef :: SemanticTokensConfig
 semanticDef = def
-
-
 
 -- | it produces the following functions:
 -- semanticConfigProperties :: Properties '[
@@ -95,9 +92,8 @@ mkSemanticConfigFunctions = do
   let pid = mkName "pid"
   let semanticConfigPropertiesName = mkName "semanticConfigProperties"
   let useSemanticConfigActionName = mkName "useSemanticConfigAction"
-  let
-      allLabelStrs = map ((<> "Token"). lowerFirst) allHsTokenNameStrings
-      allLabels = map (LabelE . (<> "Token"). lowerFirst) allHsTokenNameStrings
+  let allLabelStrs = map ((<> "Token") . lowerFirst) allHsTokenNameStrings
+      allLabels = map (LabelE . (<> "Token") . lowerFirst) allHsTokenNameStrings
       allFieldsNames = map (mkName . toConfigName) allHsTokenNameStrings
       allVariableNames = map (mkName . ("_variable_" <>) . toConfigName) allHsTokenNameStrings
       --   <- useSemanticConfigAction label pid config
@@ -112,7 +108,7 @@ mkSemanticConfigFunctions = do
       -- get and then update record
       bb = DoE Nothing $ getProperties ++ [NoBindS $ AppE (VarE 'return) recordUpdate]
   let useSemanticConfigAction = FunD useSemanticConfigActionName [Clause [VarP pid] (NormalB bb) []]
-  let useSemanticConfigActionSig = SigD useSemanticConfigActionName (ArrowT `AppT ` ConT ''PluginId `AppT` (ConT ''Action `AppT` ConT ''SemanticTokensConfig))
+  let useSemanticConfigActionSig = SigD useSemanticConfigActionName (ArrowT `AppT` ConT ''PluginId `AppT` (ConT ''Action `AppT` ConT ''SemanticTokensConfig))
 
   -- SemanticConfigProperties
   nameAndDescList <-
@@ -124,11 +120,16 @@ mkSemanticConfigFunctions = do
       )
       $ zip allLabels allHsTokenTypes
   let body = foldr (AppE . AppE (VarE 'defineSemanticProperty)) (VarE 'emptyProperties) nameAndDescList
-  let propertiesType = foldr (\la ->
-            AppT (PromotedConsT `AppT`
-                (AppT (ConT 'PropertyKey) (LitT (StrTyLit la)) `AppT` AppT (ConT 'TEnum) (ConT ''SemanticTokenTypes))))
-            PromotedNilT allLabelStrs
+  let propertiesType =
+        foldr
+          ( \la ->
+              AppT
+                ( PromotedConsT
+                    `AppT` (AppT (ConT 'PropertyKey) (LitT (StrTyLit la)) `AppT` AppT (ConT 'TEnum) (ConT ''SemanticTokenTypes))
+                )
+          )
+          PromotedNilT
+          allLabelStrs
   let semanticConfigProperties = FunD semanticConfigPropertiesName [Clause [] (NormalB body) []]
   let semanticConfigPropertiesSig = SigD semanticConfigPropertiesName (AppT (ConT ''Properties) propertiesType)
   return [semanticConfigPropertiesSig, semanticConfigProperties, useSemanticConfigActionSig, useSemanticConfigAction]
-
