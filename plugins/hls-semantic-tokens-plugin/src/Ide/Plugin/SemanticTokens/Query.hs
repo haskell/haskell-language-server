@@ -74,9 +74,7 @@ rangeSemanticMapSemanticTokens stc mapping =
     . M.mapKeys (toCurrentRange mapping)
   where
     toAbsSemanticToken :: Range -> HsSemanticTokenType -> SemanticTokenAbsolute
-    toAbsSemanticToken (Range (Language.LSP.Protocol.Types.Position startLine startColumn)
-                              (Language.LSP.Protocol.Types.Position _endLine endColumn))
-                              tokenType =
+    toAbsSemanticToken (Range (Position startLine startColumn) (Position _endLine endColumn)) tokenType =
       let len = endColumn - startColumn
        in SemanticTokenAbsolute
             (fromIntegral startLine)
