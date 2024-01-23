@@ -36,6 +36,11 @@ import           Development.IDE.Core.RuleTypes       (TcModuleResult (..),
 import           Development.IDE.Core.Shake           (define, useWithStale)
 import qualified Development.IDE.Core.Shake           as Shake
 
+#if __GLASGOW_HASKELL__ >= 903
+import           Development.IDE.GHC.Compat           (HsExpr (HsRecSel))
+#else
+import           Development.IDE.GHC.Compat           (HsExpr (HsRecFld))
+#endif
 
 import           Control.DeepSeq                      (rwhnf)
 import           Development.IDE.Core.PluginUtils
@@ -44,13 +49,7 @@ import           Development.IDE.Core.PositionMapping (PositionMapping,
 import           Development.IDE.GHC.Compat           (Extension (OverloadedRecordDot),
                                                        GhcPass,
                                                        HsExpansion (HsExpanded),
-                                                       HsExpr (HsApp, HsVar, OpApp, XExpr,
-#if __GLASGOW_HASKELL__ >= 903
-                                                             HsRecSel
-#else
-                                                             HsRecFld
-#endif
-                                                       ),
+                                                       HsExpr (HsApp, HsVar, OpApp, XExpr),
                                                        LHsExpr, Outputable,
                                                        Pass (..), appPrec,
                                                        dollarName, getLoc,
