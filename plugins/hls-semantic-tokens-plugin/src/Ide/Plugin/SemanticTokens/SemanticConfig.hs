@@ -79,8 +79,6 @@ semanticDef = def
 -- ...
 -- ]
 -- useSemanticConfigAction :: PluginId -> Action SemanticTokensConfig
-
--- useSemanticConfigAction :: PluginId -> Action SemanticTokensConfig
 mkSemanticConfigFunctions :: Q [Dec]
 mkSemanticConfigFunctions = do
   let pid = mkName "pid"
