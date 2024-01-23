@@ -21,7 +21,6 @@ import Ide.Plugin.Properties
       PropertyType(type TEnum),
       PropertyKey(type PropertyKey),
       KeyNameProxy,
-      HasProperty,
       NotElem )
 import           Ide.Plugin.SemanticTokens.Types
 import           Language.Haskell.TH
@@ -29,8 +28,7 @@ import           Language.LSP.Protocol.Types     (LspEnum (..),
                                                   SemanticTokenTypes)
 import Ide.Types (PluginId)
 import Data.Text (Text)
-import GHC.TypeLits (KnownSymbol, Symbol)
-import Data.Aeson (ToJSON, FromJSON)
+import GHC.TypeLits (KnownSymbol)
 
 
 
