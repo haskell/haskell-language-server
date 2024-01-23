@@ -13,7 +13,6 @@
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UnicodeSyntax         #-}
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 -- |
 -- This module provides the core functionality of the plugin.
