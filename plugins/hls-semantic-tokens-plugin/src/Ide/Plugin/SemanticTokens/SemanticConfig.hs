@@ -5,6 +5,7 @@
 {-# LANGUAGE TypeOperators     #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Ide.Plugin.SemanticTokens.SemanticConfig where
 
