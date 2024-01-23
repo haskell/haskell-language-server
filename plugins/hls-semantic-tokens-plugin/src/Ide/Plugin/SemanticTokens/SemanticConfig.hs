@@ -1,34 +1,32 @@
-{-# LANGUAGE GADTs             #-}
-{-# LANGUAGE OverloadedLabels  #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE TypeOperators     #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE OverloadedLabels      #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 
 module Ide.Plugin.SemanticTokens.SemanticConfig where
 
 import           Data.Char                       (toLower)
 import           Data.Default                    (def)
 import qualified Data.Set                        as S
+import           Data.Text                       (Text)
 import qualified Data.Text                       as T
-import           Development.IDE                 (usePropertyAction, Action)
-import Ide.Plugin.Properties
-    ( defineEnumProperty,
-      emptyProperties,
-      Properties,
-      PropertyType(type TEnum),
-      PropertyKey(type PropertyKey),
-      KeyNameProxy,
-      NotElem )
+import           Development.IDE                 (Action, usePropertyAction)
+import           GHC.TypeLits                    (KnownSymbol)
+import           Ide.Plugin.Properties           (KeyNameProxy, NotElem,
+                                                  Properties,
+                                                  PropertyKey (type PropertyKey),
+                                                  PropertyType (type TEnum),
+                                                  defineEnumProperty,
+                                                  emptyProperties)
 import           Ide.Plugin.SemanticTokens.Types
+import           Ide.Types                       (PluginId)
 import           Language.Haskell.TH
 import           Language.LSP.Protocol.Types     (LspEnum (..),
                                                   SemanticTokenTypes)
-import Ide.Types (PluginId)
-import Data.Text (Text)
-import GHC.TypeLits (KnownSymbol)
 
 
 
