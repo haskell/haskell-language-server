@@ -57,7 +57,7 @@ toGADTSyntaxCommandId = "GADT.toGADT"
 -- | A command replaces H98 data decl with GADT decl in place
 toGADTCommand :: PluginId -> CommandFunction IdeState ToGADTParams
 toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = withExceptT handleGhcidePluginError $ do
-    nfp <- withExceptT (GhcidePluginErrors) $ getNormalizedFilePathE uri
+    nfp <- withExceptT GhcidePluginErrors $ getNormalizedFilePathE uri
     (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
     (L ann decl) <- case decls of
         [d] -> pure d
@@ -88,7 +88,7 @@ toGADTCommand pId@(PluginId pId') state ToGADTParams{..} = withExceptT handleGhc
 
 codeActionHandler :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
 codeActionHandler state plId (CodeActionParams _ _ doc range _) = withExceptT handleGhcidePluginError $ do
-    nfp <- withExceptT (GhcidePluginErrors) $ getNormalizedFilePathE (doc ^. L.uri)
+    nfp <- withExceptT GhcidePluginErrors $ getNormalizedFilePathE (doc ^. L.uri)
     (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
     let actions = map (mkAction . printOutputable . tcdLName . unLoc) inRangeH98Decls
     pure $ InL actions
@@ -138,8 +138,8 @@ handleGhcidePluginError = \case
     UnexpectedNumberOfDeclarations nums -> do
         PluginInternalError $ "Expected one declaration but found: " <> T.pack (show nums)
     FailedToFindDataDeclRange ->
-        PluginInternalError $ "Unable to get data decl range"
+        PluginInternalError "Unable to get data decl range"
     PrettyGadtError errMsg ->
-        PluginInternalError $ errMsg
+        PluginInternalError errMsg
     GhcidePluginErrors errors ->
         errors
