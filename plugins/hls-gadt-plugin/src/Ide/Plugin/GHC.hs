@@ -16,8 +16,6 @@ import qualified Data.Text                               as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.ExactPrint
-import           Ide.PluginUtils                         (subRange)
-import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
 import           GHC.Parser.Annotation                   (AddEpAnn (..),
                                                           Anchor (Anchor),
                                                           AnchorOperation (MovedAnchor),
@@ -27,7 +25,9 @@ import           GHC.Parser.Annotation                   (AddEpAnn (..),
                                                           EpaLocation (EpaDelta),
                                                           SrcSpanAnn' (SrcSpanAnn),
                                                           spanAsAnchor)
+import           Ide.PluginUtils                         (subRange)
 import           Language.Haskell.GHC.ExactPrint         (showAst)
+import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
 
 #if MIN_VERSION_ghc(9,5,0)
 import qualified Data.List.NonEmpty                      as NE
