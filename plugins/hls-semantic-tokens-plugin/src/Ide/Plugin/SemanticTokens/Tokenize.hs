@@ -19,6 +19,7 @@ import           Data.Text                   (Text)
 import qualified Data.Text                   as T
 import qualified Data.Text.Rope              as Char
 import           Data.Text.Utf16.Rope        (toText)
+import qualified Data.Text.Utf16.Rope        as Utf16
 import           Data.Text.Utf16.Rope.Mixed  (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed  as Rope
 import           Development.IDE.GHC.Compat
@@ -75,6 +76,9 @@ addRangeIdSetMap r i = modify $ \s -> s {rangeIdSetMap = Map.insertWith (<>) r (
 updateColumnsInUtf16 :: (Monad m) => UInt -> Tokenizer m ()
 updateColumnsInUtf16 n = modify $ \s -> s {columnsInUtf16 = n}
 
+-- lift a Tokenizer Maybe () to Tokenizer m (),
+-- if the Maybe is Nothing, do nothing, recover the state
+-- if the Maybe is Just (), do the action, and keep the state
 liftMaybeM :: (Monad m) => Tokenizer Maybe () -> Tokenizer m ()
 liftMaybeM p = do
   st <- get
@@ -94,6 +98,8 @@ foldAst ast = do
 visitLeafIds :: HieAST t -> Tokenizer Maybe ()
 visitLeafIds leaf = liftMaybeM $ do
   (ran, token) <- focusTokenAt leaf
+  -- we do want to revert `focusTokenAt` on failure of `splitRangeByText`
+  -- since the `focusTokenAt` properly update the state
   liftMaybeM $ do
     splitResult <-  lift $ splitRangeByText token ran
     modify $ \s -> s {currentRange = ran, currentRangeContext = splitResult}
@@ -166,8 +172,8 @@ focusTokenAt leaf = do
     srcSpanEndCharPosition real = realSrcLocRopePosition $ realSrcSpanEnd real
     newColumn :: UInt -> Text -> UInt
     newColumn n rp = case T.breakOnEnd "\n" rp of
-      ("", nEnd) -> n + fromIntegral (Rope.utf16Length $ Rope.fromText nEnd)
-      (_, nEnd)  -> fromIntegral (Rope.utf16Length $ Rope.fromText nEnd)
+      ("", nEnd) -> n + utf16Length nEnd
+      (_, nEnd)  -> utf16Length nEnd
     codePointRangeToRangeWith :: UInt -> UInt -> CodePointRange -> Range
     codePointRangeToRangeWith newStartCol newEndCol (CodePointRange (CodePointPosition startLine _) (CodePointPosition endLine _)) =
       Range (Position startLine newStartCol) (Position endLine newEndCol)
@@ -188,7 +194,7 @@ splitRangeByText tk ran = do
         Just ('`', xs) -> (subOneRange ran, T.takeWhile (/= '`') xs)
         _              -> (ran, tk)
   let (prefix, tk'') = T.breakOnEnd "." tk'
-  splitRange tk'' (fromIntegral $ Rope.utf16Length $ Rope.fromText prefix) ran'
+  splitRange tk'' (utf16Length prefix) ran'
   where
     splitRange :: Text -> UInt -> Range -> Maybe SplitResult
     splitRange tx n r@(Range (Position l1 c1) (Position l2 c2))
@@ -197,3 +203,6 @@ splitRangeByText tk ran = do
       | otherwise = Nothing
     subOneRange :: Range -> Range
     subOneRange (Range (Position l1 c1) (Position l2 c2)) = Range (Position l1 (c1 + 1)) (Position l2 (c2 - 1))
+
+utf16Length :: Integral i => Text -> i
+utf16Length = fromIntegral . Utf16.length . Utf16.fromText
