@@ -10,7 +10,6 @@ packages:
   - ./hls-test-utils
   # - ./shake-bench
   - ./plugins/hls-refactor-plugin
-  - ./plugins/hls-stylish-haskell-plugin
   - ./plugins/hls-semantic-tokens-plugin
 
 ghc-options:
