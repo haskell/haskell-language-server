@@ -1550,6 +1550,108 @@ common refactor
     build-depends: hls-refactor-plugin == 2.6.0.0
     cpp-options: -Dhls_refactor
 
+library hls-refactor-plugin
+  import: warnings
+  exposed-modules:  Development.IDE.GHC.ExactPrint
+                    Development.IDE.GHC.Compat.ExactPrint
+                    Development.IDE.Plugin.CodeAction
+                    Development.IDE.Plugin.CodeAction.Util
+                    Development.IDE.GHC.Dump
+  other-modules:    Development.IDE.Plugin.CodeAction.Args
+                    Development.IDE.Plugin.CodeAction.ExactPrint
+                    Development.IDE.Plugin.CodeAction.PositionIndexed
+                    Development.IDE.Plugin.Plugins.AddArgument
+                    Development.IDE.Plugin.Plugins.Diagnostic
+                    Development.IDE.Plugin.Plugins.FillHole
+                    Development.IDE.Plugin.Plugins.FillTypeWildcard
+                    Development.IDE.Plugin.Plugins.ImportUtils
+  default-extensions:
+    BangPatterns
+    CPP
+    DataKinds
+    DeriveGeneric
+    DerivingStrategies
+    DerivingVia
+    DuplicateRecordFields
+    ExplicitNamespaces
+    FlexibleContexts
+    FlexibleInstances
+    FunctionalDependencies
+    GeneralizedNewtypeDeriving
+    LambdaCase
+    NamedFieldPuns
+    OverloadedStrings
+    PatternSynonyms
+    RankNTypes
+    RecordWildCards
+    ScopedTypeVariables
+    TupleSections
+    TypeApplications
+    TypeOperators
+    ViewPatterns
+  hs-source-dirs:   plugins/hls-refactor-plugin/src
+  build-depends:
+    , base                  >=4.12 && <5
+    , ghc
+    , bytestring
+    , ghc-boot
+    , regex-tdfa
+    , text-rope
+    , ghcide                == 2.6.0.0
+    , hls-plugin-api        == 2.6.0.0
+    , lsp
+    , text
+    , transformers
+    , unordered-containers
+    , containers
+    , ghc-exactprint < 1 || >= 1.4
+    , extra
+    , retrie
+    , syb
+    , hls-graph
+    , dlist
+    , deepseq
+    , mtl
+    , lens
+    , data-default
+    , time
+    -- FIXME: Only needed to workaround for qualified imports in GHC 9.4
+    , regex-applicative
+    , parser-combinators
+  ghc-options: -Wno-name-shadowing
+  default-language: Haskell2010
+
+test-suite hls-refactor-plugin-tests
+  import: warnings
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   plugins/hls-refactor-plugin/test
+  main-is:          Main.hs
+  other-modules:    Test.AddArgument
+  ghc-options:      -O0 -threaded -rtsopts -with-rtsopts=-N -Wno-name-shadowing
+  build-depends:
+    , base
+    , filepath
+    , hls-refactor-plugin
+    , hls-test-utils      == 2.6.0.0
+    , lens
+    , lsp-types
+    , text
+    , hls-plugin-api
+    , parser-combinators
+    , data-default
+    , extra
+    , ghcide
+    , ghcide-test-utils
+    , shake
+    , hls-plugin-api
+    , lsp-test
+    , directory
+    , regex-tdfa
+    , tasty-hunit
+    , tasty-expected-failure
+    , tasty
+
 -----------------------------
 -- semantic tokens plugin
 -----------------------------
