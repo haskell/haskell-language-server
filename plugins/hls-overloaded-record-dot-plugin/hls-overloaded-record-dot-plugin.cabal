@@ -19,7 +19,7 @@ source-repository head
   location: https://github.com/haskell/haskell-language-server
 
 common warnings
-    ghc-options: -Wall
+    ghc-options: -Wall -Wunused-packages
 
 library
     import:           warnings
@@ -35,8 +35,6 @@ library
       , text
       , syb
       , transformers
-      , ghc-boot-th
-      , unordered-containers
       , containers
       , deepseq
     hs-source-dirs:   src
@@ -51,13 +49,7 @@ test-suite tests
     build-depends:
       , base
       , filepath
-      , ghcide
       , text
       , hls-overloaded-record-dot-plugin
-      , hls-plugin-api
-      , lens
-      , lsp-test
-      , lsp-types
-      , row-types
       , hls-test-utils
 
