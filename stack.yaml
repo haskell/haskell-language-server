@@ -23,7 +23,6 @@ packages:
   - ./plugins/hls-qualify-imported-names-plugin
   - ./plugins/hls-refactor-plugin
   - ./plugins/hls-splice-plugin
-  - ./plugins/hls-stan-plugin
   - ./plugins/hls-stylish-haskell-plugin
   - ./plugins/hls-semantic-tokens-plugin
 
