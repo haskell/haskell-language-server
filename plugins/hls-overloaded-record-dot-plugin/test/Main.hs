@@ -75,4 +75,4 @@ isExplicitFieldsCodeAction selectorName CodeAction {_title} =
   ("Convert `" <> selectorName <> "` to record dot syntax") `T.isPrefixOf` _title
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-overloaded-record-dot-plugin" </> "test" </> "testdata"
