@@ -26,6 +26,7 @@ import           GHC.Generics                  (Generic)
 import           Language.LSP.Protocol.Types
 -- import template haskell
 import           Data.Map                      (Map)
+import           Data.Set                      (Set)
 import           Language.Haskell.TH.Syntax    (Lift)
 
 
@@ -112,7 +113,9 @@ data Loc = Loc
 instance Show Loc where
   show (Loc line startChar len) = show line <> ":" <> show startChar <> "-" <> show (startChar + len)
 
-type NameSemanticMap = Map Identifier HsSemanticTokenType
+type RangeIdSetMap = Map Range (Set Identifier)
+
+type IdSemanticMap = Map Identifier HsSemanticTokenType
 
 data GetSemanticTokens = GetSemanticTokens
   deriving (Eq, Show, Typeable, Generic)

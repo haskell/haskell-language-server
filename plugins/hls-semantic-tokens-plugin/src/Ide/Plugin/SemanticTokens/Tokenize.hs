@@ -5,33 +5,33 @@
 
 module Ide.Plugin.SemanticTokens.Tokenize (hieAstSpanIdentifiers) where
 
-import           Control.Lens                (Identity (runIdentity))
-import           Control.Monad               (forM_, guard)
-import           Control.Monad.State         (MonadState (get),
-                                              MonadTrans (lift), execStateT,
-                                              gets, modify, put)
-import           Control.Monad.Trans.State   (StateT)
-import qualified Data.Map                    as M
-import qualified Data.Map                    as Map
-import           Data.Set                    (Set)
-import qualified Data.Set                    as S
-import           Data.Text                   (Text)
-import qualified Data.Text                   as T
-import qualified Data.Text.Rope              as Char
-import           Data.Text.Utf16.Rope        (toText)
-import qualified Data.Text.Utf16.Rope        as Utf16
-import           Data.Text.Utf16.Rope.Mixed  (Rope)
-import qualified Data.Text.Utf16.Rope.Mixed  as Rope
+import           Control.Lens                    (Identity (runIdentity))
+import           Control.Monad                   (forM_, guard)
+import           Control.Monad.State             (MonadState (get),
+                                                  MonadTrans (lift), execStateT,
+                                                  gets, modify, put)
+import           Control.Monad.Trans.State       (StateT)
+import qualified Data.Map                        as M
+import qualified Data.Map                        as Map
+import           Data.Set                        (Set)
+import qualified Data.Set                        as S
+import           Data.Text                       (Text)
+import qualified Data.Text                       as T
+import qualified Data.Text.Rope                  as Char
+import           Data.Text.Utf16.Rope            (toText)
+import qualified Data.Text.Utf16.Rope            as Utf16
+import           Data.Text.Utf16.Rope.Mixed      (Rope)
+import qualified Data.Text.Utf16.Rope.Mixed      as Rope
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error   (realSrcSpanToCodePointRange)
-import           Language.LSP.Protocol.Types (Position (Position),
-                                              Range (Range), UInt)
-import           Language.LSP.VFS            hiding (line)
-import           Prelude                     hiding (length, span)
+import           Development.IDE.GHC.Error       (realSrcSpanToCodePointRange)
+import           Ide.Plugin.SemanticTokens.Types (RangeIdSetMap)
+import           Language.LSP.Protocol.Types     (Position (Position),
+                                                  Range (Range), UInt)
+import           Language.LSP.VFS                hiding (line)
+import           Prelude                         hiding (length, span)
 
 type Tokenizer m a = forall t. StateT (PTokenState t) m a
 
-type RangeIdSetMap = Map.Map Range (Set Identifier)
 
 data PTokenState t = PTokenState
   { rangeIdSetMap       :: RangeIdSetMap,

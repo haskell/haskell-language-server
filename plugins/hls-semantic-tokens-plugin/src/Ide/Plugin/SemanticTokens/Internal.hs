@@ -108,10 +108,10 @@ getSemanticTokensRule recorder =
     -- get current location from the old ones
     let spanIdMap = M.filter (not . null) $ hieAstSpanIdentifiers virtualFile ast
     let names = S.toList $ S.unions $ Map.elems spanIdMap
-    let localSemanticMap = mkLocalNameSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
+    let localSemanticMap = mkLocalIdSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
     -- get imported name semantic map
-    let importedNameSemanticMap = foldr (getTypeExclude localSemanticMap getTyThingMap) mempty names
-    let sMap = M.unionWith (<>) importedNameSemanticMap localSemanticMap
+    let importedIdSemanticMap = foldr (getTypeExclude localSemanticMap getTyThingMap) mempty names
+    let sMap = M.unionWith (<>) importedIdSemanticMap localSemanticMap
     let rangeTokenType = extractSemanticTokensFromNames sMap spanIdMap
     return $ RangeHsSemanticTokenTypes rangeTokenType
   where

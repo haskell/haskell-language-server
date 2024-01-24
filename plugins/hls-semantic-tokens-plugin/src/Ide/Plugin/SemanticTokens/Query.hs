@@ -21,7 +21,8 @@ import           Development.IDE.GHC.Compat
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
                                                        HsSemanticTokenType (TModule),
-                                                       NameSemanticMap,
+                                                       IdSemanticMap,
+                                                       RangeIdSetMap,
                                                        SemanticTokensConfig)
 import           Language.LSP.Protocol.Types          (Position (Position),
                                                        Range (Range),
@@ -37,17 +38,17 @@ import           Prelude                              hiding (length, span)
 
 ---------------------------------------------------------
 
-mkLocalNameSemanticFromAst :: [Identifier] -> HieFunMaskKind a -> RefMap a -> NameSemanticMap
-mkLocalNameSemanticFromAst names hieKind rm = M.fromList (mapMaybe (nameNameSemanticFromHie hieKind rm) names)
+mkLocalIdSemanticFromAst :: [Identifier] -> HieFunMaskKind a -> RefMap a -> IdSemanticMap
+mkLocalIdSemanticFromAst names hieKind rm = M.fromList (mapMaybe (idIdSemanticFromHie hieKind rm) names)
 
-nameNameSemanticFromHie :: forall a. HieFunMaskKind a -> RefMap a -> Identifier -> Maybe (Identifier, HsSemanticTokenType)
-nameNameSemanticFromHie _ _ ns@(Left _) = Just (ns, TModule)
-nameNameSemanticFromHie hieKind rm ns@(Right _) = do
-  st <- nameSemanticFromRefMap rm ns
+idIdSemanticFromHie :: forall a. HieFunMaskKind a -> RefMap a -> Identifier -> Maybe (Identifier, HsSemanticTokenType)
+idIdSemanticFromHie _ _ ns@(Left _) = Just (ns, TModule)
+idIdSemanticFromHie hieKind rm ns@(Right _) = do
+  st <- idSemanticFromRefMap rm ns
   return (ns, st)
   where
-    nameSemanticFromRefMap :: RefMap a -> Identifier -> Maybe HsSemanticTokenType
-    nameSemanticFromRefMap rm' name' = do
+    idSemanticFromRefMap :: RefMap a -> Identifier -> Maybe HsSemanticTokenType
+    idSemanticFromRefMap rm' name' = do
       spanInfos <- Map.lookup name' rm'
       let typeTokenType = foldMap (typeSemantic hieKind) $ listToMaybe $ mapMaybe (identType . snd) spanInfos
       contextInfoTokenType <- foldMap (contextInfosMaybeTokenType . identInfo . snd) spanInfos
@@ -59,11 +60,11 @@ nameNameSemanticFromHie hieKind rm ns@(Right _) = do
 
 -------------------------------------------------
 
--- * extract semantic tokens from NameSemanticMap
+-- * extract semantic tokens from IdSemanticMap
 
 -------------------------------------------------
 
-extractSemanticTokensFromNames :: NameSemanticMap -> M.Map Range (Set Identifier) -> M.Map Range HsSemanticTokenType
+extractSemanticTokensFromNames :: IdSemanticMap -> RangeIdSetMap -> M.Map Range HsSemanticTokenType
 extractSemanticTokensFromNames nsm = Map.mapMaybe (foldMap (`M.lookup` nsm))
 
 rangeSemanticMapSemanticTokens :: SemanticTokensConfig -> PositionMapping -> M.Map Range HsSemanticTokenType -> Either Text SemanticTokens
