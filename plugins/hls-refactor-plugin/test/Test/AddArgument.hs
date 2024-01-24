@@ -66,7 +66,7 @@ mkGoldenAddArgTest' testFileName range varName = do
       def
       (mkPluginTestDescriptor Refactor.bindingsPluginDescriptor "ghcide-code-actions-bindings")
       (testFileName <> " (golden)")
-      (FS.mkVirtualFileTree "test/data/golden/add-arg" (FS.directProject $ testFileName <.> "hs"))
+      (FS.mkVirtualFileTree "plugins/hls-refactor-plugin/test/data/golden/add-arg" (FS.directProject $ testFileName <.> "hs"))
       testFileName
       "expected"
       "hs"
