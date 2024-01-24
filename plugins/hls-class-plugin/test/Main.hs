@@ -173,4 +173,4 @@ expectCodeActionsAvailable title path actionTitles =
       expectedActions = Just <$> actionTitles
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-class-plugin" </> "test" </> "testdata"
