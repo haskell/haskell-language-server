@@ -88,10 +88,10 @@ foldAst ast = if null (nodeChildren ast)
 
 visitLeafIds :: HieAST t -> Tokenizer Maybe ()
 visitLeafIds leaf = liftMaybeM $ do
+  let span = nodeSpan leaf
+  -- only handle the leaf node with single column token
+  guard $ srcSpanStartCol span /= srcSpanEndCol span
   (ran, token) <- focusTokenAt leaf
-  -- we do not want to revert `focusTokenAt` on failure of `splitRangeByText`
-  -- since the `focusTokenAt` properly update the state
-  -- todo
   splitResult <-  lift $ splitRangeByText token ran
   modify $ \s -> s {currentRange = ran, currentRangeContext = splitResult}
   mapM_ combineNodeIds $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
@@ -129,8 +129,6 @@ focusTokenAt ::
 focusTokenAt leaf = do
   PTokenState{cursor, rope, columnsInUtf16} <- get
   let span = nodeSpan leaf
-  -- only handle the leaf node with single column token
-  guard $ srcSpanStartCol span /= srcSpanEndCol span
   let (startPos, length) = srcSpanMaybePositionLength span
   let (gap, startRope) = first Rope.toText $ Rope.charSplitAtPosition (startPos `sub` cursor) rope
   (token, remains) <- lift $ charSplitAtMaybe length startRope
