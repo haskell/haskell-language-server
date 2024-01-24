@@ -815,6 +815,40 @@ common pragmas
     build-depends: hls-pragmas-plugin == 2.6.0.0
     cpp-options: -Dhls_pragmas
 
+library hls-pragmas-plugin
+  import: warnings
+  exposed-modules:  Ide.Plugin.Pragmas
+  hs-source-dirs:   plugins/hls-pragmas-plugin/src
+  build-depends:
+    , base                  >=4.12 && <5
+    , extra
+    , fuzzy
+    , ghcide                == 2.6.0.0
+    , hls-plugin-api        == 2.6.0.0
+    , lens
+    , lsp
+    , text
+    , transformers
+    , containers
+  default-language: Haskell2010
+
+test-suite hls-pragmas-plugin-tests
+  import: warnings
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   plugins/hls-pragmas-plugin/test
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    , aeson
+    , base
+    , filepath
+    , hls-pragmas-plugin
+    , hls-test-utils      == 2.6.0.0
+    , lens
+    , lsp-types
+    , text
+
 -----------------------------
 -- splice plugin
 -----------------------------
