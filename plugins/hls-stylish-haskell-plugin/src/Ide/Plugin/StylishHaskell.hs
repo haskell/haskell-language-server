@@ -11,7 +11,8 @@ import           Control.Monad.Except             (throwError)
 import           Control.Monad.IO.Class
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
-import           Development.IDE                  hiding (getExtensions, pluginHandlers)
+import           Development.IDE                  hiding (getExtensions,
+                                                   pluginHandlers)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat       (ModSummary (ms_hspp_opts),
                                                    extensionFlags)
