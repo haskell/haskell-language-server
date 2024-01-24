@@ -20,7 +20,6 @@ packages:
          ./plugins/hls-pragmas-plugin
          ./plugins/hls-module-name-plugin
          ./plugins/hls-ormolu-plugin
-         ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-qualify-imported-names-plugin
          ./plugins/hls-code-range-plugin
          ./plugins/hls-change-type-signature-plugin
