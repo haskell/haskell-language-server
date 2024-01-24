@@ -12,7 +12,6 @@ packages:
          ./plugins/hls-fourmolu-plugin
          ./plugins/hls-floskell-plugin
          ./plugins/hls-ormolu-plugin
-         ./plugins/hls-qualify-imported-names-plugin
          ./plugins/hls-code-range-plugin
          ./plugins/hls-change-type-signature-plugin
          ./plugins/hls-gadt-plugin
