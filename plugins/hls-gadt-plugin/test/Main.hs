@@ -72,4 +72,4 @@ isGADTCodeAction CodeAction{..} = case _kind of
         _                              -> False
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-gadt-plugin" </> "test" </> "testdata"
