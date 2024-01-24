@@ -91,10 +91,10 @@ visitLeafIds leaf = liftMaybeM $ do
   (ran, token) <- focusTokenAt leaf
   -- we do not want to revert `focusTokenAt` on failure of `splitRangeByText`
   -- since the `focusTokenAt` properly update the state
-  liftMaybeM $ do
-    splitResult <-  lift $ splitRangeByText token ran
-    modify $ \s -> s {currentRange = ran, currentRangeContext = splitResult}
-    mapM_ combineNodeIds $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
+  -- todo
+  splitResult <-  lift $ splitRangeByText token ran
+  modify $ \s -> s {currentRange = ran, currentRangeContext = splitResult}
+  mapM_ combineNodeIds $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
   where
     combineNodeIds :: (Monad m) => NodeInfo a -> Tokenizer m ()
     combineNodeIds (NodeInfo _ _ bd) = mapM_ getIdentifier (M.keys bd)
@@ -129,6 +129,8 @@ focusTokenAt ::
 focusTokenAt leaf = do
   PTokenState{cursor, rope, columnsInUtf16} <- get
   let span = nodeSpan leaf
+  -- only handle the leaf node with single column token
+  guard $ srcSpanStartCol span /= srcSpanEndCol span
   let (startPos, length) = srcSpanMaybePositionLength span
   let (gap, startRope) = first Rope.toText $ Rope.charSplitAtPosition (startPos `sub` cursor) rope
   (token, remains) <- lift $ charSplitAtMaybe length startRope
@@ -142,7 +144,7 @@ focusTokenAt leaf = do
     srcSpanMaybePositionLength :: (Integral l) => RealSrcSpan -> (Char.Position, l)
     srcSpanMaybePositionLength real =
         ( realSrcLocRopePosition $ realSrcSpanStart real,
-          fromIntegral $ srcLocCol (realSrcSpanEnd real) - srcLocCol (realSrcSpanStart real)
+          fromIntegral $ srcSpanEndCol real - srcSpanStartCol real
         )
     charSplitAtMaybe :: Word -> Rope -> Maybe (Text, Rope)
     charSplitAtMaybe len rpe = do
