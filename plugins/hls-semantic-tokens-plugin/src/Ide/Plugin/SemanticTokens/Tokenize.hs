@@ -90,7 +90,7 @@ visitLeafIds :: HieAST t -> Tokenizer Maybe ()
 visitLeafIds leaf = liftMaybeM $ do
   let span = nodeSpan leaf
   -- only handle the leaf node with single column token
-  guard $ srcSpanStartCol span /= srcSpanEndCol span
+  guard $ srcSpanStartLine span == srcSpanEndLine span
   (ran, token) <- focusTokenAt leaf
   splitResult <-  lift $ splitRangeByText token ran
   modify $ \s -> s {currentRange = ran, currentRangeContext = splitResult}
