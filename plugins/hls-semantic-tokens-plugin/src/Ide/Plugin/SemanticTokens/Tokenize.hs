@@ -98,7 +98,7 @@ foldAst ast = do
 visitLeafIds :: HieAST t -> Tokenizer Maybe ()
 visitLeafIds leaf = liftMaybeM $ do
   (ran, token) <- focusTokenAt leaf
-  -- we do want to revert `focusTokenAt` on failure of `splitRangeByText`
+  -- we do not want to revert `focusTokenAt` on failure of `splitRangeByText`
   -- since the `focusTokenAt` properly update the state
   liftMaybeM $ do
     splitResult <-  lift $ splitRangeByText token ran
