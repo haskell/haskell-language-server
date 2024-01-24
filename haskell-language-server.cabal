@@ -1310,6 +1310,39 @@ common overloadedRecordDot
     build-depends: hls-overloaded-record-dot-plugin == 2.6.0.0
     cpp-options: -Dhls_overloaded_record_dot
 
+library hls-overloaded-record-dot-plugin
+    import:           warnings
+    exposed-modules:  Ide.Plugin.OverloadedRecordDot
+    build-depends:
+      , base                  >=4.16 && <5
+      , aeson
+      , ghcide
+      , hls-plugin-api
+      , lsp
+      , lens
+      , hls-graph
+      , text
+      , syb
+      , transformers
+      , containers
+      , deepseq
+    hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/src
+    default-language: GHC2021
+
+test-suite hls-overloaded-record-dot-plugin-tests
+    import:           warnings
+    default-language: GHC2021
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/test
+    main-is:          Main.hs
+    build-depends:
+      , base
+      , filepath
+      , text
+      , hls-overloaded-record-dot-plugin
+      , hls-test-utils
+
+
 -----------------------------
 -- floskell plugin
 -----------------------------
