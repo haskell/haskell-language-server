@@ -5,6 +5,7 @@
 
 module Ide.Plugin.SemanticTokens.Tokenize (hieAstSpanIdentifiers) where
 
+import           Control.Arrow                   (first)
 import           Control.Lens                    (Identity (runIdentity))
 import           Control.Monad                   (forM_, guard)
 import           Control.Monad.State             (MonadState (get),
@@ -141,28 +142,27 @@ focusTokenAt leaf = do
   cs <- gets columnsInUtf16
   let span = nodeSpan leaf
   let (startPos, length) = srcSpanMaybePositionLength span
-  let (gap, startRope) = Rope.charSplitAtPosition (startPos `sub` cur) rp
+  let (gap, startRope) = first Rope.toText $ Rope.charSplitAtPosition (startPos `sub` cur) rp
   (token, remains) <- lift $ charSplitAtMaybe length startRope
-  let tokenText = Rope.toText token
-  let ncs = newColumn cs $ Rope.toText gap
-  let nce = newColumn ncs tokenText
+  let ncs = newColumn cs gap
+  let nce = newColumn ncs token
   -- compute the new range for utf16
   let ran = codePointRangeToRangeWith ncs nce $ realSrcSpanToCodePointRange span
   updateColumnsInUtf16 nce
   updateRope remains
   updateCursor $ srcSpanEndCharPosition span
-  return (ran, tokenText)
+  return (ran, token)
   where
     srcSpanMaybePositionLength :: (Integral l) => RealSrcSpan -> (Char.Position, l)
     srcSpanMaybePositionLength real =
         ( realSrcLocRopePosition $ realSrcSpanStart real,
           fromIntegral $ (srcLocCol $ realSrcSpanEnd real) - (srcLocCol $ realSrcSpanStart real)
         )
-    charSplitAtMaybe :: Word -> Rope -> Maybe (Rope, Rope)
+    charSplitAtMaybe :: Word -> Rope -> Maybe (Text, Rope)
     charSplitAtMaybe len rpe = do
       let (prefix, suffix) = Rope.charSplitAt len rpe
       guard $ Rope.charLength prefix == len
-      return (prefix, suffix)
+      return (Rope.toText prefix, suffix)
     sub :: Char.Position -> Char.Position -> Char.Position
     sub (Char.Position l1 c1) (Char.Position l2 c2) =
       if l1 == l2 then Char.Position 0 (c1 - c2) else Char.Position (l1 - l2) c1
