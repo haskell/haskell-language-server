@@ -183,10 +183,6 @@ focusTokenAt leaf = do
 -- for `ModuleA.b`, break it into `ModuleA.` and `b`
 -- for `(b)`, strip `()`, and get `b`
 -- for `(ModuleA.b)`, strip `()` and break it into `ModuleA.` and `b`
--- nameLength get the length of the `b` in code points unit
--- while Range might not be in code points unit.
--- but the comparison is still valid since we only want to know if it is potentially a qualified identifier
--- or an identifier that is wrapped in () or ``
 splitRangeByText :: Text -> Range -> Maybe SplitResult
 splitRangeByText tk ran = do
   let (ran', tk') = case T.uncons tk of
