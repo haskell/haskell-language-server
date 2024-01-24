@@ -23,8 +23,10 @@ extra-source-files:
   test/testdata/**/*.yaml
   test/testdata/**/*.hs
 
-  plugins/**/test/testdata/*.hs
-  plugins/**/test/testdata/*.yaml
+  plugins/**/*.project
+  plugins/**/*.cabal
+  plugins/**/*.yaml
+  plugins/**/*.hs
 
   bindist/wrapper.in
 
