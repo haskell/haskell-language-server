@@ -63,4 +63,4 @@ goldenWithModuleName :: TestName -> FilePath -> (TextDocumentIdentifier -> Sessi
 goldenWithModuleName title path = goldenWithHaskellDoc def moduleNamePlugin title testDataDir path "expected" "hs"
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-module-name-plugin" </> "test" </> "testdata"
