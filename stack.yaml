@@ -18,7 +18,6 @@ packages:
   - ./plugins/hls-gadt-plugin
   - ./plugins/hls-ormolu-plugin
   - ./plugins/hls-overloaded-record-dot-plugin
-  - ./plugins/hls-pragmas-plugin
   - ./plugins/hls-qualify-imported-names-plugin
   - ./plugins/hls-refactor-plugin
   - ./plugins/hls-splice-plugin
