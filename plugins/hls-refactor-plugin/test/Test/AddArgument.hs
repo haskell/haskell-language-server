@@ -12,9 +12,7 @@ import           Data.List.Extra
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types       hiding
-                                                   (SemanticTokenAbsolute (length, line),
-                                                    SemanticTokenRelative (length),
-                                                    SemanticTokensEdit (_start),
+                                                   (SemanticTokensEdit (_start),
                                                     mkRange)
 import           Language.LSP.Test
 import           Test.Tasty
