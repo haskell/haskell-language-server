@@ -141,6 +141,75 @@ common cabal
     build-depends: hls-cabal-plugin == 2.6.0.0
     cpp-options: -Dhls_cabal
 
+library hls-cabal-plugin
+  import:           warnings
+  exposed-modules:
+    Ide.Plugin.Cabal
+    Ide.Plugin.Cabal.Diagnostics
+    Ide.Plugin.Cabal.Completion.Completer.FilePath
+    Ide.Plugin.Cabal.Completion.Completer.Module
+    Ide.Plugin.Cabal.Completion.Completer.Paths
+    Ide.Plugin.Cabal.Completion.Completer.Simple
+    Ide.Plugin.Cabal.Completion.Completer.Snippet
+    Ide.Plugin.Cabal.Completion.Completer.Types
+    Ide.Plugin.Cabal.Completion.Completions
+    Ide.Plugin.Cabal.Completion.Data
+    Ide.Plugin.Cabal.Completion.Types
+    Ide.Plugin.Cabal.LicenseSuggest
+    Ide.Plugin.Cabal.Parse
+
+
+  build-depends:
+    , base                  >=4.12     && <5
+    , bytestring
+    , Cabal-syntax          >= 3.7
+    , containers
+    , deepseq
+    , directory
+    , filepath
+    , extra                 >=1.7.4
+    , ghcide                == 2.6.0.0
+    , hashable
+    , hls-plugin-api        == 2.6.0.0
+    , hls-graph             == 2.6.0.0
+    , lens
+    , lsp                   ^>=2.3
+    , lsp-types             ^>=2.1
+    , regex-tdfa            ^>=1.3.1
+    , stm
+    , text
+    , text-rope
+    , transformers
+    , unordered-containers  >=0.2.10.0
+    , containers
+  hs-source-dirs:   plugins/hls-cabal-plugin/src
+  default-language: Haskell2010
+
+test-suite hls-cabal-plugin-tests
+  import:           warnings
+  default-language: Haskell2010
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-cabal-plugin/test
+  main-is:          Main.hs
+  other-modules:
+    Completer
+    Context
+    Utils
+  build-depends:
+    , base
+    , bytestring
+    , Cabal-syntax          >= 3.7
+    , filepath
+    , hls-cabal-plugin
+    , hls-test-utils    == 2.6.0.0
+    , lens
+    , lsp
+    , lsp-types
+    , text
+    , text-rope
+    , transformers
+    , row-types
+
 -----------------------------
 -- class plugin
 -----------------------------
