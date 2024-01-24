@@ -36,7 +36,6 @@ data PTokenState t = PTokenState
   { rangeIdSetMap       :: RangeIdSetMap,
     rope                :: Rope,
     cursor              :: Char.Position,
-    currentAst          :: HieAST t,
     columnsInUtf16      :: UInt,
     currentRange        :: Range,
     currentRangeContext :: SplitResult
@@ -53,13 +52,12 @@ data SplitResult
 startRange :: Range
 startRange = Range (Position 0 0) (Position 0 0)
 
-mkPTokenState :: VirtualFile -> HieAST a -> PTokenState a
-mkPTokenState vf ast =
+mkPTokenState :: VirtualFile -> PTokenState a
+mkPTokenState vf =
   PTokenState
     { rangeIdSetMap = mempty,
       rope = Rope.fromText $ toText vf._file_text,
       cursor = Char.Position 0 0,
-      currentAst = ast,
       columnsInUtf16 = 0,
       currentRange = startRange,
       currentRangeContext = NoSplit ("", startRange)
@@ -83,22 +81,21 @@ liftMaybeM p = do
   forM_ (execStateT p st) put
 
 hieAstSpanIdentifiers :: VirtualFile -> HieAST a -> RangeIdSetMap
-hieAstSpanIdentifiers vf ast = runIdentity $ runTokenizer foldAst (mkPTokenState vf ast)
+hieAstSpanIdentifiers vf ast = runIdentity $ runTokenizer (foldAst ast) (mkPTokenState vf)
 
 -- | foldAst
 -- visit every leaf node in the ast in depth first order
-foldAst :: (Monad m) => Tokenizer m ()
-foldAst = do
-  ast <- gets currentAst
+foldAst :: (Monad m) => HieAST t -> Tokenizer m ()
+foldAst ast = do
+--   ast <- gets currentAst
   if null (nodeChildren ast)
-    then liftMaybeM visitLeafIds
+    then liftMaybeM (visitLeafIds ast)
     else do
       let children = nodeChildren ast
-      mapM_ (\x -> (modify $ \s -> s {currentAst = x}) >> foldAst) children
+      mapM_ foldAst children
 
-visitLeafIds :: Tokenizer Maybe ()
-visitLeafIds = liftMaybeM $ do
-  leaf <- gets currentAst
+visitLeafIds :: HieAST t -> Tokenizer Maybe ()
+visitLeafIds leaf = liftMaybeM $ do
   (ran, token) <- focusTokenAt leaf
   splitResult <- lift $ splitRangeByText token ran
   modify $ \s -> s {currentRange = ran, currentRangeContext = splitResult}
@@ -139,7 +136,7 @@ focusTokenAt leaf = do
   cur <- gets cursor
   cs <- gets columnsInUtf16
   let span = nodeSpan leaf
-  (startPos, length) <- lift $ srcSpanMaybePositionLength span
+  let (startPos, length) = srcSpanMaybePositionLength span
   let (gap, startRope) = Rope.charSplitAtPosition (startPos `sub` cur) rp
   (token, remains) <- lift $ charSplitAtMaybe length startRope
   let tokenText = Rope.toText token
@@ -152,9 +149,8 @@ focusTokenAt leaf = do
   updateCursor $ srcSpanEndCharPosition span
   return (ran, tokenText)
   where
-    srcSpanMaybePositionLength :: (Integral l) => RealSrcSpan -> Maybe (Char.Position, l)
+    srcSpanMaybePositionLength :: (Integral l) => RealSrcSpan -> (Char.Position, l)
     srcSpanMaybePositionLength real =
-      return
         ( realSrcLocRopePosition $ realSrcSpanStart real,
           fromIntegral $ (srcLocCol $ realSrcSpanEnd real) - (srcLocCol $ realSrcSpanStart real)
         )
