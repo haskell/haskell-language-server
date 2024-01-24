@@ -121,7 +121,7 @@ suggestionsTests =
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo x = x\n"
 
-    , testCase "falls back to pre 3.8 code actions" $ runSessionWithServerAndCaps def hlintPlugin noLiteralCaps "test/testdata" $ do
+    , testCase "falls back to pre 3.8 code actions" $ runSessionWithServerAndCaps def hlintPlugin noLiteralCaps testDir $ do
         doc <- openDoc "Base.hs" "haskell"
 
         _ <- waitForDiagnosticsFromSource doc "hlint"
@@ -337,7 +337,7 @@ configTests = testGroup "hlint plugin config" [
     ]
 
 testDir :: FilePath
-testDir = "test/testdata"
+testDir = "plugins/hls-hlint-plugin/test/testdata"
 
 runHlintSession :: FilePath -> Session a -> IO a
 runHlintSession subdir = failIfSessionTimeout . runSessionWithServerAndCaps def hlintPlugin codeActionNoResolveCaps (testDir </> subdir)

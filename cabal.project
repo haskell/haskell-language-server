@@ -10,7 +10,6 @@ packages:
          ./hls-test-utils
          ./plugins/hls-stylish-haskell-plugin
          ./plugins/hls-fourmolu-plugin
-         ./plugins/hls-hlint-plugin
          ./plugins/hls-splice-plugin
          ./plugins/hls-floskell-plugin
          ./plugins/hls-pragmas-plugin
