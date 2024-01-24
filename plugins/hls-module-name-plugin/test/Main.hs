@@ -55,7 +55,6 @@ tests =
         let edit = TextEdit (mkRange 1 0 1 0) "f ="
         _ <- applyEdit doc edit
         newLens <- getCodeLenses doc
-        txt <- documentContents doc
         liftIO $ newLens @?= oldLens
         closeDoc doc
   ]
