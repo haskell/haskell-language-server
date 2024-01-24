@@ -94,9 +94,10 @@ foldAst ast = do
 visitLeafIds :: HieAST t -> Tokenizer Maybe ()
 visitLeafIds leaf = liftMaybeM $ do
   (ran, token) <- focusTokenAt leaf
-  splitResult <- lift $ splitRangeByText token ran
-  modify $ \s -> s {currentRange = ran, currentRangeContext = splitResult}
-  mapM_ combineNodeIds $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
+  liftMaybeM $ do
+    splitResult <-  lift $ splitRangeByText token ran
+    modify $ \s -> s {currentRange = ran, currentRangeContext = splitResult}
+    mapM_ combineNodeIds $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
   where
     combineNodeIds :: (Monad m) => NodeInfo a -> Tokenizer m ()
     combineNodeIds (NodeInfo _ _ bd) = mapM_ getIdentifier (M.keys bd)
