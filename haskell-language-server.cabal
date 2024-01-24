@@ -1261,6 +1261,41 @@ common explicitFields
     build-depends: hls-explicit-record-fields-plugin == 2.6.0.0
     cpp-options: -DexplicitFields
 
+library hls-explicit-record-fields-plugin
+    import:           warnings
+    exposed-modules:  Ide.Plugin.ExplicitFields
+    build-depends:
+      , base                  >=4.12 && <5
+      , ghcide                == 2.6.0.0
+      , hls-plugin-api        == 2.6.0.0
+      , lsp
+      , lens
+      , hls-graph
+      , text
+      , syb
+      , transformers
+      , containers
+      , aeson
+    hs-source-dirs:   plugins/hls-explicit-record-fields-plugin/src
+    default-language: Haskell2010
+
+  if flag(pedantic)
+    ghc-options: -Werror
+                 -Wwarn=incomplete-record-updates
+    
+test-suite hls-explicit-record-fields-plugin-tests
+    import:           warnings
+    default-language: Haskell2010
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   plugins/hls-explicit-record-fields-plugin/test
+    main-is:          Main.hs
+    build-depends:
+      , base
+      , filepath
+      , text
+      , hls-explicit-record-fields-plugin
+      , hls-test-utils
+
 -----------------------------
 -- overloaded record dot plugin
 -----------------------------
