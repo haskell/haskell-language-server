@@ -1,4 +1,5 @@
-{-# LANGUAGE DeriveFunctor       #-}
+
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
@@ -14,7 +15,6 @@ import           Control.Monad.State             (MonadState (get),
 import           Control.Monad.Trans.State       (StateT)
 import qualified Data.Map                        as M
 import qualified Data.Map                        as Map
-import           Data.Set                        (Set)
 import qualified Data.Set                        as S
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
@@ -65,17 +65,8 @@ mkPTokenState vf =
       currentRangeContext = NoSplit ("", startRange)
     }
 
-updateCursor :: (Monad m) => Char.Position -> Tokenizer m ()
-updateCursor pos = modify $ \s -> s {cursor = pos}
-
-updateRope :: (Monad m) => Rope -> Tokenizer m ()
-updateRope r = modify $ \s -> s {rope = r}
-
 addRangeIdSetMap :: (Monad m) => Range -> Identifier -> Tokenizer m ()
 addRangeIdSetMap r i = modify $ \s -> s {rangeIdSetMap = Map.insertWith (<>) r (S.singleton i) $ rangeIdSetMap s}
-
-updateColumnsInUtf16 :: (Monad m) => UInt -> Tokenizer m ()
-updateColumnsInUtf16 n = modify $ \s -> s {columnsInUtf16 = n}
 
 -- lift a Tokenizer Maybe () to Tokenizer m (),
 -- if the Maybe is Nothing, do nothing, recover the state
@@ -91,10 +82,9 @@ hieAstSpanIdentifiers vf ast = runIdentity $ runTokenizer (foldAst ast) (mkPToke
 -- | foldAst
 -- visit every leaf node in the ast in depth first order
 foldAst :: (Monad m) => HieAST t -> Tokenizer m ()
-foldAst ast = do
-  if null (nodeChildren ast)
-    then liftMaybeM (visitLeafIds ast)
-    else mapM_ foldAst $ nodeChildren ast
+foldAst ast = if null (nodeChildren ast)
+  then liftMaybeM (visitLeafIds ast)
+  else mapM_ foldAst $ nodeChildren ast
 
 visitLeafIds :: HieAST t -> Tokenizer Maybe ()
 visitLeafIds leaf = liftMaybeM $ do
@@ -137,26 +127,22 @@ focusTokenAt ::
   -- | (token, remains)
   Tokenizer Maybe (Range, Text)
 focusTokenAt leaf = do
-  rp <- gets rope
-  cur <- gets cursor
-  cs <- gets columnsInUtf16
+  PTokenState{cursor, rope, columnsInUtf16} <- get
   let span = nodeSpan leaf
   let (startPos, length) = srcSpanMaybePositionLength span
-  let (gap, startRope) = first Rope.toText $ Rope.charSplitAtPosition (startPos `sub` cur) rp
+  let (gap, startRope) = first Rope.toText $ Rope.charSplitAtPosition (startPos `sub` cursor) rope
   (token, remains) <- lift $ charSplitAtMaybe length startRope
-  let ncs = newColumn cs gap
+  let ncs = newColumn columnsInUtf16 gap
   let nce = newColumn ncs token
   -- compute the new range for utf16
   let ran = codePointRangeToRangeWith ncs nce $ realSrcSpanToCodePointRange span
-  updateColumnsInUtf16 nce
-  updateRope remains
-  updateCursor $ realSrcLocRopePosition $ realSrcSpanEnd span
+  modify $ \s -> s {columnsInUtf16 = nce, rope = remains, cursor = realSrcLocRopePosition (realSrcSpanEnd span)}
   return (ran, token)
   where
     srcSpanMaybePositionLength :: (Integral l) => RealSrcSpan -> (Char.Position, l)
     srcSpanMaybePositionLength real =
         ( realSrcLocRopePosition $ realSrcSpanStart real,
-          fromIntegral $ (srcLocCol $ realSrcSpanEnd real) - (srcLocCol $ realSrcSpanStart real)
+          fromIntegral $ srcLocCol (realSrcSpanEnd real) - srcLocCol (realSrcSpanStart real)
         )
     charSplitAtMaybe :: Word -> Rope -> Maybe (Text, Rope)
     charSplitAtMaybe len rpe = do
