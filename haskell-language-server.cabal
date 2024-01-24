@@ -393,7 +393,7 @@ library hls-eval-plugin
     , unordered-containers
 
   if flag(pedantic)
-    ghc-options: -Werror
+    ghc-options: -Werror -Wwarn=redundant-constraints
 
   default-language:   Haskell2010
   default-extensions:
