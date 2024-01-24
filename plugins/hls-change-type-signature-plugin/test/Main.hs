@@ -88,7 +88,7 @@ testRegex921One = testGroup "Regex One" [
         regex = errorMessageRegexes !! 2
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-change-type-signature-plugin" </> "test" </> "testdata"
 
 goldenChangeSignature :: FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenChangeSignature fp = goldenWithHaskellDoc def changeTypeSignaturePlugin (fp <> " (golden)") testDataDir fp "expected" "hs"

@@ -12,7 +12,6 @@ packages:
          ./plugins/hls-fourmolu-plugin
          ./plugins/hls-floskell-plugin
          ./plugins/hls-ormolu-plugin
-         ./plugins/hls-change-type-signature-plugin
          ./plugins/hls-gadt-plugin
          ./plugins/hls-explicit-fixity-plugin
          ./plugins/hls-explicit-record-fields-plugin
