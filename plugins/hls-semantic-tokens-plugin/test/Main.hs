@@ -48,7 +48,7 @@ import qualified Test.Hls.FileSystem                as FS
 import           Test.Hls.FileSystem                (file, text)
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-semantic-tokens-plugin" </> "test" </> "testdata"
 
 mkFs :: [FS.FileTree] -> FS.VirtualFileTree
 mkFs = FS.mkVirtualFileTree testDataDir
