@@ -8,7 +8,6 @@ packages:
          ./ghcide/test
          ./hls-plugin-api
          ./hls-test-utils
-         ./plugins/hls-stylish-haskell-plugin
          ./plugins/hls-refactor-plugin
          ./plugins/hls-semantic-tokens-plugin
 

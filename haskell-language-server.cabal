@@ -1505,6 +1505,37 @@ common stylishHaskell
     build-depends: hls-stylish-haskell-plugin == 2.6.0.0
     cpp-options: -Dhls_stylishHaskell
 
+library hls-stylish-haskell-plugin
+  import: warnings
+  exposed-modules:  Ide.Plugin.StylishHaskell
+  hs-source-dirs:   plugins/hls-stylish-haskell-plugin/src
+  build-depends:
+    , base             >=4.12 && <5
+    , directory
+    , filepath
+    , ghc-boot-th
+    , ghcide           == 2.6.0.0
+    , hls-plugin-api   == 2.6.0.0
+    , lsp-types
+    , mtl
+    , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14.2
+    , text
+
+  default-language: Haskell2010
+
+test-suite hls-stylish-haskell-plugin-tests
+  import: warnings
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   plugins/hls-stylish-haskell-plugin/test
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    , base
+    , filepath
+    , hls-stylish-haskell-plugin
+    , hls-test-utils              == 2.6.0.0
+
 -----------------------------
 -- refactor plugin
 -----------------------------
