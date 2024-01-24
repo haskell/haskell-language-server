@@ -150,7 +150,7 @@ focusTokenAt leaf = do
   let ran = codePointRangeToRangeWith ncs nce $ realSrcSpanToCodePointRange span
   updateColumnsInUtf16 nce
   updateRope remains
-  updateCursor $ srcSpanEndCharPosition span
+  updateCursor $ realSrcLocRopePosition $ realSrcSpanEnd span
   return (ran, token)
   where
     srcSpanMaybePositionLength :: (Integral l) => RealSrcSpan -> (Char.Position, l)
@@ -168,8 +168,6 @@ focusTokenAt leaf = do
       if l1 == l2 then Char.Position 0 (c1 - c2) else Char.Position (l1 - l2) c1
     realSrcLocRopePosition :: RealSrcLoc -> Char.Position
     realSrcLocRopePosition real = Char.Position (fromIntegral $ srcLocLine real - 1) (fromIntegral $ srcLocCol real - 1)
-    srcSpanEndCharPosition :: RealSrcSpan -> Char.Position
-    srcSpanEndCharPosition real = realSrcLocRopePosition $ realSrcSpanEnd real
     newColumn :: UInt -> Text -> UInt
     newColumn n rp = case T.breakOnEnd "\n" rp of
       ("", nEnd) -> n + utf16Length nEnd
