@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TypeOperators     #-}
 {-# LANGUAGE ViewPatterns      #-}
 
 {-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults #-}
@@ -133,7 +132,7 @@ action recorder state uri = do
         | emptyModule ->
             let code = "module " <> bestName <> " where\n"
             in pure [Replace uri (Range (Position 0 0) (Position 0 0)) code code]
-      _ -> pure $ []
+      _ -> pure []
 
 -- | Possible module names, as derived by the position of the module in the
 -- source directories.  There may be more than one possible name, if the source
