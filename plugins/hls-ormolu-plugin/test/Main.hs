@@ -40,4 +40,4 @@ goldenWithOrmolu cli title path desc =
   conf = def{plcConfig = KM.fromList ["external" .= cli]}
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-ormolu-plugin" </> "test" </> "testdata"
