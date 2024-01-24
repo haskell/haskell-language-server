@@ -87,12 +87,9 @@ hieAstSpanIdentifiers vf ast = runIdentity $ runTokenizer (foldAst ast) (mkPToke
 -- visit every leaf node in the ast in depth first order
 foldAst :: (Monad m) => HieAST t -> Tokenizer m ()
 foldAst ast = do
---   ast <- gets currentAst
   if null (nodeChildren ast)
     then liftMaybeM (visitLeafIds ast)
-    else do
-      let children = nodeChildren ast
-      mapM_ foldAst children
+    else mapM_ foldAst $ nodeChildren ast
 
 visitLeafIds :: HieAST t -> Tokenizer Maybe ()
 visitLeafIds leaf = liftMaybeM $ do
