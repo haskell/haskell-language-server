@@ -136,113 +136,113 @@ jobs:
         run: cabal test wrapper-test --test-options="$TEST_OPTS --rerun-log-file .tasty-rerun-log-wrapper"
 
       - if: matrix.test
-        name: Test hls-refactor-plugin
-        run: cabal test hls-refactor-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-refactor-plugin-tests --test-options="$TEST_OPTS"
+        name: Test refactor-plugin
+        run: cabal test refactor-plugin-tests --test-options="$TEST_OPTS" || cabal test refactor-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test 
-        name: Test hls-floskell-plugin
-        run: cabal test hls-floskell-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-floskell-plugin-tests --test-options="$TEST_OPTS"
+        name: Test floskell-plugin
+        run: cabal test floskell-plugin-tests --test-options="$TEST_OPTS" || cabal test floskell-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-class-plugin
-        run: cabal test hls-class-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-class-plugin-tests --test-options="$TEST_OPTS"
+        name: Test class-plugin
+        run: cabal test class-plugin-tests --test-options="$TEST_OPTS" || cabal test class-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-pragmas-plugin
-        run: cabal test hls-pragmas-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-pragmas-plugin-tests --test-options="$TEST_OPTS"
+        name: Test pragmas-plugin
+        run: cabal test pragmas-plugin-tests --test-options="$TEST_OPTS" || cabal test pragmas-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-eval-plugin
-        run: cabal test hls-eval-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-eval-plugin-tests --test-options="$TEST_OPTS"
+        name: Test eval-plugin
+        run: cabal test eval-plugin-tests --test-options="$TEST_OPTS" || cabal test eval-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-splice-plugin
-        run: cabal test hls-splice-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-splice-plugin-tests --test-options="$TEST_OPTS"
+        name: Test splice-plugin
+        run: cabal test splice-plugin-tests --test-options="$TEST_OPTS" || cabal test splice-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test && matrix.ghc != '9.2'
-        name: Test hls-stan-plugin
-        run: cabal test hls-stan-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-stan-plugin-tests --test-options="$TEST_OPTS"
+        name: Test stan-plugin
+        run: cabal test stan-plugin-tests --test-options="$TEST_OPTS" || cabal test stan-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-stylish-haskell-plugin
-        run: cabal test hls-stylish-haskell-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-stylish-haskell-plugin-tests --test-options="$TEST_OPTS"
+        name: Test stylish-haskell-plugin
+        run: cabal test stylish-haskell-plugin-tests --test-options="$TEST_OPTS" || cabal test stylish-haskell-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test 
-        name: Test hls-ormolu-plugin
-        run: cabal test hls-ormolu-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-ormolu-plugin-tests --test-options="$TEST_OPTS"
+        name: Test ormolu-plugin
+        run: cabal test ormolu-plugin-tests --test-options="$TEST_OPTS" || cabal test ormolu-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test 
-        name: Test hls-fourmolu-plugin
-        run: cabal test hls-fourmolu-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-fourmolu-plugin-tests --test-options="$TEST_OPTS"
+        name: Test fourmolu-plugin
+        run: cabal test fourmolu-plugin-tests --test-options="$TEST_OPTS" || cabal test fourmolu-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-explicit-imports-plugin test suite
-        run: cabal test hls-explicit-imports-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-explicit-imports-plugin-tests --test-options="$TEST_OPTS"
+        name: Test explicit-imports-plugin test suite
+        run: cabal test explicit-imports-plugin-tests --test-options="$TEST_OPTS" || cabal test explicit-imports-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-call-hierarchy-plugin test suite
-        run: cabal test hls-call-hierarchy-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-call-hierarchy-plugin-tests --test-options="$TEST_OPTS"
+        name: Test call-hierarchy-plugin test suite
+        run: cabal test call-hierarchy-plugin-tests --test-options="$TEST_OPTS" || cabal test call-hierarchy-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test && matrix.os != 'windows-latest'
-        name: Test hls-rename-plugin test suite
-        run: cabal test hls-rename-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-rename-plugin-tests --test-options="$TEST_OPTS"
+        name: Test rename-plugin test suite
+        run: cabal test rename-plugin-tests --test-options="$TEST_OPTS" || cabal test rename-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test 
-        name: Test hls-hlint-plugin test suite
-        run: cabal test hls-hlint-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-hlint-plugin-tests --test-options="$TEST_OPTS"
+        name: Test hlint-plugin test suite
+        run: cabal test hlint-plugin-tests --test-options="$TEST_OPTS" || cabal test hlint-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-module-name-plugin test suite
-        run: cabal test hls-module-name-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-module-name-plugin-tests --test-options="$TEST_OPTS"
+        name: Test module-name-plugin test suite
+        run: cabal test module-name-plugin-tests --test-options="$TEST_OPTS" || cabal test module-name-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-alternate-number-format-plugin test suite
-        run: cabal test hls-alternate-number-format-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-alternate-number-format-plugin-tests --test-options="$TEST_OPTS"
+        name: Test alternate-number-format-plugin test suite
+        run: cabal test alternate-number-format-plugin-tests --test-options="$TEST_OPTS" || cabal test alternate-number-format-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
         name: Test qualify-imported-names-plugin test suite
         run: cabal test qualify-imported-names-plugin-tests --test-options="$TEST_OPTS" || cabal test qualify-imported-names-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-code-range-plugin test suite
-        run: cabal test hls-code-range-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-code-range-plugin-tests --test-options="$TEST_OPTS"
+        name: Test code-range-plugin test suite
+        run: cabal test code-range-plugin-tests --test-options="$TEST_OPTS" || cabal test code-range-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-change-type-signature test suite
-        run: cabal test hls-change-type-signature-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-change-type-signature-plugin-tests --test-options="$TEST_OPTS"
+        name: Test change-type-signature test suite
+        run: cabal test change-type-signature-plugin-tests --test-options="$TEST_OPTS" || cabal test change-type-signature-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-gadt-plugin test suit
-        run: cabal test hls-gadt-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-gadt-plugin-tests --test-options="$TEST_OPTS"
+        name: Test gadt-plugin test suit
+        run: cabal test gadt-plugin-tests --test-options="$TEST_OPTS" || cabal test gadt-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-explicit-fixity-plugin test suite
-        run: cabal test hls-explicit-fixity-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-explicit-fixity-plugin-tests --test-options="$TEST_OPTS"
+        name: Test explicit-fixity-plugin test suite
+        run: cabal test explicit-fixity-plugin-tests --test-options="$TEST_OPTS" || cabal test explicit-fixity-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-explicit-record-fields-plugin test suite
-        run: cabal test hls-explicit-record-fields-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-explicit-record-fields-plugin-tests --test-options="$TEST_OPTS"
+        name: Test explicit-record-fields-plugin test suite
+        run: cabal test explicit-record-fields-plugin-tests --test-options="$TEST_OPTS" || cabal test explicit-record-fields-plugin-tests --test-options="$TEST_OPTS"
 
       ## version needs to be limited since the tests depend on cabal-fmt which only builds using specific ghc versions
       - if: matrix.test && matrix.ghc == '9.2'
-        name: Test hls-cabal-fmt-plugin test suite
-        run: cabal test hls-cabal-fmt-plugin-tests --flag=isolateTests --test-options="$TEST_OPTS" || cabal test hls-cabal-fmt-plugin-tests --flag=isolateTests --test-options="$TEST_OPTS"
+        name: Test cabal-fmt-plugin test suite
+        run: cabal test cabal-fmt-plugin-tests --flag=isolateTests --test-options="$TEST_OPTS" || cabal test cabal-fmt-plugin-tests --flag=isolateTests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-cabal-plugin test suite
-        run: cabal test hls-cabal-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-cabal-plugin-tests --test-options="$TEST_OPTS"
+        name: Test cabal-plugin test suite
+        run: cabal test cabal-plugin-tests --test-options="$TEST_OPTS" || cabal test cabal-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-retrie-plugin test suite
-        run: cabal test hls-retrie-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-retrie-plugin-tests --test-options="$TEST_OPTS"
+        name: Test retrie-plugin test suite
+        run: cabal test retrie-plugin-tests --test-options="$TEST_OPTS" || cabal test retrie-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-overloaded-record-dot-plugin test suite
-        run: cabal test hls-overloaded-record-dot-plugin-tests --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-overloaded-record-dot-plugin-tests --test-options="$TEST_OPTS"
+        name: Test overloaded-record-dot-plugin test suite
+        run: cabal test overloaded-record-dot-plugin-tests --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test overloaded-record-dot-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-semantic-tokens-plugin test suite
-        run: cabal test hls-semantic-tokens-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-semantic-tokens-plugin-tests --test-options="$TEST_OPTS"
+        name: Test semantic-tokens-plugin test suite
+        run: cabal test semantic-tokens-plugin-tests --test-options="$TEST_OPTS" || cabal test semantic-tokens-plugin-tests --test-options="$TEST_OPTS"
 
 
   test_post_job:

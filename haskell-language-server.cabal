@@ -85,7 +85,7 @@ flag cabalfmt
 
 common cabalfmt
   if flag(cabalfmt)
-    build-depends: hls-cabal-fmt-plugin
+    build-depends: cabal-fmt-plugin
     cpp-options: -Dhls_cabalfmt
 
 flag isolateCabalfmtTests
@@ -94,7 +94,7 @@ flag isolateCabalfmtTests
   default:     False
   manual:      True
 
-library hls-cabal-fmt-plugin
+library cabal-fmt-plugin
   import:           warnings
   exposed-modules:  Ide.Plugin.CabalFmt
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/src
@@ -112,7 +112,7 @@ library hls-cabal-fmt-plugin
 
   default-language: Haskell2010
 
-test-suite hls-cabal-fmt-plugin-tests
+test-suite cabal-fmt-plugin-tests
   import:             warnings
   type:               exitcode-stdio-1.0
   default-language:   Haskell2010
@@ -123,7 +123,7 @@ test-suite hls-cabal-fmt-plugin-tests
     , base
     , directory
     , filepath
-    , hls-cabal-fmt-plugin
+    , cabal-fmt-plugin
     , hls-test-utils        == 2.6.0.0
 
   if flag(isolateCabalfmtTests)
@@ -140,10 +140,10 @@ flag cabal
 
 common cabal
   if flag(cabal)
-    build-depends: hls-cabal-plugin 
+    build-depends: cabal-plugin 
     cpp-options: -Dhls_cabal
 
-library hls-cabal-plugin
+library cabal-plugin
   import:           warnings
   exposed-modules:
     Ide.Plugin.Cabal
@@ -187,7 +187,7 @@ library hls-cabal-plugin
   hs-source-dirs:   plugins/hls-cabal-plugin/src
   default-language: Haskell2010
 
-test-suite hls-cabal-plugin-tests
+test-suite cabal-plugin-tests
   import:           warnings
   default-language: Haskell2010
   type:             exitcode-stdio-1.0
@@ -202,7 +202,7 @@ test-suite hls-cabal-plugin-tests
     , bytestring
     , Cabal-syntax          >= 3.7
     , filepath
-    , hls-cabal-plugin
+    , cabal-plugin
     , hls-test-utils    == 2.6.0.0
     , lens
     , lsp
@@ -223,10 +223,10 @@ flag class
 
 common class
   if flag(class)
-    build-depends: hls-class-plugin 
+    build-depends: class-plugin 
     cpp-options: -Dhls_class
 
-library hls-class-plugin
+library class-plugin
   import: warnings
   exposed-modules:    Ide.Plugin.Class
   other-modules:      Ide.Plugin.Class.CodeAction
@@ -258,7 +258,7 @@ library hls-class-plugin
     TypeOperators
     OverloadedStrings
 
-test-suite hls-class-plugin-tests
+test-suite class-plugin-tests
   import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -269,7 +269,7 @@ test-suite hls-class-plugin-tests
     , base
     , filepath
     , ghcide
-    , hls-class-plugin
+    , class-plugin
     , hls-test-utils     == 2.6.0.0
     , lens
     , lsp-types
@@ -287,10 +287,10 @@ flag callHierarchy
 
 common callHierarchy
   if flag(callHierarchy)
-    build-depends: hls-call-hierarchy-plugin 
+    build-depends: call-hierarchy-plugin 
     cpp-options: -Dhls_callHierarchy
 
-library hls-call-hierarchy-plugin
+library call-hierarchy-plugin
   import: warnings
   buildable: True
   exposed-modules:    Ide.Plugin.CallHierarchy
@@ -316,7 +316,7 @@ library hls-call-hierarchy-plugin
   default-language:   Haskell2010
   default-extensions: DataKinds
 
-test-suite hls-call-hierarchy-plugin-tests
+test-suite call-hierarchy-plugin-tests
   import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -329,7 +329,7 @@ test-suite hls-call-hierarchy-plugin-tests
     , containers
     , extra
     , filepath
-    , hls-call-hierarchy-plugin
+    , call-hierarchy-plugin
     , hls-test-utils              == 2.6.0.0
     , ghcide-test-utils
     , lens
@@ -348,10 +348,10 @@ flag eval
 
 common eval
   if flag(eval)
-    build-depends: hls-eval-plugin 
+    build-depends: eval-plugin 
     cpp-options: -Dhls_eval
 
-library hls-eval-plugin
+library eval-plugin
   import: warnings
   exposed-modules:
     Ide.Plugin.Eval
@@ -402,7 +402,7 @@ library hls-eval-plugin
     DataKinds
     TypeOperators
 
-test-suite hls-eval-plugin-tests
+test-suite eval-plugin-tests
   import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -415,7 +415,7 @@ test-suite hls-eval-plugin-tests
     , containers
     , extra
     , filepath
-    , hls-eval-plugin
+    , eval-plugin
     , hls-plugin-api
     , hls-test-utils   == 2.6.0.0
     , lens
@@ -429,7 +429,7 @@ test-suite hls-eval-plugin-tests
 
 common importLens
   if flag(importLens)
-    build-depends: hls-explicit-imports-plugin 
+    build-depends: explicit-imports-plugin 
     cpp-options: -Dhls_importLens
 
 flag importLens
@@ -437,7 +437,7 @@ flag importLens
   default:     True
   manual:      True
 
-library hls-explicit-imports-plugin
+library explicit-imports-plugin
   import:           warnings
   exposed-modules:    Ide.Plugin.ExplicitImports
   hs-source-dirs:     plugins/hls-explicit-imports-plugin/src
@@ -465,7 +465,7 @@ library hls-explicit-imports-plugin
   if flag(pedantic)
     ghc-options: -Werror
 
-test-suite hls-explicit-imports-plugin-tests
+test-suite explicit-imports-plugin-tests
   import:           warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -476,7 +476,7 @@ test-suite hls-explicit-imports-plugin-tests
     , base
     , extra
     , filepath
-    , hls-explicit-imports-plugin
+    , explicit-imports-plugin
     , hls-test-utils
     , lens
     , lsp-types
@@ -494,10 +494,10 @@ flag rename
 
 common rename
   if flag(rename)
-    build-depends: hls-rename-plugin 
+    build-depends: rename-plugin 
     cpp-options: -Dhls_rename
 
-library hls-rename-plugin
+library rename-plugin
   exposed-modules:  Ide.Plugin.Rename
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
@@ -511,7 +511,7 @@ library hls-rename-plugin
     , hiedb
     , hie-compat
     , hls-plugin-api        == 2.6.0.0
-    , hls-refactor-plugin
+    , refactor-plugin
     , lens
     , lsp
     , lsp-types
@@ -524,7 +524,7 @@ library hls-rename-plugin
 
   default-language: Haskell2010
 
-test-suite hls-rename-plugin-tests
+test-suite rename-plugin-tests
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   plugins/hls-rename-plugin/test
@@ -536,7 +536,7 @@ test-suite hls-rename-plugin-tests
     , containers
     , filepath
     , hls-plugin-api
-    , hls-rename-plugin
+    , rename-plugin
     , hls-test-utils             == 2.6.0.0
 
 -----------------------------
@@ -550,10 +550,10 @@ flag retrie
 
 common retrie
   if flag(retrie)
-    build-depends: hls-retrie-plugin 
+    build-depends: retrie-plugin 
     cpp-options: -Dhls_retrie
 
-library hls-retrie-plugin
+library retrie-plugin
   exposed-modules:    Ide.Plugin.Retrie
   hs-source-dirs:     plugins/hls-retrie-plugin/src
   build-depends:
@@ -568,7 +568,7 @@ library hls-retrie-plugin
     , ghcide                == 2.6.0.0
     , hashable
     , hls-plugin-api        == 2.6.0.0
-    , hls-refactor-plugin
+    , refactor-plugin
     , lens
     , lsp
     , lsp-types
@@ -587,7 +587,7 @@ library hls-retrie-plugin
 
   ghc-options:        -Wno-unticked-promoted-constructors
 
-test-suite hls-retrie-plugin-tests
+test-suite retrie-plugin-tests
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   plugins/hls-retrie-plugin/test
@@ -599,8 +599,8 @@ test-suite hls-retrie-plugin-tests
     , containers
     , filepath
     , hls-plugin-api
-    , hls-refactor-plugin
-    , hls-retrie-plugin
+    , refactor-plugin
+    , retrie-plugin
     , hls-test-utils             == 2.6.0.0
     , text
 
@@ -615,10 +615,10 @@ flag hlint
 
 common hlint
   if flag(hlint) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-hlint-plugin 
+    build-depends: hlint-plugin 
     cpp-options: -Dhls_hlint
 
-library hls-hlint-plugin
+library hlint-plugin
   exposed-modules:    Ide.Plugin.Hlint
   hs-source-dirs:     plugins/hls-hlint-plugin/src
   build-depends:
@@ -665,7 +665,7 @@ library hls-hlint-plugin
     DataKinds
     TypeOperators
 
-test-suite hls-hlint-plugin-tests
+test-suite hlint-plugin-tests
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   plugins/hls-hlint-plugin/test
@@ -676,7 +676,7 @@ test-suite hls-hlint-plugin-tests
     , base
     , containers
     , filepath
-    , hls-hlint-plugin
+    , hlint-plugin
     , hls-plugin-api
     , hls-test-utils      == 2.6.0.0
     , lens
@@ -695,10 +695,10 @@ flag stan
 
 common stan
   if flag(stan) && (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
-    build-depends: hls-stan-plugin 
+    build-depends: stan-plugin 
     cpp-options: -Dhls_stan
 
-library hls-stan-plugin
+library stan-plugin
   if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
     buildable: True
   else
@@ -733,7 +733,7 @@ library hls-stan-plugin
     DuplicateRecordFields
     OverloadedStrings
 
-test-suite hls-stan-plugin-tests
+test-suite stan-plugin-tests
   if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
     buildable: True
   else
@@ -748,7 +748,7 @@ test-suite hls-stan-plugin-tests
     , base
     , containers
     , filepath
-    , hls-stan-plugin
+    , stan-plugin
     , hls-plugin-api
     , hls-test-utils      == 2.6.0.0
     , lens
@@ -769,10 +769,10 @@ flag moduleName
 
 common moduleName
   if flag(moduleName)
-    build-depends: hls-module-name-plugin 
+    build-depends: module-name-plugin 
     cpp-options: -Dhls_moduleName
 
-library hls-module-name-plugin
+library module-name-plugin
   import: warnings
   exposed-modules:  Ide.Plugin.ModuleName
   hs-source-dirs:   plugins/hls-module-name-plugin/src
@@ -790,7 +790,7 @@ library hls-module-name-plugin
 
   default-language: Haskell2010
 
-test-suite hls-module-name-plugin-tests
+test-suite module-name-plugin-tests
   import:           warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -800,7 +800,7 @@ test-suite hls-module-name-plugin-tests
   build-depends:
     , base
     , filepath
-    , hls-module-name-plugin
+    , module-name-plugin
     , hls-test-utils          == 2.6.0.0
 
 -----------------------------
@@ -814,10 +814,10 @@ flag pragmas
 
 common pragmas
   if flag(pragmas)
-    build-depends: hls-pragmas-plugin 
+    build-depends: pragmas-plugin 
     cpp-options: -Dhls_pragmas
 
-library hls-pragmas-plugin
+library pragmas-plugin
   import: warnings
   exposed-modules:  Ide.Plugin.Pragmas
   hs-source-dirs:   plugins/hls-pragmas-plugin/src
@@ -834,7 +834,7 @@ library hls-pragmas-plugin
     , containers
   default-language: Haskell2010
 
-test-suite hls-pragmas-plugin-tests
+test-suite pragmas-plugin-tests
   import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -845,7 +845,7 @@ test-suite hls-pragmas-plugin-tests
     , aeson
     , base
     , filepath
-    , hls-pragmas-plugin
+    , pragmas-plugin
     , hls-test-utils      == 2.6.0.0
     , lens
     , lsp-types
@@ -862,10 +862,10 @@ flag splice
 
 common splice
   if flag(splice)
-    build-depends: hls-splice-plugin 
+    build-depends: splice-plugin 
     cpp-options: -Dhls_splice
 
-library hls-splice-plugin
+library splice-plugin
   exposed-modules:
     Ide.Plugin.Splice
     Ide.Plugin.Splice.Types
@@ -883,7 +883,7 @@ library hls-splice-plugin
     , ghc-exactprint
     , ghcide                == 2.6.0.0
     , hls-plugin-api        == 2.6.0.0
-    , hls-refactor-plugin
+    , refactor-plugin
     , lens
     , lsp
     , mtl
@@ -899,7 +899,7 @@ library hls-splice-plugin
     DataKinds
     TypeOperators
 
-test-suite hls-splice-plugin-tests
+test-suite splice-plugin-tests
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   plugins/hls-splice-plugin/test
@@ -908,7 +908,7 @@ test-suite hls-splice-plugin-tests
   build-depends:
     , base
     , filepath
-    , hls-splice-plugin
+    , splice-plugin
     , hls-test-utils == 2.6.0.0
     , text
     , row-types
@@ -924,10 +924,10 @@ flag alternateNumberFormat
 
 common alternateNumberFormat
   if flag(alternateNumberFormat)
-    build-depends: hls-alternate-number-format-plugin
+    build-depends: alternate-number-format-plugin
     cpp-options: -Dhls_alternateNumberFormat
 
-library hls-alternate-number-format-plugin
+library alternate-number-format-plugin
   import:           warnings
   exposed-modules:  Ide.Plugin.AlternateNumberFormat, Ide.Plugin.Conversion
   other-modules:    Ide.Plugin.Literals
@@ -955,7 +955,7 @@ library hls-alternate-number-format-plugin
     OverloadedStrings
     RecordWildCards
 
-test-suite hls-alternate-number-format-plugin-tests
+test-suite alternate-number-format-plugin-tests
   import:           warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -966,7 +966,7 @@ test-suite hls-alternate-number-format-plugin-tests
   build-depends:
     , base                 >=4.12 && < 5
     , filepath
-    , hls-alternate-number-format-plugin
+    , alternate-number-format-plugin
     , hls-test-utils       == 2.6.0.0
     , regex-tdfa
     , tasty-quickcheck
@@ -992,7 +992,6 @@ common qualifyImportedNames
     build-depends: qualify-imported-names-plugin 
     cpp-options: -Dhls_qualifyImportedNames
 
--- shorten the name to avoid long path issues on windows
 library qualify-imported-names-plugin
   exposed-modules:    Ide.Plugin.QualifyImportedNames
   hs-source-dirs:     plugins/hls-qualify-imported-names-plugin/src
@@ -1041,10 +1040,10 @@ flag codeRange
 
 common codeRange
   if flag(codeRange)
-    build-depends: hls-code-range-plugin 
+    build-depends: code-range-plugin 
     cpp-options: -Dhls_codeRange
 
-library hls-code-range-plugin
+library code-range-plugin
   import: warnings
   exposed-modules:
     Ide.Plugin.CodeRange
@@ -1068,7 +1067,7 @@ library hls-code-range-plugin
     , transformers
     , vector
 
-test-suite hls-code-range-plugin-tests
+test-suite code-range-plugin-tests
   import:           warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -1082,7 +1081,7 @@ test-suite hls-code-range-plugin-tests
     , base
     , bytestring
     , filepath
-    , hls-code-range-plugin
+    , code-range-plugin
     , hls-test-utils             == 2.6.0.0
     , lens
     , lsp
@@ -1101,10 +1100,10 @@ flag changeTypeSignature
 
 common changeTypeSignature
   if flag(changeTypeSignature)
-    build-depends: hls-change-type-signature-plugin 
+    build-depends: change-type-signature-plugin 
     cpp-options: -Dhls_changeTypeSignature
 
-library hls-change-type-signature-plugin
+library change-type-signature-plugin
   import: warnings
   exposed-modules:  Ide.Plugin.ChangeTypeSignature
   hs-source-dirs:   plugins/hls-change-type-signature-plugin/src
@@ -1130,7 +1129,7 @@ library hls-change-type-signature-plugin
     TypeOperators
 
 
-test-suite hls-change-type-signature-plugin-tests
+test-suite change-type-signature-plugin-tests
   import:           warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -1140,7 +1139,7 @@ test-suite hls-change-type-signature-plugin-tests
   build-depends:
     , base                 >=4.12 && < 5
     , filepath
-    , hls-change-type-signature-plugin
+    , change-type-signature-plugin
     , hls-test-utils       == 2.6.0.0
     , regex-tdfa
     , text
@@ -1161,10 +1160,10 @@ flag gadt
 
 common gadt
   if flag(gadt)
-    build-depends: hls-gadt-plugin 
+    build-depends: gadt-plugin 
     cpp-options: -Dhls_gadt
 
-library hls-gadt-plugin
+library gadt-plugin
   import: warnings
   exposed-modules:    Ide.Plugin.GADT
   other-modules:      Ide.Plugin.GHC
@@ -1179,7 +1178,7 @@ library hls-gadt-plugin
     , ghcide                 == 2.6.0.0
     , ghc-exactprint
     , hls-plugin-api         == 2.6.0.0
-    , hls-refactor-plugin
+    , refactor-plugin
     , lens
     , lsp                    >=2.3
     , mtl
@@ -1189,7 +1188,7 @@ library hls-gadt-plugin
   default-language:   Haskell2010
   default-extensions: DataKinds
 
-test-suite hls-gadt-plugin-tests
+test-suite gadt-plugin-tests
   import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -1199,7 +1198,7 @@ test-suite hls-gadt-plugin-tests
   build-depends:
     , base
     , filepath
-    , hls-gadt-plugin
+    , gadt-plugin
     , hls-test-utils              == 2.6.0.0
     , text
 
@@ -1214,10 +1213,10 @@ flag explicitFixity
 
 common explicitFixity
   if flag(explicitFixity)
-    build-depends: hls-explicit-fixity-plugin 
+    build-depends: explicit-fixity-plugin 
     cpp-options: -DexplicitFixity
 
-library hls-explicit-fixity-plugin
+library explicit-fixity-plugin
   import: warnings
   exposed-modules:    Ide.Plugin.ExplicitFixity
 
@@ -1236,7 +1235,7 @@ library hls-explicit-fixity-plugin
   default-language:   Haskell2010
   default-extensions: DataKinds
 
-test-suite hls-explicit-fixity-plugin-tests
+test-suite explicit-fixity-plugin-tests
   import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -1246,7 +1245,7 @@ test-suite hls-explicit-fixity-plugin-tests
   build-depends:
     , base
     , filepath
-    , hls-explicit-fixity-plugin
+    , explicit-fixity-plugin
     , hls-test-utils              == 2.6.0.0
     , text
 
@@ -1261,10 +1260,10 @@ flag explicitFields
 
 common explicitFields
   if flag(explicitFields)
-    build-depends: hls-explicit-record-fields-plugin 
+    build-depends: explicit-record-fields-plugin 
     cpp-options: -DexplicitFields
 
-library hls-explicit-record-fields-plugin
+library explicit-record-fields-plugin
     import:           warnings
     exposed-modules:  Ide.Plugin.ExplicitFields
     build-depends:
@@ -1286,7 +1285,7 @@ library hls-explicit-record-fields-plugin
     ghc-options: -Werror
                  -Wwarn=incomplete-record-updates
     
-test-suite hls-explicit-record-fields-plugin-tests
+test-suite explicit-record-fields-plugin-tests
     import:           warnings
     default-language: Haskell2010
     type:             exitcode-stdio-1.0
@@ -1296,7 +1295,7 @@ test-suite hls-explicit-record-fields-plugin-tests
       , base
       , filepath
       , text
-      , hls-explicit-record-fields-plugin
+      , explicit-record-fields-plugin
       , hls-test-utils
 
 -----------------------------
@@ -1310,10 +1309,10 @@ flag overloadedRecordDot
 
 common overloadedRecordDot
   if flag(overloadedRecordDot)
-    build-depends: hls-overloaded-record-dot-plugin 
+    build-depends: overloaded-record-dot-plugin 
     cpp-options: -Dhls_overloaded_record_dot
 
-library hls-overloaded-record-dot-plugin
+library overloaded-record-dot-plugin
     import:           warnings
     exposed-modules:  Ide.Plugin.OverloadedRecordDot
     build-depends:
@@ -1332,7 +1331,7 @@ library hls-overloaded-record-dot-plugin
     hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/src
     default-language: GHC2021
 
-test-suite hls-overloaded-record-dot-plugin-tests
+test-suite overloaded-record-dot-plugin-tests
     import:           warnings
     default-language: GHC2021
     type:             exitcode-stdio-1.0
@@ -1342,7 +1341,7 @@ test-suite hls-overloaded-record-dot-plugin-tests
       , base
       , filepath
       , text
-      , hls-overloaded-record-dot-plugin
+      , overloaded-record-dot-plugin
       , hls-test-utils
 
 
@@ -1357,10 +1356,10 @@ flag floskell
 
 common floskell
   if flag(floskell) && (impl(ghc < 9.7) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-floskell-plugin 
+    build-depends: floskell-plugin 
     cpp-options: -Dhls_floskell
 
-library hls-floskell-plugin
+library floskell-plugin
   import:           warnings
   exposed-modules:  Ide.Plugin.Floskell
   hs-source-dirs:   plugins/hls-floskell-plugin/src
@@ -1375,7 +1374,7 @@ library hls-floskell-plugin
 
   default-language: Haskell2010
 
-test-suite hls-floskell-plugin-tests
+test-suite floskell-plugin-tests
   import:           warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -1385,7 +1384,7 @@ test-suite hls-floskell-plugin-tests
   build-depends:
     , base
     , filepath
-    , hls-floskell-plugin
+    , floskell-plugin
     , hls-test-utils       == 2.6.0.0
 
 -----------------------------
@@ -1399,10 +1398,10 @@ flag fourmolu
 
 common fourmolu
   if flag(fourmolu)
-    build-depends: hls-fourmolu-plugin 
+    build-depends: fourmolu-plugin 
     cpp-options: -Dhls_fourmolu
 
-library hls-fourmolu-plugin
+library fourmolu-plugin
   import: warnings
   exposed-modules:
       Ide.Plugin.Fourmolu
@@ -1423,7 +1422,7 @@ library hls-fourmolu-plugin
 
   default-language: Haskell2010
 
-test-suite hls-fourmolu-plugin-tests
+test-suite fourmolu-plugin-tests
   import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -1436,7 +1435,7 @@ test-suite hls-fourmolu-plugin-tests
     , base            >=4.12 && <5
     , aeson
     , filepath
-    , hls-fourmolu-plugin
+    , fourmolu-plugin
     , hls-plugin-api
     , hls-test-utils       == 2.6.0.0
     , lsp-test
@@ -1452,10 +1451,10 @@ flag ormolu
 
 common ormolu
   if flag(ormolu)
-    build-depends: hls-ormolu-plugin 
+    build-depends: ormolu-plugin 
     cpp-options: -Dhls_ormolu
 
-library hls-ormolu-plugin
+library ormolu-plugin
   import:           warnings
   exposed-modules:  Ide.Plugin.Ormolu
   hs-source-dirs:   plugins/hls-ormolu-plugin/src
@@ -1475,7 +1474,7 @@ library hls-ormolu-plugin
 
   default-language: Haskell2010
 
-test-suite hls-ormolu-plugin-tests
+test-suite ormolu-plugin-tests
   import:           warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -1488,7 +1487,7 @@ test-suite hls-ormolu-plugin-tests
     , base
     , aeson
     , filepath
-    , hls-ormolu-plugin
+    , ormolu-plugin
     , hls-plugin-api
     , hls-test-utils     == 2.6.0.0
     , lsp-types
@@ -1505,10 +1504,10 @@ flag stylishHaskell
 
 common stylishHaskell
   if flag(stylishHaskell) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-stylish-haskell-plugin 
+    build-depends: stylish-haskell-plugin 
     cpp-options: -Dhls_stylishHaskell
 
-library hls-stylish-haskell-plugin
+library stylish-haskell-plugin
   import: warnings
   exposed-modules:  Ide.Plugin.StylishHaskell
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/src
@@ -1526,7 +1525,7 @@ library hls-stylish-haskell-plugin
 
   default-language: Haskell2010
 
-test-suite hls-stylish-haskell-plugin-tests
+test-suite stylish-haskell-plugin-tests
   import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -1536,7 +1535,7 @@ test-suite hls-stylish-haskell-plugin-tests
   build-depends:
     , base
     , filepath
-    , hls-stylish-haskell-plugin
+    , stylish-haskell-plugin
     , hls-test-utils              == 2.6.0.0
 
 -----------------------------
@@ -1550,10 +1549,10 @@ flag refactor
 
 common refactor
   if flag(refactor)
-    build-depends: hls-refactor-plugin 
+    build-depends: refactor-plugin 
     cpp-options: -Dhls_refactor
 
-library hls-refactor-plugin
+library refactor-plugin
   import: warnings
   exposed-modules:  Development.IDE.GHC.ExactPrint
                     Development.IDE.GHC.Compat.ExactPrint
@@ -1624,7 +1623,7 @@ library hls-refactor-plugin
   ghc-options: -Wno-name-shadowing
   default-language: Haskell2010
 
-test-suite hls-refactor-plugin-tests
+test-suite refactor-plugin-tests
   import: warnings
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
@@ -1635,7 +1634,7 @@ test-suite hls-refactor-plugin-tests
   build-depends:
     , base
     , filepath
-    , hls-refactor-plugin
+    , refactor-plugin
     , hls-test-utils      == 2.6.0.0
     , lens
     , lsp-types
@@ -1647,7 +1646,6 @@ test-suite hls-refactor-plugin-tests
     , ghcide
     , ghcide-test-utils
     , shake
-    , hls-plugin-api
     , lsp-test
     , directory
     , regex-tdfa
@@ -1666,10 +1664,10 @@ flag semanticTokens
 
 common semanticTokens
   if flag(semanticTokens)
-    build-depends: hls-semantic-tokens-plugin 
+    build-depends: semantic-tokens-plugin 
     cpp-options: -Dhls_semanticTokens
 
-library hls-semantic-tokens-plugin
+library semantic-tokens-plugin
   ghc-options: -Wall
   buildable: True
   exposed-modules:
@@ -1709,7 +1707,7 @@ library hls-semantic-tokens-plugin
   default-language:   Haskell2010
   default-extensions: DataKinds
 
-test-suite hls-semantic-tokens-plugin-tests
+test-suite semantic-tokens-plugin-tests
   type:             exitcode-stdio-1.0
   ghc-options: -Wall
   default-language: Haskell2010
@@ -1723,10 +1721,9 @@ test-suite hls-semantic-tokens-plugin-tests
     , containers
     , extra
     , filepath
-    , hls-semantic-tokens-plugin
+    , semantic-tokens-plugin
     , hls-test-utils              == 2.6.0.0
     , ghcide-test-utils
-    , hls-plugin-api
     , lens
     , lsp
     , ghc
