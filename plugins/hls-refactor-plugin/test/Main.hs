@@ -2137,24 +2137,24 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
         ]
         ++ txtB')
   , testSession "insert new function definition - with similar suggestion in scope" $ do
-      doc <- createDoc "ModuleB.hs" "haskell" $ T.unlines
+      doc <- createDoc "Module.hs" "haskell" $ T.unlines
           [ "import Control.Monad" -- brings `mplus` into scope, leading to additional suggestion
                                    -- "Perhaps use \8216mplus\8217 (imported from Control.Monad)"
-          , "foo :: Int -> Int"
-          , "foo x = plus x (plus x x)"
+          , "f :: Int -> Int"
+          , "f x = plus x x"
           ]
       _ <- waitForDiagnostics
       action@CodeAction { _title = actionTitle } : _
-          <- findCodeActionsByPrefix doc (R 2 10 2 13) ["Define"]
-      liftIO $ actionTitle @?= "Define plus :: Int -> t0 -> Int"
+          <- findCodeActionsByPrefix doc (R 2 0 2 13) ["Define"]
+      liftIO $ actionTitle @?= "Define plus :: Int -> Int -> Int"
       executeCodeAction action
       contentAfterAction <- documentContents doc
       liftIO $ contentAfterAction @?= T.unlines
           [ "import Control.Monad"
-          , "foo :: Int -> Int"
-          , "foo x = plus x (plus x x)"
+          , "f :: Int -> Int"
+          , "f x = plus x x"
           , ""
-          , "plus :: Int -> t0 -> Int"
+          , "plus :: Int -> Int -> Int"
           , "plus = _"
           ]
   , testSession "define a hole" $ do
