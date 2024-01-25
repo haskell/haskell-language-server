@@ -989,10 +989,11 @@ flag qualifyImportedNames
 
 common qualifyImportedNames
   if flag(qualifyImportedNames)
-    build-depends: hls-qualify-imported-names-plugin == 2.6.0.0
+    build-depends: qualify-imported-names-plugin == 2.6.0.0
     cpp-options: -Dhls_qualifyImportedNames
 
-library hls-qualify-imported-names-plugin
+-- shorten the name to avoid long path issues on windows
+library qualify-imported-names-plugin
   exposed-modules:    Ide.Plugin.QualifyImportedNames
   hs-source-dirs:     plugins/hls-qualify-imported-names-plugin/src
   build-depends:
@@ -1016,7 +1017,7 @@ library hls-qualify-imported-names-plugin
     DataKinds
     TypeOperators
 
-test-suite hls-qualify-imported-names-plugin-tests
+test-suite qualify-imported-names-plugin-tests
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   plugins/hls-qualify-imported-names-plugin/test
@@ -1026,7 +1027,7 @@ test-suite hls-qualify-imported-names-plugin-tests
     , base
     , text
     , filepath
-    , hls-qualify-imported-names-plugin
+    , qualify-imported-names-plugin
     , hls-test-utils             == 2.6.0.0
 
 -----------------------------

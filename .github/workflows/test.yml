@@ -200,8 +200,8 @@ jobs:
         run: cabal test hls-alternate-number-format-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-alternate-number-format-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
-        name: Test hls-qualify-imported-names-plugin test suite
-        run: cabal test hls-qualify-imported-names-plugin-tests --test-options="$TEST_OPTS" || cabal test hls-qualify-imported-names-plugin-tests --test-options="$TEST_OPTS"
+        name: Test qualify-imported-names-plugin test suite
+        run: cabal test qualify-imported-names-plugin-tests --test-options="$TEST_OPTS" || cabal test qualify-imported-names-plugin-tests --test-options="$TEST_OPTS"
 
       - if: matrix.test
         name: Test hls-code-range-plugin test suite
