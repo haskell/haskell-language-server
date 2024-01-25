@@ -140,7 +140,7 @@ flag cabal
 
 common cabal
   if flag(cabal)
-    build-depends: hls-cabal-plugin == 2.6.0.0
+    build-depends: hls-cabal-plugin 
     cpp-options: -Dhls_cabal
 
 library hls-cabal-plugin
@@ -223,7 +223,7 @@ flag class
 
 common class
   if flag(class)
-    build-depends: hls-class-plugin == 2.6.0.0
+    build-depends: hls-class-plugin 
     cpp-options: -Dhls_class
 
 library hls-class-plugin
@@ -287,7 +287,7 @@ flag callHierarchy
 
 common callHierarchy
   if flag(callHierarchy)
-    build-depends: hls-call-hierarchy-plugin == 2.6.0.0
+    build-depends: hls-call-hierarchy-plugin 
     cpp-options: -Dhls_callHierarchy
 
 library hls-call-hierarchy-plugin
@@ -348,7 +348,7 @@ flag eval
 
 common eval
   if flag(eval)
-    build-depends: hls-eval-plugin == 2.6.0.0
+    build-depends: hls-eval-plugin 
     cpp-options: -Dhls_eval
 
 library hls-eval-plugin
@@ -429,7 +429,7 @@ test-suite hls-eval-plugin-tests
 
 common importLens
   if flag(importLens)
-    build-depends: hls-explicit-imports-plugin == 2.6.0.0
+    build-depends: hls-explicit-imports-plugin 
     cpp-options: -Dhls_importLens
 
 flag importLens
@@ -494,7 +494,7 @@ flag rename
 
 common rename
   if flag(rename)
-    build-depends: hls-rename-plugin == 2.6.0.0
+    build-depends: hls-rename-plugin 
     cpp-options: -Dhls_rename
 
 library hls-rename-plugin
@@ -550,7 +550,7 @@ flag retrie
 
 common retrie
   if flag(retrie)
-    build-depends: hls-retrie-plugin == 2.6.0.0
+    build-depends: hls-retrie-plugin 
     cpp-options: -Dhls_retrie
 
 library hls-retrie-plugin
@@ -615,7 +615,7 @@ flag hlint
 
 common hlint
   if flag(hlint) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-hlint-plugin == 2.6.0.0
+    build-depends: hls-hlint-plugin 
     cpp-options: -Dhls_hlint
 
 library hls-hlint-plugin
@@ -695,7 +695,7 @@ flag stan
 
 common stan
   if flag(stan) && (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
-    build-depends: hls-stan-plugin == 2.6.0.0
+    build-depends: hls-stan-plugin 
     cpp-options: -Dhls_stan
 
 library hls-stan-plugin
@@ -769,7 +769,7 @@ flag moduleName
 
 common moduleName
   if flag(moduleName)
-    build-depends: hls-module-name-plugin == 2.6.0.0
+    build-depends: hls-module-name-plugin 
     cpp-options: -Dhls_moduleName
 
 library hls-module-name-plugin
@@ -814,7 +814,7 @@ flag pragmas
 
 common pragmas
   if flag(pragmas)
-    build-depends: hls-pragmas-plugin == 2.6.0.0
+    build-depends: hls-pragmas-plugin 
     cpp-options: -Dhls_pragmas
 
 library hls-pragmas-plugin
@@ -862,7 +862,7 @@ flag splice
 
 common splice
   if flag(splice)
-    build-depends: hls-splice-plugin == 2.6.0.0
+    build-depends: hls-splice-plugin 
     cpp-options: -Dhls_splice
 
 library hls-splice-plugin
@@ -989,7 +989,7 @@ flag qualifyImportedNames
 
 common qualifyImportedNames
   if flag(qualifyImportedNames)
-    build-depends: qualify-imported-names-plugin == 2.6.0.0
+    build-depends: qualify-imported-names-plugin 
     cpp-options: -Dhls_qualifyImportedNames
 
 -- shorten the name to avoid long path issues on windows
@@ -1041,7 +1041,7 @@ flag codeRange
 
 common codeRange
   if flag(codeRange)
-    build-depends: hls-code-range-plugin == 2.6.0.0
+    build-depends: hls-code-range-plugin 
     cpp-options: -Dhls_codeRange
 
 library hls-code-range-plugin
@@ -1101,7 +1101,7 @@ flag changeTypeSignature
 
 common changeTypeSignature
   if flag(changeTypeSignature)
-    build-depends: hls-change-type-signature-plugin == 2.6.0.0
+    build-depends: hls-change-type-signature-plugin 
     cpp-options: -Dhls_changeTypeSignature
 
 library hls-change-type-signature-plugin
@@ -1161,7 +1161,7 @@ flag gadt
 
 common gadt
   if flag(gadt)
-    build-depends: hls-gadt-plugin == 2.6.0.0
+    build-depends: hls-gadt-plugin 
     cpp-options: -Dhls_gadt
 
 library hls-gadt-plugin
@@ -1214,7 +1214,7 @@ flag explicitFixity
 
 common explicitFixity
   if flag(explicitFixity)
-    build-depends: hls-explicit-fixity-plugin == 2.6.0.0
+    build-depends: hls-explicit-fixity-plugin 
     cpp-options: -DexplicitFixity
 
 library hls-explicit-fixity-plugin
@@ -1261,7 +1261,7 @@ flag explicitFields
 
 common explicitFields
   if flag(explicitFields)
-    build-depends: hls-explicit-record-fields-plugin == 2.6.0.0
+    build-depends: hls-explicit-record-fields-plugin 
     cpp-options: -DexplicitFields
 
 library hls-explicit-record-fields-plugin
@@ -1310,7 +1310,7 @@ flag overloadedRecordDot
 
 common overloadedRecordDot
   if flag(overloadedRecordDot)
-    build-depends: hls-overloaded-record-dot-plugin == 2.6.0.0
+    build-depends: hls-overloaded-record-dot-plugin 
     cpp-options: -Dhls_overloaded_record_dot
 
 library hls-overloaded-record-dot-plugin
@@ -1357,7 +1357,7 @@ flag floskell
 
 common floskell
   if flag(floskell) && (impl(ghc < 9.7) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-floskell-plugin == 2.6.0.0
+    build-depends: hls-floskell-plugin 
     cpp-options: -Dhls_floskell
 
 library hls-floskell-plugin
@@ -1399,7 +1399,7 @@ flag fourmolu
 
 common fourmolu
   if flag(fourmolu)
-    build-depends: hls-fourmolu-plugin == 2.6.0.0
+    build-depends: hls-fourmolu-plugin 
     cpp-options: -Dhls_fourmolu
 
 library hls-fourmolu-plugin
@@ -1452,7 +1452,7 @@ flag ormolu
 
 common ormolu
   if flag(ormolu)
-    build-depends: hls-ormolu-plugin == 2.6.0.0
+    build-depends: hls-ormolu-plugin 
     cpp-options: -Dhls_ormolu
 
 library hls-ormolu-plugin
@@ -1505,7 +1505,7 @@ flag stylishHaskell
 
 common stylishHaskell
   if flag(stylishHaskell) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-stylish-haskell-plugin == 2.6.0.0
+    build-depends: hls-stylish-haskell-plugin 
     cpp-options: -Dhls_stylishHaskell
 
 library hls-stylish-haskell-plugin
@@ -1550,7 +1550,7 @@ flag refactor
 
 common refactor
   if flag(refactor)
-    build-depends: hls-refactor-plugin == 2.6.0.0
+    build-depends: hls-refactor-plugin 
     cpp-options: -Dhls_refactor
 
 library hls-refactor-plugin
@@ -1666,7 +1666,7 @@ flag semanticTokens
 
 common semanticTokens
   if flag(semanticTokens)
-    build-depends: hls-semantic-tokens-plugin == 2.6.0.0
+    build-depends: hls-semantic-tokens-plugin 
     cpp-options: -Dhls_semanticTokens
 
 library hls-semantic-tokens-plugin
