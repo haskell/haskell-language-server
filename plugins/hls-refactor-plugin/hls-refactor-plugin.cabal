@@ -102,7 +102,7 @@ test-suite tests
   hs-source-dirs:   test
   main-is:          Main.hs
   other-modules:    Test.AddArgument
-  ghc-options:      -O0 -threaded -rtsopts -with-rtsopts=-N -Wunused-imports
+  ghc-options:      -O0 -threaded -rtsopts -with-rtsopts=-N -Wno-name-shadowing
   build-depends:
     , base
     , filepath
