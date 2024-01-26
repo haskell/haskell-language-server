@@ -26,7 +26,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error       (realSrcSpanToCodePointRange)
 import           Ide.Plugin.SemanticTokens.Types (RangeIdSetMap)
 import           Language.LSP.Protocol.Types     (Position (Position),
-                                                  Range (Range), UInt)
+                                                  Range (Range), UInt, mkRange)
 import           Language.LSP.VFS                hiding (line)
 import           Prelude                         hiding (length, span)
 
@@ -131,7 +131,6 @@ focusTokenAt ::
 focusTokenAt leaf = do
   PTokenState{cursor, rope, columnsInUtf16} <- get
   let span = nodeSpan leaf
-  -- traceShowM ("focusTokenAt", span)
   let (startPos, endPos) = srcSpanCharPositions span
   startOff <- lift $ startPos `sub` cursor
   tokenOff <- lift $ endPos `sub` startPos
@@ -156,7 +155,7 @@ focusTokenAt leaf = do
       return (Rope.toText prefix, suffix)
     sub :: Char.Position -> Char.Position -> Maybe Char.Position
     sub (Char.Position l1 c1) (Char.Position l2 c2)
-      | l1 == l2 || c1 > c2 = Just $ Char.Position 0 (c1 - c2)
+      | l1 == l2 && c1 > c2 = Just $ Char.Position 0 (c1 - c2)
       | l1 > l2 = Just $ Char.Position (l1 - l2) c1
       | otherwise = Nothing
     realSrcLocRopePosition :: RealSrcLoc -> Char.Position
@@ -191,8 +190,8 @@ splitRangeByText tk ran = do
     splitRange tx (Position l c) r@(Range (Position l1 c1) (Position l2 c2))
       | l1 + l > l2 || (l1 + l == l2 && c > c2) = Nothing -- out of range
       | l==0 && c==0 = Just $ NoSplit (tx, r)
-      | l==0 = Just $ Split (tx, Range (Position l1 c1) (Position l1 (c1+c)), Range (Position l1 (c1+c)) (Position l2 c2))
-      | otherwise = Just $ Split (tx, Range (Position l1 c1) (Position (l1+l) c), Range (Position (l1+l) c) (Position l2 c2))
+      | otherwise = let c' = if l <= 0 then c1+c else c
+                    in Just $ Split (tx, mkRange l1 c1 (l1 + l) c', mkRange (l1 + l) c' l2 c2)
     subOneRange :: Range -> Range
     subOneRange (Range (Position l1 c1) (Position l2 c2)) = Range (Position l1 (c1 + 1)) (Position l2 (c2 - 1))
     utf16PositionPosition :: Utf16.Position -> Position
