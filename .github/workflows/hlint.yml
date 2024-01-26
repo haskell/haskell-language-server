@@ -20,7 +20,7 @@ jobs:
     - name: 'Checking code'
       uses: rwe/actions-hlint-run@v2
       with:
-        hlint-bin: "hlint --with-group=extra --ignore-glob='**/testdata/**' --ignore-glob='**/test/data/**'"
+        hlint-bin: "hlint --with-group=extra --ignore-glob=**/testdata/** --ignore-glob=**/test/data/**"
         fail-on: error
         path: .
 
