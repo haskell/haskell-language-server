@@ -74,13 +74,18 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
-        # Mark which GHC versions on which platforms we want to test.
+        test: true
+        exclude:
+          # Don't test (but do build) on macos, it's sufficiently similar to other OSs
+          # that it mostly just burns CI time
+          - os: macos
+            test: true
+          # Don't test windows on 9.2, it has particularly bad long-path issues
+          - os: windows-latest
+            ghc: "9.2"
         include:
-           # Test all supported versions, but only on ubuntu and windows
-           - os: ubuntu-latest
-             test: true
-           - os: windows-latest
-             test: true
+          - os: macos
+            test: false
 
     steps:
       - uses: actions/checkout@v3
