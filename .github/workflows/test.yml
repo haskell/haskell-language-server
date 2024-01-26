@@ -74,7 +74,8 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
-        test: true
+        test: 
+          - true
         exclude:
           # Don't test (but do build) on macos, it's sufficiently similar to other OSs
           # that it mostly just burns CI time
