@@ -6,7 +6,6 @@
 
 module Ide.Plugin.SemanticTokens.Tokenize (hieAstSpanIdentifiers) where
 
-import           Control.Arrow                   (first)
 import           Control.Lens                    (Identity (runIdentity))
 import           Control.Monad                   (forM_, guard)
 import           Control.Monad.State             (MonadState (get),
@@ -89,12 +88,15 @@ foldAst ast = if null (nodeChildren ast)
 visitLeafIds :: HieAST t -> Tokenizer Maybe ()
 visitLeafIds leaf = liftMaybeM $ do
   let span = nodeSpan leaf
-  -- only handle the leaf node with single column token
-  guard $ srcSpanStartLine span == srcSpanEndLine span
   (ran, token) <- focusTokenAt leaf
-  splitResult <-  lift $ splitRangeByText token ran
-  modify $ \s -> s {currentRange = ran, currentRangeContext = splitResult}
-  mapM_ combineNodeIds $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
+  -- if `focusTokenAt` succeed, we can safely assume we have shift the cursor correctly
+  -- we do not need to recover the cursor state, even if the following computation failed
+  liftMaybeM $ do
+    -- only handle the leaf node with single column token
+    guard $ srcSpanStartLine span == srcSpanEndLine span
+    splitResult <-  lift $ splitRangeByText token ran
+    modify $ \s -> s {currentRange = ran, currentRangeContext = splitResult}
+    mapM_ combineNodeIds $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
   where
     combineNodeIds :: (Monad m) => NodeInfo a -> Tokenizer m ()
     combineNodeIds (NodeInfo _ _ bd) = mapM_ getIdentifier (M.keys bd)
@@ -129,31 +131,40 @@ focusTokenAt ::
 focusTokenAt leaf = do
   PTokenState{cursor, rope, columnsInUtf16} <- get
   let span = nodeSpan leaf
-  let (startPos, length) = srcSpanMaybePositionLength span
-  let (gap, startRope) = first Rope.toText $ Rope.charSplitAtPosition (startPos `sub` cursor) rope
-  (token, remains) <- lift $ charSplitAtMaybe length startRope
+  -- traceShowM ("focusTokenAt", span)
+  let (startPos, endPos) = srcSpanCharPositions span
+  startOff <- lift $ startPos `sub` cursor
+  tokenOff <- lift $ endPos `sub` startPos
+  (gap, startRope) <- lift $ charSplitAtPositionMaybe startOff rope
+  (token, remains) <- lift $ charSplitAtPositionMaybe tokenOff startRope
   let ncs = newColumn columnsInUtf16 gap
   let nce = newColumn ncs token
-  -- compute the new range for utf16
+  -- compute the new range for utf16, tuning the columns is enough
   let ran = codePointRangeToRangeWith ncs nce $ realSrcSpanToCodePointRange span
-  modify $ \s -> s {columnsInUtf16 = nce, rope = remains, cursor = realSrcLocRopePosition (realSrcSpanEnd span)}
+  modify $ \s -> s {columnsInUtf16 = nce, rope = remains, cursor = endPos}
   return (ran, token)
   where
-    srcSpanMaybePositionLength :: (Integral l) => RealSrcSpan -> (Char.Position, l)
-    srcSpanMaybePositionLength real =
+    srcSpanCharPositions :: RealSrcSpan -> (Char.Position, Char.Position)
+    srcSpanCharPositions real =
         ( realSrcLocRopePosition $ realSrcSpanStart real,
-          fromIntegral $ srcSpanEndCol real - srcSpanStartCol real
+          realSrcLocRopePosition $ realSrcSpanEnd real
         )
-    charSplitAtMaybe :: Word -> Rope -> Maybe (Text, Rope)
-    charSplitAtMaybe len rpe = do
-      let (prefix, suffix) = Rope.charSplitAt len rpe
-      guard $ Rope.charLength prefix == len
+    charSplitAtPositionMaybe :: Char.Position -> Rope -> Maybe (Text, Rope)
+    charSplitAtPositionMaybe tokenOff rpe = do
+      let (prefix, suffix) = Rope.charSplitAtPosition tokenOff rpe
+      guard $ Rope.charLengthAsPosition prefix == tokenOff
       return (Rope.toText prefix, suffix)
-    sub :: Char.Position -> Char.Position -> Char.Position
-    sub (Char.Position l1 c1) (Char.Position l2 c2) =
-      if l1 == l2 then Char.Position 0 (c1 - c2) else Char.Position (l1 - l2) c1
+    sub :: Char.Position -> Char.Position -> Maybe Char.Position
+    sub (Char.Position l1 c1) (Char.Position l2 c2)
+      | l1 == l2 || c1 > c2 = Just $ Char.Position 0 (c1 - c2)
+      | l1 > l2 = Just $ Char.Position (l1 - l2) c1
+      | otherwise = Nothing
     realSrcLocRopePosition :: RealSrcLoc -> Char.Position
     realSrcLocRopePosition real = Char.Position (fromIntegral $ srcLocLine real - 1) (fromIntegral $ srcLocCol real - 1)
+    -- | newColumn
+    -- rope do not treat single \n in our favor
+    -- for example, the row length of "123\n" and "123" are both 1
+    -- we are forced to use text to compute new column
     newColumn :: UInt -> Text -> UInt
     newColumn n rp = case T.breakOnEnd "\n" rp of
       ("", nEnd) -> n + utf16Length nEnd
@@ -174,15 +185,19 @@ splitRangeByText tk ran = do
         Just ('`', xs) -> (subOneRange ran, T.takeWhile (/= '`') xs)
         _              -> (ran, tk)
   let (prefix, tk'') = T.breakOnEnd "." tk'
-  splitRange tk'' (utf16Length prefix) ran'
+  splitRange tk'' (utf16PositionPosition $ Rope.utf16LengthAsPosition $ Rope.fromText prefix) ran'
   where
-    splitRange :: Text -> UInt -> Range -> Maybe SplitResult
-    splitRange tx n r@(Range (Position l1 c1) (Position l2 c2))
-      | l1 == l2, n <= 0 = Just $ NoSplit (tx, r)
-      | l1 == l2, n < fromIntegral (c2 - c1) = Just $ Split (tx, Range (Position l1 c1) (Position l1 (c1 + n)), Range (Position l1 (c1 + n)) (Position l1 c2))
-      | otherwise = Nothing
+    splitRange :: Text -> Position -> Range -> Maybe SplitResult
+    splitRange tx (Position l c) r@(Range (Position l1 c1) (Position l2 c2))
+      | l1 + l > l2 || (l1 + l == l2 && c > c2) = Nothing -- out of range
+      | l==0 && c==0 = Just $ NoSplit (tx, r)
+      | l==0 = Just $ Split (tx, Range (Position l1 c1) (Position l1 (c1+c)), Range (Position l1 (c1+c)) (Position l2 c2))
+      | otherwise = Just $ Split (tx, Range (Position l1 c1) (Position (l1+l) c), Range (Position (l1+l) c) (Position l2 c2))
     subOneRange :: Range -> Range
     subOneRange (Range (Position l1 c1) (Position l2 c2)) = Range (Position l1 (c1 + 1)) (Position l2 (c2 - 1))
+    utf16PositionPosition :: Utf16.Position -> Position
+    utf16PositionPosition (Utf16.Position l c) = Position (fromIntegral l) (fromIntegral c)
+
 
 utf16Length :: Integral i => Text -> i
 utf16Length = fromIntegral . Utf16.length . Utf16.fromText

@@ -205,7 +205,8 @@ semanticTokensTests =
       goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternSynonym",
       goldenWithSemanticTokensWithDefaultConfig "type family" "TTypefamily",
       goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax",
-      goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName"
+      goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName",
+      goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc"
     ]
 
 semanticTokensDataTypeTests :: TestTree
