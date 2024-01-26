@@ -76,16 +76,20 @@ jobs:
           - windows-latest
         test: 
           - true
+          - false
         exclude:
-          # Don't test (but do build) on macos, it's sufficiently similar to other OSs
-          # that it mostly just burns CI time
-          - os: macOS-latest
-            test: true
-          # Don't test windows on 9.2, it has particularly bad long-path issues
+          # Don't do anything for windows on 9.2, it has particularly bad long-path issues
           - os: windows-latest
             ghc: "9.2"
-        include:
+          # Exclude the test configuration on macos, it's sufficiently similar to other OSs
+          # that it mostly just burns CI time. Buiding is still useful since it catches
+          # solver issues.
           - os: macOS-latest
+            test: true
+          # Exclude the build-only configurations for windows and ubuntu
+          - os: windows-latest
+            test: false
+          - os: ubuntu-latest
             test: false
 
     steps:
