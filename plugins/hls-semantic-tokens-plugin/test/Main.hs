@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE ExplicitNamespaces  #-}
 {-# LANGUAGE FlexibleInstances   #-}
@@ -166,12 +167,6 @@ semanticTokensTests =
     [ testCase "module import test" $ do
         let file1 = "TModula𐐀bA.hs"
         let file2 = "TModuleB.hs"
-        let expect =
-              [
-                SemanticTokenOriginal TModule (Loc 3 8 8) "TModuleA",
-                SemanticTokenOriginal TVariable (Loc 5 1 2) "go",
-                SemanticTokenOriginal TDataConstructor (Loc 5 6 4) "Game"
-              ]
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
           doc1 <- openDoc file1 "haskell"
           doc2 <- openDoc file2 "haskell"
@@ -186,9 +181,6 @@ semanticTokensTests =
 
 
 
-          textContent2 <- documentContents doc2
-          let vfs = VirtualFile 0 0 (Rope.fromText textContent2)
-          res2 <- Test.getSemanticTokens doc2
           result <- docSemanticTokensString def doc2
           let expect = unlines [
                     "3:8-18 TModule \"TModula\\66560bA\""
@@ -205,8 +197,11 @@ semanticTokensTests =
       goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternSynonym",
       goldenWithSemanticTokensWithDefaultConfig "type family" "TTypefamily",
       goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax",
-      goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName",
-      goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc"
+      goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName"
+      -- it is not supported in ghc92
+#if MIN_VERSION_ghc(9,4,0)
+      , goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc"
+#endif
     ]
 
 semanticTokensDataTypeTests :: TestTree
