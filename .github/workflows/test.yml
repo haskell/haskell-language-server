@@ -79,7 +79,7 @@ jobs:
         exclude:
           # Don't test (but do build) on macos, it's sufficiently similar to other OSs
           # that it mostly just burns CI time
-          - os: macos
+          - os: macOS-latest
             test: true
           # Don't test windows on 9.2, it has particularly bad long-path issues
           - os: windows-latest
