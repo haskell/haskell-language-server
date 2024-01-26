@@ -85,7 +85,7 @@ jobs:
           - os: windows-latest
             ghc: "9.2"
         include:
-          - os: macos
+          - os: macOS-latest
             test: false
 
     steps:
