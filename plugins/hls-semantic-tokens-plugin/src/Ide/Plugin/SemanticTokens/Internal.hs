@@ -109,24 +109,22 @@ getSemanticTokensRule recorder =
     let names = S.unions $ M.elems spanIdMap
     let localSemanticMap = mkLocalIdSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
     -- get imported name semantic map
-    let importedIdSemanticMap = foldr (getTypeExclude localSemanticMap getTyThingMap) mempty names
+    let importedIdSemanticMap = M.mapMaybe id
+            $ M.fromSet (getTypeExclude getTyThingMap) (names `S.difference` M.keysSet localSemanticMap)
     let sMap = M.unionWith (<>) importedIdSemanticMap localSemanticMap
     let rangeTokenType = extractSemanticTokensFromNames sMap spanIdMap
     return $ RangeHsSemanticTokenTypes rangeTokenType
   where
     -- ignore one already in discovered in local
     getTypeExclude ::
-      Map Identifier a ->
       NameEnv TyThing ->
       Identifier ->
-      Map Identifier HsSemanticTokenType ->
-      Map Identifier HsSemanticTokenType
-    getTypeExclude localEnv tyThingMap n nameMap
-      | n `M.member` localEnv = nameMap
+      Maybe HsSemanticTokenType
+    getTypeExclude tyThingMap n
       | (Right name) <- n =
           let tyThing =  lookupNameEnv tyThingMap name
-           in maybe nameMap (\k -> M.insert n k nameMap) (tyThing >>= tyThingSemantic)
-     | otherwise = nameMap
+           in (tyThing >>= tyThingSemantic)
+     | otherwise = Nothing
 
 -- | Persistent rule to ensure that semantic tokens doesn't block on startup
 persistentGetSemanticTokensRule :: Rules ()
