@@ -6,43 +6,41 @@
 
 module Ide.Plugin.SemanticTokens.Tokenize (hieAstSpanIdentifiers) where
 
-import           Control.Lens                    (Identity (runIdentity))
-import           Control.Monad                   (forM_, guard)
-import           Control.Monad.State             (MonadState (get),
-                                                  MonadTrans (lift), execStateT,
-                                                  gets, modify, put)
-import           Control.Monad.Trans.State       (StateT)
-import qualified Data.Map                        as M
-import qualified Data.Map                        as Map
-import qualified Data.Set                        as S
-import           Data.Text                       (Text)
-import qualified Data.Text                       as T
-import qualified Data.Text.Rope                  as Char
-import           Data.Text.Utf16.Rope            (toText)
-import qualified Data.Text.Utf16.Rope            as Utf16
-import           Data.Text.Utf16.Rope.Mixed      (Rope)
-import qualified Data.Text.Utf16.Rope.Mixed      as Rope
+import           Control.Lens                     (Identity (runIdentity))
+import           Control.Monad                    (forM_, guard)
+import           Control.Monad.State.Strict       (MonadState (get),
+                                                   MonadTrans (lift),
+                                                   execStateT, modify, put)
+import           Control.Monad.Trans.State.Strict (StateT)
+import qualified Data.Map                         as M
+import qualified Data.Map                         as Map
+import qualified Data.Set                         as S
+import           Data.Text                        (Text)
+import qualified Data.Text                        as T
+import qualified Data.Text.Rope                   as Char
+import           Data.Text.Utf16.Rope             (toText)
+import qualified Data.Text.Utf16.Rope             as Utf16
+import           Data.Text.Utf16.Rope.Mixed       (Rope)
+import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error       (realSrcSpanToCodePointRange)
-import           Ide.Plugin.SemanticTokens.Types (RangeIdSetMap)
-import           Language.LSP.Protocol.Types     (Position (Position),
-                                                  Range (Range), UInt, mkRange)
-import           Language.LSP.VFS                hiding (line)
-import           Prelude                         hiding (length, span)
+import           Development.IDE.GHC.Error        (realSrcSpanToCodePointRange)
+import           Ide.Plugin.SemanticTokens.Types  (RangeIdSetMap)
+import           Language.LSP.Protocol.Types      (Position (Position),
+                                                   Range (Range), UInt, mkRange)
+import           Language.LSP.VFS                 hiding (line)
+import           Prelude                          hiding (length, span)
 
-type Tokenizer m a = forall t. StateT (PTokenState t) m a
+type Tokenizer m a = StateT PTokenState m a
 
 
-data PTokenState t = PTokenState
-  { rangeIdSetMap       :: RangeIdSetMap,
-    rope                :: Rope,
-    cursor              :: Char.Position,
-    columnsInUtf16      :: UInt,
-    currentRange        :: Range,
-    currentRangeContext :: SplitResult
+data PTokenState = PTokenState
+  { rangeIdSetMap  :: RangeIdSetMap,
+    rope           :: Rope,
+    cursor         :: !Char.Position,
+    columnsInUtf16 :: !UInt
   }
 
-runTokenizer :: (Monad m) => Tokenizer m a -> PTokenState t -> m RangeIdSetMap
+runTokenizer :: (Monad m) => Tokenizer m a -> PTokenState -> m RangeIdSetMap
 runTokenizer p st = rangeIdSetMap <$> execStateT p st
 
 data SplitResult
@@ -50,18 +48,14 @@ data SplitResult
   | Split (Text, Range, Range) -- token text, prefix range(module range), token range
   deriving (Show)
 
-startRange :: Range
-startRange = Range (Position 0 0) (Position 0 0)
 
-mkPTokenState :: VirtualFile -> PTokenState a
+mkPTokenState :: VirtualFile -> PTokenState
 mkPTokenState vf =
   PTokenState
     { rangeIdSetMap = mempty,
       rope = Rope.fromText $ toText vf._file_text,
       cursor = Char.Position 0 0,
-      columnsInUtf16 = 0,
-      currentRange = startRange,
-      currentRangeContext = NoSplit ("", startRange)
+      columnsInUtf16 = 0
     }
 
 addRangeIdSetMap :: (Monad m) => Range -> Identifier -> Tokenizer m ()
@@ -95,18 +89,15 @@ visitLeafIds leaf = liftMaybeM $ do
     -- only handle the leaf node with single column token
     guard $ srcSpanStartLine span == srcSpanEndLine span
     splitResult <-  lift $ splitRangeByText token ran
-    modify $ \s -> s {currentRange = ran, currentRangeContext = splitResult}
-    mapM_ combineNodeIds $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
+    mapM_ (combineNodeIds ran splitResult) $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
   where
-    combineNodeIds :: (Monad m) => NodeInfo a -> Tokenizer m ()
-    combineNodeIds (NodeInfo _ _ bd) = mapM_ getIdentifier (M.keys bd)
-    getIdentifier :: (Monad m) => Identifier -> Tokenizer m ()
-    getIdentifier idt = liftMaybeM $ do
-      ran <- gets currentRange
+    combineNodeIds :: (Monad m) => Range -> SplitResult -> NodeInfo a -> Tokenizer m ()
+    combineNodeIds ran ranSplit (NodeInfo _ _ bd) = mapM_ (getIdentifier ran ranSplit) (M.keys bd)
+    getIdentifier :: (Monad m) => Range -> SplitResult -> Identifier -> Tokenizer m ()
+    getIdentifier ran ranSplit idt = liftMaybeM $ do
       case idt of
         Left _moduleName -> addRangeIdSetMap ran idt
         Right name -> do
-          ranSplit <- gets currentRangeContext
           occStr <- lift $ case (occNameString . nameOccName) name of
             -- the generated selector name with {-# LANGUAGE DuplicateRecordFields #-}
             '$' : 's' : 'e' : 'l' : ':' : xs -> Just $ takeWhile (/= ':') xs
