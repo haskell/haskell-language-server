@@ -23,9 +23,8 @@ import           Control.Monad.Except                     (ExceptT, liftEither,
                                                            withExceptT)
 import           Control.Monad.Trans                      (lift)
 import           Control.Monad.Trans.Except               (runExceptT)
-import           Data.Map                                 (Map)
-import qualified Data.Map                                 as M
-import qualified Data.Map                                 as Map
+import           Data.Map.Strict                          (Map)
+import qualified Data.Map.Strict                          as M
 import qualified Data.Set                                 as S
 import           Development.IDE                          (Action,
                                                            GetDocMap (GetDocMap),
@@ -103,11 +102,11 @@ getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> handleError recorder $ do
     (HAR {..}) <- lift $ use_ GetHieAst nfp
     (DKMap {getTyThingMap}, _) <- lift $ useWithStale_ GetDocMap nfp
-    ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst Map.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
+    ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     -- get current location from the old ones
     let spanIdMap = M.filter (not . null) $ hieAstSpanIdentifiers virtualFile ast
-    let names = S.unions $ Map.elems spanIdMap
+    let names = S.unions $ M.elems spanIdMap
     let localSemanticMap = mkLocalIdSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
     -- get imported name semantic map
     let importedIdSemanticMap = foldr (getTypeExclude localSemanticMap getTyThingMap) mempty names
