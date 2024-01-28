@@ -164,6 +164,11 @@ rules recorder plId = do
               logWith recorder Debug (LogDebugStanEnvVars env)
               seTomlFiles <- liftIO $ usedTomlFiles useDefConfig (stanArgsConfigFile stanArgs)
 
+              -- Note that Stan works in terms of relative paths, but the HIE come in as absolute. Without
+              -- making its path relative, the file name(s) won't line up with the associated Map keys.
+              relativeHsFilePath <- liftIO $ makeRelativeToCurrentDirectory $ fromNormalizedFilePath file
+              let hieRelative = hie{hie_hs_file=relativeHsFilePath}
+
               (cabalExtensionsMap, checksMap, confIgnored) <- case configTrial of
                   FiascoL es -> do
                       logWith recorder Development.IDE.Warning (LogWarnConf es)
@@ -171,17 +176,13 @@ rules recorder plId = do
                             HM.fromList [(LSP.fromNormalizedFilePath file, inspectionsIds)],
                             [])
                   ResultL warnings stanConfig -> do
-                      let currentHSAbs = fromNormalizedFilePath file -- hie_hs_file hie
-                      currentHSRel <- liftIO $ makeRelativeToCurrentDirectory currentHSAbs
-                      cabalExtensionsMap <- liftIO $ createCabalExtensionsMap isLoud (stanArgsCabalFilePath stanArgs) [hie]
-
-                      -- Files (keys) in checksMap need to have an absolute path for the analysis, but applyConfig needs to receive relative
-                      -- filepaths to apply the config, because the toml config has relative paths. Stan itself seems to work only in terms of relative paths.
-                      let checksMap = HM.mapKeys (const currentHSAbs) $ applyConfig [currentHSRel] stanConfig
-
-                      let analysis = runAnalysis cabalExtensionsMap checksMap (configIgnored stanConfig) [hie]
+                      -- A Map from *relative* file paths (just one, in this case) to language extension info.
+                      cabalExtensionsMap <- liftIO $ createCabalExtensionsMap isLoud (stanArgsCabalFilePath stanArgs) [hieRelative]
+                      -- HashMap of *relative* file paths to info about enabled checks for those file paths.
+                      let checksMap = applyConfig [relativeHsFilePath] stanConfig
                       pure (cabalExtensionsMap, checksMap, configIgnored stanConfig)
-              let analysis = runAnalysis cabalExtensionsMap checksMap confIgnored [hie]
+
+              let analysis = runAnalysis cabalExtensionsMap checksMap confIgnored [hieRelative]
               return (analysisToDiagnostics file analysis, Just ())
       else return ([], Nothing)
 
