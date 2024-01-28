@@ -107,7 +107,7 @@ getSemanticTokensRule recorder =
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     -- get current location from the old ones
     let spanIdMap = M.filter (not . null) $ hieAstSpanIdentifiers virtualFile ast
-    let names = S.toList $ S.unions $ Map.elems spanIdMap
+    let names = S.unions $ Map.elems spanIdMap
     let localSemanticMap = mkLocalIdSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
     -- get imported name semantic map
     let importedIdSemanticMap = foldr (getTypeExclude localSemanticMap getTyThingMap) mempty names
