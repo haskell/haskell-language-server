@@ -34,8 +34,8 @@ type Tokenizer m a = StateT PTokenState m a
 
 
 data PTokenState = PTokenState
-  { rangeIdSetMap  :: RangeIdSetMap,
-    rope           :: Rope, -- the remains of rope we are working on
+  { rangeIdSetMap  :: !RangeIdSetMap,
+    rope           :: !Rope, -- the remains of rope we are working on
     cursor         :: !Char.Position, -- the cursor position of the current rope to the start of the original file in code point position
     columnsInUtf16 :: !UInt -- the column of the start of the current rope in utf16
   }
