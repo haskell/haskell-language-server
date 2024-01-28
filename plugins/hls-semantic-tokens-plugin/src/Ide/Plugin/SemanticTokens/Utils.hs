@@ -10,7 +10,7 @@ module Ide.Plugin.SemanticTokens.Utils where
 
 import           Data.ByteString            (ByteString)
 import           Data.ByteString.Char8      (unpack)
-import qualified Data.Map                   as Map
+import qualified Data.Map.Strict            as Map
 import           Development.IDE            (Position (..), Range (..))
 import           Development.IDE.GHC.Compat
 import           Prelude                    hiding (length, span)

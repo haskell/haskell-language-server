@@ -12,7 +12,7 @@ import           Data.Aeson                         (KeyValue (..), Value (..),
                                                      object)
 import           Data.Default
 import           Data.Functor                       (void)
-import           Data.Map                           as Map hiding (map)
+import           Data.Map.Strict                    as Map hiding (map)
 import           Data.String                        (fromString)
 import           Data.Text                          hiding (length, map,
                                                      unlines)

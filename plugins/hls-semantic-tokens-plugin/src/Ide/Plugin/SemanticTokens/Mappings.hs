@@ -13,7 +13,7 @@ module Ide.Plugin.SemanticTokens.Mappings where
 
 import qualified Data.Array                      as A
 import           Data.List.Extra                 (chunksOf, (!?))
-import qualified Data.Map                        as Map
+import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (mapMaybe)
 import qualified Data.Set                        as Set
 import           Data.Text                       (Text, unpack)
