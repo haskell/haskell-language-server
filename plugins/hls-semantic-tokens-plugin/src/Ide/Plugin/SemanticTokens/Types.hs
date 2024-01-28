@@ -17,7 +17,7 @@ import           Control.DeepSeq               (NFData (rnf), rwhnf)
 import qualified Data.Array                    as A
 import           Data.Default                  (Default (def))
 import           Data.Generics                 (Typeable)
-import qualified Data.Map                      as M
+import qualified Data.Map.Strict               as M
 import           Development.IDE               (Pretty (pretty), RuleResult)
 import qualified Development.IDE.Core.Shake    as Shake
 import           Development.IDE.GHC.Compat    hiding (loc)
@@ -25,7 +25,7 @@ import           Development.IDE.Graph.Classes (Hashable)
 import           GHC.Generics                  (Generic)
 import           Language.LSP.Protocol.Types
 -- import template haskell
-import           Data.Map                      (Map)
+import           Data.Map.Strict               (Map)
 import           Data.Set                      (Set)
 import           Language.Haskell.TH.Syntax    (Lift)
 
