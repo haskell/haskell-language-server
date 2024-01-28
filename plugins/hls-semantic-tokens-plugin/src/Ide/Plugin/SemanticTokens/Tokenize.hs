@@ -98,19 +98,20 @@ visitLeafIds leaf = liftMaybeM $ do
       case idt of
         Left _moduleName -> addRangeIdSetMap ran idt
         Right name -> do
-          occStr <- lift $ case (occNameString . nameOccName) name of
+          occStr <- lift $ T.pack <$> case (occNameString . nameOccName) name of
             -- the generated selector name with {-# LANGUAGE DuplicateRecordFields #-}
             '$' : 's' : 'e' : 'l' : ':' : xs -> Just $ takeWhile (/= ':') xs
             ['$']                            -> Just "$"
             -- other generated names that should not be visible
             '$' : _                          -> Nothing
+            _c : ':' : _                     -> Nothing
             ns                               -> Just ns
           case ranSplit of
             (NoSplit (tk, r)) -> do
-              guard $ T.unpack tk == occStr
+              guard $ tk == occStr
               addRangeIdSetMap r idt
             (Split (tk, r1, r2)) -> do
-              guard $ T.unpack tk == occStr
+              guard $ tk == occStr
               addRangeIdSetMap r1 (Left $ mkModuleName "")
               addRangeIdSetMap r2 idt
 
