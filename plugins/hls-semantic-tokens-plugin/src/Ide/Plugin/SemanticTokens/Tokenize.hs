@@ -35,9 +35,9 @@ type Tokenizer m a = StateT PTokenState m a
 
 data PTokenState = PTokenState
   { rangeIdSetMap  :: RangeIdSetMap,
-    rope           :: Rope,
-    cursor         :: !Char.Position,
-    columnsInUtf16 :: !UInt
+    rope           :: Rope, -- the remains of rope we are working on
+    cursor         :: !Char.Position, -- the cursor position of the current rope to the start of the original file in code point position
+    columnsInUtf16 :: !UInt -- the column of the start of the current rope in utf16
   }
 
 runTokenizer :: (Monad m) => Tokenizer m a -> PTokenState -> m RangeIdSetMap
@@ -122,16 +122,20 @@ focusTokenAt ::
 focusTokenAt leaf = do
   PTokenState{cursor, rope, columnsInUtf16} <- get
   let span = nodeSpan leaf
-  let (startPos, endPos) = srcSpanCharPositions span
-  startOff <- lift $ startPos `sub` cursor
-  tokenOff <- lift $ endPos `sub` startPos
-  (gap, startRope) <- lift $ charSplitAtPositionMaybe startOff rope
-  (token, remains) <- lift $ charSplitAtPositionMaybe tokenOff startRope
+  let (tokenStartPos, tokenEndPos) = srcSpanCharPositions span
+  -- tokenStartOff: the offset position of the token start position to the cursor position
+  tokenStartOff <- lift $ tokenStartPos `sub` cursor
+  -- tokenOff: the offset position of the token end position to the token start position
+  tokenOff <- lift $ tokenEndPos `sub` tokenStartPos
+  (gap, tokenStartRope) <- lift $ charSplitAtPositionMaybe tokenStartOff rope
+  (token, remains) <- lift $ charSplitAtPositionMaybe tokenOff tokenStartRope
+  -- ncs: token start column in utf16
   let ncs = newColumn columnsInUtf16 gap
+  -- nce: token end column in utf16
   let nce = newColumn ncs token
   -- compute the new range for utf16, tuning the columns is enough
   let ran = codePointRangeToRangeWith ncs nce $ realSrcSpanToCodePointRange span
-  modify $ \s -> s {columnsInUtf16 = nce, rope = remains, cursor = endPos}
+  modify $ \s -> s {columnsInUtf16 = nce, rope = remains, cursor = tokenEndPos}
   return (ran, token)
   where
     srcSpanCharPositions :: RealSrcSpan -> (Char.Position, Char.Position)
