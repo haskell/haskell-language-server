@@ -574,7 +574,7 @@ checkImport' testComment originalPath expectedPath action excludedActions =
       shouldBeDoc <- createDoc expectedPath "haskell" eSrc
       actionsOrCommands <- getAllCodeActions originalDoc
       for_ excludedActions (\a -> liftIO $ assertNoActionWithTitle a actionsOrCommands)
-      chosenAction <- liftIO $ pickActionWithTitle action actionsOrCommands
+      chosenAction <- pickActionWithTitle action actionsOrCommands
       executeCodeAction chosenAction
       originalDocAfterAction <- documentContents originalDoc
       shouldBeDocContents <- documentContents shouldBeDoc
@@ -590,7 +590,7 @@ renameActionTests = testGroup "rename actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      action <- findCodeAction doc (Range (Position 2 14) (Position 2 20)) "Replace with ‘argName’"
+      action <- pickActionWithTitle "Replace with ‘argName’" =<< getCodeActions doc (R 2 14 2 20)
       executeCodeAction action
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -608,7 +608,7 @@ renameActionTests = testGroup "rename actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      action <- findCodeAction doc (Range (Position 3 6) (Position 3 16))  "Replace with ‘maybeToList’"
+      action <- pickActionWithTitle "Replace with ‘maybeToList’" =<< getCodeActions doc (R 3 6 3 16)
       executeCodeAction action
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -626,9 +626,13 @@ renameActionTests = testGroup "rename actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      _ <- findCodeActions doc (Range (Position 2 36) (Position 2 45))
-                           ["Replace with ‘argument1’", "Replace with ‘argument2’", "Replace with ‘argument3’"]
-      return()
+      actions <- getCodeActions doc (R 2 36 2 45)
+      liftIO $ assertAllActionsPresent
+        [ "Replace with ‘argument1’"
+        , "Replace with ‘argument2’"
+        , "Replace with ‘argument3’"
+        ]
+        actions
   , testSession "change infix function" $ do
       let content = T.unlines
             [ "module Testing where"
@@ -638,11 +642,7 @@ renameActionTests = testGroup "rename actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 3 12) (Position 3 20))
-      [fixTypo] <- pure [action | InR action@CodeAction{ _title = actionTitle } <- actionsOrCommands
-                                , "monus" `T.isInfixOf` actionTitle
-                                , "Replace" `T.isInfixOf` actionTitle
-                        ]
+      fixTypo <- pickActionWithTitle "Replace with ‘monus’" =<< getCodeActions doc (R 3 12 3 20)
       executeCodeAction fixTypo
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -662,10 +662,7 @@ renameActionTests = testGroup "rename actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 4 6) (Position 4 12))
-      [fixTypo] <- pure [action | InR action@CodeAction{ _title = actionTitle } <- actionsOrCommands
-                                , "break" `T.isInfixOf` actionTitle
-                        ]
+      fixTypo <- pickActionWithTitle "Replace with ‘break’" =<< getCodeActions doc (R 4 6 4 12)
       executeCodeAction fixTypo
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -781,7 +778,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         _ <- waitForDiagnostics
         actionsOrCommands <- getAllCodeActions doc
         [addSignature] <- pure [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
-                                       , "Use type signature" `T.isInfixOf` actionTitle
+                                       , "Use type signature" `T.isPrefixOf` actionTitle
                                ]
         executeCodeAction addSignature
         contentAfterAction <- documentContents doc
@@ -1581,8 +1578,7 @@ fixModuleImportTypoTests = testGroup "fix module import typo"
     [ testSession "works when single module suggested" $ do
         doc <- createDoc "A.hs" "haskell" "import Data.Cha"
         _ <- waitForDiagnostics
-        InR action@CodeAction { _title = actionTitle } : _  <- getCodeActions doc (R 0 0 0 10)
-        liftIO $ actionTitle @?= "replace with Data.Char"
+        action <- pickActionWithTitle "replace with Data.Char" =<< getCodeActions doc (R 0 0 0 10)
         executeCodeAction action
         contentAfterAction <- documentContents doc
         liftIO $ contentAfterAction @?= "import Data.Char"
@@ -1762,7 +1758,7 @@ suggestImportTests = testGroup "suggest import actions"
       actions <- getCodeActions doc range
       if wanted
          then do
-             action <- liftIO $ pickActionWithTitle newImp actions
+             action <- pickActionWithTitle newImp actions
              executeCodeAction action
              contentAfterAction <- documentContents doc
              liftIO $ after @=? contentAfterAction
@@ -1789,7 +1785,7 @@ suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields w
       let defLine = 3
           range = Range (Position defLine 0) (Position defLine maxBound)
       actions <- getCodeActions doc range
-      action <- liftIO $ pickActionWithTitle "Add foo to the import list of B" actions
+      action <- pickActionWithTitle "Add foo to the import list of B" actions
       executeCodeAction action
       contentAfterAction <- documentContents doc
       liftIO $ after @=? contentAfterAction
@@ -1831,7 +1827,6 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             compareTwo "HidePreludeIndented.hs" [(3,8)]
             "Use AVec for ++, hiding other imports"
             "HidePreludeIndented.expected.hs"
-
         ]
     , testGroup "Vec (type)"
         [ testCase "AVec" $
@@ -1912,7 +1907,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         withTarget original locs $ \dir doc actions -> do
             expected <- liftIO $
                 readFileUtf8 (dir </> expected)
-            action <- liftIO $ pickActionWithTitle cmd actions
+            action <- pickActionWithTitle cmd actions
             executeCodeAction action
             contentAfterAction <- documentContents doc
             liftIO $ T.replace "\r\n" "\n" expected @=? contentAfterAction
@@ -2074,7 +2069,7 @@ suggestHideShadowTests =
  where
   testOneCodeAction testName actionName start end origin expected =
     helper testName start end origin expected $ \cas -> do
-      action <- liftIO $ pickActionWithTitle actionName cas
+      action <- pickActionWithTitle actionName cas
       executeCodeAction action
   noCodeAction testName start end origin =
     helper testName start end origin origin $ \cas -> do
@@ -2125,9 +2120,8 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ txtB ++ txtB')
       _ <- waitForDiagnostics
-      action@CodeAction { _title = actionTitle } : _
-          <- findCodeActionsByPrefix docB (R 0 0 0 50) ["Define"]
-      liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
+      action <- pickActionWithTitle "Define select :: [Bool] -> Bool"
+          =<< getCodeActions docB (R 0 0 0 50)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       liftIO $ contentAfterAction @?= T.unlines (txtB ++
@@ -2144,9 +2138,8 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
           , "f x = plus x x"
           ]
       _ <- waitForDiagnostics
-      action@CodeAction { _title = actionTitle } : _
-          <- findCodeActionsByPrefix doc (R 2 0 2 13) ["Define"]
-      liftIO $ actionTitle @?= "Define plus :: Int -> Int -> Int"
+      action <- pickActionWithTitle "Define plus :: Int -> Int -> Int"
+          =<< getCodeActions doc (R 2 0 2 13)
       executeCodeAction action
       contentAfterAction <- documentContents doc
       liftIO $ contentAfterAction @?= T.unlines
@@ -2169,9 +2162,8 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ txtB ++ txtB')
       _ <- waitForDiagnostics
-      action@CodeAction { _title = actionTitle } : _
-          <- findCodeActionsByPrefix docB (R 0 0 0 50) ["Define"]
-      liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
+      action <- pickActionWithTitle "Define select :: [Bool] -> Bool"
+          =<< getCodeActions docB (R 0 0 0 50)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       liftIO $ contentAfterAction @?= T.unlines (
@@ -2184,7 +2176,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
         ]
         ++ txtB')
   , testSession "insert new function definition - Haddock comments" $ do
-    let start =  ["foo :: Int -> Bool"
+    let start = [ "foo :: Int -> Bool"
                  , "foo x = select (x + 1)"
                  , ""
                  , "-- | This is a haddock comment"
@@ -2199,12 +2191,12 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
              , ""
              , "-- | This is a haddock comment"
              , "haddock :: Int -> Int"
-             , "haddock = undefined"]
+             , "haddock = undefined"
+             ]
     docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
     _ <- waitForDiagnostics
-    action@CodeAction { _title = actionTitle } : _
-        <- findCodeActionsByPrefix docB (R 1 0 0 50) ["Define"]
-    liftIO $ actionTitle @?= "Define select :: Int -> Bool"
+    action <- pickActionWithTitle "Define select :: Int -> Bool"
+            =<< getCodeActions docB (R 1 0 0 50)
     executeCodeAction action
     contentAfterAction <- documentContents docB
     liftIO $ contentAfterAction @?= T.unlines expected
@@ -2227,9 +2219,8 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
              , "normal = undefined"]
     docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
     _ <- waitForDiagnostics
-    action@CodeAction { _title = actionTitle } : _
-        <- findCodeActionsByPrefix docB (R 1 0 0 50) ["Define"]
-    liftIO $ actionTitle @?= "Define select :: Int -> Bool"
+    action <- pickActionWithTitle "Define select :: Int -> Bool"
+        =<< getCodeActions docB (R 1 0 0 50)
     executeCodeAction action
     contentAfterAction <- documentContents docB
     liftIO $ contentAfterAction @?= T.unlines expected
@@ -2243,9 +2234,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ txtB ++ txtB')
       _ <- waitForDiagnostics
-      action@CodeAction { _title = actionTitle } : _ <-
-          findCodeActionsByPrefix docB (R 0 0 0 50) ["Define"]
-      liftIO $ actionTitle @?= "Define select :: _"
+      action <- pickActionWithTitle"Define select :: _" =<< getCodeActions docB (R 0 0 0 50)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       liftIO $ contentAfterAction @?= T.unlines (txtB ++
@@ -2385,20 +2374,13 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
                ])
   ]
   where
-    testFor source pos expectedTitle expectedResult = do
+    testFor source pos@(l,c) expectedTitle expectedResult = do
       docId <- createDoc "A.hs" "haskell" source
       expectDiagnostics [ ("A.hs", [(DiagnosticSeverity_Warning, pos, "not used")]) ]
-
-      (action, title) <- extractCodeAction docId "Delete" pos
-
-      liftIO $ title @?= expectedTitle
+      action <- pickActionWithTitle expectedTitle =<< getCodeActions docId  (R l c l c)
       executeCodeAction action
       contentAfterAction <- documentContents docId
       liftIO $ contentAfterAction @?= expectedResult
-
-    extractCodeAction docId actionPrefix (l, c) = do
-      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R l c l c) [actionPrefix]
-      return (action, actionTitle)
 
 addTypeAnnotationsToLiteralsTest :: TestTree
 addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals to satisfy constraints"
@@ -2537,18 +2519,15 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
     testFor source diag expectedTitle expectedResult = do
       docId <- createDoc "A.hs" "haskell" source
       expectDiagnostics [ ("A.hs", diag) ]
-
       let cursors = map snd3 diag
-      (action, title) <- extractCodeAction docId "Add type annotation" (minimum cursors) (maximum cursors)
+          (ls, cs) = minimum cursors
+          (le, ce) = maximum cursors
 
-      liftIO $ title @?= expectedTitle
+      action <- pickActionWithTitle expectedTitle =<< getCodeActions docId (R ls cs le ce)
       executeCodeAction action
       contentAfterAction <- documentContents docId
       liftIO $ contentAfterAction @?= expectedResult
 
-    extractCodeAction docId actionPrefix (l,c) (l', c')= do
-      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R l c l' c') [actionPrefix]
-      return (action, actionTitle)
 
 
 fixConstructorImportTests :: TestTree
@@ -2573,11 +2552,8 @@ fixConstructorImportTests = testGroup "fix import actions"
     template contentA contentB range expectedAction expectedContentB = do
       _docA <- createDoc "ModuleA.hs" "haskell" contentA
       docB  <- createDoc "ModuleB.hs" "haskell" contentB
-      _diags <- waitForDiagnostics
-      InR action@CodeAction { _title = actionTitle } : _
-                  <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
-                     getCodeActions docB range
-      liftIO $ expectedAction @=? actionTitle
+      _ <- waitForDiagnostics
+      action <- pickActionWithTitle expectedAction =<< getCodeActions docB range
       executeCodeAction action
       contentAfterAction <- documentContents docB
       liftIO $ expectedContentB @=? contentAfterAction
@@ -2585,7 +2561,9 @@ fixConstructorImportTests = testGroup "fix import actions"
 importRenameActionTests :: TestTree
 importRenameActionTests = testGroup "import rename actions"
   [ testSession "Data.Mape -> Data.Map"   $ check "Map"
-  , testSession "Data.Mape -> Data.Maybe" $ check "Maybe" ] where
+  , testSession "Data.Mape -> Data.Maybe" $ check "Maybe"
+  ]
+  where
   check modname = do
       let content = T.unlines
             [ "module Testing where"
@@ -2593,10 +2571,7 @@ importRenameActionTests = testGroup "import rename actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (R 1 8 1 16)
-      [changeToMap] <- pure [action | InR action@CodeAction{ _title = actionTitle } <- actionsOrCommands
-                                    , ("Data." <> modname) `T.isInfixOf` actionTitle
-                            ]
+      changeToMap <- pickActionWithTitle ("replace with Data." <> modname) =<< getCodeActions doc (R 1 8 1 16)
       executeCodeAction changeToMap
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -2636,7 +2611,7 @@ fillTypedHoleTests = let
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 9 0) (Position 9 maxBound))
-    chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
+    chosenAction <- pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
@@ -2677,7 +2652,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_toException"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 3 0) (Position 3 maxBound))
-      chosen <- liftIO $ pickActionWithTitle "replace _toException with E.toException" actions
+      chosen <- pickActionWithTitle "replace _toException with E.toException" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "E.toException" @=? modifiedCode
@@ -2693,7 +2668,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 5 16) (Position 5 19))
-      chosen <- liftIO $ pickActionWithTitle "replace _ with foo" actions
+      chosen <- pickActionWithTitle "replace _ with foo" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "`foo`" @=? modifiedCode
@@ -2706,7 +2681,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 13) (Position 2 14))
-      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      chosen <- pickActionWithTitle "replace _ with (+)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "(+)" @=? modifiedCode
@@ -2719,7 +2694,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 16) (Position 2 19))
-      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      chosen <- pickActionWithTitle "replace _ with (+)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "+" @=? modifiedCode
@@ -2768,7 +2743,7 @@ addInstanceConstraintTests = let
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
     actionsOrCommands <- getAllCodeActions doc
-    chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
+    chosenAction <- pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
@@ -2920,7 +2895,7 @@ checkCodeAction testName actionTitle originalCode expectedCode = testSession tes
   doc <- createDoc "Testing.hs" "haskell" originalCode
   _ <- waitForDiagnostics
   actionsOrCommands <- getAllCodeActions doc
-  chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
+  chosenAction <- pickActionWithTitle actionTitle actionsOrCommands
   executeCodeAction chosenAction
   modifiedCode <- documentContents doc
   liftIO $ expectedCode @=? modifiedCode
@@ -3099,7 +3074,7 @@ removeRedundantConstraintsTests = let
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
     actionsOrCommands <- getAllCodeActions doc
-    chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
+    chosenAction <- pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
@@ -3172,7 +3147,7 @@ addSigActionTests = let
     doc <- createDoc "Sigs.hs" "haskell" originalCode
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 5 1) (Position 5 maxBound))
-    chosenAction <- liftIO $ pickActionWithTitle ("add signature: " <> sig) actionsOrCommands
+    chosenAction <- pickActionWithTitle ("add signature: " <> sig) actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
@@ -3549,7 +3524,7 @@ exportTemplate mRange initialContent expectedAction expectedContents = do
     Just range -> getCodeActions doc range
   case expectedContents of
     Just content -> do
-      action <- liftIO $ pickActionWithTitle expectedAction actions
+      action <- pickActionWithTitle expectedAction actions
       executeCodeAction action
       contentAfterAction <- documentContents doc
       liftIO $ content @=? contentAfterAction
@@ -3768,10 +3743,11 @@ extendImportTestsRegEx = testGroup "regex parsing"
         template message expected = do
             liftIO $ expected @=? matchRegExMultipleImports message
 
-pickActionWithTitle :: T.Text -> [Command |? CodeAction] -> IO CodeAction
-pickActionWithTitle title actions = do
-  assertBool ("Found no matching actions for " <> show title <> " in " <> show titles) (not $ null matches)
-  return $ head matches
+pickActionWithTitle :: T.Text -> [Command |? CodeAction] -> Session CodeAction
+pickActionWithTitle title actions =
+  case matches of
+    [] -> liftIO . assertFailure $ "CodeAction with title '" <> show title <> "' not found in " <> show titles
+    a:_ -> pure a
   where
     titles =
         [ actionTitle
@@ -3784,9 +3760,8 @@ pickActionWithTitle title actions = do
         ]
 
 assertNoActionWithTitle :: T.Text -> [Command |? CodeAction] -> IO ()
-assertNoActionWithTitle title actions = do
+assertNoActionWithTitle title actions =
   assertBool ("Unexpected code action " <> show title <> " in " <> show titles) (null matches)
-  pure ()
   where
     titles =
         [ actionTitle
@@ -3798,34 +3773,16 @@ assertNoActionWithTitle title actions = do
         , title == actionTitle
         ]
 
-findCodeActions :: TextDocumentIdentifier -> Range -> [T.Text] -> Session [CodeAction]
-findCodeActions = findCodeActions' (==) "is not a superset of"
-
-findCodeActionsByPrefix :: TextDocumentIdentifier -> Range -> [T.Text] -> Session [CodeAction]
-findCodeActionsByPrefix = findCodeActions' T.isPrefixOf "is not prefix of"
-
-findCodeActions' :: (T.Text -> T.Text -> Bool) -> String -> TextDocumentIdentifier -> Range -> [T.Text] -> Session [CodeAction]
-findCodeActions' op errMsg doc range expectedTitles = do
-  actions <- getCodeActions doc range
-  let matches = sequence
-        [ listToMaybe
-          [ action
-          | InR action@CodeAction { _title = actionTitle } <- actions
-          , expectedTitle `op` actionTitle]
-        | expectedTitle <- expectedTitles]
-  let msg = show
-            [ actionTitle
-            | InR CodeAction { _title = actionTitle } <- actions
-            ]
-            ++ " " <> errMsg <> " "
-            ++ show expectedTitles
-  liftIO $ case matches of
-    Nothing -> assertFailure msg
-    Just _  -> pure ()
-  return (fromJust matches)
-
-findCodeAction :: TextDocumentIdentifier -> Range -> T.Text -> Session CodeAction
-findCodeAction doc range t = head <$> findCodeActions doc range [t]
+assertAllActionsPresent :: [T.Text] -> [Command |? CodeAction] -> IO ()
+assertAllActionsPresent expectedTitles actions =
+  for_ expectedTitles $ \title ->
+    assertBool ("CodeAction with title '" <> show title <>"' not found in " <> show titles)
+               (title `elem` titles)
+  where
+    titles =
+        [ actionTitle
+        | InR CodeAction { _title = actionTitle } <- actions
+        ]
 
 testSession :: String -> Session () -> TestTree
 testSession name = testCase name . run
