@@ -17,7 +17,7 @@ import           Control.DeepSeq               (NFData (rnf), rwhnf)
 import qualified Data.Array                    as A
 import           Data.Default                  (Default (def))
 import           Data.Generics                 (Typeable)
-import qualified Data.Map                      as M
+import qualified Data.Map.Strict               as M
 import           Development.IDE               (Pretty (pretty), RuleResult)
 import qualified Development.IDE.Core.Shake    as Shake
 import           Development.IDE.GHC.Compat    hiding (loc)
@@ -25,6 +25,8 @@ import           Development.IDE.Graph.Classes (Hashable)
 import           GHC.Generics                  (Generic)
 import           Language.LSP.Protocol.Types
 -- import template haskell
+import           Data.Map.Strict               (Map)
+import           Data.Set                      (Set)
 import           Language.Haskell.TH.Syntax    (Lift)
 
 
@@ -43,6 +45,7 @@ data HsSemanticTokenType
   | TTypeSynonym -- Type synonym
   | TTypeFamily -- type family
   | TRecordField -- from match bind
+  | TModule -- module name
   deriving (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
 
 
@@ -65,6 +68,7 @@ instance Default SemanticTokensConfig where
       , stTypeSynonym = SemanticTokenTypes_Type
       , stTypeFamily = SemanticTokenTypes_Interface
       , stRecordField = SemanticTokenTypes_Property
+      , stModule = SemanticTokenTypes_Namespace
       }
 -- | SemanticTokensConfig_ is a configuration for the semantic tokens plugin.
 -- it contains map between the hs semantic token type and default token type.
@@ -80,6 +84,7 @@ data SemanticTokensConfig = STC
   , stTypeSynonym     :: !SemanticTokenTypes
   , stTypeFamily      :: !SemanticTokenTypes
   , stRecordField     :: !SemanticTokenTypes
+  , stModule          :: !SemanticTokenTypes
   } deriving (Generic, Show)
 
 
@@ -108,7 +113,9 @@ data Loc = Loc
 instance Show Loc where
   show (Loc line startChar len) = show line <> ":" <> show startChar <> "-" <> show (startChar + len)
 
-type NameSemanticMap = NameEnv HsSemanticTokenType
+type RangeIdSetMap = Map Range (Set Identifier)
+
+type IdSemanticMap = Map Identifier HsSemanticTokenType
 
 data GetSemanticTokens = GetSemanticTokens
   deriving (Eq, Show, Typeable, Generic)
@@ -117,14 +124,14 @@ instance Hashable GetSemanticTokens
 
 instance NFData GetSemanticTokens
 
-data RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {rangeSemanticMap :: M.Map Range HsSemanticTokenType}
+newtype RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {rangeSemanticMap :: M.Map Range HsSemanticTokenType}
 
 instance NFData RangeHsSemanticTokenTypes where
   rnf :: RangeHsSemanticTokenTypes -> ()
   rnf (RangeHsSemanticTokenTypes a) = rwhnf a
 
 instance Show RangeHsSemanticTokenTypes where
-  show = const "GlobalNameMap"
+  show = const "RangeHsSemanticTokenTypes"
 
 type instance RuleResult GetSemanticTokens = RangeHsSemanticTokenTypes
 

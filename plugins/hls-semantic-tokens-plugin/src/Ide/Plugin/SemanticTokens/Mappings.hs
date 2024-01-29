@@ -13,7 +13,7 @@ module Ide.Plugin.SemanticTokens.Mappings where
 
 import qualified Data.Array                      as A
 import           Data.List.Extra                 (chunksOf, (!?))
-import qualified Data.Map                        as Map
+import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (mapMaybe)
 import qualified Data.Set                        as Set
 import           Data.Text                       (Text, unpack)
@@ -45,6 +45,7 @@ toLspTokenType conf tk = case tk of
   TTypeFamily      -> stTypeFamily conf
   TRecordField     -> stRecordField conf
   TPatternSynonym  -> stPatternSynonym conf
+  TModule          -> stModule conf
 
 lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap config
@@ -114,15 +115,15 @@ recoverFunMaskArray flattened = unflattened
     -- The recursion in 'unflattened' is crucial - it's what gives us sharing
     -- function indicator check.
     unflattened :: A.Array TypeIndex Bool
-    unflattened = fmap (\flatTy -> go (fmap (unflattened A.!) flatTy)) flattened
+    unflattened = fmap (go . fmap (unflattened A.!)) flattened
 
-    -- Unfold an 'HieType' whose subterms have already been unfolded
+    -- Unfold an 'HieType' whose sub-terms have already been unfolded
     go :: HieType Bool -> Bool
     go (HTyVarTy _name)              = False
     go (HAppTy _f _x)                = False
     go (HLitTy _lit)                 = False
     go (HForAllTy ((_n, _k), _af) b) = b
-    go (HFunTy _ _ _)                = True
+    go (HFunTy {})                   = True
     go (HQualTy _constraint b)       = b
     go (HCastTy b)                   = b
     go HCoercionTy                   = False

@@ -15,6 +15,7 @@
 module Ide.Plugin.Properties
   ( PropertyType (..),
     ToHsType,
+    NotElem,
     MetaData (..),
     PropertyKey (..),
     SPropertyKey (..),
