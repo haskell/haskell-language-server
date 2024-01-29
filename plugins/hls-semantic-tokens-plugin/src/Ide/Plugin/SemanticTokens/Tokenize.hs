@@ -11,7 +11,7 @@ import           Control.Monad.State.Strict       (MonadState (get),
                                                    MonadTrans (lift),
                                                    execStateT, modify, put)
 import           Control.Monad.Trans.State.Strict (StateT)
-import           Data.Char                        (isAlpha)
+import           Data.Char                        (isAlpha, isAlphaNum)
 import qualified Data.Map.Strict                  as M
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Set                         as S
@@ -101,10 +101,9 @@ visitLeafIds leaf = liftMaybeM $ do
           occStr <- lift $ T.pack <$> case (occNameString . nameOccName) name of
             -- the generated selector name with {-# LANGUAGE DuplicateRecordFields #-}
             '$' : 's' : 'e' : 'l' : ':' : xs -> Just $ takeWhile (/= ':') xs
-            ['$']                            -> Just "$"
             -- other generated names that should not be visible
-            '$' : _                          -> Nothing
-            c : ':' : _ | isAlpha c          -> Nothing
+            '$' : c : _ | isAlphaNum c       -> Nothing
+            c : ':' : _ | isAlphaNum c       -> Nothing
             ns                               -> Just ns
           case ranSplit of
             (NoSplit (tk, r)) -> do
