@@ -122,7 +122,7 @@ getSemanticTokensRule recorder =
       Maybe HsSemanticTokenType
     getTypeExclude tyThingMap n
       | (Right name) <- n =
-          let tyThing =  lookupNameEnv tyThingMap name
+          let tyThing = lookupNameEnv tyThingMap name
            in (tyThing >>= tyThingSemantic)
      | otherwise = Nothing
 
