@@ -138,7 +138,7 @@ Provided by: `hls-call-hierarchy-plugin`
 
 Shows ingoing and outgoing calls for a function.
 
-![Call Hierarchy in VSCode](https://github.com/haskell/haskell-language-server/raw/2857eeece0398e1cd4b2ffb6069b05c4d2308b39/plugins/hls-call-hierarchy-plugin/call-hierarchy-in-vscode.gif)
+![Call Hierarchy in VSCode](../plugins/hls-call-hierarchy-plugin/call-hierarchy-in-vscode.gif)
 
 ## Highlight references
 
@@ -199,7 +199,7 @@ Rewrites imported names to be qualified.
 
 ![Qualify Imported Names Demo](../plugins/hls-qualify-imported-names-plugin/qualify-imported-names-demo.gif)
 
-For usage see the ![readme](../plugins/hls-qualify-imported-names-plugin/README.md).
+For usage see the [readme](../plugins/hls-qualify-imported-names-plugin/README.md).
 
 ### Add missing class methods
 
@@ -264,7 +264,7 @@ Known Limitations:
 
 ![Change Type Signature Demo](../plugins/hls-change-type-signature-plugin/change2.gif)
 
-![Link to Docs](../plugins/hls-change-type-signature-plugin/README.md)
+[Link to Docs](../plugins/hls-change-type-signature-plugin/README.md)
 
 ### Add argument to function
 
@@ -284,7 +284,7 @@ Convert a datatype to GADT syntax.
 
 ![GADT Demo](../plugins/hls-gadt-plugin/gadt.gif)
 
-![Link to Docs](../plugins/hls-gadt-plugin/README.md)
+[Link to Docs](../plugins/hls-gadt-plugin/README.md)
 
 ### Expand record wildcard
 
@@ -318,7 +318,7 @@ Provided by: `hls-eval-plugin`
 
 Evaluates code blocks in comments with a click. [Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md).
 
-![Eval Demo](https://raw.githubusercontent.com/haskell/haskell-language-server/master/plugins/hls-eval-plugin/demo.gif)
+![Eval Demo](../plugins/hls-eval-plugin/demo.gif)
 
 Known limitations:
 
