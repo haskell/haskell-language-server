@@ -47,7 +47,7 @@ runCabalSession subdir =
     failIfSessionTimeout . runSessionWithServer def cabalPlugin (testDataDir </> subdir)
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-cabal-plugin" </> "test" </> "testdata"
 
 -- | list comparison where the order in the list is irrelevant
 (@?==) :: (HasCallStack, Ord a, Show a) => [a] -> [a] -> Assertion

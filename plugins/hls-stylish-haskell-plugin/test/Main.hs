@@ -25,4 +25,4 @@ goldenWithStylishHaskell :: TestName -> FilePath -> FilePath -> (TextDocumentIde
 goldenWithStylishHaskell title fp desc = goldenWithHaskellDocFormatter def stylishHaskellPlugin "stylishHaskell" def title testDataDir fp desc "hs"
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-stylish-haskell-plugin" </> "test" </> "testdata"

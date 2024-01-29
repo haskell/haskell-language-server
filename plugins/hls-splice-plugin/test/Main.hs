@@ -109,7 +109,7 @@ goldenTestWithEdit fp expect tc line col =
        _ -> liftIO $ assertFailure "No CodeAction detected"
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-splice-plugin" </> "test" </> "testdata"
 
 pointRange :: Int -> Int -> Range
 pointRange (subtract 1 -> fromIntegral -> line) (subtract 1 -> fromIntegral -> col) =

@@ -48,7 +48,7 @@ selectionRangeGoldenTest testName positions = goldenGitDiff testName (testDataDi
         Right golden -> pure golden
   where
     testDataDir :: FilePath
-    testDataDir = "test" </> "testdata" </> "selection-range"
+    testDataDir = "plugins" </> "hls-code-range-plugin" </> "test" </> "testdata" </> "selection-range"
 
     showSelectionRangesForTest :: [SelectionRange] -> ByteString
     showSelectionRangesForTest selectionRanges = LBSChar8.intercalate "\n" $ fmap showSelectionRangeForTest selectionRanges
@@ -78,7 +78,7 @@ foldingRangeGoldenTest testName = goldenGitDiff  testName (testDataDir </> testN
 
     where
         testDataDir :: FilePath
-        testDataDir = "test" </> "testdata" </> "folding-range"
+        testDataDir = "plugins" </> "hls-code-range-plugin" </> "test" </> "testdata" </> "folding-range"
 
         showFoldingRangesForTest :: [FoldingRange] -> ByteString
         showFoldingRangesForTest foldingRanges = (LBSChar8.intercalate "\n" $ fmap showFoldingRangeForTest foldingRanges) `LBSChar8.snoc` '\n'

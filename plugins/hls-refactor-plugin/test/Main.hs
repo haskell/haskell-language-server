@@ -3841,10 +3841,10 @@ runWithExtraFiles prefix s = withTempDir $ \dir -> do
 copyTestDataFiles :: HasCallStack => FilePath -> FilePath -> IO ()
 copyTestDataFiles dir prefix = do
   -- Copy all the test data files to the temporary workspace
-  testDataFiles <- getDirectoryFilesIO ("test/data" </> prefix) ["//*"]
+  testDataFiles <- getDirectoryFilesIO ("plugins/hls-refactor-plugin/test/data" </> prefix) ["//*"]
   for_ testDataFiles $ \f -> do
     createDirectoryIfMissing True $ dir </> takeDirectory f
-    copyFile ("test/data" </> prefix </> f) (dir </> f)
+    copyFile ("plugins/hls-refactor-plugin/test/data" </> prefix </> f) (dir </> f)
 
 run :: Session a -> IO a
 run s = run' (const s)

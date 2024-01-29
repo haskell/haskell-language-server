@@ -214,4 +214,4 @@ goldenWithPragmas :: PluginTestDescriptor () -> TestName -> FilePath -> (TextDoc
 goldenWithPragmas descriptor title path = goldenWithHaskellDoc def descriptor title testDataDir path "expected" "hs"
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-pragmas-plugin" </> "test" </> "testdata"
