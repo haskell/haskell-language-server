@@ -110,17 +110,16 @@ getSemanticTokensRule recorder =
     let localSemanticMap = mkLocalIdSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
     -- get imported name semantic map
     let importedIdSemanticMap = M.mapMaybe id
-            $ M.fromSet (getTypeExclude getTyThingMap) (names `S.difference` M.keysSet localSemanticMap)
+            $ M.fromSet (getTypeThing getTyThingMap) (names `S.difference` M.keysSet localSemanticMap)
     let sMap = M.unionWith (<>) importedIdSemanticMap localSemanticMap
     let rangeTokenType = extractSemanticTokensFromNames sMap spanIdMap
     return $ RangeHsSemanticTokenTypes rangeTokenType
   where
-    -- ignore one already in discovered in local
-    getTypeExclude ::
+    getTypeThing ::
       NameEnv TyThing ->
       Identifier ->
       Maybe HsSemanticTokenType
-    getTypeExclude tyThingMap n
+    getTypeThing tyThingMap n
       | (Right name) <- n =
           let tyThing = lookupNameEnv tyThingMap name
            in (tyThing >>= tyThingSemantic)
