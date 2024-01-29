@@ -286,7 +286,7 @@ codeLensTestOutput codeLens = do
   testOutput =<< sectionTests
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-eval-plugin" </> "test" </> "testdata"
 
 changeConfig :: [Pair] -> Config
 changeConfig conf =

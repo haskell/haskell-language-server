@@ -69,4 +69,4 @@ isExplicitFieldsCodeAction CodeAction {_title} =
   "Expand record wildcard" `T.isPrefixOf` _title
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-explicit-record-fields-plugin" </> "test" </> "testdata"

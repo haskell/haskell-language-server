@@ -43,7 +43,7 @@ tests =
     ]
 
 testDir :: FilePath
-testDir = "test/testdata"
+testDir = "plugins/hls-stan-plugin/test/testdata"
 
 stanPlugin :: PluginTestDescriptor Stan.Log
 stanPlugin = mkPluginTestDescriptor enabledStanDescriptor "stan"
