@@ -1888,8 +1888,6 @@ test-suite func-test
     Test.Hls.Flags
 
   default-extensions: OverloadedStrings
-  ghc-options:
-    -threaded -rtsopts -with-rtsopts=-N
 
 -- Duplicating inclusion plugin conditions until tests are moved to their own packages
   if flag(eval)
@@ -1924,7 +1922,7 @@ benchmark benchmark
     if impl(ghc >= 9.5)
       buildable: False
     type: exitcode-stdio-1.0
-    ghc-options: -Wall -Wno-name-shadowing -threaded
+    ghc-options: -threaded
     main-is: Main.hs
     hs-source-dirs: bench
     build-tool-depends:
