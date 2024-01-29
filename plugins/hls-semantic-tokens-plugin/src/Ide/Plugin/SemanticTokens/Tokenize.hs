@@ -17,7 +17,6 @@ import qualified Data.Map.Strict                  as Map
 import qualified Data.Set                         as S
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
-import           Data.Text.Encoding               (encodeUtf8)
 import qualified Data.Text.Rope                   as Char
 import           Data.Text.Utf16.Rope             (toText)
 import qualified Data.Text.Utf16.Rope             as Utf16
@@ -25,7 +24,6 @@ import           Data.Text.Utf16.Rope.Mixed       (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error        (realSrcSpanToCodePointRange)
-import           Development.IDE.Types.Exports    (renderOcc)
 import           Ide.Plugin.SemanticTokens.Types  (RangeIdSetMap)
 import           Language.LSP.Protocol.Types      (Position (Position),
                                                    Range (Range), UInt, mkRange)
