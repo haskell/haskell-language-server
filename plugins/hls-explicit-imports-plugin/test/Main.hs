@@ -174,7 +174,7 @@ goldenWithImportActions :: String -> FilePath -> ClientCapabilities -> (TextDocu
 goldenWithImportActions title fp caps = goldenWithHaskellAndCaps def caps explicitImportsPlugin (fp <> title <> " (golden)") testDataDir fp "expected" "hs"
 
 testDataDir :: String
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-explicit-imports-plugin" </> "test" </> "testdata"
 
 pointRange :: Int -> Int -> Range
 pointRange

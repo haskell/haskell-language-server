@@ -8,33 +8,6 @@ packages:
          ./ghcide/test
          ./hls-plugin-api
          ./hls-test-utils
-         ./plugins/hls-cabal-plugin
-         ./plugins/hls-cabal-fmt-plugin
-         ./plugins/hls-stylish-haskell-plugin
-         ./plugins/hls-fourmolu-plugin
-         ./plugins/hls-class-plugin
-         ./plugins/hls-eval-plugin
-         ./plugins/hls-explicit-imports-plugin
-         ./plugins/hls-hlint-plugin
-         ./plugins/hls-rename-plugin
-         ./plugins/hls-retrie-plugin
-         ./plugins/hls-splice-plugin
-         ./plugins/hls-floskell-plugin
-         ./plugins/hls-pragmas-plugin
-         ./plugins/hls-module-name-plugin
-         ./plugins/hls-ormolu-plugin
-         ./plugins/hls-call-hierarchy-plugin
-         ./plugins/hls-alternate-number-format-plugin
-         ./plugins/hls-qualify-imported-names-plugin
-         ./plugins/hls-code-range-plugin
-         ./plugins/hls-change-type-signature-plugin
-         ./plugins/hls-stan-plugin
-         ./plugins/hls-gadt-plugin
-         ./plugins/hls-explicit-fixity-plugin
-         ./plugins/hls-explicit-record-fields-plugin
-         ./plugins/hls-refactor-plugin
-         ./plugins/hls-overloaded-record-dot-plugin
-         ./plugins/hls-semantic-tokens-plugin
 
 index-state: 2024-01-21T00:00:00Z
 

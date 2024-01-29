@@ -67,4 +67,4 @@ hoverTest' docName title pos expected = testCase title $ runSessionWithServer de
     closeDoc doc
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-explicit-fixity-plugin" </> "test" </> "testdata"
