@@ -21,7 +21,6 @@ Options apply only in the section where they are defined (unless they are in the
 
 >>> class L a b c
 Too many parameters for class `L'
-(Enable MultiParamTypeClasses to allow multi-parameter classes)
 In the class declaration for `L'
 -}
 
@@ -33,7 +32,6 @@ Not set yet:
 
 >>> class D
 No parameters for class `D'
-(Enable MultiParamTypeClasses to allow no-parameter classes)
 In the class declaration for `D'
 
 Now it works:
@@ -57,7 +55,7 @@ It still works
 {- Invalid option/flags are reported, but valid ones will be reflected
 
 >>> :set -XRank2Types -XAbsent -XDatatypeContexts -XWrong -fprint-nothing-at-all
-<interactive>: warning:
+<interactive>: warning: [GHC-53692] [-Wdeprecated-flags (in -Wdefault)]
     -XDatatypeContexts is deprecated: It was widely considered a misfeature, and has been removed from the Haskell language.
 Some flags have not been recognized: -XAbsent, -XWrong, -fprint-nothing-at-all
 

@@ -131,7 +131,7 @@ tests =
   , goldenWithEvalAndFs "Transitive local dependency"  (FS.directProjectMulti ["TTransitive.hs", "TLocalImport.hs", "Util.hs"]) "TTransitive" "hs"
   -- , goldenWithEval "Local Modules can be imported in a test" "TLocalImportInTest" "hs"
   , goldenWithEval "Setting language option TupleSections" "TLanguageOptionsTupleSections" "hs"
-  , goldenWithEval' ":set accepts ghci flags" "TFlags" "hs" (if ghcVersion >= GHC92 then "ghc98.expected" else if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
+  , goldenWithEval' ":set accepts ghci flags" "TFlags" "hs" (if ghcVersion >= GHC98 then "ghc98.expected" else if ghcVersion >= GHC92 then "ghc92.expected" else "expected")
   , testCase ":set -fprint-explicit-foralls works" $ do
       evalInFile "T8.hs" "-- >>> :t id" "-- id :: a -> a"
       evalInFile "T8.hs" "-- >>> :set -fprint-explicit-foralls\n-- >>> :t id"
@@ -142,7 +142,9 @@ tests =
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEvalAndFs "Property checking" cabalProjectFS "TProperty" "hs"
   , goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" (
-        if ghcVersion >= GHC96 then
+        if ghcVersion >= GHC98 then
+          "ghc98.expected"
+        else if ghcVersion >= GHC96 then
           "ghc96.expected"
         else if ghcVersion >= GHC94 && hostOS == Windows then
           "windows-ghc94.expected"
