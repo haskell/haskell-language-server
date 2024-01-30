@@ -40,6 +40,18 @@ tests =
           diags <- waitForDiagnosticsFromSource doc "stan"
           liftIO $ length diags @?= 0
           return ()
+    , testCase "respects LANGUAGE pragmas in the source file" $
+        runStanSession "" $ do
+          doc <- openDoc "extension-tests/language-pragma/LanguagePragmaTest.hs" "haskell"
+          diags <- waitForDiagnosticsFromSource doc "stan"
+          liftIO $ length diags @?= 0
+          return ()
+    , testCase "respects language extensions defined in the .cabal file" $
+        runStanSession "" $ do
+          doc <- openDoc "extension-tests/cabal-file/CabalFileTest.hs" "haskell"
+          diags <- waitForDiagnosticsFromSource doc "stan"
+          liftIO $ length diags @?= 0
+          return ()
     ]
 
 testDir :: FilePath
