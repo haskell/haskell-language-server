@@ -107,8 +107,12 @@ jobs:
         # run the tests without parallelism, otherwise tasty will attempt to run
         # all functional test cases simultaneously which causes way too many hls
         # instances to be spun up for the poor github actions runner to handle
+        # TODO(MPJ): I removed the tasty-rerun options since it seemed to be
+        # triggering when it shouldn't. We should try and figure out why or
+        # just drop it entirely.
+        # --rerun-update --rerun-filter failures,exceptions
         run: |
-          echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions" >> $GITHUB_ENV
+          echo "TEST_OPTS=-j1 " >> $GITHUB_ENV
 
       - name: Cache test log between attempts of the same run
         uses: actions/cache@v3
