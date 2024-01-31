@@ -44,13 +44,17 @@ tests =
         runStanSession "" $ do
           doc <- openDoc "extension-tests/language-pragma/LanguagePragmaTest.hs" "haskell"
           diags <- waitForDiagnosticsFromSource doc "stan"
-          liftIO $ length diags @?= 0
+          -- We must include at least one valid diagnostic in our test file to avoid
+          -- the false-positive case where Stan finds no analyses to perform due to a
+          -- bad mapping, which would also lead to zero diagnostics being returned.
+          liftIO $ length diags @?= 1
           return ()
     , testCase "respects language extensions defined in the .cabal file" $
         runStanSession "" $ do
           doc <- openDoc "extension-tests/cabal-file/CabalFileTest.hs" "haskell"
           diags <- waitForDiagnosticsFromSource doc "stan"
-          liftIO $ length diags @?= 0
+          -- We need at least one valid diagnostic here too, for the same reason as above.
+          liftIO $ length diags @?= 1
           return ()
     ]
 
