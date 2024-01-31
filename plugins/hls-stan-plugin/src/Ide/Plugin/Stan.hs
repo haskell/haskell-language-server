@@ -169,20 +169,20 @@ rules recorder plId = do
               relativeHsFilePath <- liftIO $ makeRelativeToCurrentDirectory $ fromNormalizedFilePath file
               let hieRelative = hie{hie_hs_file=relativeHsFilePath}
 
-              (cabalExtensionsMap, checksMap, confIgnored) <- case configTrial of
+              (checksMap, ignoredObservations) <- case configTrial of
                   FiascoL es -> do
                       logWith recorder Development.IDE.Warning (LogWarnConf es)
-                      pure (Map.empty,
-                            HM.fromList [(LSP.fromNormalizedFilePath file, inspectionsIds)],
-                            [])
-                  ResultL warnings stanConfig -> do
-                      -- A Map from *relative* file paths (just one, in this case) to language extension info.
-                      cabalExtensionsMap <- liftIO $ createCabalExtensionsMap isLoud (stanArgsCabalFilePath stanArgs) [hieRelative]
+                      -- If we can't read the config file, default to using all inspections:
+                      let allInspections = HM.fromList [(relativeHsFilePath, inspectionsIds)]
+                      pure (allInspections, [])
+                  ResultL _warnings stanConfig -> do
                       -- HashMap of *relative* file paths to info about enabled checks for those file paths.
                       let checksMap = applyConfig [relativeHsFilePath] stanConfig
-                      pure (cabalExtensionsMap, checksMap, configIgnored stanConfig)
+                      pure (checksMap, configIgnored stanConfig)
 
-              let analysis = runAnalysis cabalExtensionsMap checksMap confIgnored [hieRelative]
+              -- A Map from *relative* file paths (just one, in this case) to language extension info:
+              cabalExtensionsMap <- liftIO $ createCabalExtensionsMap isLoud (stanArgsCabalFilePath stanArgs) [hieRelative]
+              let analysis = runAnalysis cabalExtensionsMap checksMap ignoredObservations [hieRelative]
               return (analysisToDiagnostics file analysis, Just ())
       else return ([], Nothing)
 
