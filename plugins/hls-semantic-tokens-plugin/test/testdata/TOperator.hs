@@ -5,5 +5,8 @@ go f x = f $ x
 -- operator defined in local module
 ($$$$) = b
 x = 1 $$$$ 2
+data a :+: b = Add a b
+-- type take precedence over operator
+add :: Int :+: Int -> Int
 -- class method take precedence over operator
-b = 1 + 1
+add (Add x y) = x + y
