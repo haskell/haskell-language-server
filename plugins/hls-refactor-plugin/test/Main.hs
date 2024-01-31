@@ -103,7 +103,6 @@ initializeTests = withResource acquire release tests
     acquire :: IO (TResponseMessage Method_Initialize)
     acquire = run initializeResponse
 
-
     release :: TResponseMessage Method_Initialize -> IO ()
     release = const $ pure ()
 
@@ -262,7 +261,7 @@ completionTests =
           ]
       ]
 
-completionCommandTest :: String -> [T.Text] -> Position -> T.Text -> [T.Text] -> TestTree
+completionCommandTest :: TestName -> [T.Text] -> Position -> T.Text -> [T.Text] -> TestTree
 completionCommandTest name src pos wanted expected = testSession name $ do
   docId <- createDoc "A.hs" "haskell" (T.unlines src)
   _ <- waitForDiagnostics
@@ -286,7 +285,7 @@ completionCommandTest name src pos wanted expected = testSession name $ do
             expectMessages SMethod_WorkspaceApplyEdit 1 $ \edit ->
               liftIO $ assertFailure $ "Expected no edit but got: " <> show edit
 
-completionNoCommandTest :: String -> [T.Text] -> Position -> T.Text -> TestTree
+completionNoCommandTest :: TestName -> [T.Text] -> Position -> T.Text -> TestTree
 completionNoCommandTest name src pos wanted = testSession name $ do
   docId <- createDoc "A.hs" "haskell" (T.unlines src)
   _ <- waitForDiagnostics
@@ -544,13 +543,13 @@ importQualifiedTests = testGroup "import qualified prefix suggestions"
       ["import qualified Control.Monad as Control", "import Control.Monad (when)"]
   ]
 
-checkImport :: String -> FilePath -> FilePath -> T.Text -> TestTree
-checkImport testComment originalPath expectedPath action =
-  checkImport' testComment originalPath expectedPath action []
+checkImport :: TestName -> FilePath -> FilePath -> T.Text -> TestTree
+checkImport testName originalPath expectedPath action =
+  checkImport' testName originalPath expectedPath action []
 
-checkImport' :: String -> FilePath -> FilePath -> T.Text -> [T.Text] -> TestTree
-checkImport' testComment originalPath expectedPath action excludedActions =
-  testSessionWithExtraFiles "import-placement" testComment $ \dir ->
+checkImport' :: TestName -> FilePath -> FilePath -> T.Text -> [T.Text] -> TestTree
+checkImport' testName originalPath expectedPath action excludedActions =
+  testSessionWithExtraFiles "import-placement" testName $ \dir ->
     check (dir </> originalPath) (dir </> expectedPath) action
   where
     check :: FilePath -> FilePath -> T.Text -> Session ()
@@ -631,7 +630,7 @@ renameActionTests = testGroup "rename actions"
         ]
   ]
   where
-    check :: String -> [T.Text] -> (T.Text, Range) -> [T.Text] -> TestTree
+    check :: TestName -> [T.Text] -> (T.Text, Range) -> [T.Text] -> TestTree
     check testName linesOrig (actionTitle, actionRange) linesExpected  =
       testSession testName $ do
         let contentBefore = T.unlines linesOrig
@@ -2402,14 +2401,14 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
           [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint")
           , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint")
           ])
-      ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
+      "Add type annotation ‘String’ to ‘\"debug\"’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
       , "module A (f) where"
       , ""
       , "import Debug.Trace"
       , ""
-      , "f = seq (\"debug\" :: " <> listOfChar <> ") traceShow \"debug\""
+      , "f = seq (\"debug\" :: String) traceShow \"debug\""
       ]
   , testSession "add default type to satisfy two constraints" $
     testFor
@@ -2424,14 +2423,14 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       (if ghcVersion >= GHC94
         then [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable") ]
         else [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint") ])
-      ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
+      "Add type annotation ‘String’ to ‘\"debug\"’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
       , "module A (f) where"
       , ""
       , "import Debug.Trace"
       , ""
-      , "f a = traceShow (\"debug\" :: " <> listOfChar <> ") a"
+      , "f a = traceShow (\"debug\" :: String) a"
       ]
   , testSession "add default type to satisfy two constraints with duplicate literals" $
     testFor
@@ -2446,14 +2445,14 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       (if ghcVersion >= GHC94
         then [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable") ]
         else [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint") ])
-      ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
+      "Add type annotation ‘String’ to ‘\"debug\"’"
       [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
       , "{-# LANGUAGE OverloadedStrings #-}"
       , "module A (f) where"
       , ""
       , "import Debug.Trace"
       , ""
-      , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: " <> listOfChar <> ")))"
+      , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: String)))"
       ]
   ]
   where
@@ -2520,20 +2519,19 @@ fillTypedHoleTests = let
   sourceCode :: T.Text -> T.Text -> T.Text -> T.Text
   sourceCode a b c = T.unlines
     [ "module Testing where"
-      , ""
-      , "globalConvert :: Int -> String"
-      , "globalConvert = undefined"
-      , ""
-      , "globalInt :: Int"
-      , "globalInt = 3"
-      , ""
-      , "bar :: Int -> Int -> String"
-      , "bar n parameterInt = " <> a <> " (n + " <> b <> " + " <> c <> ")  where"
-      , "  localConvert = (flip replicate) 'x'"
-      , ""
-      , "foo :: () -> Int -> String"
-      , "foo = undefined"
-
+    , ""
+    , "globalConvert :: Int -> String"
+    , "globalConvert = undefined"
+    , ""
+    , "globalInt :: Int"
+    , "globalInt = 3"
+    , ""
+    , "bar :: Int -> Int -> String"
+    , "bar n parameterInt = " <> a <> " (n + " <> b <> " + " <> c <> ")  where"
+    , "  localConvert = (flip replicate) 'x'"
+    , ""
+    , "foo :: () -> Int -> String"
+    , "foo = undefined"
     ]
 
   check :: T.Text -> T.Text -> T.Text -> T.Text -> T.Text -> T.Text -> T.Text -> TestTree
@@ -2818,7 +2816,7 @@ addFunctionConstraintTests = let
     (missingMonadConstraint "Monad m => ")
   ]
 
-checkCodeAction :: String -> T.Text -> T.Text -> T.Text -> TestTree
+checkCodeAction :: TestName -> T.Text -> T.Text -> T.Text -> TestTree
 checkCodeAction testName actionTitle originalCode expectedCode = testSession testName $ do
   doc <- createDoc "Testing.hs" "haskell" originalCode
   _ <- waitForDiagnostics
@@ -3659,7 +3657,7 @@ extendImportTestsRegEx = testGroup "regex parsing"
 pickActionWithTitle :: T.Text -> [Command |? CodeAction] -> Session CodeAction
 pickActionWithTitle title actions =
   case matches of
-    [] -> liftIO . assertFailure $ "CodeAction with title '" <> show title <> "' not found in " <> show titles
+    [] -> liftIO . assertFailure $ "CodeAction with title " <> show title <> " not found in " <> show titles
     a:_ -> pure a
   where
     titles =
@@ -3686,7 +3684,7 @@ assertNoActionWithTitle title actions =
 assertActionWithTitle :: [Command |? CodeAction] -> T.Text -> Session ()
 assertActionWithTitle actions title =
   liftIO $ assertBool
-    ("CodeAction with title '" <> show title <>"' not found in " <> show titles)
+    ("CodeAction with title " <> show title <>" not found in " <> show titles)
     (title `elem` titles)
   where
     titles =
@@ -3694,10 +3692,10 @@ assertActionWithTitle actions title =
         | InR CodeAction { _title = actionTitle } <- actions
         ]
 
-testSession :: String -> Session () -> TestTree
+testSession :: TestName -> Session () -> TestTree
 testSession name = testCase name . run
 
-testSessionWithExtraFiles :: HasCallStack => FilePath -> String -> (FilePath -> Session ()) -> TestTree
+testSessionWithExtraFiles :: HasCallStack => FilePath -> TestName -> (FilePath -> Session ()) -> TestTree
 testSessionWithExtraFiles prefix name = testCase name . runWithExtraFiles prefix
 
 runWithExtraFiles :: HasCallStack => FilePath -> (FilePath -> Session a) -> IO a
@@ -3745,8 +3743,3 @@ assertJust :: MonadIO m => String -> Maybe a -> m a
 assertJust s = \case
   Nothing -> liftIO $ assertFailure s
   Just x  -> pure x
-
--- | Before ghc9, lists of Char is displayed as [Char], but with ghc9 and up, it's displayed as String
-listOfChar :: T.Text
-listOfChar | ghcVersion >= GHC90 = "String"
-           | otherwise = "[Char]"
