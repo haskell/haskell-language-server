@@ -141,13 +141,11 @@ tests =
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEvalAndFs "Property checking" cabalProjectFS "TProperty" "hs"
-  , goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" (
+  , knownBrokenInEnv [HostOS Windows] "The output has path separators in it, which on Windows look different. Just skip it there" $ goldenWithEvalAndFs' "Property checking with exception" cabalProjectFS "TPropertyError" "hs" (
         if ghcVersion >= GHC98 then
           "ghc98.expected"
         else if ghcVersion >= GHC96 then
           "ghc96.expected"
-        else if ghcVersion >= GHC94 && hostOS == Windows then
-          "windows-ghc94.expected"
         else if ghcVersion >= GHC94 then
           "ghc94.expected"
         else
