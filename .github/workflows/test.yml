@@ -110,14 +110,6 @@ jobs:
         run: |
           echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions" >> $GITHUB_ENV
 
-      - name: Cache test log between attempts of the same run
-        uses: actions/cache@v3
-        env:
-          cache-name: cache-test-log
-        with:
-          path: "**/.tasty-rerun-log*"
-          key: v1-${{ runner.os }}-${{ matrix.ghc }}-test-log-${{ github.sha }}
-
       - if: matrix.test
         name: Test hls-graph
         run: cabal test hls-graph --test-options="$TEST_OPTS"
