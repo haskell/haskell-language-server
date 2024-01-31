@@ -108,7 +108,7 @@ jobs:
         # all functional test cases simultaneously which causes way too many hls
         # instances to be spun up for the poor github actions runner to handle
         run: |
-          echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions" >> $GITHUB_ENV
+          echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions,new" >> $GITHUB_ENV
 
       - if: matrix.test
         name: Test hls-graph
