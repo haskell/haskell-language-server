@@ -224,7 +224,8 @@ semanticTokensFunctionTests =
       goldenWithSemanticTokensWithDefaultConfig "local functions" "TFunctionLocal",
       goldenWithSemanticTokensWithDefaultConfig "functions under type synonym" "TFunctionUnderTypeSynonym",
       goldenWithSemanticTokensWithDefaultConfig "function in let binding" "TFunctionLet",
-      goldenWithSemanticTokensWithDefaultConfig "negative case non-function with constraint" "TNoneFunctionWithConstraint"
+      goldenWithSemanticTokensWithDefaultConfig "negative case non-function with constraint" "TNoneFunctionWithConstraint",
+      goldenWithSemanticTokensWithDefaultConfig "TOperator" "TOperator"
     ]
 
 main :: IO ()

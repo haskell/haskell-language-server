@@ -29,6 +29,16 @@ import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
                                                   UInt, absolutizeTokens)
 import           Language.LSP.VFS                hiding (line)
 
+-- * 0. Mapping name to Hs semantic token type.
+
+idInfixOperator :: Identifier -> Maybe HsSemanticTokenType
+idInfixOperator (Right name) = nameInfixOperator name
+idInfixOperator _            = Nothing
+
+nameInfixOperator :: Name -> Maybe HsSemanticTokenType
+nameInfixOperator name | isSymOcc (nameOccName name) = Just TOperator
+nameInfixOperator _ = Nothing
+
 -- * 1. Mapping semantic token type to and from the LSP default token type.
 
 -- | map from haskell semantic token type to LSP default token type
@@ -46,6 +56,7 @@ toLspTokenType conf tk = case tk of
   TRecordField     -> stRecordField conf
   TPatternSynonym  -> stPatternSynonym conf
   TModule          -> stModule conf
+  TOperator        -> stOperator conf
 
 lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap config
@@ -66,7 +77,7 @@ tyThingSemantic ty = case ty of
     | isTyVar vid -> Just TTypeVariable
     | isRecordSelector vid -> Just TRecordField
     | isClassOpId vid -> Just TClassMethod
-    | isFunVar vid -> Just TFunction
+    | isFunVar vid -> Just TFunction <> (nameInfixOperator $ getName vid)
     | otherwise -> Just TVariable
   AConLike con -> case con of
     RealDataCon _ -> Just TDataConstructor

@@ -36,6 +36,7 @@ import           Language.Haskell.TH.Syntax    (Lift)
 data HsSemanticTokenType
   = TVariable -- none function variable
   | TFunction -- function
+  | TOperator-- operator
   | TDataConstructor -- Data constructor
   | TTypeVariable -- Type variable
   | TClassMethod -- Class method
@@ -69,6 +70,7 @@ instance Default SemanticTokensConfig where
       , stTypeFamily = SemanticTokenTypes_Interface
       , stRecordField = SemanticTokenTypes_Property
       , stModule = SemanticTokenTypes_Namespace
+      , stOperator = SemanticTokenTypes_Operator
       }
 -- | SemanticTokensConfig_ is a configuration for the semantic tokens plugin.
 -- it contains map between the hs semantic token type and default token type.
@@ -85,6 +87,7 @@ data SemanticTokensConfig = STC
   , stTypeFamily      :: !SemanticTokenTypes
   , stRecordField     :: !SemanticTokenTypes
   , stModule          :: !SemanticTokenTypes
+  , stOperator        :: !SemanticTokenTypes
   } deriving (Generic, Show)
 
 

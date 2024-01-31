@@ -50,7 +50,7 @@ idIdSemanticFromHie hieKind rm ns = do
       spanInfos <- M.lookup name' rm'
       let typeTokenType = foldMap (typeSemantic hieKind) $ listToMaybe $ mapMaybe (identType . snd) spanInfos
       contextInfoTokenType <- foldMap (contextInfosMaybeTokenType . identInfo . snd) spanInfos
-      fold [typeTokenType, Just contextInfoTokenType]
+      fold [typeTokenType, Just contextInfoTokenType, idInfixOperator ns]
 
     contextInfosMaybeTokenType :: Set.Set ContextInfo -> Maybe HsSemanticTokenType
     contextInfosMaybeTokenType details = foldMap infoTokenType (Set.toList details)
