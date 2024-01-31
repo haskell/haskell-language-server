@@ -107,6 +107,10 @@ jobs:
         # run the tests without parallelism, otherwise tasty will attempt to run
         # all functional test cases simultaneously which causes way too many hls
         # instances to be spun up for the poor github actions runner to handle
+        #
+        # See https://github.com/ocharles/tasty-rerun/issues/22 for why we need
+        # to include 'new' in the filters, since many of our test suites are in the
+        # same package.
         run: |
           echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions,new" >> $GITHUB_ENV
 
