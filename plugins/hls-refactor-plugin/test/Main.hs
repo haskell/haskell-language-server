@@ -563,7 +563,7 @@ checkImport' testName originalPath expectedPath action excludedActions =
       chosenAction <- pickActionWithTitle action actionsOrCommands
       executeCodeAction chosenAction
       originalDocAfterAction <- documentContents originalDoc
-      liftIO $ shouldBeDocContents @=? T.replace "\r\n" "\n" originalDocAfterAction
+      liftIO $ T.replace "\r\n" "\n" shouldBeDocContents @=? T.replace "\r\n" "\n" originalDocAfterAction
 
 renameActionTests :: TestTree
 renameActionTests = testGroup "rename actions"
