@@ -127,7 +127,7 @@ codeActionGoldenTest testCaseName goldenFilename point =
       _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
 
 testDataDir :: String
-testDataDir = "test" </> "data"
+testDataDir = "plugins" </> "hls-qualify-imported-names-plugin" </> "test" </> "data"
 
 pluginDescriptor :: PluginTestDescriptor ()
 pluginDescriptor = mkPluginTestDescriptor' QualifyImportedNames.descriptor "qualifyImportedNames"

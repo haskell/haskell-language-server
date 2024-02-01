@@ -91,4 +91,4 @@ testPlugins =
     refactorPlugin  -- needed for the GetAnnotatedParsedSource rule
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-retrie-plugin" </> "test" </> "testdata"

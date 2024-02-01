@@ -72,4 +72,4 @@ goldenWithRename title path act =
     goldenWithHaskellDoc (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] }) renamePlugin title testDataDir path "expected" "hs" act
 
 testDataDir :: FilePath
-testDataDir = "test" </> "testdata"
+testDataDir = "plugins" </> "hls-rename-plugin" </> "test" </> "testdata"

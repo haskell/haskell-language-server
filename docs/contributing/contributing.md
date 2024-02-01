@@ -221,7 +221,7 @@ Run the benchmarks with `cabal bench`.
 
 It should take around 25 minutes and the results will be stored in the `bench-results` folder. To interpret the results, see the comments in the `bench/Main.hs` module.
 
-More details in [bench/README](../../bench/README.md)
+More details in [bench/README](https://github.com/haskell/haskell-language-server/blob/master/bench/README.md)
 
 ### Tracing
 
@@ -233,7 +233,7 @@ Adding support for new editors is fairly easy if the editor already has good sup
 In that case, there will likely be an editor-specific support system for this (like `lsp-mode` for Emacs).
 This will typically provide instructions for how to support new languages.
 
-In some cases you may need to write a small bit of additional client support, or expose a way for the user to set the server's [configuration options](#configuring-haskell-language-server) and
+In some cases you may need to write a small bit of additional client support, or expose a way for the user to set the server's [configuration options](../configuration.md#configuring-haskell-language-server) and
 for them to configure how the server is started.
 
 ## Building the docs
