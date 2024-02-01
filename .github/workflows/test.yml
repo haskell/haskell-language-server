@@ -232,7 +232,7 @@ jobs:
       ## version needs to be limited since the tests depend on cabal-fmt which only builds using specific ghc versions
       - if: matrix.test && matrix.ghc == '9.2'
         name: Test hls-cabal-fmt-plugin test suite
-        run: cabal test hls-cabal-fmt-plugin-tests --flag=isolateTests --test-options="$TEST_OPTS" || cabal test hls-cabal-fmt-plugin-tests --flag=isolateTests --test-options="$TEST_OPTS"
+        run: cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests --test-options="$TEST_OPTS" || cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests --test-options="$TEST_OPTS"
 
       - if: matrix.test
         name: Test hls-cabal-plugin test suite
