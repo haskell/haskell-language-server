@@ -107,16 +107,12 @@ jobs:
         # run the tests without parallelism, otherwise tasty will attempt to run
         # all functional test cases simultaneously which causes way too many hls
         # instances to be spun up for the poor github actions runner to handle
+        #
+        # See https://github.com/ocharles/tasty-rerun/issues/22 for why we need
+        # to include 'new' in the filters, since many of our test suites are in the
+        # same package.
         run: |
-          echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions" >> $GITHUB_ENV
-
-      - name: Cache test log between attempts of the same run
-        uses: actions/cache@v3
-        env:
-          cache-name: cache-test-log
-        with:
-          path: "**/.tasty-rerun-log*"
-          key: v1-${{ runner.os }}-${{ matrix.ghc }}-test-log-${{ github.sha }}
+          echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions,new" >> $GITHUB_ENV
 
       - if: matrix.test
         name: Test hls-graph
@@ -236,7 +232,7 @@ jobs:
       ## version needs to be limited since the tests depend on cabal-fmt which only builds using specific ghc versions
       - if: matrix.test && matrix.ghc == '9.2'
         name: Test hls-cabal-fmt-plugin test suite
-        run: cabal test hls-cabal-fmt-plugin-tests --flag=isolateTests --test-options="$TEST_OPTS" || cabal test hls-cabal-fmt-plugin-tests --flag=isolateTests --test-options="$TEST_OPTS"
+        run: cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests --test-options="$TEST_OPTS" || cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests --test-options="$TEST_OPTS"
 
       - if: matrix.test
         name: Test hls-cabal-plugin test suite
