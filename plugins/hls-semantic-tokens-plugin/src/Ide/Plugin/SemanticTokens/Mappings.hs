@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TypeOperators     #-}
 
 -- |
 -- This module provides mappings to convert token type information in the Haskell IDE plugin. It includes functions for:
@@ -72,12 +73,15 @@ lspTokenTypeHsTokenType cf tk = Map.lookup tk (lspTokenReverseMap cf)
 
 -- | tyThingSemantic
 tyThingSemantic :: TyThing -> Maybe HsSemanticTokenType
-tyThingSemantic ty = case ty of
+tyThingSemantic ty | (Just hst) <- tyThingSemantic' ty = Just hst <> nameInfixOperator (getName ty)
+tyThingSemantic _ = Nothing
+tyThingSemantic' :: TyThing -> Maybe HsSemanticTokenType
+tyThingSemantic' ty = case ty of
   AnId vid
     | isTyVar vid -> Just TTypeVariable
     | isRecordSelector vid -> Just TRecordField
     | isClassOpId vid -> Just TClassMethod
-    | isFunVar vid -> Just TFunction <> (nameInfixOperator $ getName vid)
+    | isFunVar vid -> Just TFunction
     | otherwise -> Just TVariable
   AConLike con -> case con of
     RealDataCon _ -> Just TDataConstructor

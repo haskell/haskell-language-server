@@ -36,7 +36,6 @@ import           Language.Haskell.TH.Syntax    (Lift)
 data HsSemanticTokenType
   = TVariable -- none function variable
   | TFunction -- function
-  | TOperator-- operator
   | TDataConstructor -- Data constructor
   | TTypeVariable -- Type variable
   | TClassMethod -- Class method
@@ -46,10 +45,9 @@ data HsSemanticTokenType
   | TTypeSynonym -- Type synonym
   | TTypeFamily -- type family
   | TRecordField -- from match bind
+  | TOperator-- operator
   | TModule -- module name
   deriving (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
-
-
 
 -- type SemanticTokensConfig = SemanticTokensConfig_ Identity
 instance Default SemanticTokensConfig where
