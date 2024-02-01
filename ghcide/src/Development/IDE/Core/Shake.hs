@@ -1,16 +1,12 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP                       #-}
-{-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE DerivingStrategies        #-}
-{-# LANGUAGE DuplicateRecordFields     #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE PackageImports            #-}
-{-# LANGUAGE PolyKinds                 #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE RecursiveDo               #-}
-{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE PackageImports        #-}
+{-# LANGUAGE RecursiveDo           #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 -- | A Shake implementation of the compiler service.
 --

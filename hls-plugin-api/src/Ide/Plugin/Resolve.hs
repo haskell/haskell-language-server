@@ -1,10 +1,7 @@
-{-# LANGUAGE DeriveGeneric            #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
-{-# LANGUAGE RankNTypes               #-}
-{-# LANGUAGE ScopedTypeVariables      #-}
 {-| This module currently includes helper functions to provide fallback support
 to code actions that use resolve in HLS. The difference between the two
 functions for code actions that don't support resolve is that

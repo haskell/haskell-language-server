@@ -1,5 +1,4 @@
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Ide.Plugin.Cabal.Completion.Completer.FilePath where
 

@@ -59,4 +59,4 @@ library
   if flag(pedantic)
     ghc-options: -Werror
 
-  default-language: Haskell2010
+  default-language: GHC2021

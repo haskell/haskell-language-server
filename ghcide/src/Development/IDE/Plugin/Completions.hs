@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP              #-}
 {-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE RankNTypes       #-}
 {-# LANGUAGE TypeFamilies     #-}
 
 module Development.IDE.Plugin.Completions

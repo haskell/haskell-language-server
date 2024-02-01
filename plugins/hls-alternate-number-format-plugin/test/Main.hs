@@ -1,6 +1,4 @@
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE TypeOperators  #-}
-{-# LANGUAGE ViewPatterns   #-}
+{-# LANGUAGE ViewPatterns #-}
 module Main ( main ) where
 
 import           Data.Either                      (rights)

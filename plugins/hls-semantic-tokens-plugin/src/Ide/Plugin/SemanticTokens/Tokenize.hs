@@ -1,7 +1,5 @@
-{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
 
 module Ide.Plugin.SemanticTokens.Tokenize (hieAstSpanIdentifiers) where
 

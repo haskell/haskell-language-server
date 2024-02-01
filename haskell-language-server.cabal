@@ -35,7 +35,9 @@ source-repository head
   location: https://github.com/haskell/haskell-language-server
 
 common defaults
-  default-language: Haskell2010
+  default-language: GHC2021
+  -- Should have been in GHC2021, an oversight
+  default-extensions: ExplicitNamespaces
 
 common test-defaults
   ghc-options:        -threaded -rtsopts -with-rtsopts=-N
@@ -254,7 +256,6 @@ library hls-class-plugin
 
   default-extensions:
     DataKinds
-    TypeOperators
     OverloadedStrings
 
 test-suite hls-class-plugin-tests
@@ -393,7 +394,6 @@ library hls-eval-plugin
 
   default-extensions:
     DataKinds
-    TypeOperators
 
 test-suite hls-eval-plugin-tests
   import: defaults, test-defaults, warnings
@@ -451,7 +451,6 @@ library hls-explicit-imports-plugin
 
   default-extensions:
     DataKinds
-    TypeOperators
 
 test-suite hls-explicit-imports-plugin-tests
   import:           defaults, test-defaults, warnings
@@ -568,7 +567,6 @@ library hls-retrie-plugin
 
   default-extensions:
     DataKinds
-    TypeOperators
 
 test-suite hls-retrie-plugin-tests
   import:           defaults, test-defaults, warnings
@@ -638,7 +636,6 @@ library hls-hlint-plugin
 
   default-extensions:
     DataKinds
-    TypeOperators
 
 test-suite hls-hlint-plugin-tests
   import:           defaults, test-defaults, warnings
@@ -700,10 +697,7 @@ library hls-stan-plugin
 
   default-extensions:
     LambdaCase
-    NamedFieldPuns
-    DeriveGeneric
     TypeFamilies
-    StandaloneDeriving
     DuplicateRecordFields
     OverloadedStrings
 
@@ -728,7 +722,6 @@ test-suite hls-stan-plugin-tests
     , lsp-types
     , text
  default-extensions:
-    NamedFieldPuns
     OverloadedStrings
 
 -----------------------------
@@ -863,7 +856,6 @@ library hls-splice-plugin
 
   default-extensions:
     DataKinds
-    TypeOperators
 
 test-suite hls-splice-plugin-tests
   import:           defaults, test-defaults, warnings
@@ -914,7 +906,6 @@ library hls-alternate-number-format-plugin
 
   default-extensions:
     LambdaCase
-    NamedFieldPuns
     OverloadedStrings
     RecordWildCards
 
@@ -936,7 +927,6 @@ test-suite hls-alternate-number-format-plugin-tests
 
   default-extensions:
     LambdaCase
-    NamedFieldPuns
     OverloadedStrings
     RecordWildCards
 
@@ -976,7 +966,6 @@ library hls-qualify-imported-names-plugin
 
   default-extensions:
     DataKinds
-    TypeOperators
 
 test-suite hls-qualify-imported-names-plugin-tests
   import:           defaults, test-defaults, warnings
@@ -1076,14 +1065,10 @@ library hls-change-type-signature-plugin
     , transformers
     , containers
   default-extensions:
-    ConstraintKinds
     DataKinds
     ExplicitNamespaces
-    FlexibleContexts
-    NamedFieldPuns
     OverloadedStrings
     RecordWildCards
-    TypeOperators
 
 
 test-suite hls-change-type-signature-plugin-tests
@@ -1099,9 +1084,7 @@ test-suite hls-change-type-signature-plugin-tests
     , regex-tdfa
     , text
   default-extensions:
-    NamedFieldPuns
     OverloadedStrings
-    TypeOperators
     ViewPatterns
 
 -----------------------------
@@ -1275,11 +1258,9 @@ library hls-overloaded-record-dot-plugin
       , containers
       , deepseq
     hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/src
-    default-language: GHC2021
 
 test-suite hls-overloaded-record-dot-plugin-tests
     import:           defaults, test-defaults, warnings
-    default-language: GHC2021
     type:             exitcode-stdio-1.0
     hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/test
     main-is:          Main.hs
@@ -1502,28 +1483,17 @@ library hls-refactor-plugin
                     Development.IDE.Plugin.Plugins.FillTypeWildcard
                     Development.IDE.Plugin.Plugins.ImportUtils
   default-extensions:
-    BangPatterns
     CPP
     DataKinds
-    DeriveGeneric
     DerivingStrategies
     DerivingVia
     DuplicateRecordFields
     ExplicitNamespaces
-    FlexibleContexts
-    FlexibleInstances
     FunctionalDependencies
-    GeneralizedNewtypeDeriving
     LambdaCase
-    NamedFieldPuns
     OverloadedStrings
     PatternSynonyms
-    RankNTypes
     RecordWildCards
-    ScopedTypeVariables
-    TupleSections
-    TypeApplications
-    TypeOperators
     ViewPatterns
   hs-source-dirs:   plugins/hls-refactor-plugin/src
   build-depends:
@@ -1739,7 +1709,7 @@ library
     , unordered-containers
     , aeson-pretty
 
-  default-extensions: DataKinds, TypeOperators
+  default-extensions: DataKinds
 
 executable haskell-language-server
   import:           defaults
@@ -1801,7 +1771,7 @@ executable haskell-language-server
     , transformers
     , unordered-containers
 
-  default-extensions: DataKinds, TypeOperators
+  default-extensions: DataKinds
 
 executable haskell-language-server-wrapper
   import:           defaults
@@ -1930,18 +1900,8 @@ benchmark benchmark
         hp2pretty:hp2pretty,
         implicit-hie:gen-hie
     default-extensions:
-        BangPatterns
-        DeriveFunctor
-        DeriveGeneric
-        FlexibleContexts
-        GeneralizedNewtypeDeriving
         LambdaCase
-        NamedFieldPuns
         RecordWildCards
-        ScopedTypeVariables
-        StandaloneDeriving
-        TupleSections
-        TypeApplications
         ViewPatterns
 
     build-depends:

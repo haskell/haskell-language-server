@@ -3,7 +3,6 @@
 
 {-# LANGUAGE CPP        #-}
 {-# LANGUAGE GADTs      #-}
-{-# LANGUAGE RankNTypes #-}
 
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
 --   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.

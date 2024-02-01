@@ -1,5 +1,4 @@
 {-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE RankNTypes  #-}
 
 -- | Custom SYB traversals explicitly designed for operating over the GHC AST.
 module Generics.SYB.GHC

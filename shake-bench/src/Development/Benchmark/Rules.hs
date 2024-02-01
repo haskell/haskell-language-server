@@ -1,14 +1,10 @@
-{-# LANGUAGE AllowAmbiguousTypes       #-}
-{-# LANGUAGE ApplicativeDo             #-}
-{-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE DeriveAnyClass            #-}
-{-# LANGUAGE DerivingStrategies        #-}
-{-# LANGUAGE DuplicateRecordFields     #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE TypeOperators             #-}
-{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE AllowAmbiguousTypes   #-}
+{-# LANGUAGE ApplicativeDo         #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 {- |
     This module provides a bunch of Shake rules to build multiple revisions of a
