@@ -9,17 +9,16 @@ module Main
 
 import           Control.Lens               ((^.))
 import           Control.Monad              (when)
-import           Data.Aeson                 (Value (..), object, toJSON, (.=))
+import           Data.Aeson                 (Value (..), object, (.=))
 import           Data.Functor               (void)
 import           Data.List                  (find)
 import qualified Data.Map                   as Map
 import           Data.Maybe                 (fromJust, isJust)
 import           Data.Row                   ((.+), (.==))
 import qualified Data.Text                  as T
-import           Ide.Plugin.Config          (Config (..), PluginConfig (..))
+import           Ide.Plugin.Config          (Config (..))
 import qualified Ide.Plugin.Config          as Plugin
 import qualified Ide.Plugin.Hlint           as HLint
-import           Ide.Types                  (PluginId)
 import qualified Language.LSP.Protocol.Lens as L
 import           System.FilePath            ((</>))
 import           Test.Hls
@@ -383,10 +382,6 @@ data Point = Point {
   column :: !Int
 }
 
-makePoint line column
-  | line >= 1 && column >= 1 = Point line column
-  | otherwise = error "Line or column is less than 1."
-
 pointToRange :: Point -> Range
 pointToRange Point {..}
   | line <- fromIntegral $ subtract 1 line
@@ -402,10 +397,6 @@ makeCodeActionNotFoundAtString :: Point -> String
 makeCodeActionNotFoundAtString Point {..} =
   "CodeAction not found at line: " <> show line <> ", column: " <> show column
 
-makeCodeActionFoundAtString :: Point -> String
-makeCodeActionFoundAtString Point {..} =
-  "CodeAction found at line: " <> show line <> ", column: " <> show column
-
 ignoreHintGoldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 ignoreHintGoldenTest testCaseName goldenFilename point hintName =
   goldenTest testCaseName goldenFilename point (getIgnoreHintText hintName)
@@ -417,7 +408,7 @@ applyHintGoldenTest testCaseName goldenFilename point hintName = do
 goldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 goldenTest testCaseName goldenFilename point hintText =
   setupGoldenHlintTest testCaseName goldenFilename $ \document -> do
-    waitForDiagnosticsFromSource document "hlint"
+    _ <- waitForDiagnosticsFromSource document "hlint"
     actions <- getCodeActions document $ pointToRange point
     case find ((== Just hintText) . getCodeActionTitle) actions of
       Just (InR codeAction) -> do
@@ -441,7 +432,7 @@ applyHintGoldenResolveTest testCaseName goldenFilename point hintName = do
 goldenResolveTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
 goldenResolveTest testCaseName goldenFilename point hintText =
   setupGoldenHlintResolveTest testCaseName goldenFilename $ \document -> do
-    waitForDiagnosticsFromSource document "hlint"
+    _ <- waitForDiagnosticsFromSource document "hlint"
     actions <- getAndResolveCodeActions document $ pointToRange point
     case find ((== Just hintText) . getCodeActionTitle) actions of
       Just (InR codeAction) -> executeCodeAction codeAction
