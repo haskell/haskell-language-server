@@ -2,36 +2,18 @@
 {-# LANGUAGE PatternSynonyms #-}
 module Ide.Plugin.Stan (descriptor, Log) where
 
-import           Compat.HieTypes                (HieASTs, HieFile (..))
+import           Compat.HieTypes                (HieFile (..))
 import           Control.DeepSeq                (NFData)
-import           Control.Monad                  (void, when)
+import           Control.Monad                  (void)
 import           Control.Monad.IO.Class         (liftIO)
-import           Control.Monad.Trans.Maybe      (MaybeT (MaybeT), runMaybeT)
-import           Data.Default
 import           Data.Foldable                  (toList)
 import           Data.Hashable                  (Hashable)
 import qualified Data.HashMap.Strict            as HM
-import           Data.HashSet                   (HashSet)
-import qualified Data.HashSet                   as HS
-import qualified Data.Map                       as Map
-import           Data.Maybe                     (fromJust, mapMaybe,
-                                                 maybeToList)
-import           Data.String                    (IsString (fromString))
+import           Data.Maybe                     (mapMaybe)
 import qualified Data.Text                      as T
 import           Development.IDE
-import           Development.IDE.Core.Rules     (getHieFile,
-                                                 getSourceFileSource)
-import           Development.IDE.Core.RuleTypes (HieAstResult (..))
+import           Development.IDE.Core.Rules     (getHieFile)
 import qualified Development.IDE.Core.Shake     as Shake
-import           Development.IDE.GHC.Compat     (HieASTs (HieASTs),
-                                                 HieFile (hie_hs_file),
-                                                 RealSrcSpan (..), mkHieFile',
-                                                 mkRealSrcLoc, mkRealSrcSpan,
-                                                 runHsc, srcSpanEndCol,
-                                                 srcSpanEndLine,
-                                                 srcSpanStartCol,
-                                                 srcSpanStartLine, tcg_exports)
-import           Development.IDE.GHC.Error      (realSrcSpanToRange)
 import           GHC.Generics                   (Generic)
 import           Ide.Plugin.Config              (PluginConfig (..))
 import           Ide.Types                      (PluginDescriptor (..),
@@ -45,11 +27,8 @@ import           Stan                           (createCabalExtensionsMap,
 import           Stan.Analysis                  (Analysis (..), runAnalysis)
 import           Stan.Category                  (Category (..))
 import           Stan.Cli                       (StanArgs (..))
-import           Stan.Config                    (Config, ConfigP (..),
-                                                 applyConfig, defaultConfig)
-import           Stan.Config.Pretty             (ConfigAction, configToTriples,
-                                                 prettyConfigAction,
-                                                 prettyConfigCli)
+import           Stan.Config                    (Config, ConfigP (..), applyConfig)
+import           Stan.Config.Pretty             (prettyConfigCli)
 import           Stan.Core.Id                   (Id (..))
 import           Stan.EnvVars                   (EnvVars (..), envVarsToText)
 import           Stan.Inspection                (Inspection (..))

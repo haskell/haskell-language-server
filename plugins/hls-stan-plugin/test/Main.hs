@@ -4,11 +4,7 @@ module Main
 where
 
 import           Control.Lens               ((^.))
-import           Control.Monad              (void)
-import           Data.List                  (find)
-import           Data.Text                  (Text)
 import qualified Data.Text                  as T
-import qualified Data.Text.IO               as T
 import qualified Ide.Plugin.Stan            as Stan
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens as L
