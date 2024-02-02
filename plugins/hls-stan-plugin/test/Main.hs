@@ -32,13 +32,13 @@ tests =
           return ()
     , testCase "ignores diagnostics from .stan.toml" $
         runStanSession "" $ do
-          doc <- openDoc "dir/configTest.hs" "haskell"
+          doc <- openDoc ("dir" </> "configTest.hs") "haskell"
           diags <- waitForDiagnosticsFromSource doc "stan"
           liftIO $ length diags @?= 0
           return ()
     , testCase "respects LANGUAGE pragmas in the source file" $
         runStanSession "" $ do
-          doc <- openDoc "extension-tests/language-pragma/LanguagePragmaTest.hs" "haskell"
+          doc <- openDoc ("extension-tests" </> "language-pragma" </> "LanguagePragmaTest.hs") "haskell"
           diags <- waitForDiagnosticsFromSource doc "stan"
           -- We must include at least one valid diagnostic in our test file to avoid
           -- the false-positive case where Stan finds no analyses to perform due to a
@@ -47,7 +47,7 @@ tests =
           return ()
     , testCase "respects language extensions defined in the .cabal file" $
         runStanSession "" $ do
-          doc <- openDoc "extension-tests/cabal-file/CabalFileTest.hs" "haskell"
+          doc <- openDoc ("extension-tests" </> "cabal-file" </> "CabalFileTest.hs") "haskell"
           diags <- waitForDiagnosticsFromSource doc "stan"
           -- We need at least one valid diagnostic here too, for the same reason as above.
           liftIO $ length diags @?= 1
@@ -55,7 +55,7 @@ tests =
     ]
 
 testDir :: FilePath
-testDir = "plugins/hls-stan-plugin/test/testdata"
+testDir = "plugins" </> "hls-stan-plugin" </> "test" </> "testdata"
 
 stanPlugin :: PluginTestDescriptor Stan.Log
 stanPlugin = mkPluginTestDescriptor enabledStanDescriptor "stan"
