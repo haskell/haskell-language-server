@@ -673,17 +673,13 @@ library hls-stan-plugin
   hs-source-dirs:     plugins/hls-stan-plugin/src
   build-depends:
       base
-    , containers
-    , data-default
     , deepseq
     , hashable
     , hie-compat
     , hls-plugin-api
-    , ghc
     , ghcide
     , lsp-types
     , text
-    , transformers
     , unordered-containers
     , stan >= 0.1.2.0
     , trial
@@ -705,9 +701,7 @@ test-suite hls-stan-plugin-tests
   hs-source-dirs:   plugins/hls-stan-plugin/test
   main-is:          Main.hs
   build-depends:
-      aeson
     , base
-    , containers
     , filepath
     , haskell-language-server:hls-stan-plugin
     , hls-plugin-api
