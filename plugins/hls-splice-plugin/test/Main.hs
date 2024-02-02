@@ -1,8 +1,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
 module Main
   ( main

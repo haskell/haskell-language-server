@@ -1,6 +1,4 @@
-{-# LANGUAGE DeriveGeneric    #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns     #-}
+{-# LANGUAGE ViewPatterns #-}
 module Ide.Plugin.Conversion (
     alternateFormat
     , hexRegex

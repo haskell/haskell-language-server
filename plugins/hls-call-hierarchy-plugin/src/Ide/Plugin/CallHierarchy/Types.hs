@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 
 module Ide.Plugin.CallHierarchy.Types where

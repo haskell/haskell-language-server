@@ -1,15 +1,9 @@
 {-# LANGUAGE CPP                       #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExtendedDefaultRules      #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE NamedFieldPuns            #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE RecordWildCards           #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE ViewPatterns              #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults -Wno-unused-imports #-}
 
@@ -116,8 +110,8 @@ import           Ide.Plugin.Eval.Config                       (EvalConfig (..),
 import           Ide.Plugin.Eval.GHC                          (addImport,
                                                                addPackages,
                                                                hasPackage,
-                                                               showDynFlags,
-                                                               setSessionAndInteractiveDynFlags)
+                                                               setSessionAndInteractiveDynFlags,
+                                                               showDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments               (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option                 (parseSetFlags)
 import           Ide.Plugin.Eval.Rules                        (queueForEvaluation,

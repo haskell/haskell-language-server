@@ -1,5 +1,4 @@
-{-# LANGUAGE CPP             #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
 -- | GHC Utils and Datastructures re-exports.
 --
 -- Mainly handles module hierarchy re-organisation of GHC

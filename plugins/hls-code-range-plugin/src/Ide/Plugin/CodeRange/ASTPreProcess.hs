@@ -1,5 +1,4 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Ide.Plugin.CodeRange.ASTPreProcess
     ( preProcessAST

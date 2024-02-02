@@ -2,7 +2,6 @@
 
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE RankNTypes            #-}
 
 module Development.IDE.LSP.Outline
   ( moduleOutline

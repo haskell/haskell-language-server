@@ -1,15 +1,9 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE DeriveLift          #-}
-{-# LANGUAGE DerivingVia         #-}
-{-# LANGUAGE FlexibleInstances   #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE InstanceSigs        #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StrictData          #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DerivingVia       #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StrictData        #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Ide.Plugin.SemanticTokens.Types where
 

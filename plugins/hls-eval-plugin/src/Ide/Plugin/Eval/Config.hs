@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Ide.Plugin.Eval.Config

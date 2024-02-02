@@ -1,7 +1,5 @@
 {-# LANGUAGE CPP                       #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TypeApplications          #-}
 {-# OPTIONS_GHC -Wno-orphans -Wno-unused-imports #-}
 
 -- |Debug utilities
@@ -60,7 +58,7 @@ logWith state key val =
         let stk = toList callStack
             pr pos = concat [srcLocFile pos, ":", show . srcLocStartLine $ pos, ":", show . srcLocStartCol $ pos]
          in case stk of
-              [] -> ""
+              []    -> ""
               (x:_) -> pr $ snd x
 
     asT :: Show a => a -> T.Text

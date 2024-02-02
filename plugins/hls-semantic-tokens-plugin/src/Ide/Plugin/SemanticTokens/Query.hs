@@ -1,8 +1,5 @@
-{-# LANGUAGE ExplicitNamespaces  #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
 -- The query module is used to query the semantic tokens from the AST

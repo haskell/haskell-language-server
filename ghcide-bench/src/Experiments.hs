@@ -1,12 +1,9 @@
-{-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE DataKinds                 #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE ImplicitParams            #-}
-{-# LANGUAGE ImpredicativeTypes        #-}
-{-# LANGUAGE OverloadedLabels          #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE PolyKinds                 #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE ImplicitParams     #-}
+{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE OverloadedLabels   #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
 module Experiments

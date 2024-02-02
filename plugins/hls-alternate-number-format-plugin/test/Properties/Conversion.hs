@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeApplications #-}
 module Properties.Conversion where
 
 import           Ide.Plugin.Conversion

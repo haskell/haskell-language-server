@@ -1,5 +1,4 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Ide.Plugin.Cabal.Completion.Completions (contextToCompleter, getContext, getCabalPrefixInfo) where
 

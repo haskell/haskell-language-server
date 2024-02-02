@@ -1,8 +1,6 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
-{-# LANGUAGE NamedFieldPuns           #-}
 {-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
-{-# LANGUAGE TypeOperators            #-}
 
 module Main (
     main,

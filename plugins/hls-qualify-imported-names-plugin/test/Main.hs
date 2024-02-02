@@ -1,9 +1,7 @@
 {-# LANGUAGE BlockArguments    #-}
 {-# LANGUAGE MultiWayIf        #-}
-{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TypeOperators     #-}
 
 module Main (main) where
 

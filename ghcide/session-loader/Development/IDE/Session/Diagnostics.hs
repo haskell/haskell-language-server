@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric  #-}
 
 module Development.IDE.Session.Diagnostics where
 import           Control.Applicative

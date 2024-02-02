@@ -1,6 +1,5 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
 {-# OPTIONS_GHC -Wwarn #-}
 {-# LANGUAGE LambdaCase            #-}
 

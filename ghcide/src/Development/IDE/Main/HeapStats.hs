@@ -1,4 +1,3 @@
-{-# LANGUAGE NumericUnderscores #-}
 -- | Logging utilities for reporting heap statistics
 module Development.IDE.Main.HeapStats ( withHeapStats, Log(..)) where
 
