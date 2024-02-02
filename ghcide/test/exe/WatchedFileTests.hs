@@ -1,6 +1,5 @@
 
-{-# LANGUAGE GADTs     #-}
-{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE GADTs #-}
 
 module WatchedFileTests (tests) where
 

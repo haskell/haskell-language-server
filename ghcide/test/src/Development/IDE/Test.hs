@@ -4,7 +4,6 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE PolyKinds             #-}
 
 module Development.IDE.Test
   ( Cursor

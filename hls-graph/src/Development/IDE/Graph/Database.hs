@@ -1,6 +1,3 @@
-
-{-# LANGUAGE ConstraintKinds           #-}
-{-# LANGUAGE ExistentialQuantification #-}
 module Development.IDE.Graph.Database(
     ShakeDatabase,
     ShakeValue,

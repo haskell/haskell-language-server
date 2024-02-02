@@ -1,8 +1,6 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
-{-# LANGUAGE NamedFieldPuns           #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE PartialTypeSignatures    #-}
-{-# LANGUAGE TypeOperators            #-}
 
 module Main (main) where
 

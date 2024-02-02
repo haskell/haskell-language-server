@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE RankNTypes         #-}
 module Development.IDE.Types.Exports
 (
     IdentInfo(..),

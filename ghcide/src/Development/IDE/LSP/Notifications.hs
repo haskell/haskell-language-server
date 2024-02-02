@@ -3,8 +3,6 @@
 
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE PolyKinds             #-}
-{-# LANGUAGE RankNTypes            #-}
 
 module Development.IDE.LSP.Notifications
     ( whenUriFile

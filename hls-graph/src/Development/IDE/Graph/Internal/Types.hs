@@ -1,15 +1,9 @@
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE ExistentialQuantification  #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE PatternSynonyms            #-}
-{-# LANGUAGE BangPatterns               #-}
-{-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE PatternSynonyms    #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE ViewPatterns       #-}
 
 module Development.IDE.Graph.Internal.Types where
 
@@ -23,15 +17,15 @@ import qualified Data.ByteString               as BS
 import           Data.Coerce
 import           Data.Dynamic
 import qualified Data.HashMap.Strict           as Map
-import qualified Data.IntMap.Strict            as IM
 import           Data.IntMap                   (IntMap)
-import qualified Data.IntSet                   as IS
+import qualified Data.IntMap.Strict            as IM
 import           Data.IntSet                   (IntSet)
-import qualified Data.Text                     as T
-import           Data.Text                     (Text)
+import qualified Data.IntSet                   as IS
 import           Data.IORef
 import           Data.List                     (intercalate)
 import           Data.Maybe
+import           Data.Text                     (Text)
+import qualified Data.Text                     as T
 import           Data.Typeable
 import           Development.IDE.Graph.Classes
 import           GHC.Conc                      (TVar, atomically)
@@ -39,8 +33,8 @@ import           GHC.Generics                  (Generic)
 import qualified ListT
 import qualified StmContainers.Map             as SMap
 import           StmContainers.Map             (Map)
-import           System.Time.Extra             (Seconds)
 import           System.IO.Unsafe
+import           System.Time.Extra             (Seconds)
 import           UnliftIO                      (MonadUnliftIO)
 
 
@@ -73,10 +67,10 @@ data SRules = SRules {
 -- ACTIONS
 
 -- | An action representing something that can be run as part of a 'Rule'.
--- 
+--
 -- 'Action's can be pure functions but also have access to 'IO' via 'MonadIO' and 'MonadUnliftIO.
 -- It should be assumed that actions throw exceptions, these can be caught with
--- 'Development.IDE.Graph.Internal.Action.actionCatch'. In particular, it is 
+-- 'Development.IDE.Graph.Internal.Action.actionCatch'. In particular, it is
 -- permissible to use the 'MonadFail' instance, which will lead to an 'IOException'.
 newtype Action a = Action {fromAction :: ReaderT SAction IO a}
     deriving newtype (Monad, Applicative, Functor, MonadIO, MonadFail, MonadThrow, MonadCatch, MonadMask, MonadUnliftIO)

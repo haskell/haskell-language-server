@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE RankNTypes #-}
 module Development.IDE.Main
 (Arguments(..)
 ,defaultArguments

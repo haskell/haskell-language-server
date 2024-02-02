@@ -1,5 +1,4 @@
 {-# LANGUAGE GADTs           #-}
-{-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE ViewPatterns    #-}
 module Ide.Plugin.Class.CodeLens where

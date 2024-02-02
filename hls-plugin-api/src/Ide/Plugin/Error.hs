@@ -1,6 +1,5 @@
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Ide.Plugin.Error (
       -- * Plugin Error Handling API
     PluginError(..),

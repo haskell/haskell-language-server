@@ -1,11 +1,5 @@
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE DeriveTraversable          #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-#ifdef USE_FINGERTREE
-{-# LANGUAGE DeriveFoldable             #-}
-{-# LANGUAGE DeriveFunctor              #-}
-#endif
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 -- | A map that allows fast \"in-range\" filtering. 'RangeMap' is meant
 -- to be constructed once and cached as part of a Shake rule. If
