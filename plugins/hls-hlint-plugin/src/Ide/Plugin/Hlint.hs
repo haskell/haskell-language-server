@@ -134,8 +134,7 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
                                                                      lineSplitTextEdits,
                                                                      nextPragmaLine)
 import           GHC.Generics                                       (Generic)
-#if MIN_VERSION_apply_refact(0,12,0)
-#else
+#if !MIN_VERSION_apply_refact(0,12,0)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 #endif

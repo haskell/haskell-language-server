@@ -6,7 +6,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE RecordWildCards       #-}
-{-# OPTIONS_GHC -Wno-unticked-promoted-constructors #-}
+{-# LANGUAGE TypeOperators         #-}
 
 module Main
   ( main
@@ -100,7 +100,6 @@ initializeTests = withResource acquire release tests
 
     acquire :: IO (TResponseMessage Method_Initialize)
     acquire = run initializeResponse
-
 
     release :: TResponseMessage Method_Initialize -> IO ()
     release = const $ pure ()
@@ -260,13 +259,7 @@ completionTests =
           ]
       ]
 
-completionCommandTest ::
-  String ->
-  [T.Text] ->
-  Position ->
-  T.Text ->
-  [T.Text] ->
-  TestTree
+completionCommandTest :: TestName -> [T.Text] -> Position -> T.Text -> [T.Text] -> TestTree
 completionCommandTest name src pos wanted expected = testSession name $ do
   docId <- createDoc "A.hs" "haskell" (T.unlines src)
   _ <- waitForDiagnostics
@@ -290,12 +283,7 @@ completionCommandTest name src pos wanted expected = testSession name $ do
             expectMessages SMethod_WorkspaceApplyEdit 1 $ \edit ->
               liftIO $ assertFailure $ "Expected no edit but got: " <> show edit
 
-completionNoCommandTest ::
-  String ->
-  [T.Text] ->
-  Position ->
-  T.Text ->
-  TestTree
+completionNoCommandTest :: TestName -> [T.Text] -> Position -> T.Text -> TestTree
 completionNoCommandTest name src pos wanted = testSession name $ do
   docId <- createDoc "A.hs" "haskell" (T.unlines src)
   _ <- waitForDiagnostics
@@ -553,127 +541,104 @@ importQualifiedTests = testGroup "import qualified prefix suggestions"
       ["import qualified Control.Monad as Control", "import Control.Monad (when)"]
   ]
 
-checkImport :: String -> FilePath -> FilePath -> T.Text -> TestTree
-checkImport testComment originalPath expectedPath action =
-  checkImport' testComment originalPath expectedPath action []
+checkImport :: TestName -> FilePath -> FilePath -> T.Text -> TestTree
+checkImport testName originalPath expectedPath action =
+  checkImport' testName originalPath expectedPath action []
 
-checkImport' :: String -> FilePath -> FilePath -> T.Text -> [T.Text] -> TestTree
-checkImport' testComment originalPath expectedPath action excludedActions =
-  testSessionWithExtraFiles "import-placement" testComment $ \dir ->
+checkImport' :: TestName -> FilePath -> FilePath -> T.Text -> [T.Text] -> TestTree
+checkImport' testName originalPath expectedPath action excludedActions =
+  testSessionWithExtraFiles "import-placement" testName $ \dir ->
     check (dir </> originalPath) (dir </> expectedPath) action
   where
     check :: FilePath -> FilePath -> T.Text -> Session ()
     check originalPath expectedPath action = do
       oSrc <- liftIO $ readFileUtf8 originalPath
-      eSrc <- liftIO $ readFileUtf8 expectedPath
+      shouldBeDocContents <- liftIO $ readFileUtf8 expectedPath
       originalDoc <- createDoc originalPath "haskell" oSrc
       _ <- waitForDiagnostics
-      shouldBeDoc <- createDoc expectedPath "haskell" eSrc
       actionsOrCommands <- getAllCodeActions originalDoc
-      for_ excludedActions (\a -> liftIO $ assertNoActionWithTitle a actionsOrCommands)
-      chosenAction <- liftIO $ pickActionWithTitle action actionsOrCommands
+      for_ excludedActions (\a -> assertNoActionWithTitle a actionsOrCommands)
+      chosenAction <- pickActionWithTitle action actionsOrCommands
       executeCodeAction chosenAction
       originalDocAfterAction <- documentContents originalDoc
-      shouldBeDocContents <- documentContents shouldBeDoc
       liftIO $ T.replace "\r\n" "\n" shouldBeDocContents @=? T.replace "\r\n" "\n" originalDocAfterAction
 
 renameActionTests :: TestTree
 renameActionTests = testGroup "rename actions"
-  [ testSession "change to local variable name" $ do
-      let content = T.unlines
-            [ "module Testing where"
-            , "foo :: Int -> Int"
-            , "foo argName = argNme"
-            ]
-      doc <- createDoc "Testing.hs" "haskell" content
-      _ <- waitForDiagnostics
-      action <- findCodeAction doc (Range (Position 2 14) (Position 2 20)) "Replace with ‘argName’"
-      executeCodeAction action
-      contentAfterAction <- documentContents doc
-      let expectedContentAfterAction = T.unlines
-            [ "module Testing where"
-            , "foo :: Int -> Int"
-            , "foo argName = argName"
-            ]
-      liftIO $ expectedContentAfterAction @=? contentAfterAction
-  , testSession "change to name of imported function" $ do
-      let content = T.unlines
-            [ "module Testing where"
-            , "import Data.Maybe (maybeToList)"
-            , "foo :: Maybe a -> [a]"
-            , "foo = maybToList"
-            ]
-      doc <- createDoc "Testing.hs" "haskell" content
-      _ <- waitForDiagnostics
-      action <- findCodeAction doc (Range (Position 3 6) (Position 3 16))  "Replace with ‘maybeToList’"
-      executeCodeAction action
-      contentAfterAction <- documentContents doc
-      let expectedContentAfterAction = T.unlines
-            [ "module Testing where"
-            , "import Data.Maybe (maybeToList)"
-            , "foo :: Maybe a -> [a]"
-            , "foo = maybeToList"
-            ]
-      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  [ check "change to local variable name"
+      [ "module Testing where"
+      , "foo :: Int -> Int"
+      , "foo argName = argNme"
+      ]
+      ("Replace with ‘argName’", R 2 14 2 20)
+      [ "module Testing where"
+      , "foo :: Int -> Int"
+      , "foo argName = argName"
+      ]
+  , check "change to name of imported function"
+      [ "module Testing where"
+      , "import Data.Maybe (maybeToList)"
+      , "foo :: Maybe a -> [a]"
+      , "foo = maybToList"
+      ]
+      ("Replace with ‘maybeToList’", R 3 6 3 16)
+      [ "module Testing where"
+      , "import Data.Maybe (maybeToList)"
+      , "foo :: Maybe a -> [a]"
+      , "foo = maybeToList"
+      ]
+  , check "change infix function"
+      [ "module Testing where"
+      , "monus :: Int -> Int"
+      , "monus x y = max 0 (x - y)"
+      , "foo x y = x `monnus` y"
+      ]
+      ("Replace with ‘monus’", R 3 12 3 20)
+      [ "module Testing where"
+      , "monus :: Int -> Int"
+      , "monus x y = max 0 (x - y)"
+      , "foo x y = x `monus` y"
+      ]
+  , check "change template function"
+      [ "{-# LANGUAGE TemplateHaskellQuotes #-}"
+      , "module Testing where"
+      , "import Language.Haskell.TH (Name)"
+      , "foo :: Name"
+      , "foo = 'bread"
+      ]
+      ("Replace with ‘break’", R 4 6 4 12)
+      [ "{-# LANGUAGE TemplateHaskellQuotes #-}"
+      , "module Testing where"
+      , "import Language.Haskell.TH (Name)"
+      , "foo :: Name"
+      , "foo = 'break"
+      ]
   , testSession "suggest multiple local variable names" $ do
-      let content = T.unlines
+      doc <- createDoc "Testing.hs" "haskell" $ T.unlines
             [ "module Testing where"
             , "foo :: Char -> Char -> Char -> Char"
             , "foo argument1 argument2 argument3 = argumentX"
             ]
-      doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      _ <- findCodeActions doc (Range (Position 2 36) (Position 2 45))
-                           ["Replace with ‘argument1’", "Replace with ‘argument2’", "Replace with ‘argument3’"]
-      return()
-  , testSession "change infix function" $ do
-      let content = T.unlines
-            [ "module Testing where"
-            , "monus :: Int -> Int"
-            , "monus x y = max 0 (x - y)"
-            , "foo x y = x `monnus` y"
-            ]
-      doc <- createDoc "Testing.hs" "haskell" content
-      _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 3 12) (Position 3 20))
-      [fixTypo] <- pure [action | InR action@CodeAction{ _title = actionTitle } <- actionsOrCommands
-                                , "monus" `T.isInfixOf` actionTitle
-                                , "Replace" `T.isInfixOf` actionTitle
-                        ]
-      executeCodeAction fixTypo
-      contentAfterAction <- documentContents doc
-      let expectedContentAfterAction = T.unlines
-            [ "module Testing where"
-            , "monus :: Int -> Int"
-            , "monus x y = max 0 (x - y)"
-            , "foo x y = x `monus` y"
-            ]
-      liftIO $ expectedContentAfterAction @=? contentAfterAction
-  , testSession "change template function" $ do
-      let content = T.unlines
-            [ "{-# LANGUAGE TemplateHaskellQuotes #-}"
-            , "module Testing where"
-            , "import Language.Haskell.TH (Name)"
-            , "foo :: Name"
-            , "foo = 'bread"
-            ]
-      doc <- createDoc "Testing.hs" "haskell" content
-      _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 4 6) (Position 4 12))
-      [fixTypo] <- pure [action | InR action@CodeAction{ _title = actionTitle } <- actionsOrCommands
-                                , "break" `T.isInfixOf` actionTitle
-                        ]
-      executeCodeAction fixTypo
-      contentAfterAction <- documentContents doc
-      let expectedContentAfterAction = T.unlines
-            [ "{-# LANGUAGE TemplateHaskellQuotes #-}"
-            , "module Testing where"
-            , "import Language.Haskell.TH (Name)"
-            , "foo :: Name"
-            , "foo = 'break"
-            ]
-      liftIO $ expectedContentAfterAction @=? contentAfterAction
+      actions <- getCodeActions doc (R 2 36 2 45)
+      traverse_ (assertActionWithTitle actions)
+        [ "Replace with ‘argument1’"
+        , "Replace with ‘argument2’"
+        , "Replace with ‘argument3’"
+        ]
   ]
+  where
+    check :: TestName -> [T.Text] -> (T.Text, Range) -> [T.Text] -> TestTree
+    check testName linesOrig (actionTitle, actionRange) linesExpected  =
+      testSession testName $ do
+        let contentBefore = T.unlines linesOrig
+        doc <- createDoc "Testing.hs" "haskell" contentBefore
+        _ <- waitForDiagnostics
+        action <- pickActionWithTitle actionTitle =<< getCodeActions doc actionRange
+        executeCodeAction action
+        contentAfter <- documentContents doc
+        let expectedContent = T.unlines linesExpected
+        liftIO $ expectedContent @=? contentAfter
 
 typeWildCardActionTests :: TestTree
 typeWildCardActionTests = testGroup "type wildcard actions"
@@ -778,14 +743,13 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         _ <- waitForDiagnostics
         actionsOrCommands <- getAllCodeActions doc
         [addSignature] <- pure [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
-                                       , "Use type signature" `T.isInfixOf` actionTitle
+                                       , "Use type signature" `T.isPrefixOf` actionTitle
                                ]
         executeCodeAction addSignature
         contentAfterAction <- documentContents doc
         liftIO $ expectedContentAfterAction @=? contentAfterAction
 
 
-{-# HLINT ignore "Use nubOrd" #-}
 removeImportTests :: TestTree
 removeImportTests = testGroup "remove import actions"
   [ testSession "redundant" $ do
@@ -802,9 +766,7 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [InR action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove import" @=? actionTitle
+      action <- pickActionWithTitle "Remove import" =<< getCodeActions docB (R 2 0 2 5)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -828,9 +790,7 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [InR action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove import" @=? actionTitle
+      action <- pickActionWithTitle "Remove import" =<< getCodeActions docB (R 2 0 2 5)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -858,9 +818,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [InR action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove _stuffD, stuffA, stuffC from import" @=? actionTitle
+      action <- pickActionWithTitle "Remove _stuffD, stuffA, stuffC from import"
+          =<< getCodeActions docB (R 2 0 2 5)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -886,9 +845,7 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [InR action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove ε from import" @=? actionTitle
+      action <- pickActionWithTitle "Remove ε from import" =<< getCodeActions docB (R 2 0 2 5)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -915,9 +872,7 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [InR action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove !!, <?> from import" @=? actionTitle
+      action <- pickActionWithTitle "Remove !!, <?> from import" =<< getCodeActions docB (R 2 0 2 5)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -943,9 +898,7 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [InR action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove A from import" @=? actionTitle
+      action <- pickActionWithTitle "Remove A from import" =<< getCodeActions docB (R 2 0 2 5)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -970,9 +923,7 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [InR action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove A, E, F from import" @=? actionTitle
+      action <- pickActionWithTitle "Remove A, E, F from import" =<< getCodeActions docB (R 2 0 2 5)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -994,9 +945,7 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [InR action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove import" @=? actionTitle
+      action <- pickActionWithTitle "Remove import" =<< getCodeActions docB (R 2 0 2 5)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1019,9 +968,7 @@ removeImportTests = testGroup "remove import actions"
             ]
       doc <- createDoc "ModuleC.hs" "haskell" content
       _ <- waitForDiagnostics
-      [_, _, _, _, InR action@CodeAction { _title = actionTitle }]
-          <- nub <$> getAllCodeActions doc
-      liftIO $ "Remove all redundant imports" @=? actionTitle
+      action <- pickActionWithTitle "Remove all redundant imports" =<< getAllCodeActions doc
       executeCodeAction action
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -1051,9 +998,7 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [InR action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove @. from import" @=? actionTitle
+      action <- pickActionWithTitle "Remove @. from import" =<< getCodeActions docB (R 2 0 2 5)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1578,8 +1523,7 @@ fixModuleImportTypoTests = testGroup "fix module import typo"
     [ testSession "works when single module suggested" $ do
         doc <- createDoc "A.hs" "haskell" "import Data.Cha"
         _ <- waitForDiagnostics
-        InR action@CodeAction { _title = actionTitle } : _  <- getCodeActions doc (R 0 0 0 10)
-        liftIO $ actionTitle @?= "replace with Data.Char"
+        action <- pickActionWithTitle "replace with Data.Char" =<< getCodeActions doc (R 0 0 0 10)
         executeCodeAction action
         contentAfterAction <- documentContents doc
         liftIO $ contentAfterAction @?= "import Data.Char"
@@ -1656,11 +1600,8 @@ suggestImportClassMethodTests =
       doc <- createDoc "A.hs" "haskell" $ T.unlines (beforeContent <> decls)
       _ <- waitForDiagnostics
       waitForProgressDone
-      actions <- getCodeActions doc range
-      let actions' = [x | InR x <- actions]
-          titles = [_title | CodeAction {_title} <- actions']
-      liftIO $ executeTitle `elem` titles @? T.unpack executeTitle <> " does not in " <> show titles
-      executeCodeAction $ fromJust $ find (\CodeAction {_title} -> _title == executeTitle) actions'
+      action <- pickActionWithTitle executeTitle =<< getCodeActions doc range
+      executeCodeAction action
       content <- documentContents doc
       liftIO $ T.unlines (expectedContent <> decls) @=? content
     template' executeTitle range = let c = ["module A where"] in template c range executeTitle $ c <> [executeTitle]
@@ -1759,7 +1700,7 @@ suggestImportTests = testGroup "suggest import actions"
       actions <- getCodeActions doc range
       if wanted
          then do
-             action <- liftIO $ pickActionWithTitle newImp actions
+             action <- pickActionWithTitle newImp actions
              executeCodeAction action
              contentAfterAction <- documentContents doc
              liftIO $ after @=? contentAfterAction
@@ -1775,8 +1716,8 @@ suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields w
   where
     theTest = testSessionWithExtraFiles "hover" def $ \dir -> do
       configureCheckProject False
-      let before = T.unlines $ "module A where" : ["import B (Foo)", "getFoo :: Foo -> Int", "getFoo x = x.foo"]
-          after  = T.unlines $ "module A where" : ["import B (Foo, foo)", "getFoo :: Foo -> Int", "getFoo x = x.foo"]
+      let before = T.unlines ["module A where", "import B (Foo)", "getFoo :: Foo -> Int", "getFoo x = x.foo"]
+          after  = T.unlines ["module A where", "import B (Foo, foo)", "getFoo :: Foo -> Int", "getFoo x = x.foo"]
           cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, B]}}"
       liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
       liftIO $ writeFileUTF8 (dir </> "B.hs") $ unlines ["module B where", "data Foo = Foo { foo :: Int }"]
@@ -1786,7 +1727,7 @@ suggestAddRecordFieldImportTests = testGroup "suggest imports of record fields w
       let defLine = 3
           range = Range (Position defLine 0) (Position defLine maxBound)
       actions <- getCodeActions doc range
-      action <- liftIO $ pickActionWithTitle "Add foo to the import list of B" actions
+      action <- pickActionWithTitle "Add foo to the import list of B" actions
       executeCodeAction action
       contentAfterAction <- documentContents doc
       liftIO $ after @=? contentAfterAction
@@ -1828,7 +1769,6 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             compareTwo "HidePreludeIndented.hs" [(3,8)]
             "Use AVec for ++, hiding other imports"
             "HidePreludeIndented.expected.hs"
-
         ]
     , testGroup "Vec (type)"
         [ testCase "AVec" $
@@ -1909,7 +1849,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         withTarget original locs $ \dir doc actions -> do
             expected <- liftIO $
                 readFileUtf8 (dir </> expected)
-            action <- liftIO $ pickActionWithTitle cmd actions
+            action <- pickActionWithTitle cmd actions
             executeCodeAction action
             contentAfterAction <- documentContents doc
             liftIO $ T.replace "\r\n" "\n" expected @=? contentAfterAction
@@ -2071,7 +2011,7 @@ suggestHideShadowTests =
  where
   testOneCodeAction testName actionName start end origin expected =
     helper testName start end origin expected $ \cas -> do
-      action <- liftIO $ pickActionWithTitle actionName cas
+      action <- pickActionWithTitle actionName cas
       executeCodeAction action
   noCodeAction testName start end origin =
     helper testName start end origin origin $ \cas -> do
@@ -2122,9 +2062,8 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ txtB ++ txtB')
       _ <- waitForDiagnostics
-      action@CodeAction { _title = actionTitle } : _
-          <- findCodeActionsByPrefix docB (R 0 0 0 50) ["Define"]
-      liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
+      action <- pickActionWithTitle "Define select :: [Bool] -> Bool"
+          =<< getCodeActions docB (R 0 0 0 50)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       liftIO $ contentAfterAction @?= T.unlines (txtB ++
@@ -2141,9 +2080,8 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
           , "f x = plus x x"
           ]
       _ <- waitForDiagnostics
-      action@CodeAction { _title = actionTitle } : _
-          <- findCodeActionsByPrefix doc (R 2 0 2 13) ["Define"]
-      liftIO $ actionTitle @?= "Define plus :: Int -> Int -> Int"
+      action <- pickActionWithTitle "Define plus :: Int -> Int -> Int"
+          =<< getCodeActions doc (R 2 0 2 13)
       executeCodeAction action
       contentAfterAction <- documentContents doc
       liftIO $ contentAfterAction @?= T.unlines
@@ -2166,9 +2104,8 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ txtB ++ txtB')
       _ <- waitForDiagnostics
-      action@CodeAction { _title = actionTitle } : _
-          <- findCodeActionsByPrefix docB (R 0 0 0 50) ["Define"]
-      liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
+      action <- pickActionWithTitle "Define select :: [Bool] -> Bool"
+          =<< getCodeActions docB (R 0 0 0 50)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       liftIO $ contentAfterAction @?= T.unlines (
@@ -2181,7 +2118,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
         ]
         ++ txtB')
   , testSession "insert new function definition - Haddock comments" $ do
-    let start =  ["foo :: Int -> Bool"
+    let start = [ "foo :: Int -> Bool"
                  , "foo x = select (x + 1)"
                  , ""
                  , "-- | This is a haddock comment"
@@ -2196,12 +2133,12 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
              , ""
              , "-- | This is a haddock comment"
              , "haddock :: Int -> Int"
-             , "haddock = undefined"]
+             , "haddock = undefined"
+             ]
     docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
     _ <- waitForDiagnostics
-    action@CodeAction { _title = actionTitle } : _
-        <- findCodeActionsByPrefix docB (R 1 0 0 50) ["Define"]
-    liftIO $ actionTitle @?= "Define select :: Int -> Bool"
+    action <- pickActionWithTitle "Define select :: Int -> Bool"
+            =<< getCodeActions docB (R 1 0 0 50)
     executeCodeAction action
     contentAfterAction <- documentContents docB
     liftIO $ contentAfterAction @?= T.unlines expected
@@ -2224,9 +2161,8 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
              , "normal = undefined"]
     docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
     _ <- waitForDiagnostics
-    action@CodeAction { _title = actionTitle } : _
-        <- findCodeActionsByPrefix docB (R 1 0 0 50) ["Define"]
-    liftIO $ actionTitle @?= "Define select :: Int -> Bool"
+    action <- pickActionWithTitle "Define select :: Int -> Bool"
+        =<< getCodeActions docB (R 1 0 0 50)
     executeCodeAction action
     contentAfterAction <- documentContents docB
     liftIO $ contentAfterAction @?= T.unlines expected
@@ -2240,9 +2176,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" (T.unlines $ txtB ++ txtB')
       _ <- waitForDiagnostics
-      action@CodeAction { _title = actionTitle } : _ <-
-          findCodeActionsByPrefix docB (R 0 0 0 50) ["Define"]
-      liftIO $ actionTitle @?= "Define select :: _"
+      action <- pickActionWithTitle "Define select :: _" =<< getCodeActions docB (R 0 0 0 50)
       executeCodeAction action
       contentAfterAction <- documentContents docB
       liftIO $ contentAfterAction @?= T.unlines (txtB ++
@@ -2258,294 +2192,279 @@ deleteUnusedDefinitionTests :: TestTree
 deleteUnusedDefinitionTests = testGroup "delete unused definition action"
   [ testSession "delete unused top level binding" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-               , "module A (some) where"
-               , ""
-               , "f :: Int -> Int"
-               , "f 1 = let a = 1"
-               , "      in a"
-               , "f 2 = 2"
-               , ""
-               , "some = ()"
-               ])
-    (4, 0)
-    "Delete ‘f’"
-    (T.unlines [
-        "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-        , "module A (some) where"
-        , ""
-        , "some = ()"
-        ])
-
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "f :: Int -> Int"
+      , "f 1 = let a = 1"
+      , "      in a"
+      , "f 2 = 2"
+      , ""
+      , "some = ()"
+      ]
+      (4, 0)
+      "Delete ‘f’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "some = ()"
+      ]
   , testSession "delete unused top level binding defined in infix form" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-               , "module A (some) where"
-               , ""
-               , "myPlus :: Int -> Int -> Int"
-               , "a `myPlus` b = a + b"
-               , ""
-               , "some = ()"
-               ])
-    (4, 2)
-    "Delete ‘myPlus’"
-    (T.unlines [
-        "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-        , "module A (some) where"
-        , ""
-        , "some = ()"
-      ])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "myPlus :: Int -> Int -> Int"
+      , "a `myPlus` b = a + b"
+      , ""
+      , "some = ()"
+      ]
+      (4, 2)
+      "Delete ‘myPlus’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (some) where"
+      , ""
+      , "some = ()"
+      ]
   , testSession "delete unused binding in where clause" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
-               , "module A (h, g) where"
-               , ""
-               , "h :: Int"
-               , "h = 3"
-               , ""
-               , "g :: Int"
-               , "g = 6"
-               , "  where"
-               , "    h :: Int"
-               , "    h = 4"
-               , ""
-               ])
-    (10, 4)
-    "Delete ‘h’"
-    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
-               , "module A (h, g) where"
-               , ""
-               , "h :: Int"
-               , "h = 3"
-               , ""
-               , "g :: Int"
-               , "g = 6"
-               , "  where"
-               , ""
-               ])
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (h, g) where"
+      , ""
+      , "h :: Int"
+      , "h = 3"
+      , ""
+      , "g :: Int"
+      , "g = 6"
+      , "  where"
+      , "    h :: Int"
+      , "    h = 4"
+      , ""
+      ]
+      (10, 4)
+      "Delete ‘h’"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (h, g) where"
+      , ""
+      , "h :: Int"
+      , "h = 3"
+      , ""
+      , "g :: Int"
+      , "g = 6"
+      , "  where"
+      , ""
+      ]
   , testSession "delete unused binding with multi-oneline signatures front" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
-               , "module A (b, c) where"
-               , ""
-               , "a, b, c :: Int"
-               , "a = 3"
-               , "b = 4"
-               , "c = 5"
-               ])
-    (4, 0)
-    "Delete ‘a’"
-    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
-               , "module A (b, c) where"
-               , ""
-               , "b, c :: Int"
-               , "b = 4"
-               , "c = 5"
-               ])
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (b, c) where"
+      , ""
+      , "a, b, c :: Int"
+      , "a = 3"
+      , "b = 4"
+      , "c = 5"
+      ]
+      (4, 0)
+      "Delete ‘a’"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (b, c) where"
+      , ""
+      , "b, c :: Int"
+      , "b = 4"
+      , "c = 5"
+      ]
   , testSession "delete unused binding with multi-oneline signatures mid" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
-               , "module A (a, c) where"
-               , ""
-               , "a, b, c :: Int"
-               , "a = 3"
-               , "b = 4"
-               , "c = 5"
-               ])
-    (5, 0)
-    "Delete ‘b’"
-    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
-               , "module A (a, c) where"
-               , ""
-               , "a, c :: Int"
-               , "a = 3"
-               , "c = 5"
-               ])
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (a, c) where"
+      , ""
+      , "a, b, c :: Int"
+      , "a = 3"
+      , "b = 4"
+      , "c = 5"
+      ]
+      (5, 0)
+      "Delete ‘b’"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (a, c) where"
+      , ""
+      , "a, c :: Int"
+      , "a = 3"
+      , "c = 5"
+      ]
   , testSession "delete unused binding with multi-oneline signatures end" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
-               , "module A (a, b) where"
-               , ""
-               , "a, b, c :: Int"
-               , "a = 3"
-               , "b = 4"
-               , "c = 5"
-               ])
-    (6, 0)
-    "Delete ‘c’"
-    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
-               , "module A (a, b) where"
-               , ""
-               , "a, b :: Int"
-               , "a = 3"
-               , "b = 4"
-               ])
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (a, b) where"
+      , ""
+      , "a, b, c :: Int"
+      , "a = 3"
+      , "b = 4"
+      , "c = 5"
+      ]
+      (6, 0)
+      "Delete ‘c’"
+      [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (a, b) where"
+      , ""
+      , "a, b :: Int"
+      , "a = 3"
+      , "b = 4"
+      ]
   ]
   where
-    testFor source pos expectedTitle expectedResult = do
-      docId <- createDoc "A.hs" "haskell" source
+    testFor sourceLines pos@(l,c) expectedTitle expectedLines = do
+      docId <- createDoc "A.hs" "haskell" $ T.unlines sourceLines
       expectDiagnostics [ ("A.hs", [(DiagnosticSeverity_Warning, pos, "not used")]) ]
-
-      (action, title) <- extractCodeAction docId "Delete" pos
-
-      liftIO $ title @?= expectedTitle
+      action <- pickActionWithTitle expectedTitle =<< getCodeActions docId  (R l c l c)
       executeCodeAction action
       contentAfterAction <- documentContents docId
-      liftIO $ contentAfterAction @?= expectedResult
-
-    extractCodeAction docId actionPrefix (l, c) = do
-      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R l c l c) [actionPrefix]
-      return (action, actionTitle)
+      liftIO $ contentAfterAction @?= T.unlines expectedLines
 
 addTypeAnnotationsToLiteralsTest :: TestTree
 addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals to satisfy constraints"
-  [
-    testSession "add default type to satisfy one constraint" $
+  [ testSession "add default type to satisfy one constraint" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "module A (f) where"
-               , ""
-               , "f = 1"
-               ])
-    (if ghcVersion >= GHC94
-      then [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable") ]
-      else [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the following constraint") ])
-    "Add type annotation ‘Integer’ to ‘1’"
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "module A (f) where"
-               , ""
-               , "f = (1 :: Integer)"
-               ])
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "module A (f) where"
+      , ""
+      , "f = 1"
+      ]
+      (if ghcVersion >= GHC94
+        then [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the type variable") ]
+        else [ (DiagnosticSeverity_Warning, (3, 4), "Defaulting the following constraint") ])
+      "Add type annotation ‘Integer’ to ‘1’"
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "module A (f) where"
+      , ""
+      , "f = (1 :: Integer)"
+      ]
 
   , testSession "add default type to satisfy one constraint in nested expressions" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "module A where"
-               , ""
-               , "f ="
-               , "    let x = 3"
-               , "    in x"
-               ])
-    (if ghcVersion >= GHC94
-      then [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable") ]
-      else [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the following constraint") ])
-    "Add type annotation ‘Integer’ to ‘3’"
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "module A where"
-               , ""
-               , "f ="
-               , "    let x = (3 :: Integer)"
-               , "    in x"
-               ])
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "module A where"
+      , ""
+      , "f ="
+      , "    let x = 3"
+      , "    in x"
+      ]
+      (if ghcVersion >= GHC94
+        then [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the type variable") ]
+        else [ (DiagnosticSeverity_Warning, (4, 12), "Defaulting the following constraint") ])
+      "Add type annotation ‘Integer’ to ‘3’"
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "module A where"
+      , ""
+      , "f ="
+      , "    let x = (3 :: Integer)"
+      , "    in x"
+      ]
   , testSession "add default type to satisfy one constraint in more nested expressions" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "module A where"
-               , ""
-               , "f ="
-               , "    let x = let y = 5 in y"
-               , "    in x"
-               ])
-    (if ghcVersion >= GHC94
-      then [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable") ]
-      else [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the following constraint") ])
-    "Add type annotation ‘Integer’ to ‘5’"
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "module A where"
-               , ""
-               , "f ="
-               , "    let x = let y = (5 :: Integer) in y"
-               , "    in x"
-               ])
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "module A where"
+      , ""
+      , "f ="
+      , "    let x = let y = 5 in y"
+      , "    in x"
+      ]
+      (if ghcVersion >= GHC94
+        then [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the type variable") ]
+        else [ (DiagnosticSeverity_Warning, (4, 20), "Defaulting the following constraint") ])
+      "Add type annotation ‘Integer’ to ‘5’"
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "module A where"
+      , ""
+      , "f ="
+      , "    let x = let y = (5 :: Integer) in y"
+      , "    in x"
+      ]
   , testSession "add default type to satisfy one constraint with duplicate literals" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "{-# LANGUAGE OverloadedStrings #-}"
-               , "module A (f) where"
-               , ""
-               , "import Debug.Trace"
-               , ""
-               , "f = seq \"debug\" traceShow \"debug\""
-               ])
-    (if ghcVersion >= GHC94
-      then
-        [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable")
-        , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable")
-        ]
-      else
-        [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint")
-        , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint")
-        ])
-    ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "{-# LANGUAGE OverloadedStrings #-}"
-               , "module A (f) where"
-               , ""
-               , "import Debug.Trace"
-               , ""
-               , "f = seq (\"debug\" :: " <> listOfChar <> ") traceShow \"debug\""
-               ])
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "{-# LANGUAGE OverloadedStrings #-}"
+      , "module A (f) where"
+      , ""
+      , "import Debug.Trace"
+      , ""
+      , "f = seq \"debug\" traceShow \"debug\""
+      ]
+      (if ghcVersion >= GHC94
+        then
+          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the type variable")
+          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the type variable")
+          ]
+        else
+          [ (DiagnosticSeverity_Warning, (6, 8), "Defaulting the following constraint")
+          , (DiagnosticSeverity_Warning, (6, 16), "Defaulting the following constraint")
+          ])
+      "Add type annotation ‘String’ to ‘\"debug\"’"
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "{-# LANGUAGE OverloadedStrings #-}"
+      , "module A (f) where"
+      , ""
+      , "import Debug.Trace"
+      , ""
+      , "f = seq (\"debug\" :: String) traceShow \"debug\""
+      ]
   , testSession "add default type to satisfy two constraints" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "{-# LANGUAGE OverloadedStrings #-}"
-               , "module A (f) where"
-               , ""
-               , "import Debug.Trace"
-               , ""
-               , "f a = traceShow \"debug\" a"
-               ])
-    (if ghcVersion >= GHC94
-      then [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable") ]
-      else [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint") ])
-    ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "{-# LANGUAGE OverloadedStrings #-}"
-               , "module A (f) where"
-               , ""
-               , "import Debug.Trace"
-               , ""
-               , "f a = traceShow (\"debug\" :: " <> listOfChar <> ") a"
-               ])
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "{-# LANGUAGE OverloadedStrings #-}"
+      , "module A (f) where"
+      , ""
+      , "import Debug.Trace"
+      , ""
+      , "f a = traceShow \"debug\" a"
+      ]
+      (if ghcVersion >= GHC94
+        then [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the type variable") ]
+        else [ (DiagnosticSeverity_Warning, (6, 6), "Defaulting the following constraint") ])
+      "Add type annotation ‘String’ to ‘\"debug\"’"
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "{-# LANGUAGE OverloadedStrings #-}"
+      , "module A (f) where"
+      , ""
+      , "import Debug.Trace"
+      , ""
+      , "f a = traceShow (\"debug\" :: String) a"
+      ]
   , testSession "add default type to satisfy two constraints with duplicate literals" $
     testFor
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "{-# LANGUAGE OverloadedStrings #-}"
-               , "module A (f) where"
-               , ""
-               , "import Debug.Trace"
-               , ""
-               , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
-               ])
-    (if ghcVersion >= GHC94
-      then [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable") ]
-      else [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint") ])
-    ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
-    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
-               , "{-# LANGUAGE OverloadedStrings #-}"
-               , "module A (f) where"
-               , ""
-               , "import Debug.Trace"
-               , ""
-               , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: " <> listOfChar <> ")))"
-               ])
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "{-# LANGUAGE OverloadedStrings #-}"
+      , "module A (f) where"
+      , ""
+      , "import Debug.Trace"
+      , ""
+      , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
+      ]
+      (if ghcVersion >= GHC94
+        then [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the type variable") ]
+        else [ (DiagnosticSeverity_Warning, (6, 54), "Defaulting the following constraint") ])
+      "Add type annotation ‘String’ to ‘\"debug\"’"
+      [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+      , "{-# LANGUAGE OverloadedStrings #-}"
+      , "module A (f) where"
+      , ""
+      , "import Debug.Trace"
+      , ""
+      , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: String)))"
+      ]
   ]
   where
-    testFor source diag expectedTitle expectedResult = do
-      docId <- createDoc "A.hs" "haskell" source
+    testFor sourceLines diag expectedTitle expectedLines = do
+      docId <- createDoc "A.hs" "haskell" $ T.unlines sourceLines
       expectDiagnostics [ ("A.hs", diag) ]
-
       let cursors = map snd3 diag
-      (action, title) <- extractCodeAction docId "Add type annotation" (minimum cursors) (maximum cursors)
+          (ls, cs) = minimum cursors
+          (le, ce) = maximum cursors
 
-      liftIO $ title @?= expectedTitle
+      action <- pickActionWithTitle expectedTitle =<< getCodeActions docId (R ls cs le ce)
       executeCodeAction action
       contentAfterAction <- documentContents docId
-      liftIO $ contentAfterAction @?= expectedResult
-
-    extractCodeAction docId actionPrefix (l,c) (l', c')= do
-      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R l c l' c') [actionPrefix]
-      return (action, actionTitle)
+      liftIO $ contentAfterAction @?= T.unlines expectedLines
 
 
 fixConstructorImportTests :: TestTree
@@ -2570,37 +2489,27 @@ fixConstructorImportTests = testGroup "fix import actions"
     template contentA contentB range expectedAction expectedContentB = do
       _docA <- createDoc "ModuleA.hs" "haskell" contentA
       docB  <- createDoc "ModuleB.hs" "haskell" contentB
-      _diags <- waitForDiagnostics
-      InR action@CodeAction { _title = actionTitle } : _
-                  <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
-                     getCodeActions docB range
-      liftIO $ expectedAction @=? actionTitle
+      _ <- waitForDiagnostics
+      action <- pickActionWithTitle expectedAction =<< getCodeActions docB range
       executeCodeAction action
       contentAfterAction <- documentContents docB
       liftIO $ expectedContentB @=? contentAfterAction
 
 importRenameActionTests :: TestTree
-importRenameActionTests = testGroup "import rename actions"
-  [ testSession "Data.Mape -> Data.Map"   $ check "Map"
-  , testSession "Data.Mape -> Data.Maybe" $ check "Maybe" ] where
-  check modname = do
-      let content = T.unlines
-            [ "module Testing where"
-            , "import Data.Mape"
-            ]
-      doc <- createDoc "Testing.hs" "haskell" content
-      _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (R 1 8 1 16)
-      [changeToMap] <- pure [action | InR action@CodeAction{ _title = actionTitle } <- actionsOrCommands
-                                    , ("Data." <> modname) `T.isInfixOf` actionTitle
-                            ]
-      executeCodeAction changeToMap
-      contentAfterAction <- documentContents doc
-      let expectedContentAfterAction = T.unlines
-            [ "module Testing where"
-            , "import Data." <> modname
-            ]
-      liftIO $ expectedContentAfterAction @=? contentAfterAction
+importRenameActionTests = testGroup "import rename actions" $
+  fmap check ["Map", "Maybe"]
+  where
+    check modname = checkCodeAction
+      ("Data.Mape -> Data." <> T.unpack modname)
+      ("replace with Data." <> modname)
+      (T.unlines
+        [ "module Testing where"
+        , "import Data.Mape"
+        ])
+      (T.unlines
+        [ "module Testing where"
+        , "import Data." <> modname
+        ])
 
 fillTypedHoleTests :: TestTree
 fillTypedHoleTests = let
@@ -2608,20 +2517,19 @@ fillTypedHoleTests = let
   sourceCode :: T.Text -> T.Text -> T.Text -> T.Text
   sourceCode a b c = T.unlines
     [ "module Testing where"
-      , ""
-      , "globalConvert :: Int -> String"
-      , "globalConvert = undefined"
-      , ""
-      , "globalInt :: Int"
-      , "globalInt = 3"
-      , ""
-      , "bar :: Int -> Int -> String"
-      , "bar n parameterInt = " <> a <> " (n + " <> b <> " + " <> c <> ")  where"
-      , "  localConvert = (flip replicate) 'x'"
-      , ""
-      , "foo :: () -> Int -> String"
-      , "foo = undefined"
-
+    , ""
+    , "globalConvert :: Int -> String"
+    , "globalConvert = undefined"
+    , ""
+    , "globalInt :: Int"
+    , "globalInt = 3"
+    , ""
+    , "bar :: Int -> Int -> String"
+    , "bar n parameterInt = " <> a <> " (n + " <> b <> " + " <> c <> ")  where"
+    , "  localConvert = (flip replicate) 'x'"
+    , ""
+    , "foo :: () -> Int -> String"
+    , "foo = undefined"
     ]
 
   check :: T.Text -> T.Text -> T.Text -> T.Text -> T.Text -> T.Text -> T.Text -> TestTree
@@ -2633,7 +2541,7 @@ fillTypedHoleTests = let
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 9 0) (Position 9 maxBound))
-    chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
+    chosenAction <- pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
@@ -2674,7 +2582,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_toException"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 3 0) (Position 3 maxBound))
-      chosen <- liftIO $ pickActionWithTitle "replace _toException with E.toException" actions
+      chosen <- pickActionWithTitle "replace _toException with E.toException" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "E.toException" @=? modifiedCode
@@ -2690,7 +2598,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 5 16) (Position 5 19))
-      chosen <- liftIO $ pickActionWithTitle "replace _ with foo" actions
+      chosen <- pickActionWithTitle "replace _ with foo" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "`foo`" @=? modifiedCode
@@ -2703,7 +2611,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 13) (Position 2 14))
-      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      chosen <- pickActionWithTitle "replace _ with (+)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "(+)" @=? modifiedCode
@@ -2716,7 +2624,7 @@ fillTypedHoleTests = let
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc (Range (Position 2 16) (Position 2 19))
-      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      chosen <- pickActionWithTitle "replace _ with (+)" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "+" @=? modifiedCode
@@ -2761,14 +2669,8 @@ addInstanceConstraintTests = let
     ]
 
   check :: T.Text -> T.Text -> T.Text -> TestTree
-  check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
-    doc <- createDoc "Testing.hs" "haskell" originalCode
-    _ <- waitForDiagnostics
-    actionsOrCommands <- getAllCodeActions doc
-    chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
-    executeCodeAction chosenAction
-    modifiedCode <- documentContents doc
-    liftIO $ expectedCode @=? modifiedCode
+  check actionTitle originalCode expectedCode =
+    checkCodeAction (T.unpack actionTitle) actionTitle originalCode expectedCode
 
   in testGroup "add instance constraint"
   [ check
@@ -2912,12 +2814,12 @@ addFunctionConstraintTests = let
     (missingMonadConstraint "Monad m => ")
   ]
 
-checkCodeAction :: String -> T.Text -> T.Text -> T.Text -> TestTree
+checkCodeAction :: TestName -> T.Text -> T.Text -> T.Text -> TestTree
 checkCodeAction testName actionTitle originalCode expectedCode = testSession testName $ do
   doc <- createDoc "Testing.hs" "haskell" originalCode
   _ <- waitForDiagnostics
   actionsOrCommands <- getAllCodeActions doc
-  chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
+  chosenAction <- pickActionWithTitle actionTitle actionsOrCommands
   executeCodeAction chosenAction
   modifiedCode <- documentContents doc
   liftIO $ expectedCode @=? modifiedCode
@@ -3092,14 +2994,8 @@ removeRedundantConstraintsTests = let
 
 
   check :: T.Text -> T.Text -> T.Text -> TestTree
-  check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
-    doc <- createDoc "Testing.hs" "haskell" originalCode
-    _ <- waitForDiagnostics
-    actionsOrCommands <- getAllCodeActions doc
-    chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
-    executeCodeAction chosenAction
-    modifiedCode <- documentContents doc
-    liftIO $ expectedCode @=? modifiedCode
+  check actionTitle originalCode expectedCode =
+    checkCodeAction (T.unpack actionTitle) actionTitle originalCode expectedCode
 
   in testGroup "remove redundant function constraints"
   [ check
@@ -3169,7 +3065,7 @@ addSigActionTests = let
     doc <- createDoc "Sigs.hs" "haskell" originalCode
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 5 1) (Position 5 maxBound))
-    chosenAction <- liftIO $ pickActionWithTitle ("add signature: " <> sig) actionsOrCommands
+    chosenAction <- pickActionWithTitle ("add signature: " <> sig) actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
@@ -3195,562 +3091,553 @@ addSigActionTests = let
 
 exportUnusedTests :: TestTree
 exportUnusedTests = testGroup "export unused actions"
-  [ testGroup "don't want suggestion"
-    [ testSession "implicit exports" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# OPTIONS_GHC -Wmissing-signatures #-}"
-              , "module A where"
-              , "foo = id"])
-        (R 3 0 3 3)
-        "Export ‘foo’"
-        Nothing -- codeaction should not be available
-    , testSession "not top-level" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# OPTIONS_GHC -Wunused-binds #-}"
-              , "module A (foo,bar) where"
-              , "foo = ()"
-              , "  where bar = ()"
-              , "bar = ()"])
-        (R 2 0 2 11)
-        "Export ‘bar’"
-        Nothing
+  [ testGroup "don't want suggestion" -- in this test group we check that no code actions are created
+    [ testSession "implicit exports" $ templateNoAction
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# OPTIONS_GHC -Wmissing-signatures #-}"
+      , "module A where"
+      , "foo = id"
+      ]
+      (R 3 0 3 3)
+      "Export ‘foo’"
+    , testSession "not top-level" $ templateNoAction
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# OPTIONS_GHC -Wunused-binds #-}"
+      , "module A (foo,bar) where"
+      , "foo = ()"
+      , "  where bar = ()"
+      , "bar = ()"
+      ]
+      (R 2 0 2 11)
+      "Export ‘bar’"
     , ignoreForGhcVersions [GHC92, GHC94] "Diagnostic message has no suggestions" $
-      testSession "type is exported but not the constructor of same name" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (Foo) where"
-              , "data Foo = Foo"])
+      testSession "type is exported but not the constructor of same name" $ templateNoAction
+        [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+        , "module A (Foo) where"
+        , "data Foo = Foo"
+        ]
         (R 2 0 2 8)
         "Export ‘Foo’"
-        Nothing -- codeaction should not be available
-    , testSession "unused data field" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (Foo(Foo)) where"
-              , "data Foo = Foo {foo :: ()}"])
-        (R 2 0 2 20)
-        "Export ‘foo’"
-        Nothing -- codeaction should not be available
+    , testSession "unused data field" $ templateNoAction
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (Foo(Foo)) where"
+      , "data Foo = Foo {foo :: ()}"
+      ]
+      (R 2 0 2 20)
+      "Export ‘foo’"
     ]
   , testGroup "want suggestion"
     [ testSession "empty exports" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A ("
-              , ") where"
-              , "foo = id"])
-        (R 3 0 3 3)
-        "Export ‘foo’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A ("
-              , "foo) where"
-              , "foo = id"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A ("
+      , ") where"
+      , "foo = id"
+      ]
+      (R 3 0 3 3)
+      "Export ‘foo’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A ("
+      , "foo) where"
+      , "foo = id"
+      ]
     , testSession "single line explicit exports" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (foo) where"
-              , "foo = id"
-              , "bar = foo"])
-        (R 3 0 3 3)
-        "Export ‘bar’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (foo, bar) where"
-              , "foo = id"
-              , "bar = foo"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (foo) where"
+      , "foo = id"
+      , "bar = foo"
+      ]
+      (R 3 0 3 3)
+      "Export ‘bar’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (foo, bar) where"
+      , "foo = id"
+      , "bar = foo"
+      ]
     , testSession "multi line explicit exports" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A"
-              , "  ("
-              , "    foo) where"
-              , "foo = id"
-              , "bar = foo"])
-        (R 5 0 5 3)
-        "Export ‘bar’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A"
-              , "  ("
-              , "    foo, bar) where"
-              , "foo = id"
-              , "bar = foo"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A"
+      , "  ("
+      , "    foo) where"
+      , "foo = id"
+      , "bar = foo"
+      ]
+      (R 5 0 5 3)
+      "Export ‘bar’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A"
+      , "  ("
+      , "    foo, bar) where"
+      , "foo = id"
+      , "bar = foo"
+      ]
     , testSession "export list ends in comma" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A"
-              , "  (foo,"
-              , "  ) where"
-              , "foo = id"
-              , "bar = foo"])
-        (R 5 0 5 3)
-        "Export ‘bar’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A"
-              , "  (foo,"
-              , "  bar) where"
-              , "foo = id"
-              , "bar = foo"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A"
+      , "  (foo,"
+      , "  ) where"
+      , "foo = id"
+      , "bar = foo"
+      ]
+      (R 5 0 5 3)
+      "Export ‘bar’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A"
+      , "  (foo,"
+      , "  bar) where"
+      , "foo = id"
+      , "bar = foo"
+      ]
     , testSession "style of multiple exports is preserved 1" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A"
-              , "  ( foo"
-              , "  , bar"
-              , "  ) where"
-              , "foo = id"
-              , "bar = foo"
-              , "baz = bar"
-              ])
-        (R 7 0 7 3)
-        "Export ‘baz’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A"
-              , "  ( foo"
-              , "  , bar"
-              , "  , baz"
-              , "  ) where"
-              , "foo = id"
-              , "bar = foo"
-              , "baz = bar"
-              ])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A"
+      , "  ( foo"
+      , "  , bar"
+      , "  ) where"
+      , "foo = id"
+      , "bar = foo"
+      , "baz = bar"
+      ]
+      (R 7 0 7 3)
+      "Export ‘baz’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A"
+      , "  ( foo"
+      , "  , bar"
+      , "  , baz"
+      , "  ) where"
+      , "foo = id"
+      , "bar = foo"
+      , "baz = bar"
+      ]
     , testSession "style of multiple exports is preserved 2" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A"
-              , "  ( foo,"
-              , "    bar"
-              , "  ) where"
-              , "foo = id"
-              , "bar = foo"
-              , "baz = bar"
-              ])
-        (R 7 0 7 3)
-        "Export ‘baz’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A"
-              , "  ( foo,"
-              , "    bar,"
-              , "    baz"
-              , "  ) where"
-              , "foo = id"
-              , "bar = foo"
-              , "baz = bar"
-              ])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A"
+      , "  ( foo,"
+      , "    bar"
+      , "  ) where"
+      , "foo = id"
+      , "bar = foo"
+      , "baz = bar"
+      ]
+      (R 7 0 7 3)
+      "Export ‘baz’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A"
+      , "  ( foo,"
+      , "    bar,"
+      , "    baz"
+      , "  ) where"
+      , "foo = id"
+      , "bar = foo"
+      , "baz = bar"
+      ]
     , testSession "style of multiple exports is preserved and selects smallest export separator" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A"
-              , "  ( foo"
-              , "  , bar"
-              , "  -- * For testing"
-              , "  , baz"
-              , "  ) where"
-              , "foo = id"
-              , "bar = foo"
-              , "baz = bar"
-              , "quux = bar"
-              ])
-        (R 10 0 10 4)
-        "Export ‘quux’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A"
-              , "  ( foo"
-              , "  , bar"
-              , "  -- * For testing"
-              , "  , baz"
-              , "  , quux"
-              , "  ) where"
-              , "foo = id"
-              , "bar = foo"
-              , "baz = bar"
-              , "quux = bar"
-              ])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A"
+      , "  ( foo"
+      , "  , bar"
+      , "  -- * For testing"
+      , "  , baz"
+      , "  ) where"
+      , "foo = id"
+      , "bar = foo"
+      , "baz = bar"
+      , "quux = bar"
+      ]
+      (R 10 0 10 4)
+      "Export ‘quux’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A"
+      , "  ( foo"
+      , "  , bar"
+      , "  -- * For testing"
+      , "  , baz"
+      , "  , quux"
+      , "  ) where"
+      , "foo = id"
+      , "bar = foo"
+      , "baz = bar"
+      , "quux = bar"
+      ]
     , testSession "unused pattern synonym" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE PatternSynonyms #-}"
-              , "module A () where"
-              , "pattern Foo a <- (a, _)"])
-        (R 3 0 3 10)
-        "Export ‘Foo’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE PatternSynonyms #-}"
-              , "module A (pattern Foo) where"
-              , "pattern Foo a <- (a, _)"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE PatternSynonyms #-}"
+      , "module A () where"
+      , "pattern Foo a <- (a, _)"
+      ]
+      (R 3 0 3 10)
+      "Export ‘Foo’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE PatternSynonyms #-}"
+      , "module A (pattern Foo) where"
+      , "pattern Foo a <- (a, _)"
+      ]
     , testSession "unused data type" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A () where"
-              , "data Foo = Foo"])
-        (R 2 0 2 7)
-        "Export ‘Foo’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (Foo(..)) where"
-              , "data Foo = Foo"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A () where"
+      , "data Foo = Foo"
+      ]
+      (R 2 0 2 7)
+      "Export ‘Foo’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (Foo(..)) where"
+      , "data Foo = Foo"
+      ]
     , testSession "unused newtype" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A () where"
-              , "newtype Foo = Foo ()"])
-        (R 2 0 2 10)
-        "Export ‘Foo’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (Foo(..)) where"
-              , "newtype Foo = Foo ()"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A () where"
+      , "newtype Foo = Foo ()"
+      ]
+      (R 2 0 2 10)
+      "Export ‘Foo’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (Foo(..)) where"
+      , "newtype Foo = Foo ()"
+      ]
     , testSession "unused type synonym" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A () where"
-              , "type Foo = ()"])
-        (R 2 0 2 7)
-        "Export ‘Foo’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (Foo) where"
-              , "type Foo = ()"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A () where"
+      , "type Foo = ()"
+      ]
+      (R 2 0 2 7)
+      "Export ‘Foo’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (Foo) where"
+      , "type Foo = ()"
+      ]
     , testSession "unused type family" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeFamilies #-}"
-              , "module A () where"
-              , "type family Foo p"])
-        (R 3 0 3 15)
-        "Export ‘Foo’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeFamilies #-}"
-              , "module A (Foo) where"
-              , "type family Foo p"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeFamilies #-}"
+      , "module A () where"
+      , "type family Foo p"
+      ]
+      (R 3 0 3 15)
+      "Export ‘Foo’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeFamilies #-}"
+      , "module A (Foo) where"
+      , "type family Foo p"
+      ]
     , testSession "unused typeclass" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A () where"
-              , "class Foo a"])
-        (R 2 0 2 8)
-        "Export ‘Foo’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (Foo(..)) where"
-              , "class Foo a"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A () where"
+      , "class Foo a"
+      ]
+      (R 2 0 2 8)
+      "Export ‘Foo’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (Foo(..)) where"
+      , "class Foo a"
+      ]
     , testSession "infix" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A () where"
-              , "a `f` b = ()"])
-        (R 2 0 2 11)
-        "Export ‘f’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (f) where"
-              , "a `f` b = ()"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A () where"
+      , "a `f` b = ()"
+      ]
+      (R 2 0 2 11)
+      "Export ‘f’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A (f) where"
+      , "a `f` b = ()"
+      ]
     , testSession "function operator" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A () where"
-              , "(<|) = ($)"])
-        (R 2 0 2 9)
-        "Export ‘<|’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A ((<|)) where"
-              , "(<|) = ($)"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A () where"
+      , "(<|) = ($)"
+      ]
+      (R 2 0 2 9)
+      "Export ‘<|’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "module A ((<|)) where"
+      , "(<|) = ($)"
+      ]
     , testSession "type synonym operator" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeOperators #-}"
-              , "module A () where"
-              , "type (:<) = ()"])
-        (R 3 0 3 13)
-        "Export ‘:<’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeOperators #-}"
-              , "module A ((:<)) where"
-              , "type (:<) = ()"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeOperators #-}"
+      , "module A () where"
+      , "type (:<) = ()"
+      ]
+      (R 3 0 3 13)
+      "Export ‘:<’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeOperators #-}"
+      , "module A ((:<)) where"
+      , "type (:<) = ()"
+      ]
     , testSession "type family operator" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeFamilies #-}"
-              , "{-# LANGUAGE TypeOperators #-}"
-              , "module A () where"
-              , "type family (:<)"])
-        (R 4 0 4 15)
-        "Export ‘:<’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeFamilies #-}"
-              , "{-# LANGUAGE TypeOperators #-}"
-              , "module A (type (:<)) where"
-              , "type family (:<)"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeFamilies #-}"
+      , "{-# LANGUAGE TypeOperators #-}"
+      , "module A () where"
+      , "type family (:<)"
+      ]
+      (R 4 0 4 15)
+      "Export ‘:<’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeFamilies #-}"
+      , "{-# LANGUAGE TypeOperators #-}"
+      , "module A (type (:<)) where"
+      , "type family (:<)"
+      ]
     , testSession "typeclass operator" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeOperators #-}"
-              , "module A () where"
-              , "class (:<) a"])
-        (R 3 0 3 11)
-        "Export ‘:<’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeOperators #-}"
-              , "module A (type (:<)(..)) where"
-              , "class (:<) a"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeOperators #-}"
+      , "module A () where"
+      , "class (:<) a"
+      ]
+      (R 3 0 3 11)
+      "Export ‘:<’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeOperators #-}"
+      , "module A (type (:<)(..)) where"
+      , "class (:<) a"
+      ]
     , testSession "newtype operator" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeOperators #-}"
-              , "module A () where"
-              , "newtype (:<) = Foo ()"])
-        (R 3 0 3 20)
-        "Export ‘:<’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeOperators #-}"
-              , "module A (type (:<)(..)) where"
-              , "newtype (:<) = Foo ()"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeOperators #-}"
+      , "module A () where"
+      , "newtype (:<) = Foo ()"
+      ]
+      (R 3 0 3 20)
+      "Export ‘:<’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeOperators #-}"
+      , "module A (type (:<)(..)) where"
+      , "newtype (:<) = Foo ()"
+      ]
     , testSession "data type operator" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeOperators #-}"
-              , "module A () where"
-              , "data (:<) = Foo ()"])
-        (R 3 0 3 17)
-        "Export ‘:<’"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "{-# LANGUAGE TypeOperators #-}"
-              , "module A (type (:<)(..)) where"
-              , "data (:<) = Foo ()"])
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeOperators #-}"
+      , "module A () where"
+      , "data (:<) = Foo ()"
+      ]
+      (R 3 0 3 17)
+      "Export ‘:<’"
+      [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+      , "{-# LANGUAGE TypeOperators #-}"
+      , "module A (type (:<)(..)) where"
+      , "data (:<) = Foo ()"
+      ]
     ]
   ]
   where
-    template doc range = exportTemplate (Just range) doc
+    template origLines range actionTitle expectedLines =
+      exportTemplate (Just range) origLines actionTitle (Just expectedLines)
+    templateNoAction origLines range actionTitle =
+      exportTemplate (Just range) origLines actionTitle Nothing
 
-exportTemplate :: Maybe Range -> T.Text -> T.Text -> Maybe T.Text -> Session ()
-exportTemplate mRange initialContent expectedAction expectedContents = do
-  doc <- createDoc "A.hs" "haskell" initialContent
+exportTemplate :: Maybe Range -> [T.Text] -> T.Text -> Maybe [T.Text] -> Session ()
+exportTemplate mRange initialLines expectedAction expectedLines = do
+  doc <- createDoc "A.hs" "haskell" $ T.unlines initialLines
   _ <- waitForDiagnostics
   actions <- case mRange of
     Nothing    -> getAllCodeActions doc
     Just range -> getCodeActions doc range
-  case expectedContents of
+  case expectedLines of
     Just content -> do
-      action <- liftIO $ pickActionWithTitle expectedAction actions
+      action <- pickActionWithTitle expectedAction actions
       executeCodeAction action
       contentAfterAction <- documentContents doc
-      liftIO $ content @=? contentAfterAction
+      liftIO $ T.unlines content @=? contentAfterAction
     Nothing ->
       liftIO $ [_title | InR CodeAction{_title} <- actions, _title == expectedAction ] @?= []
 
 removeExportTests :: TestTree
 removeExportTests = testGroup "remove export actions"
     [ testSession "single export" $ template
-        (T.unlines
-              [ "module A (  a   ) where"
-              , "b :: ()"
-              , "b = ()"])
+        [ "module A (  a   ) where"
+        , "b :: ()"
+        , "b = ()"
+        ]
         "Remove ‘a’ from export"
-        (Just $ T.unlines
-              [ "module A (     ) where"
-              , "b :: ()"
-              , "b = ()"])
+        [ "module A (     ) where"
+        , "b :: ()"
+        , "b = ()"
+        ]
     , testSession "ending comma" $ template
-        (T.unlines
-              [ "module A (  a,   ) where"
-              , "b :: ()"
-              , "b = ()"])
+        [ "module A (  a,   ) where"
+        , "b :: ()"
+        , "b = ()"
+        ]
         "Remove ‘a’ from export"
-        (Just $ T.unlines
-              [ "module A (  ) where"
-              , "b :: ()"
-              , "b = ()"])
+        [ "module A (  ) where"
+        , "b :: ()"
+        , "b = ()"
+        ]
     , testSession "multiple exports" $ template
-        (T.unlines
-              [ "module A (a  ,   c,    b ) where"
-              , "a, c :: ()"
-              , "a = ()"
-              , "c = ()"])
+        [ "module A (a  ,   c,    b ) where"
+        , "a, c :: ()"
+        , "a = ()"
+        , "c = ()"
+        ]
         "Remove ‘b’ from export"
-        (Just $ T.unlines
-              [ "module A (a  ,   c ) where"
-              , "a, c :: ()"
-              , "a = ()"
-              , "c = ()"])
+        [ "module A (a  ,   c ) where"
+        , "a, c :: ()"
+        , "a = ()"
+        , "c = ()"
+        ]
     , testSession "not in scope constructor" $ template
-        (T.unlines
-              [ "module A (A (X,Y,Z,(:<)), ab) where"
-              , "data A = X Int | Y | (:<) Int"
-              , "ab :: ()"
-              , "ab = ()"
-              ])
+        [ "module A (A (X,Y,Z,(:<)), ab) where"
+        , "data A = X Int | Y | (:<) Int"
+        , "ab :: ()"
+        , "ab = ()"
+        ]
         "Remove ‘Z’ from export"
-        (Just $ T.unlines
-              [ "module A (A (X,Y,(:<)), ab) where"
-              , "data A = X Int | Y | (:<) Int"
-              , "ab :: ()"
-              , "ab = ()"])
+        [ "module A (A (X,Y,(:<)), ab) where"
+        , "data A = X Int | Y | (:<) Int"
+        , "ab :: ()"
+        , "ab = ()"
+        ]
     , testSession "multiline export" $ template
-        (T.unlines
-              [ "module A (a"
-              , " ,  b"
-              , " , (:*:)"
-              , " , ) where"
-              , "a,b :: ()"
-              , "a = ()"
-              , "b = ()"])
+        [ "module A (a"
+        , " ,  b"
+        , " , (:*:)"
+        , " , ) where"
+        , "a,b :: ()"
+        , "a = ()"
+        , "b = ()"
+        ]
         "Remove ‘:*:’ from export"
-        (Just $ T.unlines
-              [ "module A (a"
-              , " ,  b"
-              , " "
-              , " , ) where"
-              , "a,b :: ()"
-              , "a = ()"
-              , "b = ()"])
+        [ "module A (a"
+        , " ,  b"
+        , " "
+        , " , ) where"
+        , "a,b :: ()"
+        , "a = ()"
+        , "b = ()"
+        ]
     , testSession "qualified re-export" $ template
-        (T.unlines
-              [ "module A (M.x,a) where"
-              , "import qualified Data.List as M"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A (M.x,a) where"
+        , "import qualified Data.List as M"
+        , "a :: ()"
+        , "a = ()"
+        ]
         "Remove ‘M.x’ from export"
-        (Just $ T.unlines
-              [ "module A (a) where"
-              , "import qualified Data.List as M"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A (a) where"
+        , "import qualified Data.List as M"
+        , "a :: ()"
+        , "a = ()"
+        ]
     , testSession "qualified re-export ending in '.'" $ template
-        (T.unlines
-              [ "module A ((M.@.),a) where"
-              , "import qualified Data.List as M"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A ((M.@.),a) where"
+        , "import qualified Data.List as M"
+        , "a :: ()"
+        , "a = ()"
+        ]
         "Remove ‘M.@.’ from export"
-        (Just $ T.unlines
-              [ "module A (a) where"
-              , "import qualified Data.List as M"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A (a) where"
+        , "import qualified Data.List as M"
+        , "a :: ()"
+        , "a = ()"
+        ]
     , testSession "export module" $ template
-        (T.unlines
-              [ "module A (module B) where"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A (module B) where"
+        , "a :: ()"
+        , "a = ()"
+        ]
         "Remove ‘module B’ from export"
-        (Just $ T.unlines
-              [ "module A () where"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A () where"
+        , "a :: ()"
+        , "a = ()"
+        ]
     , testSession "dodgy export" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wall #-}"
-              , "module A (A (..)) where"
-              , "data X = X"
-              , "type A = X"])
+        [ "{-# OPTIONS_GHC -Wall #-}"
+        , "module A (A (..)) where"
+        , "data X = X"
+        , "type A = X"
+        ]
         "Remove ‘A(..)’ from export"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wall #-}"
-              , "module A () where"
-              , "data X = X"
-              , "type A = X"])
+        [ "{-# OPTIONS_GHC -Wall #-}"
+        , "module A () where"
+        , "data X = X"
+        , "type A = X"
+        ]
     , testSession "dodgy export" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wall #-}"
-              , "module A (A (..)) where"
-              , "data X = X"
-              , "type A = X"])
+        [ "{-# OPTIONS_GHC -Wall #-}"
+        , "module A (A (..)) where"
+        , "data X = X"
+        , "type A = X"
+        ]
         "Remove ‘A(..)’ from export"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wall #-}"
-              , "module A () where"
-              , "data X = X"
-              , "type A = X"])
+        [ "{-# OPTIONS_GHC -Wall #-}"
+        , "module A () where"
+        , "data X = X"
+        , "type A = X"
+        ]
     , testSession "duplicate module export" $ template
-        (T.unlines
-              [ "{-# OPTIONS_GHC -Wall #-}"
-              , "module A (module L,module L) where"
-              , "import Data.List as L"
-              , "a :: ()"
-              , "a = ()"])
+        [ "{-# OPTIONS_GHC -Wall #-}"
+        , "module A (module L,module L) where"
+        , "import Data.List as L"
+        , "a :: ()"
+        , "a = ()"
+        ]
         "Remove ‘Module L’ from export"
-        (Just $ T.unlines
-              [ "{-# OPTIONS_GHC -Wall #-}"
-              , "module A (module L) where"
-              , "import Data.List as L"
-              , "a :: ()"
-              , "a = ()"])
+        [ "{-# OPTIONS_GHC -Wall #-}"
+        , "module A (module L) where"
+        , "import Data.List as L"
+        , "a :: ()"
+        , "a = ()"
+        ]
     , testSession "remove all exports single" $ template
-        (T.unlines
-              [ "module A (x) where"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A (x) where"
+        , "a :: ()"
+        , "a = ()"
+        ]
         "Remove all redundant exports"
-        (Just $ T.unlines
-              [ "module A () where"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A () where"
+        , "a :: ()"
+        , "a = ()"
+        ]
     , testSession "remove all exports two" $ template
-        (T.unlines
-              [ "module A (x,y) where"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A (x,y) where"
+        , "a :: ()"
+        , "a = ()"
+        ]
         "Remove all redundant exports"
-        (Just $ T.unlines
-              [ "module A () where"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A () where"
+        , "a :: ()"
+        , "a = ()"
+        ]
     , testSession "remove all exports three" $ template
-        (T.unlines
-              [ "module A (a,x,y) where"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A (a,x,y) where"
+        , "a :: ()"
+        , "a = ()"
+        ]
         "Remove all redundant exports"
-        (Just $ T.unlines
-              [ "module A (a) where"
-              , "a :: ()"
-              , "a = ()"])
+        [ "module A (a) where"
+        , "a :: ()"
+        , "a = ()"
+        ]
     , testSession "remove all exports composite" $ template
-        (T.unlines
-              [ "module A (x,y,b, module Ls, a, A(X,getW, Y, Z,(:-),getV), (-+), B(B)) where"
-              , "data A = X {getV :: Int} | Y {getV :: Int}"
-              , "data B = B"
-              , "a,b :: ()"
-              , "a = ()"
-              , "b = ()"])
+        [ "module A (x,y,b, module Ls, a, A(X,getW, Y, Z,(:-),getV), (-+), B(B)) where"
+        , "data A = X {getV :: Int} | Y {getV :: Int}"
+        , "data B = B"
+        , "a,b :: ()"
+        , "a = ()"
+        , "b = ()"
+        ]
         "Remove all redundant exports"
-        (Just $ T.unlines
-              [ "module A (b, a, A(X, Y,getV), B(B)) where"
-              , "data A = X {getV :: Int} | Y {getV :: Int}"
-              , "data B = B"
-              , "a,b :: ()"
-              , "a = ()"
-              , "b = ()"])
+        [ "module A (b, a, A(X, Y,getV), B(B)) where"
+        , "data A = X {getV :: Int} | Y {getV :: Int}"
+        , "data B = B"
+        , "a,b :: ()"
+        , "a = ()"
+        , "b = ()"
+        ]
     ]
   where
-    template = exportTemplate Nothing
+    template origLines actionTitle expectedLines =
+      exportTemplate Nothing origLines actionTitle (Just expectedLines)
 
 
 codeActionHelperFunctionTests :: TestTree
 codeActionHelperFunctionTests = testGroup "code action helpers"
-    [
-    extendImportTestsRegEx
+    [ extendImportTestsRegEx
     ]
 
 extendImportTestsRegEx :: TestTree
 extendImportTestsRegEx = testGroup "regex parsing"
-    [
-      testCase "parse invalid multiple imports" $ template "foo bar foo" Nothing
+    [ testCase "parse invalid multiple imports" $ template "foo bar foo" Nothing
     , testCase "parse malformed import list" $ template
                   "\n\8226 Perhaps you want to add \8216fromList\8217 to one of these import lists:\n    \8216Data.Map\8217)"
                   Nothing
@@ -3765,10 +3652,11 @@ extendImportTestsRegEx = testGroup "regex parsing"
         template message expected = do
             liftIO $ expected @=? matchRegExMultipleImports message
 
-pickActionWithTitle :: T.Text -> [Command |? CodeAction] -> IO CodeAction
-pickActionWithTitle title actions = do
-  assertBool ("Found no matching actions for " <> show title <> " in " <> show titles) (not $ null matches)
-  return $ head matches
+pickActionWithTitle :: T.Text -> [Command |? CodeAction] -> Session CodeAction
+pickActionWithTitle title actions =
+  case matches of
+    [] -> liftIO . assertFailure $ "CodeAction with title " <> show title <> " not found in " <> show titles
+    a:_ -> pure a
   where
     titles =
         [ actionTitle
@@ -3780,54 +3668,32 @@ pickActionWithTitle title actions = do
         , title == actionTitle
         ]
 
-assertNoActionWithTitle :: T.Text -> [Command |? CodeAction] -> IO ()
-assertNoActionWithTitle title actions = do
-  assertBool ("Unexpected code action " <> show title <> " in " <> show titles) (null matches)
-  pure ()
+assertNoActionWithTitle :: T.Text -> [Command |? CodeAction] -> Session ()
+assertNoActionWithTitle title actions =
+  liftIO $ assertBool
+      ("Unexpected code action " <> show title <> " in " <> show titles)
+      (title `notElem` titles)
   where
     titles =
         [ actionTitle
         | InR CodeAction { _title = actionTitle } <- actions
         ]
-    matches =
-        [ action
-        | InR action@CodeAction { _title = actionTitle } <- actions
-        , title == actionTitle
+
+assertActionWithTitle :: [Command |? CodeAction] -> T.Text -> Session ()
+assertActionWithTitle actions title =
+  liftIO $ assertBool
+    ("CodeAction with title " <> show title <>" not found in " <> show titles)
+    (title `elem` titles)
+  where
+    titles =
+        [ actionTitle
+        | InR CodeAction { _title = actionTitle } <- actions
         ]
 
-findCodeActions :: TextDocumentIdentifier -> Range -> [T.Text] -> Session [CodeAction]
-findCodeActions = findCodeActions' (==) "is not a superset of"
-
-findCodeActionsByPrefix :: TextDocumentIdentifier -> Range -> [T.Text] -> Session [CodeAction]
-findCodeActionsByPrefix = findCodeActions' T.isPrefixOf "is not prefix of"
-
-findCodeActions' :: (T.Text -> T.Text -> Bool) -> String -> TextDocumentIdentifier -> Range -> [T.Text] -> Session [CodeAction]
-findCodeActions' op errMsg doc range expectedTitles = do
-  actions <- getCodeActions doc range
-  let matches = sequence
-        [ listToMaybe
-          [ action
-          | InR action@CodeAction { _title = actionTitle } <- actions
-          , expectedTitle `op` actionTitle]
-        | expectedTitle <- expectedTitles]
-  let msg = show
-            [ actionTitle
-            | InR CodeAction { _title = actionTitle } <- actions
-            ]
-            ++ " " <> errMsg <> " "
-            ++ show expectedTitles
-  liftIO $ case matches of
-    Nothing -> assertFailure msg
-    Just _  -> pure ()
-  return (fromJust matches)
-
-findCodeAction :: TextDocumentIdentifier -> Range -> T.Text -> Session CodeAction
-findCodeAction doc range t = head <$> findCodeActions doc range [t]
-
-testSession :: String -> Session () -> TestTree
+testSession :: TestName -> Session () -> TestTree
 testSession name = testCase name . run
 
-testSessionWithExtraFiles :: HasCallStack => FilePath -> String -> (FilePath -> Session ()) -> TestTree
+testSessionWithExtraFiles :: HasCallStack => FilePath -> TestName -> (FilePath -> Session ()) -> TestTree
 testSessionWithExtraFiles prefix name = testCase name . runWithExtraFiles prefix
 
 runWithExtraFiles :: HasCallStack => FilePath -> (FilePath -> Session a) -> IO a
@@ -3875,8 +3741,3 @@ assertJust :: MonadIO m => String -> Maybe a -> m a
 assertJust s = \case
   Nothing -> liftIO $ assertFailure s
   Just x  -> pure x
-
--- | Before ghc9, lists of Char is displayed as [Char], but with ghc9 and up, it's displayed as String
-listOfChar :: T.Text
-listOfChar | ghcVersion >= GHC90 = "String"
-           | otherwise = "[Char]"
