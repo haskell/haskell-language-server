@@ -1,0 +1,11 @@
+cabal-version: 3.0
+name: language-pragma-test
+version: 0.0.0.0
+
+-- Without at least a minimal valid `.cabal` file, Stan won't bother building its
+-- map of language extensions. This means it also won't detect LANGUAGE pragmas
+-- without this file.
+
+library
+  exposed-modules: LanguagePragmaTest
+  hs-source-dirs: extensions-language-pragma
