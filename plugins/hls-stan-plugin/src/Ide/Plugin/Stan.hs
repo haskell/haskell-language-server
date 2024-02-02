@@ -80,9 +80,6 @@ stripModifiers = go ""
         Nothing    -> txt
         Just index -> T.drop (index + 1) txt
 
-renderId :: Id a -> T.Text
-renderId (Id t) = "Id = " <> t
-
 instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
@@ -136,12 +133,11 @@ rules recorder plId = do
                           }
 
               (configTrial, useDefConfig, env) <- liftIO $ getStanConfig stanArgs isLoud
-              seTomlFiles <- liftIO $ usedTomlFiles useDefConfig (stanArgsConfigFile stanArgs)
-              logWith recorder Debug (LogDebugStanConfigResult seTomlFiles configTrial)
+              tomlsUsedByStan <- liftIO $ usedTomlFiles useDefConfig (stanArgsConfigFile stanArgs)
+              logWith recorder Debug (LogDebugStanConfigResult tomlsUsedByStan configTrial)
 
               -- If envVar is set to 'False', stan will ignore all local and global .stan.toml files
               logWith recorder Debug (LogDebugStanEnvVars env)
-              seTomlFiles <- liftIO $ usedTomlFiles useDefConfig (stanArgsConfigFile stanArgs)
 
               -- Note that Stan works in terms of relative paths, but the HIE come in as absolute. Without
               -- making its path relative, the file name(s) won't line up with the associated Map keys.
