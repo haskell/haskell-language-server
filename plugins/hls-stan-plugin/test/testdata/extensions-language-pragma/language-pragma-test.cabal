@@ -8,4 +8,4 @@ version: 0.0.0.0
 
 library
   exposed-modules: LanguagePragmaTest
-  hs-source-dirs: extension-tests/language-pragma
+  hs-source-dirs: extensions-language-pragma
