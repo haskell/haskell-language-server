@@ -170,7 +170,7 @@ blockCommandDescriptor plId = (defaultPluginDescriptor plId "") {
 }
 
 blockCommandHandler :: CommandFunction state ExecuteCommandParams
-blockCommandHandler _ideState _params = do
+blockCommandHandler _ideState _ _params = do
   lift $ LSP.sendNotification (SMethod_CustomMethod (Proxy @"ghcide/blocking/command")) A.Null
   liftIO $ threadDelay maxBound
   pure $ InR Null

@@ -12,7 +12,7 @@ import           Data.String                        (fromString)
 import           Data.Text                          hiding (length, map,
                                                      unlines)
 import qualified Data.Text                          as Text
-import qualified Data.Text.Utf16.Rope               as Rope
+import qualified Data.Text.Utf16.Rope.Mixed         as Rope
 import           Development.IDE                    (Pretty)
 import           Development.IDE.GHC.Compat         (GhcVersion (..),
                                                      ghcVersion)

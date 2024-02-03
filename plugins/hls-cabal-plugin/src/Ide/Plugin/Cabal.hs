@@ -25,6 +25,8 @@ import           Development.IDE                             as D
 import           Development.IDE.Core.Shake                  (restartShakeSession)
 import qualified Development.IDE.Core.Shake                  as Shake
 import           Development.IDE.Graph                       (alwaysRerun)
+import qualified Development.IDE.Plugin.Completions.Logic    as Ghcide
+import qualified Development.IDE.Plugin.Completions.Types    as Ghcide
 import           GHC.Generics
 import qualified Ide.Plugin.Cabal.Completion.Completer.Types as CompleterTypes
 import qualified Ide.Plugin.Cabal.Completion.Completions     as Completions
@@ -279,14 +281,13 @@ completion recorder ide _ complParams = do
   contents <- lift $ getVirtualFile $ toNormalizedUri uri
   case (contents, uriToFilePath' uri) of
     (Just cnts, Just path) -> do
-      pref <- VFS.getCompletionPrefix position cnts
+      let pref = Ghcide.getCompletionPrefix position cnts
       let res = result pref path cnts
       liftIO $ fmap InL res
     _ -> pure . InR $ InR Null
  where
-  result :: Maybe VFS.PosPrefixInfo -> FilePath -> VFS.VirtualFile -> IO [CompletionItem]
-  result Nothing _ _ = pure []
-  result (Just prefix) fp cnts = do
+  result :: Ghcide.PosPrefixInfo -> FilePath -> VFS.VirtualFile -> IO [CompletionItem]
+  result prefix fp cnts = do
     runMaybeT context >>= \case
       Nothing -> pure []
       Just ctx -> do
@@ -306,6 +307,6 @@ completion recorder ide _ complParams = do
         pure completions
    where
     completerRecorder = cmapWithPrio LogCompletions recorder
-    pos = VFS.cursorPos prefix
+    pos = Ghcide.cursorPos prefix
     context = Completions.getContext completerRecorder prefInfo (cnts ^. VFS.file_text)
     prefInfo = Completions.getCabalPrefixInfo fp prefix

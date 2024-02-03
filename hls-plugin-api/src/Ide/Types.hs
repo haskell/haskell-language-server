@@ -980,6 +980,7 @@ data PluginCommand ideState = forall a. (FromJSON a) =>
 
 type CommandFunction ideState a
   = ideState
+  -> Maybe ProgressToken
   -> a
   -> ExceptT PluginError (LspM Config) (Value |? Null)
 
@@ -1068,6 +1069,7 @@ type FormattingMethod m =
 
 type FormattingHandler a
   =  a
+  -> Maybe ProgressToken
   -> FormattingType
   -> T.Text
   -> NormalizedFilePath
@@ -1084,11 +1086,11 @@ mkFormattingHandlers f = mkPluginHandler SMethod_TextDocumentFormatting ( provid
         mf <- lift $ getVirtualFile $ toNormalizedUri uri
         case mf of
           Just vf -> do
-            let typ = case m of
-                  SMethod_TextDocumentFormatting -> FormatText
-                  SMethod_TextDocumentRangeFormatting -> FormatRange (params ^. L.range)
+            let (typ, mtoken) = case m of
+                  SMethod_TextDocumentFormatting -> (FormatText, params ^. L.workDoneToken)
+                  SMethod_TextDocumentRangeFormatting -> (FormatRange (params ^. L.range), params ^. L.workDoneToken)
                   _ -> Prelude.error "mkFormattingHandlers: impossible"
-            f ide typ (virtualFileText vf) nfp opts
+            f ide mtoken typ (virtualFileText vf) nfp opts
           Nothing -> throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
 
       | otherwise = throwError $ PluginInvalidParams $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri

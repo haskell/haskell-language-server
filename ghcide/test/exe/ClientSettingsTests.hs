@@ -21,7 +21,6 @@ tests :: TestTree
 tests = testGroup "client settings handling"
     [ testSession "ghcide restarts shake session on config changes" $ do
             setIgnoringLogNotifications False
-            void $ skipManyTill anyMessage $ message SMethod_ClientRegisterCapability
             void $ createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
             setConfigSection "haskell" $ toJSON (def :: Config)

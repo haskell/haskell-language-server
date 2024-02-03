@@ -37,7 +37,7 @@ descriptor plId = (defaultPluginDescriptor plId desc)
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: FormattingHandler IdeState
-provider ide typ contents fp _opts = do
+provider ide _token typ contents fp _opts = do
   (msrModSummary -> ms_hspp_opts -> dyn) <- runActionE "stylish-haskell" ide $ useE GetModSummary fp
   let file = fromNormalizedFilePath fp
   config <- liftIO $ loadConfigFrom file

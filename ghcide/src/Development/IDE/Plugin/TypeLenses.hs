@@ -192,7 +192,7 @@ generateLensCommand pId uri title edit =
 -- recompute the edit upon command. Hence the command here just takes a edit
 -- and applies it.
 commandHandler :: CommandFunction IdeState WorkspaceEdit
-commandHandler _ideState wedit = do
+commandHandler _ideState _ wedit = do
   _ <- lift $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   pure $ InR Null
 

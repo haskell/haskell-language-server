@@ -183,7 +183,7 @@ getFileContentsImpl file = do
     time <- use_ GetModificationTime file
     res <- do
         mbVirtual <- getVirtualFile file
-        pure $ Rope.toText . _file_text <$> mbVirtual
+        pure $ virtualFileText <$> mbVirtual
     pure ([], Just (time, res))
 
 -- | Returns the modification time and the contents.

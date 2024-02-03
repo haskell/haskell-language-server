@@ -94,7 +94,7 @@ expandTHSplice ::
     -- | Inplace?
     ExpandStyle ->
     CommandFunction IdeState ExpandSpliceParams
-expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = ExceptT $ do
+expandTHSplice _eStyle ideState _ params@ExpandSpliceParams {..} = ExceptT $ do
     clientCapabilities <- getClientCapabilities
     rio <- askRunInIO
     let reportEditor :: ReportEditor

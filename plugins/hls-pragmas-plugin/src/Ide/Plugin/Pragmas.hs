@@ -15,28 +15,29 @@ module Ide.Plugin.Pragmas
   , AppearWhere(..)
   ) where
 
-import           Control.Lens                       hiding (List)
-import           Control.Monad.IO.Class             (MonadIO (liftIO))
-import           Control.Monad.Trans.Class          (lift)
-import           Data.List.Extra                    (nubOrdOn)
-import qualified Data.Map                           as M
-import           Data.Maybe                         (mapMaybe)
-import qualified Data.Text                          as T
-import           Development.IDE                    hiding (line)
-import           Development.IDE.Core.Compile       (sourceParser,
-                                                     sourceTypecheck)
+import           Control.Lens                             hiding (List)
+import           Control.Monad.IO.Class                   (MonadIO (liftIO))
+import           Control.Monad.Trans.Class                (lift)
+import           Data.List.Extra                          (nubOrdOn)
+import qualified Data.Map                                 as M
+import           Data.Maybe                               (mapMaybe)
+import qualified Data.Text                                as T
+import           Development.IDE                          hiding (line)
+import           Development.IDE.Core.Compile             (sourceParser,
+                                                           sourceTypecheck)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Plugin.Completions (ghcideCompletionsPluginPriority)
-import qualified Development.IDE.Spans.Pragmas      as Pragmas
+import           Development.IDE.Plugin.Completions       (ghcideCompletionsPluginPriority)
+import           Development.IDE.Plugin.Completions.Logic (getCompletionPrefix)
+import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (..))
+import qualified Development.IDE.Spans.Pragmas            as Pragmas
 import           Ide.Plugin.Error
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens         as L
-import qualified Language.LSP.Protocol.Message      as LSP
-import qualified Language.LSP.Protocol.Types        as LSP
-import qualified Language.LSP.Server                as LSP
-import qualified Language.LSP.VFS                   as VFS
-import qualified Text.Fuzzy                         as Fuzzy
+import qualified Language.LSP.Protocol.Lens               as L
+import qualified Language.LSP.Protocol.Message            as LSP
+import qualified Language.LSP.Protocol.Types              as LSP
+import qualified Language.LSP.Server                      as LSP
+import qualified Text.Fuzzy                               as Fuzzy
 
 -- ---------------------------------------------------------------------
 
@@ -201,15 +202,15 @@ completion _ide _ complParams = do
     contents <- lift $ LSP.getVirtualFile $ toNormalizedUri uri
     fmap LSP.InL $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
-            result <$> VFS.getCompletionPrefix position cnts
+            pure $ result $ getCompletionPrefix position cnts
             where
-                result (Just pfix)
+                result pfix
                     | "{-# language" `T.isPrefixOf` line
                     = map buildCompletion
-                        (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
+                        (Fuzzy.simpleFilter (prefixText pfix) allPragmas)
                     | "{-# options_ghc" `T.isPrefixOf` line
                     =  map buildCompletion
-                        (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
+                        (Fuzzy.simpleFilter (prefixText pfix) flags)
                     | "{-#" `T.isPrefixOf` line
                     = [ mkPragmaCompl (a <> suffix) b c
                       | (a, b, c, w) <- validPragmas, w == NewLine
@@ -234,9 +235,9 @@ completion _ide _ complParams = do
                         (appearWhere == CanInline && line /= word && Fuzzy.test word matcher)
                       ]
                     where
-                        line = T.toLower $ VFS.fullLine pfix
-                        module_ = VFS.prefixModule pfix
-                        word = VFS.prefixText pfix
+                        line = T.toLower $ fullLine pfix
+                        module_ = prefixScope pfix
+                        word = prefixText pfix
                         -- Not completely correct, may fail if more than one "{-#" exist
                         -- , we can ignore it since it rarely happen.
                         prefix
@@ -249,7 +250,6 @@ completion _ide _ complParams = do
                             | "-}"   `T.isSuffixOf` line = " #"
                             | "}"    `T.isSuffixOf` line = " #-"
                             | otherwise                 = " #-}"
-                result Nothing = []
         _ -> return []
 
 -----------------------------------------------------------------------

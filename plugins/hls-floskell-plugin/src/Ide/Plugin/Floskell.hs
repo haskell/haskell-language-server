@@ -32,7 +32,7 @@ descriptor plId = (defaultPluginDescriptor plId desc)
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: FormattingHandler IdeState
-provider _ideState typ contents fp _ = do
+provider _ideState _token typ contents fp _ = do
     let file = fromNormalizedFilePath fp
     config <- liftIO $ findConfigOrDefault file
     let (range, selectedContents) = case typ of

@@ -65,7 +65,7 @@ tests recorder logger = do
               plugins = pluginDescToIdePlugins $
                   [ (defaultPluginDescriptor pluginId "")
                       { pluginCommands =
-                          [ PluginCommand commandId "Causes an exception" $ \_ (_::Int) -> do
+                          [ PluginCommand commandId "Causes an exception" $ \_ _ (_::Int) -> do
                               _ <- liftIO $ throwIO DivideByZero
                               pure (InR Null)
                           ]

@@ -47,10 +47,10 @@ descriptor recorder plId =
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: Recorder (WithPriority Log) -> FormattingHandler IdeState
-provider recorder _ (FormatRange _) _ _ _ = do
+provider recorder _ _ (FormatRange _) _ _ _ = do
   logWith recorder Info LogInvalidInvocationInfo
   throwError $ PluginInvalidParams "You cannot format a text-range using cabal-fmt."
-provider recorder _ide FormatText contents nfp opts = do
+provider recorder _ide _ FormatText contents nfp opts = do
   let cabalFmtArgs = [ "--indent", show tabularSize]
   x <- liftIO $ findExecutable "cabal-fmt"
   case x of

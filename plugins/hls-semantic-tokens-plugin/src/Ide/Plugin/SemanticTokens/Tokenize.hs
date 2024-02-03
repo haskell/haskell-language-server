@@ -17,7 +17,6 @@ import qualified Data.Map.Strict                  as Map
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import qualified Data.Text.Rope                   as Char
-import           Data.Text.Utf16.Rope             (toText)
 import qualified Data.Text.Utf16.Rope             as Utf16
 import           Data.Text.Utf16.Rope.Mixed       (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
@@ -55,7 +54,7 @@ mkPTokenState :: VirtualFile -> PTokenState
 mkPTokenState vf =
   PTokenState
     {
-      rope = Rope.fromText $ toText vf._file_text,
+      rope = vf._file_text,
       cursor = Char.Position 0 0,
       columnsInUtf16 = 0
     }

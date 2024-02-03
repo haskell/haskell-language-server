@@ -63,7 +63,7 @@ properties =
 -- ---------------------------------------------------------------------
 
 provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
-provider recorder plId ideState typ contents fp _ = ExceptT $ withIndefiniteProgress title Cancellable $ runExceptT $ do
+provider recorder plId ideState token typ contents fp _ = ExceptT $ withIndefiniteProgress title token Cancellable $ \_updater -> runExceptT $ do
   fileOpts <-
       maybe [] (fromDyn . hsc_dflags . hscEnv)
           <$> liftIO (runAction "Ormolu" ideState $ use GhcSession fp)

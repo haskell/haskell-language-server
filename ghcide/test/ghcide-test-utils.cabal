@@ -35,7 +35,7 @@ library
         lsp-types,
         hls-plugin-api,
         lens,
-        lsp-test ^>= 0.16,
+        lsp-test ^>= 0.17,
         tasty-hunit >= 0.10,
         text,
         row-types,

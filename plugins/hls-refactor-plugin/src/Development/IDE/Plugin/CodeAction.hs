@@ -103,7 +103,7 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     uriToFilePath)
 import qualified Language.LSP.Server                               as LSP
 import           Language.LSP.VFS                                  (VirtualFile,
-                                                                    _file_text)
+                                                                    virtualFileText)
 import qualified Text.Fuzzy.Parallel                               as TFP
 import qualified Text.Regex.Applicative                            as RE
 import           Text.Regex.TDFA                                   ((=~), (=~~))
@@ -115,7 +115,7 @@ codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
 codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics= xs}) = do
   contents <- lift $ LSP.getVirtualFile $ toNormalizedUri uri
   liftIO $ do
-    let text = Rope.toText . (_file_text :: VirtualFile -> Rope.Rope) <$> contents
+    let text = virtualFileText <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     diag <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
@@ -188,7 +188,7 @@ extendImportCommand =
   PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
 
 extendImportHandler :: CommandFunction IdeState ExtendImport
-extendImportHandler ideState edit@ExtendImport {..} = ExceptT $ do
+extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
     let (_, (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . M.toList

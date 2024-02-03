@@ -6,8 +6,8 @@ module PositionMappingTests (tests) where
 import qualified Data.EnumMap.Strict                  as EM
 import           Data.Row
 import qualified Data.Text                            as T
-import           Data.Text.Utf16.Rope                 (Rope)
-import qualified Data.Text.Utf16.Rope                 as Rope
+import           Data.Text.Utf16.Rope.Mixed           (Rope)
+import qualified Data.Text.Utf16.Rope.Mixed           as Rope
 import           Development.IDE.Core.PositionMapping (PositionResult (..),
                                                        fromCurrent,
                                                        positionResultToMaybe,
