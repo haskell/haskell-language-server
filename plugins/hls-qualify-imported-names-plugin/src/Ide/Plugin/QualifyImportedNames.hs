@@ -8,13 +8,11 @@ module Ide.Plugin.QualifyImportedNames (descriptor) where
 
 import           Control.Lens                     ((^.))
 import           Control.Monad                    (foldM)
-import           Control.Monad.IO.Class           (MonadIO (liftIO))
 import           Control.Monad.Trans.State.Strict (State)
 import qualified Control.Monad.Trans.State.Strict as State
 import           Data.DList                       (DList)
 import qualified Data.DList                       as DList
 import           Data.Foldable                    (Foldable (foldl'), find)
-import qualified Data.HashMap.Strict              as HashMap
 import           Data.List                        (sortOn)
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
@@ -28,8 +26,7 @@ import           Development.IDE.Core.RuleTypes   (GetFileContents (GetFileConte
                                                    HieAstResult (HAR, refMap),
                                                    TcModuleResult (TcModuleResult, tmrParsed, tmrTypechecked),
                                                    TypeCheck (TypeCheck))
-import           Development.IDE.Core.Service     (runAction)
-import           Development.IDE.Core.Shake       (IdeState, use)
+import           Development.IDE.Core.Shake       (IdeState)
 import           Development.IDE.GHC.Compat       (ContextInfo (Use),
                                                    GenLocated (..), GhcPs,
                                                    GlobalRdrElt, GlobalRdrEnv,
@@ -55,14 +52,11 @@ import           Development.IDE.GHC.Compat       (ContextInfo (Use),
                                                    srcSpanEndLine,
                                                    srcSpanStartCol,
                                                    srcSpanStartLine, unitUFM)
-import           Development.IDE.GHC.Error        (isInsideSrcSpan)
-import           Development.IDE.Types.Location   (NormalizedFilePath,
-                                                   Position (Position),
-                                                   Range (Range), Uri,
-                                                   toNormalizedUri)
+import           Development.IDE.Types.Location   (Position (Position),
+                                                   Range (Range), Uri)
 import           Ide.Plugin.Error                 (PluginError (PluginRuleFailed),
                                                    getNormalizedFilePathE,
-                                                   handleMaybe, handleMaybeM)
+                                                   handleMaybe)
 import           Ide.Types                        (PluginDescriptor (pluginHandlers),
                                                    PluginId,
                                                    PluginMethodHandler,
@@ -74,11 +68,9 @@ import           Language.LSP.Protocol.Message    (Method (Method_TextDocumentCo
 import           Language.LSP.Protocol.Types      (CodeAction (CodeAction, _command, _data_, _diagnostics, _disabled, _edit, _isPreferred, _kind, _title),
                                                    CodeActionKind (CodeActionKind_QuickFix),
                                                    CodeActionParams (CodeActionParams),
-                                                   TextDocumentIdentifier (TextDocumentIdentifier),
                                                    TextEdit (TextEdit),
                                                    WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
-                                                   type (|?) (InL, InR),
-                                                   uriToNormalizedFilePath)
+                                                   type (|?) (InL, InR))
 
 thenCmp :: Ordering -> Ordering -> Ordering
 {-# INLINE thenCmp #-}

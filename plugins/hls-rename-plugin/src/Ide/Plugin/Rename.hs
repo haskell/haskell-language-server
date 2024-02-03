@@ -7,16 +7,12 @@
 
 module Ide.Plugin.Rename (descriptor, E.Log) where
 
-import           GHC.Parser.Annotation                 (AnnContext, AnnList,
-                                                        AnnParen, AnnPragma)
-
 import           Compat.HieTypes
 import           Control.Lens                          ((^.))
 import           Control.Monad
-import           Control.Monad.Except
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Except
+import           Control.Monad.Except                  (ExceptT, throwError)
+import           Control.Monad.IO.Class                (MonadIO, liftIO)
+import           Control.Monad.Trans.Class             (lift)
 import           Data.Bifunctor                        (first)
 import           Data.Generics
 import           Data.Hashable

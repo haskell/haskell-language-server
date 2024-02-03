@@ -68,14 +68,6 @@ import           Development.IDE.Plugin.TypeLenses                 (suggestSigna
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           GHC.Exts                                          (fromList)
-import qualified GHC.LanguageExtensions                            as Lang
-import           Ide.Logger                                        hiding
-                                                                   (group)
-import qualified Text.Regex.Applicative                            as RE
-#if MIN_VERSION_ghc(9,4,0)
-import           GHC.Parser.Annotation                             (TokenLocation (..))
-#endif
 import           GHC                                               (AddEpAnn (AddEpAnn),
                                                                     Anchor (anchor_op),
                                                                     AnchorOperation (..),
@@ -83,8 +75,11 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     DeltaPos (..),
                                                                     EpAnn (..),
                                                                     EpaLocation (..),
-                                                                    LEpaComment,
-                                                                    hsmodAnn)
+                                                                    LEpaComment)
+import           GHC.Exts                                          (fromList)
+import qualified GHC.LanguageExtensions                            as Lang
+import           Ide.Logger                                        hiding
+                                                                   (group)
 import           Ide.PluginUtils                                   (extractTextInRange,
                                                                     subRange)
 import           Ide.Types
@@ -110,6 +105,7 @@ import qualified Language.LSP.Server                               as LSP
 import           Language.LSP.VFS                                  (VirtualFile,
                                                                     _file_text)
 import qualified Text.Fuzzy.Parallel                               as TFP
+import qualified Text.Regex.Applicative                            as RE
 import           Text.Regex.TDFA                                   ((=~), (=~~))
 
 -------------------------------------------------------------------------------------------------
