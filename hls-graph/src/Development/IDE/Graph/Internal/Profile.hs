@@ -21,7 +21,6 @@ import           Data.List.Extra                         (nubOrd)
 import           Data.Maybe
 import           Data.Time                               (getCurrentTime)
 import           Data.Time.Format.ISO8601                (iso8601Show)
-import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Database (getDirtySet)
 import           Development.IDE.Graph.Internal.Paths
 import           Development.IDE.Graph.Internal.Types

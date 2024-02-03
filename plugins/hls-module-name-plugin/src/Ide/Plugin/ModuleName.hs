@@ -4,8 +4,7 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
 
-{-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wwarn -fno-warn-type-defaults #-}
 
 {- | Keep the module name in sync with its file path.
 

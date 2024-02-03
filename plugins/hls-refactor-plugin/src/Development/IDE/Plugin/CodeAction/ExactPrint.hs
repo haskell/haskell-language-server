@@ -1,5 +1,5 @@
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GADTs        #-}
+{-# LANGUAGE TypeFamilies #-}
 module Development.IDE.Plugin.CodeAction.ExactPrint (
   Rewrite (..),
   rewriteToEdit,
@@ -17,35 +17,40 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
 
 import           Control.Monad
 import           Control.Monad.Trans
-import           Data.Char                       (isAlphaNum)
-import           Data.Data                       (Data)
-import           Data.Generics                   (listify)
-import qualified Data.Text                       as T
-import           Development.IDE.GHC.Compat      hiding (Annotation)
+import           Data.Char                              (isAlphaNum)
+import           Data.Data                              (Data)
+import           Data.Generics                          (listify)
+import qualified Data.Text                              as T
+import           Development.IDE.GHC.Compat             hiding (Annotation)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util
 import           Development.IDE.Spans.Common
-import           GHC.Exts                        (IsList (fromList))
-import           GHC.Stack                       (HasCallStack)
+import           GHC.Exts                               (IsList (fromList))
+import           GHC.Stack                              (HasCallStack)
 import           Language.Haskell.GHC.ExactPrint
 import           Language.LSP.Protocol.Types
 
 import           Development.IDE.Plugin.CodeAction.Util
 
 -- GHC version specific imports. For any supported GHC version, make sure there is no warning in imports.
-import           Control.Lens   (_head, _last, over)
-import           Data.Bifunctor (first)
-import           Data.Default   (Default (..))
-import           Data.Maybe     (fromJust, fromMaybe, mapMaybe)
-import           GHC            (AddEpAnn (..), AnnContext (..), AnnList (..),
-                                 AnnParen (..), DeltaPos (SameLine), EpAnn (..),
-                                 EpaLocation (EpaDelta),
-                                 IsUnicodeSyntax (NormalSyntax),
-                                 NameAdornment (NameParens),
-                                 TrailingAnn (AddCommaAnn), addAnns, ann,
-                                 emptyComments, noSrcSpanA, reAnnL)
-import Language.Haskell.GHC.ExactPrint.ExactPrint      (makeDeltaAst, showAst)
+import           Control.Lens                           (_head, _last, over)
+import           Data.Bifunctor                         (first)
+import           Data.Default                           (Default (..))
+import           Data.Maybe                             (fromJust, fromMaybe,
+                                                         mapMaybe)
+import           GHC                                    (AddEpAnn (..),
+                                                         AnnContext (..),
+                                                         AnnList (..),
+                                                         AnnParen (..),
+                                                         DeltaPos (SameLine),
+                                                         EpAnn (..),
+                                                         EpaLocation (EpaDelta),
+                                                         IsUnicodeSyntax (NormalSyntax),
+                                                         NameAdornment (NameParens),
+                                                         TrailingAnn (AddCommaAnn),
+                                                         addAnns, ann,
+                                                         emptyComments, reAnnL)
 
 
 ------------------------------------------------------------------------------

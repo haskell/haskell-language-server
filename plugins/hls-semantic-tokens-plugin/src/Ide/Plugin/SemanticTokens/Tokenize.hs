@@ -9,7 +9,7 @@ import           Control.Monad.State.Strict       (MonadState (get),
                                                    MonadTrans (lift),
                                                    execStateT, modify, put)
 import           Control.Monad.Trans.State.Strict (StateT)
-import           Data.Char                        (isAlpha, isAlphaNum)
+import           Data.Char                        (isAlphaNum)
 import qualified Data.Map.Strict                  as M
 import qualified Data.Map.Strict                  as Map
 import qualified Data.Set                         as S

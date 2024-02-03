@@ -1,5 +1,4 @@
 {-# LANGUAGE BlockArguments    #-}
-{-# LANGUAGE MultiWayIf        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -10,9 +9,7 @@ import           Data.Text                       (Text)
 import qualified Ide.Plugin.QualifyImportedNames as QualifyImportedNames
 import           System.FilePath                 ((</>))
 import           Test.Hls                        (CodeAction (CodeAction, _title),
-                                                  Command (Command), IdeState,
-                                                  MonadIO (liftIO),
-                                                  PluginDescriptor,
+                                                  Command, MonadIO (liftIO),
                                                   PluginTestDescriptor,
                                                   Position (Position),
                                                   Range (Range), Session,
@@ -24,10 +21,9 @@ import           Test.Hls                        (CodeAction (CodeAction, _title
                                                   getCodeActions,
                                                   goldenWithHaskellDoc,
                                                   mkPluginTestDescriptor',
-                                                  openDoc, rename,
-                                                  runSessionWithServer,
+                                                  openDoc, runSessionWithServer,
                                                   testCase, testGroup,
-                                                  type (|?) (InR), (@?=))
+                                                  type (|?) (InR))
 
 import           Prelude
 
@@ -37,6 +33,7 @@ data Point = Point {
   column :: !Int
 }
 
+makePoint :: Int -> Int -> Point
 makePoint line column
   | line >= 1 && column >= 1 = Point line column
   | otherwise = error "Line or column is less than 1."

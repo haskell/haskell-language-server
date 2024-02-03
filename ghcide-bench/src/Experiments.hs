@@ -31,7 +31,6 @@ import           Control.Lens.Extras                (is)
 import           Control.Monad.Extra                (allM, forM, forM_, forever,
                                                      unless, void, when,
                                                      whenJust, (&&^))
-import           Control.Monad.Fail                 (MonadFail)
 import           Control.Monad.IO.Class
 import           Data.Aeson                         (Value (Null),
                                                      eitherDecodeStrict',

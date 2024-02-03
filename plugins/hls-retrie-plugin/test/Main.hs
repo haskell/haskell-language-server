@@ -4,19 +4,15 @@
 
 module Main (main) where
 
-import           Control.Concurrent                (threadDelay)
 import           Control.Monad                     (void)
-import           Data.Aeson
 import qualified Data.Map                          as M
 import           Data.Text                         (Text)
 import qualified Development.IDE.GHC.ExactPrint
 import qualified Development.IDE.Plugin.CodeAction as Refactor
 import           Ide.Plugin.Config
 import qualified Ide.Plugin.Retrie                 as Retrie
-import           Ide.Types                         (IdePlugins (IdePlugins))
 import           System.FilePath
 import           Test.Hls
-import           Test.Hls                          (PluginTestDescriptor)
 
 main :: IO ()
 main = defaultTestRunner tests
