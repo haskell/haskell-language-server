@@ -148,7 +148,7 @@ focusTokenAt leaf = do
       return (Rope.toText prefix, suffix)
     sub :: Char.Position -> Char.Position -> Maybe Char.Position
     sub (Char.Position l1 c1) (Char.Position l2 c2)
-      | l1 == l2 && c1 > c2 = Just $ Char.Position 0 (c1 - c2)
+      | l1 == l2 && c1 >= c2 = Just $ Char.Position 0 (c1 - c2)
       | l1 > l2 = Just $ Char.Position (l1 - l2) c1
       | otherwise = Nothing
     realSrcLocRopePosition :: RealSrcLoc -> Char.Position
