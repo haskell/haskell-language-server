@@ -1,7 +1,6 @@
 
 {-# LANGUAGE GADTs           #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TypeOperators   #-}
 
 module TestUtils where
 

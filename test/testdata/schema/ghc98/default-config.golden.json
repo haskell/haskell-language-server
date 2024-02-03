@@ -115,6 +115,8 @@
                 "classToken": "class",
                 "dataConstructorToken": "enumMember",
                 "functionToken": "function",
+                "moduleToken": "namespace",
+                "operatorToken": "operator",
                 "patternSynonymToken": "macro",
                 "recordFieldToken": "property",
                 "typeConstructorToken": "enum",

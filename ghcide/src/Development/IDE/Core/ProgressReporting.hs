@@ -1,4 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
 module Development.IDE.Core.ProgressReporting
   ( ProgressEvent(..)
   , ProgressReporting(..)

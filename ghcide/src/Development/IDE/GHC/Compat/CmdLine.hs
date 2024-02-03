@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE RankNTypes #-}
 
 -- | Compat module Interface file relevant code.
 module Development.IDE.GHC.Compat.CmdLine (
@@ -15,12 +14,13 @@ module Development.IDE.GHC.Compat.CmdLine (
     ) where
 
 #if MIN_VERSION_ghc(9,3,0)
-import GHC.Driver.Session (processCmdLineP, CmdLineP (..), getCmdLineState, putCmdLineState)
-import GHC.Driver.CmdLine
+import           GHC.Driver.CmdLine
+import           GHC.Driver.Session     (CmdLineP (..), getCmdLineState,
+                                         processCmdLineP, putCmdLineState)
 #else
-import GHC.Driver.CmdLine
-import Control.Monad.IO.Class
-import GHC (Located)
+import           Control.Monad.IO.Class
+import           GHC                    (Located)
+import           GHC.Driver.CmdLine
 #endif
 
 #if !MIN_VERSION_ghc(9,3,0)

@@ -100,15 +100,13 @@ library
   if flag(pedantic)
     ghc-options: -Werror
 
-  default-language:   Haskell2010
+  default-language:   GHC2021
   default-extensions:
     DataKinds
-    KindSignatures
-    TypeOperators
 
 test-suite tests
   type:               exitcode-stdio-1.0
-  default-language:   Haskell2010
+  default-language:   GHC2021
   hs-source-dirs:     test
   main-is:            Main.hs
   other-modules:

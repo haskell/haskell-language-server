@@ -2,7 +2,6 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE PackageImports     #-}
-{-# LANGUAGE PolyKinds          #-}
 -- | A plugin that adds custom messages for use in tests
 module Development.IDE.Plugin.Test
   ( TestRequest(..)

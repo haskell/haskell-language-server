@@ -1,24 +1,16 @@
-{-# LANGUAGE CPP                       #-}
-{-# LANGUAGE DeriveAnyClass            #-}
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE DuplicateRecordFields     #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE MultiWayIf                #-}
-{-# LANGUAGE NamedFieldPuns            #-}
-{-# LANGUAGE OverloadedLabels          #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE PackageImports            #-}
-{-# LANGUAGE PatternSynonyms           #-}
-{-# LANGUAGE RecordWildCards           #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE StrictData                #-}
-{-# LANGUAGE TupleSections             #-}
-{-# LANGUAGE TypeApplications          #-}
-{-# LANGUAGE TypeFamilies              #-}
-{-# LANGUAGE ViewPatterns              #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE OverloadedLabels      #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PackageImports        #-}
+{-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE StrictData            #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
 -- On 9.4 we get a new redundant constraint warning, but deleting the
@@ -142,8 +134,7 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
                                                                      lineSplitTextEdits,
                                                                      nextPragmaLine)
 import           GHC.Generics                                       (Generic)
-#if MIN_VERSION_apply_refact(0,12,0)
-#else
+#if !MIN_VERSION_apply_refact(0,12,0)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 #endif

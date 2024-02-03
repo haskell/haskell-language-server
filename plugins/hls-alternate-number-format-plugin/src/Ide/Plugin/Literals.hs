@@ -1,9 +1,5 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE ViewPatterns       #-}
+{-# LANGUAGE CPP          #-}
+{-# LANGUAGE ViewPatterns #-}
 module Ide.Plugin.Literals (
     collectLiterals
     , Literal(..)

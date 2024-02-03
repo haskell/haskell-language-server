@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeOperators     #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
@@ -99,9 +98,8 @@ codeActionTests = testGroup
     action <- head . concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
     executeCodeAction action
     _ <- waitForDiagnostics
-    -- TODO: uncomment this after lsp-test fixed
-    -- ver3 <- (^.J.version) <$> getVersionedDoc doc
-    -- liftIO $ ver3 @?= Just 3
+    ver3 <- (^. L.version) <$> getVersionedDoc doc
+    liftIO $ ver3 @?= 2
     pure mempty
   ]
 

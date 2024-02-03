@@ -22,7 +22,7 @@ source-repository head
     location: https://github.com/haskell/haskell-language-server.git
 
 library
-  default-language:    Haskell2010
+  default-language:    GHC2021
   build-depends:
      base < 4.20, array, bytestring, containers, directory, filepath, transformers
   build-depends: ghc >= 8.10, ghc-boot

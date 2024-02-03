@@ -1,9 +1,6 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE ExplicitNamespaces  #-}
-{-# LANGUAGE FlexibleInstances   #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 import           Control.Lens                       ((^?))
 import           Control.Monad.IO.Class             (liftIO)
@@ -11,7 +8,7 @@ import           Data.Aeson                         (KeyValue (..), Value (..),
                                                      object)
 import           Data.Default
 import           Data.Functor                       (void)
-import           Data.Map                           as Map hiding (map)
+import           Data.Map.Strict                    as Map hiding (map)
 import           Data.String                        (fromString)
 import           Data.Text                          hiding (length, map,
                                                      unlines)
@@ -164,37 +161,43 @@ semanticTokensTests =
   testGroup
     "other semantic Token test"
     [ testCase "module import test" $ do
-        let file1 = "TModuleA.hs"
+        let file1 = "TModula𐐀bA.hs"
         let file2 = "TModuleB.hs"
-        let expect =
-              [ SemanticTokenOriginal TVariable (Loc 5 1 2) "go",
-                SemanticTokenOriginal TDataConstructor (Loc 5 6 4) "Game"
-              ]
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
           doc1 <- openDoc file1 "haskell"
           doc2 <- openDoc file2 "haskell"
-          _check1 <- waitForAction "TypeCheck" doc1
+          check1 <- waitForAction "TypeCheck" doc1
           check2 <- waitForAction "TypeCheck" doc2
+          case check1 of
+            Right (WaitForIdeRuleResult _) -> return ()
+            Left _                         -> error "TypeCheck1 failed"
           case check2 of
             Right (WaitForIdeRuleResult _) -> return ()
             Left _                         -> error "TypeCheck2 failed"
 
-          textContent2 <- documentContents doc2
-          let vfs = VirtualFile 0 0 (Rope.fromText textContent2)
-          res2 <- Test.getSemanticTokens doc2
-          case res2 ^? Language.LSP.Protocol.Types._L of
-            Just tokens -> do
-              either
-                (error . show)
-                (\xs -> liftIO $ xs @?= expect)
-                $ recoverSemanticTokens def vfs tokens
-              return ()
-            _ -> error "No tokens found"
-          liftIO $ 1 @?= 1,
+
+
+          result <- docSemanticTokensString def doc2
+          let expect = unlines [
+                    "3:8-18 TModule \"TModula\\66560bA\""
+                    , "4:18-28 TModule \"TModula\\66560bA\""
+                    , "6:1-3 TVariable \"go\""
+                    , "6:6-10 TDataConstructor \"Game\""
+                    , "8:1-5 TVariable \"a\\66560bb\""
+                    , "8:8-19 TModule \"TModula\\66560bA.\""
+                    , "8:19-22 TRecordField \"a\\66560b\""
+                    , "8:23-25 TVariable \"go\""
+                ]
+          liftIO $ result @?= expect,
       goldenWithSemanticTokensWithDefaultConfig "mixed constancy test result generated from one ghc version" "T1",
       goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternSynonym",
       goldenWithSemanticTokensWithDefaultConfig "type family" "TTypefamily",
-      goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax"
+      goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax",
+      goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName"
+      -- it is not supported in ghc92
+#if MIN_VERSION_ghc(9,4,0)
+      , goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc"
+#endif
     ]
 
 semanticTokensDataTypeTests :: TestTree
@@ -217,7 +220,8 @@ semanticTokensFunctionTests =
       goldenWithSemanticTokensWithDefaultConfig "local functions" "TFunctionLocal",
       goldenWithSemanticTokensWithDefaultConfig "functions under type synonym" "TFunctionUnderTypeSynonym",
       goldenWithSemanticTokensWithDefaultConfig "function in let binding" "TFunctionLet",
-      goldenWithSemanticTokensWithDefaultConfig "negative case non-function with constraint" "TNoneFunctionWithConstraint"
+      goldenWithSemanticTokensWithDefaultConfig "negative case non-function with constraint" "TNoneFunctionWithConstraint",
+      goldenWithSemanticTokensWithDefaultConfig "TOperator" "TOperator"
     ]
 
 main :: IO ()

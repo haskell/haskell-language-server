@@ -47,7 +47,7 @@ common warnings
     -fno-ignore-asserts
 
 library
-  default-language:   Haskell2010
+  default-language:   GHC2021
   build-depends:
     , aeson
     , array
@@ -123,24 +123,11 @@ library
     build-depends: unix
 
   default-extensions:
-    BangPatterns
     DataKinds
-    DeriveFoldable
-    DeriveFunctor
-    DeriveGeneric
-    DeriveTraversable
-    FlexibleContexts
-    GeneralizedNewtypeDeriving
-    KindSignatures
+    ExplicitNamespaces
     LambdaCase
-    NamedFieldPuns
     OverloadedStrings
     RecordWildCards
-    ScopedTypeVariables
-    StandaloneDeriving
-    TupleSections
-    TypeApplications
-    TypeOperators
     ViewPatterns
 
   hs-source-dirs:     src session-loader
@@ -249,7 +236,7 @@ flag test-exe
 
 executable ghcide-test-preprocessor
   import: warnings
-  default-language: Haskell2010
+  default-language:   GHC2021
   hs-source-dirs:   test/preprocessor
   ghc-options:      -Wno-name-shadowing
   main-is:          Main.hs
@@ -264,7 +251,7 @@ flag executable
 
 executable ghcide
   import: warnings
-  default-language:   Haskell2010
+  default-language:   GHC2021
   hs-source-dirs:     exe
   ghc-options:        -threaded -rtsopts "-with-rtsopts=-I0 -A128M -T" -Wno-name-shadowing
 
@@ -291,19 +278,9 @@ executable ghcide
 
   autogen-modules:    Paths_ghcide
   default-extensions:
-    BangPatterns
-    DeriveFunctor
-    DeriveGeneric
-    FlexibleContexts
-    GeneralizedNewtypeDeriving
     LambdaCase
-    NamedFieldPuns
     OverloadedStrings
     RecordWildCards
-    ScopedTypeVariables
-    StandaloneDeriving
-    TupleSections
-    TypeApplications
     ViewPatterns
 
   if !flag(executable)
@@ -319,7 +296,7 @@ executable ghcide
 test-suite ghcide-tests
   import: warnings
   type:               exitcode-stdio-1.0
-  default-language:   Haskell2010
+  default-language:   GHC2021
   build-tool-depends:
     , ghcide:ghcide
     , ghcide:ghcide-test-preprocessor
@@ -420,17 +397,7 @@ test-suite ghcide-tests
 
   -- Tests that have been pulled out of the main file
   default-extensions:
-    BangPatterns
-    DeriveFunctor
-    DeriveGeneric
-    FlexibleContexts
-    GeneralizedNewtypeDeriving
     LambdaCase
-    NamedFieldPuns
     OverloadedStrings
     RecordWildCards
-    ScopedTypeVariables
-    StandaloneDeriving
-    TupleSections
-    TypeApplications
     ViewPatterns
