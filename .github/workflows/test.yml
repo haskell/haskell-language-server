@@ -103,16 +103,18 @@ jobs:
       - name: Build
         run: cabal build
 
-      - name: Set test options
+      - if: matrix.test
+        name: Test hls-graph
+        run: cabal test hls-graph 
+
+      # Do this after running the tests that don't use tasty-rerun, otherwise they complain
+      # about not recognizing the arguments
+      - name: Set rerun test options 
         # See https://github.com/ocharles/tasty-rerun/issues/22 for why we need
         # to include 'new' in the filters, since many of our test suites are in the
         # same package.
         run: |
           echo "test-options: --rerun-update --rerun-filter failures,exceptions,new" >> cabal.project.local
-
-      - if: matrix.test
-        name: Test hls-graph
-        run: cabal test hls-graph 
 
       - if: needs.pre_job.outputs.should_skip_ghcide != 'true' && matrix.test
         name: Test ghcide
