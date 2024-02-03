@@ -1,7 +1,7 @@
 module TOperator where
 
 -- imported operator
-go f x = f $ x
+go f x = f$x
 -- operator defined in local module
 ($$$$) = b
 x = 1 $$$$ 2
