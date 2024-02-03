@@ -7,6 +7,6 @@
 7:18-22 TClassMethod "elem"
 8:1-2 TVariable "c"
 8:6-14 TModule "Prelude."
-8:14-15 TClassMethod "+"
+8:14-15 TOperator "+"
 9:1-2 TVariable "d"
-9:6-7 TClassMethod "+"
+9:6-7 TOperator "+"

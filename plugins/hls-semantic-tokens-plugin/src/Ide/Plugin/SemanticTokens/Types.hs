@@ -39,10 +39,9 @@ data HsSemanticTokenType
   | TTypeSynonym -- Type synonym
   | TTypeFamily -- type family
   | TRecordField -- from match bind
+  | TOperator-- operator
   | TModule -- module name
   deriving (Eq, Ord, Show, Enum, Bounded, Generic, Lift)
-
-
 
 -- type SemanticTokensConfig = SemanticTokensConfig_ Identity
 instance Default SemanticTokensConfig where
@@ -63,6 +62,7 @@ instance Default SemanticTokensConfig where
       , stTypeFamily = SemanticTokenTypes_Interface
       , stRecordField = SemanticTokenTypes_Property
       , stModule = SemanticTokenTypes_Namespace
+      , stOperator = SemanticTokenTypes_Operator
       }
 -- | SemanticTokensConfig_ is a configuration for the semantic tokens plugin.
 -- it contains map between the hs semantic token type and default token type.
@@ -79,6 +79,7 @@ data SemanticTokensConfig = STC
   , stTypeFamily      :: !SemanticTokenTypes
   , stRecordField     :: !SemanticTokenTypes
   , stModule          :: !SemanticTokenTypes
+  , stOperator        :: !SemanticTokenTypes
   } deriving (Generic, Show)
 
 

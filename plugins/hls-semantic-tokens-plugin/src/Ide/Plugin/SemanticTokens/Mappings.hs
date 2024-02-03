@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TypeOperators     #-}
 
 -- |
 -- This module provides mappings to convert token type information in the Haskell IDE plugin. It includes functions for:
@@ -29,6 +30,16 @@ import           Language.LSP.Protocol.Types     (LspEnum (knownValues),
                                                   UInt, absolutizeTokens)
 import           Language.LSP.VFS                hiding (line)
 
+-- * 0. Mapping name to Hs semantic token type.
+
+idInfixOperator :: Identifier -> Maybe HsSemanticTokenType
+idInfixOperator (Right name) = nameInfixOperator name
+idInfixOperator _            = Nothing
+
+nameInfixOperator :: Name -> Maybe HsSemanticTokenType
+nameInfixOperator name | isSymOcc (nameOccName name) = Just TOperator
+nameInfixOperator _ = Nothing
+
 -- * 1. Mapping semantic token type to and from the LSP default token type.
 
 -- | map from haskell semantic token type to LSP default token type
@@ -46,6 +57,7 @@ toLspTokenType conf tk = case tk of
   TRecordField     -> stRecordField conf
   TPatternSynonym  -> stPatternSynonym conf
   TModule          -> stModule conf
+  TOperator        -> stOperator conf
 
 lspTokenReverseMap :: SemanticTokensConfig -> Map.Map SemanticTokenTypes HsSemanticTokenType
 lspTokenReverseMap config
@@ -61,7 +73,10 @@ lspTokenTypeHsTokenType cf tk = Map.lookup tk (lspTokenReverseMap cf)
 
 -- | tyThingSemantic
 tyThingSemantic :: TyThing -> Maybe HsSemanticTokenType
-tyThingSemantic ty = case ty of
+tyThingSemantic ty | (Just hst) <- tyThingSemantic' ty = Just hst <> nameInfixOperator (getName ty)
+tyThingSemantic _ = Nothing
+tyThingSemantic' :: TyThing -> Maybe HsSemanticTokenType
+tyThingSemantic' ty = case ty of
   AnId vid
     | isTyVar vid -> Just TTypeVariable
     | isRecordSelector vid -> Just TRecordField
