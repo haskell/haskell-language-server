@@ -425,7 +425,6 @@ describeRestriction restrictToOriginatingFile =
         if restrictToOriginatingFile then " in current file" else ""
 
 suggestTypeRewrites ::
-  (Outputable (IdP GhcRn)) =>
   Uri ->
   GHC.Module ->
   TyClDecl GhcRn ->

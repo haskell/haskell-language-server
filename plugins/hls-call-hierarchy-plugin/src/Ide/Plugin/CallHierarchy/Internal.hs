@@ -243,8 +243,8 @@ mkCallHierarchyCall mk v@Vertex{..} = do
                     []     -> pure Nothing
 
 -- | Unified queries include incoming calls and outgoing calls.
-queryCalls :: (Show a)
-    => CallHierarchyItem
+queryCalls ::
+    CallHierarchyItem
     -> (HieDb -> Symbol -> IO [Vertex])
     -> (Vertex -> Action (Maybe a))
     -> ([a] -> [a])

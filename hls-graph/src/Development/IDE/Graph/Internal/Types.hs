@@ -110,7 +110,7 @@ keyMap = unsafePerformIO $ newIORef (GlobalKeyValueMap Map.empty IM.empty 0)
 
 {-# NOINLINE keyMap #-}
 
-newKey :: (Eq a, Typeable a, Hashable a, Show a) => a -> Key
+newKey :: (Typeable a, Hashable a, Show a) => a -> Key
 newKey k = unsafePerformIO $ do
   let !newKey = KeyValue k (T.pack (show k))
   atomicModifyIORef' keyMap $ \km@(GlobalKeyValueMap hm im n) ->

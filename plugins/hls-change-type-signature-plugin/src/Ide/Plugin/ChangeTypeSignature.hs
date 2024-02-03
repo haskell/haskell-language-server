@@ -107,7 +107,7 @@ errorMessageRegexes = [ -- be sure to add new Error Messages Regexes at the bott
 
 -- | Given a String with the name of a declaration, GHC's "Expected Type", find the declaration that matches
 -- both the name given and the Expected Type, and return the type signature location
-findSigLocOfStringDecl :: SigName => [LHsDecl GhcPs] -> ExpectedSig -> String -> Maybe RealSrcSpan
+findSigLocOfStringDecl :: [LHsDecl GhcPs] -> ExpectedSig -> String -> Maybe RealSrcSpan
 findSigLocOfStringDecl decls expectedType declName = something (const Nothing `extQ` findSig `extQ` findLocalSig) decls
     where
         -- search for Top Level Signatures

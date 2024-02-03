@@ -49,7 +49,7 @@ getSrcSpan = \case
     FracLiteral ss _ _ -> unLit ss
 
 -- | Find all literals in a Parsed Source File
-collectLiterals :: (Data ast, Typeable ast) => ast -> [Literal]
+collectLiterals :: Data ast => ast -> [Literal]
 collectLiterals = everything (<>) (maybeToList . (const Nothing `extQ` getLiteral `extQ` getPattern))
 
 

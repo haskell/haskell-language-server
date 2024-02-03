@@ -158,19 +158,19 @@ toBase conv header n
   | n < 0 = '-' : header <> upper (conv (abs n) "")
   | otherwise = header <> upper (conv n "")
 
-toOctal :: (Integral a, Show a) => a -> String
+toOctal :: Integral a => a -> String
 toOctal = toBase showOct "0o"
 
 toDecimal :: Integral a => a -> String
 toDecimal = toBase showInt ""
 
-toBinary :: (Integral a, Show a) => a -> String
+toBinary :: Integral a => a -> String
 toBinary = toBase showBin_ "0b"
   where
     -- this is not defined in versions of Base < 4.16-ish
     showBin_ = showIntAtBase 2 intToDigit
 
-toHex :: (Integral a, Show a) => a  -> String
+toHex :: Integral a => a -> String
 toHex = toBase showHex "0x"
 
 toFloatDecimal :: RealFloat a => a -> String

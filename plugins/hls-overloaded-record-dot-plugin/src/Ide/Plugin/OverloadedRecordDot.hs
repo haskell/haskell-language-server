@@ -264,9 +264,7 @@ convertRecordSelectors RecordSelectorExpr{..} =
 -- |Converts a record selector expression into record dot syntax, currently we
 -- are using printOutputable to do it. We are also letting GHC decide when to
 -- parenthesize the record expression
-convertRecSel :: Outputable (LHsExpr (GhcPass 'Renamed))
-                    => LHsExpr (GhcPass 'Renamed)
-                    -> LHsExpr (GhcPass 'Renamed) -> Text
+convertRecSel :: LHsExpr (GhcPass 'Renamed) -> LHsExpr (GhcPass 'Renamed) -> Text
 convertRecSel se re = printOutputable (parenthesizeHsExpr appPrec re) <> "."
                         <> printOutputable se
 
