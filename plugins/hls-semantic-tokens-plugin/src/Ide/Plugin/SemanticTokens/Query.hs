@@ -63,7 +63,7 @@ nameSemanticFromHie hieKind rm n = do
 
 -------------------------------------------------
 
--- * extract semantic tokens from IdSemanticMap
+-- * extract lsp semantic tokens from RangeSemanticTokenTypeList
 
 -------------------------------------------------
 

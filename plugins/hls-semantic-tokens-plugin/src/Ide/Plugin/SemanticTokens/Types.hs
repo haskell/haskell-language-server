@@ -107,10 +107,6 @@ data Loc = Loc
 instance Show Loc where
   show (Loc line startChar len) = show line <> ":" <> show startChar <> "-" <> show (startChar + len)
 
-type RangeIdSetMap = Map Range (Set Identifier)
-
-type IdSemanticMap = Map Identifier HsSemanticTokenType
-
 data GetSemanticTokens = GetSemanticTokens
   deriving (Eq, Show, Typeable, Generic)
 
