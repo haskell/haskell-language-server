@@ -54,10 +54,9 @@ import           Development.IDE.GHC.Compat           (GRHSs (GRHSs),
                                                        HsExpr (HsApp, OpApp),
                                                        HsGroup (..),
                                                        HsValBindsLR (..),
-                                                       HscEnv, IdP,
-                                                       ImportDecl (..), LHsExpr,
-                                                       LRuleDecls, Match,
-                                                       ModIface,
+                                                       HscEnv, ImportDecl (..),
+                                                       LHsExpr, LRuleDecls,
+                                                       Match, ModIface,
                                                        ModSummary (ModSummary, ms_hspp_buf, ms_mod),
                                                        Outputable, ParsedModule,
                                                        RuleDecl (HsRule),
@@ -425,7 +424,6 @@ describeRestriction restrictToOriginatingFile =
         if restrictToOriginatingFile then " in current file" else ""
 
 suggestTypeRewrites ::
-  (Outputable (IdP GhcRn)) =>
   Uri ->
   GHC.Module ->
   TyClDecl GhcRn ->

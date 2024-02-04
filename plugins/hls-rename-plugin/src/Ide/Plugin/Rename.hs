@@ -148,7 +148,7 @@ replaceRefs newName refs = everywhere $
     -- replaceLoc @NoEpAnns `extT` -- not needed
     replaceLoc @NameAnn
     where
-        replaceLoc :: forall an. Typeable an => LocatedAn an RdrName -> LocatedAn an RdrName
+        replaceLoc :: forall an. LocatedAn an RdrName -> LocatedAn an RdrName
         replaceLoc (L srcSpan oldRdrName)
             | isRef (locA srcSpan) = L srcSpan $ replace oldRdrName
         replaceLoc lOldRdrName = lOldRdrName
@@ -217,7 +217,7 @@ removeGenerated HAR{..} = HAR{hieAst = go hieAst,..}
     goAst (Node nsi sp xs) = Node (SourcedNodeInfo $ M.restrictKeys (getSourcedNodeInfo nsi) (S.singleton SourceInfo)) sp (map goAst xs)
 
 -- head is safe since groups are non-empty
-collectWith :: (Hashable a, Eq a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
+collectWith :: (Hashable a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
 collectWith f = map (\a -> (f $ head a, HS.fromList a)) . groupOn f . HS.toList
 
 locToUri :: Location -> Uri

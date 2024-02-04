@@ -301,7 +301,7 @@ blockProp = do
     AProp ran prop <$> resultBlockP
 
 withRange ::
-    (TraversableStream s, Stream s, Monad m, Ord v, Traversable t) =>
+    (TraversableStream s, Ord v, Traversable t) =>
     ParsecT v s m (t (a, Position)) ->
     ParsecT v s m (Range, t a)
 withRange p = do
@@ -489,7 +489,7 @@ consume style =
         Line     -> (,) <$> takeRest <*> getPosition
         Block {} -> manyTill_ anySingle (getPosition <* eob)
 
-getPosition :: (Monad m, Ord v, TraversableStream s) => ParsecT v s m Position
+getPosition :: (Ord v, TraversableStream s) => ParsecT v s m Position
 getPosition = sourcePosToPosition <$> getSourcePos
 
 -- | Parses example test line.
