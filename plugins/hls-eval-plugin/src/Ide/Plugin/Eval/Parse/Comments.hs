@@ -301,7 +301,7 @@ blockProp = do
     AProp ran prop <$> resultBlockP
 
 withRange ::
-    (TraversableStream s, Stream s, Ord v, Traversable t) =>
+    (TraversableStream s, Ord v, Traversable t) =>
     ParsecT v s m (t (a, Position)) ->
     ParsecT v s m (Range, t a)
 withRange p = do

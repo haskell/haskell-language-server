@@ -50,10 +50,9 @@ import           Development.IDE.GHC.Compat           (Extension (OverloadedReco
                                                        GhcPass,
                                                        HsExpansion (HsExpanded),
                                                        HsExpr (HsApp, HsVar, OpApp, XExpr),
-                                                       LHsExpr, Outputable,
-                                                       Pass (..), appPrec,
-                                                       dollarName, getLoc,
-                                                       hs_valds,
+                                                       LHsExpr, Pass (..),
+                                                       appPrec, dollarName,
+                                                       getLoc, hs_valds,
                                                        parenthesizeHsExpr,
                                                        pattern RealSrcSpan,
                                                        unLoc)

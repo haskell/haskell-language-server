@@ -70,15 +70,12 @@ data ChangeSignature = ChangeSignature {
                          , diagnostic  :: Diagnostic
                          }
 
--- | Constraint needed to trackdown OccNames in signatures
-type SigName = (HasOccName (IdP GhcPs))
-
 -- | Create a CodeAction from a Diagnostic
-generateAction :: SigName => PluginId -> Uri -> [LHsDecl GhcPs] -> Diagnostic -> Maybe (Command |? CodeAction)
+generateAction :: PluginId -> Uri -> [LHsDecl GhcPs] -> Diagnostic -> Maybe (Command |? CodeAction)
 generateAction plId uri decls diag = changeSigToCodeAction plId uri <$> diagnosticToChangeSig decls diag
 
 -- | Convert a diagnostic into a ChangeSignature and add the proper SrcSpan
-diagnosticToChangeSig :: SigName => [LHsDecl GhcPs] -> Diagnostic -> Maybe ChangeSignature
+diagnosticToChangeSig :: [LHsDecl GhcPs] -> Diagnostic -> Maybe ChangeSignature
 diagnosticToChangeSig decls diagnostic = do
     -- regex match on the GHC Error Message
     (expectedType, actualType, declName) <- matchingDiagnostic diagnostic
