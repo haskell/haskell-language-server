@@ -18,10 +18,14 @@ module Ide.Plugin.Pragmas
 import           Control.Lens                             hiding (List)
 import           Control.Monad.IO.Class                   (MonadIO (liftIO))
 import           Control.Monad.Trans.Class                (lift)
+import           Data.Char                                (isAlphaNum)
 import           Data.List.Extra                          (nubOrdOn)
 import qualified Data.Map                                 as M
-import           Data.Maybe                               (mapMaybe)
+import           Data.Maybe                               (fromMaybe,
+                                                           listToMaybe,
+                                                           mapMaybe)
 import qualified Data.Text                                as T
+import qualified Data.Text.Utf16.Rope.Mixed               as Rope
 import           Development.IDE                          hiding (line)
 import           Development.IDE.Core.Compile             (sourceParser,
                                                            sourceTypecheck)
@@ -29,7 +33,8 @@ import           Development.IDE.Core.PluginUtils
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Plugin.Completions       (ghcideCompletionsPluginPriority)
 import           Development.IDE.Plugin.Completions.Logic (getCompletionPrefix)
-import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (..))
+import           Development.IDE.Plugin.Completions.Types (PosPrefixInfo (..),
+                                                           prefixText)
 import qualified Development.IDE.Spans.Pragmas            as Pragmas
 import           Ide.Plugin.Error
 import           Ide.Types
@@ -37,6 +42,7 @@ import qualified Language.LSP.Protocol.Lens               as L
 import qualified Language.LSP.Protocol.Message            as LSP
 import qualified Language.LSP.Protocol.Types              as LSP
 import qualified Language.LSP.Server                      as LSP
+import qualified Language.LSP.VFS                         as VFS
 import qualified Text.Fuzzy                               as Fuzzy
 
 -- ---------------------------------------------------------------------
@@ -193,30 +199,32 @@ allPragmas =
 
 -- ---------------------------------------------------------------------
 flags :: [T.Text]
-flags = map (T.pack . stripLeading '-') $ flagsForCompletion False
+flags = map T.pack $ flagsForCompletion False
 
 completion :: PluginMethodHandler IdeState 'LSP.Method_TextDocumentCompletion
 completion _ide _ complParams = do
     let (LSP.TextDocumentIdentifier uri) = complParams ^. L.textDocument
-        position = complParams ^. L.position
+        cursorPos@(Position l c) = complParams ^. L.position
     contents <- lift $ LSP.getVirtualFile $ toNormalizedUri uri
     fmap LSP.InL $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
-            pure $ result $ getCompletionPrefix position cnts
+            pure $ result $ getCompletionPrefix cursorPos cnts
             where
                 result pfix
                     | "{-# language" `T.isPrefixOf` line
-                    = map buildCompletion
-                        (Fuzzy.simpleFilter (prefixText pfix) allPragmas)
+                    = map mkLanguagePragmaCompl $
+                        Fuzzy.simpleFilter (prefixText pfix) allPragmas
                     | "{-# options_ghc" `T.isPrefixOf` line
-                    =  map buildCompletion
-                        (Fuzzy.simpleFilter (prefixText pfix) flags)
+                    = let flagPrefix = getGhcOptionPrefix cursorPos cnts
+                          prefixLength = fromIntegral $ T.length flagPrefix
+                          prefixRange = LSP.Range (Position l (c - prefixLength)) cursorPos
+                      in map (mkGhcOptionCompl prefixRange) $ Fuzzy.simpleFilter flagPrefix flags
                     | "{-#" `T.isPrefixOf` line
                     = [ mkPragmaCompl (a <> suffix) b c
                       | (a, b, c, w) <- validPragmas, w == NewLine
                       ]
                     | -- Do not suggest any pragmas any of these conditions:
-                      -- 1. Current line is a an import
+                      -- 1. Current line is an import
                       -- 2. There is a module name right before the current word.
                       --    Something like `Text.la` shouldn't suggest adding the
                       --    'LANGUAGE' pragma.
@@ -239,7 +247,7 @@ completion _ide _ complParams = do
                         module_ = prefixScope pfix
                         word = prefixText pfix
                         -- Not completely correct, may fail if more than one "{-#" exist
-                        -- , we can ignore it since it rarely happen.
+                        -- , we can ignore it since it rarely happens.
                         prefix
                             | "{-# "  `T.isInfixOf` line = ""
                             | "{-#"   `T.isInfixOf` line = " "
@@ -293,19 +301,43 @@ mkPragmaCompl insertText label detail =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just LSP.InsertTextFormat_Snippet)
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
+getGhcOptionPrefix :: Position -> VFS.VirtualFile -> T.Text
+getGhcOptionPrefix (Position l c) (VFS.VirtualFile _ _ ropetext) =
+  fromMaybe "" $ do
+    let lastMaybe = listToMaybe . reverse
 
-stripLeading :: Char -> String -> String
-stripLeading _ [] = []
-stripLeading c (s:ss)
-  | s == c = ss
-  | otherwise = s:ss
+    -- grab the entire line the cursor is at
+    curLine <- listToMaybe
+        $ Rope.lines
+        $ fst $ Rope.splitAtLine 1
+        $ snd $ Rope.splitAtLine (fromIntegral l) ropetext
+    let beforePos = T.take (fromIntegral c) curLine
+    -- the word getting typed, after previous space and before cursor
+    curWord <-
+        if | T.null beforePos        -> Just ""
+           | T.last beforePos == ' ' -> Just "" -- don't count abc as the curword in 'abc '
+           | otherwise               -> lastMaybe (T.words beforePos)
+    pure $ T.takeWhileEnd isGhcOptionChar curWord
 
+-- | Is this character contained in some GHC flag? Based on:
+-- GHCi> nub . sort . concat $ GHC.Driver.Session.flagsForCompletion False
+-- "#-.01234589=ABCDEFGHIJKLMNOPQRSTUVWX_abcdefghijklmnopqrstuvwxyz"
+isGhcOptionChar :: Char -> Bool
+isGhcOptionChar c = isAlphaNum c || c `elem` ("#-.=_" :: String)
 
-buildCompletion :: T.Text -> LSP.CompletionItem
-buildCompletion label =
+mkLanguagePragmaCompl :: T.Text -> LSP.CompletionItem
+mkLanguagePragmaCompl label =
   LSP.CompletionItem label Nothing (Just LSP.CompletionItemKind_Keyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+
+mkGhcOptionCompl :: Range -> T.Text -> LSP.CompletionItem
+mkGhcOptionCompl editRange completedFlag =
+  LSP.CompletionItem completedFlag Nothing (Just LSP.CompletionItemKind_Keyword) Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    Nothing (Just insertCompleteFlag) Nothing Nothing Nothing Nothing Nothing
+  where
+    insertCompleteFlag = LSP.InL $ LSP.TextEdit editRange completedFlag
 
 
 

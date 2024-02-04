@@ -761,7 +761,7 @@ common pragmas
     cpp-options: -Dhls_pragmas
 
 library hls-pragmas-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:  Ide.Plugin.Pragmas
   hs-source-dirs:   plugins/hls-pragmas-plugin/src
   build-depends:
@@ -773,11 +773,12 @@ library hls-pragmas-plugin
     , lens
     , lsp
     , text
+    , text-rope
     , transformers
     , containers
 
 test-suite hls-pragmas-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-pragmas-plugin/test
   main-is:          Main.hs
