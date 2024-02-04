@@ -3,7 +3,7 @@ module Development.IDE.Graph(
       shakeOptions,
     Rules,
     Action, action,
-    Key(.., Key),
+    pattern Key,
     newKey, renderKey,
     actionFinally, actionBracket, actionCatch, actionFork,
     -- * Configuration

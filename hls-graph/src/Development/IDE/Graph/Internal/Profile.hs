@@ -63,7 +63,7 @@ resultsOnly mp = mapKeyMap (\r ->
 -- | Given a map of representing a dependency order (with a show for error messages), find an ordering for the items such
 --   that no item points to an item before itself.
 --   Raise an error if you end up with a cycle.
--- dependencyOrder :: (Eq a, Hashable a) => (a -> String) -> [(a,[a])] -> [a]
+--
 -- Algorithm:
 --    Divide everyone up into those who have no dependencies [Id]
 --    And those who depend on a particular Id, Dep :-> Maybe [(Key,[Dep])]
@@ -71,6 +71,7 @@ resultsOnly mp = mapKeyMap (\r ->
 --    For each with no dependencies, add to list, then take its dep hole and
 --    promote them either to Nothing (if ds == []) or into a new slot.
 --    k :-> Nothing means the key has already been freed
+dependencyOrder :: (Key -> String) -> [(Key, [Key])] -> [Key]
 dependencyOrder shw status =
   f (map fst noDeps) $
     mapKeyMap Just $
@@ -87,8 +88,8 @@ dependencyOrder shw status =
             where (bad,badOverflow) = splitAt 10 [shw i | (i, Just _) <- toListKeyMap mp]
 
         f (x:xs) mp = x : f (now++xs) later
-            where Just free = lookupDefaultKeyMap (Just []) x mp
-                  (now,later) = foldl' g ([], insertKeyMap x Nothing mp) free
+            where mfree = lookupDefaultKeyMap (Just []) x mp
+                  (now,later) = foldl' g ([], insertKeyMap x Nothing mp) $ fromMaybe [] mfree
 
         g (free, mp) (k, []) = (k:free, mp)
         g (free, mp) (k, d:ds) = case lookupDefaultKeyMap (Just []) d mp of

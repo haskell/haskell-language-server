@@ -70,7 +70,7 @@ jobs:
           os:  ${{ runner.os }}
 
       - name: Build `hls-graph` with flags
-        run: cabal v2-build hls-graph --flags="embed-files stm-stats"
+        run: cabal v2-build hls-graph --flags="embed-files stm-stats pedantic"
 
       - name: Build `ghcide` with flags
         run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe ekg"

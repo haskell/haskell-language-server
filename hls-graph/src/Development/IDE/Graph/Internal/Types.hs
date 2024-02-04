@@ -5,7 +5,65 @@
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE ViewPatterns       #-}
 
-module Development.IDE.Graph.Internal.Types where
+module Development.IDE.Graph.Internal.Types
+    ( Action (..)
+    , Database (..)
+    , Step (..)
+    , Rules (..)
+    , SRules (..)
+    , TheRules
+    , RunMode (..)
+    , RunResult (..)
+    , Value (..)
+    , Result (..)
+    , ResultDeps (..)
+    , Status (..)
+    , Stack
+    , Key -- Opaque - don't expose constructor, use newKey to create
+    , pattern Key
+    , KeyDetails (..)
+    , RunChanged (..)
+    , SAction (..)
+    , StackException (..)
+    , ShakeDatabase (..)
+    , onKeyReverseDeps
+    , unwrapDynamic
+    , getDatabaseValues
+    , getResult
+    , getResultDepsDefault
+    , newKey
+    , viewDirty
+    , memberStack
+    , addStack
+    , mapResultDeps
+    , getDatabase
+    , emptyStack
+    , renderKey
+    -- * KeyMap
+    , KeyMap
+    , mapKeyMap
+    , insertKeyMap
+    , lookupKeyMap
+    , lookupDefaultKeyMap
+    , fromListKeyMap
+    , fromListWithKeyMap
+    , toListKeyMap
+    , elemsKeyMap
+    , restrictKeysKeyMap
+    -- * KeySet
+    , KeySet
+    , nullKeySet
+    , insertKeySet
+    , memberKeySet
+    , toListKeySet
+    , lengthKeySet
+    , filterKeySet
+    , singletonKeySet
+    , fromListKeySet
+    , deleteKeySet
+    , differenceKeySet
+    )
+ where
 
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
@@ -97,11 +155,13 @@ newtype Step = Step Int
 ---------------------------------------------------------------------
 -- Keys
 
-data KeyValue = forall a . (Eq a, Typeable a, Hashable a, Show a) => KeyValue a Text
+data KeyValue = forall a . (Typeable a, Hashable a, Show a) => KeyValue a Text
 
 newtype Key = UnsafeMkKey Int
 
+pattern Key :: () => (Typeable a, Hashable a, Show a) => a -> Key
 pattern Key a <- (lookupKeyValue -> KeyValue a _)
+{-# COMPLETE Key #-}
 
 data GlobalKeyValueMap = GlobalKeyValueMap !(Map.HashMap KeyValue Key) !(IntMap KeyValue) {-# UNPACK #-} !Int
 
@@ -141,7 +201,7 @@ instance Eq KeyValue where
 instance Hashable KeyValue where
     hashWithSalt i (KeyValue x _) = hashWithSalt i (typeOf x, x)
 instance Show KeyValue where
-    show (KeyValue x t) = T.unpack t
+    show (KeyValue _ t) = T.unpack t
 
 renderKey :: Key -> Text
 renderKey (lookupKeyValue -> KeyValue _ t) = t
