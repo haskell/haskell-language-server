@@ -69,8 +69,8 @@ computeSemanticTokens :: Recorder (WithPriority SemanticLog) -> PluginId -> IdeS
 computeSemanticTokens recorder pid _ nfp = do
   config <- lift $ useSemanticConfigAction pid
   logWith recorder Debug (LogConfig config)
-  (RangeHsSemanticTokenTypes {rangeSemantic}, mapping) <- useWithStaleE GetSemanticTokens nfp
-  withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens config mapping rangeSemantic
+  (RangeHsSemanticTokenTypes {rangeSemanticList}, mapping) <- useWithStaleE GetSemanticTokens nfp
+  withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens config mapping rangeSemanticList
 
 semanticTokensFull :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull recorder state pid param = do

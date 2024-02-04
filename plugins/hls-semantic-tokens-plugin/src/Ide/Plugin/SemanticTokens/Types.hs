@@ -120,7 +120,7 @@ instance NFData GetSemanticTokens
 
 type RangeSemanticTokenTypeList = [(Range, HsSemanticTokenType)]
 
-newtype RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {rangeSemantic :: RangeSemanticTokenTypeList}
+newtype RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {rangeSemanticList :: RangeSemanticTokenTypeList}
 
 instance NFData RangeHsSemanticTokenTypes where
   rnf :: RangeHsSemanticTokenTypes -> ()
