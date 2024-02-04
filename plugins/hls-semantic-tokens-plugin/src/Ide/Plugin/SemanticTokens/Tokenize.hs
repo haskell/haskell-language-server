@@ -1,18 +1,17 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings   #-}
 
-module Ide.Plugin.SemanticTokens.Tokenize (hieAstSpanIdentifiers) where
+module Ide.Plugin.SemanticTokens.Tokenize (computeRangeHsSemanticTokenTypeList) where
 
 import           Control.Lens                     (Identity (runIdentity))
 import           Control.Monad                    (forM_, guard)
 import           Control.Monad.State.Strict       (MonadState (get),
                                                    MonadTrans (lift),
                                                    execStateT, modify, put)
-import           Control.Monad.Trans.State.Strict (StateT)
+import           Control.Monad.Trans.State.Strict (StateT, modify')
 import           Data.Char                        (isAlphaNum)
 import qualified Data.Map.Strict                  as M
 import qualified Data.Map.Strict                  as Map
-import qualified Data.Set                         as S
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import qualified Data.Text.Rope                   as Char
@@ -22,42 +21,50 @@ import           Data.Text.Utf16.Rope.Mixed       (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed       as Rope
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error        (realSrcSpanToCodePointRange)
-import           Ide.Plugin.SemanticTokens.Types  (RangeIdSetMap)
+import           Ide.Plugin.SemanticTokens.Types  (HsSemanticTokenType (TModule),
+                                                   RangeHsSemanticTokenTypes (..))
 import           Language.LSP.Protocol.Types      (Position (Position),
                                                    Range (Range), UInt, mkRange)
 import           Language.LSP.VFS                 hiding (line)
 import           Prelude                          hiding (length, span)
 
 type Tokenizer m a = StateT PTokenState m a
+type HsSemanticLookup = Identifier -> Maybe HsSemanticTokenType
 
 
 data PTokenState = PTokenState
-  { rangeIdSetMap  :: !RangeIdSetMap,
-    rope           :: !Rope, -- the remains of rope we are working on
-    cursor         :: !Char.Position, -- the cursor position of the current rope to the start of the original file in code point position
-    columnsInUtf16 :: !UInt -- the column of the start of the current rope in utf16
+  {
+    rope                  :: !Rope -- the remains of rope we are working on
+    , cursor              :: !Char.Position -- the cursor position of the current rope to the start of the original file in code point position
+    , columnsInUtf16      :: !UInt -- the column of the start of the current rope in utf16
+    , rangeHsSemanticList :: [(Range, HsSemanticTokenType)] -- (range, token type) in reverse order
   }
 
-runTokenizer :: (Monad m) => Tokenizer m a -> PTokenState -> m RangeIdSetMap
-runTokenizer p st = rangeIdSetMap <$> execStateT p st
+runTokenizer :: (Monad m) => Tokenizer m a -> PTokenState -> m [(Range, HsSemanticTokenType)]
+runTokenizer p st = reverse . rangeHsSemanticList <$> execStateT p st
 
 data SplitResult
   = NoSplit (Text, Range) -- does not need to split, token text, token range
   | Split (Text, Range, Range) -- token text, prefix range(module range), token range
   deriving (Show)
 
+getSplitTokenText :: SplitResult -> Text
+getSplitTokenText (NoSplit (t, _))  = t
+getSplitTokenText (Split (t, _, _)) = t
+
 
 mkPTokenState :: VirtualFile -> PTokenState
 mkPTokenState vf =
   PTokenState
-    { rangeIdSetMap = mempty,
+    {
       rope = Rope.fromText $ toText vf._file_text,
       cursor = Char.Position 0 0,
-      columnsInUtf16 = 0
+      columnsInUtf16 = 0,
+      rangeHsSemanticList = []
     }
 
-addRangeIdSetMap :: (Monad m) => Range -> Identifier -> Tokenizer m ()
-addRangeIdSetMap r i = modify $ \s -> s {rangeIdSetMap = Map.insertWith (<>) r (S.singleton i) $ rangeIdSetMap s}
+addRangeHsSemanticList :: (Monad m) => (Range, HsSemanticTokenType) -> Tokenizer m ()
+addRangeHsSemanticList r = modify' $ \s -> s {rangeHsSemanticList = r : rangeHsSemanticList s}
 
 -- lift a Tokenizer Maybe () to Tokenizer m (),
 -- if the Maybe is Nothing, do nothing, recover the state
@@ -67,18 +74,19 @@ liftMaybeM p = do
   st <- get
   forM_ (execStateT p st) put
 
-hieAstSpanIdentifiers :: VirtualFile -> HieAST a -> RangeIdSetMap
-hieAstSpanIdentifiers vf ast = runIdentity $ runTokenizer (foldAst ast) (mkPTokenState vf)
+computeRangeHsSemanticTokenTypeList :: HsSemanticLookup -> VirtualFile -> HieAST a -> RangeHsSemanticTokenTypes
+computeRangeHsSemanticTokenTypeList lookupHsTokenType vf ast =
+    RangeHsSemanticTokenTypes $ runIdentity $ runTokenizer (foldAst lookupHsTokenType ast) (mkPTokenState vf)
 
 -- | foldAst
 -- visit every leaf node in the ast in depth first order
-foldAst :: (Monad m) => HieAST t -> Tokenizer m ()
-foldAst ast = if null (nodeChildren ast)
-  then liftMaybeM (visitLeafIds ast)
-  else mapM_ foldAst $ nodeChildren ast
+foldAst :: (Monad m) => HsSemanticLookup -> HieAST t -> Tokenizer m ()
+foldAst lookupHsTokenType ast = if null (nodeChildren ast)
+  then liftMaybeM (visitLeafIds lookupHsTokenType ast)
+  else mapM_ (foldAst lookupHsTokenType) $ nodeChildren ast
 
-visitLeafIds :: HieAST t -> Tokenizer Maybe ()
-visitLeafIds leaf = liftMaybeM $ do
+visitLeafIds :: HsSemanticLookup -> HieAST t -> Tokenizer Maybe ()
+visitLeafIds lookupHsTokenType leaf = liftMaybeM $ do
   let span = nodeSpan leaf
   (ran, token) <- focusTokenAt leaf
   -- if `focusTokenAt` succeed, we can safely assume we have shift the cursor correctly
@@ -87,30 +95,37 @@ visitLeafIds leaf = liftMaybeM $ do
     -- only handle the leaf node with single column token
     guard $ srcSpanStartLine span == srcSpanEndLine span
     splitResult <-  lift $ splitRangeByText token ran
-    mapM_ (combineNodeIds ran splitResult) $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
+    mapM_ (combineNodeIds lookupHsTokenType ran splitResult) $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
   where
-    combineNodeIds :: (Monad m) => Range -> SplitResult -> NodeInfo a -> Tokenizer m ()
-    combineNodeIds ran ranSplit (NodeInfo _ _ bd) = mapM_ (getIdentifier ran ranSplit) (M.keys bd)
-    getIdentifier :: (Monad m) => Range -> SplitResult -> Identifier -> Tokenizer m ()
-    getIdentifier ran ranSplit idt = liftMaybeM $ do
+    combineNodeIds :: (Monad m) => HsSemanticLookup -> Range -> SplitResult -> NodeInfo a -> Tokenizer m ()
+    combineNodeIds lookupHsTokenType ran  ranSplit (NodeInfo _ _ bd) =
+        case (maybeTokenType, ranSplit) of
+            (Nothing, _) -> return ()
+            (Just TModule, _) -> addRangeHsSemanticList (ran, TModule)
+            (Just tokenType, NoSplit (_, tokenRan)) -> addRangeHsSemanticList (tokenRan, tokenType)
+            (Just tokenType, Split (_, ranPrefix, tokenRan)) -> do
+                addRangeHsSemanticList (ranPrefix, TModule)
+                addRangeHsSemanticList (tokenRan, tokenType)
+        where
+            maybeTokenType = foldMap (getIdentifier lookupHsTokenType ranSplit) (M.keys bd)
+
+    -- takeHsSemanticType :: HsSemanticLookup -> SplitResult -> Identifier -> Maybe HsSemanticTokenType
+
+    getIdentifier :: HsSemanticLookup -> SplitResult -> Identifier -> Maybe HsSemanticTokenType
+    getIdentifier lookupHsTokenType ranSplit idt = do
       case idt of
-        Left _moduleName -> addRangeIdSetMap ran idt
+        Left _moduleName -> Just TModule
         Right name -> do
-          occStr <- lift $ T.pack <$> case (occNameString . nameOccName) name of
+          occStr <- T.pack <$> case (occNameString . nameOccName) name of
             -- the generated selector name with {-# LANGUAGE DuplicateRecordFields #-}
             '$' : 's' : 'e' : 'l' : ':' : xs -> Just $ takeWhile (/= ':') xs
             -- other generated names that should not be visible
             '$' : c : _ | isAlphaNum c       -> Nothing
             c : ':' : _ | isAlphaNum c       -> Nothing
             ns                               -> Just ns
-          case ranSplit of
-            (NoSplit (tk, r)) -> do
-              guard $ tk == occStr
-              addRangeIdSetMap r idt
-            (Split (tk, r1, r2)) -> do
-              guard $ tk == occStr
-              addRangeIdSetMap r1 (Left $ mkModuleName "")
-              addRangeIdSetMap r2 idt
+          guard $ getSplitTokenText ranSplit == occStr
+          lookupHsTokenType idt
+
 
 focusTokenAt ::
   -- | leaf node we want to focus on
