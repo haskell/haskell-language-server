@@ -442,6 +442,16 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
     | otherwise = []
 
 
+-- Using a looser equality check, determines if a given `Diagnostic` is present
+-- in a list. Compares using *only* required fields for this type as defined by:
+-- https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnostic
+-- See https://github.com/haskell/haskell-language-server/issues/3857 for more
+-- context.
+diagIsElemOf :: Diagnostic -> [Diagnostic] -> Bool
+diagIsElemOf d ds = any (requiredFieldsEqual d) ds
+ where
+   requiredFieldsEqual Diagnostic{_range=r1, _message=m1} Diagnostic{_range=r2, _message=m2} = r1 == r2 && m1 == m2
+
 -- Note [Removing imports is preferred]
 -- It's good to prefer the remove imports code action because an unused import
 -- is likely to be removed and less likely the warning will be disabled.
@@ -453,7 +463,7 @@ caRemoveRedundantImports m contents digs ctxDigs uri
     r <- join $ map (\d -> repeat d `zip` suggestRemoveRedundantImport pm contents d) digs,
     allEdits <- [ e | (_, (_, edits)) <- r, e <- edits],
     caRemoveAll <- removeAll allEdits,
-    ctxEdits <- [ x | x@(d, _) <- r, d `elem` ctxDigs],
+    ctxEdits <- [ x | x@(d, _) <- r, d `diagIsElemOf` ctxDigs],
     not $ null ctxEdits,
     caRemoveCtx <- map (\(d, (title, tedit)) -> removeSingle title tedit d) ctxEdits
       = caRemoveCtx ++ [caRemoveAll]
@@ -488,7 +498,7 @@ caRemoveInvalidExports m contents digs ctxDigs uri
     allRanges <- nubOrd $ [ range | (_,_,ranges) <- r, range <- ranges],
     allRanges' <- extend txt' allRanges,
     Just caRemoveAll <- removeAll allRanges',
-    ctxEdits <- [ x | x@(_, d, _) <- r, d `elem` ctxDigs],
+    ctxEdits <- [ x | x@(_, d, _) <- r, d `diagIsElemOf` ctxDigs],
     not $ null ctxEdits
       = caRemoveCtx ++ [caRemoveAll]
   | otherwise = []
