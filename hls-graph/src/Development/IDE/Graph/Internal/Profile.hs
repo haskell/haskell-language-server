@@ -88,8 +88,8 @@ dependencyOrder shw status =
             where (bad,badOverflow) = splitAt 10 [shw i | (i, Just _) <- toListKeyMap mp]
 
         f (x:xs) mp = x : f (now++xs) later
-            where mfree = lookupDefaultKeyMap (Just []) x mp
-                  (now,later) = foldl' g ([], insertKeyMap x Nothing mp) $ fromMaybe [] mfree
+            where free = fromMaybe [] $ lookupDefaultKeyMap (Just []) x mp
+                  (now,later) = foldl' g ([], insertKeyMap x Nothing mp) free
 
         g (free, mp) (k, []) = (k:free, mp)
         g (free, mp) (k, d:ds) = case lookupDefaultKeyMap (Just []) d mp of

@@ -88,6 +88,9 @@ library
     build-depends:
       , file-embed        >=0.0.11
       , template-haskell
+  else
+    build-depends:
+      directory
 
   if flag(stm-stats)
     cpp-options: -DSTM_STATS
