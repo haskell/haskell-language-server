@@ -25,9 +25,9 @@ module Development.IDE.Graph(
     ) where
 
 import           Development.IDE.Graph.Database
-import           Development.IDE.Graph.KeyMap
-import           Development.IDE.Graph.KeySet
 import           Development.IDE.Graph.Internal.Action
 import           Development.IDE.Graph.Internal.Options
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
+import           Development.IDE.Graph.KeyMap
+import           Development.IDE.Graph.KeySet
