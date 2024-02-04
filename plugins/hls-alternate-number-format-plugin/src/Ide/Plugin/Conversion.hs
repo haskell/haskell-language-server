@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE ViewPatterns #-}
 module Ide.Plugin.Conversion (
     alternateFormat
@@ -158,19 +159,21 @@ toBase conv header n
   | n < 0 = '-' : header <> upper (conv (abs n) "")
   | otherwise = header <> upper (conv n "")
 
-toOctal :: (Integral a, Show a) => a -> String
-toOctal = toBase showOct "0o"
+#if MIN_VERSION_base(4,17,0)
+toOctal, toDecimal, toBinary, toHex :: Integral a => a -> String
+#else
+toOctal, toDecimal, toBinary, toHex:: (Integral a, Show a) => a -> String
+#endif
 
-toDecimal :: Integral a => a -> String
-toDecimal = toBase showInt ""
-
-toBinary :: (Integral a, Show a) => a -> String
 toBinary = toBase showBin_ "0b"
   where
-    -- this is not defined in versions of Base < 4.16-ish
+    -- this is not defined in base < 4.16
     showBin_ = showIntAtBase 2 intToDigit
 
-toHex :: (Integral a, Show a) => a  -> String
+toOctal = toBase showOct "0o"
+
+toDecimal = toBase showInt ""
+
 toHex = toBase showHex "0x"
 
 toFloatDecimal :: RealFloat a => a -> String

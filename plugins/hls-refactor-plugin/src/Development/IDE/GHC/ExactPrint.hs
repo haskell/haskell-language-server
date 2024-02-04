@@ -258,7 +258,7 @@ needsParensSpace _               = mempty
 -}
 graft' ::
     forall ast a l.
-    (Data a, Typeable l, ASTElement l ast) =>
+    (Data a, ASTElement l ast) =>
     -- | Do we need to insert a space before this grafting? In do blocks, the
     -- answer is no, or we will break layout. But in function applications,
     -- the answer is yes, or the function call won't get its argument. Yikes!
@@ -348,7 +348,7 @@ graftExprWithM dst trans = Graft $ \dflags a -> do
 
 graftWithM ::
     forall ast m a l.
-    (Fail.MonadFail m, Data a, Typeable l, ASTElement l ast) =>
+    (Fail.MonadFail m, Data a, ASTElement l ast) =>
     SrcSpan ->
     (LocatedAn l ast -> TransformT m (Maybe (LocatedAn l ast))) ->
     Graft m a
@@ -643,7 +643,7 @@ instance ASTElement NameAnn RdrName where
 
 -- | Given an 'LHSExpr', compute its exactprint annotations.
 --   Note that this function will throw away any existing annotations (and format)
-annotate :: (ASTElement l ast, Outputable l)
+annotate :: ASTElement l ast
     => DynFlags -> Bool -> LocatedAn l ast -> TransformT (Either String) (LocatedAn l ast)
 annotate dflags needs_space ast = do
     uniq <- show <$> uniqueSrcSpanT
