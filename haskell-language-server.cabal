@@ -42,15 +42,6 @@ common defaults
 common test-defaults
   ghc-options:        -threaded -rtsopts -with-rtsopts=-N
 
-common common-deps
-  build-depends:
-    , base       >=4.16 && <5
-    , directory
-    , extra
-    , filepath
-    , text
-    , prettyprinter >= 1.7
-
 -- Default warnings in HLS
 common warnings
   ghc-options: -Wall
@@ -434,7 +425,7 @@ flag importLens
   manual:      True
 
 library hls-explicit-imports-plugin
-  import:             defaults, warnings
+  import:             defaults, pedantic, warnings
   exposed-modules:    Ide.Plugin.ExplicitImports
   hs-source-dirs:     plugins/hls-explicit-imports-plugin/src
   build-depends:
@@ -928,7 +919,7 @@ common qualifyImportedNames
     cpp-options: -Dhls_qualifyImportedNames
 
 library hls-qualify-imported-names-plugin
-  import:             defaults, pedantic, warnings
+  import:             defaults, warnings
   exposed-modules:    Ide.Plugin.QualifyImportedNames
   hs-source-dirs:     plugins/hls-qualify-imported-names-plugin/src
   build-depends:
@@ -1616,7 +1607,6 @@ test-suite hls-semantic-tokens-plugin-tests
 
 library
   import:           defaults
-                  , common-deps
                   , warnings
                   , pedantic
                   -- plugins
@@ -1658,7 +1648,12 @@ library
   autogen-modules:  Paths_haskell_language_server
   hs-source-dirs:   src
   build-depends:
+    , aeson-pretty
+    , base                  >=4.16 && <5
     , data-default
+    , directory
+    , extra
+    , filepath
     , ghc
     , ghcide                == 2.6.0.0
     , githash               >=0.1.6.1
@@ -1666,14 +1661,14 @@ library
     , hls-plugin-api        == 2.6.0.0
     , optparse-applicative
     , optparse-simple
+    , prettyprinter         >= 1.7
     , process
-    , aeson-pretty
+    , text
 
   default-extensions: DataKinds
 
 executable haskell-language-server
   import:           defaults
-                  , common-deps
                   , warnings
                   , pedantic
   main-is:          Main.hs
@@ -1700,15 +1695,17 @@ executable haskell-language-server
     ghc-options: -dynamic
 
   build-depends:
+    , base                    >=4.16 && <5
     , haskell-language-server
-    , lsp
     , hls-plugin-api
+    , lsp
+    , prettyprinter           >= 1.7
+    , text
 
   default-extensions: DataKinds
 
 executable haskell-language-server-wrapper
   import:           defaults
-                  , common-deps
                   , warnings
                   , pedantic
   main-is:          Wrapper.hs
@@ -1724,14 +1721,18 @@ executable haskell-language-server-wrapper
     "-with-rtsopts=-I0 -A128M"
 
   build-depends:
+    , base       >=4.16 && <5
     , data-default
-    , ghc
+    , directory
+    , extra
+    , filepath
     , ghcide
     , haskell-language-server
     , hie-bios
     , hls-plugin-api
     , lsp
     , lsp-types
+    , text
     , transformers
     , unliftio-core
   if !os(windows)
@@ -1744,7 +1745,6 @@ executable haskell-language-server-wrapper
 test-suite func-test
   import:             defaults
                     , test-defaults
-                    , common-deps
                     , warnings
                     , pedantic
                     , refactor
@@ -1754,18 +1754,22 @@ test-suite func-test
     ghcide:ghcide-test-preprocessor
 
   build-depends:
+    , aeson
+    , base            >=4.16 && <5
     , bytestring
+    , containers
     , deepseq
-    , hashable
-    , lens
+    , extra
+    , filepath
     , ghcide
     , ghcide-test-utils
-    , hls-test-utils == 2.6.0.0
-    , lsp-types
-    , aeson
+    , hashable
     , hls-plugin-api
+    , hls-test-utils == 2.6.0.0
+    , lens
     , lsp-test
-    , containers
+    , lsp-types
+    , text
     , unordered-containers
 
   hs-source-dirs:     test/functional test/utils
@@ -1796,7 +1800,6 @@ test-suite func-test
 
 test-suite wrapper-test
   import:             defaults
-                    , common-deps
                     , warnings
                     , pedantic
   type:               exitcode-stdio-1.0
@@ -1805,14 +1808,16 @@ test-suite wrapper-test
     haskell-language-server:haskell-language-server
 
   build-depends:
-      process
+    , base       >=4.16 && <5
+    , extra
     , hls-test-utils
+    , process
 
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs
 
 benchmark benchmark
-    import:           defaults, warnings, common-deps
+    import:           defaults, warnings
     -- Depends on shake-bench which is unbuildable after this point
     if impl(ghc >= 9.5)
       buildable: False
@@ -1830,14 +1835,19 @@ benchmark benchmark
         ViewPatterns
 
     build-depends:
-        aeson,
-        containers,
-        data-default,
-        ghcide-bench,
-        haskell-language-server,
-        hls-plugin-api,
-        lens,
-        lens-aeson,
-        shake,
-        shake-bench == 0.2.*,
-        yaml
+      , aeson
+      , base       >=4.16 && <5
+      , containers
+      , data-default
+      , directory
+      , extra
+      , filepath
+      , ghcide-bench
+      , haskell-language-server
+      , hls-plugin-api
+      , lens
+      , lens-aeson
+      , shake
+      , shake-bench == 0.2.*
+      , text
+      , yaml
