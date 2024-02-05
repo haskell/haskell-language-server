@@ -63,9 +63,6 @@ mkPTokenState vf =
       cursor = Char.Position 0 0,
       columnsInUtf16 = 0
     }
--- instance Monoid (DList a) where
---   mempty = DL.empty
---   mappend = (DL.++)
 
 -- lift a Tokenizer Maybe a to Tokenizer m a,
 -- if the Maybe is Nothing, do nothing, recover the state
