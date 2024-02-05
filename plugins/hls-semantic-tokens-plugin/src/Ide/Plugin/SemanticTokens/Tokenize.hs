@@ -98,7 +98,7 @@ visitLeafIds lookupHsTokenType leaf = liftMaybeM mempty $ do
     foldMapM (combineNodeIds lookupHsTokenType ran splitResult) $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
   where
     combineNodeIds :: (Monad m) => HsSemanticLookup -> Range -> SplitResult -> NodeInfo a -> Tokenizer m (DList (Range, HsSemanticTokenType))
-    combineNodeIds lookupHsTokenType ran  ranSplit (NodeInfo _ _ bd) =
+    combineNodeIds lookupHsTokenType ran ranSplit (NodeInfo _ _ bd) =
         case (maybeTokenType, ranSplit) of
             (Nothing, _) -> return mempty
             (Just TModule, _) -> return $ DL.singleton (ran, TModule)
