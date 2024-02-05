@@ -95,7 +95,7 @@ visitLeafIds lookupHsTokenType leaf = liftMaybeM mempty $ do
   liftMaybeM mempty $ do
     -- only handle the leaf node with single column token
     guard $ srcSpanStartLine span == srcSpanEndLine span
-    splitResult <-  lift $ splitRangeByText token ran
+    splitResult <- lift $ splitRangeByText token ran
     foldMapM (combineNodeIds lookupHsTokenType ran splitResult) $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
   where
     combineNodeIds :: (Monad m) => HsSemanticLookup -> Range -> SplitResult -> NodeInfo a -> Tokenizer m (DList (Range, HsSemanticTokenType))
