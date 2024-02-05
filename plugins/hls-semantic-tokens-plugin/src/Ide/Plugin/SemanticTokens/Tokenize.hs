@@ -4,12 +4,15 @@
 module Ide.Plugin.SemanticTokens.Tokenize (computeRangeHsSemanticTokenTypeList) where
 
 import           Control.Lens                     (Identity (runIdentity))
-import           Control.Monad                    (forM_, guard)
+import           Control.Monad                    (foldM, forM, forM_, guard)
 import           Control.Monad.State.Strict       (MonadState (get),
                                                    MonadTrans (lift),
-                                                   execStateT, modify, put)
-import           Control.Monad.Trans.State.Strict (StateT, modify')
+                                                   evalStateT, execStateT,
+                                                   modify, put)
+import           Control.Monad.Trans.State.Strict (StateT, modify', runStateT)
 import           Data.Char                        (isAlphaNum)
+import           Data.DList                       (DList)
+import qualified Data.DList                       as DL
 import qualified Data.Map.Strict                  as M
 import qualified Data.Map.Strict                  as Map
 import           Data.Text                        (Text)
@@ -34,14 +37,13 @@ type HsSemanticLookup = Identifier -> Maybe HsSemanticTokenType
 
 data PTokenState = PTokenState
   {
-    rope                  :: !Rope -- the remains of rope we are working on
-    , cursor              :: !Char.Position -- the cursor position of the current rope to the start of the original file in code point position
-    , columnsInUtf16      :: !UInt -- the column of the start of the current rope in utf16
-    , rangeHsSemanticList :: [(Range, HsSemanticTokenType)] -- (range, token type) in reverse order
+    rope             :: !Rope -- the remains of rope we are working on
+    , cursor         :: !Char.Position -- the cursor position of the current rope to the start of the original file in code point position
+    , columnsInUtf16 :: !UInt -- the column of the start of the current rope in utf16
   }
 
-runTokenizer :: (Monad m) => Tokenizer m a -> PTokenState -> m [(Range, HsSemanticTokenType)]
-runTokenizer p st = reverse . rangeHsSemanticList <$> execStateT p st
+runTokenizer :: (Monad m) => Tokenizer m a -> PTokenState -> m a
+runTokenizer p st = evalStateT p st
 
 data SplitResult
   = NoSplit (Text, Range) -- does not need to split, token text, token range
@@ -59,53 +61,53 @@ mkPTokenState vf =
     {
       rope = Rope.fromText $ toText vf._file_text,
       cursor = Char.Position 0 0,
-      columnsInUtf16 = 0,
-      rangeHsSemanticList = []
+      columnsInUtf16 = 0
     }
+-- instance Monoid (DList a) where
+--   mempty = DL.empty
+--   mappend = (DL.++)
 
-addRangeHsSemanticList :: (Monad m) => (Range, HsSemanticTokenType) -> Tokenizer m ()
-addRangeHsSemanticList r = modify' $ \s -> s {rangeHsSemanticList = r : rangeHsSemanticList s}
-
--- lift a Tokenizer Maybe () to Tokenizer m (),
+-- lift a Tokenizer Maybe a to Tokenizer m a,
 -- if the Maybe is Nothing, do nothing, recover the state
--- if the Maybe is Just (), do the action, and keep the state
-liftMaybeM :: (Monad m) => Tokenizer Maybe () -> Tokenizer m ()
-liftMaybeM p = do
+-- if the Maybe is Just a, do the action, and keep the state
+liftMaybeM :: (Monad m) => a -> Tokenizer Maybe a -> Tokenizer m a
+liftMaybeM a p = do
   st <- get
-  forM_ (execStateT p st) put
+  maybe (return a) (\(a, st') -> put st' >> return a) $ runStateT p st
 
 computeRangeHsSemanticTokenTypeList :: HsSemanticLookup -> VirtualFile -> HieAST a -> RangeHsSemanticTokenTypes
 computeRangeHsSemanticTokenTypeList lookupHsTokenType vf ast =
-    RangeHsSemanticTokenTypes $ runIdentity $ runTokenizer (foldAst lookupHsTokenType ast) (mkPTokenState vf)
+    RangeHsSemanticTokenTypes $ DL.toList $ runIdentity $ runTokenizer (foldAst lookupHsTokenType ast) (mkPTokenState vf)
 
+foldMapM :: (Monad m, Monoid b, Foldable t) => (a -> m b) -> t a -> m b
+foldMapM f ta = foldM (\b a -> mappend b <$> f a) mempty ta
+-- (a -> m b) -> (a -> b -> m b) -> t a -> m b
 -- | foldAst
 -- visit every leaf node in the ast in depth first order
-foldAst :: (Monad m) => HsSemanticLookup -> HieAST t -> Tokenizer m ()
+foldAst :: (Monad m) => HsSemanticLookup -> HieAST t -> Tokenizer m (DList (Range, HsSemanticTokenType))
 foldAst lookupHsTokenType ast = if null (nodeChildren ast)
-  then liftMaybeM (visitLeafIds lookupHsTokenType ast)
-  else mapM_ (foldAst lookupHsTokenType) $ nodeChildren ast
+  then liftMaybeM mempty (visitLeafIds lookupHsTokenType ast)
+  else foldMapM (foldAst lookupHsTokenType) $ nodeChildren ast
 
-visitLeafIds :: HsSemanticLookup -> HieAST t -> Tokenizer Maybe ()
-visitLeafIds lookupHsTokenType leaf = liftMaybeM $ do
+visitLeafIds :: HsSemanticLookup -> HieAST t -> Tokenizer Maybe (DList (Range, HsSemanticTokenType))
+visitLeafIds lookupHsTokenType leaf = liftMaybeM mempty $ do
   let span = nodeSpan leaf
   (ran, token) <- focusTokenAt leaf
   -- if `focusTokenAt` succeed, we can safely assume we have shift the cursor correctly
   -- we do not need to recover the cursor state, even if the following computation failed
-  liftMaybeM $ do
+  liftMaybeM mempty $ do
     -- only handle the leaf node with single column token
     guard $ srcSpanStartLine span == srcSpanEndLine span
     splitResult <-  lift $ splitRangeByText token ran
-    mapM_ (combineNodeIds lookupHsTokenType ran splitResult) $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
+    foldMapM (combineNodeIds lookupHsTokenType ran splitResult) $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
   where
-    combineNodeIds :: (Monad m) => HsSemanticLookup -> Range -> SplitResult -> NodeInfo a -> Tokenizer m ()
+    combineNodeIds :: (Monad m) => HsSemanticLookup -> Range -> SplitResult -> NodeInfo a -> Tokenizer m (DList (Range, HsSemanticTokenType))
     combineNodeIds lookupHsTokenType ran  ranSplit (NodeInfo _ _ bd) =
         case (maybeTokenType, ranSplit) of
-            (Nothing, _) -> return ()
-            (Just TModule, _) -> addRangeHsSemanticList (ran, TModule)
-            (Just tokenType, NoSplit (_, tokenRan)) -> addRangeHsSemanticList (tokenRan, tokenType)
-            (Just tokenType, Split (_, ranPrefix, tokenRan)) -> do
-                addRangeHsSemanticList (ranPrefix, TModule)
-                addRangeHsSemanticList (tokenRan, tokenType)
+            (Nothing, _) -> return mempty
+            (Just TModule, _) -> return $ DL.singleton (ran, TModule)
+            (Just tokenType, NoSplit (_, tokenRan)) -> return $ DL.singleton (tokenRan, tokenType)
+            (Just tokenType, Split (_, ranPrefix, tokenRan)) -> return $ DL.fromList [(ranPrefix, TModule),(tokenRan, tokenType)]
         where
             maybeTokenType = foldMap (getIdentifier lookupHsTokenType ranSplit) (M.keys bd)
 

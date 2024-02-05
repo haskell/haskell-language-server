@@ -1592,6 +1592,7 @@ library hls-semantic-tokens-plugin
     , syb
     , array
     , deepseq
+    , dlist
     , hls-graph == 2.6.0.0
     , template-haskell
     , data-default
