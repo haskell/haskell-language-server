@@ -107,8 +107,6 @@ visitLeafIds lookupHsTokenType leaf = liftMaybeM mempty $ do
         where
             maybeTokenType = foldMap (getIdentifier lookupHsTokenType ranSplit) (M.keys bd)
 
-    -- takeHsSemanticType :: HsSemanticLookup -> SplitResult -> Identifier -> Maybe HsSemanticTokenType
-
     getIdentifier :: HsSemanticLookup -> SplitResult -> Identifier -> Maybe HsSemanticTokenType
     getIdentifier lookupHsTokenType ranSplit idt = do
       case idt of
