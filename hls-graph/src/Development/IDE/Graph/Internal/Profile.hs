@@ -22,6 +22,7 @@ import           Data.Maybe
 import           Data.Time                               (getCurrentTime)
 import           Data.Time.Format.ISO8601                (iso8601Show)
 import           Development.IDE.Graph.Internal.Database (getDirtySet)
+import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Paths
 import           Development.IDE.Graph.Internal.Types
 import qualified Language.Javascript.DGTable             as DGTable

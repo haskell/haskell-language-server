@@ -1,18 +1,15 @@
-{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+
 module DatabaseSpec where
 
-import           Control.Concurrent.STM
-import           Development.IDE.Graph                 (shakeOptions)
-import           Development.IDE.Graph.Database        (shakeNewDatabase,
-                                                        shakeRunDatabase)
-import           Development.IDE.Graph.Internal.Action (apply1)
+import           Development.IDE.Graph                (shakeOptions)
+import           Development.IDE.Graph.Database       (shakeNewDatabase,
+                                                       shakeRunDatabase)
 import           Development.IDE.Graph.Internal.Types
-import           Development.IDE.Graph.Rule
+import Development.IDE.Graph.Internal.Action ( apply1 )
+import Development.IDE.Graph.Internal.Rules ( addRule )
 import           Example
-import qualified StmContainers.Map                     as STM
-import           System.Time.Extra                     (timeout)
+import           System.Time.Extra                    (timeout)
 import           Test.Hspec
 
 spec :: Spec
@@ -21,7 +18,7 @@ spec = do
         it "detects cycles" $ do
             db <- shakeNewDatabase shakeOptions $ do
                 ruleBool
-                addRule $ \Rule old mode -> do
+                addRule $ \Rule _old _mode -> do
                     True <- apply1 (Rule @Bool)
                     return $ RunResult ChangedRecomputeDiff "" ()
             let res = shakeRunDatabase db $ pure $ apply1 (Rule @())

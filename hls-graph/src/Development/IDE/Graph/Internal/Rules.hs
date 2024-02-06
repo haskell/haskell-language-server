@@ -17,6 +17,7 @@ import           Data.IORef
 import           Data.Maybe
 import           Data.Typeable
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Types
 
 -- | The type mapping between the @key@ or a rule and the resulting @value@.

@@ -26,6 +26,7 @@ module Development.IDE.Graph(
 
 import           Development.IDE.Graph.Database
 import           Development.IDE.Graph.Internal.Action
+import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Options
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types

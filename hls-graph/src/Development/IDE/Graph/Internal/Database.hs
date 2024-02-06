@@ -40,6 +40,7 @@ import qualified ListT
 import qualified StmContainers.Map                    as SMap
 import           System.IO.Unsafe
 import           System.Time.Extra                    (duration, sleep)
+import           Development.IDE.Graph.Internal.Key
 
 
 newDatabase :: Dynamic -> TheRules -> IO Database
