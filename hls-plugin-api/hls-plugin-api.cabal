@@ -142,6 +142,6 @@ benchmark rangemap-benchmark
     , criterion
     , deepseq
     , hls-plugin-api
-    , lsp-types
+    , lsp-test
     , random
     , random-fu

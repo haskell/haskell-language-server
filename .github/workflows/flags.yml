@@ -69,11 +69,16 @@ jobs:
           ghc: ${{ matrix.ghc }}
           os:  ${{ runner.os }}
 
+      # The purpose of this job is to ensure that the build works even with flags
+      # in their non-default settings. Below we:
+      # - enable flags that are off by default
+      # - disable flags that are on by default
       - name: Configue flags for all components
         run: |
           cabal configure \
               --constraint "hls-graph +embed-files +stm-stats" \
               --constraint "ghcide +ekg +executable +test-exe" \
+              --constraint "hls-plugin-api -use-fingertree" \
               --constraint "all +pedantic"
           cat cabal.project.local
 
