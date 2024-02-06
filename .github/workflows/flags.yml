@@ -78,7 +78,7 @@ jobs:
           cat cabal.project.local
 
       - name: Build with pedantic (-WError)
-        run: cabal buid all
+        run: cabal build all
 
   flags_post_job:
     if: always()
