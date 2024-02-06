@@ -42,7 +42,10 @@ flag pedantic
 
 common warnings
   ghc-options:
-    -Wall -Wincomplete-uni-patterns -Wunused-packages
+    -Wall
+    -Wincomplete-uni-patterns
+    -Wunused-packages
+    -Wno-name-shadowing
     -Wno-unticked-promoted-constructors
     -fno-ignore-asserts
 
@@ -233,7 +236,6 @@ executable ghcide-test-preprocessor
   import: warnings
   default-language:   GHC2021
   hs-source-dirs:   test/preprocessor
-  ghc-options:      -Wno-name-shadowing
   main-is:          Main.hs
   build-depends:    base >=4 && <5
 
@@ -248,7 +250,7 @@ executable ghcide
   import: warnings
   default-language:   GHC2021
   hs-source-dirs:     exe
-  ghc-options:        -threaded -rtsopts "-with-rtsopts=-I0 -A128M -T" -Wno-name-shadowing
+  ghc-options:        -threaded -rtsopts "-with-rtsopts=-I0 -A128M -T"
 
 
   -- allow user RTS overrides
@@ -347,7 +349,7 @@ test-suite ghcide-tests
     build-depends: ghc-typelits-knownnat
 
   hs-source-dirs:     test/cabal test/exe test/src
-  ghc-options:        -threaded -O0 -Wno-name-shadowing
+  ghc-options:        -threaded -O0
 
   main-is:            Main.hs
   other-modules:

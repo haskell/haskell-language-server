@@ -439,10 +439,10 @@ defRowToSymbolInfo _ = Nothing
 
 pointCommand :: HieASTs t -> Position -> (HieAST t -> a) -> [a]
 pointCommand hf pos k =
-    catMaybes $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
+    M.elems $ flip M.mapMaybeWithKey (getAsts hf) $ \fs ast ->
       -- Since GHC 9.2:
       -- getAsts :: Map HiePath (HieAst a)
-      -- type HiePath = LexialFastString
+      -- type HiePath = LexicalFastString
       --
       -- but before:
       -- getAsts :: Map HiePath (HieAst a)
