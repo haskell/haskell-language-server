@@ -72,8 +72,8 @@ jobs:
       - name: Configue flags for all components
         run: |
           cabal configure \
-              --constraint "hls-graph +embed-files +stm-stats +pedantic" \
-              --constraint "ghcide +ekg +executable +pedantic +test-exe" \
+              --constraint "hls-graph +embed-files +stm-stats" \
+              --constraint "ghcide +ekg +executable +test-exe" \
               --constraint "all +pedantic"
           cat cabal.project.local
 
