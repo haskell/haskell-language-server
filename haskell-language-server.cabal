@@ -1737,10 +1737,11 @@ executable haskell-language-server-wrapper
     , unliftio-core
   if !os(windows)
       build-depends:
-          unix
+        , unix
         , containers
-
-
+  else
+      build-depends:
+        , process
 
 test-suite func-test
   import:             defaults
