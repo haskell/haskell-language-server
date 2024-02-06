@@ -216,12 +216,7 @@ library
     -- finished purging the warnings, so some are set to not be errors
     -- for now
     ghc-options:
-      -Werror -Wwarn=unused-packages -Wwarn=unrecognised-pragmas
-      -Wwarn=dodgy-imports -Wwarn=missing-signatures
-      -Wwarn=duplicate-exports -Wwarn=dodgy-exports
-      -Wwarn=incomplete-patterns -Wwarn=overlapping-patterns
-      -Wwarn=incomplete-record-updates
-      -Wwarn=ambiguous-fields
+      -Werror -Wwarn=unused-packages
 
   if flag(ekg)
     build-depends:

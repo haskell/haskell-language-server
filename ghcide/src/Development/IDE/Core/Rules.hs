@@ -1270,7 +1270,7 @@ mainRule recorder RulesConfig{..} = do
     reportImportCyclesRule recorder
     typeCheckRule recorder
     getDocMapRule recorder
-    loadGhcSession recorder def{fullModuleGraph}
+    loadGhcSession recorder GhcSessionDepsConfig{fullModuleGraph}
     getModIfaceFromDiskRule recorder
     getModIfaceFromDiskAndIndexRule recorder
     getModIfaceRule recorder
