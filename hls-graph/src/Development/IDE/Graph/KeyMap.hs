@@ -12,4 +12,4 @@ module Development.IDE.Graph.KeyMap(
       restrictKeysKeyMap,
     ) where
 
-import Development.IDE.Graph.Internal.Key
+import           Development.IDE.Graph.Internal.Key

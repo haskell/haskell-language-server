@@ -1,6 +1,6 @@
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE ViewPatterns       #-}
-{-# LANGUAGE DerivingStrategies #-}
 
 module Development.IDE.Graph.Internal.Key
     ( Key -- Opaque - don't expose constructor, use newKey to create

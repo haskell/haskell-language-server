@@ -33,6 +33,7 @@ import           Data.Traversable                     (for)
 import           Data.Tuple.Extra
 import           Debug.Trace                          (traceM)
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
 import qualified Focus
@@ -40,7 +41,6 @@ import qualified ListT
 import qualified StmContainers.Map                    as SMap
 import           System.IO.Unsafe
 import           System.Time.Extra                    (duration, sleep)
-import           Development.IDE.Graph.Internal.Key
 
 
 newDatabase :: Dynamic -> TheRules -> IO Database

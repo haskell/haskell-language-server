@@ -2,14 +2,14 @@
 
 module DatabaseSpec where
 
-import           Development.IDE.Graph                (shakeOptions)
-import           Development.IDE.Graph.Database       (shakeNewDatabase,
-                                                       shakeRunDatabase)
+import           Development.IDE.Graph                 (shakeOptions)
+import           Development.IDE.Graph.Database        (shakeNewDatabase,
+                                                        shakeRunDatabase)
+import           Development.IDE.Graph.Internal.Action (apply1)
+import           Development.IDE.Graph.Internal.Rules  (addRule)
 import           Development.IDE.Graph.Internal.Types
-import Development.IDE.Graph.Internal.Action ( apply1 )
-import Development.IDE.Graph.Internal.Rules ( addRule )
 import           Example
-import           System.Time.Extra                    (timeout)
+import           System.Time.Extra                     (timeout)
 import           Test.Hspec
 
 spec :: Spec
