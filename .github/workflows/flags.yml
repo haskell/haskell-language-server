@@ -73,7 +73,7 @@ jobs:
       # in their non-default settings. Below we:
       # - enable flags that are off by default
       # - disable flags that are on by default
-      - name: Configue flags for all components
+      - name: Configue non-default flags for all components
         run: |
           cabal configure \
               --constraint "hls-graph +embed-files +stm-stats" \
@@ -82,7 +82,7 @@ jobs:
               --constraint "all +pedantic"
           cat cabal.project.local
 
-      - name: Build with pedantic (-WError)
+      - name: Build everything with non-default flags
         run: cabal build all
 
   flags_post_job:
