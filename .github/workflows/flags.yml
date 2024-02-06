@@ -69,15 +69,16 @@ jobs:
           ghc: ${{ matrix.ghc }}
           os:  ${{ runner.os }}
 
-      - name: Configue extra flags for some components
+      - name: Configue flags for all components
         run: |
           cabal configure \
-               --constraint "hls-graph +embed-files +stm-stats +pedantic" \
-               --constraint "ghcide +ekg +executable +pedantic +test-exe"
+              --constraint "hls-graph +embed-files +stm-stats +pedantic" \
+              --constraint "ghcide +ekg +executable +pedantic +test-exe" \
+              --constraint "all +pedantic"
           cat cabal.project.local
 
       - name: Build with pedantic (-WError)
-        run: cabal v2-build --flags=pedantic
+        run: cabal buid all
 
   flags_post_job:
     if: always()
