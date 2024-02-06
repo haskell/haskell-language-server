@@ -14,14 +14,16 @@ module Ide.Plugin.RangeMap
     fromList',
     filterByRange,
   ) where
+
 import           Development.IDE.Graph.Classes            (NFData)
-import           Language.LSP.Protocol.Types              (Range, isSubrangeOf)
 #ifdef USE_FINGERTREE
 import           Data.Bifunctor                           (first)
 import           Data.Foldable                            (foldl')
 import qualified HaskellWorks.Data.IntervalMap.FingerTree as IM
 import           Language.LSP.Protocol.Types              (Position,
                                                            Range (Range))
+#else
+import           Language.LSP.Protocol.Types              (Range, isSubrangeOf)
 #endif
 
 -- | A map from code ranges to values.

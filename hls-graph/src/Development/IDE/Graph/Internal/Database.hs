@@ -33,6 +33,7 @@ import           Data.Traversable                     (for)
 import           Data.Tuple.Extra
 import           Debug.Trace                          (traceM)
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
 import qualified Focus

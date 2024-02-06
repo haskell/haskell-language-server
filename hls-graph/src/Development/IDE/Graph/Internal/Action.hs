@@ -27,6 +27,7 @@ import           Data.Functor.Identity
 import           Data.IORef
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Database
+import           Development.IDE.Graph.Internal.Key
 import           Development.IDE.Graph.Internal.Rules    (RuleResult)
 import           Development.IDE.Graph.Internal.Types
 import           System.Exit
