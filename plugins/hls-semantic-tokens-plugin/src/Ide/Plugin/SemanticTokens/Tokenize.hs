@@ -69,7 +69,7 @@ mkPTokenState vf =
 liftMaybeM :: (Monad m) => a -> Tokenizer Maybe a -> Tokenizer m a
 liftMaybeM a p = do
   st <- get
-  maybe (return a) (\(a, st') -> put st' >> return a) $ runStateT p st
+  maybe (return a) (\(ans, st') -> put st' >> return ans) $ runStateT p st
 
 computeRangeHsSemanticTokenTypeList :: HsSemanticLookup -> VirtualFile -> HieAST a -> RangeHsSemanticTokenTypes
 computeRangeHsSemanticTokenTypeList lookupHsTokenType vf ast =
