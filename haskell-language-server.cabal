@@ -433,9 +433,10 @@ library hls-explicit-imports-plugin
   import:             defaults, pedantic, warnings
   exposed-modules:    Ide.Plugin.ExplicitImports
   hs-source-dirs:     plugins/hls-explicit-imports-plugin/src
-  ghc-options:
-                      --See Note [unused-packages]
-                      -Wwarn=unused-packages
+  if flag(pedantic)
+    ghc-options:
+      --See Note [unused-packages]
+      -Wwarn=unused-packages
   build-depends:
     , aeson
     , base                  >=4.12 && <5
@@ -816,9 +817,10 @@ library hls-splice-plugin
   exposed-modules:
     Ide.Plugin.Splice
     Ide.Plugin.Splice.Types
-  ghc-options:
-    --See Note [unused-packages]
-    -Wwarn=unused-packages
+  if flag(pedantic)
+    ghc-options:
+      --See Note [unused-packages]
+      -Wwarn=unused-packages
 
   hs-source-dirs:     plugins/hls-splice-plugin/src
   build-depends:
@@ -1379,9 +1381,10 @@ test-suite hls-ormolu-plugin-tests
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-ormolu-plugin/test
   main-is:          Main.hs
-  ghc-options:
-                    -- See Note [unused-packages]
-                    -Wwarn=unused-packages
+  if flag(pedantic)
+    ghc-options:
+      --See Note [unused-packages]
+      -Wwarn=unused-packages
   build-tool-depends:
     ormolu:ormolu
   build-depends:
