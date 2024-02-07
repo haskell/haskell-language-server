@@ -4,11 +4,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+{-# LANGUAGE DataKinds         #-}
 
 module Main
   ( main
   ) where
 
+import           Control.Exception             (catch)
 import           Control.Lens                  (Prism', prism', view, (^.),
                                                 (^..), (^?))
 import           Control.Monad                 (void)
@@ -120,6 +122,17 @@ codeLensTests = testGroup
             doc <- openDoc "TH.hs" "haskell"
             lens <- getAndResolveCodeLenses doc
             liftIO $ length lens @?= 0
+    , testCase "Don not construct error action!, Ticket3942one" $ do
+        runSessionWithServer def classPlugin testDataDir $ do
+            doc <- openDoc "Ticket3942one.hs" "haskell"
+            _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
+            lens <- getAllCodeActions doc
+            -- should switch to `liftIO $ length lens @?= 2, when Ticket3942 is entirely fixed`
+            -- current fix is just to make sure the code does not throw an exception that would mess up
+            -- the client UI.
+            liftIO $ length lens > 0 @?= True
+        `catch` \(e :: SessionException) -> do
+          liftIO $ assertFailure $ "classPluginTestError: "++ show e
     , goldenCodeLens "Apply code lens" "CodeLensSimple" 1
     , goldenCodeLens "Apply code lens for local class" "LocalClassDefine" 0
     , goldenCodeLens "Apply code lens on the same line" "Inline" 0
