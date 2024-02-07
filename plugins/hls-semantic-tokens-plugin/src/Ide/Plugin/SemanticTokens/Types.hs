@@ -11,7 +11,6 @@ import           Control.DeepSeq               (NFData (rnf), rwhnf)
 import qualified Data.Array                    as A
 import           Data.Default                  (Default (def))
 import           Data.Generics                 (Typeable)
-import qualified Data.Map.Strict               as M
 import           Development.IDE               (Pretty (pretty), RuleResult)
 import qualified Development.IDE.Core.Shake    as Shake
 import           Development.IDE.GHC.Compat    hiding (loc)
@@ -108,10 +107,6 @@ data Loc = Loc
 instance Show Loc where
   show (Loc line startChar len) = show line <> ":" <> show startChar <> "-" <> show (startChar + len)
 
-type RangeIdSetMap = Map Range (Set Identifier)
-
-type IdSemanticMap = Map Identifier HsSemanticTokenType
-
 data GetSemanticTokens = GetSemanticTokens
   deriving (Eq, Show, Typeable, Generic)
 
@@ -119,14 +114,21 @@ instance Hashable GetSemanticTokens
 
 instance NFData GetSemanticTokens
 
-newtype RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {rangeSemanticMap :: M.Map Range HsSemanticTokenType}
+type RangeSemanticTokenTypeList = [(Range, HsSemanticTokenType)]
+
+newtype RangeHsSemanticTokenTypes = RangeHsSemanticTokenTypes {rangeSemanticList :: RangeSemanticTokenTypeList}
 
 instance NFData RangeHsSemanticTokenTypes where
   rnf :: RangeHsSemanticTokenTypes -> ()
   rnf (RangeHsSemanticTokenTypes a) = rwhnf a
 
 instance Show RangeHsSemanticTokenTypes where
-  show = const "RangeHsSemanticTokenTypes"
+  show (RangeHsSemanticTokenTypes xs) = unlines $ map showRangeToken xs
+
+showRangeToken :: (Range, HsSemanticTokenType) -> String
+showRangeToken (ran, tk) = showRange ran <> " " <> show tk
+showRange :: Range -> String
+showRange (Range (Position l1 c1) (Position l2 c2)) = show l1 <> ":" <> show c1 <> "-" <> show l2 <> ":" <> show c2
 
 type instance RuleResult GetSemanticTokens = RangeHsSemanticTokenTypes
 

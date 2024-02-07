@@ -32,10 +32,6 @@ import           Language.LSP.VFS                hiding (line)
 
 -- * 0. Mapping name to Hs semantic token type.
 
-idInfixOperator :: Identifier -> Maybe HsSemanticTokenType
-idInfixOperator (Right name) = nameInfixOperator name
-idInfixOperator _            = Nothing
-
 nameInfixOperator :: Name -> Maybe HsSemanticTokenType
 nameInfixOperator name | isSymOcc (nameOccName name) = Just TOperator
 nameInfixOperator _ = Nothing
