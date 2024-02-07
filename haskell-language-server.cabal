@@ -46,11 +46,6 @@ common test-defaults
 common warnings
   ghc-options: -Wall
                -Wredundant-constraints
-               -- Note [unused-packages] Some packages need CPP conditioned on MIN_VERSION_ghc(x,y,z).
-               -- MIN_VERSION_<pkg> is CPP macro that cabal defines only when <pkg> is declared as a dependency.
-               -- But -Wunused-packages still reports it as unused dependency if it's not imported.
-               -- For packages with such "unused" dependencies we demote -Wunused-packages error
-               -- (enabled by --flag=pedantic) to warning via -Wwarn=unused-packages.
                -Wunused-packages
                -Wno-name-shadowing
                -Wno-unticked-promoted-constructors
@@ -63,7 +58,14 @@ flag pedantic
 -- Allow compiling in pedantic mode
 common pedantic
   if flag(pedantic)
-    ghc-options: -Werror
+    ghc-options:
+      -Werror
+      -- Note [unused-packages] Some packages need CPP conditioned on MIN_VERSION_ghc(x,y,z).
+      -- MIN_VERSION_<pkg> is CPP macro that cabal defines only when <pkg> is declared as a dependency.
+      -- But -Wunused-packages still reports it as unused dependency if it's not imported.
+      -- For packages with such "unused" dependencies we demote -Wunused-packages error
+      -- (enabled by --flag=pedantic) to warning via -Wwarn=unused-packages.
+      -Wwarn=unused-packages
 
 -- Plugin flags are designed for 'cabal install haskell-language-server':
 -- - Bulk flags should be default:False
@@ -430,10 +432,6 @@ library hls-explicit-imports-plugin
   import:             defaults, pedantic, warnings
   exposed-modules:    Ide.Plugin.ExplicitImports
   hs-source-dirs:     plugins/hls-explicit-imports-plugin/src
-  if flag(pedantic)
-    ghc-options:
-      --See Note [unused-packages]
-      -Wwarn=unused-packages
   build-depends:
     , aeson
     , base                  >=4.12 && <5
@@ -814,10 +812,6 @@ library hls-splice-plugin
   exposed-modules:
     Ide.Plugin.Splice
     Ide.Plugin.Splice.Types
-  if flag(pedantic)
-    ghc-options:
-      --See Note [unused-packages]
-      -Wwarn=unused-packages
 
   hs-source-dirs:     plugins/hls-splice-plugin/src
   build-depends:
@@ -1378,10 +1372,6 @@ test-suite hls-ormolu-plugin-tests
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-ormolu-plugin/test
   main-is:          Main.hs
-  if flag(pedantic)
-    ghc-options:
-      --See Note [unused-packages]
-      -Wwarn=unused-packages
   build-tool-depends:
     ormolu:ormolu
   build-depends:
@@ -1680,11 +1670,6 @@ library
 
   default-extensions: DataKinds
 
-  if flag(pedantic)
-    ghc-options:
-      --See Note [unused-packages]
-      -Wwarn=unused-packages
-
 executable haskell-language-server
   import:           defaults
                   , warnings
@@ -1803,11 +1788,6 @@ test-suite func-test
     Progress
     Test.Hls.Command
     Test.Hls.Flags
-
-  if flag(pedantic)
-    ghc-options:
-      --See Note [unused-packages]
-      -Wwarn=unused-packages
 
   default-extensions: OverloadedStrings
 
