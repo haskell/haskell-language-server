@@ -389,9 +389,6 @@ library hls-eval-plugin
     , unliftio
     , unordered-containers
 
-  if flag(pedantic)
-    ghc-options: -Wwarn=redundant-constraints
-
   default-extensions:
     DataKinds
 
@@ -1682,6 +1679,11 @@ library
     , text
 
   default-extensions: DataKinds
+
+  if flag(pedantic)
+    ghc-options:
+      --See Note [unused-packages]
+      -Wwarn=unused-packages
 
 executable haskell-language-server
   import:           defaults
