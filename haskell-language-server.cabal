@@ -1804,6 +1804,11 @@ test-suite func-test
     Test.Hls.Command
     Test.Hls.Flags
 
+  if flag(pedantic)
+    ghc-options:
+      --See Note [unused-packages]
+      -Wwarn=unused-packages
+
   default-extensions: OverloadedStrings
 
 -- Duplicating inclusion plugin conditions until tests are moved to their own packages
