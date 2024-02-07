@@ -121,7 +121,7 @@ codeLensTests = testGroup
             doc <- openDoc "TH.hs" "haskell"
             lens <- getAndResolveCodeLenses doc
             liftIO $ length lens @?= 0
-    , testCase "Don not construct error action!, Ticket3942one" $ do
+    , testCase "Do not construct error action!, Ticket3942one" $ do
         runSessionWithServer def classPlugin testDataDir $ do
             doc <- openDoc "Ticket3942one.hs" "haskell"
             _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
