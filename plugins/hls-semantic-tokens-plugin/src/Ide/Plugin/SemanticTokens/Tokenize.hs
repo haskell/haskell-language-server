@@ -41,9 +41,6 @@ data PTokenState = PTokenState
     , columnsInUtf16 :: !UInt -- the column of the start of the current rope in utf16
   }
 
-runTokenizer :: (Monad m) => Tokenizer m a -> PTokenState -> m a
-runTokenizer p st = evalStateT p st
-
 data SplitResult
   = NoSplit (Text, Range) -- does not need to split, token text, token range
   | Split (Text, Range, Range) -- token text, prefix range(module range), token range
@@ -64,34 +61,33 @@ mkPTokenState vf =
     }
 
 -- lift a Tokenizer Maybe a to Tokenizer m a,
--- if the Maybe is Nothing, do nothing, recover the state, and return the default value
--- if the Maybe is Just a, do the action, and keep the state, and return a
-liftMaybeM :: (Monad m) => a -> Tokenizer Maybe a -> Tokenizer m a
-liftMaybeM a p = do
+-- if the Maybe is Nothing, do nothing, recover the state, and return the mempty value
+-- if the Maybe is Just x, do the action, and keep the state, and return x
+liftMaybeM :: (Monad m, Monoid a) => Tokenizer Maybe a -> Tokenizer m a
+liftMaybeM p = do
   st <- get
-  maybe (return a) (\(ans, st') -> put st' >> return ans) $ runStateT p st
-
-computeRangeHsSemanticTokenTypeList :: HsSemanticLookup -> VirtualFile -> HieAST a -> RangeHsSemanticTokenTypes
-computeRangeHsSemanticTokenTypeList lookupHsTokenType vf ast =
-    RangeHsSemanticTokenTypes $ DL.toList $ runIdentity $ runTokenizer (foldAst lookupHsTokenType ast) (mkPTokenState vf)
+  maybe (return mempty) (\(ans, st') -> put st' >> return ans) $ runStateT p st
 
 foldMapM :: (Monad m, Monoid b, Foldable t) => (a -> m b) -> t a -> m b
 foldMapM f ta = foldM (\b a -> mappend b <$> f a) mempty ta
 
+computeRangeHsSemanticTokenTypeList :: HsSemanticLookup -> VirtualFile -> HieAST a -> RangeHsSemanticTokenTypes
+computeRangeHsSemanticTokenTypeList lookupHsTokenType vf ast =
+    RangeHsSemanticTokenTypes $ DL.toList $ runIdentity $ evalStateT (foldAst lookupHsTokenType ast) (mkPTokenState vf)
 -- | foldAst
 -- visit every leaf node in the ast in depth first order
 foldAst :: (Monad m) => HsSemanticLookup -> HieAST t -> Tokenizer m (DList (Range, HsSemanticTokenType))
 foldAst lookupHsTokenType ast = if null (nodeChildren ast)
-  then liftMaybeM mempty (visitLeafIds lookupHsTokenType ast)
+  then liftMaybeM (visitLeafIds lookupHsTokenType ast)
   else foldMapM (foldAst lookupHsTokenType) $ nodeChildren ast
 
 visitLeafIds :: HsSemanticLookup -> HieAST t -> Tokenizer Maybe (DList (Range, HsSemanticTokenType))
-visitLeafIds lookupHsTokenType leaf = liftMaybeM mempty $ do
+visitLeafIds lookupHsTokenType leaf = liftMaybeM $ do
   let span = nodeSpan leaf
   (ran, token) <- focusTokenAt leaf
   -- if `focusTokenAt` succeed, we can safely assume we have shift the cursor correctly
   -- we do not need to recover the cursor state, even if the following computation failed
-  liftMaybeM mempty $ do
+  liftMaybeM $ do
     -- only handle the leaf node with single column token
     guard $ srcSpanStartLine span == srcSpanEndLine span
     splitResult <- lift $ splitRangeByText token ran
@@ -104,8 +100,7 @@ visitLeafIds lookupHsTokenType leaf = liftMaybeM mempty $ do
             (Just TModule, _) -> return $ DL.singleton (ran, TModule)
             (Just tokenType, NoSplit (_, tokenRan)) -> return $ DL.singleton (tokenRan, tokenType)
             (Just tokenType, Split (_, ranPrefix, tokenRan)) -> return $ DL.fromList [(ranPrefix, TModule),(tokenRan, tokenType)]
-        where
-            maybeTokenType = foldMap (getIdentifier lookupHsTokenType ranSplit) (M.keys bd)
+        where maybeTokenType = foldMap (getIdentifier lookupHsTokenType ranSplit) (M.keys bd)
 
     getIdentifier :: HsSemanticLookup -> SplitResult -> Identifier -> Maybe HsSemanticTokenType
     getIdentifier lookupHsTokenType ranSplit idt = do
