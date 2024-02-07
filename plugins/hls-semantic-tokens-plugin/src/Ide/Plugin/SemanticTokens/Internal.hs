@@ -17,7 +17,6 @@ import           Control.Monad.Except                     (ExceptT, liftEither,
                                                            withExceptT)
 import           Control.Monad.Trans                      (lift)
 import           Control.Monad.Trans.Except               (runExceptT)
-import           Data.Map.Strict                          (Map)
 import qualified Data.Map.Strict                          as M
 import qualified Data.Set                                 as S
 import           Development.IDE                          (Action,
@@ -30,8 +29,7 @@ import           Development.IDE                          (Action,
                                                            WithPriority,
                                                            cmapWithPrio, define,
                                                            fromNormalizedFilePath,
-                                                           hieKind, logPriority,
-                                                           use_)
+                                                           hieKind, use_)
 import           Development.IDE.Core.PluginUtils         (runActionE,
                                                            useWithStaleE)
 import           Development.IDE.Core.PositionMapping     (idDelta)

@@ -1,5 +1,5 @@
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GADTs        #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- | This module hosts various abstractions and utility functions to work with ghc-exactprint.
 module Development.IDE.GHC.ExactPrint
@@ -43,7 +43,7 @@ module Development.IDE.GHC.ExactPrint
 where
 
 import           Control.Applicative                     (Alternative)
-import           Control.Arrow                           (right, (***))
+import           Control.Arrow                           ((***))
 import           Control.DeepSeq
 import           Control.Monad
 import qualified Control.Monad.Fail                      as Fail
@@ -56,14 +56,11 @@ import           Data.Bool                               (bool)
 import           Data.Default                            (Default)
 import qualified Data.DList                              as DL
 import           Data.Either.Extra                       (mapLeft)
-import           Data.Foldable                           (Foldable (fold))
 import           Data.Functor.Classes
 import           Data.Functor.Contravariant
 import           Data.Monoid                             (All (All), getAll)
 import qualified Data.Text                               as T
-import           Data.Traversable                        (for)
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service            (runAction)
 import           Development.IDE.Core.Shake              hiding (Log)
 import qualified Development.IDE.Core.Shake              as Shake
 import           Development.IDE.GHC.Compat              hiding (parseImport,
@@ -72,14 +69,13 @@ import           Development.IDE.GHC.Compat              hiding (parseImport,
 import           Development.IDE.GHC.Compat.ExactPrint
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Types.Location
-import           Ide.Logger            (Pretty (pretty),
-                                                          Recorder,
-                                                          WithPriority,
-                                                          cmapWithPrio)
 import           Generics.SYB
 import           Generics.SYB.GHC
 import qualified GHC.Generics                            as GHC
+import           Ide.Logger                              (Pretty (pretty),
+                                                          Recorder,
+                                                          WithPriority,
+                                                          cmapWithPrio)
 import           Ide.PluginUtils
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Protocol.Types
@@ -100,16 +96,19 @@ import           GHC                                     (EpAnn (..),
                                                           emptyComments,
                                                           spanAsAnchor)
 import           GHC.Parser.Annotation                   (AnnContext (..),
-                                                          DeltaPos (SameLine),
                                                           EpaLocation (EpaDelta),
                                                           deltaPos)
 #endif
 
-import Data.List (partition)
-import GHC (Anchor(..), realSrcSpan, AnchorOperation, DeltaPos(..), SrcSpanAnnN)
-import GHC.Types.SrcLoc (generatedSrcSpan)
-import Control.Lens ((&), _last)
-import Control.Lens.Operators ((%~))
+import           Control.Lens                            (_last, (&))
+import           Control.Lens.Operators                  ((%~))
+import           Data.List                               (partition)
+import           GHC                                     (Anchor (..),
+                                                          AnchorOperation,
+                                                          DeltaPos (..),
+                                                          SrcSpanAnnN,
+                                                          realSrcSpan)
+import           GHC.Types.SrcLoc                        (generatedSrcSpan)
 
 setPrecedingLines :: Default t => LocatedAn t a -> Int -> Int -> LocatedAn t a
 setPrecedingLines ast n c = setEntryDP ast (deltaPos n c)
@@ -259,7 +258,7 @@ needsParensSpace _               = mempty
 -}
 graft' ::
     forall ast a l.
-    (Data a, Typeable l, ASTElement l ast) =>
+    (Data a, ASTElement l ast) =>
     -- | Do we need to insert a space before this grafting? In do blocks, the
     -- answer is no, or we will break layout. But in function applications,
     -- the answer is yes, or the function call won't get its argument. Yikes!
@@ -349,7 +348,7 @@ graftExprWithM dst trans = Graft $ \dflags a -> do
 
 graftWithM ::
     forall ast m a l.
-    (Fail.MonadFail m, Data a, Typeable l, ASTElement l ast) =>
+    (Fail.MonadFail m, Data a, ASTElement l ast) =>
     SrcSpan ->
     (LocatedAn l ast -> TransformT m (Maybe (LocatedAn l ast))) ->
     Graft m a
@@ -644,7 +643,7 @@ instance ASTElement NameAnn RdrName where
 
 -- | Given an 'LHSExpr', compute its exactprint annotations.
 --   Note that this function will throw away any existing annotations (and format)
-annotate :: (ASTElement l ast, Outputable l)
+annotate :: ASTElement l ast
     => DynFlags -> Bool -> LocatedAn l ast -> TransformT (Either String) (LocatedAn l ast)
 annotate dflags needs_space ast = do
     uniq <- show <$> uniqueSrcSpanT

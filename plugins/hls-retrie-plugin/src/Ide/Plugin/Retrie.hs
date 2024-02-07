@@ -23,30 +23,23 @@ import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
 import           Control.Monad.Trans.Except           (ExceptT (..), runExceptT)
 
-import           Control.Monad.Trans.Maybe
-import           Control.Monad.Trans.Writer.Strict
 import           Data.Aeson                           (FromJSON (..),
-                                                       ToJSON (..), Value)
+                                                       ToJSON (..))
 import           Data.Bifunctor                       (second)
 import qualified Data.ByteString                      as BS
 import           Data.Coerce
 import           Data.Data
 import           Data.Either                          (partitionEithers)
-import           Data.Hashable                        (Hashable (hash),
-                                                       unhashed)
-import qualified Data.HashMap.Strict                  as HM
+import           Data.Hashable                        (unhashed)
 import qualified Data.HashSet                         as Set
 import           Data.IORef.Extra                     (atomicModifyIORef'_,
                                                        newIORef, readIORef)
 import           Data.List.Extra                      (find, nubOrdOn)
 import qualified Data.Map                             as Map
-import           Data.Maybe                           (catMaybes, fromJust,
-                                                       listToMaybe)
+import           Data.Maybe                           (catMaybes)
 import           Data.String                          (IsString)
 import qualified Data.Text                            as T
 import qualified Data.Text.Encoding                   as T
-import           Data.Typeable                        (Typeable)
-import           Debug.Trace
 import           Development.IDE                      hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake           (ShakeExtras (ShakeExtras, knownTargetsVar),
@@ -56,28 +49,23 @@ import           Development.IDE.Core.Shake           (ShakeExtras (ShakeExtras,
                                                        toKnownFiles, withHieDb)
 import           Development.IDE.GHC.Compat           (GRHSs (GRHSs),
                                                        GenLocated (L), GhcPs,
-                                                       GhcRn, GhcTc,
+                                                       GhcRn,
                                                        HsBindLR (FunBind),
                                                        HsExpr (HsApp, OpApp),
                                                        HsGroup (..),
                                                        HsValBindsLR (..),
-                                                       HscEnv, IdP,
-                                                       ImportDecl (..), LHsExpr,
-                                                       LRuleDecls, Match,
-                                                       ModIface,
+                                                       HscEnv, ImportDecl (..),
+                                                       LHsExpr, LRuleDecls,
+                                                       Match, ModIface,
                                                        ModSummary (ModSummary, ms_hspp_buf, ms_mod),
-                                                       Name, Outputable,
-                                                       ParsedModule (..),
-                                                       RealSrcLoc,
+                                                       Outputable, ParsedModule,
                                                        RuleDecl (HsRule),
                                                        RuleDecls (HsRules),
                                                        SourceText (..),
                                                        TyClDecl (SynDecl),
                                                        TyClGroup (..), fun_id,
-                                                       hm_iface, isQual,
-                                                       isQual_maybe, isVarOcc,
+                                                       isQual, isQual_maybe,
                                                        locA, mi_fixities,
-                                                       moduleName,
                                                        moduleNameString,
                                                        ms_hspp_opts,
                                                        nameModule_maybe,
@@ -88,21 +76,13 @@ import           Development.IDE.GHC.Compat           (GRHSs (GRHSs),
                                                        pattern NotBoot,
                                                        pattern RealSrcSpan,
                                                        pm_parsed_source,
-                                                       printWithoutUniques,
                                                        rdrNameOcc, rds_rules,
                                                        srcSpanFile, topDir,
                                                        unLoc, unLocA)
 import qualified Development.IDE.GHC.Compat           as GHC
 import           Development.IDE.GHC.Compat.Util      hiding (catch, try)
-import           Development.IDE.GHC.Dump             (showAstDataHtml)
-import           Development.IDE.GHC.ExactPrint       (ExceptStringT (ExceptStringT),
-                                                       GetAnnotatedParsedSource (GetAnnotatedParsedSource),
-                                                       TransformT,
-                                                       graftExprWithM,
-                                                       graftSmallestDeclsWithM,
-                                                       hoistGraft, transformM)
-import qualified GHC                                  (Module, ParsedSource,
-                                                       moduleName, parseModule)
+import           Development.IDE.GHC.ExactPrint       (GetAnnotatedParsedSource (GetAnnotatedParsedSource),
+                                                       TransformT)
 import qualified GHC                                  as GHCGHC
 import           GHC.Generics                         (Generic)
 import           GHC.Hs.Dump
@@ -112,8 +92,7 @@ import           Ide.Types
 import qualified Language.LSP.Protocol.Lens           as L
 import           Language.LSP.Protocol.Message        as LSP
 import           Language.LSP.Protocol.Types          as LSP
-import           Language.LSP.Server                  (LspM,
-                                                       ProgressCancellable (Cancellable),
+import           Language.LSP.Server                  (ProgressCancellable (Cancellable),
                                                        sendNotification,
                                                        sendRequest,
                                                        withIndefiniteProgress)
@@ -122,14 +101,13 @@ import           Retrie                               (Annotated (astA),
                                                        Fixity (Fixity),
                                                        FixityDirection (InfixL),
                                                        Options, Options_ (..),
-                                                       RewriteSpec,
                                                        Verbosity (Loud),
                                                        addImports, apply,
                                                        applyWithUpdate)
 import           Retrie.Context
 import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
-import           Retrie.ExactPrint                    (Annotated, fix,
-                                                       transformA, unsafeMkA)
+import           Retrie.ExactPrint                    (fix, transformA,
+                                                       unsafeMkA)
 import           Retrie.Expr                          (mkLocatedHsVar)
 import           Retrie.Fixity                        (FixityEnv, lookupOp,
                                                        mkFixityEnv)
@@ -151,17 +129,13 @@ import           System.Directory                     (makeAbsolute)
 import           GHC.Types.PkgQual
 #endif
 
-import           Control.Arrow                        ((&&&))
-import           Control.Exception                    (evaluate)
 import           Data.Monoid                          (First (First))
 import           Development.IDE.Core.Actions         (lookupMod)
 import           Development.IDE.Core.PluginUtils
 import           Development.IDE.Spans.AtPoint        (LookupModule,
-                                                       getNamesAtPoint,
                                                        nameToLocation)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           Retrie.ExactPrint                    (makeDeltaAst)
-import           Retrie.GHC                           (ann)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -450,7 +424,6 @@ describeRestriction restrictToOriginatingFile =
         if restrictToOriginatingFile then " in current file" else ""
 
 suggestTypeRewrites ::
-  (Outputable (IdP GhcRn)) =>
   Uri ->
   GHC.Module ->
   TyClDecl GhcRn ->
