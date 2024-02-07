@@ -13,4 +13,4 @@ module Development.IDE.Graph.KeySet(
       lengthKeySet,
     ) where
 
-import Development.IDE.Graph.Internal.Types
+import           Development.IDE.Graph.Internal.Key

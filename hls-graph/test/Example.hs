@@ -19,11 +19,11 @@ instance Typeable a => Show (Rule a) where
 type instance RuleResult (Rule a) = a
 
 ruleUnit :: Rules ()
-ruleUnit = addRule $ \(Rule :: Rule ()) old mode -> do
+ruleUnit = addRule $ \(Rule :: Rule ()) _old _mode -> do
     return $ RunResult ChangedRecomputeDiff "" ()
 
 -- | Depends on Rule @()
 ruleBool :: Rules ()
-ruleBool = addRule $ \Rule old mode -> do
+ruleBool = addRule $ \Rule _old _mode -> do
     () <- apply1 Rule
     return $ RunResult ChangedRecomputeDiff "" True
