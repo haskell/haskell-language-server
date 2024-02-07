@@ -42,7 +42,10 @@ flag pedantic
 
 common warnings
   ghc-options:
-    -Wall -Wincomplete-uni-patterns -Wunused-packages
+    -Wall
+    -Wincomplete-uni-patterns
+    -Wunused-packages
+    -Wno-name-shadowing
     -Wno-unticked-promoted-constructors
     -fno-ignore-asserts
 
@@ -216,12 +219,7 @@ library
     -- finished purging the warnings, so some are set to not be errors
     -- for now
     ghc-options:
-      -Werror -Wwarn=unused-packages -Wwarn=unrecognised-pragmas
-      -Wwarn=dodgy-imports -Wwarn=missing-signatures
-      -Wwarn=duplicate-exports -Wwarn=dodgy-exports
-      -Wwarn=incomplete-patterns -Wwarn=overlapping-patterns
-      -Wwarn=incomplete-record-updates
-      -Wwarn=ambiguous-fields
+      -Werror -Wwarn=unused-packages
 
   if flag(ekg)
     build-depends:
@@ -238,7 +236,6 @@ executable ghcide-test-preprocessor
   import: warnings
   default-language:   GHC2021
   hs-source-dirs:   test/preprocessor
-  ghc-options:      -Wno-name-shadowing
   main-is:          Main.hs
   build-depends:    base >=4 && <5
 
@@ -253,7 +250,7 @@ executable ghcide
   import: warnings
   default-language:   GHC2021
   hs-source-dirs:     exe
-  ghc-options:        -threaded -rtsopts "-with-rtsopts=-I0 -A128M -T" -Wno-name-shadowing
+  ghc-options:        -threaded -rtsopts "-with-rtsopts=-I0 -A128M -T"
 
 
   -- allow user RTS overrides
@@ -352,7 +349,7 @@ test-suite ghcide-tests
     build-depends: ghc-typelits-knownnat
 
   hs-source-dirs:     test/cabal test/exe test/src
-  ghc-options:        -threaded -O0 -Wno-name-shadowing
+  ghc-options:        -threaded -O0
 
   main-is:            Main.hs
   other-modules:

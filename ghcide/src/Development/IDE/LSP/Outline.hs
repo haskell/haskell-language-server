@@ -190,12 +190,10 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ForD _ x)) = Just
     { _name   = case x of
                   ForeignImport{} -> name
                   ForeignExport{} -> name
-                  XForeignDecl{}  -> "?"
     , _kind   = SymbolKind_Object
     , _detail = case x of
                   ForeignImport{} -> Just "import"
                   ForeignExport{} -> Just "export"
-                  XForeignDecl{}  -> Nothing
     }
   where name = printOutputable $ unLoc $ fd_name x
 
