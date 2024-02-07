@@ -198,6 +198,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = do
                         _ -> fail "Ide.Plugin.Class.findClassFromIdentifier"
         findClassFromIdentifier _ (Left _) = throwError (PluginInternalError "Ide.Plugin.Class.findClassIdentifier")
 
+-- see https://hackage.haskell.org/package/ghc-9.8.1/docs/src/GHC.Types.Name.Occurrence.html#mkClassDataConOcc
 isClassNodeIdentifier :: Identifier -> IdentifierDetails a -> Bool
 isClassNodeIdentifier (Right i) ident  | 'C':':':_ <- unpackFS $ occNameFS $ occName i = (isNothing . identType) ident && Use `Set.member` identInfo ident
 isClassNodeIdentifier _ _ = False
