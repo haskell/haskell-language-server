@@ -3,7 +3,7 @@ cabal-version:      3.0
 build-type:         Simple
 category:           Development
 name:               ghcide-test-utils
-version:            1.9.0.0
+version:            2.0.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -14,7 +14,7 @@ description:
     Test utils for ghcide
 homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC == 9.0.2 || == 9.2.3 || == 9.2.4
+tested-with:        GHC == 9.2.8 || == 9.4.8 || == 9.6.4 || == 9.8.1
 
 source-repository head
     type:     git
