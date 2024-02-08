@@ -18,7 +18,6 @@ import           Control.Monad.Except                     (ExceptT, liftEither,
 import           Control.Monad.Trans                      (lift)
 import           Control.Monad.Trans.Except               (runExceptT)
 import qualified Data.Map.Strict                          as M
-import qualified Data.Set                                 as S
 import           Development.IDE                          (Action,
                                                            GetDocMap (GetDocMap),
                                                            GetHieAst (GetHieAst),
