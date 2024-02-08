@@ -14,7 +14,7 @@ homepage:
   https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC == 9.8.1 || ==9.6.4 || ==9.4.8 || ==9.2.8
+tested-with:        GHC ==9.8.1 || ==9.6.4 || ==9.4.8 || ==9.2.8
 extra-source-files:
   CHANGELOG.md
   README.md
@@ -215,11 +215,8 @@ library
     Development.IDE.Types.Action
 
   if flag(pedantic)
-    -- We eventually want to build with Werror fully, but we haven't
-    -- finished purging the warnings, so some are set to not be errors
-    -- for now
     ghc-options:
-      -Werror -Wwarn=unused-packages
+      -Werror
 
   if flag(ekg)
     build-depends:
@@ -283,13 +280,6 @@ executable ghcide
   if !flag(executable)
     buildable: False
 
-  if flag(ekg)
-    build-depends:
-      , ekg-core
-      , ekg-wai
-
-    cpp-options:   -DMONITORING_EKG
-
 test-suite ghcide-tests
   import: warnings
   type:               exitcode-stdio-1.0
@@ -310,14 +300,6 @@ test-suite ghcide-tests
     , extra
     , filepath
     , fuzzy
-  --------------------------------------------------------------
-  -- The MIN_VERSION_ghc macro relies on MIN_VERSION pragmas
-  -- which require depending on ghc. So the tests need to depend
-  -- on ghc if they need to use MIN_VERSION_ghc. Maybe a
-  -- better solution can be found, but this is a quick solution
-  -- which works for now.
-  --------------------------------------------------------------
-    , ghc
     , ghcide
     , hls-plugin-api
     , lens

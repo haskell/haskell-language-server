@@ -1,11 +1,10 @@
-{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 import           Control.Lens                       ((^?))
 import           Control.Monad.IO.Class             (liftIO)
-import           Data.Aeson                         (KeyValue (..), Value (..),
-                                                     object)
+import           Data.Aeson                         (KeyValue (..), Object)
+import qualified Data.Aeson.KeyMap                  as KV
 import           Data.Default
 import           Data.Functor                       (void)
 import           Data.Map.Strict                    as Map hiding (map)
@@ -14,6 +13,9 @@ import           Data.Text                          hiding (length, map,
                                                      unlines)
 import qualified Data.Text                          as Text
 import qualified Data.Text.Utf16.Rope               as Rope
+import           Development.IDE                    (Pretty)
+import           Development.IDE.GHC.Compat         (GhcVersion (..),
+                                                     ghcVersion)
 import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
 import           Development.IDE.Test               (waitForBuildQueue)
 import           Ide.Plugin.SemanticTokens
@@ -22,13 +24,12 @@ import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 import           Language.LSP.Protocol.Types        (SemanticTokenTypes (..),
                                                      _L)
-import           Language.LSP.Test                  (Session (..),
+import           Language.LSP.Test                  (Session,
                                                      SessionConfig (ignoreConfigurationRequests),
                                                      openDoc)
 import qualified Language.LSP.Test                  as Test
 import           Language.LSP.VFS                   (VirtualFile (..))
 import           System.FilePath
-import qualified Test.Hls                           as Test
 import           Test.Hls                           (PluginTestDescriptor,
                                                      TestName, TestTree,
                                                      TextDocumentIdentifier,
@@ -65,6 +66,7 @@ semanticTokensPlugin = Test.Hls.mkPluginTestDescriptor enabledSemanticDescriptor
                   }
             }
 
+goldenWithHaskellAndCapsOutPut :: Pretty b => Config -> PluginTestDescriptor b -> TestName -> FS.VirtualFileTree -> FilePath -> String -> (TextDocumentIdentifier -> Session String) -> TestTree
 goldenWithHaskellAndCapsOutPut config plugin title tree path desc act =
   goldenGitDiff title (FS.vftOriginalRoot tree </> path <.> desc) $
     runSessionWithServerInTmpDir config plugin tree $
@@ -118,13 +120,11 @@ semanticTokensValuePatternTests =
       goldenWithSemanticTokensWithDefaultConfig "pattern bind" "TPatternbind"
     ]
 
-mkSemanticConfig :: Value -> Config
+mkSemanticConfig :: Object -> Config
 mkSemanticConfig setting = def{plugins = Map.insert "SemanticTokens" conf (plugins def)}
     where
-      conf = def{plcConfig = (\(Object obj) -> obj) setting }
+      conf = def{plcConfig = setting }
 
-modifySemantic :: Value -> Session ()
-modifySemantic setting = Test.setHlsConfig $ mkSemanticConfig setting
 
 
 directFile :: FilePath -> Text -> [FS.FileTree]
@@ -138,7 +138,7 @@ semanticTokensConfigTest = testGroup "semantic token config test" [
         testCase "function to variable" $ do
             let content = Text.unlines ["module Hello where", "go _ = 1"]
             let fs = mkFs $ directFile "Hello.hs" content
-            let funcVar = object ["functionToken" .= var]
+            let funcVar = KV.fromList ["functionToken" .= var]
                 var :: String
                 var = "variable"
             do
@@ -158,8 +158,7 @@ semanticTokensConfigTest = testGroup "semantic token config test" [
 
 semanticTokensTests :: TestTree
 semanticTokensTests =
-  testGroup
-    "other semantic Token test"
+  testGroup "other semantic Token test" $
     [ testCase "module import test" $ do
         let file1 = "TModula𐐀bA.hs"
         let file2 = "TModuleB.hs"
@@ -194,11 +193,9 @@ semanticTokensTests =
       goldenWithSemanticTokensWithDefaultConfig "type family" "TTypefamily",
       goldenWithSemanticTokensWithDefaultConfig "TUnicodeSyntax" "TUnicodeSyntax",
       goldenWithSemanticTokensWithDefaultConfig "TQualifiedName" "TQualifiedName"
-      -- it is not supported in ghc92
-#if MIN_VERSION_ghc(9,4,0)
-      , goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc"
-#endif
     ]
+      -- not supported in ghc92
+    ++ [goldenWithSemanticTokensWithDefaultConfig "TDoc" "TDoc" | ghcVersion > GHC92]
 
 semanticTokensDataTypeTests :: TestTree
 semanticTokensDataTypeTests =

@@ -18,8 +18,6 @@ import           Development.IDE.Graph.Classes (Hashable)
 import           GHC.Generics                  (Generic)
 import           Language.LSP.Protocol.Types
 -- import template haskell
-import           Data.Map.Strict               (Map)
-import           Data.Set                      (Set)
 import           Language.Haskell.TH.Syntax    (Lift)
 
 

@@ -42,18 +42,13 @@ common defaults
 common test-defaults
   ghc-options:        -threaded -rtsopts -with-rtsopts=-N
 
-common common-deps
-  build-depends:
-    , base       >=4.16 && <5
-    , directory
-    , extra
-    , filepath
-    , text
-    , prettyprinter >= 1.7
-
 -- Default warnings in HLS
 common warnings
-  ghc-options: -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
+  ghc-options: -Wall
+               -Wredundant-constraints
+               -Wunused-packages
+               -Wno-name-shadowing
+               -Wno-unticked-promoted-constructors
 
 flag pedantic
   description: Enable -Werror
@@ -63,7 +58,14 @@ flag pedantic
 -- Allow compiling in pedantic mode
 common pedantic
   if flag(pedantic)
-    ghc-options: -Werror
+    ghc-options:
+      -Werror
+      -- Note [unused-packages] Some packages need CPP conditioned on MIN_VERSION_ghc(x,y,z).
+      -- MIN_VERSION_<pkg> is CPP macro that cabal defines only when <pkg> is declared as a dependency.
+      -- But -Wunused-packages still reports it as unused dependency if it's not imported.
+      -- For packages with such "unused" dependencies we demote -Wunused-packages error
+      -- (enabled by --flag=pedantic) to warning via -Wwarn=unused-packages.
+      -Wwarn=unused-packages
 
 -- Plugin flags are designed for 'cabal install haskell-language-server':
 -- - Bulk flags should be default:False
@@ -389,9 +391,6 @@ library hls-eval-plugin
     , unliftio
     , unordered-containers
 
-  if flag(pedantic)
-    ghc-options: -Wwarn=redundant-constraints
-
   default-extensions:
     DataKinds
 
@@ -430,7 +429,7 @@ flag importLens
   manual:      True
 
 library hls-explicit-imports-plugin
-  import:           defaults, warnings, pedantic
+  import:             defaults, pedantic, warnings
   exposed-modules:    Ide.Plugin.ExplicitImports
   hs-source-dirs:     plugins/hls-explicit-imports-plugin/src
   build-depends:
@@ -447,13 +446,12 @@ library hls-explicit-imports-plugin
     , mtl
     , text
     , transformers
-    , unordered-containers
 
   default-extensions:
     DataKinds
 
 test-suite hls-explicit-imports-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-explicit-imports-plugin/test
   main-is:          Main.hs
@@ -490,8 +488,6 @@ library hls-rename-plugin
     , base                  >=4.12    && <5
     , containers
     , extra
-    , ghc
-    , ghc-exactprint
     , ghcide                == 2.6.0.0
     , hashable
     , hiedb
@@ -538,7 +534,7 @@ common retrie
     cpp-options: -Dhls_retrie
 
 library hls-retrie-plugin
-  import:           defaults, warnings
+  import:             defaults, warnings
   exposed-modules:    Ide.Plugin.Retrie
   hs-source-dirs:     plugins/hls-retrie-plugin/src
   build-depends:
@@ -546,7 +542,6 @@ library hls-retrie-plugin
     , base                  >=4.12    && <5
     , bytestring
     , containers
-    , deepseq
     , directory
     , extra
     , ghc
@@ -574,7 +569,6 @@ test-suite hls-retrie-plugin-tests
   hs-source-dirs:   plugins/hls-retrie-plugin/test
   main-is:          Main.hs
   build-depends:
-    , aeson
     , base
     , containers
     , filepath
@@ -814,7 +808,7 @@ common splice
     cpp-options: -Dhls_splice
 
 library hls-splice-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:
     Ide.Plugin.Splice
     Ide.Plugin.Splice.Types
@@ -823,8 +817,6 @@ library hls-splice-plugin
   build-depends:
     , aeson
     , base                  >=4.12 && <5
-    , containers
-    , dlist
     , extra
     , foldl
     , ghc
@@ -835,18 +827,16 @@ library hls-splice-plugin
     , lens
     , lsp
     , mtl
-    , retrie
     , syb
     , text
     , transformers
     , unliftio-core
-    , unordered-containers
 
   default-extensions:
     DataKinds
 
 test-suite hls-splice-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-splice-plugin/test
   main-is:          Main.hs
@@ -933,22 +923,17 @@ common qualifyImportedNames
     cpp-options: -Dhls_qualifyImportedNames
 
 library hls-qualify-imported-names-plugin
-  import:           defaults, warnings
+  import:             defaults, warnings
   exposed-modules:    Ide.Plugin.QualifyImportedNames
   hs-source-dirs:     plugins/hls-qualify-imported-names-plugin/src
   build-depends:
-    , aeson
     , base                  >=4.12 && <5
     , containers
-    , deepseq
-    , ghc
     , ghcide                == 2.6.0.0
-    , hls-graph
     , hls-plugin-api        == 2.6.0.0
     , lens
     , lsp
     , text
-    , unordered-containers
     , dlist
     , transformers
 
@@ -1383,7 +1368,7 @@ library hls-ormolu-plugin
 
 
 test-suite hls-ormolu-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-ormolu-plugin/test
   main-is:          Main.hs
@@ -1558,7 +1543,7 @@ common semanticTokens
     cpp-options: -Dhls_semanticTokens
 
 library hls-semantic-tokens-plugin
-  import:           defaults, warnings
+  import: defaults, pedantic, warnings
   buildable: True
   exposed-modules:
     Ide.Plugin.SemanticTokens
@@ -1573,20 +1558,16 @@ library hls-semantic-tokens-plugin
 
   hs-source-dirs:     plugins/hls-semantic-tokens-plugin/src
   build-depends:
-    , aeson
     , base                  >=4.12 && <5
     , containers
     , extra
-    , hiedb
     , text-rope
     , mtl                   >= 2.2
     , ghcide                == 2.6.0.0
     , hls-plugin-api        == 2.6.0.0
     , lens
     , lsp                    >=2.3
-    , sqlite-simple
     , text
-    , unordered-containers
     , transformers
     , bytestring
     , syb
@@ -1600,7 +1581,7 @@ library hls-semantic-tokens-plugin
   default-extensions: DataKinds
 
 test-suite hls-semantic-tokens-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-semantic-tokens-plugin/test
   main-is:          Main.hs
@@ -1609,7 +1590,6 @@ test-suite hls-semantic-tokens-plugin-tests
     , aeson
     , base
     , containers
-    , extra
     , filepath
     , haskell-language-server:hls-semantic-tokens-plugin
     , hls-test-utils              == 2.6.0.0
@@ -1617,15 +1597,12 @@ test-suite hls-semantic-tokens-plugin-tests
     , hls-plugin-api
     , lens
     , lsp
-    , ghc
     , text-rope
     , lsp-test
     , text
     , data-default
-    , bytestring
     , ghcide                == 2.6.0.0
     , hls-plugin-api        == 2.6.0.0
-    , template-haskell
     , data-default
 
 -----------------------------
@@ -1634,7 +1611,6 @@ test-suite hls-semantic-tokens-plugin-tests
 
 library
   import:           defaults
-                  , common-deps
                   , warnings
                   , pedantic
                   -- plugins
@@ -1676,33 +1652,27 @@ library
   autogen-modules:  Paths_haskell_language_server
   hs-source-dirs:   src
   build-depends:
-    , async
-    , base16-bytestring
-    , bytestring
-    , containers
-    , cryptohash-sha1
+    , aeson-pretty
+    , base                  >=4.16 && <5
     , data-default
+    , directory
+    , extra
+    , filepath
     , ghc
     , ghcide                == 2.6.0.0
     , githash               >=0.1.6.1
-    , lsp                   >= 2.3.0.0
     , hie-bios
-    , hiedb
     , hls-plugin-api        == 2.6.0.0
     , optparse-applicative
     , optparse-simple
+    , prettyprinter         >= 1.7
     , process
-    , hls-graph
-    , safe-exceptions
-    , sqlite-simple
-    , unordered-containers
-    , aeson-pretty
+    , text
 
   default-extensions: DataKinds
 
 executable haskell-language-server
   import:           defaults
-                  , common-deps
                   , warnings
                   , pedantic
   main-is:          Main.hs
@@ -1729,42 +1699,17 @@ executable haskell-language-server
     ghc-options: -dynamic
 
   build-depends:
-    , aeson
-    , async
-    , base16-bytestring
-    , binary
-    , bytestring
-    , containers
-    , cryptohash-sha1
-    , deepseq
-    , ghc
-    , ghc-boot-th
-    , ghcide
-    , hashable
+    , base                    >=4.16 && <5
     , haskell-language-server
-    , lsp
-    , hie-bios
-    , hiedb
-    , lens
-    , regex-tdfa
-    , optparse-applicative
     , hls-plugin-api
-    , lens
-    , mtl
-    , regex-tdfa
-    , safe-exceptions
-    , hls-graph
-    , sqlite-simple
-    , stm
-    , temporary
-    , transformers
-    , unordered-containers
+    , lsp
+    , prettyprinter           >= 1.7
+    , text
 
   default-extensions: DataKinds
 
 executable haskell-language-server-wrapper
   import:           defaults
-                  , common-deps
                   , warnings
                   , pedantic
   main-is:          Wrapper.hs
@@ -1780,33 +1725,31 @@ executable haskell-language-server-wrapper
     "-with-rtsopts=-I0 -A128M"
 
   build-depends:
+    , base       >=4.16 && <5
     , data-default
-    , ghc
-    , ghc-paths
+    , directory
+    , extra
+    , filepath
     , ghcide
-    , gitrev
     , haskell-language-server
     , hie-bios
     , hls-plugin-api
     , lsp
     , lsp-types
-    , mtl
-    , optparse-applicative
-    , optparse-simple
-    , process
+    , text
     , transformers
     , unliftio-core
   if !os(windows)
       build-depends:
-          unix
+        , unix
         , containers
-
-
+  else
+      build-depends:
+        , process
 
 test-suite func-test
   import:             defaults
                     , test-defaults
-                    , common-deps
                     , warnings
                     , pedantic
                     , refactor
@@ -1816,22 +1759,23 @@ test-suite func-test
     ghcide:ghcide-test-preprocessor
 
   build-depends:
+    , aeson
+    , base            >=4.16 && <5
     , bytestring
-    , data-default
+    , containers
     , deepseq
-    , hashable
-    , lens
-    , lens-aeson
+    , extra
+    , filepath
     , ghcide
     , ghcide-test-utils
-    , hls-test-utils == 2.6.0.0
-    , lsp-types
-    , aeson
+    , hashable
     , hls-plugin-api
+    , hls-test-utils == 2.6.0.0
+    , lens
     , lsp-test
-    , containers
+    , lsp-types
+    , text
     , unordered-containers
-    , row-types
 
   hs-source-dirs:     test/functional test/utils
 
@@ -1860,7 +1804,7 @@ test-suite func-test
     cpp-options: -Dhls_ormolu
 
 test-suite wrapper-test
-  import:             defaults, common-deps
+  import:             defaults
                     , warnings
                     , pedantic
   type:               exitcode-stdio-1.0
@@ -1869,14 +1813,16 @@ test-suite wrapper-test
     haskell-language-server:haskell-language-server
 
   build-depends:
-      process
+    , base       >=4.16 && <5
+    , extra
     , hls-test-utils
+    , process
 
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs
 
 benchmark benchmark
-    import:           defaults, warnings, common-deps
+    import:           defaults, warnings
     -- Depends on shake-bench which is unbuildable after this point
     if impl(ghc >= 9.5)
       buildable: False
@@ -1894,15 +1840,19 @@ benchmark benchmark
         ViewPatterns
 
     build-depends:
-        aeson,
-        containers,
-        data-default,
-        ghcide-bench,
-        haskell-language-server,
-        hls-plugin-api,
-        lens,
-        lens-aeson,
-        optparse-applicative,
-        shake,
-        shake-bench == 0.2.*,
-        yaml
+      , aeson
+      , base       >=4.16 && <5
+      , containers
+      , data-default
+      , directory
+      , extra
+      , filepath
+      , ghcide-bench
+      , haskell-language-server
+      , hls-plugin-api
+      , lens
+      , lens-aeson
+      , shake
+      , shake-bench == 0.2.*
+      , text
+      , yaml
