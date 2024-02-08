@@ -42,7 +42,7 @@ import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
 
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
-addMethodPlaceholders _ state param@AddMinimalMethodsParams{..} = do
+addMethodPlaceholders _ state _ param@AddMinimalMethodsParams{..} = do
     caps <- lift getClientCapabilities
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     pm <- runActionE "classplugin.addMethodPlaceholders.GetParsedModule" state

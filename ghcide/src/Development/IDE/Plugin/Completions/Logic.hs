@@ -62,7 +62,7 @@ import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
 
-import qualified Data.Text.Utf16.Rope                     as Rope
+import qualified Data.Text.Utf16.Rope.Mixed               as Rope
 import           Development.IDE                          hiding (line)
 
 import           Development.IDE.Spans.AtPoint            (pointCommand)

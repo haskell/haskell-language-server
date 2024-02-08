@@ -199,7 +199,7 @@ evalCommand plId = PluginCommand evalCommandName "evaluate" (runEvalCmd plId)
 type EvalId = Int
 
 runEvalCmd :: PluginId -> CommandFunction IdeState EvalParams
-runEvalCmd plId st EvalParams{..} =
+runEvalCmd plId st mtoken EvalParams{..} =
     let dbg = logWith st
         perf = timed dbg
         cmd :: ExceptT PluginError (LspM Config) WorkspaceEdit
@@ -233,7 +233,7 @@ runEvalCmd plId st EvalParams{..} =
 
             return workspaceEdits
      in perf "evalCmd" $ ExceptT $
-            withIndefiniteProgress "Evaluating" Cancellable $
+            withIndefiniteProgress "Evaluating" mtoken Cancellable $ \_updater ->
                 runExceptT $ response' cmd
 
 -- | Create an HscEnv which is suitable for performing interactive evaluation.

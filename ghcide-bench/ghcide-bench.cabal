@@ -99,7 +99,7 @@ test-suite test
         base,
         extra,
         ghcide-bench,
-        lsp-test ^>= 0.16,
+        lsp-test ^>= 0.17,
         tasty,
         tasty-hunit >= 0.10,
         tasty-rerun,

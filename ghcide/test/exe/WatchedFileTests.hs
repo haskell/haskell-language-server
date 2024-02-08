@@ -28,6 +28,7 @@ tests = testGroup "watched files"
     [ testSession' "workspace files" $ \sessionDir -> do
         liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"WatchedFilesMissingModule\"]}}"
         _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
+        setIgnoringRegistrationRequests False
         watchedFileRegs <- getWatchedFilesSubscriptionsUntil SMethod_TextDocumentPublishDiagnostics
 
         -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
@@ -38,6 +39,7 @@ tests = testGroup "watched files"
         let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
         liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
         _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
+        setIgnoringRegistrationRequests False
         watchedFileRegs <- getWatchedFilesSubscriptionsUntil SMethod_TextDocumentPublishDiagnostics
 
         -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle

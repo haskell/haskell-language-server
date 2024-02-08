@@ -168,8 +168,8 @@ data RunRetrieParams = RunRetrieParams
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 runRetrieCmd :: CommandFunction IdeState RunRetrieParams
-runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} = ExceptT $
-  withIndefiniteProgress description Cancellable $ do
+runRetrieCmd state token RunRetrieParams{originatingFile = uri, ..} = ExceptT $
+  withIndefiniteProgress description token Cancellable $ \_updater -> do
     runExceptT $ do
         nfp <- getNormalizedFilePathE uri
         (session, _) <-
@@ -203,7 +203,7 @@ data RunRetrieInlineThisParams = RunRetrieInlineThisParams
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
 runRetrieInlineThisCmd :: CommandFunction IdeState RunRetrieInlineThisParams
-runRetrieInlineThisCmd state RunRetrieInlineThisParams{..} = do
+runRetrieInlineThisCmd state token RunRetrieInlineThisParams{..} = do
     nfp <- getNormalizedFilePathE $ getLocationUri inlineIntoThisLocation
     nfpSource <- getNormalizedFilePathE $ getLocationUri inlineFromThisLocation
     -- What we do here:

@@ -8,6 +8,7 @@ import           Control.Lens.Prism
 import qualified Data.ByteString                                as ByteString
 import           Data.Maybe                                     (mapMaybe)
 import qualified Data.Text                                      as T
+import qualified Development.IDE.Plugin.Completions.Types       as Ghcide
 import           Distribution.PackageDescription.Parsec         (parseGenericPackageDescriptionMaybe)
 import           Ide.Plugin.Cabal.Completion.Completer.FilePath
 import           Ide.Plugin.Cabal.Completion.Completer.Module
@@ -18,7 +19,6 @@ import           Ide.Plugin.Cabal.Completion.Types              (CabalPrefixInfo
                                                                  StanzaName)
 import           Ide.Plugin.Cabal.Parse                         (GenericPackageDescription)
 import qualified Language.LSP.Protocol.Lens                     as L
-import qualified Language.LSP.VFS                               as VFS
 import           System.FilePath
 import           Test.Hls
 import           Utils
@@ -152,13 +152,13 @@ filePathCompletionContextTests =
         compls @?== ["f1.txt", "f2.hs"]
     ]
   where
-    simplePosPrefixInfo :: T.Text -> UInt -> UInt -> VFS.PosPrefixInfo
+    simplePosPrefixInfo :: T.Text -> UInt -> UInt -> Ghcide.PosPrefixInfo
     simplePosPrefixInfo lineString linePos charPos =
-      VFS.PosPrefixInfo
-        { VFS.fullLine = lineString,
-          VFS.prefixModule = "",
-          VFS.prefixText = "",
-          VFS.cursorPos = Position linePos charPos
+      Ghcide.PosPrefixInfo
+        { Ghcide.fullLine = lineString,
+          Ghcide.prefixScope = "",
+          Ghcide.prefixText = "",
+          Ghcide.cursorPos = Position linePos charPos
         }
 
 directoryCompleterTests :: TestTree
@@ -228,11 +228,11 @@ completionHelperTests =
     getFilePathCursorPrefix :: T.Text -> UInt -> UInt -> T.Text
     getFilePathCursorPrefix lineString linePos charPos =
       completionPrefix . getCabalPrefixInfo "" $
-        VFS.PosPrefixInfo
-          { VFS.fullLine = lineString,
-            VFS.prefixModule = "",
-            VFS.prefixText = "",
-            VFS.cursorPos = Position linePos charPos
+        Ghcide.PosPrefixInfo
+          { Ghcide.fullLine = lineString,
+            Ghcide.prefixScope = "",
+            Ghcide.prefixText = "",
+            Ghcide.cursorPos = Position linePos charPos
           }
 
 filePathExposedModulesTests :: TestTree

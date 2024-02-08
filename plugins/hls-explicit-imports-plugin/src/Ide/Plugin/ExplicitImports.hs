@@ -105,7 +105,7 @@ descriptorForModules recorder modFilter plId =
 
 -- | The actual command handler
 runImportCommand :: Recorder (WithPriority Log) -> CommandFunction IdeState IAResolveData
-runImportCommand recorder ideState eird@(ResolveOne _ _) = do
+runImportCommand recorder ideState _ eird@(ResolveOne _ _) = do
   wedit <- resolveWTextEdit ideState eird
   _ <- lift $ sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) logErrors
   return $ InR  Null
@@ -113,7 +113,7 @@ runImportCommand recorder ideState eird@(ResolveOne _ _) = do
           logWith recorder Error (LogWAEResponseError re)
           pure ()
         logErrors (Right _) = pure ()
-runImportCommand _ _ rd = do
+runImportCommand _ _ _ rd = do
   throwError $ PluginInvalidParams (T.pack $ "Unexpected argument for command handler:" <> show rd)
 
 

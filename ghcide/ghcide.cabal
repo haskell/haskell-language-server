@@ -93,7 +93,7 @@ library
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5
     , lens
     , list-t
-    , lsp                          ^>=2.3.0.0
+    , lsp                          ^>=2.4.0.0
     , lsp-types                    ^>=2.1.0.0
     , mtl
     , opentelemetry                >=0.6.1
@@ -183,6 +183,7 @@ library
     Development.IDE.Plugin
     Development.IDE.Plugin.Completions
     Development.IDE.Plugin.Completions.Types
+    Development.IDE.Plugin.Completions.Logic
     Development.IDE.Plugin.HLS
     Development.IDE.Plugin.HLS.GhcIde
     Development.IDE.Plugin.Test
@@ -210,7 +211,6 @@ library
     Development.IDE.Core.FileExists
     Development.IDE.GHC.CPP
     Development.IDE.GHC.Warnings
-    Development.IDE.Plugin.Completions.Logic
     Development.IDE.Session.VersionCheck
     Development.IDE.Types.Action
 
@@ -305,7 +305,7 @@ test-suite ghcide-tests
     , lens
     , list-t
     , lsp
-    , lsp-test                ^>=0.16.0.0
+    , lsp-test                ^>=0.17.0.0
     , lsp-types
     , monoid-subclasses
     , mtl
