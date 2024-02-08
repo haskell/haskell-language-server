@@ -1,7 +1,5 @@
 defaults: &defaults
   working_directory: ~/build
-  docker:
-    - image: haskell:9.6.4-slim-buster
   resource_class: large
   steps:
     - checkout
@@ -34,25 +32,11 @@ defaults: &defaults
           echo "export SKIP_CI=$SKIP_CI" >> $BASH_ENV
 
     - run:
-        name: Stack upgrade
-        command: |
-          if [[ -z "$SKIP_CI" ]]; then
-            stack upgrade
-          fi
-
-    - run:
-        name: Stack setup
-        command: |
-          if [[ -z "$SKIP_CI" ]]; then
-            stack -j4 --stack-yaml=${STACK_FILE} setup
-          fi
-
-    - run:
         name: Build (we need the exe for tests)
         # need j1, else ghc-lib-parser triggers OOM
         command: |
           if [[ -z "$SKIP_CI" ]]; then
-            stack -j4 --stack-yaml=${STACK_FILE} install --no-terminal
+            stack -j4 --stack-yaml=${STACK_FILE} install --system-ghc --no-terminal
           fi
         no_output_timeout: 30m
 
@@ -60,7 +44,7 @@ defaults: &defaults
         name: Build Testsuite without running it
         command: |
           if [[ -z "$SKIP_CI" ]]; then
-            stack -j4 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
+            stack -j4 --stack-yaml=${STACK_FILE} build --system-ghc --test --no-run-tests --no-terminal
           fi
         no_output_timeout: 30m
 
@@ -76,15 +60,18 @@ defaults: &defaults
 version: 2
 jobs:
   stackage-lts21:
+    docker:
+      - image: haskell:9.4.8-slim-buster
     environment:
       - STACK_FILE: "stack-lts21.yaml"
     <<: *defaults
 
   stackage-lts22:
+    docker:
+      - image: haskell:9.6.4-slim-buster
     environment:
       - STACK_FILE: "stack.yaml"
     <<: *defaults
-
 
 workflows:
   version: 2
