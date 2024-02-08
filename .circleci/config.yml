@@ -1,7 +1,7 @@
 defaults: &defaults
   working_directory: ~/build
   docker:
-    - image: alanz/haskell-hie-ci
+    - image: haskell:9.6.4-slim-buster
   resource_class: large
   steps:
     - checkout
@@ -80,7 +80,7 @@ jobs:
       - STACK_FILE: "stack-lts21.yaml"
     <<: *defaults
 
-  stackage-nightly:
+  stackage-lts22:
     environment:
       - STACK_FILE: "stack.yaml"
     <<: *defaults
@@ -91,4 +91,4 @@ workflows:
   multiple-ghcs:
     jobs:
       - stackage-lts21
-      - stackage-nightly
+      - stackage-lts22
