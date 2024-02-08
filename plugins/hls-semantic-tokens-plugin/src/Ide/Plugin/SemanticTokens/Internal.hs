@@ -48,7 +48,7 @@ import           Ide.Plugin.Error                         (PluginError (PluginIn
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Query
 import           Ide.Plugin.SemanticTokens.SemanticConfig (mkSemanticConfigFunctions)
-import           Ide.Plugin.SemanticTokens.Tokenize       (hieAstSpanIdentifiers)
+import           Ide.Plugin.SemanticTokens.Tokenize       (computeRangeHsSemanticTokenTypeList)
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
@@ -69,8 +69,8 @@ computeSemanticTokens :: Recorder (WithPriority SemanticLog) -> PluginId -> IdeS
 computeSemanticTokens recorder pid _ nfp = do
   config <- lift $ useSemanticConfigAction pid
   logWith recorder Debug (LogConfig config)
-  (RangeHsSemanticTokenTypes {rangeSemanticMap}, mapping) <- useWithStaleE GetSemanticTokens nfp
-  withExceptT PluginInternalError $ liftEither $ rangeSemanticMapSemanticTokens config mapping rangeSemanticMap
+  (RangeHsSemanticTokenTypes {rangeSemanticList}, mapping) <- useWithStaleE GetSemanticTokens nfp
+  withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens config mapping rangeSemanticList
 
 semanticTokensFull :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
 semanticTokensFull recorder state pid param = do
@@ -96,26 +96,8 @@ getSemanticTokensRule recorder =
     (DKMap {getTyThingMap}, _) <- lift $ useWithStale_ GetDocMap nfp
     ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
-    -- get current location from the old ones
-    let spanIdMap = M.filter (not . null) $ hieAstSpanIdentifiers virtualFile ast
-    let names = S.unions $ M.elems spanIdMap
-    let localSemanticMap = mkLocalIdSemanticFromAst names (hieKindFunMasksKind hieKind) refMap
-    -- get imported name semantic map
-    let importedIdSemanticMap = M.mapMaybe id
-            $ M.fromSet (getTypeThing getTyThingMap) (names `S.difference` M.keysSet localSemanticMap)
-    let sMap = M.unionWith (<>) importedIdSemanticMap localSemanticMap
-    let rangeTokenType = extractSemanticTokensFromNames sMap spanIdMap
-    return $ RangeHsSemanticTokenTypes rangeTokenType
-  where
-    getTypeThing ::
-      NameEnv TyThing ->
-      Identifier ->
-      Maybe HsSemanticTokenType
-    getTypeThing tyThingMap n
-      | (Right name) <- n =
-          let tyThing = lookupNameEnv tyThingMap name
-           in (tyThing >>= tyThingSemantic)
-     | otherwise = Nothing
+    let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap
+    return $ computeRangeHsSemanticTokenTypeList hsFinder virtualFile ast
 
 -- | Persistent rule to ensure that semantic tokens doesn't block on startup
 persistentGetSemanticTokensRule :: Rules ()
