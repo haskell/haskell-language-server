@@ -124,7 +124,7 @@ codeLensTests = testGroup
     , testCase "Do not construct error action!, Ticket3942one" $ do
         runSessionWithServer def classPlugin testDataDir $ do
             doc <- openDoc "Ticket3942one.hs" "haskell"
-            _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
+            _ <- waitForDiagnosticsFrom doc
             lens <- getAllCodeActions doc
             -- should switch to `liftIO $ length lens @?= 2, when Ticket3942 is entirely fixed`
             -- current fix is just to make sure the code does not throw an exception that would mess up
@@ -165,7 +165,7 @@ goldenCodeLens title path idx =
 goldenWithClass ::TestName -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 goldenWithClass title path desc act =
   goldenWithHaskellDoc def classPlugin title testDataDir path (desc <.> "expected") "hs" $ \doc -> do
-    _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
+    _ <- waitForDiagnosticsFrom doc
     actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
     act actions
     void $ skipManyTill anyMessage (getDocumentEdit doc)
@@ -175,7 +175,7 @@ expectCodeActionsAvailable title path actionTitles =
   testCase title $ do
     runSessionWithServer def classPlugin testDataDir $ do
       doc <- openDoc (path <.> "hs") "haskell"
-      _ <- waitForDiagnosticsFromSource doc (T.unpack sourceTypecheck)
+      _ <- waitForDiagnosticsFrom doc
       caResults <- getAllCodeActions doc
       liftIO $ map (^? _CACodeAction . L.title) caResults
         @?= expectedActions
