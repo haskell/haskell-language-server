@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Ide.Plugin.Rename (descriptor, E.Log) where
 
@@ -61,7 +62,7 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultP
     }
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
-renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier uri) pos  newNameText) = do
+renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos  newNameText) = do
         nfp <- getNormalizedFilePathE uri
         directOldNames <- getNamesAtPos state nfp pos
         directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
@@ -70,8 +71,8 @@ renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier 
            indirect references through punned names. To find the transitive closure, we do a pass of
            the direct references to find the references for any punned names.
            See the `IndirectPuns` test for an example. -}
-        indirectOldNames <- concat . filter ((>1) . Prelude.length) <$>
-            mapM (uncurry (getNamesAtPos state) . locToFilePos) directRefs
+        indirectOldNames <- concat . filter notNull <$>
+            mapM (uncurry (getNamesAtPos state)) (mapMaybe locToFilePos directRefs)
         let oldNames = filter matchesDirect indirectOldNames ++ directOldNames
             matchesDirect n = occNameFS (nameOccName n) `elem` directFS
               where
@@ -127,8 +128,8 @@ getSrcEdit state verTxtDocId updatePs = do
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     annAst <- runActionE "Rename.GetAnnotatedParsedSource" state
         (useE GetAnnotatedParsedSource nfp)
-    let (ps, anns) = (astA annAst, annsA annAst)
-    let src = T.pack $ exactPrint ps
+    let ps = astA annAst
+        src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
     pure $ diffText ccs (verTxtDocId, src) res IncludeDeletions
 
@@ -142,7 +143,7 @@ replaceRefs newName refs = everywhere $
     -- there has to be a better way...
     mkT (replaceLoc @AnnListItem) `extT`
     -- replaceLoc @AnnList `extT` -- not needed
-    -- replaceLoc @AnnParen `extT`   -- not needed
+    -- replaceLoc @AnnParen `extT` -- not needed
     -- replaceLoc @AnnPragma `extT` -- not needed
     -- replaceLoc @AnnContext `extT` -- not needed
     -- replaceLoc @NoEpAnns `extT` -- not needed
@@ -187,8 +188,8 @@ refsAtName state nfp name = do
 
 nameLocs :: Name -> (HieAstResult, PositionMapping) -> [Location]
 nameLocs name (HAR _ _ rm _ _, pm) =
-    mapMaybe (toCurrentLocation pm . realSrcSpanToLocation . fst)
-             (concat $ M.lookup (Right name) rm)
+    concatMap (mapMaybe (toCurrentLocation pm . realSrcSpanToLocation . fst))
+              (M.lookup (Right name) rm)
 
 ---------------------------------------------------------------------------------------------------
 -- Util
@@ -223,22 +224,16 @@ collectWith f = map (\a -> (f $ head a, HS.fromList a)) . groupOn f . HS.toList
 locToUri :: Location -> Uri
 locToUri (Location uri _) = uri
 
-nfpToUri :: NormalizedFilePath -> Uri
-nfpToUri = filePathToUri . fromNormalizedFilePath
-
-showName :: Name -> String
-showName = occNameString . getOccName
-
 unsafeSrcSpanToLoc :: SrcSpan -> Location
 unsafeSrcSpanToLoc srcSpan =
     case srcSpanToLocation srcSpan of
         Nothing       -> error "Invalid conversion from UnhelpfulSpan to Location"
         Just location -> location
 
-locToFilePos :: Location -> (NormalizedFilePath, Position)
-locToFilePos (Location uri (Range pos _)) = (nfp, pos)
+locToFilePos :: Location -> Maybe (NormalizedFilePath, Position)
+locToFilePos (Location uri (Range pos _)) = (,pos) <$> nfp
     where
-        Just nfp = (uriToNormalizedFilePath . toNormalizedUri) uri
+        nfp = uriToNormalizedFilePath $ toNormalizedUri uri
 
 replaceModName :: Name -> Maybe ModuleName -> Module
 replaceModName name mbModName =

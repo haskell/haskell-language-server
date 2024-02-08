@@ -165,10 +165,6 @@ mkSymbol = \case
 -------------- Incoming calls and outgoing calls ---------------------
 ----------------------------------------------------------------------
 
-#if !MIN_VERSION_aeson(1,5,2)
-deriving instance Ord Value
-#endif
-
 -- | Render incoming calls request.
 incomingCalls :: PluginMethodHandler IdeState Method_CallHierarchyIncomingCalls
 incomingCalls state _pluginId param = do
