@@ -32,8 +32,7 @@ defaults: &defaults
           echo "export SKIP_CI=$SKIP_CI" >> $BASH_ENV
 
     - run:
-        name: Build (we need the exe for tests)
-        # need j1, else ghc-lib-parser triggers OOM
+        name: Build
         command: |
           if [[ -z "$SKIP_CI" ]]; then
             stack -j4 --stack-yaml=${STACK_FILE} install --system-ghc --no-terminal
@@ -54,7 +53,7 @@ defaults: &defaults
 
     - save_cache:
         key: v4-stack-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
-        paths: &cache_paths
+        paths:
           - ~/.stack
 
 version: 2
@@ -66,7 +65,7 @@ jobs:
       - STACK_FILE: "stack-lts21.yaml"
     <<: *defaults
 
-  stackage-lts22:
+  stackage-nightly:
     docker:
       - image: haskell:9.6.4-slim-buster
     environment:
@@ -78,4 +77,4 @@ workflows:
   multiple-ghcs:
     jobs:
       - stackage-lts21
-      - stackage-lts22
+      - stackage-nightly
