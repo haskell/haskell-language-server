@@ -290,7 +290,7 @@ checkDefs (defToLocation -> defs) mkExpectations = traverse_ check =<< mkExpecta
 
   assertOneDefinitionFound :: [Location] -> Session Location
   assertOneDefinitionFound [def] = pure def
-  assertOneDefinitionFound _ = liftIO $ assertFailure "Expecting exactly one definition"
+  assertOneDefinitionFound xs = liftIO . assertFailure $ "Expecting exactly one definition, got " <> show (length xs)
 
   assertRangeCorrect Location{_range = foundRange} expectedRange =
     liftIO $ expectedRange @=? foundRange
