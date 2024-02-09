@@ -95,10 +95,10 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
           adjustedLocs = HM.foldr go [] asts
           go (HAR _ _ rf tr _, goMapping) xs = refs ++ typerefs ++ xs
             where
-              refs = mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation . fst)
-                   $ concat $ mapMaybe (\n -> M.lookup (Right n) rf) names
-              typerefs = mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation)
-                   $ concat $ mapMaybe (`M.lookup` tr) names
+              refs = concatMap (mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation . fst))
+                               (mapMaybe (\n -> M.lookup (Right n) rf) names)
+              typerefs = concatMap (mapMaybe (toCurrentLocation goMapping . realSrcSpanToLocation))
+                                   (mapMaybe (`M.lookup` tr) names)
         in (names, adjustedLocs,map fromNormalizedFilePath $ HM.keys asts)
 
 getNamesAtPoint :: HieASTs a -> Position -> PositionMapping -> [Name]

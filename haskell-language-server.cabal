@@ -105,7 +105,7 @@ flag isolateCabalfmtTests
   manual:      True
 
 library hls-cabal-fmt-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:  Ide.Plugin.CabalFmt
   hs-source-dirs:   plugins/hls-cabal-fmt-plugin/src
   build-depends:
@@ -121,7 +121,7 @@ library hls-cabal-fmt-plugin
     , text
 
 test-suite hls-cabal-fmt-plugin-tests
-  import:             defaults, test-defaults, warnings
+  import:             defaults, pedantic, test-defaults, warnings
   type:               exitcode-stdio-1.0
   hs-source-dirs:     plugins/hls-cabal-fmt-plugin/test
   main-is:            Main.hs
@@ -150,7 +150,7 @@ common cabal
     cpp-options: -Dhls_cabal
 
 library hls-cabal-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:
     Ide.Plugin.Cabal
     Ide.Plugin.Cabal.Diagnostics
@@ -193,7 +193,7 @@ library hls-cabal-plugin
   hs-source-dirs:   plugins/hls-cabal-plugin/src
 
 test-suite hls-cabal-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-cabal-plugin/test
   main-is:          Main.hs
@@ -210,7 +210,6 @@ test-suite hls-cabal-plugin-tests
     , haskell-language-server:hls-cabal-plugin
     , hls-test-utils    == 2.6.0.0
     , lens
-    , lsp
     , lsp-types
     , text
     , text-rope
@@ -232,7 +231,7 @@ common class
     cpp-options: -Dhls_class
 
 library hls-class-plugin
-  import: defaults, warnings
+  import: defaults, pedantic, warnings
   exposed-modules:    Ide.Plugin.Class
   other-modules:      Ide.Plugin.Class.CodeAction
                     , Ide.Plugin.Class.CodeLens
@@ -262,14 +261,13 @@ library hls-class-plugin
     OverloadedStrings
 
 test-suite hls-class-plugin-tests
-  import: defaults, test-defaults, warnings
+  import: defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-class-plugin/test
   main-is:          Main.hs
   build-depends:
     , base
     , filepath
-    , ghcide
     , haskell-language-server:hls-class-plugin
     , hls-test-utils     == 2.6.0.0
     , lens
@@ -292,7 +290,7 @@ common callHierarchy
     cpp-options: -Dhls_callHierarchy
 
 library hls-call-hierarchy-plugin
-  import: defaults, warnings
+  import: defaults, pedantic, warnings
   buildable: True
   exposed-modules:    Ide.Plugin.CallHierarchy
   other-modules:
@@ -317,7 +315,7 @@ library hls-call-hierarchy-plugin
   default-extensions: DataKinds
 
 test-suite hls-call-hierarchy-plugin-tests
-  import: defaults, test-defaults, warnings
+  import: defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-call-hierarchy-plugin/test
   main-is:          Main.hs
@@ -350,7 +348,7 @@ common eval
     cpp-options: -Dhls_eval
 
 library hls-eval-plugin
-  import: defaults, warnings, pedantic
+  import: defaults, pedantic, warnings
   exposed-modules:
     Ide.Plugin.Eval
     Ide.Plugin.Eval.Types
@@ -396,7 +394,7 @@ library hls-eval-plugin
     DataKinds
 
 test-suite hls-eval-plugin-tests
-  import: defaults, test-defaults, warnings
+  import: defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-eval-plugin/test
   main-is:          Main.hs
@@ -482,13 +480,12 @@ common rename
     cpp-options: -Dhls_rename
 
 library hls-rename-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:  Ide.Plugin.Rename
   hs-source-dirs:   plugins/hls-rename-plugin/src
   build-depends:
     , base                  >=4.12    && <5
     , containers
-    , extra
     , ghcide                == 2.6.0.0
     , hashable
     , hiedb
@@ -507,7 +504,7 @@ library hls-rename-plugin
 
 
 test-suite hls-rename-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-rename-plugin/test
   main-is:          Main.hs
@@ -593,7 +590,7 @@ common hlint
     cpp-options: -Dhls_hlint
 
 library hls-hlint-plugin
-  import: defaults, warnings, pedantic
+  import: defaults, pedantic, warnings, pedantic
   exposed-modules:    Ide.Plugin.Hlint
   hs-source-dirs:     plugins/hls-hlint-plugin/src
   build-depends:
@@ -627,7 +624,7 @@ library hls-hlint-plugin
     DataKinds
 
 test-suite hls-hlint-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-hlint-plugin/test
   main-is:          Main.hs
