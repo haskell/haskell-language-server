@@ -486,7 +486,6 @@ library hls-rename-plugin
   build-depends:
     , base                  >=4.12    && <5
     , containers
-    , extra
     , ghcide                == 2.6.0.0
     , hashable
     , hiedb

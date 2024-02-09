@@ -107,7 +107,6 @@
     - Ide.Plugin.Eval.Util
     - Ide.Plugin.Floskell
     - Ide.Plugin.ModuleName
-    - Ide.Plugin.Rename
     - Ide.Plugin.Class.ExactPrint
     - TExpectedActual
     - TRigidType
