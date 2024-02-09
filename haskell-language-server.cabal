@@ -773,7 +773,6 @@ library hls-pragmas-plugin
     , lens
     , lsp
     , text
-    , text-rope
     , transformers
     , containers
 
