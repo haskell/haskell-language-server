@@ -80,7 +80,8 @@ import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.Logger                                        hiding
                                                                    (group)
-import           Ide.PluginUtils                                   (extractTextInRange,
+import           Ide.PluginUtils                                   (extendToFullLines,
+                                                                    extractTextInRange,
                                                                     subRange)
 import           Ide.Types
 import           Language.LSP.Protocol.Message                     (Method (..),
@@ -112,16 +113,16 @@ import           Text.Regex.TDFA                                   ((=~), (=~~))
 
 -- | Generate code actions.
 codeAction :: PluginMethodHandler IdeState 'Method_TextDocumentCodeAction
-codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics= xs}) = do
+codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
   contents <- lift $ LSP.getVirtualFile $ toNormalizedUri uri
   liftIO $ do
     let text = virtualFileText <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-    diag <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
+    allDiags <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
-      actions = caRemoveRedundantImports parsedModule text diag xs uri
-               <> caRemoveInvalidExports parsedModule text diag xs uri
+      actions = caRemoveRedundantImports parsedModule text allDiags range uri
+               <> caRemoveInvalidExports parsedModule text allDiags range uri
     pure $ InL $ actions
 
 -------------------------------------------------------------------------------------------------
@@ -441,19 +442,25 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
         = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
     | otherwise = []
 
+diagInRange :: Diagnostic -> Range -> Bool
+diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange
+  where
+    -- Ensures the range captures full lines. Makes it easier to trigger the correct
+    -- "remove redundant" code actions from anywhere on the offending line.
+    extendedRange = extendToFullLines r
 
 -- Note [Removing imports is preferred]
 -- It's good to prefer the remove imports code action because an unused import
 -- is likely to be removed and less likely the warning will be disabled.
 -- Therefore actions to remove a single or all redundant imports should be
 -- preferred, so that the client can prioritize them higher.
-caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [Command |? CodeAction]
-caRemoveRedundantImports m contents digs ctxDigs uri
+caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caRemoveRedundantImports m contents allDiags contextRange uri
   | Just pm <- m,
-    r <- join $ map (\d -> repeat d `zip` suggestRemoveRedundantImport pm contents d) digs,
+    r <- join $ map (\d -> repeat d `zip` suggestRemoveRedundantImport pm contents d) allDiags,
     allEdits <- [ e | (_, (_, edits)) <- r, e <- edits],
     caRemoveAll <- removeAll allEdits,
-    ctxEdits <- [ x | x@(d, _) <- r, d `elem` ctxDigs],
+    ctxEdits <- [ x | x@(d, _) <- r, d `diagInRange` contextRange],
     not $ null ctxEdits,
     caRemoveCtx <- map (\(d, (title, tedit)) -> removeSingle title tedit d) ctxEdits
       = caRemoveCtx ++ [caRemoveAll]
@@ -477,8 +484,8 @@ caRemoveRedundantImports m contents digs ctxDigs uri
         _data_ = Nothing
         _changeAnnotations = Nothing
 
-caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [Command |? CodeAction]
-caRemoveInvalidExports m contents digs ctxDigs uri
+caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
+caRemoveInvalidExports m contents digs contextRange uri
   | Just pm <- m,
     Just txt <- contents,
     txt' <- indexedByPosition $ T.unpack txt,
@@ -488,7 +495,7 @@ caRemoveInvalidExports m contents digs ctxDigs uri
     allRanges <- nubOrd $ [ range | (_,_,ranges) <- r, range <- ranges],
     allRanges' <- extend txt' allRanges,
     Just caRemoveAll <- removeAll allRanges',
-    ctxEdits <- [ x | x@(_, d, _) <- r, d `elem` ctxDigs],
+    ctxEdits <- [ x | x@(_, d, _) <- r, d `diagInRange` contextRange],
     not $ null ctxEdits
       = caRemoveCtx ++ [caRemoveAll]
   | otherwise = []
