@@ -74,7 +74,7 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
            the direct references to find the references for any punned names.
            See the `IndirectPuns` test for an example. -}
         indirectOldNames <- concat . filter ((>1) . length) <$>
-            (mapM (uncurry (getNamesAtPos state)) =<< mapM locToFilePos directRefs)
+            mapM (uncurry (getNamesAtPos state) <=< locToFilePos) directRefs
         let oldNames = filter matchesDirect indirectOldNames ++ directOldNames
             matchesDirect n = occNameFS (nameOccName n) `elem` directFS
               where
