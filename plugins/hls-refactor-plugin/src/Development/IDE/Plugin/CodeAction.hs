@@ -40,7 +40,6 @@ import           Data.Ord                                          (comparing)
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
-import qualified Data.Text.Utf16.Rope                              as Rope
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -88,7 +87,6 @@ import           Language.LSP.Protocol.Message                     (Method (..),
                                                                     SMethod (..))
 import           Language.LSP.Protocol.Types                       (ApplyWorkspaceEditParams (..),
                                                                     CodeAction (..),
-                                                                    CodeActionContext (CodeActionContext, _diagnostics),
                                                                     CodeActionKind (CodeActionKind_QuickFix),
                                                                     CodeActionParams (CodeActionParams),
                                                                     Command,
@@ -103,8 +101,7 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     type (|?) (InL, InR),
                                                                     uriToFilePath)
 import qualified Language.LSP.Server                               as LSP
-import           Language.LSP.VFS                                  (VirtualFile,
-                                                                    virtualFileText)
+import           Language.LSP.VFS                                  (virtualFileText)
 import qualified Text.Fuzzy.Parallel                               as TFP
 import qualified Text.Regex.Applicative                            as RE
 import           Text.Regex.TDFA                                   ((=~), (=~~))
