@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs        #-}
 {-# LANGUAGE TypeFamilies #-}
-
+{-# OPTIONS_GHC -Wno-orphans #-}
 -- | This module hosts various abstractions and utility functions to work with ghc-exactprint.
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
@@ -29,6 +29,7 @@ module Development.IDE.GHC.ExactPrint
       removeComma,
       -- * Helper function
       eqSrcSpan,
+      eqSrcSpanA,
       epl,
       epAnn,
       removeTrailingComma,
@@ -690,7 +691,7 @@ eqSrcSpan l r = leftmost_smallest l r == EQ
 
 -- | Equality on SrcSpan's.
 -- Ignores the (Maybe BufSpan) field of SrcSpan's.
-eqSrcSpanA :: SrcAnn la -> SrcAnn b -> Bool
+eqSrcSpanA :: SrcAnn a -> SrcAnn b -> Bool
 eqSrcSpanA l r = leftmost_smallest (locA l) (locA r) == EQ
 
 addParensToCtxt :: Maybe EpaLocation -> AnnContext -> AnnContext

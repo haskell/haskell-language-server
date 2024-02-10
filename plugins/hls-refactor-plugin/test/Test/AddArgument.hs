@@ -7,7 +7,6 @@
 
 module Test.AddArgument (tests) where
 
-import           Data.List.Extra
 import qualified Data.Text                         as T
 import           Development.IDE.Types.Location
 import           Language.LSP.Protocol.Types       hiding
@@ -54,9 +53,11 @@ mkGoldenAddArgTest' :: FilePath -> Range -> T.Text -> TestTree
 mkGoldenAddArgTest' testFileName range varName = do
     let action docB = do
           _ <- waitForDiagnostics
+          let matchAction a = case a of
+                InR CodeAction {_title = t} -> "Add" `T.isPrefixOf` t
+                _ -> False
           InR action@CodeAction {_title = actionTitle} : _ <-
-            filter (\(InR CodeAction {_title = x}) -> "Add" `isPrefixOf` T.unpack x)
-              <$> getCodeActions docB range
+            filter matchAction <$> getCodeActions docB range
           liftIO $ actionTitle @?= ("Add argument ‘" <> varName <> "’ to function")
           executeCodeAction action
     goldenWithHaskellDocInTmpDir

@@ -42,7 +42,7 @@ showAstDataHtml a0 = html $
     pre = tag "pre"
     showAstDataHtml' :: Data a => a -> SDoc
     showAstDataHtml' =
-      (generic
+      generic
               `ext1Q` list
               `extQ` string `extQ` fastString `extQ` srcSpan `extQ` realSrcSpan
               `extQ` annotation
@@ -73,7 +73,6 @@ showAstDataHtml a0 = html $
               `extQ` srcSpanAnnP
               `extQ` srcSpanAnnC
               `extQ` srcSpanAnnN
-              )
 
       where generic :: Data a => a -> SDoc
             generic t = nested (text $ showConstr (toConstr t))
@@ -245,7 +244,7 @@ showAstDataHtml a0 = html $
             annotationEpaLocation = annotation' (text "EpAnn EpaLocation")
 
             annotation' :: forall a. Data a => SDoc -> EpAnn a -> SDoc
-            annotation' tag anns = nested (text $ showConstr (toConstr anns))
+            annotation' _tag anns = nested (text (showConstr (toConstr anns)) )
               (vcat (map li $ gmapQ showAstDataHtml' anns))
 
             -- -------------------------

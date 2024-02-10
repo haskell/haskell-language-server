@@ -19,6 +19,7 @@ import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
 import           Data.Either                                  (fromRight,
                                                                partitionEithers)
+import           Data.Functor                                 ((<&>))
 import           Data.IORef.Extra
 import qualified Data.Map                                     as Map
 import           Data.Maybe                                   (fromMaybe)
@@ -52,7 +53,6 @@ type GhcideCodeAction = ExceptT PluginError (ReaderT CodeActionArgs IO) GhcideCo
 
 -------------------------------------------------------------------------------------------------
 
-{-# ANN runGhcideCodeAction ("HLint: ignore Move guards forward" :: String) #-}
 runGhcideCodeAction :: LSP.MonadLsp Config m => IdeState -> MessageParams Method_TextDocumentCodeAction -> GhcideCodeAction -> m GhcideCodeActionResult
 runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext {_diagnostics = diags}) codeAction = do
   let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
@@ -70,9 +70,9 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
   caaParsedModule <- onceIO $ runRule GetParsedModuleWithComments
   caaContents <-
     onceIO $
-      runRule GetFileContents >>= \case
-        Just (_, txt) -> pure txt
-        _             -> pure Nothing
+      runRule GetFileContents <&> \case
+        Just (_, txt) -> txt
+        Nothing       -> Nothing
   caaDf <- onceIO $ fmap (ms_hspp_opts . pm_mod_summary) <$> caaParsedModule
   caaAnnSource <- onceIO $ runRule GetAnnotatedParsedSource
   caaTmr <- onceIO $ runRule TypeCheck
@@ -80,18 +80,16 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
   caaBindings <- onceIO $ runRule GetBindings
   caaGblSigs <- onceIO $ runRule GetGlobalBindingTypeSigs
   results <- liftIO $
-
       sequence
-        [ runReaderT (runExceptT codeAction) caa
-          | caaDiagnostic <- diags,
-            let caa = CodeActionArgs {..}
+        [ runReaderT (runExceptT codeAction) CodeActionArgs {..}
+          | caaDiagnostic <- diags
         ]
-  let (errs, successes) = partitionEithers results
+  let (_errs, successes) = partitionEithers results
   pure $ concat successes
 
 mkCA :: T.Text -> Maybe CodeActionKind -> Maybe Bool -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
 mkCA title kind isPreferred diags edit =
-  InR $ CodeAction title kind (Just $ diags) isPreferred Nothing (Just edit) Nothing Nothing
+  InR $ CodeAction title kind (Just diags) isPreferred Nothing (Just edit) Nothing Nothing
 
 mkGhcideCAPlugin :: GhcideCodeAction -> PluginId -> T.Text -> PluginDescriptor IdeState
 mkGhcideCAPlugin codeAction plId desc =

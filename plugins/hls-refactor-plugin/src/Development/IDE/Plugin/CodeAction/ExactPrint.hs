@@ -82,7 +82,7 @@ rewriteToEdit :: HasCallStack =>
   Either String [TextEdit]
 rewriteToEdit dflags
               (Rewrite dst f) = do
-  (ast, anns , _) <- runTransformT
+  (ast, _ , _) <- runTransformT
                           $ do
     ast <- f dflags
     pure $ traceAst "REWRITE_result" $ resetEntryDP ast
@@ -209,10 +209,6 @@ lastMaybe :: [a] -> Maybe a
 lastMaybe []    = Nothing
 lastMaybe other = Just $ last other
 
-liftMaybe :: String -> Maybe a -> TransformT (Either String) a
-liftMaybe _ (Just x) = return x
-liftMaybe s _        = TransformT $ lift $ Left s
-
 ------------------------------------------------------------------------------
 extendImport :: Maybe String -> String -> LImportDecl GhcPs -> Rewrite
 extendImport mparent identifier lDecl@(L l _) =
@@ -243,7 +239,7 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
 #else
   | Just (hide, L l' lies) <- ideclHiding
 #endif
-    , hasSibling <- not $ null lies = do
+  = do
     src <- uniqueSrcSpanT
     top <- uniqueSrcSpanT
     let rdr = reLocA $ L src $ mkRdrUnqual $ mkVarOcc thing
@@ -312,7 +308,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
  where
   go _hide _l' _pre ((L _ll' (IEThingAll _ (L _ ie))) : _xs)
     | parent == unIEWrappedName ie = TransformT $ lift . Left $ child <> " already included in " <> parent <> " imports"
-  go hide l' pre (lAbs@(L ll' (IEThingAbs _ absIE@(L _ ie))) : xs)
+  go hide l' pre ((L ll' (IEThingAbs _ absIE@(L _ ie))) : xs)
     -- ThingAbs ie => ThingWith ie child
     | parent == unIEWrappedName ie = do
       srcChild <- uniqueSrcSpanT
@@ -353,9 +349,8 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #endif
             lies = L l' $ reverse pre ++ [L l'' thing] ++ xs
         return $ L l it'
-    | parent == unIEWrappedName ie
-    , hasSibling <- not $ null lies' =
-      do
+    | parent == unIEWrappedName ie = do
+        let hasSibling = not $ null lies'
         srcChild <- uniqueSrcSpanT
         let childRdr = reLocA $ L srcChild $ mkRdrUnqual $ mkVarOcc child
         childRdr <- pure $ setEntryDP childRdr $ SameLine $ if hasSibling then 1 else 0
@@ -380,8 +375,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
             fixLast = if hasSibling then first addComma else id
         return $ L l it'
   go hide l' pre (x : xs) = go hide l' (x : pre) xs
-  go hide l' pre []
-    | hasSibling <- not $ null pre = do
+  go hide l' pre [] = do
       -- [] => ThingWith parent [child]
       l'' <- uniqueSrcSpanT
       srcParent <- uniqueSrcSpanT
@@ -440,7 +434,7 @@ addCommaInImportList lies x =
             _ -> Nothing
         pure $ any isTrailingAnnComma (lann_trailing lastItemAnn)
 
-    hasSibling = not . null $ lies
+    hasSibling = not $ null lies
 
     -- Setup the new item. It should have a preceding whitespace if it has siblings, and a trailing comma if the
     -- preceding item already has one.
@@ -480,8 +474,6 @@ hideSymbol symbol lidecl@(L loc ImportDecl{..}) =
     Just (True, hides) -> Rewrite (locA loc) $ extendHiding symbol lidecl (Just hides)
     Just (False, imports) -> Rewrite (locA loc) $ deleteFromImport symbol lidecl imports
 #endif
-hideSymbol _ (L _ (XImportDecl _)) =
-  error "cannot happen"
 
 extendHiding ::
   String ->
@@ -534,7 +526,7 @@ deleteFromImport ::
   XRec GhcPs [LIE GhcPs] ->
   DynFlags ->
   TransformT (Either String) (LImportDecl GhcPs)
-deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
+deleteFromImport (T.pack -> symbol) (L l idecl) (L lieLoc lies) _ = do
   let edited = L lieLoc deletedLies
       lidecl' =
         L l $

@@ -1439,7 +1439,7 @@ common refactor
     cpp-options: -Dhls_refactor
 
 library hls-refactor-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:  Development.IDE.GHC.ExactPrint
                     Development.IDE.GHC.Compat.ExactPrint
                     Development.IDE.Plugin.CodeAction
@@ -1473,7 +1473,6 @@ library hls-refactor-plugin
     , bytestring
     , ghc-boot
     , regex-tdfa
-    , text-rope
     , ghcide                == 2.6.0.0
     , hls-plugin-api        == 2.6.0.0
     , lsp
@@ -1497,7 +1496,7 @@ library hls-refactor-plugin
     , parser-combinators
 
 test-suite hls-refactor-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-refactor-plugin/test
   main-is:          Main.hs

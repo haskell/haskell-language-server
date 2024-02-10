@@ -40,7 +40,6 @@ import           Data.Ord                                          (comparing)
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import qualified Data.Text.Encoding                                as T
-import qualified Data.Text.Utf16.Rope                              as Rope
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
@@ -102,8 +101,7 @@ import           Language.LSP.Protocol.Types                       (ApplyWorkspa
                                                                     type (|?) (InL, InR),
                                                                     uriToFilePath)
 import qualified Language.LSP.Server                               as LSP
-import           Language.LSP.VFS                                  (VirtualFile,
-                                                                    virtualFileText)
+import           Language.LSP.VFS                                  (virtualFileText)
 import qualified Text.Fuzzy.Parallel                               as TFP
 import qualified Text.Regex.Applicative                            as RE
 import           Text.Regex.TDFA                                   ((=~), (=~~))
@@ -389,7 +387,6 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
 findImportDeclByModuleName :: [LImportDecl GhcPs] -> String -> Maybe (LImportDecl GhcPs)
 findImportDeclByModuleName decls modName = flip find decls $ \case
   (L _ ImportDecl {..}) -> modName == moduleNameString (unLoc ideclName)
-  _                     -> error "impossible"
 
 isTheSameLine :: SrcSpan -> SrcSpan -> Bool
 isTheSameLine s1 s2
@@ -637,7 +634,6 @@ suggestDeleteUnusedBinding
         case grhssLocalBinds of
           (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
           _                                     -> []
-      findRelatedSpanForMatch _ _ _ = []
 
       findRelatedSpanForHsBind
         :: PositionIndexedString
@@ -1123,8 +1119,6 @@ targetModuleName :: ModuleTarget -> ModuleName
 targetModuleName ImplicitPrelude{} = mkModuleName "Prelude"
 targetModuleName (ExistingImp (L _ ImportDecl{..} :| _)) =
     unLoc ideclName
-targetModuleName (ExistingImp _) =
-    error "Cannot happen!"
 
 disambiguateSymbol ::
     Annotated ParsedSource ->
