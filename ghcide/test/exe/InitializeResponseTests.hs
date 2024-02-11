@@ -79,18 +79,15 @@ tests = withResource acquire release tests where
       che :: TestName -> (ServerCapabilities -> Maybe ExecuteCommandOptions) -> [T.Text] -> TestTree
       che title getActual expected = testCase title $ do
         ir <- getInitializeResponse
-        ExecuteCommandOptions {_commands = commands} <- assertJust "ExecuteCommandOptions" $ getActual $ innerCaps ir
+        ExecuteCommandOptions {_commands = commands} <- case getActual $ innerCaps ir of
+          Just eco -> pure eco
+          Nothing -> assertFailure "Was expecting Just ExecuteCommandOptions, got Nothing"
         let commandNames = (!! 2) . T.splitOn ":" <$> commands
         zipWithM_ (\e o -> T.isSuffixOf e o @? show (e,o)) (sort expected) (sort commandNames)
 
   innerCaps :: TResponseMessage Method_Initialize -> ServerCapabilities
   innerCaps (TResponseMessage _ _ (Right (InitializeResult c _))) = c
   innerCaps (TResponseMessage _ _ (Left _)) = error "Initialization error"
-
-  assertJust :: String -> Maybe a -> IO a
-  assertJust s = \case
-    Nothing -> assertFailure $ "Expecting Just " <> s <> ", got Nothing"
-    Just x  -> pure x
 
   acquire :: IO (TResponseMessage Method_Initialize)
   acquire = run initializeResponse

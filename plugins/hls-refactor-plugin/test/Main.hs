@@ -94,7 +94,7 @@ initializeTests = withResource acquire release tests
           ir <- getInitializeResponse
           ExecuteCommandOptions {_commands = commands} <- case getActual $ innerCaps ir of
             Just eco -> pure eco
-            Nothing -> assertFailure $ "Was expecting Just ExecuteCommandOptions, got Nothing"
+            Nothing -> assertFailure "Was expecting Just ExecuteCommandOptions, got Nothing"
           -- Check if expected exists in commands. Note that commands can arrive in different order.
           mapM_ (\e -> any (\o -> T.isSuffixOf e o) commands @? show (expected, show commands)) expected
 

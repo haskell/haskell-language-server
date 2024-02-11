@@ -156,15 +156,15 @@ showAstDataHtml a0 = html $
 
             srcSpan :: SrcSpan -> SDoc
             srcSpan ss = char ' ' <>
-                             (hang (ppr ss) 1
+                             hang (ppr ss) 1
                                    -- TODO: show annotations here
-                                   (text ""))
+                                   (text "")
 
             realSrcSpan :: RealSrcSpan -> SDoc
             realSrcSpan ss = braces $ char ' ' <>
-                             (hang (ppr ss) 1
+                             hang (ppr ss) 1
                                    -- TODO: show annotations here
-                                   (text ""))
+                                   (text "")
 
             addEpAnn :: AddEpAnn -> SDoc
             addEpAnn (AddEpAnn a s) = text "AddEpAnn" <+> ppr a <+> epaAnchor s
@@ -201,7 +201,7 @@ showAstDataHtml a0 = html $
 
             located :: (Data a, Data b) => GenLocated a b -> SDoc
             located (L ss a)
-              = nested "L" $ (li (showAstDataHtml' ss) $$ li (showAstDataHtml' a))
+              = nested "L" (li (showAstDataHtml' ss) $$ li (showAstDataHtml' a))
 
             -- -------------------------
 
@@ -244,7 +244,7 @@ showAstDataHtml a0 = html $
             annotationEpaLocation = annotation' (text "EpAnn EpaLocation")
 
             annotation' :: forall a. Data a => SDoc -> EpAnn a -> SDoc
-            annotation' _tag anns = nested (text (showConstr (toConstr anns)) )
+            annotation' _tag anns = nested (text $ showConstr (toConstr anns))
               (vcat (map li $ gmapQ showAstDataHtml' anns))
 
             -- -------------------------

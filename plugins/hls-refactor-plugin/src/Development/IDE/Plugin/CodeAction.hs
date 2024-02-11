@@ -120,7 +120,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
     let
       actions = caRemoveRedundantImports parsedModule text diag xs uri
                <> caRemoveInvalidExports parsedModule text diag xs uri
-    pure $ InL $ actions
+    pure $ InL actions
 
 -------------------------------------------------------------------------------------------------
 
@@ -189,7 +189,7 @@ extendImportHandler :: CommandFunction IdeState ExtendImport
 extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
-    let (_, (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . M.toList
+    let (_, head -> TextEdit {_range}) = fromJust $ _changes >>= listToMaybe . M.toList
         srcSpan = rangeToSrcSpan nfp _range
     LSP.sendNotification SMethod_WindowShowMessage $
       ShowMessageParams MessageType_Info $
@@ -1532,7 +1532,8 @@ constructNewImportSuggestions
 constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules qis = nubOrdBy simpleCompareImportSuggestion
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing] -- strip away qualified module names from the unknown name
-  , identInfo <- maybe [] Set.toList $ (lookupOccEnv (getExportsMap exportsMap) (mkVarOrDataOcc name)) <> (lookupOccEnv (getExportsMap exportsMap) (mkTypeOcc name)) -- look up the modified unknown name in the export map
+  , identInfo <- maybe [] Set.toList $ lookupOccEnv (getExportsMap exportsMap) (mkVarOrDataOcc name)
+                                    <> lookupOccEnv (getExportsMap exportsMap) (mkTypeOcc name) -- look up the modified unknown name in the export map
   , canUseIdent thingMissing identInfo                                              -- check if the identifier information retrieved can be used
   , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules                 -- check if the module of the identifier is allowed
   , suggestion <- renderNewImport identInfo                                         -- creates a list of import suggestions for the retrieved identifier information

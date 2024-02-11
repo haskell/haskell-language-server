@@ -343,9 +343,9 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #endif
             thing = IEThingWith newl twIE (IEWildcard 2) []
 #if MIN_VERSION_ghc(9,7,0)
-            newl = fmap (\ann -> ann ++ [(AddEpAnn AnnDotdot d0)]) <$> l'''
+            newl = fmap (\ann -> ann ++ [AddEpAnn AnnDotdot d0]) <$> l'''
 #else
-            newl = (\ann -> ann ++ [(AddEpAnn AnnDotdot d0)]) <$> l'''
+            newl = (\ann -> ann ++ [AddEpAnn AnnDotdot d0]) <$> l'''
 #endif
             lies = L l' $ reverse pre ++ [L l'' thing] ++ xs
         return $ L l it'
@@ -383,12 +383,12 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       parentRdr <- liftParseAST df parent
       let childRdr = reLocA $ L srcChild $ mkRdrUnqual $ mkVarOcc child
           isParentOperator = hasParen parent
-      let parentLIE = reLocA $ L srcParent $ (if isParentOperator then IEType (epl 0) parentRdr'
+      let parentLIE = reLocA $ L srcParent $ if isParentOperator then IEType (epl 0) parentRdr'
                                                else IEName
 #if MIN_VERSION_ghc(9,5,0)
                                                       noExtField
 #endif
-                                                      parentRdr')
+                                                      parentRdr'
           parentRdr' = modifyAnns parentRdr $ \case
               it@NameAnn{nann_adornment = NameParens} -> it{nann_open = epl 1, nann_close = epl 0}
               other -> other
