@@ -55,7 +55,7 @@ mkGoldenAddArgTest' testFileName range varName = do
           _ <- waitForDiagnostics
           let matchAction a = case a of
                 InR CodeAction {_title = t} -> "Add" `T.isPrefixOf` t
-                _ -> False
+                _                           -> False
           InR action@CodeAction {_title = actionTitle} : _ <-
             filter matchAction <$> getCodeActions docB range
           liftIO $ actionTitle @?= ("Add argument ‘" <> varName <> "’ to function")
