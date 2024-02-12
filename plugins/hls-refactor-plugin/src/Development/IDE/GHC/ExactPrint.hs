@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs        #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | This module hosts various abstractions and utility functions to work with ghc-exactprint.
 module Development.IDE.GHC.ExactPrint
@@ -29,6 +30,7 @@ module Development.IDE.GHC.ExactPrint
       removeComma,
       -- * Helper function
       eqSrcSpan,
+      eqSrcSpanA,
       epl,
       epAnn,
       removeTrailingComma,
@@ -434,7 +436,7 @@ modifySmallestDeclWithM validSpan f a = do
         TransformT (lift $ validSpan $ locA src) >>= \case
             True -> do
               (decs', r) <- f ldecl
-              pure $ (DL.fromList decs' <> DL.fromList rest, Just r)
+              pure (DL.fromList decs' <> DL.fromList rest, Just r)
             False -> first (DL.singleton ldecl <>) <$> modifyMatchingDecl rest
   modifyDeclsT' (fmap (first DL.toList) . modifyMatchingDecl) a
 
@@ -476,7 +478,7 @@ modifySigWithM ::
   TransformT m a
 modifySigWithM queryId f a = do
   let modifyMatchingSigD :: [LHsDecl GhcPs] -> TransformT m (DL.DList (LHsDecl GhcPs))
-      modifyMatchingSigD [] = pure (DL.empty)
+      modifyMatchingSigD [] = pure DL.empty
       modifyMatchingSigD (ldecl@(L annSigD (SigD xsig (TypeSig xTypeSig ids (HsWC xHsWc lHsSig)))) : rest)
         | queryId `elem` (unLoc <$> ids) = do
             let newSig = f lHsSig
@@ -546,7 +548,7 @@ modifyMgMatchesT' (MG xMg (L locMatches matches)) f def combineResults = do
 modifyMgMatchesT' (MG xMg (L locMatches matches) originMg) f def combineResults = do
   (unzip -> (matches', rs)) <- mapM f matches
   r' <- lift $ foldM combineResults def rs
-  pure $ (MG xMg (L locMatches matches') originMg, r')
+  pure (MG xMg (L locMatches matches') originMg, r')
 #endif
 
 graftSmallestDeclsWithM ::
@@ -690,7 +692,7 @@ eqSrcSpan l r = leftmost_smallest l r == EQ
 
 -- | Equality on SrcSpan's.
 -- Ignores the (Maybe BufSpan) field of SrcSpan's.
-eqSrcSpanA :: SrcAnn la -> SrcAnn b -> Bool
+eqSrcSpanA :: SrcAnn a -> SrcAnn b -> Bool
 eqSrcSpanA l r = leftmost_smallest (locA l) (locA r) == EQ
 
 addParensToCtxt :: Maybe EpaLocation -> AnnContext -> AnnContext
@@ -715,7 +717,7 @@ modifyAnns x f = first ((fmap.fmap) f) x
 removeComma :: SrcSpanAnnA -> SrcSpanAnnA
 removeComma it@(SrcSpanAnn EpAnnNotUsed _) = it
 removeComma (SrcSpanAnn (EpAnn anc (AnnListItem as) cs) l)
-  = (SrcSpanAnn (EpAnn anc (AnnListItem (filter (not . isCommaAnn) as)) cs) l)
+  = SrcSpanAnn (EpAnn anc (AnnListItem (filter (not . isCommaAnn) as)) cs) l
   where
       isCommaAnn AddCommaAnn{} = True
       isCommaAnn _             = False

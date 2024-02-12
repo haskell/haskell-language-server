@@ -31,7 +31,7 @@ import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                 hiding (withTempDir)
--- import Test.QuickCheck.Instances ()
+
 import           Control.Lens                    ((^.))
 import           Control.Monad.Extra             (whenJust)
 import           Development.IDE.Plugin.Test     (WaitForIdeRuleResult (..))

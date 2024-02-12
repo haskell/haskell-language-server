@@ -77,13 +77,13 @@ tests = withResource acquire release tests where
         testCase title $ getInitializeResponse >>= \ir -> expected @=? (getActual . innerCaps) ir
 
       che :: TestName -> (ServerCapabilities -> Maybe ExecuteCommandOptions) -> [T.Text] -> TestTree
-      che title getActual expected = testCase title doTest
-        where
-            doTest = do
-                ir <- getInitializeResponse
-                let Just ExecuteCommandOptions {_commands = commands} = getActual $ innerCaps ir
-                    commandNames = (!! 2) . T.splitOn ":" <$> commands
-                zipWithM_ (\e o -> T.isSuffixOf e o @? show (e,o)) (sort expected) (sort commandNames)
+      che title getActual expected = testCase title $ do
+        ir <- getInitializeResponse
+        ExecuteCommandOptions {_commands = commands} <- case getActual $ innerCaps ir of
+          Just eco -> pure eco
+          Nothing -> assertFailure "Was expecting Just ExecuteCommandOptions, got Nothing"
+        let commandNames = (!! 2) . T.splitOn ":" <$> commands
+        zipWithM_ (\e o -> T.isSuffixOf e o @? show (e,o)) (sort expected) (sort commandNames)
 
   innerCaps :: TResponseMessage Method_Initialize -> ServerCapabilities
   innerCaps (TResponseMessage _ _ (Right (InitializeResult c _))) = c
@@ -93,5 +93,5 @@ tests = withResource acquire release tests where
   acquire = run initializeResponse
 
   release :: TResponseMessage Method_Initialize -> IO ()
-  release = const $ pure ()
+  release = mempty
 

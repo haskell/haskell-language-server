@@ -49,24 +49,24 @@ inlineThisTests = testGroup "Inline this"
         ]
     ]
 
-
+testProvider :: TestName -> FilePath -> UInt -> UInt -> [Text] -> TestTree
 testProvider title file line row expected = testCase title $ runWithRetrie $ do
     adoc <- openDoc (file <.> "hs") "haskell"
-    waitForTypecheck adoc
+    _ <- waitForTypecheck adoc
     let position = Position line row
     codeActions <- getCodeActions adoc $ Range position position
     liftIO $ map codeActionTitle codeActions @?= map Just expected
 
 testCommand :: TestName -> FilePath -> UInt -> UInt -> TestTree
 testCommand title file row col = goldenWithRetrie title file $ \adoc -> do
-    waitForTypecheck adoc
+    _ <- waitForTypecheck adoc
     let p = Position row col
     codeActions <- getCodeActions adoc $ Range p p
     case codeActions of
         [InR ca] -> do
             executeCodeAction ca
             void $ skipManyTill anyMessage $ getDocumentEdit adoc
-        [] -> error "No code actions found"
+        cas -> liftIO . assertFailure $ "One code action expected, got " <> show (length cas)
 
 codeActionTitle :: (Command |? CodeAction) -> Maybe Text
 codeActionTitle (InR CodeAction {_title}) = Just _title

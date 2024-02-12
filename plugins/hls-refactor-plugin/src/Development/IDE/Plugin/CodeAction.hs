@@ -120,7 +120,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) =
     let
       actions = caRemoveRedundantImports parsedModule text allDiags range uri
                <> caRemoveInvalidExports parsedModule text allDiags range uri
-    pure $ InL $ actions
+    pure $ InL actions
 
 -------------------------------------------------------------------------------------------------
 
@@ -189,7 +189,7 @@ extendImportHandler :: CommandFunction IdeState ExtendImport
 extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
-    let (_, (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . M.toList
+    let (_, head -> TextEdit {_range}) = fromJust $ _changes >>= listToMaybe . M.toList
         srcSpan = rangeToSrcSpan nfp _range
     LSP.sendNotification SMethod_WindowShowMessage $
       ShowMessageParams MessageType_Info $
@@ -387,7 +387,6 @@ suggestHideShadow ps fileContents mTcM mHar Diagnostic {_message, _range}
 findImportDeclByModuleName :: [LImportDecl GhcPs] -> String -> Maybe (LImportDecl GhcPs)
 findImportDeclByModuleName decls modName = flip find decls $ \case
   (L _ ImportDecl {..}) -> modName == moduleNameString (unLoc ideclName)
-  _                     -> error "impossible"
 
 isTheSameLine :: SrcSpan -> SrcSpan -> Bool
 isTheSameLine s1 s2
@@ -641,7 +640,6 @@ suggestDeleteUnusedBinding
         case grhssLocalBinds of
           (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
           _                                     -> []
-      findRelatedSpanForMatch _ _ _ = []
 
       findRelatedSpanForHsBind
         :: PositionIndexedString
@@ -1127,8 +1125,6 @@ targetModuleName :: ModuleTarget -> ModuleName
 targetModuleName ImplicitPrelude{} = mkModuleName "Prelude"
 targetModuleName (ExistingImp (L _ ImportDecl{..} :| _)) =
     unLoc ideclName
-targetModuleName (ExistingImp _) =
-    error "Cannot happen!"
 
 disambiguateSymbol ::
     Annotated ParsedSource ->
@@ -1542,7 +1538,8 @@ constructNewImportSuggestions
 constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules qis = nubOrdBy simpleCompareImportSuggestion
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing] -- strip away qualified module names from the unknown name
-  , identInfo <- maybe [] Set.toList $ (lookupOccEnv (getExportsMap exportsMap) (mkVarOrDataOcc name)) <> (lookupOccEnv (getExportsMap exportsMap) (mkTypeOcc name)) -- look up the modified unknown name in the export map
+  , identInfo <- maybe [] Set.toList $ lookupOccEnv (getExportsMap exportsMap) (mkVarOrDataOcc name)
+                                    <> lookupOccEnv (getExportsMap exportsMap) (mkTypeOcc name) -- look up the modified unknown name in the export map
   , canUseIdent thingMissing identInfo                                              -- check if the identifier information retrieved can be used
   , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules                 -- check if the module of the identifier is allowed
   , suggestion <- renderNewImport identInfo                                         -- creates a list of import suggestions for the retrieved identifier information

@@ -38,9 +38,6 @@ makePoint line column
   | line >= 1 && column >= 1 = Point line column
   | otherwise = error "Line or column is less than 1."
 
-isNotEmpty :: Foldable f => f a -> Bool
-isNotEmpty = not . isEmpty
-
 isEmpty :: Foldable f => f a -> Bool
 isEmpty = null
 

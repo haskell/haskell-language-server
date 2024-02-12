@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Ide.Plugin.Rename (descriptor, E.Log) where
 
@@ -14,11 +15,13 @@ import           Control.Monad.Except                  (ExceptT, throwError)
 import           Control.Monad.IO.Class                (MonadIO, liftIO)
 import           Control.Monad.Trans.Class             (lift)
 import           Data.Bifunctor                        (first)
+import           Data.Foldable                         (fold)
 import           Data.Generics
 import           Data.Hashable
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
-import           Data.List.Extra                       hiding (length)
+import           Data.List.NonEmpty                    (NonEmpty ((:|)),
+                                                        groupWith)
 import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
@@ -61,7 +64,7 @@ descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultP
     }
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
-renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier uri) pos  newNameText) = do
+renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
         nfp <- getNormalizedFilePathE uri
         directOldNames <- getNamesAtPos state nfp pos
         directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
@@ -70,8 +73,8 @@ renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier 
            indirect references through punned names. To find the transitive closure, we do a pass of
            the direct references to find the references for any punned names.
            See the `IndirectPuns` test for an example. -}
-        indirectOldNames <- concat . filter ((>1) . Prelude.length) <$>
-            mapM (uncurry (getNamesAtPos state) . locToFilePos) directRefs
+        indirectOldNames <- concat . filter ((>1) . length) <$>
+            mapM (uncurry (getNamesAtPos state) <=< locToFilePos) directRefs
         let oldNames = filter matchesDirect indirectOldNames ++ directOldNames
             matchesDirect n = occNameFS (nameOccName n) `elem` directFS
               where
@@ -90,7 +93,7 @@ renameProvider state pluginId (RenameParams _prog docId@(TextDocumentIdentifier 
               verTxtDocId <- lift $ getVersionedTextDoc (TextDocumentIdentifier uri)
               getSrcEdit state verTxtDocId (replaceRefs newName locations)
         fileEdits <- mapM getFileEdit filesRefs
-        pure $ InL $ foldl' (<>) mempty fileEdits
+        pure $ InL $ fold fileEdits
 
 -- | Limit renaming across modules.
 failWhenImportOrExport ::
@@ -127,8 +130,8 @@ getSrcEdit state verTxtDocId updatePs = do
     nfp <- getNormalizedFilePathE (verTxtDocId ^. L.uri)
     annAst <- runActionE "Rename.GetAnnotatedParsedSource" state
         (useE GetAnnotatedParsedSource nfp)
-    let (ps, anns) = (astA annAst, annsA annAst)
-    let src = T.pack $ exactPrint ps
+    let ps = astA annAst
+        src = T.pack $ exactPrint ps
         res = T.pack $ exactPrint (updatePs ps)
     pure $ diffText ccs (verTxtDocId, src) res IncludeDeletions
 
@@ -142,7 +145,7 @@ replaceRefs newName refs = everywhere $
     -- there has to be a better way...
     mkT (replaceLoc @AnnListItem) `extT`
     -- replaceLoc @AnnList `extT` -- not needed
-    -- replaceLoc @AnnParen `extT`   -- not needed
+    -- replaceLoc @AnnParen `extT` -- not needed
     -- replaceLoc @AnnPragma `extT` -- not needed
     -- replaceLoc @AnnContext `extT` -- not needed
     -- replaceLoc @NoEpAnns `extT` -- not needed
@@ -187,8 +190,8 @@ refsAtName state nfp name = do
 
 nameLocs :: Name -> (HieAstResult, PositionMapping) -> [Location]
 nameLocs name (HAR _ _ rm _ _, pm) =
-    mapMaybe (toCurrentLocation pm . realSrcSpanToLocation . fst)
-             (concat $ M.lookup (Right name) rm)
+    concatMap (mapMaybe (toCurrentLocation pm . realSrcSpanToLocation . fst))
+              (M.lookup (Right name) rm)
 
 ---------------------------------------------------------------------------------------------------
 -- Util
@@ -216,18 +219,11 @@ removeGenerated HAR{..} = HAR{hieAst = go hieAst,..}
       HieASTs (fmap goAst (getAsts hf))
     goAst (Node nsi sp xs) = Node (SourcedNodeInfo $ M.restrictKeys (getSourcedNodeInfo nsi) (S.singleton SourceInfo)) sp (map goAst xs)
 
--- head is safe since groups are non-empty
 collectWith :: (Hashable a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
-collectWith f = map (\a -> (f $ head a, HS.fromList a)) . groupOn f . HS.toList
+collectWith f = map (\(a :| as) -> (f a, HS.fromList (a:as))) . groupWith f . HS.toList
 
 locToUri :: Location -> Uri
 locToUri (Location uri _) = uri
-
-nfpToUri :: NormalizedFilePath -> Uri
-nfpToUri = filePathToUri . fromNormalizedFilePath
-
-showName :: Name -> String
-showName = occNameString . getOccName
 
 unsafeSrcSpanToLoc :: SrcSpan -> Location
 unsafeSrcSpanToLoc srcSpan =
@@ -235,10 +231,8 @@ unsafeSrcSpanToLoc srcSpan =
         Nothing       -> error "Invalid conversion from UnhelpfulSpan to Location"
         Just location -> location
 
-locToFilePos :: Location -> (NormalizedFilePath, Position)
-locToFilePos (Location uri (Range pos _)) = (nfp, pos)
-    where
-        Just nfp = (uriToNormalizedFilePath . toNormalizedUri) uri
+locToFilePos :: Monad m => Location -> ExceptT PluginError m (NormalizedFilePath, Position)
+locToFilePos (Location uri (Range pos _)) = (,pos) <$> getNormalizedFilePathE uri
 
 replaceModName :: Name -> Maybe ModuleName -> Module
 replaceModName name mbModName =

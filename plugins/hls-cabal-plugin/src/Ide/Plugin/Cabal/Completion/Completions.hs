@@ -14,7 +14,6 @@ import qualified Data.Text.Utf16.Lines                         as Rope (Position
 import           Data.Text.Utf16.Rope.Mixed                    (Rope)
 import qualified Data.Text.Utf16.Rope.Mixed                    as Rope
 import           Development.IDE                               as D
-import qualified Development.IDE.Plugin.Completions.Logic      as Ghcide
 import qualified Development.IDE.Plugin.Completions.Types      as Ghcide
 import           Ide.Plugin.Cabal.Completion.Completer.Simple
 import           Ide.Plugin.Cabal.Completion.Completer.Snippet

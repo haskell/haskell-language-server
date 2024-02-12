@@ -904,7 +904,7 @@ getCompletionPrefix pos@(Position l c) (VFS.VirtualFile _ _ ropetext) =
             lastMaybe = headMaybe . reverse
 
         -- grab the entire line the cursor is at
-        curLine <- headMaybe $ T.lines $ Rope.toText
+        curLine <- headMaybe $ Rope.lines
                              $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) ropetext
         let beforePos = T.take (fromIntegral c) curLine
         -- the word getting typed, after previous space and before cursor
