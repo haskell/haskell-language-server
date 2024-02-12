@@ -36,9 +36,8 @@ import           Development.IDE.GHC.Compat       (ContextInfo (Use),
                                                    ImpDeclSpec (ImpDeclSpec, is_as, is_dloc, is_qual),
                                                    ImportSpec (ImpSpec),
                                                    LImportDecl, ModuleName,
-                                                   Name, NameEnv, OccName,
-                                                   ParsedModule, RefMap, Span,
-                                                   SrcSpan,
+                                                   Name, NameEnv, ParsedModule,
+                                                   RefMap, Span, SrcSpan,
                                                    TcGblEnv (tcg_rdr_env),
                                                    emptyUFM, globalRdrEnvElts,
                                                    gre_imp, gre_name, locA,
@@ -111,7 +110,7 @@ data ImportedBy = ImportedBy {
 }
 
 isRangeWithinImportedBy :: Range -> ImportedBy -> Bool
-isRangeWithinImportedBy range (ImportedBy _ srcSpan) = fromMaybe False $ spanContainsRange srcSpan range
+isRangeWithinImportedBy range ImportedBy{importedBySrcSpan} = fromMaybe False $ spanContainsRange importedBySrcSpan range
 
 globalRdrEnvToNameToImportedByMap :: GlobalRdrEnv -> NameEnv [ImportedBy]
 globalRdrEnvToNameToImportedByMap =
@@ -168,9 +167,6 @@ refMapToUsedIdentifiers = DList.toList . Map.foldlWithKey' folder DList.empty
       , Use `elem` identInfo = Just $ UsedIdentifier name identifierSpan
       | otherwise = Nothing
 
-occNameToText :: OccName -> Text
-occNameToText = Text.pack . occNameString
-
 updateColOffset :: Int -> Int -> Int -> Int
 updateColOffset row lineOffset colOffset
   | row == lineOffset = colOffset
@@ -182,13 +178,13 @@ usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
       State.evalState (makeStateComputation sortedUsedIdentifiers) (Text.lines sourceText, 0, 0)
   where
     folder :: [TextEdit] -> UsedIdentifier -> State ([Text], Int, Int) [TextEdit]
-    folder prevTextEdits (UsedIdentifier identifierName identifierSpan)
-      | Just importedBys <- lookupNameEnv nameToImportedByMap identifierName
-      , Just (ImportedBy alias _) <- find (isRangeWithinImportedBy range) importedBys
-      , let IdentifierSpan row startCol endCol = identifierSpan
-      , let identifierRange = identifierSpanToRange identifierSpan
-      , let aliasText = Text.pack $ moduleNameString alias
-      , let identifierText = Text.pack $ occNameString $ nameOccName identifierName
+    folder prevTextEdits UsedIdentifier{usedIdentifierName, usedIdentifierSpan}
+      | Just importedBys <- lookupNameEnv nameToImportedByMap usedIdentifierName
+      , Just ImportedBy{importedByAlias} <- find (isRangeWithinImportedBy range) importedBys
+      , let IdentifierSpan row startCol _ = usedIdentifierSpan
+      , let identifierRange = identifierSpanToRange usedIdentifierSpan
+      , let aliasText = Text.pack $ moduleNameString importedByAlias
+      , let identifierText = Text.pack $ occNameString $ nameOccName usedIdentifierName
       , let qualifiedIdentifierText = aliasText <> "." <> identifierText = do
           (sourceTextLines, lineOffset, updateColOffset row lineOffset -> colOffset) <- State.get
           let lines = List.drop (row - lineOffset) sourceTextLines
@@ -219,7 +215,7 @@ usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
 -- 3. For each used name in refMap check whether the name comes from an import
 --    at the origin of the code action.
 codeActionProvider :: PluginMethodHandler IdeState Method_TextDocumentCodeAction
-codeActionProvider ideState pluginId (CodeActionParams _ _ documentId range context) = do
+codeActionProvider ideState _pluginId (CodeActionParams _ _ documentId range _) = do
   normalizedFilePath <- getNormalizedFilePathE (documentId ^. L.uri)
   TcModuleResult { tmrParsed, tmrTypechecked } <- runActionE "QualifyImportedNames.TypeCheck" ideState $ useE TypeCheck normalizedFilePath
   if isJust (findLImportDeclAt range tmrParsed)
