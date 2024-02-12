@@ -7,6 +7,7 @@
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-} -- don't warn about usage HasCallStack
 
 module Main
   ( main
@@ -47,7 +48,6 @@ import           Text.Regex.TDFA                          ((=~))
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
 import           Test.Hls
 
-import           Control.Applicative                      (liftA2)
 import qualified Development.IDE.Plugin.CodeAction        as Refactor
 import qualified Development.IDE.Plugin.HLS.GhcIde        as GhcIde
 import qualified Test.AddArgument
@@ -90,23 +90,24 @@ initializeTests = withResource acquire release tests
           testCase title $ getInitializeResponse >>= \ir -> expected @=? (getActual . innerCaps) ir
 
         che :: TestName -> (ServerCapabilities -> Maybe ExecuteCommandOptions) -> [T.Text] -> TestTree
-        che title getActual expected = testCase title doTest
-          where
-              doTest = do
-                  ir <- getInitializeResponse
-                  let Just ExecuteCommandOptions {_commands = commands} = getActual $ innerCaps ir
-                  -- Check if expected exists in commands. Note that commands can arrive in different order.
-                  mapM_ (\e -> any (\o -> T.isSuffixOf e o) commands @? show (expected, show commands)) expected
+        che title getActual expected = testCase title $ do
+          ir <- getInitializeResponse
+          ExecuteCommandOptions {_commands = commands} <- case getActual $ innerCaps ir of
+            Just eco -> pure eco
+            Nothing -> assertFailure "Was expecting Just ExecuteCommandOptions, got Nothing"
+          -- Check if expected exists in commands. Note that commands can arrive in different order.
+          mapM_ (\e -> any (\o -> T.isSuffixOf e o) commands @? show (expected, show commands)) expected
 
     acquire :: IO (TResponseMessage Method_Initialize)
     acquire = run initializeResponse
 
     release :: TResponseMessage Method_Initialize -> IO ()
-    release = const $ pure ()
+    release = mempty
 
     innerCaps :: TResponseMessage Method_Initialize -> ServerCapabilities
     innerCaps (TResponseMessage _ _ (Right (InitializeResult c _))) = c
     innerCaps (TResponseMessage _ _ (Left _)) = error "Initialization error"
+
 
 completionTests :: TestTree
 completionTests =
@@ -264,24 +265,23 @@ completionCommandTest name src pos wanted expected = testSession name $ do
   docId <- createDoc "A.hs" "haskell" (T.unlines src)
   _ <- waitForDiagnostics
   compls <- skipManyTill anyMessage (getCompletions docId pos)
-  let wantedC = find ( \case
-            CompletionItem {_insertText = Just x
-                           ,_command    = Just _} -> wanted `T.isPrefixOf` x
-            _                                     -> False
-            ) compls
+  let wantedC = mapMaybe (\case
+        CompletionItem {_insertText = Just x, _command = Just cmd}
+          | wanted `T.isPrefixOf` x -> Just cmd
+        _                           -> Nothing
+        ) compls
   case wantedC of
-    Nothing ->
-      liftIO $ assertFailure $ "Cannot find expected completion in: " <> show [_label | CompletionItem {_label} <- compls]
-    Just CompletionItem {..} -> do
-      c <- assertJust "Expected a command" _command
-      executeCommand c
+    [] ->
+      liftIO $ assertFailure $ "Cannot find completion " <> show wanted <> " in: " <> show [_label | CompletionItem {_label} <- compls]
+    command:_ -> do
+      executeCommand command
       if src /= expected
-          then do
-            modifiedCode <- skipManyTill anyMessage (getDocumentEdit docId)
-            liftIO $ modifiedCode @?= T.unlines expected
-          else do
-            expectMessages SMethod_WorkspaceApplyEdit 1 $ \edit ->
-              liftIO $ assertFailure $ "Expected no edit but got: " <> show edit
+        then do
+          modifiedCode <- skipManyTill anyMessage (getDocumentEdit docId)
+          liftIO $ modifiedCode @?= T.unlines expected
+        else do
+          expectMessages SMethod_WorkspaceApplyEdit 1 $ \edit ->
+            liftIO $ assertFailure $ "Expected no edit but got: " <> show edit
 
 completionNoCommandTest :: TestName -> [T.Text] -> Position -> T.Text -> TestTree
 completionNoCommandTest name src pos wanted = testSession name $ do
@@ -1493,15 +1493,16 @@ extendImportTests = testGroup "extend import actions"
         template setUpModules moduleUnderTest range expectedTitles expectedContentB = do
             configureCheckProject overrideCheckProject
 
-            mapM_ (\x -> createDoc (fst x) "haskell" (snd x)) setUpModules
+            mapM_ (\(fileName, contents) -> createDoc fileName "haskell" contents) setUpModules
             docB <- createDoc (fst moduleUnderTest) "haskell" (snd moduleUnderTest)
             _  <- waitForDiagnostics
             waitForProgressDone
             actionsOrCommands <- getCodeActions docB range
             let codeActions =
-                  filter
-                    (liftA2 (&&) (T.isPrefixOf "Add") (not . T.isPrefixOf "Add argument") . codeActionTitle)
-                    [ca | InR ca <- actionsOrCommands]
+                  [ ca | InR ca <- actionsOrCommands
+                  , let title = codeActionTitle ca
+                  , "Add" `T.isPrefixOf` title && not ("Add argument" `T.isPrefixOf` title)
+                  ]
                 actualTitles = codeActionTitle <$> codeActions
             -- Note that we are not testing the order of the actions, as the
             -- order of the expected actions indicates which one we'll execute
@@ -1511,9 +1512,8 @@ extendImportTests = testGroup "extend import actions"
             -- Execute the action with the same title as the first expected one.
             -- Since we tested that both lists have the same elements (possibly
             -- in a different order), this search cannot fail.
-            let firstTitle:_ = expectedTitles
-                action = fromJust $
-                  find ((firstTitle ==) . codeActionTitle) codeActions
+            firstTitle:_ <- pure expectedTitles
+            Just action <- pure $ find ((firstTitle ==) . codeActionTitle) codeActions
             executeCodeAction action
             contentAfterAction <- documentContents docB
             liftIO $ expectedContentB @=? contentAfterAction
@@ -1530,13 +1530,13 @@ fixModuleImportTypoTests = testGroup "fix module import typo"
     , testSession "works when multiple modules suggested" $ do
         doc <- createDoc "A.hs" "haskell" "import Data.I"
         _ <- waitForDiagnostics
-        actions <- sortOn (\(InR CodeAction{_title=x}) -> x) <$> getCodeActions doc (R 0 0 0 10)
-        let actionTitles = [ title | InR CodeAction{_title=title} <- actions ]
-        liftIO $ actionTitles @?= [ "replace with Data.Eq"
-                                  , "replace with Data.Int"
-                                  , "replace with Data.Ix"
-                                  ]
-        let InR replaceWithDataEq : _ = actions
+        actions <- getCodeActions doc (R 0 0 0 10)
+        traverse_ (assertActionWithTitle actions)
+          [ "replace with Data.Eq"
+          , "replace with Data.Int"
+          , "replace with Data.Ix"
+          ]
+        replaceWithDataEq <- pickActionWithTitle "replace with Data.Eq" actions
         executeCodeAction replaceWithDataEq
         contentAfterAction <- documentContents doc
         liftIO $ contentAfterAction @?= "import Data.Eq"
@@ -3735,9 +3735,3 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir ->
 
 brokenForGHC94 :: String -> TestTree -> TestTree
 brokenForGHC94 = knownBrokenForGhcVersions [GHC94]
-
--- | Assert that a value is not 'Nothing', and extract the value.
-assertJust :: MonadIO m => String -> Maybe a -> m a
-assertJust s = \case
-  Nothing -> liftIO $ assertFailure s
-  Just x  -> pure x
