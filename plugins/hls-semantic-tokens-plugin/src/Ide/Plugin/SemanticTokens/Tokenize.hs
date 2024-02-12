@@ -7,7 +7,8 @@ import           Control.Lens                     (Identity (runIdentity))
 import           Control.Monad                    (foldM, guard)
 import           Control.Monad.State.Strict       (MonadState (get),
                                                    MonadTrans (lift),
-                                                   evalStateT, modify, put)
+                                                   evalStateT, gets, modify',
+                                                   put)
 import           Control.Monad.Trans.State.Strict (StateT, runStateT)
 import           Data.Char                        (isAlphaNum)
 import           Data.DList                       (DList)
@@ -31,13 +32,27 @@ import           Prelude                          hiding (length, span)
 
 type Tokenizer m a = StateT PTokenState m a
 type HsSemanticLookup = Identifier -> Maybe HsSemanticTokenType
+type CachedHsSemanticLookup m = Identifier -> Tokenizer m (Maybe HsSemanticTokenType)
+
+cacheLookup :: (Monad m) => HsSemanticLookup -> CachedHsSemanticLookup m
+cacheLookup _ (Left _) = return $ Just TModule
+cacheLookup lk idt@(Right n) = do
+  ne  <- gets semanticLookupCache
+  case lookupNameEnv ne n of
+    Nothing -> do
+      let hsSemanticTy = lk idt
+      modify' (\x -> x{ semanticLookupCache= extendNameEnv ne n hsSemanticTy })
+      return hsSemanticTy
+    Just x -> return x
+
 
 
 data PTokenState = PTokenState
   {
-    rope             :: !Rope -- the remains of rope we are working on
-    , cursor         :: !Char.Position -- the cursor position of the current rope to the start of the original file in code point position
-    , columnsInUtf16 :: !UInt -- the column of the start of the current rope in utf16
+    rope                  :: !Rope -- the remains of rope we are working on
+    , cursor              :: !Char.Position -- the cursor position of the current rope to the start of the original file in code point position
+    , columnsInUtf16      :: !UInt -- the column of the start of the current rope in utf16
+    , semanticLookupCache :: !(NameEnv (Maybe HsSemanticTokenType)) -- the cache for semantic lookup result of the current file
   }
 
 data SplitResult
@@ -56,7 +71,8 @@ mkPTokenState vf =
     {
       rope = vf._file_text,
       cursor = Char.Position 0 0,
-      columnsInUtf16 = 0
+      columnsInUtf16 = 0,
+      semanticLookupCache = emptyNameEnv
     }
 
 -- lift a Tokenizer Maybe a to Tokenizer m a,
@@ -77,10 +93,10 @@ computeRangeHsSemanticTokenTypeList lookupHsTokenType vf ast =
 -- visit every leaf node in the ast in depth first order
 foldAst :: (Monad m) => HsSemanticLookup -> HieAST t -> Tokenizer m (DList (Range, HsSemanticTokenType))
 foldAst lookupHsTokenType ast = if null (nodeChildren ast)
-  then liftMaybeM (visitLeafIds lookupHsTokenType ast)
+  then visitLeafIds lookupHsTokenType ast
   else foldMapM (foldAst lookupHsTokenType) $ nodeChildren ast
 
-visitLeafIds :: HsSemanticLookup -> HieAST t -> Tokenizer Maybe (DList (Range, HsSemanticTokenType))
+visitLeafIds :: (Monad m) => HsSemanticLookup -> HieAST t -> Tokenizer m (DList (Range, HsSemanticTokenType))
 visitLeafIds lookupHsTokenType leaf = liftMaybeM $ do
   let span = nodeSpan leaf
   (ran, token) <- focusTokenAt leaf
@@ -93,16 +109,15 @@ visitLeafIds lookupHsTokenType leaf = liftMaybeM $ do
     foldMapM (combineNodeIds lookupHsTokenType ran splitResult) $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
   where
     combineNodeIds :: (Monad m) => HsSemanticLookup -> Range -> SplitResult -> NodeInfo a -> Tokenizer m (DList (Range, HsSemanticTokenType))
-    combineNodeIds lookupHsTokenType ran ranSplit (NodeInfo _ _ bd) =
+    combineNodeIds lookupHsTokenType ran ranSplit (NodeInfo _ _ bd) = do
+        maybeTokenType <- foldMapM (cacheLookup $ lookupIdentifier lookupHsTokenType ranSplit) (M.keys bd)
         case (maybeTokenType, ranSplit) of
             (Nothing, _) -> return mempty
             (Just TModule, _) -> return $ DL.singleton (ran, TModule)
             (Just tokenType, NoSplit (_, tokenRan)) -> return $ DL.singleton (tokenRan, tokenType)
             (Just tokenType, Split (_, ranPrefix, tokenRan)) -> return $ DL.fromList [(ranPrefix, TModule),(tokenRan, tokenType)]
-        where maybeTokenType = foldMap (getIdentifier lookupHsTokenType ranSplit) (M.keys bd)
-
-    getIdentifier :: HsSemanticLookup -> SplitResult -> Identifier -> Maybe HsSemanticTokenType
-    getIdentifier lookupHsTokenType ranSplit idt = do
+    lookupIdentifier :: HsSemanticLookup -> SplitResult -> HsSemanticLookup
+    lookupIdentifier lookupHsTokenType ranSplit idt = do
       case idt of
         Left _moduleName -> Just TModule
         Right name -> do
@@ -138,7 +153,7 @@ focusTokenAt leaf = do
   let nce = newColumn ncs token
   -- compute the new range for utf16, tuning the columns is enough
   let ran = codePointRangeToRangeWith ncs nce $ realSrcSpanToCodePointRange span
-  modify $ \s -> s {columnsInUtf16 = nce, rope = remains, cursor = tokenEndPos}
+  modify' $ \s -> s {columnsInUtf16 = nce, rope = remains, cursor = tokenEndPos}
   return (ran, token)
   where
     srcSpanCharPositions :: RealSrcSpan -> (Char.Position, Char.Position)
