@@ -481,11 +481,11 @@ caRemoveRedundantImports m contents allDiags contextRange uri
         _changeAnnotations = Nothing
 
 caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> Range -> Uri -> [Command |? CodeAction]
-caRemoveInvalidExports m contents digs contextRange uri
+caRemoveInvalidExports m contents allDiags contextRange uri
   | Just pm <- m,
     Just txt <- contents,
     txt' <- indexedByPosition $ T.unpack txt,
-    r <- mapMaybe (groupDiag pm) digs,
+    r <- mapMaybe (groupDiag pm) allDiags,
     r' <- map (\(t,d,rs) -> (t,d,extend txt' rs)) r,
     caRemoveCtx <- mapMaybe removeSingle r',
     allRanges <- nubOrd $ [ range | (_,_,ranges) <- r, range <- ranges],
