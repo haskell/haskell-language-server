@@ -1,14 +1,16 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Avoid restricted function" #-}
 
 module Ide.Plugin.SemanticTokens.Tokenize (computeRangeHsSemanticTokenTypeList) where
 
-import           Control.Lens                     (Identity (runIdentity))
+import           Control.Lens                     (Identity (Identity, runIdentity))
 import           Control.Monad                    (foldM, guard)
 import           Control.Monad.State.Strict       (MonadState (get),
                                                    MonadTrans (lift),
-                                                   evalStateT, gets, modify',
-                                                   put)
+                                                   evalStateT, gets, mapStateT,
+                                                   modify', put)
 import           Control.Monad.Trans.State.Strict (StateT, runStateT)
 import           Data.Char                        (isAlphaNum)
 import           Data.DList                       (DList)
@@ -83,20 +85,21 @@ liftMaybeM p = do
   st <- get
   maybe (return mempty) (\(ans, st') -> put st' >> return ans) $ runStateT p st
 
+
 foldMapM :: (Monad m, Monoid b, Foldable t) => (a -> m b) -> t a -> m b
 foldMapM f ta = foldM (\b a -> mappend b <$> f a) mempty ta
 
 computeRangeHsSemanticTokenTypeList :: HsSemanticLookup -> VirtualFile -> HieAST a -> RangeHsSemanticTokenTypes
 computeRangeHsSemanticTokenTypeList lookupHsTokenType vf ast =
-    RangeHsSemanticTokenTypes $ DL.toList $ runIdentity $ evalStateT (foldAst lookupHsTokenType ast) (mkPTokenState vf)
+    RangeHsSemanticTokenTypes $ DL.toList $ runIdentity $ evalStateT (foldAst (cacheLookup lookupHsTokenType) ast) (mkPTokenState vf)
 -- | foldAst
 -- visit every leaf node in the ast in depth first order
-foldAst :: (Monad m) => HsSemanticLookup -> HieAST t -> Tokenizer m (DList (Range, HsSemanticTokenType))
+foldAst :: (Monad m) => CachedHsSemanticLookup Identity -> HieAST t -> Tokenizer m (DList (Range, HsSemanticTokenType))
 foldAst lookupHsTokenType ast = if null (nodeChildren ast)
   then visitLeafIds lookupHsTokenType ast
   else foldMapM (foldAst lookupHsTokenType) $ nodeChildren ast
 
-visitLeafIds :: (Monad m) => HsSemanticLookup -> HieAST t -> Tokenizer m (DList (Range, HsSemanticTokenType))
+visitLeafIds :: (Monad m) => CachedHsSemanticLookup Identity -> HieAST t -> Tokenizer m (DList (Range, HsSemanticTokenType))
 visitLeafIds lookupHsTokenType leaf = liftMaybeM $ do
   let span = nodeSpan leaf
   (ran, token) <- focusTokenAt leaf
@@ -106,20 +109,23 @@ visitLeafIds lookupHsTokenType leaf = liftMaybeM $ do
     -- only handle the leaf node with single column token
     guard $ srcSpanStartLine span == srcSpanEndLine span
     splitResult <- lift $ splitRangeByText token ran
-    foldMapM (combineNodeIds lookupHsTokenType ran splitResult) $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
+    mapStateT hoistIdMaybe
+        $ foldMapM (combineNodeIds lookupHsTokenType ran splitResult)
+        $ Map.filterWithKey (\k _ -> k == SourceInfo) $ getSourcedNodeInfo $ sourcedNodeInfo leaf
   where
-    combineNodeIds :: (Monad m) => HsSemanticLookup -> Range -> SplitResult -> NodeInfo a -> Tokenizer m (DList (Range, HsSemanticTokenType))
+    hoistIdMaybe :: Identity (a, s) -> Maybe (a, s)
+    hoistIdMaybe (Identity x) = Just x
+    combineNodeIds :: CachedHsSemanticLookup Identity -> Range -> SplitResult -> NodeInfo a -> Tokenizer Identity (DList (Range, HsSemanticTokenType))
     combineNodeIds lookupHsTokenType ran ranSplit (NodeInfo _ _ bd) = do
-        maybeTokenType <- foldMapM (cacheLookup $ lookupIdentifier lookupHsTokenType ranSplit) (M.keys bd)
+        maybeTokenType <- foldMapM (maybe (return Nothing) lookupHsTokenType . getIdentifier ranSplit) (M.keys bd)
         case (maybeTokenType, ranSplit) of
             (Nothing, _) -> return mempty
             (Just TModule, _) -> return $ DL.singleton (ran, TModule)
             (Just tokenType, NoSplit (_, tokenRan)) -> return $ DL.singleton (tokenRan, tokenType)
             (Just tokenType, Split (_, ranPrefix, tokenRan)) -> return $ DL.fromList [(ranPrefix, TModule),(tokenRan, tokenType)]
-    lookupIdentifier :: HsSemanticLookup -> SplitResult -> HsSemanticLookup
-    lookupIdentifier lookupHsTokenType ranSplit idt = do
+    getIdentifier ranSplit idt = do
       case idt of
-        Left _moduleName -> Just TModule
+        Left _moduleName -> Just idt
         Right name -> do
           occStr <- T.pack <$> case (occNameString . nameOccName) name of
             -- the generated selector name with {-# LANGUAGE DuplicateRecordFields #-}
@@ -129,7 +135,7 @@ visitLeafIds lookupHsTokenType leaf = liftMaybeM $ do
             c : ':' : _ | isAlphaNum c       -> Nothing
             ns                               -> Just ns
           guard $ getSplitTokenText ranSplit == occStr
-          lookupHsTokenType idt
+          return idt
 
 
 focusTokenAt ::
