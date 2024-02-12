@@ -1,7 +1,5 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Avoid restricted function" #-}
 
 module Ide.Plugin.SemanticTokens.Tokenize (computeRangeHsSemanticTokenTypeList) where
 
@@ -47,8 +45,6 @@ cacheLookup lk idt@(Right n) = do
       return hsSemanticTy
     Just x -> return x
 
-
-
 data PTokenState = PTokenState
   {
     rope                  :: !Rope -- the remains of rope we are working on
@@ -65,7 +61,6 @@ data SplitResult
 getSplitTokenText :: SplitResult -> Text
 getSplitTokenText (NoSplit (t, _))  = t
 getSplitTokenText (Split (t, _, _)) = t
-
 
 mkPTokenState :: VirtualFile -> PTokenState
 mkPTokenState vf =
@@ -84,7 +79,6 @@ liftMaybeM :: (Monad m, Monoid a) => Tokenizer Maybe a -> Tokenizer m a
 liftMaybeM p = do
   st <- get
   maybe (return mempty) (\(ans, st') -> put st' >> return ans) $ runStateT p st
-
 
 foldMapM :: (Monad m, Monoid b, Foldable t) => (a -> m b) -> t a -> m b
 foldMapM f ta = foldM (\b a -> mappend b <$> f a) mempty ta
