@@ -1,6 +1,3 @@
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings   #-}
-
 -- |
 -- The query module is used to query the semantic tokens from the AST
 module Ide.Plugin.SemanticTokens.Query where
@@ -11,7 +8,6 @@ import qualified Data.Map.Strict                      as M
 import           Data.Maybe                           (listToMaybe, mapMaybe)
 import qualified Data.Set                             as Set
 import           Data.Text                            (Text)
-import qualified Data.Text                            as T
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
 import           Development.IDE.GHC.Compat
@@ -50,8 +46,7 @@ idSemantic tyThingMap hieKind rm (Right n) =
 ---------------------------------------------------------
 
 nameSemanticFromHie :: forall a. HieFunMaskKind a -> RefMap a -> Name -> Maybe HsSemanticTokenType
-nameSemanticFromHie hieKind rm n = do
-  idSemanticFromRefMap rm (Right n)
+nameSemanticFromHie hieKind rm n = idSemanticFromRefMap rm (Right n)
   where
     idSemanticFromRefMap :: RefMap a -> Identifier -> Maybe HsSemanticTokenType
     idSemanticFromRefMap rm' name' = do
@@ -90,7 +85,7 @@ makeSemanticTokensWithId sid tokens = do
     return $ SemanticTokens sid tokens
 
 makeSemanticTokensDeltaWithId :: Maybe Text ->  SemanticTokens -> SemanticTokens -> SemanticTokensDelta
-makeSemanticTokensDeltaWithId sid previousTokens currentTokens = do
+makeSemanticTokensDeltaWithId sid previousTokens currentTokens =
     let (SemanticTokensDelta _ stEdits) = makeSemanticTokensDelta previousTokens currentTokens
-        in SemanticTokensDelta sid stEdits
+    in SemanticTokensDelta sid stEdits
 
