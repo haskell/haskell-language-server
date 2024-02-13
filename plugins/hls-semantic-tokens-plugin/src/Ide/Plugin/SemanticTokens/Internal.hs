@@ -86,47 +86,39 @@ computeSemanticTokens recorder pid _ nfp = do
   withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens semanticId config mapping rangeSemanticList
 
 semanticTokensFull :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
-semanticTokensFull recorder state pid param = do
-  nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
-  items <- runActionE "SemanticTokens.semanticTokensFull" state $ computeSemanticTokens recorder pid state nfp
-  return $ InL items
+semanticTokensFull recorder state pid param = runActionE "SemanticTokens.semanticTokensFull" state computeSemanticTokensFullDelta
+  where
+    computeSemanticTokensFullDelta :: ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFull)
+    computeSemanticTokensFullDelta = do
+      nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
+      items <- computeSemanticTokens recorder pid state nfp
+      lift $ setSemanticTokens (normalizedFilePathToUri nfp) items
+      return $ InL items
 
-getAndIncreaseSemanticTokensId :: Action Text
-getAndIncreaseSemanticTokensId = do
-  ShakeExtras{semanticTokensId} <- getShakeExtras
-  liftIO $ atomically $ do
-    i <- readTVar semanticTokensId
-    modifyTVar' semanticTokensId (+1)
-    return $ T.pack $ show i
-
-getPreviousSemanticTokens :: NormalizedUri -> Action (Maybe SemanticTokens)
-getPreviousSemanticTokens uri = getShakeExtras >>= liftIO . atomically . STM.lookup uri . semanticTokensCache
-
-setSemanticTokens :: NormalizedUri -> SemanticTokens -> Action ()
-setSemanticTokens uri tokens = getShakeExtras >>= liftIO . atomically . STM.insert tokens uri . semanticTokensCache
-
-computeSemanticTokensFullDelta :: Text -> Recorder (WithPriority SemanticLog) -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
-computeSemanticTokensFullDelta previousVersionFromParam recorder pid state nfp = do
-  semanticTokens <- computeSemanticTokens recorder pid state nfp
-  previousSemanticTokensMaybe <- lift $ getPreviousSemanticTokens (normalizedFilePathToUri nfp)
-  lift $ setSemanticTokens (normalizedFilePathToUri nfp) semanticTokens
-  case previousSemanticTokensMaybe of
-    Nothing -> return $ InL semanticTokens
-    Just previousSemanticTokens ->
-        if Just previousVersionFromParam == previousSemanticTokens^.L.resultId
-        then
-            do
-            let delta = makeSemanticTokensDeltaWithId (semanticTokens^.L.resultId) previousSemanticTokens semanticTokens
-            logWith recorder Info (LogMsg "SemanticTokensDelta:")
-            logWith recorder Info (LogMsg $ show $ pretty delta)
-            return $ InR $ InL delta
-        else return $ InL semanticTokens
 
 semanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFullDelta
 semanticTokensFullDelta recorder state pid param = do
   nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
   let previousVersionFromParam = param ^. L.previousResultId
-  runActionE "SemanticTokens.semanticTokensFullDelta" state $ computeSemanticTokensFullDelta previousVersionFromParam recorder pid state nfp
+  let semanticTokens = computeSemanticTokensFullDelta previousVersionFromParam recorder pid state nfp
+  runActionE "SemanticTokens.semanticTokensFullDelta" state semanticTokens
+  where
+    computeSemanticTokensFullDelta :: Text -> Recorder (WithPriority SemanticLog) -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
+    computeSemanticTokensFullDelta previousVersionFromParam recorder pid state nfp = do
+      semanticTokens <- computeSemanticTokens recorder pid state nfp
+      previousSemanticTokensMaybe <- lift $ getPreviousSemanticTokens (normalizedFilePathToUri nfp)
+      lift $ setSemanticTokens (normalizedFilePathToUri nfp) semanticTokens
+      case previousSemanticTokensMaybe of
+          Nothing -> return $ InL semanticTokens
+          Just previousSemanticTokens ->
+              if Just previousVersionFromParam == previousSemanticTokens^.L.resultId
+              then
+                  do
+                  let delta = makeSemanticTokensDeltaWithId (semanticTokens^.L.resultId) previousSemanticTokens semanticTokens
+                  logWith recorder Info (LogMsg "SemanticTokensDelta:")
+                  logWith recorder Info (LogMsg $ show $ pretty delta)
+                  return $ InR $ InL delta
+              else return $ InL semanticTokens
 
 -- | Defines the 'getSemanticTokensRule' function, compute semantic tokens for a Haskell source file.
 --
@@ -164,3 +156,21 @@ handleError recorder action' = do
       logWith recorder Warning msg
       pure $ toIdeResult (Left [])
     Right value -> pure $ toIdeResult (Right value)
+
+-----------------------
+-- helper functions
+-----------------------
+
+getAndIncreaseSemanticTokensId :: Action Text
+getAndIncreaseSemanticTokensId = do
+  ShakeExtras{semanticTokensId} <- getShakeExtras
+  liftIO $ atomically $ do
+    i <- readTVar semanticTokensId
+    modifyTVar' semanticTokensId (+1)
+    return $ T.pack $ show i
+
+getPreviousSemanticTokens :: NormalizedUri -> Action (Maybe SemanticTokens)
+getPreviousSemanticTokens uri = getShakeExtras >>= liftIO . atomically . STM.lookup uri . semanticTokensCache
+
+setSemanticTokens :: NormalizedUri -> SemanticTokens -> Action ()
+setSemanticTokens uri tokens = getShakeExtras >>= liftIO . atomically . STM.insert tokens uri . semanticTokensCache

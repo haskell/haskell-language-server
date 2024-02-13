@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-import           Control.Lens                       ((^?))
+import           Control.Lens                       ((^.), (^?))
 import           Control.Monad.IO.Class             (liftIO)
 import           Data.Aeson                         (KeyValue (..), Object)
 import qualified Data.Aeson.KeyMap                  as KV
@@ -13,7 +13,7 @@ import           Data.Text                          hiding (length, map,
                                                      unlines)
 import qualified Data.Text                          as Text
 import qualified Data.Text.Utf16.Rope.Mixed         as Rope
-import           Development.IDE                    (Pretty)
+import           Development.IDE                    (Pretty (pretty))
 import           Development.IDE.GHC.Compat         (GhcVersion (..),
                                                      ghcVersion)
 import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
@@ -22,15 +22,20 @@ import           Ide.Plugin.SemanticTokens
 import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
+import qualified Language.LSP.Protocol.Lens         as L
+import           Language.LSP.Protocol.Types
 import           Language.LSP.Protocol.Types        (SemanticTokenTypes (..),
-                                                     _L)
+                                                     SemanticTokensDeltaParams (SemanticTokensDeltaParams),
+                                                     _L, type (|?) (InR))
 import           Language.LSP.Test                  (Session,
                                                      SessionConfig (ignoreConfigurationRequests),
-                                                     openDoc)
+                                                     openDoc, request)
 import qualified Language.LSP.Test                  as Test
 import           Language.LSP.VFS                   (VirtualFile (..))
 import           System.FilePath
-import           Test.Hls                           (PluginTestDescriptor,
+import           Test.Hls                           (HasCallStack,
+                                                     PluginTestDescriptor,
+                                                     SMethod (SMethod_TextDocumentSemanticTokensFull, SMethod_TextDocumentSemanticTokensFullDelta),
                                                      TestName, TestTree,
                                                      TextDocumentIdentifier,
                                                      defaultTestRunner,
@@ -91,7 +96,7 @@ docSemanticTokensString cf doc = do
   xs  <- map (lspTokenHsToken cf) <$> docLspSemanticTokensString doc
   return $ unlines . map show $ xs
 
-docLspSemanticTokensString :: TextDocumentIdentifier -> Session [SemanticTokenOriginal Language.LSP.Protocol.Types.SemanticTokenTypes]
+docLspSemanticTokensString :: (HasCallStack) => TextDocumentIdentifier -> Session [SemanticTokenOriginal Language.LSP.Protocol.Types.SemanticTokenTypes]
 docLspSemanticTokensString doc = do
   res <- Test.getSemanticTokens doc
   textContent <- documentContents doc
@@ -100,6 +105,20 @@ docLspSemanticTokensString doc = do
     Just tokens -> do
       either (error . show) pure $ recoverLspSemanticTokens vfs tokens
     _noTokens -> error "No tokens found"
+
+
+-- | Pass a param and return the response from `semanticTokensFull`
+-- getSemanticTokensFullDelta :: TextDocumentIdentifier -> Session _
+getSemanticTokensFullDelta doc lastResultId = do
+  let params = SemanticTokensDeltaParams Nothing Nothing doc lastResultId
+  rsp <- request SMethod_TextDocumentSemanticTokensFullDelta params
+  case rsp ^. L.result of
+    Right x -> return x
+    _       -> error "No tokens found"
+
+-- docLspSemanticTokensFullDeltaString :: TextDocumentIdentifier -> Session [SemanticTokenOriginal Language.LSP.Protocol.Types.SemanticTokenTypes]
+-- docLspSemanticTokensFullDeltaString doc = do
+--   res <- Test.getSemanticTokens doc
 
 semanticTokensClassTests :: TestTree
 semanticTokensClassTests =
@@ -156,6 +175,22 @@ semanticTokensConfigTest = testGroup "semantic token config test" [
                     liftIO $ unlines (map show result1) @?= "2:1-3 SemanticTokenTypes_Variable \"go\"\n"
     ]
 
+semanticTokensFullDeltaTests :: TestTree
+semanticTokensFullDeltaTests =
+  testGroup "semanticTokensFullDeltaTests" $
+    [ testCase "null delta since unchanged" $ do
+        let file1 = "TModula𐐀bA.hs"
+        let expectDelta = InR (InL (SemanticTokensDelta (Just "1") []))
+        Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
+          doc1 <- openDoc file1 "haskell"
+          _ <- waitForAction "TypeCheck" doc1
+          fullResult <- Test.getSemanticTokens doc1
+          liftIO $ print fullResult
+          delta <- getSemanticTokensFullDelta doc1 "0"
+          liftIO $ delta @?= expectDelta
+          liftIO $ print delta
+    ]
+
 semanticTokensTests :: TestTree
 semanticTokensTests =
   testGroup "other semantic Token test" $
@@ -173,8 +208,6 @@ semanticTokensTests =
           case check2 of
             Right (WaitForIdeRuleResult _) -> return ()
             Left _                         -> error "TypeCheck2 failed"
-
-
 
           result <- docSemanticTokensString def doc2
           let expect = unlines [
@@ -231,5 +264,6 @@ main =
         semanticTokensDataTypeTests,
         semanticTokensValuePatternTests,
         semanticTokensFunctionTests,
-        semanticTokensConfigTest
+        semanticTokensConfigTest,
+        semanticTokensFullDeltaTests
       ]
