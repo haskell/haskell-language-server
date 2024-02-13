@@ -259,10 +259,10 @@ data ShakeExtras = ShakeExtras
     ,diagnostics :: STMDiagnosticStore
     ,hiddenDiagnostics :: STMDiagnosticStore
     ,publishedDiagnostics :: STM.Map NormalizedUri [Diagnostic]
-    ,semanticTokensCache:: STM.Map NormalizedUri SemanticTokens
-    ,semanticTokensId :: TVar Int
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
+    ,semanticTokensCache:: STM.Map NormalizedUri SemanticTokens
+    ,semanticTokensId :: TVar Int
     ,positionMapping :: STM.Map NormalizedUri (EnumMap Int32 (PositionDelta, PositionMapping))
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version
