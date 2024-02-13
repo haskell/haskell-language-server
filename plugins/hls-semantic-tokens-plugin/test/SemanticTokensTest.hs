@@ -209,6 +209,25 @@ semanticTokensFullDeltaTests =
           delta <- getSemanticTokensFullDelta doc1 "0"
           liftIO $ print delta
           liftIO $ delta @?= expectDelta
+
+      , testCase "remove tokens" $ do
+        let file1 = "TModula𐐀bA.hs"
+        let expectDelta = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 0 20 (Just [])]))
+        -- delete all tokens
+        Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
+          doc1 <- openDoc file1 "haskell"
+          _ <- waitForAction "TypeCheck" doc1
+          _ <- Test.getSemanticTokens doc1
+          -- open the file and append a line to it
+          let change = TextDocumentContentChangeEvent
+                $ InL $ #range .== Range (Position 2 0) (Position 2 28)
+                .+ #rangeLength .== Nothing
+                .+ #text .== Text.replicate 28 " "
+          changeDoc doc1 [change]
+          _ <- waitForAction "TypeCheck" doc1
+          delta <- getSemanticTokensFullDelta doc1 "0"
+          liftIO $ print delta
+          liftIO $ delta @?= expectDelta
     ]
 
 semanticTokensTests :: TestTree
