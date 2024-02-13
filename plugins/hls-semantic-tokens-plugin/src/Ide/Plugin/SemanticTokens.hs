@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
+
 
 module Ide.Plugin.SemanticTokens (descriptor) where
 

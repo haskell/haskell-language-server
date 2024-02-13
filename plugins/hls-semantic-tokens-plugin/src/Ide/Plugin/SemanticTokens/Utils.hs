@@ -1,6 +1,5 @@
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 

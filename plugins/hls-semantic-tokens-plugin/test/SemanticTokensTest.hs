@@ -14,7 +14,7 @@ import           Data.Text                          hiding (length, map,
                                                      unlines)
 import qualified Data.Text                          as Text
 import qualified Data.Text.Utf16.Rope.Mixed         as Rope
-import           Development.IDE                    (Pretty (pretty))
+import           Development.IDE                    (Pretty)
 
 import           Data.Row                           ((.==))
 import           Data.Row.Records                   ((.+))
