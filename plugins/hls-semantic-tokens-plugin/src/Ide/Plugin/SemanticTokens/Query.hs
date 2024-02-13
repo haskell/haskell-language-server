@@ -79,7 +79,7 @@ rangeSemanticsSemanticTokens sid stc mapping =
             (toLspTokenType stc tokenType)
             []
 
-makeSemanticTokensWithId :: Maybe Text -> [SemanticTokenAbsolute] -> Either Text  SemanticTokens
+makeSemanticTokensWithId :: Maybe Text -> [SemanticTokenAbsolute] -> Either Text SemanticTokens
 makeSemanticTokensWithId sid tokens = do
     (SemanticTokens _  tokens) <- makeSemanticTokens defaultSemanticTokensLegend tokens
     return $ SemanticTokens sid tokens

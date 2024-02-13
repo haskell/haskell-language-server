@@ -111,12 +111,7 @@ semanticTokensFullDelta recorder state pid param = do
           Nothing -> return $ InL semanticTokens
           Just previousSemanticTokens ->
               if Just previousVersionFromParam == previousSemanticTokens^.L.resultId
-              then
-                  do
-                  let delta = makeSemanticTokensDeltaWithId (semanticTokens^.L.resultId) previousSemanticTokens semanticTokens
-                  logWith recorder Info (LogMsg "SemanticTokensDelta:")
-                  logWith recorder Info (LogMsg $ show $ pretty delta)
-                  return $ InR $ InL delta
+              then return $ InR $ InL $ makeSemanticTokensDeltaWithId (semanticTokens^.L.resultId) previousSemanticTokens semanticTokens
               else return $ InL semanticTokens
 
 -- | Defines the 'getSemanticTokensRule' function, compute semantic tokens for a Haskell source file.
