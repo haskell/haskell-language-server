@@ -110,6 +110,7 @@ docLspSemanticTokensString doc = do
 
 -- | Pass a param and return the response from `semanticTokensFull`
 -- getSemanticTokensFullDelta :: TextDocumentIdentifier -> Session _
+getSemanticTokensFullDelta :: TextDocumentIdentifier -> Text -> Session (SemanticTokens |? (SemanticTokensDelta |? Null))
 getSemanticTokensFullDelta doc lastResultId = do
   let params = SemanticTokensDeltaParams Nothing Nothing doc lastResultId
   rsp <- request SMethod_TextDocumentSemanticTokensFullDelta params
