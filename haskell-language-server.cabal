@@ -1574,6 +1574,8 @@ library hls-semantic-tokens-plugin
     , hls-graph == 2.6.0.0
     , template-haskell
     , data-default
+    , stm
+    , stm-containers
 
   default-extensions: DataKinds
 

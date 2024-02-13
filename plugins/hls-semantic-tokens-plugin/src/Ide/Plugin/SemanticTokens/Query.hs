@@ -11,6 +11,7 @@ import qualified Data.Map.Strict                      as M
 import           Data.Maybe                           (listToMaybe, mapMaybe)
 import qualified Data.Set                             as Set
 import           Data.Text                            (Text)
+import qualified Data.Text                            as T
 import           Development.IDE.Core.PositionMapping (PositionMapping,
                                                        toCurrentRange)
 import           Development.IDE.GHC.Compat
@@ -22,9 +23,11 @@ import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
 import           Language.LSP.Protocol.Types          (Position (Position),
                                                        Range (Range),
                                                        SemanticTokenAbsolute (SemanticTokenAbsolute),
-                                                       SemanticTokens,
+                                                       SemanticTokens (SemanticTokens),
+                                                       SemanticTokensDelta (SemanticTokensDelta),
                                                        defaultSemanticTokensLegend,
-                                                       makeSemanticTokens)
+                                                       makeSemanticTokens,
+                                                       makeSemanticTokensDelta)
 import           Prelude                              hiding (length, span)
 
 ---------------------------------------------------------
@@ -67,10 +70,9 @@ nameSemanticFromHie hieKind rm n = do
 
 -------------------------------------------------
 
-rangeSemanticsSemanticTokens :: SemanticTokensConfig -> PositionMapping -> RangeSemanticTokenTypeList -> Either Text SemanticTokens
-rangeSemanticsSemanticTokens stc mapping =
-  makeSemanticTokens defaultSemanticTokensLegend
-    . mapMaybe (\(ran, tk) -> toAbsSemanticToken <$> toCurrentRange mapping ran <*> return tk)
+rangeSemanticsSemanticTokens :: Text -> SemanticTokensConfig -> PositionMapping -> RangeSemanticTokenTypeList -> Either Text SemanticTokens
+rangeSemanticsSemanticTokens sid stc mapping =
+  makeSemanticTokensWithId (Just sid) . mapMaybe (\(ran, tk) -> toAbsSemanticToken <$> toCurrentRange mapping ran <*> return tk)
   where
     toAbsSemanticToken :: Range -> HsSemanticTokenType -> SemanticTokenAbsolute
     toAbsSemanticToken (Range (Position startLine startColumn) (Position _endLine endColumn)) tokenType =
@@ -81,3 +83,14 @@ rangeSemanticsSemanticTokens stc mapping =
             (fromIntegral len)
             (toLspTokenType stc tokenType)
             []
+
+makeSemanticTokensWithId :: Maybe Text -> [SemanticTokenAbsolute] -> Either Text  SemanticTokens
+makeSemanticTokensWithId sid tokens = do
+    (SemanticTokens _  tokens) <- makeSemanticTokens defaultSemanticTokensLegend tokens
+    return $ SemanticTokens sid tokens
+
+makeSemanticTokensDeltaWithId :: Maybe Text ->  SemanticTokens -> SemanticTokens -> SemanticTokensDelta
+makeSemanticTokensDeltaWithId sid previousTokens currentTokens = do
+    let (SemanticTokensDelta _ stEdits) = makeSemanticTokensDelta previousTokens currentTokens
+        in SemanticTokensDelta sid stEdits
+

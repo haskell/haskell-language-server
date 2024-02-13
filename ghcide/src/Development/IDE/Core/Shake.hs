@@ -164,6 +164,7 @@ import           Language.LSP.Diagnostics
 import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types            (SemanticTokens)
 import qualified Language.LSP.Protocol.Types            as LSP
 import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.VFS                       hiding (start)
@@ -243,6 +244,7 @@ data HieDbWriter
 -- with (currently) retry functionality
 type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
+
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
     { --eventer :: LSP.FromServerMessage -> IO ()
@@ -257,6 +259,8 @@ data ShakeExtras = ShakeExtras
     ,diagnostics :: STMDiagnosticStore
     ,hiddenDiagnostics :: STMDiagnosticStore
     ,publishedDiagnostics :: STM.Map NormalizedUri [Diagnostic]
+    ,semanticTokensCache:: STM.Map NormalizedUri SemanticTokens
+    ,semanticTokensId :: TVar Int
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
     ,positionMapping :: STM.Map NormalizedUri (EnumMap Int32 (PositionDelta, PositionMapping))
@@ -616,12 +620,14 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
         diagnostics <- STM.newIO
         hiddenDiagnostics <- STM.newIO
         publishedDiagnostics <- STM.newIO
+        semanticTokensCache <- STM.newIO
         positionMapping <- STM.newIO
         knownTargetsVar <- newTVarIO $ hashed HMap.empty
         let restartShakeSession = shakeRestart recorder ideState
         persistentKeys <- newTVarIO mempty
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
+        semanticTokensId <- newTVarIO 0
         indexProgressToken <- newVar Nothing
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newTVarIO mempty
