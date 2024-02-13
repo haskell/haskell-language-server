@@ -1583,7 +1583,7 @@ test-suite hls-semantic-tokens-plugin-tests
   import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-semantic-tokens-plugin/test
-  main-is:          Main.hs
+  main-is:          SemanticTokensTest.hs
 
   build-depends:
     , aeson
@@ -1603,6 +1603,8 @@ test-suite hls-semantic-tokens-plugin-tests
     , ghcide                == 2.6.0.0
     , hls-plugin-api        == 2.6.0.0
     , data-default
+    , directory
+    , row-types
 
 -----------------------------
 -- HLS

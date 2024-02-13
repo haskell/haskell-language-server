@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 import           Control.Lens                       ((^.), (^?))
@@ -14,6 +15,9 @@ import           Data.Text                          hiding (length, map,
 import qualified Data.Text                          as Text
 import qualified Data.Text.Utf16.Rope.Mixed         as Rope
 import           Development.IDE                    (Pretty (pretty))
+
+import           Data.Row                           ((.==))
+import           Data.Row.Records                   ((.+))
 import           Development.IDE.GHC.Compat         (GhcVersion (..),
                                                      ghcVersion)
 import           Development.IDE.Plugin.Test        (WaitForIdeRuleResult (..))
@@ -24,9 +28,6 @@ import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens         as L
 import           Language.LSP.Protocol.Types
-import           Language.LSP.Protocol.Types        (SemanticTokenTypes (..),
-                                                     SemanticTokensDeltaParams (SemanticTokensDeltaParams),
-                                                     _L, type (|?) (InR))
 import           Language.LSP.Test                  (Session,
                                                      SessionConfig (ignoreConfigurationRequests),
                                                      openDoc, request)
@@ -35,9 +36,9 @@ import           Language.LSP.VFS                   (VirtualFile (..))
 import           System.FilePath
 import           Test.Hls                           (HasCallStack,
                                                      PluginTestDescriptor,
-                                                     SMethod (SMethod_TextDocumentSemanticTokensFull, SMethod_TextDocumentSemanticTokensFullDelta),
+                                                     SMethod (SMethod_TextDocumentSemanticTokensFullDelta),
                                                      TestName, TestTree,
-                                                     TextDocumentIdentifier,
+                                                     changeDoc,
                                                      defaultTestRunner,
                                                      documentContents, fullCaps,
                                                      goldenGitDiff,
@@ -188,7 +189,26 @@ semanticTokensFullDeltaTests =
           liftIO $ print fullResult
           delta <- getSemanticTokensFullDelta doc1 "0"
           liftIO $ delta @?= expectDelta
+
+      , testCase "add tokens" $ do
+        let file1 = "TModula𐐀bA.hs"
+        let expectDelta = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 20 0 (Just [2,0,3,8,0])]))
+        --                                                                                         r c l t m
+        --                                      where r = row, c = column, l = length, t = token, m = modifier
+        Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
+          doc1 <- openDoc file1 "haskell"
+          _ <- waitForAction "TypeCheck" doc1
+          _ <- Test.getSemanticTokens doc1
+          -- open the file and append a line to it
+          let change = TextDocumentContentChangeEvent
+                $ InL $ #range .== Range (Position 4 0) (Position 4 6)
+                .+ #rangeLength .== Nothing
+                .+ #text .== "foo = 1"
+          changeDoc doc1 [change]
+          _ <- waitForAction "TypeCheck" doc1
+          delta <- getSemanticTokensFullDelta doc1 "0"
           liftIO $ print delta
+          liftIO $ delta @?= expectDelta
     ]
 
 semanticTokensTests :: TestTree
