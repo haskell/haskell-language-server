@@ -720,16 +720,20 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
     ideclSource' = if ideclSource then IsBoot else NotBoot
     toMod = noLocA . GHC.mkModuleName
     ideclName = toMod ideclNameString
+    ideclSafe = False
+    ideclImplicit = False
+    ideclSourceSrc = NoSourceText
+    ideclAs = toMod <$> ideclAsString
+    ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
+
 #if MIN_VERSION_ghc(9,3,0)
     ideclPkgQual = NoRawPkgQual
 #else
     ideclPkgQual = Nothing
 #endif
-    ideclSafe = False
-    ideclImplicit = False
-    ideclHiding = Nothing
-    ideclSourceSrc = NoSourceText
+
 #if MIN_VERSION_ghc(9,5,0)
+    ideclImportList = Nothing
     ideclExt = GHCGHC.XImportDeclPass
       { ideclAnn = GHCGHC.EpAnnNotUsed
       , ideclSourceText = ideclSourceSrc
@@ -737,9 +741,9 @@ toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
       }
 #else
     ideclExt = GHCGHC.EpAnnNotUsed
+    ideclHiding = Nothing
 #endif
-    ideclAs = toMod <$> ideclAsString
-    ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
+
 
 reuseParsedModule :: IdeState -> NormalizedFilePath -> IO (FixityEnv, Annotated GHCGHC.ParsedSource)
 reuseParsedModule state f = do
