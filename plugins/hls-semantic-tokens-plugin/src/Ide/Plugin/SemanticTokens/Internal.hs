@@ -149,7 +149,7 @@ handleError recorder action' = do
 -- helper functions
 -----------------------
 
-getAndIncreaseSemanticTokensId :: Action Text
+getAndIncreaseSemanticTokensId :: Action SemanticTokenId
 getAndIncreaseSemanticTokensId = do
   ShakeExtras{semanticTokensId} <- getShakeExtras
   liftIO $ atomically $ do

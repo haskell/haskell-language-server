@@ -18,6 +18,7 @@ import           Development.IDE.Graph.Classes (Hashable)
 import           GHC.Generics                  (Generic)
 import           Language.LSP.Protocol.Types
 -- import template haskell
+import           Data.Text                     (Text)
 import           Language.Haskell.TH.Syntax    (Lift)
 
 
@@ -150,3 +151,5 @@ instance Pretty SemanticLog where
     LogConfig config  -> "SemanticTokensConfig_: " <> pretty (show config)
     LogMsg msg        -> "SemanticLog Debug Message: " <> pretty msg
 
+
+type SemanticTokenId = Text

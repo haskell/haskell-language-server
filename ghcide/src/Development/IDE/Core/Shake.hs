@@ -262,7 +262,10 @@ data ShakeExtras = ShakeExtras
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
     ,semanticTokensCache:: STM.Map NormalizedUri SemanticTokens
+    -- ^ Cache of last response of semantic tokens for each file,
+    -- so we can compute deltas for semantic tokens(SMethod_TextDocumentSemanticTokensFullDelta).
     ,semanticTokensId :: TVar Int
+    -- ^ semanticTokensId is used to generate unique ids for each lsp response of semantic tokens.
     ,positionMapping :: STM.Map NormalizedUri (EnumMap Int32 (PositionDelta, PositionMapping))
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version

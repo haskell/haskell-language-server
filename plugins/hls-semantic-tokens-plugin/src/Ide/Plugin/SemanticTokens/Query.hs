@@ -15,6 +15,7 @@ import           Ide.Plugin.SemanticTokens.Mappings
 import           Ide.Plugin.SemanticTokens.Types      (HieFunMaskKind,
                                                        HsSemanticTokenType (TModule),
                                                        RangeSemanticTokenTypeList,
+                                                       SemanticTokenId,
                                                        SemanticTokensConfig)
 import           Language.LSP.Protocol.Types          (Position (Position),
                                                        Range (Range),
@@ -65,7 +66,7 @@ nameSemanticFromHie hieKind rm n = idSemanticFromRefMap rm (Right n)
 
 -------------------------------------------------
 
-rangeSemanticsSemanticTokens :: Text -> SemanticTokensConfig -> PositionMapping -> RangeSemanticTokenTypeList -> Either Text SemanticTokens
+rangeSemanticsSemanticTokens :: SemanticTokenId -> SemanticTokensConfig -> PositionMapping -> RangeSemanticTokenTypeList -> Either Text SemanticTokens
 rangeSemanticsSemanticTokens sid stc mapping =
   makeSemanticTokensWithId (Just sid) . mapMaybe (\(ran, tk) -> toAbsSemanticToken <$> toCurrentRange mapping ran <*> return tk)
   where
@@ -79,12 +80,12 @@ rangeSemanticsSemanticTokens sid stc mapping =
             (toLspTokenType stc tokenType)
             []
 
-makeSemanticTokensWithId :: Maybe Text -> [SemanticTokenAbsolute] -> Either Text SemanticTokens
+makeSemanticTokensWithId :: Maybe SemanticTokenId -> [SemanticTokenAbsolute] -> Either Text SemanticTokens
 makeSemanticTokensWithId sid tokens = do
     (SemanticTokens _  tokens) <- makeSemanticTokens defaultSemanticTokensLegend tokens
     return $ SemanticTokens sid tokens
 
-makeSemanticTokensDeltaWithId :: Maybe Text ->  SemanticTokens -> SemanticTokens -> SemanticTokensDelta
+makeSemanticTokensDeltaWithId :: Maybe SemanticTokenId ->  SemanticTokens -> SemanticTokens -> SemanticTokensDelta
 makeSemanticTokensDeltaWithId sid previousTokens currentTokens =
     let (SemanticTokensDelta _ stEdits) = makeSemanticTokensDelta previousTokens currentTokens
     in SemanticTokensDelta sid stEdits
