@@ -183,7 +183,7 @@ semanticTokensFullDeltaTests =
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
           doc1 <- openDoc file1 "haskell"
           _ <- waitForAction "TypeCheck" doc1
-          fullResult <- Test.getSemanticTokens doc1
+          _ <- Test.getSemanticTokens doc1
           delta <- getSemanticTokensFullDelta doc1 "0"
           liftIO $ delta @?= expectDelta
 

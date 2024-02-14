@@ -1603,7 +1603,6 @@ test-suite hls-semantic-tokens-plugin-tests
     , ghcide                == 2.6.0.0
     , hls-plugin-api        == 2.6.0.0
     , data-default
-    , directory
     , row-types
 
 -----------------------------

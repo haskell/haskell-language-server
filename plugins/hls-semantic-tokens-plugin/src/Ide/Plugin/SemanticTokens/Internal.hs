@@ -12,8 +12,7 @@
 -- This module provides the core functionality of the plugin.
 module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, semanticConfigProperties, semanticTokensFullDelta) where
 
-import           Control.Concurrent.STM                   (modifyTVar',
-                                                           readTVar)
+import           Control.Concurrent.STM                   (stateTVar)
 import           Control.Concurrent.STM.Stats             (atomically)
 import           Control.Lens                             ((^.))
 import           Control.Monad.Except                     (ExceptT, liftEither,
