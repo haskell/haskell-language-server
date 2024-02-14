@@ -10,7 +10,7 @@
 
 -- |
 -- This module provides the core functionality of the plugin.
-module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, persistentGetSemanticTokensRule, semanticConfigProperties, semanticTokensFullDelta) where
+module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, semanticConfigProperties, semanticTokensFullDelta) where
 
 import           Control.Concurrent.STM                   (modifyTVar',
                                                            readTVar)
