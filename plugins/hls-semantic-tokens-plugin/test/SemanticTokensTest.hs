@@ -184,7 +184,6 @@ semanticTokensFullDeltaTests =
           doc1 <- openDoc file1 "haskell"
           _ <- waitForAction "TypeCheck" doc1
           fullResult <- Test.getSemanticTokens doc1
-          liftIO $ print fullResult
           delta <- getSemanticTokensFullDelta doc1 "0"
           liftIO $ delta @?= expectDelta
 
@@ -205,7 +204,6 @@ semanticTokensFullDeltaTests =
           changeDoc doc1 [change]
           _ <- waitForAction "TypeCheck" doc1
           delta <- getSemanticTokensFullDelta doc1 "0"
-          liftIO $ print delta
           liftIO $ delta @?= expectDelta
 
       , testCase "remove tokens" $ do
@@ -224,7 +222,6 @@ semanticTokensFullDeltaTests =
           changeDoc doc1 [change]
           _ <- waitForAction "TypeCheck" doc1
           delta <- getSemanticTokensFullDelta doc1 "0"
-          liftIO $ print delta
           liftIO $ delta @?= expectDelta
     ]
 
