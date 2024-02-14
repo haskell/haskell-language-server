@@ -38,11 +38,9 @@ import           Development.IDE                          (Action,
                                                            hieKind, use_)
 import           Development.IDE.Core.PluginUtils         (runActionE,
                                                            useWithStaleE)
-import           Development.IDE.Core.PositionMapping     (idDelta)
 import           Development.IDE.Core.Rules               (toIdeResult)
 import           Development.IDE.Core.RuleTypes           (DocAndTyThingMap (..))
 import           Development.IDE.Core.Shake               (ShakeExtras (..),
-                                                           addPersistentRule,
                                                            getShakeExtras,
                                                            getVirtualFile,
                                                            useWithStale_)
