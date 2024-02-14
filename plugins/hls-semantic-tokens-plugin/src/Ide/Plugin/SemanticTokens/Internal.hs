@@ -134,9 +134,6 @@ getSemanticTokensRule recorder =
     let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap
     return $ computeRangeHsSemanticTokenTypeList hsFinder virtualFile ast
 
--- | Persistent rule to ensure that semantic tokens doesn't block on startup
-persistentGetSemanticTokensRule :: Rules ()
-persistentGetSemanticTokensRule = addPersistentRule GetSemanticTokens $ \_ -> pure $ Just (RangeHsSemanticTokenTypes mempty, idDelta, Nothing)
 
 -- taken from /haskell-language-server/plugins/hls-code-range-plugin/src/Ide/Plugin/CodeRange/Rules.hs
 
