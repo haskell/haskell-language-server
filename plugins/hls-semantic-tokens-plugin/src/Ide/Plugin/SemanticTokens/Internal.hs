@@ -153,8 +153,7 @@ getAndIncreaseSemanticTokensId :: Action SemanticTokenId
 getAndIncreaseSemanticTokensId = do
   ShakeExtras{semanticTokensId} <- getShakeExtras
   liftIO $ atomically $ do
-    i <- readTVar semanticTokensId
-    modifyTVar' semanticTokensId (+1)
+    i <- stateTVar semanticTokensId (\val -> (val, val+1))
     return $ T.pack $ show i
 
 getPreviousSemanticTokens :: NormalizedUri -> Action (Maybe SemanticTokens)
