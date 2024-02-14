@@ -118,9 +118,6 @@ getSemanticTokensFullDelta doc lastResultId = do
     Right x -> return x
     _       -> error "No tokens found"
 
--- docLspSemanticTokensFullDeltaString :: TextDocumentIdentifier -> Session [SemanticTokenOriginal Language.LSP.Protocol.Types.SemanticTokenTypes]
--- docLspSemanticTokensFullDeltaString doc = do
---   res <- Test.getSemanticTokens doc
 
 semanticTokensClassTests :: TestTree
 semanticTokensClassTests =
