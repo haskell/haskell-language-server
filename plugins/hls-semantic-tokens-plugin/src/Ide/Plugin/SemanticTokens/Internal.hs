@@ -97,10 +97,10 @@ semanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> PluginMethodHa
 semanticTokensFullDelta recorder state pid param = do
   nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
   let previousVersionFromParam = param ^. L.previousResultId
-  runActionE "SemanticTokens.semanticTokensFullDelta" state $ computeSemanticTokensFullDelta previousVersionFromParam recorder pid state nfp
+  runActionE "SemanticTokens.semanticTokensFullDelta" state $ computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nfp
   where
-    computeSemanticTokensFullDelta :: Text -> Recorder (WithPriority SemanticLog) -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
-    computeSemanticTokensFullDelta previousVersionFromParam recorder pid state nfp = do
+    computeSemanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> Text -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
+    computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nfp = do
       semanticTokens <- computeSemanticTokens recorder pid state nfp
       previousSemanticTokensMaybe <- lift $ getPreviousSemanticTokens (normalizedFilePathToUri nfp)
       lift $ setSemanticTokens (normalizedFilePathToUri nfp) semanticTokens
