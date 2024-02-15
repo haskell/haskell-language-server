@@ -1,6 +1,6 @@
 # The number of samples to run per experiment.
 # At least 100 is recommended in order to observe space leaks
-samples: 50
+samples: 1
 
 buildTool: cabal
 
@@ -23,8 +23,9 @@ examples:
     package: Cabal
     version: 3.6.3.0
     modules:
-        - src/Distribution/Simple.hs
-        - src/Distribution/Types/Module.hs
+        # - src/Distribution/Simple.hs
+        # - src/Distribution/Types/Module.hs
+        - src/Distribution/Simple/Configure.hs
     extra-args: [] # extra HLS command line args
   # Small-sized project with TH
   - name: lsp-types
@@ -91,20 +92,21 @@ examples:
 
 # The set of experiments to execute
 experiments:
-    - "edit-header"
-    - "edit"
-    - "hover"
-    - "hover after edit"
+    # - "edit-header"
+    # - "edit"
+    # - "hover"
+    - "semanticTokens"
+    # - "hover after edit"
     # - "hover after cradle edit"
-    - "getDefinition"
-    - "getDefinition after edit"
-    - "completions"
-    - "completions after edit"
-    - "code actions"
-    - "code actions after edit"
-    - "code actions after cradle edit"
-    - "documentSymbols after edit"
-    - "hole fit suggestions"
+    # - "getDefinition"
+    # - "getDefinition after edit"
+    # - "completions"
+    # - "completions after edit"
+    # - "code actions"
+    # - "code actions after edit"
+    # - "code actions after cradle edit"
+    # - "documentSymbols after edit"
+    # - "hole fit suggestions"
 
 # An ordered list of versions to analyze
 versions:
@@ -121,15 +123,15 @@ versions:
 
 
 # - 1.8.0.0
-- upstream: origin/master
+- upstream: upstream/master
 # - HEAD~1
-- HEAD
+- cache-semantic-lookup
 
 # A list of plugin configurations to analyze
 # WARNING: Currently bench versions later than e4234a3a5e347db249fccefb8e3fb36f89e8eafb
 # will be unable to send plugin configurations to earlier HLS versions. This causes
 # all plugins in those versions to always be enabled.
-# In addition bench proactively disables all plugins it knows about besides the 
+# In addition bench proactively disables all plugins it knows about besides the
 # ones in the following list. However because it can only disable plugins it
 # knows about, any plugins that are in old versions but were removed from HLS
 # before the current bench will not be disabled.
@@ -194,6 +196,7 @@ configurations:
   - qualifyImportedNames
   - rename
   - stylish-haskell
+  - semanticTokens
 # - alternateNumberFormat
 # - callHierarchy
 # - changeTypeSignature

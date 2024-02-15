@@ -26,7 +26,8 @@ import           Control.Applicative.Combinators    (skipManyTill)
 import           Control.Concurrent.Async           (withAsync)
 import           Control.Exception.Safe             (IOException, handleAny,
                                                      try)
-import           Control.Lens                       (_Just, (&), (.~), (^.))
+import           Control.Lens                       (_Just, (&), (.~), (^.),
+                                                     (^?))
 import           Control.Lens.Extras                (is)
 import           Control.Monad.Extra                (allM, forM, forM_, forever,
                                                      unless, void, when,
@@ -100,7 +101,16 @@ allWithIdentifierPos f docs = case applicableDocs of
 
 experiments :: HasConfig => [Bench]
 experiments =
-    [ ---------------------------------------------------------------------------------------
+    [
+      bench "semanticTokens" $ \docs -> do
+        liftIO $ putStrLn "Starting semanticTokens"
+        r <- forM docs $ \DocumentPositions{..} -> do
+            tks <- getSemanticTokens doc
+            case tks ^? LSP._L of
+                Just _  -> return True
+                Nothing -> return True
+        return $ and r,
+      ---------------------------------------------------------------------------------------
       bench "hover" $ allWithIdentifierPos $ \DocumentPositions{..} ->
         isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
@@ -316,7 +326,7 @@ versionP = maybeReader $ extract . readP_to_S parseVersion
       extract parses = listToMaybe [ res | (res,"") <- parses]
 
 output :: (MonadIO m, HasConfig) => String -> m ()
-output = if quiet?config then (\_ -> pure ()) else liftIO . putStrLn
+output = if quiet ?config then (\_ -> pure ()) else liftIO . putStrLn
 
 ---------------------------------------------------------------------------------------
 
@@ -597,7 +607,7 @@ callCommandLogging cmd = do
 setup :: HasConfig => IO SetupResult
 setup = do
 --   when alreadyExists $ removeDirectoryRecursive examplesPath
-  benchDir <- case exampleDetails(example ?config) of
+  benchDir <- case exampleDetails (example ?config) of
       ExamplePath examplePath -> do
           let hieYamlPath = examplePath </> "hie.yaml"
           alreadyExists <- doesFileExist hieYamlPath
@@ -661,7 +671,7 @@ setup = do
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
-  let cleanUp = case exampleDetails(example ?config) of
+  let cleanUp = case exampleDetails (example ?config) of
         ExampleHackage _  -> removeDirectoryRecursive examplesPath
         ExampleScript _ _ -> removeDirectoryRecursive examplesPath
         ExamplePath _     -> return ()
