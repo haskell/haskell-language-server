@@ -1,6 +1,6 @@
 # The number of samples to run per experiment.
 # At least 100 is recommended in order to observe space leaks
-samples: 1
+samples: 50
 
 buildTool: cabal
 
