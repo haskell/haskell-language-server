@@ -97,7 +97,7 @@ experiments:
     - "edit"
     - "hover"
     - "semanticTokens"
-    # - "hover after edit"
+    - "hover after edit"
     # - "hover after cradle edit"
     - "getDefinition"
     - "getDefinition after edit"
