@@ -305,7 +305,7 @@ library hls-call-hierarchy-plugin
     , containers
     , extra
     , ghcide                == 2.6.0.0
-    , hiedb
+    , hiedb                 ^>= 0.6.0.0
     , hls-plugin-api        == 2.6.0.0
     , lens
     , lsp                    >=2.4
@@ -488,7 +488,7 @@ library hls-rename-plugin
     , containers
     , ghcide                == 2.6.0.0
     , hashable
-    , hiedb
+    , hiedb                 ^>= 0.6.0.0
     , hie-compat
     , hls-plugin-api        == 2.6.0.0
     , haskell-language-server:hls-refactor-plugin
