@@ -124,9 +124,9 @@ versions:
 
 
 # - 1.8.0.0
-- upstream: upstream/master
+- upstream: origin/master
 # - HEAD~1
-- cache-semantic-lookup
+- HEAD
 
 # A list of plugin configurations to analyze
 # WARNING: Currently bench versions later than e4234a3a5e347db249fccefb8e3fb36f89e8eafb
