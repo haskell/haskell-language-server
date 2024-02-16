@@ -82,15 +82,6 @@ headerEdit =
                                         .+ #rangeLength .== Nothing
                                         .+ #text .== "-- header comment \n"
 
-tailEdit :: UInt -> Text -> TextDocumentContentChangeEvent
-tailEdit end i =
-    TextDocumentContentChangeEvent $ InL $ #range .== Range (Position end 0) (Position end (fromIntegral $ T.length txt))
-                                        .+ #rangeLength .== Nothing
-                                        .+ #text .== (txt <> "\n")
-    where
-        txt :: Text
-        txt = "x" <> i <> "=" <> i
-
 data DocumentPositions = DocumentPositions {
     -- | A position that can be used to generate non null goto-def and completion responses
     identifierP    :: Maybe Position,
@@ -114,10 +105,9 @@ experiments =
       bench "semanticTokens" $ \docs -> do
         liftIO $ putStrLn "Starting semanticTokens"
         r <- forM (zip [T.pack $ show i | i :: Int <- [0..]] docs) $ \(i, DocumentPositions{..}) -> do
-            bottom <- fromIntegral . length . T.lines <$> documentContents doc
-            changeDoc doc [tailEdit bottom i]
-            -- wait for a fresh build start
+            changeDoc doc [charEdit stringLiteralP]
             waitForProgressStart
+            waitForProgressDone
             tks <- getSemanticTokens doc
             case tks ^? LSP._L of
                 Just _  -> return True
