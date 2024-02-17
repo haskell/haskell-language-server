@@ -1275,7 +1275,8 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
-        , testSession "extend single line import in presence of extra perens" $ template
+        , brokenForGHC92 "On GHC 9.2, the error doesn't contain \"perhaps you want ...\" part from which import suggestion can be extracted." $
+          testSession "extend single line import in presence of extra parens" $ template
             []
             ("Main.hs", T.unlines
                     [ "import Data.Monoid (First)"
@@ -3749,3 +3750,6 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir ->
 
 brokenForGHC94 :: String -> TestTree -> TestTree
 brokenForGHC94 = knownBrokenForGhcVersions [GHC94]
+
+brokenForGHC92 :: String -> TestTree -> TestTree
+brokenForGHC92 = knownBrokenForGhcVersions [GHC92]
