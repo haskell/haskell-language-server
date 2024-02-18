@@ -305,7 +305,7 @@ library hls-call-hierarchy-plugin
     , containers
     , extra
     , ghcide                == 2.6.0.0
-    , hiedb
+    , hiedb                 ^>= 0.6.0.0
     , hls-plugin-api        == 2.6.0.0
     , lens
     , lsp                    >=2.4
@@ -488,7 +488,7 @@ library hls-rename-plugin
     , containers
     , ghcide                == 2.6.0.0
     , hashable
-    , hiedb
+    , hiedb                 ^>= 0.6.0.0
     , hie-compat
     , hls-plugin-api        == 2.6.0.0
     , haskell-language-server:hls-refactor-plugin
@@ -532,7 +532,7 @@ common retrie
     cpp-options: -Dhls_retrie
 
 library hls-retrie-plugin
-  import:             defaults, warnings
+  import:             defaults, pedantic, warnings
   exposed-modules:    Ide.Plugin.Retrie
   hs-source-dirs:     plugins/hls-retrie-plugin/src
   build-depends:
@@ -562,7 +562,7 @@ library hls-retrie-plugin
     DataKinds
 
 test-suite hls-retrie-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-retrie-plugin/test
   main-is:          Main.hs
@@ -921,7 +921,7 @@ common qualifyImportedNames
     cpp-options: -Dhls_qualifyImportedNames
 
 library hls-qualify-imported-names-plugin
-  import:             defaults, warnings
+  import:             defaults, pedantic, warnings
   exposed-modules:    Ide.Plugin.QualifyImportedNames
   hs-source-dirs:     plugins/hls-qualify-imported-names-plugin/src
   build-depends:
@@ -939,7 +939,7 @@ library hls-qualify-imported-names-plugin
     DataKinds
 
 test-suite hls-qualify-imported-names-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-qualify-imported-names-plugin/test
   main-is:          Main.hs
