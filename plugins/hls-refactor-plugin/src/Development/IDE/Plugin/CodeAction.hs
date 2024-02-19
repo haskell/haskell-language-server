@@ -937,9 +937,9 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
     | Just [binding, mod, srcspan] <-
       matchRegexUnifySpaces _message
 #if MIN_VERSION_ghc(9,7,0)
-      "Add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\(at (.*)\\)."
+      "Add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\(at (.*)\\)\\."
 #else
-      "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\)."
+      "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\)\\."
 #endif
     = suggestions hsmodImports binding mod srcspan
     | Just (binding, mod_srcspan) <-

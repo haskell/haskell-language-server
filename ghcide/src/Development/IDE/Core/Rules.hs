@@ -1116,16 +1116,16 @@ getLinkableRule recorder =
     HiFileResult{hirModIface, hirModDetails, hirCoreFp} <- use_ GetModIface f
     let obj_file  = ml_obj_file (ms_location ms)
         core_file = ml_core_file (ms_location ms)
-    -- Can't use `GetModificationTime` rule because the core file was possibly written in this
-    -- very session, so the results aren't reliable
-    core_t <- liftIO $ getModTime core_file
     case hirCoreFp of
-      Nothing -> error "called GetLinkable for a file without a linkable"
+      Nothing -> error $ "called GetLinkable for a file without a linkable: " ++ show f
       Just (bin_core, fileHash) -> do
         session <- use_ GhcSessionDeps f
         linkableType <- getLinkableType f >>= \case
-          Nothing -> error "called GetLinkable for a file which doesn't need compilation"
+          Nothing -> error $ "called GetLinkable for a file which doesn't need compilation: " ++ show f
           Just t -> pure t
+        -- Can't use `GetModificationTime` rule because the core file was possibly written in this
+        -- very session, so the results aren't reliable
+        core_t <- liftIO $ getModTime core_file
         (warns, hmi) <- case linkableType of
           -- Bytecode needs to be regenerated from the core file
           BCOLinkable -> liftIO $ coreFileToLinkable linkableType (hscEnv session) ms hirModIface hirModDetails bin_core (posixSecondsToUTCTime core_t)
