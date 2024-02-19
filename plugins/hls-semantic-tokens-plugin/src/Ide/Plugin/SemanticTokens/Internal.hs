@@ -28,7 +28,6 @@ import           Development.IDE                          (Action,
                                                            GetHieAst (GetHieAst),
                                                            HieAstResult (HAR, hieAst, hieModule, refMap),
                                                            IdeResult, IdeState,
-                                                           NormalizedUri,
                                                            Priority (..),
                                                            Recorder, Rules,
                                                            WithPriority,
@@ -61,7 +60,6 @@ import           Language.LSP.Protocol.Message            (MessageResult,
                                                            Method (Method_TextDocumentSemanticTokensFull, Method_TextDocumentSemanticTokensFullDelta))
 import           Language.LSP.Protocol.Types              (NormalizedFilePath,
                                                            SemanticTokens,
-                                                           normalizedFilePathToUri,
                                                            type (|?) (InL, InR))
 import           Prelude                                  hiding (span)
 import qualified StmContainers.Map                        as STM
@@ -82,13 +80,13 @@ computeSemanticTokens recorder pid _ nfp = do
   withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens semanticId config mapping rangeSemanticList
 
 semanticTokensFull :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
-semanticTokensFull recorder state pid param = runActionE "SemanticTokens.semanticTokensFull" state computeSemanticTokensFullDelta
+semanticTokensFull recorder state pid param = runActionE "SemanticTokens.semanticTokensFull" state computeSemanticTokensFull
   where
-    computeSemanticTokensFullDelta :: ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFull)
-    computeSemanticTokensFullDelta = do
+    computeSemanticTokensFull :: ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFull)
+    computeSemanticTokensFull = do
       nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
       items <- computeSemanticTokens recorder pid state nfp
-      lift $ setSemanticTokens (normalizedFilePathToUri nfp) items
+      lift $ setSemanticTokens nfp items
       return $ InL items
 
 
@@ -101,14 +99,16 @@ semanticTokensFullDelta recorder state pid param = do
     computeSemanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> Text -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
     computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nfp = do
       semanticTokens <- computeSemanticTokens recorder pid state nfp
-      previousSemanticTokensMaybe <- lift $ getPreviousSemanticTokens (normalizedFilePathToUri nfp)
-      lift $ setSemanticTokens (normalizedFilePathToUri nfp) semanticTokens
+      previousSemanticTokensMaybe <- lift $ getPreviousSemanticTokens nfp
+      lift $ setSemanticTokens nfp semanticTokens
       case previousSemanticTokensMaybe of
           Nothing -> return $ InL semanticTokens
           Just previousSemanticTokens ->
               if Just previousVersionFromParam == previousSemanticTokens^.L.resultId
               then return $ InR $ InL $ makeSemanticTokensDeltaWithId (semanticTokens^.L.resultId) previousSemanticTokens semanticTokens
-              else return $ InL semanticTokens
+              else do
+                logWith recorder Warning (LogSemanticTokensDeltaMisMatch previousVersionFromParam (previousSemanticTokens^.L.resultId))
+                return $ InL semanticTokens
 
 -- | Defines the 'getSemanticTokensRule' function, compute semantic tokens for a Haskell source file.
 --
@@ -155,8 +155,8 @@ getAndIncreaseSemanticTokensId = do
     i <- stateTVar semanticTokensId (\val -> (val, val+1))
     return $ T.pack $ show i
 
-getPreviousSemanticTokens :: NormalizedUri -> Action (Maybe SemanticTokens)
+getPreviousSemanticTokens :: NormalizedFilePath -> Action (Maybe SemanticTokens)
 getPreviousSemanticTokens uri = getShakeExtras >>= liftIO . atomically . STM.lookup uri . semanticTokensCache
 
-setSemanticTokens :: NormalizedUri -> SemanticTokens -> Action ()
+setSemanticTokens :: NormalizedFilePath -> SemanticTokens -> Action ()
 setSemanticTokens uri tokens = getShakeExtras >>= liftIO . atomically . STM.insert tokens uri . semanticTokensCache

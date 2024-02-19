@@ -141,6 +141,7 @@ data SemanticLog
   | LogConfig SemanticTokensConfig
   | LogMsg String
   | LogNoVF
+  | LogSemanticTokensDeltaMisMatch Text (Maybe Text)
   deriving (Show)
 
 instance Pretty SemanticLog where
@@ -150,6 +151,9 @@ instance Pretty SemanticLog where
     LogNoVF           -> "no VirtualSourceFile exist for file"
     LogConfig config  -> "SemanticTokensConfig_: " <> pretty (show config)
     LogMsg msg        -> "SemanticLog Debug Message: " <> pretty msg
+    LogSemanticTokensDeltaMisMatch previousIdFromRequest previousIdFromCache
+                      -> "SemanticTokensDeltaMisMatch: previousIdFromRequest: " <> pretty previousIdFromRequest
+                      <> " previousIdFromCache: " <> pretty previousIdFromCache
 
 
 type SemanticTokenId = Text
