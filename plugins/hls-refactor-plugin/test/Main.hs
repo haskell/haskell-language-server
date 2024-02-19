@@ -1275,6 +1275,21 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
+        , brokenForGHC92 "On GHC 9.2, the error doesn't contain \"perhaps you want ...\" part from which import suggestion can be extracted." $
+          testSession "extend single line import in presence of extra parens" $ template
+            []
+            ("Main.hs", T.unlines
+                    [ "import Data.Monoid (First)"
+                    , "f = (First Nothing) <> mempty" -- parens tripped up the regex extracting import suggestions
+                    ])
+            (Range (Position 1 6) (Position 1 7))
+            [ "Add First(..) to the import list of Data.Monoid"
+            , "Add First(First) to the import list of Data.Monoid"
+            ]
+            (T.unlines
+                    [ "import Data.Monoid (First (..))"
+                    , "f = (First Nothing) <> mempty"
+                    ])
         , brokenForGHC94 "On GHC 9.4, the error messages with -fdefer-type-errors don't have necessary imported target srcspan info." $
           testSession "extend single line qualified import with value" $ template
             [("ModuleA.hs", T.unlines
@@ -3735,3 +3750,6 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir ->
 
 brokenForGHC94 :: String -> TestTree -> TestTree
 brokenForGHC94 = knownBrokenForGhcVersions [GHC94]
+
+brokenForGHC92 :: String -> TestTree -> TestTree
+brokenForGHC92 = knownBrokenForGhcVersions [GHC92]

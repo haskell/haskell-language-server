@@ -651,7 +651,7 @@ constructInlineFromIdentifer originParsedModule originSpan = do
                 ->
                 let imports = mempty in
                 constructfromFunMatches imports fun_id fun_matches
-            _ -> return $ error "cound not find source code to inline"
+            _ -> return $ error "could not find source code to inline"
 
 asEditMap :: [(Uri, TextEdit)] -> Map.Map Uri [TextEdit]
 asEditMap = Map.fromListWith (++) . map (second pure)
