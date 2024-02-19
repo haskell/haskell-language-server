@@ -148,6 +148,8 @@ handleError recorder action' = do
 -- helper functions
 -----------------------
 
+-- keep track of the semantic tokens response id
+-- so that we can compute the delta between two versions
 getAndIncreaseSemanticTokensId :: Action SemanticTokenId
 getAndIncreaseSemanticTokensId = do
   ShakeExtras{semanticTokensId} <- getShakeExtras
