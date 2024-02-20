@@ -1304,7 +1304,7 @@ library hls-fourmolu-plugin
   build-depends:
     , base            >=4.12 && <5
     , filepath
-    , fourmolu        ^>= 0.14
+    , fourmolu        ^>= 0.14 || ^>= 0.15
     , ghc-boot-th
     , ghcide          == 2.6.0.0
     , hls-plugin-api  == 2.6.0.0
