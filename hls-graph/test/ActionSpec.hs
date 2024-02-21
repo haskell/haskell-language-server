@@ -40,7 +40,7 @@ spec = do
           apply1 theKey
       res `shouldBe` [True]
       Just (Clean res) <- lookup (newKey theKey) <$> getDatabaseValues theDb
-      resultDeps res `shouldBe` ResultDeps (singletonKeySet $ newKey (Rule @()))
+      resultDeps res `shouldBe` ResultDeps [singletonKeySet $ newKey (Rule @())]
     it "tracks reverse dependencies" $ do
       db@(ShakeDatabase _ _ Database {..}) <- shakeNewDatabase shakeOptions $ do
         ruleUnit
