@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE TypeOperators     #-}
+
 
 -- |
 -- This module provides mappings to convert token type information in the Haskell IDE plugin. It includes functions for:

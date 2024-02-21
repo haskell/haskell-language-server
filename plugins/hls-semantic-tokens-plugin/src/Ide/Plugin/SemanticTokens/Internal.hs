@@ -10,14 +10,19 @@
 
 -- |
 -- This module provides the core functionality of the plugin.
-module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, persistentGetSemanticTokensRule, semanticConfigProperties) where
+module Ide.Plugin.SemanticTokens.Internal (semanticTokensFull, getSemanticTokensRule, semanticConfigProperties, semanticTokensFullDelta) where
 
+import           Control.Concurrent.STM                   (stateTVar)
+import           Control.Concurrent.STM.Stats             (atomically)
 import           Control.Lens                             ((^.))
 import           Control.Monad.Except                     (ExceptT, liftEither,
                                                            withExceptT)
+import           Control.Monad.IO.Class                   (MonadIO (..))
 import           Control.Monad.Trans                      (lift)
 import           Control.Monad.Trans.Except               (runExceptT)
 import qualified Data.Map.Strict                          as M
+import           Data.Text                                (Text)
+import qualified Data.Text                                as T
 import           Development.IDE                          (Action,
                                                            GetDocMap (GetDocMap),
                                                            GetHieAst (GetHieAst),
@@ -31,10 +36,10 @@ import           Development.IDE                          (Action,
                                                            hieKind, use_)
 import           Development.IDE.Core.PluginUtils         (runActionE,
                                                            useWithStaleE)
-import           Development.IDE.Core.PositionMapping     (idDelta)
 import           Development.IDE.Core.Rules               (toIdeResult)
 import           Development.IDE.Core.RuleTypes           (DocAndTyThingMap (..))
-import           Development.IDE.Core.Shake               (addPersistentRule,
+import           Development.IDE.Core.Shake               (ShakeExtras (..),
+                                                           getShakeExtras,
                                                            getVirtualFile,
                                                            useWithStale_)
 import           Development.IDE.GHC.Compat               hiding (Warning)
@@ -51,11 +56,13 @@ import           Ide.Plugin.SemanticTokens.Tokenize       (computeRangeHsSemanti
 import           Ide.Plugin.SemanticTokens.Types
 import           Ide.Types
 import qualified Language.LSP.Protocol.Lens               as L
-import           Language.LSP.Protocol.Message            (Method (Method_TextDocumentSemanticTokensFull))
+import           Language.LSP.Protocol.Message            (MessageResult,
+                                                           Method (Method_TextDocumentSemanticTokensFull, Method_TextDocumentSemanticTokensFullDelta))
 import           Language.LSP.Protocol.Types              (NormalizedFilePath,
                                                            SemanticTokens,
-                                                           type (|?) (InL))
+                                                           type (|?) (InL, InR))
 import           Prelude                                  hiding (span)
+import qualified StmContainers.Map                        as STM
 
 
 $mkSemanticConfigFunctions
@@ -68,14 +75,40 @@ computeSemanticTokens :: Recorder (WithPriority SemanticLog) -> PluginId -> IdeS
 computeSemanticTokens recorder pid _ nfp = do
   config <- lift $ useSemanticConfigAction pid
   logWith recorder Debug (LogConfig config)
+  semanticId <- lift getAndIncreaseSemanticTokensId
   (RangeHsSemanticTokenTypes {rangeSemanticList}, mapping) <- useWithStaleE GetSemanticTokens nfp
-  withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens config mapping rangeSemanticList
+  withExceptT PluginInternalError $ liftEither $ rangeSemanticsSemanticTokens semanticId config mapping rangeSemanticList
 
 semanticTokensFull :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFull
-semanticTokensFull recorder state pid param = do
+semanticTokensFull recorder state pid param = runActionE "SemanticTokens.semanticTokensFull" state computeSemanticTokensFull
+  where
+    computeSemanticTokensFull :: ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFull)
+    computeSemanticTokensFull = do
+      nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
+      items <- computeSemanticTokens recorder pid state nfp
+      lift $ setSemanticTokens nfp items
+      return $ InL items
+
+
+semanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> PluginMethodHandler IdeState 'Method_TextDocumentSemanticTokensFullDelta
+semanticTokensFullDelta recorder state pid param = do
   nfp <- getNormalizedFilePathE (param ^. L.textDocument . L.uri)
-  items <- runActionE "SemanticTokens.semanticTokensFull" state $ computeSemanticTokens recorder pid state nfp
-  return $ InL items
+  let previousVersionFromParam = param ^. L.previousResultId
+  runActionE "SemanticTokens.semanticTokensFullDelta" state $ computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nfp
+  where
+    computeSemanticTokensFullDelta :: Recorder (WithPriority SemanticLog) -> Text -> PluginId -> IdeState -> NormalizedFilePath -> ExceptT PluginError Action (MessageResult Method_TextDocumentSemanticTokensFullDelta)
+    computeSemanticTokensFullDelta recorder previousVersionFromParam  pid state nfp = do
+      semanticTokens <- computeSemanticTokens recorder pid state nfp
+      previousSemanticTokensMaybe <- lift $ getPreviousSemanticTokens nfp
+      lift $ setSemanticTokens nfp semanticTokens
+      case previousSemanticTokensMaybe of
+          Nothing -> return $ InL semanticTokens
+          Just previousSemanticTokens ->
+              if Just previousVersionFromParam == previousSemanticTokens^.L.resultId
+              then return $ InR $ InL $ makeSemanticTokensDeltaWithId (semanticTokens^.L.resultId) previousSemanticTokens semanticTokens
+              else do
+                logWith recorder Warning (LogSemanticTokensDeltaMisMatch previousVersionFromParam (previousSemanticTokens^.L.resultId))
+                return $ InL semanticTokens
 
 -- | Defines the 'getSemanticTokensRule' function, compute semantic tokens for a Haskell source file.
 --
@@ -98,9 +131,6 @@ getSemanticTokensRule recorder =
     let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap
     return $ computeRangeHsSemanticTokenTypeList hsFinder virtualFile ast
 
--- | Persistent rule to ensure that semantic tokens doesn't block on startup
-persistentGetSemanticTokensRule :: Rules ()
-persistentGetSemanticTokensRule = addPersistentRule GetSemanticTokens $ \_ -> pure $ Just (RangeHsSemanticTokenTypes mempty, idDelta, Nothing)
 
 -- taken from /haskell-language-server/plugins/hls-code-range-plugin/src/Ide/Plugin/CodeRange/Rules.hs
 
@@ -113,3 +143,22 @@ handleError recorder action' = do
       logWith recorder Warning msg
       pure $ toIdeResult (Left [])
     Right value -> pure $ toIdeResult (Right value)
+
+-----------------------
+-- helper functions
+-----------------------
+
+-- keep track of the semantic tokens response id
+-- so that we can compute the delta between two versions
+getAndIncreaseSemanticTokensId :: Action SemanticTokenId
+getAndIncreaseSemanticTokensId = do
+  ShakeExtras{semanticTokensId} <- getShakeExtras
+  liftIO $ atomically $ do
+    i <- stateTVar semanticTokensId (\val -> (val, val+1))
+    return $ T.pack $ show i
+
+getPreviousSemanticTokens :: NormalizedFilePath -> Action (Maybe SemanticTokens)
+getPreviousSemanticTokens uri = getShakeExtras >>= liftIO . atomically . STM.lookup uri . semanticTokensCache
+
+setSemanticTokens :: NormalizedFilePath -> SemanticTokens -> Action ()
+setSemanticTokens uri tokens = getShakeExtras >>= liftIO . atomically . STM.insert tokens uri . semanticTokensCache
