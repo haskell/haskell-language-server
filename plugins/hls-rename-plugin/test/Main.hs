@@ -25,7 +25,7 @@ tests = testGroup "Rename"
     [ goldenWithRename "Data constructor" "DataConstructor" $ \doc ->
         rename doc (Position 0 15) "Op"
     , goldenWithRename "Data constructor with fields" "DataConstructorWithFields" $ \doc ->
-        rename doc (Position 0 13) "FooRenamed"
+        rename doc (Position 1 13) "FooRenamed"
     , goldenWithRename "Exported function" "ExportedFunction" $ \doc ->
         rename doc (Position 2 1) "quux"
     , goldenWithRename "Field Puns" "FieldPuns" $ \doc ->
