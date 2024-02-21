@@ -164,6 +164,7 @@ import           Language.LSP.Diagnostics
 import qualified Language.LSP.Protocol.Lens             as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
+import           Language.LSP.Protocol.Types            (SemanticTokens)
 import qualified Language.LSP.Protocol.Types            as LSP
 import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.VFS                       hiding (start)
@@ -243,6 +244,13 @@ data HieDbWriter
 -- with (currently) retry functionality
 type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
+-- Note [Semantic Tokens Cache Location]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- storing semantic tokens cache for each file in shakeExtras might
+-- not be ideal, since it most used in LSP request handlers
+-- instead of rules. We should consider moving it to a more
+-- appropriate place in the future if we find one, store it for now.
+
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
     { --eventer :: LSP.FromServerMessage -> IO ()
@@ -259,6 +267,14 @@ data ShakeExtras = ShakeExtras
     ,publishedDiagnostics :: STM.Map NormalizedUri [Diagnostic]
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
+
+    ,semanticTokensCache:: STM.Map NormalizedFilePath SemanticTokens
+    -- ^ Cache of last response of semantic tokens for each file,
+    -- so we can compute deltas for semantic tokens(SMethod_TextDocumentSemanticTokensFullDelta).
+    -- putting semantic tokens cache and id in shakeExtras might not be ideal
+    -- see Note [Semantic Tokens Cache Location]
+    ,semanticTokensId :: TVar Int
+    -- ^ semanticTokensId is used to generate unique ids for each lsp response of semantic tokens.
     ,positionMapping :: STM.Map NormalizedUri (EnumMap Int32 (PositionDelta, PositionMapping))
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version
@@ -616,12 +632,14 @@ shakeOpen recorder lspEnv defaultConfig idePlugins logger debouncer
         diagnostics <- STM.newIO
         hiddenDiagnostics <- STM.newIO
         publishedDiagnostics <- STM.newIO
+        semanticTokensCache <- STM.newIO
         positionMapping <- STM.newIO
         knownTargetsVar <- newTVarIO $ hashed HMap.empty
         let restartShakeSession = shakeRestart recorder ideState
         persistentKeys <- newTVarIO mempty
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
+        semanticTokensId <- newTVarIO 0
         indexProgressToken <- newVar Nothing
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newTVarIO mempty
