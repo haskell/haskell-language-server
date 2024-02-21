@@ -259,6 +259,11 @@ data ShakeExtras = ShakeExtras
     ,diagnostics :: STMDiagnosticStore
     ,hiddenDiagnostics :: STMDiagnosticStore
     ,publishedDiagnostics :: STM.Map NormalizedUri [Diagnostic]
+
+    -- storing semantic tokens for each file in shakeExtras might
+    -- not be ideal, since it most used in LSP request handlers
+    -- but we don't have a better place to store it for now.
+
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
     ,semanticTokensCache:: STM.Map NormalizedFilePath SemanticTokens
