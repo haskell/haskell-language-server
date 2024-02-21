@@ -12,6 +12,7 @@ import           Data.Bifunctor
 import qualified Data.ByteString.Lazy.Char8              as LBS
 import           Data.Char
 import           Data.Dynamic                            (toDyn)
+import           Data.Foldable                           (fold)
 import qualified Data.HashMap.Strict                     as Map
 import           Data.List                               (dropWhileEnd, foldl',
                                                           intercalate,
@@ -108,7 +109,7 @@ toReport :: Database -> IO ([ProfileEntry], KeyMap Int)
 toReport db = do
     status <- prepareForDependencyOrder db
     let order = dependencyOrder show
-                $ map (second (toListKeySet . getResultDepsDefault (singletonKeySet $ newKey "alwaysRerun") . resultDeps))
+                $ map (second (toListKeySet . fold . getResultDepsDefault (singletonKeySet $ newKey "alwaysRerun") . resultDeps))
                 $ toListKeyMap status
         ids = fromListKeyMap $ zip order [0..]
 
@@ -121,7 +122,7 @@ toReport db = do
             ,prfBuilt = fromStep resultBuilt
             ,prfVisited = fromStep resultVisited
             ,prfChanged = fromStep resultChanged
-            ,prfDepends = map pure $ elemsKeyMap $ restrictKeysKeyMap ids $ getResultDepsDefault (singletonKeySet $ newKey "alwaysRerun") resultDeps
+            ,prfDepends = map pure $ elemsKeyMap $ restrictKeysKeyMap ids $ fold $ getResultDepsDefault (singletonKeySet $ newKey "alwaysRerun") resultDeps
             ,prfExecution = resultExecution
             }
             where fromStep i = fromJust $ Map.lookup i steps

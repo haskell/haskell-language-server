@@ -12,6 +12,7 @@ module Development.IDE.Graph.Database(
     ,shakeGetBuildEdges) where
 import           Control.Concurrent.STM.Stats            (readTVarIO)
 import           Data.Dynamic
+import           Data.Foldable                           (fold)
 import           Data.Maybe
 import           Development.IDE.Graph.Classes           ()
 import           Development.IDE.Graph.Internal.Action
@@ -77,7 +78,7 @@ shakeGetBuildEdges :: ShakeDatabase -> IO Int
 shakeGetBuildEdges (ShakeDatabase _ _ db) = do
     keys <- getDatabaseValues db
     let ress = mapMaybe (getResult . snd) keys
-    return $ sum $ map (lengthKeySet . getResultDepsDefault mempty . resultDeps) ress
+    return $ sum $ map (lengthKeySet . fold . getResultDepsDefault mempty . resultDeps) ress
 
 -- | Returns an approximation of the database keys,
 --   annotated with how long ago (in # builds) they were visited
