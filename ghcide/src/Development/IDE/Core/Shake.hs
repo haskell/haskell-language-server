@@ -244,6 +244,12 @@ data HieDbWriter
 -- with (currently) retry functionality
 type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
+-- Note [Semantic Tokens Cache Location]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- storing semantic tokens cache for each file in shakeExtras might
+-- not be ideal, since it most used in LSP request handlers
+-- instead of rules. We should consider moving it to a more
+-- appropriate place in the future if we find one, store it for now.
 
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
@@ -260,12 +266,10 @@ data ShakeExtras = ShakeExtras
     ,hiddenDiagnostics :: STMDiagnosticStore
     ,publishedDiagnostics :: STM.Map NormalizedUri [Diagnostic]
 
-    -- storing semantic tokens for each file in shakeExtras might
-    -- not be ideal, since it most used in LSP request handlers
-    -- but we don't have a better place to store it for now.
-
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
+    -- putting semantic tokens cache and id in shakeExtras might not be ideal
+    -- see Note [Semantic Tokens Cache Location]
     ,semanticTokensCache:: STM.Map NormalizedFilePath SemanticTokens
     -- ^ Cache of last response of semantic tokens for each file,
     -- so we can compute deltas for semantic tokens(SMethod_TextDocumentSemanticTokensFullDelta).
