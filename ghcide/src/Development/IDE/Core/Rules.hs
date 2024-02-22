@@ -664,7 +664,7 @@ typeCheckRule recorder = define (cmapWithPrio LogShake recorder) $ \TypeCheck fi
     -- Keeping typechecked modules in memory for other files is
     -- very expensive.
     when (foi == NotFOI) $
-      error $ show $ pretty $ LogTypecheckedFOI file
+      logWith recorder Logger.Warning $ LogTypecheckedFOI file
     typeCheckRuleDefinition hsc pm
 
 knownFilesRule :: Recorder (WithPriority Log) -> Rules ()
