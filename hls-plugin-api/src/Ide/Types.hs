@@ -511,6 +511,9 @@ instance PluginMethod Request Method_TextDocumentRangeFormatting where
 instance PluginMethod Request Method_TextDocumentSemanticTokensFull where
   handlesRequest = pluginEnabledWithFeature plcSemanticTokensOn
 
+instance PluginMethod Request Method_TextDocumentSemanticTokensFullDelta where
+  handlesRequest = pluginEnabledWithFeature plcSemanticTokensOn
+
 instance PluginMethod Request Method_TextDocumentPrepareCallHierarchy where
   handlesRequest = pluginEnabledWithFeature plcCallHierarchyOn
 
@@ -749,6 +752,9 @@ instance PluginRequestMethod (Method_CustomMethod m) where
   combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentSemanticTokensFull where
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod Method_TextDocumentSemanticTokensFullDelta where
   combineResponses _ _ _ _ (x :| _) = x
 
 takeLefts :: [a |? b] -> [a]
