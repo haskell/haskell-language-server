@@ -136,7 +136,7 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
 isDirty :: Foldable t => Result -> t (a, Result) -> Bool
 isDirty me = any (\(_,dep) -> resultBuilt me < resultChanged dep)
 
--- | Refresh dependencies for a key:
+-- | Refresh dependencies for a key and compute the key:
 -- The deps refresh is kicking up linearly. If any of the deps are dirty in the process,
 -- we jump to the actual computation of the key and shortcut the refreshing the rest of the deps.
 -- * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
