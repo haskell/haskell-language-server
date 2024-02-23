@@ -38,7 +38,7 @@ type ShakeValue a = (Show a, Typeable a, Eq a, Hashable a, NFData a)
 alwaysRerun :: Action ()
 alwaysRerun = do
     ref <- Action $ asks actionDeps
-    liftIO $ modifyIORef ref (AlwaysRerunDeps mempty <>)
+    liftIO $ modifyIORef' ref (AlwaysRerunDeps mempty <>)
 
 -- No-op for now
 reschedule :: Double -> Action ()
@@ -120,7 +120,7 @@ apply ks = do
     stack <- Action $ asks actionStack
     (is, vs) <- liftIO $ build db stack ks
     ref <- Action $ asks actionDeps
-    liftIO $ modifyIORef ref (ResultDeps [fromListKeySet $ toList is] <>)
+    liftIO $ modifyIORef' ref (ResultDeps [fromListKeySet $ toList is] <>)
     pure vs
 
 -- | Evaluate a list of keys without recording any dependencies.
