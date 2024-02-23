@@ -114,7 +114,6 @@ actionFinally a b = do
 apply1 :: (RuleResult key ~ value, ShakeValue key, Typeable value) => key -> Action value
 apply1 k = runIdentity <$> apply (Identity k)
 
--- todo make the result ordered
 apply :: (Traversable f, RuleResult key ~ value, ShakeValue key, Typeable value) => f key -> Action (f value)
 apply ks = do
     db <- Action $ asks actionDatabase
