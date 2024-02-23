@@ -136,6 +136,12 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
 isDirty :: Foldable t => Result -> t (a, Result) -> Bool
 isDirty me = any (\(_,dep) -> resultBuilt me < resultChanged dep)
 
+-- | Refresh dependencies for a key:
+-- The deps refresh is kicking up linearly. If any of the deps are dirty in the process,
+-- we jump to the actual computation of the key and shortcut the refreshing the rest of the deps.
+-- * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
+--   This assumes that the implementation will be a lookup
+-- * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
 refreshDeps :: KeySet -> Database -> Stack -> Key -> Result -> [KeySet] -> AIO (IO Result)
 refreshDeps visited db stack key result = \case
     -- no more deps to refresh
@@ -156,9 +162,6 @@ refreshDeps visited db stack key result = \case
                     else join $ runAIO $ refreshDeps newVisited db stack key result deps
 
 -- | Refresh a key:
---     * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
---       This assumes that the implementation will be a lookup
---     * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
 refresh :: Database -> Stack -> Key -> Maybe Result -> AIO (IO Result)
 -- refresh _ st k _ | traceShow ("refresh", st, k) False = undefined
 refresh db stack key result = case (addStack key stack, result) of
