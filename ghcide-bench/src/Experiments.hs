@@ -104,7 +104,7 @@ experiments =
     [
       bench "semanticTokens" $ \docs -> do
         liftIO $ putStrLn "Starting semanticTokens"
-        r <- forM (zip [T.pack $ show i | i :: Int <- [0..]] docs) $ \(i, DocumentPositions{..}) -> do
+        r <- forM docs $ \DocumentPositions{..} -> do
             changeDoc doc [charEdit stringLiteralP]
             waitForProgressStart
             waitForProgressDone
