@@ -77,7 +77,7 @@ spec = do
       -- This should not call the SubBranchRule
       res1 <- build theDb emptyStack [BranchedRule]
       snd res1 `shouldBe` [2 :: Int]
-    --   SubBranchRule should be recomputed one before this (when the condition was True)
+     -- SubBranchRule should be recomputed once before this (when the condition was True)
       countRes <- build theDb emptyStack [SubBranchRule]
       snd countRes `shouldBe` [1 :: Int]
 
