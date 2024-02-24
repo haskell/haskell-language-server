@@ -121,10 +121,10 @@ library hls-cabal-fmt-plugin
     , text
 
 test-suite hls-cabal-fmt-plugin-tests
-  import:             defaults, pedantic, test-defaults, warnings
-  type:               exitcode-stdio-1.0
-  hs-source-dirs:     plugins/hls-cabal-fmt-plugin/test
-  main-is:            Main.hs
+  import:           defaults, pedantic, test-defaults, warnings
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-cabal-fmt-plugin/test
+  main-is:          Main.hs
   build-depends:
     , base
     , directory
@@ -231,7 +231,7 @@ common class
     cpp-options: -Dhls_class
 
 library hls-class-plugin
-  import: defaults, pedantic, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:    Ide.Plugin.Class
   other-modules:      Ide.Plugin.Class.CodeAction
                     , Ide.Plugin.Class.CodeLens
@@ -261,7 +261,7 @@ library hls-class-plugin
     OverloadedStrings
 
 test-suite hls-class-plugin-tests
-  import: defaults, pedantic, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-class-plugin/test
   main-is:          Main.hs
@@ -315,7 +315,7 @@ library hls-call-hierarchy-plugin
   default-extensions: DataKinds
 
 test-suite hls-call-hierarchy-plugin-tests
-  import: defaults, pedantic, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-call-hierarchy-plugin/test
   main-is:          Main.hs
@@ -394,7 +394,7 @@ library hls-eval-plugin
     DataKinds
 
 test-suite hls-eval-plugin-tests
-  import: defaults, pedantic, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-eval-plugin/test
   main-is:          Main.hs
@@ -428,9 +428,9 @@ flag importLens
   manual:      True
 
 library hls-explicit-imports-plugin
-  import:             defaults, pedantic, warnings
-  exposed-modules:    Ide.Plugin.ExplicitImports
-  hs-source-dirs:     plugins/hls-explicit-imports-plugin/src
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.ExplicitImports
+  hs-source-dirs:   plugins/hls-explicit-imports-plugin/src
   build-depends:
     , aeson
     , base                  >=4.12 && <5
@@ -532,9 +532,9 @@ common retrie
     cpp-options: -Dhls_retrie
 
 library hls-retrie-plugin
-  import:             defaults, pedantic, warnings
-  exposed-modules:    Ide.Plugin.Retrie
-  hs-source-dirs:     plugins/hls-retrie-plugin/src
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.Retrie
+  hs-source-dirs:   plugins/hls-retrie-plugin/src
   build-depends:
     , aeson
     , base                  >=4.12    && <5
@@ -590,9 +590,9 @@ common hlint
     cpp-options: -Dhls_hlint
 
 library hls-hlint-plugin
-  import: defaults, pedantic, warnings, pedantic
-  exposed-modules:    Ide.Plugin.Hlint
-  hs-source-dirs:     plugins/hls-hlint-plugin/src
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.Hlint
+  hs-source-dirs:   plugins/hls-hlint-plugin/src
   build-depends:
     , aeson
     , base                  >=4.12    && <5
@@ -656,7 +656,7 @@ common stan
     cpp-options: -Dhls_stan
 
 library hls-stan-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
     buildable: True
   else
@@ -684,7 +684,7 @@ library hls-stan-plugin
     OverloadedStrings
 
 test-suite hls-stan-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   if (impl(ghc > 8.8.1) && impl(ghc <= 9.2.3) || impl(ghc >= 9.4.0) && impl(ghc < 9.10.0))
     buildable: True
   else
@@ -719,7 +719,7 @@ common moduleName
     cpp-options: -Dhls_moduleName
 
 library hls-module-name-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:  Ide.Plugin.ModuleName
   hs-source-dirs:   plugins/hls-module-name-plugin/src
   build-depends:
@@ -736,7 +736,7 @@ library hls-module-name-plugin
 
 
 test-suite hls-module-name-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-module-name-plugin/test
   main-is:          Main.hs
@@ -861,7 +861,7 @@ common alternateNumberFormat
     cpp-options: -Dhls_alternateNumberFormat
 
 library hls-alternate-number-format-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:  Ide.Plugin.AlternateNumberFormat, Ide.Plugin.Conversion
   other-modules:    Ide.Plugin.Literals
   hs-source-dirs:   plugins/hls-alternate-number-format-plugin/src
@@ -886,10 +886,10 @@ library hls-alternate-number-format-plugin
     RecordWildCards
 
 test-suite hls-alternate-number-format-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-alternate-number-format-plugin/test
-  other-modules: Properties.Conversion
+  other-modules:    Properties.Conversion
   main-is:          Main.hs
   ghc-options:      -fno-ignore-asserts
   build-depends:
@@ -921,9 +921,9 @@ common qualifyImportedNames
     cpp-options: -Dhls_qualifyImportedNames
 
 library hls-qualify-imported-names-plugin
-  import:             defaults, pedantic, warnings
-  exposed-modules:    Ide.Plugin.QualifyImportedNames
-  hs-source-dirs:     plugins/hls-qualify-imported-names-plugin/src
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.QualifyImportedNames
+  hs-source-dirs:   plugins/hls-qualify-imported-names-plugin/src
   build-depends:
     , base                  >=4.12 && <5
     , containers
@@ -965,7 +965,7 @@ common codeRange
     cpp-options: -Dhls_codeRange
 
 library hls-code-range-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:
     Ide.Plugin.CodeRange
     Ide.Plugin.CodeRange.Rules
@@ -988,7 +988,7 @@ library hls-code-range-plugin
     , vector
 
 test-suite hls-code-range-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-code-range-plugin/test
   main-is:          Main.hs
@@ -1022,7 +1022,7 @@ common changeTypeSignature
     cpp-options: -Dhls_changeTypeSignature
 
 library hls-change-type-signature-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:  Ide.Plugin.ChangeTypeSignature
   hs-source-dirs:   plugins/hls-change-type-signature-plugin/src
   build-depends:
@@ -1043,7 +1043,7 @@ library hls-change-type-signature-plugin
 
 
 test-suite hls-change-type-signature-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-change-type-signature-plugin/test
   main-is:          Main.hs
@@ -1073,11 +1073,10 @@ common gadt
     cpp-options: -Dhls_gadt
 
 library hls-gadt-plugin
-  import:           defaults, warnings
-  exposed-modules:    Ide.Plugin.GADT
-  other-modules:      Ide.Plugin.GHC
-
-  hs-source-dirs:     plugins/hls-gadt-plugin/src
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.GADT
+  other-modules:    Ide.Plugin.GHC
+  hs-source-dirs:   plugins/hls-gadt-plugin/src
   build-depends:
     , aeson
     , base                  >=4.12 && <5
@@ -1097,7 +1096,7 @@ library hls-gadt-plugin
   default-extensions: DataKinds
 
 test-suite hls-gadt-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-gadt-plugin/test
   main-is:          Main.hs
@@ -1123,10 +1122,9 @@ common explicitFixity
     cpp-options: -DexplicitFixity
 
 library hls-explicit-fixity-plugin
-  import:           defaults, warnings
-  exposed-modules:    Ide.Plugin.ExplicitFixity
-
-  hs-source-dirs:     plugins/hls-explicit-fixity-plugin/src
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.ExplicitFixity
+  hs-source-dirs:   plugins/hls-explicit-fixity-plugin/src
   build-depends:
       base                  >=4.12 && <5
     , containers
@@ -1141,7 +1139,7 @@ library hls-explicit-fixity-plugin
   default-extensions: DataKinds
 
 test-suite hls-explicit-fixity-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-explicit-fixity-plugin/test
   main-is:          Main.hs
@@ -1167,36 +1165,36 @@ common explicitFields
     cpp-options: -DexplicitFields
 
 library hls-explicit-record-fields-plugin
-    import:           defaults, warnings, pedantic
-    exposed-modules:  Ide.Plugin.ExplicitFields
-    build-depends:
-      , base                  >=4.12 && <5
-      , ghcide                == 2.6.0.0
-      , hls-plugin-api        == 2.6.0.0
-      , lsp
-      , lens
-      , hls-graph
-      , text
-      , syb
-      , transformers
-      , containers
-      , aeson
-    hs-source-dirs:   plugins/hls-explicit-record-fields-plugin/src
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.ExplicitFields
+  build-depends:
+    , base                  >=4.12 && <5
+    , ghcide                == 2.6.0.0
+    , hls-plugin-api        == 2.6.0.0
+    , lsp
+    , lens
+    , hls-graph
+    , text
+    , syb
+    , transformers
+    , containers
+    , aeson
+  hs-source-dirs:   plugins/hls-explicit-record-fields-plugin/src
 
   if flag(pedantic)
     ghc-options: -Wwarn=incomplete-record-updates
 
 test-suite hls-explicit-record-fields-plugin-tests
-    import:           defaults, test-defaults, warnings
-    type:             exitcode-stdio-1.0
-    hs-source-dirs:   plugins/hls-explicit-record-fields-plugin/test
-    main-is:          Main.hs
-    build-depends:
-      , base
-      , filepath
-      , text
-      , haskell-language-server:hls-explicit-record-fields-plugin
-      , hls-test-utils
+  import:           defaults, pedantic, test-defaults, warnings
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-explicit-record-fields-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , base
+    , filepath
+    , text
+    , haskell-language-server:hls-explicit-record-fields-plugin
+    , hls-test-utils
 
 -----------------------------
 -- overloaded record dot plugin
@@ -1213,34 +1211,34 @@ common overloadedRecordDot
     cpp-options: -Dhls_overloaded_record_dot
 
 library hls-overloaded-record-dot-plugin
-    import:           defaults, warnings
-    exposed-modules:  Ide.Plugin.OverloadedRecordDot
-    build-depends:
-      , base                  >=4.16 && <5
-      , aeson
-      , ghcide
-      , hls-plugin-api
-      , lsp
-      , lens
-      , hls-graph
-      , text
-      , syb
-      , transformers
-      , containers
-      , deepseq
-    hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/src
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.OverloadedRecordDot
+  build-depends:
+    , base                  >=4.16 && <5
+    , aeson
+    , ghcide
+    , hls-plugin-api
+    , lsp
+    , lens
+    , hls-graph
+    , text
+    , syb
+    , transformers
+    , containers
+    , deepseq
+  hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/src
 
 test-suite hls-overloaded-record-dot-plugin-tests
-    import:           defaults, test-defaults, warnings
-    type:             exitcode-stdio-1.0
-    hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/test
-    main-is:          Main.hs
-    build-depends:
-      , base
-      , filepath
-      , text
-      , haskell-language-server:hls-overloaded-record-dot-plugin
-      , hls-test-utils
+  import:           defaults, pedantic, test-defaults, warnings
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-overloaded-record-dot-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , base
+    , filepath
+    , text
+    , haskell-language-server:hls-overloaded-record-dot-plugin
+    , hls-test-utils
 
 
 -----------------------------
@@ -1258,7 +1256,7 @@ common floskell
     cpp-options: -Dhls_floskell
 
 library hls-floskell-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:  Ide.Plugin.Floskell
   hs-source-dirs:   plugins/hls-floskell-plugin/src
   build-depends:
@@ -1272,7 +1270,7 @@ library hls-floskell-plugin
 
 
 test-suite hls-floskell-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-floskell-plugin/test
   main-is:          Main.hs
@@ -1297,9 +1295,8 @@ common fourmolu
     cpp-options: -Dhls_fourmolu
 
 library hls-fourmolu-plugin
-  import:           defaults, warnings
-  exposed-modules:
-      Ide.Plugin.Fourmolu
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.Fourmolu
   hs-source-dirs:   plugins/hls-fourmolu-plugin/src
   build-depends:
     , base            >=4.12 && <5
@@ -1317,7 +1314,7 @@ library hls-fourmolu-plugin
 
 
 test-suite hls-fourmolu-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-fourmolu-plugin/test
   main-is:          Main.hs
@@ -1347,7 +1344,7 @@ common ormolu
     cpp-options: -Dhls_ormolu
 
 library hls-ormolu-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:  Ide.Plugin.Ormolu
   hs-source-dirs:   plugins/hls-ormolu-plugin/src
   build-depends:
@@ -1397,7 +1394,7 @@ common stylishHaskell
     cpp-options: -Dhls_stylishHaskell
 
 library hls-stylish-haskell-plugin
-  import:           defaults, warnings
+  import:           defaults, pedantic, warnings
   exposed-modules:  Ide.Plugin.StylishHaskell
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/src
   build-depends:
@@ -1414,7 +1411,7 @@ library hls-stylish-haskell-plugin
 
 
 test-suite hls-stylish-haskell-plugin-tests
-  import:           defaults, test-defaults, warnings
+  import:           defaults, pedantic, test-defaults, warnings
   type:             exitcode-stdio-1.0
   hs-source-dirs:   plugins/hls-stylish-haskell-plugin/test
   main-is:          Main.hs
