@@ -306,8 +306,7 @@ defToLocation (InR (InR Null)) = []
 
 -- | Ghc 9 doesn't include the $-sign in TH warnings like earlier versions did
 thDollarIdx :: UInt
-thDollarIdx | ghcVersion >= GHC90 = 1
-            | otherwise = 0
+thDollarIdx = 1
 
 testIde :: Recorder (WithPriority Log) -> IDE.Arguments -> Session () -> IO ()
 testIde recorder arguments session = do

@@ -401,22 +401,6 @@ tests = testGroup "diagnostics"
           liftIO $ unless ("redundant" `T.isInfixOf` msg) $
               assertFailure ("Expected redundant import but got " <> T.unpack msg)
           closeDoc a
-  , testSessionWait "haddock parse error" $ do
-      let fooContent = T.unlines
-            [ "module Foo where"
-            , "foo :: Int"
-            , "foo = 1 {-|-}"
-            ]
-      _ <- createDoc "Foo.hs" "haskell" fooContent
-      if ghcVersion >= GHC90 then
-          -- Haddock parse errors are ignored on ghc-9.0
-            pure ()
-      else
-        expectDiagnostics
-            [ ( "Foo.hs"
-              , [(DiagnosticSeverity_Warning, (2, 8), "Haddock parse error on input")]
-              )
-            ]
   , testSessionWait "strip file path" $ do
       let
           name = "Testing"

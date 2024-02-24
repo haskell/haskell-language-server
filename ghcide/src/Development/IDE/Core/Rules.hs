@@ -60,14 +60,16 @@ module Development.IDE.Core.Rules(
     DisplayTHWarning(..),
     ) where
 
-import           Prelude                                      hiding (mod)
 import           Control.Applicative
 import           Control.Concurrent.Async                     (concurrently)
+import           Control.Concurrent.STM.Stats                 (atomically)
+import           Control.Concurrent.STM.TVar
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
-import           Control.Exception.Safe
 import           Control.Exception                            (evaluate)
+import           Control.Exception.Safe
 import           Control.Monad.Extra                          hiding (msum)
+import           Control.Monad.IO.Unlift
 import           Control.Monad.Reader                         hiding (msum)
 import           Control.Monad.State                          hiding (msum)
 import           Control.Monad.Trans.Except                   (ExceptT, except,
@@ -78,44 +80,53 @@ import qualified Data.Binary                                  as B
 import qualified Data.ByteString                              as BS
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
+import           Data.Default                                 (Default, def)
 import           Data.Foldable                                hiding (msum)
+import           Data.Hashable
 import qualified Data.HashMap.Strict                          as HM
 import qualified Data.HashSet                                 as HashSet
-import           Data.Hashable
-import           Data.IORef
-import           Control.Concurrent.STM.TVar
 import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
+import           Data.IORef
 import           Data.List
 import           Data.List.Extra                              (nubOrdOn)
 import qualified Data.Map                                     as M
 import           Data.Maybe
 import           Data.Proxy
-import qualified Data.Text.Utf16.Rope                         as Rope
 import qualified Data.Set                                     as Set
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
+import qualified Data.Text.Utf16.Rope                         as Rope
 import           Data.Time                                    (UTCTime (..))
+import           Data.Time.Clock.POSIX                        (posixSecondsToUTCTime)
 import           Data.Tuple.Extra
 import           Data.Typeable                                (cast)
 import           Development.IDE.Core.Compile
-import           Development.IDE.Core.FileExists hiding (LogShake, Log)
+import           Development.IDE.Core.FileExists              hiding (Log,
+                                                               LogShake)
 import           Development.IDE.Core.FileStore               (getFileContents,
                                                                getModTime)
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.OfInterest hiding (LogShake, Log)
+import           Development.IDE.Core.OfInterest              hiding (Log,
+                                                               LogShake)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service hiding (LogShake, Log)
-import           Development.IDE.Core.Shake hiding (Log)
-import           Development.IDE.GHC.Compat.Env
+import           Development.IDE.Core.Service                 hiding (Log,
+                                                               LogShake)
+import           Development.IDE.Core.Shake                   hiding (Log)
+import qualified Development.IDE.Core.Shake                   as Shake
 import           Development.IDE.GHC.Compat                   hiding
-                                                              (vcat, nest, parseModule,
-                                                               TargetId(..),
-                                                               loadInterface,
+                                                              (TargetId (..),
                                                                Var,
-                                                               (<+>), settings)
-import qualified Development.IDE.GHC.Compat                   as Compat hiding (vcat, nest)
+                                                               loadInterface,
+                                                               nest,
+                                                               parseModule,
+                                                               settings, vcat,
+                                                               (<+>))
+import qualified Development.IDE.GHC.Compat                   as Compat hiding
+                                                                        (nest,
+                                                                         vcat)
+import           Development.IDE.GHC.Compat.Env
 import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util                     hiding
@@ -130,15 +141,18 @@ import           Development.IDE.Types.Diagnostics            as Diag
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import qualified Development.IDE.Types.Shake                  as Shake
 import qualified GHC.LanguageExtensions                       as LangExt
+import           HIE.Bios.Ghc.Gap                             (hostIsDynamic)
 import qualified HieDb
+import           Ide.Logger                                   (Pretty (pretty),
+                                                               Recorder,
+                                                               WithPriority,
+                                                               cmapWithPrio,
+                                                               logWith, nest,
+                                                               vcat, (<+>))
+import qualified Ide.Logger                                   as Logger
 import           Ide.Plugin.Config
-import qualified Language.LSP.Server                          as LSP
-import           Language.LSP.Protocol.Types                  (ShowMessageParams (ShowMessageParams), MessageType (MessageType_Info))
-import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
-import           Language.LSP.VFS
-import           System.Directory                             (makeAbsolute, doesFileExist)
-import           Data.Default                                 (def, Default)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
                                                                Properties,
@@ -146,28 +160,28 @@ import           Ide.Plugin.Properties                        (HasProperty,
                                                                useProperty)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
-import Control.Concurrent.STM.Stats (atomically)
-import Language.LSP.Server (LspT)
-import System.Info.Extra (isWindows)
-import HIE.Bios.Ghc.Gap (hostIsDynamic)
-import Ide.Logger (Recorder, logWith, cmapWithPrio, WithPriority, Pretty (pretty), (<+>), nest, vcat)
-import qualified Development.IDE.Core.Shake as Shake
-import qualified Ide.Logger as Logger
-import qualified Development.IDE.Types.Shake as Shake
-import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)
-import Control.Monad.IO.Unlift
+import           Language.LSP.Protocol.Message                (SMethod (SMethod_CustomMethod, SMethod_WindowShowMessage))
+import           Language.LSP.Protocol.Types                  (MessageType (MessageType_Info),
+                                                               ShowMessageParams (ShowMessageParams))
+import           Language.LSP.Server                          (LspT)
+import qualified Language.LSP.Server                          as LSP
+import           Language.LSP.VFS
+import           Prelude                                      hiding (mod)
+import           System.Directory                             (doesFileExist,
+                                                               makeAbsolute)
+import           System.Info.Extra                            (isWindows)
 
 
-import GHC.Fingerprint
+import           GHC.Fingerprint
 
 -- See Note [Guidelines For Using CPP In GHCIDE Import Statements]
 
 #if !MIN_VERSION_ghc(9,3,0)
-import GHC (mgModSummaries)
+import           GHC                                          (mgModSummaries)
 #endif
 
 #if MIN_VERSION_ghc(9,3,0)
-import qualified Data.IntMap as IM
+import qualified Data.IntMap                                  as IM
 #endif
 
 
@@ -266,40 +280,7 @@ getParsedModuleRule recorder =
 
     -- We still parse with Haddocks whether Opt_Haddock is True or False to collect information
     -- but we no longer need to parse with and without Haddocks separately for above GHC90.
-    res@(_,pmod) <- if Compat.ghcVersion >= Compat.GHC90 then
-      liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt file (withOptHaddock ms)
-    else do
-        let dflags    = ms_hspp_opts ms
-            mainParse = getParsedModuleDefinition hsc opt file ms
-
-        -- Parse again (if necessary) to capture Haddock parse errors
-        if gopt Opt_Haddock dflags
-            then
-                liftIO $ (fmap.fmap.fmap) reset_ms mainParse
-            else do
-                let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
-
-                -- parse twice, with and without Haddocks, concurrently
-                -- we cannot ignore Haddock parse errors because files of
-                -- non-interest are always parsed with Haddocks
-                -- If we can parse Haddocks, might as well use them
-                ((diags,res),(diagsh,resh)) <- liftIO $ (fmap.fmap.fmap.fmap) reset_ms $ concurrently mainParse haddockParse
-
-                -- Merge haddock and regular diagnostics so we can always report haddock
-                -- parse errors
-                let diagsM = mergeParseErrorsHaddock diags diagsh
-                case resh of
-                  Just _
-                    | HaddockParse <- optHaddockParse opt
-                    -> pure (diagsM, resh)
-                  -- If we fail to parse haddocks, report the haddock diagnostics as well and
-                  -- return the non-haddock parse.
-                  -- This seems to be the correct behaviour because the Haddock flag is added
-                  -- by us and not the user, so our IDE shouldn't stop working because of it.
-                  _ -> pure (diagsM, res)
-    -- Add dependencies on included files
-    _ <- uses GetModificationTime $ map toNormalizedFilePath' (maybe [] pm_extra_src_files pmod)
-    pure res
+    liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt file (withOptHaddock ms)
 
 withOptHaddock :: ModSummary -> ModSummary
 withOptHaddock = withOption Opt_Haddock
@@ -309,18 +290,6 @@ withOption opt ms = ms{ms_hspp_opts= gopt_set (ms_hspp_opts ms) opt}
 
 withoutOption :: GeneralFlag -> ModSummary -> ModSummary
 withoutOption opt ms = ms{ms_hspp_opts= gopt_unset (ms_hspp_opts ms) opt}
-
--- | Given some normal parse errors (first) and some from Haddock (second), merge them.
---   Ignore Haddock errors that are in both. Demote Haddock-only errors to warnings.
-mergeParseErrorsHaddock :: [FileDiagnostic] -> [FileDiagnostic] -> [FileDiagnostic]
-mergeParseErrorsHaddock normal haddock = normal ++
-    [ (a,b,c{_severity = Just DiagnosticSeverity_Warning, _message = fixMessage $ _message c})
-    | (a,b,c) <- haddock, Diag._range c `Set.notMember` locations]
-  where
-    locations = Set.fromList $ map (Diag._range . thd3) normal
-
-    fixMessage x | "parse error " `T.isPrefixOf` x = "Haddock " <> x
-                 | otherwise = "Haddock: " <> x
 
 -- | This rule provides a ParsedModule preserving all annotations,
 -- including keywords, punctuation and comments.
@@ -850,7 +819,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
       let m_old = case old of
             Shake.Succeeded (Just old_version) v -> Just (v, old_version)
             Shake.Stale _   (Just old_version) v -> Just (v, old_version)
-            _ -> Nothing
+            _                                    -> Nothing
           recompInfo = RecompilationInfo
             { source_version = ver
             , old_value = m_old
@@ -1023,22 +992,14 @@ regenerateHiFile sess f ms compNeeded = do
 
     -- Embed haddocks in the interface file
     (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f (withOptHaddock ms)
-    (diags', mb_pm') <-
-        -- We no longer need to parse again if GHC version is above 9.0. https://github.com/haskell/haskell-language-server/issues/1892
-        if Compat.ghcVersion >= Compat.GHC90 || isJust mb_pm then do
-            return (diags, mb_pm)
-        else do
-            -- if parsing fails, try parsing again with Haddock turned off
-            (diagsNoHaddock, mb_pm') <- liftIO $ getParsedModuleDefinition hsc opt f ms
-            return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm')
-    case mb_pm' of
-        Nothing -> return (diags', Nothing)
+    case mb_pm of
+        Nothing -> return (diags, Nothing)
         Just pm -> do
             -- Invoke typechecking directly to update it without incurring a dependency
             -- on the parsed module and the typecheck rules
-            (diags'', mtmr) <- typeCheckRuleDefinition hsc pm
+            (diags', mtmr) <- typeCheckRuleDefinition hsc pm
             case mtmr of
-              Nothing -> pure (diags'', Nothing)
+              Nothing -> pure (diags', Nothing)
               Just tmr -> do
 
                 let compile = liftIO $ compileModule (RunSimplifier True) hsc (pm_mod_summary pm) $ tmrTypechecked tmr
@@ -1046,7 +1007,7 @@ regenerateHiFile sess f ms compNeeded = do
                 se <- getShakeExtras
 
                 -- Bang pattern is important to avoid leaking 'tmr'
-                (diags''', !res) <- writeCoreFileIfNeeded se hsc compNeeded compile tmr
+                (diags'', !res) <- writeCoreFileIfNeeded se hsc compNeeded compile tmr
 
                 -- Write hi file
                 hiDiags <- case res of
@@ -1070,7 +1031,7 @@ regenerateHiFile sess f ms compNeeded = do
                     pure (hiDiags <> gDiags <> concat wDiags)
                   Nothing -> pure []
 
-                return (diags' <> diags'' <> diags''' <> hiDiags, res)
+                return (diags <> diags' <> diags'' <> hiDiags, res)
 
 
 -- | HscEnv should have deps included already
@@ -1233,9 +1194,9 @@ data RulesConfig = RulesConfig
       -- Disabling this drastically decreases sharing and is likely to
       -- increase memory usage if you have multiple files open
       -- Disabling this also disables checking for import cycles
-      fullModuleGraph :: Bool
+      fullModuleGraph        :: Bool
     -- | Disable TH for improved performance in large codebases
-    , enableTemplateHaskell :: Bool
+    , enableTemplateHaskell  :: Bool
     -- | Warning to show when TH is not supported by the current HLS binary
     , templateHaskellWarning :: LspT Config IO ()
     }
