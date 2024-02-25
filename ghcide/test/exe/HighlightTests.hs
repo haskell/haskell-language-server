@@ -44,7 +44,7 @@ tests = testGroup "highlight"
             , DocumentHighlight (R 6 10 6 13) (Just DocumentHighlightKind_Read)
             , DocumentHighlight (R 7 12 7 15) (Just DocumentHighlightKind_Read)
             ]
-  , knownBrokenForGhcVersions [GHC90, GHC92, GHC94, GHC96, GHC98] "Ghc9 highlights the constructor and not just this field" $
+  , knownBrokenForGhcVersions [GHC92, GHC94, GHC96, GHC98] "Ghc9 highlights the constructor and not just this field" $
         testSessionWait "record" $ do
         doc <- createDoc "A.hs" "haskell" recsource
         _ <- waitForDiagnostics

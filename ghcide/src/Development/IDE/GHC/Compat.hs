@@ -504,9 +504,7 @@ generatedNodeInfo :: HieAST a -> Maybe (NodeInfo a)
 generatedNodeInfo = Map.lookup GeneratedInfo . getSourcedNodeInfo . sourcedNodeInfo
 
 data GhcVersion
-  = GHC810
-  | GHC90
-  | GHC92
+  = GHC92
   | GHC94
   | GHC96
   | GHC98

@@ -223,7 +223,7 @@ tests = let
         testM no     yes    reexported reexportedSig "Imported symbol (reexported)"
     else
         testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
-  , if ghcVersion == GHC90 && isWindows then
+  , if isWindows then
         test  no     broken    thLocL57   thLoc         "TH Splice Hover"
     else
         test  no     yes       thLocL57   thLoc         "TH Splice Hover"
