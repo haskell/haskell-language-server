@@ -113,13 +113,11 @@ tests = let
   typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 sourceFilePath (pure tcData) "Saturated data con"
                         , tst (getTypeDefinitions, checkDefs) aL20 sourceFilePath (pure [ExpectNoDefinitions]) "Polymorphic variable"]
 
-  recordDotSyntaxTests
-    | ghcVersion >= GHC92 =
-        [ tst (getHover, checkHover) (Position 17 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent"
-        , tst (getHover, checkHover) (Position 17 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child"
-        , tst (getHover, checkHover) (Position 17 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
-        ]
-    | otherwise = []
+  recordDotSyntaxTests =
+    [ tst (getHover, checkHover) (Position 17 24) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["x :: MyRecord"]]) "hover over parent"
+    , tst (getHover, checkHover) (Position 17 25) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over dot shows child"
+    , tst (getHover, checkHover) (Position 17 26) (T.unpack "RecordDotSyntax.hs") (pure [ExpectHoverText ["_ :: MyChild"]]) "hover over child"
+    ]
 
   test runDef runHover look expect = testM runDef runHover look (return expect)
 
@@ -157,8 +155,8 @@ tests = let
   spaceL37 = Position 41  24 ; space = [ExpectNoDefinitions, ExpectHoverText [":: Char"]]
   docL41 = Position 45  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
                            ;  constr = [ExpectHoverText ["Monad m"]]
-  eitL40 = Position 44 28  ;  kindE  = [ExpectHoverText [if ghcVersion >= GHC92 then ":: Type -> Type -> Type\n" else ":: * -> * -> *\n"]]
-  intL40 = Position 44 34  ;  kindI  = [ExpectHoverText [if ghcVersion >= GHC92 then ":: Type\n" else ":: *\n"]]
+  eitL40 = Position 44 28  ;  kindE  = [ExpectHoverText [":: Type -> Type -> Type\n"]]
+  intL40 = Position 44 34  ;  kindI  = [ExpectHoverText [":: Type\n"]]
   tvrL40 = Position 44 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
   intL41 = Position 45 20  ;  litI   = [ExpectHoverText ["7518"]]
   chrL36 = Position 41 24  ;  litC   = [ExpectHoverText ["'f'"]]
