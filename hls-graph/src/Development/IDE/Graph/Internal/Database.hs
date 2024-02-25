@@ -137,8 +137,9 @@ isDirty :: Foldable t => Result -> t (a, Result) -> Bool
 isDirty me = any (\(_,dep) -> resultBuilt me < resultChanged dep)
 
 -- | Refresh dependencies for a key and compute the key:
--- The deps refresh is kicking up linearly. If any of the deps are dirty in the process,
--- we jump to the actual computation of the key and shortcut the refreshing the rest of the deps.
+-- The refresh the deps linearly(last computed order of the deps for the key).
+-- If any of the deps is dirty in the process, we jump to the actual computation of the key
+-- and shortcut the refreshing of the rest of the deps.
 -- * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
 --   This assumes that the implementation will be a lookup
 -- * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
