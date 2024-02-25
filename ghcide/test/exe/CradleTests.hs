@@ -8,7 +8,7 @@ import           Control.Applicative.Combinators
 import           Control.Monad.IO.Class          (liftIO)
 import           Data.Row
 import qualified Data.Text                       as T
-import           Development.IDE.GHC.Compat      (GhcVersion (..), ghcVersion)
+import           Development.IDE.GHC.Compat      (GhcVersion (..))
 import           Development.IDE.GHC.Util
 import           Development.IDE.Test            (expectDiagnostics,
                                                   expectDiagnosticsWithTags,
@@ -84,7 +84,7 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   -- Fix the cradle and typecheck again
   let validCradle = "cradle: {bios: {shell: \"echo A.hs\"}}"
   liftIO $ writeFileUTF8 hiePath $ T.unpack validCradle
-  sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+  sendNotification SMethod_WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams
          [FileEvent (filePathToUri $ dir </> "hie.yaml") FileChangeType_Changed ]
 
   WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc

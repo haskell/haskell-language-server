@@ -304,10 +304,6 @@ defToLocation (InL (Definition (InR ls))) = ls
 defToLocation (InR (InL defLink)) = (\(DefinitionLink LocationLink{_targetUri,_targetRange}) -> Location _targetUri _targetRange) <$> defLink
 defToLocation (InR (InR Null)) = []
 
--- | Ghc 9 doesn't include the $-sign in TH warnings like earlier versions did
-thDollarIdx :: UInt
-thDollarIdx = 1
-
 testIde :: Recorder (WithPriority Log) -> IDE.Arguments -> Session () -> IO ()
 testIde recorder arguments session = do
     config <- getConfigFromEnv

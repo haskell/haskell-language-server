@@ -55,7 +55,7 @@ ifaceTHTest = testCase "iface-th-test" $ runWithExtraFiles "TH" $ \dir -> do
     changeDoc cdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ cSource]
     expectDiagnostics
       [("THC.hs", [(DiagnosticSeverity_Error, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
-      ,("THB.hs", [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level binding")])]
+      ,("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")])]
     closeDoc cdoc
 
 ifaceErrorTest :: TestTree
