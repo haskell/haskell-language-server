@@ -223,10 +223,7 @@ tests = let
         testM no     yes    reexported reexportedSig "Imported symbol (reexported)"
     else
         testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
-  , if isWindows then
-        test  no     broken    thLocL57   thLoc         "TH Splice Hover"
-    else
-        test  no     yes       thLocL57   thLoc         "TH Splice Hover"
+  , test  no     yes       thLocL57   thLoc         "TH Splice Hover"
   , test yes yes import310 pkgTxt "show package name and its version"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
