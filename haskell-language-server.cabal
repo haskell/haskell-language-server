@@ -1817,6 +1817,7 @@ test-suite wrapper-test
 
   build-depends:
     , base       >=4.16 && <5
+    , directory
     , extra
     , hls-test-utils              == 2.6.0.0
     , process
