@@ -12,6 +12,7 @@ import           Data.Aeson                         (FromJSON, ToJSON)
 import           Data.Bifunctor                     (second)
 import qualified Data.ByteString                    as BS
 import           Data.Dynamic
+import           Data.Foldable                      (fold)
 import qualified Data.HashMap.Strict                as Map
 import           Data.IORef
 import           Data.List                          (intercalate)
@@ -144,17 +145,20 @@ data Result = Result {
     resultData      :: !BS.ByteString
     }
 
-data ResultDeps = UnknownDeps | AlwaysRerunDeps ![KeySet] | ResultDeps ![KeySet]
+-- some invariant to maintain:
+-- the ResultDeps need to be stored in reverse order,
+-- so that we can append to it efficiently
+data ResultDeps = UnknownDeps | AlwaysRerunDeps !KeySet | ResultDeps ![KeySet]
   deriving (Eq, Show)
 
-getResultDepsDefault :: KeySet -> ResultDeps -> [KeySet]
-getResultDepsDefault _ (ResultDeps ids)      = ids
+getResultDepsDefault :: KeySet -> ResultDeps -> KeySet
+getResultDepsDefault _ (ResultDeps ids)      = fold ids
 getResultDepsDefault _ (AlwaysRerunDeps ids) = ids
-getResultDepsDefault def UnknownDeps         = [def]
+getResultDepsDefault def UnknownDeps         = def
 
 mapResultDeps :: (KeySet -> KeySet) -> ResultDeps -> ResultDeps
 mapResultDeps f (ResultDeps ids)      = ResultDeps $ fmap f ids
-mapResultDeps f (AlwaysRerunDeps ids) = AlwaysRerunDeps $ fmap f ids
+mapResultDeps f (AlwaysRerunDeps ids) = AlwaysRerunDeps $ f ids
 mapResultDeps _ UnknownDeps           = UnknownDeps
 
 instance Semigroup ResultDeps where

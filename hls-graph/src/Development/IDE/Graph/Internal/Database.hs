@@ -187,7 +187,7 @@ compute db@Database{..} stack key mode result = do
         actualDeps = if runChanged /= ChangedNothing then deps else previousDeps
         previousDeps= maybe UnknownDeps resultDeps result
     let res = Result runValue built' changed built actualDeps execution runStore
-    case fold $ getResultDepsDefault mempty actualDeps of
+    case getResultDepsDefault mempty actualDeps of
         deps | not (nullKeySet deps)
             && runChanged /= ChangedNothing
                     -> do
@@ -197,7 +197,7 @@ compute db@Database{..} stack key mode result = do
             -- on the next build.
             void $
                 updateReverseDeps key db
-                    (fold $ getResultDepsDefault mempty previousDeps)
+                    (getResultDepsDefault mempty previousDeps)
                     deps
         _ -> pure ()
     atomicallyNamed "compute" $ SMap.focus (updateStatus $ Clean res) key databaseValues
