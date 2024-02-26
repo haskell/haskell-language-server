@@ -14,12 +14,7 @@
       - `shake-bench` is an internal testing tool, not exposed to the outside world. Thus, no version bump required for releases.
   - For updating cabal files, the following script can be used:
     - ```sh
-      # Update all `version:` fields
-      sed -ri "s/^version:( +)2.2.0.0/version:\12.3.0.0/" **/*.cabal
-      # Update all constraints expected to be in the form `== <version>`.
-      # We usually don't force an exact version, so this is relatively unambiguous.
-      # We could introduce some more ad-hoc parsing, if there is still ambiguity.
-      sed -ri "s/== 2.2.0.0/== 2.3.0.0/" **/*.cabal
+      ./release/update_versions.sh <OLD_VERSION> <NEW_VERSION>
       ```
     - It still requires manual verification and review
 - [ ] generate and update changelog
