@@ -138,7 +138,7 @@ install_ghcup() {
 		curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_MINIMAL=1 sh
 		source "$(dirname "${GHCUP_BIN}")/env"
 		# make sure we use the vanilla channel for installing binaries
-		# see https://github.com/haskell/ghcup-metadata/pull/166#issuecomment-1893075575 
+		# see https://github.com/haskell/ghcup-metadata/pull/166#issuecomment-1893075575
 		ghcup config set url-source https://raw.githubusercontent.com/haskell/ghcup-metadata/master/ghcup-vanilla-0.0.8.yaml
 		ghcup install cabal --set "${BOOTSTRAP_HASKELL_CABAL_VERSION}"
 	fi
@@ -206,4 +206,33 @@ mktempdir() {
 			mktemp -d
 			;;
 	esac
+}
+
+# "Inspired" from GHC GitLab CI
+# https://gitlab.haskell.org/ghc/ghc/-/blob/214b2b6916f2d016ab9db0b766060e7828bb47a0/.gitlab/ci.sh#L60
+setup_locale() {
+  # BSD grep terminates early with -q, consequently locale -a will get a
+  # SIGPIPE and the pipeline will fail with pipefail.
+  shopt -o -u pipefail
+  if locale -a | grep -q C.UTF-8; then
+    # Debian
+    export LANG=C.UTF-8
+  elif locale -a | grep -q C.utf8; then
+    # Fedora calls it this
+    export LANG=C.utf8
+  elif locale -a | grep -q en_US.UTF-8; then
+    # Centos doesn't have C.UTF-8
+    export LANG=en_US.UTF-8
+  elif locale -a | grep -q en_US.utf8; then
+    # Centos doesn't have C.UTF-8
+    export LANG=en_US.utf8
+  else
+    error "Failed to find usable locale"
+    info "Available locales:"
+    locale -a
+    fail "No usable locale, aborting..."
+  fi
+  info "Using locale $LANG..."
+  export LC_ALL=$LANG
+  shopt -o -s pipefail
 }
