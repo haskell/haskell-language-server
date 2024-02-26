@@ -9,23 +9,31 @@ main = defaultTestRunner $ testGroup "haskell-language-server-wrapper" [projectG
 
 projectGhcVersionTests :: TestTree
 projectGhcVersionTests = testGroup "--project-ghc-version"
-  [ stackTest "9.2.8"
+  [ let ghcVer = case ghcVersion of
+           GHC92 -> "9.2.8"
+           GHC94 -> "9.4.8"
+           GHC96 -> "9.6.4"
+           GHC98 -> "9.8.1"
+        writeStackYaml = writeFile "stack.yaml"
+            -- Use system-ghc and install-ghc to avoid stack downloading ghc in CI
+            -- (and use ghcup-managed ghc instead)
+            ("{resolver: ghc-"++ ghcVer ++", system-ghc: true, install-ghc: false}")
+    in testCase ("stack with ghc " ++ ghcVer) $
+          testDir writeStackYaml "test/wrapper/testdata/stack-specific-ghc" ghcVer
   , testCase "cabal with global ghc" $ do
       ghcVer <- trimEnd <$> readProcess "ghc" ["--numeric-version"] ""
-      testDir "test/wrapper/testdata/cabal-cur-ver" ghcVer
+      testDir (pure ()) "test/wrapper/testdata/cabal-cur-ver" ghcVer
   , testCase "stack with existing cabal build artifact" $ do
       -- Should report cabal as existing build artifacts are more important than
       -- the existence of 'stack.yaml'
       testProjectType "test/wrapper/testdata/stack-with-dist-newstyle"
         ("cradleOptsProg = CradleAction: Cabal" `isInfixOf`)
   ]
-  where
-      stackTest ghcVer= testCase ("stack with ghc " ++ ghcVer) $
-        testDir ("test/wrapper/testdata/stack-" ++ ghcVer) ghcVer
 
-testDir :: FilePath -> String -> Assertion
-testDir dir expectedVer =
+testDir :: IO () -> FilePath -> String -> Assertion
+testDir extraSetup dir expectedVer =
   withCurrentDirectoryInTmp dir $ do
+    extraSetup
     testExe <- fromMaybe "haskell-language-server-wrapper"
       <$> lookupEnv "HLS_WRAPPER_TEST_EXE"
     actualVer <- trimEnd <$> readProcess testExe ["--project-ghc-version"] ""
