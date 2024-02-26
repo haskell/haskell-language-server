@@ -9,19 +9,15 @@ main = defaultTestRunner $ testGroup "haskell-language-server-wrapper" [projectG
 
 projectGhcVersionTests :: TestTree
 projectGhcVersionTests = testGroup "--project-ghc-version"
-  [ let ghcVer = case ghcVersion of
-           GHC92 -> "9.2.8"
-           GHC94 -> "9.4.8"
-           GHC96 -> "9.6.4"
-           GHC98 -> "9.8.1"
-        writeStackYaml = writeFile "stack.yaml"
+  [ testCase "stack with global ghc" $ do
+      ghcVer <- ghcNumericVersion
+      let writeStackYaml = writeFile "stack.yaml" $
             -- Use system-ghc and install-ghc to avoid stack downloading ghc in CI
             -- (and use ghcup-managed ghc instead)
-            ("{resolver: ghc-"++ ghcVer ++", system-ghc: true, install-ghc: false}")
-    in testCase ("stack with ghc " ++ ghcVer) $
-          testDir writeStackYaml "test/wrapper/testdata/stack-specific-ghc" ghcVer
+            "{resolver: ghc-" ++ ghcVer ++ ", system-ghc: true, install-ghc: false}"
+      testDir writeStackYaml "test/wrapper/testdata/stack-specific-ghc" ghcVer
   , testCase "cabal with global ghc" $ do
-      ghcVer <- trimEnd <$> readProcess "ghc" ["--numeric-version"] ""
+      ghcVer <- ghcNumericVersion
       testDir (pure ()) "test/wrapper/testdata/cabal-cur-ver" ghcVer
   , testCase "stack with existing cabal build artifact" $ do
       -- Should report cabal as existing build artifacts are more important than
@@ -29,6 +25,8 @@ projectGhcVersionTests = testGroup "--project-ghc-version"
       testProjectType "test/wrapper/testdata/stack-with-dist-newstyle"
         ("cradleOptsProg = CradleAction: Cabal" `isInfixOf`)
   ]
+  where
+    ghcNumericVersion = trimEnd <$> readProcess "ghc" ["--numeric-version"] ""
 
 testDir :: IO () -> FilePath -> String -> Assertion
 testDir extraSetup dir expectedVer =
