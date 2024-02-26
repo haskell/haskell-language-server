@@ -1,1 +1,3 @@
 resolver: ghc-9.2.8
+system-ghc: true
+install-ghc: false
