@@ -121,7 +121,8 @@ apply ks = do
     stack <- Action $ asks actionStack
     (is, vs) <- liftIO $ build db stack ks
     ref <- Action $ asks actionDeps
-    liftIO $ modifyIORef' ref (ResultDeps [force $ fromListKeySet $ toList is] <>)
+    let !ks = force $ fromListKeySet $ toList is
+    liftIO $ modifyIORef' ref (ResultDeps [ks] <>)
     pure vs
 
 -- | Evaluate a list of keys without recording any dependencies.
