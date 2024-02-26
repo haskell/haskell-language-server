@@ -145,9 +145,10 @@ data Result = Result {
     resultData      :: !BS.ByteString
     }
 
--- some invariant to maintain:
--- the ResultDeps need to be stored in reverse order,
--- so that we can append to it efficiently
+-- Notice, invariant to maintain:
+-- the ![KeySet] in ResultDeps need to be stored in reverse order,
+-- so that we can append to it efficiently, and we need the ordering
+-- so we can do a linear dependency refreshing in refreshDeps.
 data ResultDeps = UnknownDeps | AlwaysRerunDeps !KeySet | ResultDeps ![KeySet]
   deriving (Eq, Show)
 
