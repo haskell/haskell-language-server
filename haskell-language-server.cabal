@@ -84,6 +84,12 @@ flag dynamic
   default:     True
   manual:      True
 
+----------------------------
+----------------------------
+-- PLUGINS
+----------------------------
+----------------------------
+
 -----------------------------
 -- cabal-fmt plugin
 -----------------------------
@@ -326,8 +332,8 @@ test-suite hls-call-hierarchy-plugin-tests
     , extra
     , filepath
     , haskell-language-server:hls-call-hierarchy-plugin
-    , hls-test-utils              == 2.6.0.0
-    , ghcide-test-utils
+    , hls-test-utils        == 2.6.0.0
+    , ghcide:ghcide-test-utils
     , lens
     , lsp
     , lsp-test
@@ -459,7 +465,7 @@ test-suite hls-explicit-imports-plugin-tests
     , extra
     , filepath
     , haskell-language-server:hls-explicit-imports-plugin
-    , hls-test-utils
+    , hls-test-utils   == 2.6.0.0
     , lens
     , lsp-types
     , row-types
@@ -1194,7 +1200,7 @@ test-suite hls-explicit-record-fields-plugin-tests
     , filepath
     , text
     , haskell-language-server:hls-explicit-record-fields-plugin
-    , hls-test-utils
+    , hls-test-utils              == 2.6.0.0
 
 -----------------------------
 -- overloaded record dot plugin
@@ -1238,7 +1244,7 @@ test-suite hls-overloaded-record-dot-plugin-tests
     , filepath
     , text
     , haskell-language-server:hls-overloaded-record-dot-plugin
-    , hls-test-utils
+    , hls-test-utils              == 2.6.0.0
 
 
 -----------------------------
@@ -1511,8 +1517,7 @@ test-suite hls-refactor-plugin-tests
     , parser-combinators
     , data-default
     , extra
-    , ghcide
-    , ghcide-test-utils
+    , ghcide:{ghcide, ghcide-test-utils}
     , shake
     , hls-plugin-api
     , lsp-test
@@ -1589,7 +1594,7 @@ test-suite hls-semantic-tokens-plugin-tests
     , filepath
     , haskell-language-server:hls-semantic-tokens-plugin
     , hls-test-utils              == 2.6.0.0
-    , ghcide-test-utils
+    , ghcide:ghcide-test-utils
     , hls-plugin-api
     , lens
     , lsp
@@ -1602,9 +1607,11 @@ test-suite hls-semantic-tokens-plugin-tests
     , data-default
     , row-types
 
------------------------------
+----------------------------
+----------------------------
 -- HLS
------------------------------
+----------------------------
+----------------------------
 
 library
   import:           defaults
@@ -1763,8 +1770,7 @@ test-suite func-test
     , deepseq
     , extra
     , filepath
-    , ghcide
-    , ghcide-test-utils
+    , ghcide:{ghcide, ghcide-test-utils}
     , hashable
     , hls-plugin-api
     , hls-test-utils == 2.6.0.0
@@ -1812,7 +1818,7 @@ test-suite wrapper-test
   build-depends:
     , base       >=4.16 && <5
     , extra
-    , hls-test-utils
+    , hls-test-utils              == 2.6.0.0
     , process
 
   hs-source-dirs:     test/wrapper
