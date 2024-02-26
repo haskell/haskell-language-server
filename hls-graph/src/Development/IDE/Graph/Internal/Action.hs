@@ -18,6 +18,7 @@ module Development.IDE.Graph.Internal.Action
 ) where
 
 import           Control.Concurrent.Async
+import           Control.DeepSeq                         (force)
 import           Control.Exception
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
@@ -120,7 +121,7 @@ apply ks = do
     stack <- Action $ asks actionStack
     (is, vs) <- liftIO $ build db stack ks
     ref <- Action $ asks actionDeps
-    liftIO $ modifyIORef' ref (ResultDeps [fromListKeySet $ toList is] <>)
+    liftIO $ modifyIORef' ref (ResultDeps [force $ fromListKeySet $ toList is] <>)
     pure vs
 
 -- | Evaluate a list of keys without recording any dependencies.

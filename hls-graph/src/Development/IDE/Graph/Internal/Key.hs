@@ -101,7 +101,7 @@ renderKey :: Key -> Text
 renderKey (lookupKeyValue -> KeyValue _ t) = t
 
 newtype KeySet = KeySet IntSet
-  deriving newtype (Eq, Ord, Semigroup, Monoid)
+  deriving newtype (Eq, Ord, Semigroup, Monoid, NFData)
 
 instance Show KeySet where
   showsPrec p (KeySet is)= showParen (p > 10) $
