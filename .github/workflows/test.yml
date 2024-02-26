@@ -93,21 +93,6 @@ jobs:
             test: false
 
     steps:
-      - if: matrix.test && matrix.os == 'ubuntu-latest'
-        # Using this as workaround for wrapper-test suite failures, which started failing by the end of Feb 2024
-        # due to "No space left on device" when installing stack (via hie-bios' stack setup --silent)
-        name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          haskell: false
-          large-packages: false
-          # Enabling cleanup of stuff that's fast to run and unnecessary for our CI workflows 
-          android: true
-          dotnet: true
-          docker-images: true
-          swap-storage: true
-
       - uses: actions/checkout@v3
 
       - uses: ./.github/actions/setup-build
