@@ -14,7 +14,7 @@ homepage:
   https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC ==9.8.1 || ==9.6.4 || ==9.4.8 || ==9.2.8
+tested-with:        GHC ==9.8.2 || ==9.6.4 || ==9.4.8 || ==9.2.8
 extra-source-files:
   CHANGELOG.md
   README.md
