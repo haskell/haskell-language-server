@@ -1,5 +1,181 @@
 # Changelog for haskell-language-server
 
+## 2.7.0.0
+
+- Bindists for GHC 9.8.2
+- Fix refactor code actions for vim
+- Preserve HLint's diagnostic severity
+- Many other bug fixes.
+
+### Pull Requests
+
+- Enable pedantic for remaining plugins
+  ([#4091](https://github.com/haskell/haskell-language-server/pull/4091)) by @jhrcek
+- Add support for fourmolu 0.15
+  ([#4086](https://github.com/haskell/haskell-language-server/pull/4086)) by @brandonchinn178
+- refactor plugin: fix regex for extracting import suggestions
+  ([#4080](https://github.com/haskell/haskell-language-server/pull/4080)) by @jhrcek
+- Bump to hiedb 0.6.0.0
+  ([#4077](https://github.com/haskell/haskell-language-server/pull/4077)) by @jhrcek
+- ghcide: Only try `stat`ing a core file after we ensure it actually exists
+  ([#4076](https://github.com/haskell/haskell-language-server/pull/4076)) by @wz1000
+- Fix small typo in Retrie error message
+  ([#4075](https://github.com/haskell/haskell-language-server/pull/4075)) by @iustin
+- add Method_TextDocumentSemanticTokensFullDelta
+  ([#4073](https://github.com/haskell/haskell-language-server/pull/4073)) by @soulomoon
+- Fix -Wall in retrie plugin
+  ([#4071](https://github.com/haskell/haskell-language-server/pull/4071)) by @jhrcek
+- Fix -Wall in qualified imported names plugin
+  ([#4070](https://github.com/haskell/haskell-language-server/pull/4070)) by @jhrcek
+- benchmarks: switch from deprecated haskell/actions/setup to haskell-actions/setup
+  ([#4068](https://github.com/haskell/haskell-language-server/pull/4068)) by @jhrcek
+- Bump pre-commit/action from 3.0.0 to 3.0.1
+  ([#4066](https://github.com/haskell/haskell-language-server/pull/4066)) by @dependabot[bot]
+- Fix -Wall in refactor plugin
+  ([#4065](https://github.com/haskell/haskell-language-server/pull/4065)) by @jhrcek
+- Redundant imports/exports: use range only to determine which code actions are in scope
+  ([#4063](https://github.com/haskell/haskell-language-server/pull/4063)) by @keithfancher
+- Bump haskell-actions/setup to get GHC 9.6.4 in CI
+  ([#4062](https://github.com/haskell/haskell-language-server/pull/4062)) by @jhrcek
+- Enable pedantic for more components
+  ([#4061](https://github.com/haskell/haskell-language-server/pull/4061)) by @jhrcek
+- stack CI: switch to offic. haskell images, bump to lts-22.9 (ghc 9.6.4)
+  ([#4060](https://github.com/haskell/haskell-language-server/pull/4060)) by @jhrcek
+- Improve hls class plugin test
+  ([#4059](https://github.com/haskell/haskell-language-server/pull/4059)) by @soulomoon
+- Bump ghcide-test-utils to 2.0.0.0
+  ([#4058](https://github.com/haskell/haskell-language-server/pull/4058)) by @wz1000
+- Promote more warnings to errors in ghcide
+  ([#4054](https://github.com/haskell/haskell-language-server/pull/4054)) by @jhrcek
+- Add -Wunused-packages to common warnings
+  ([#4053](https://github.com/haskell/haskell-language-server/pull/4053)) by @jhrcek
+- Bump lsp versions
+  ([#4052](https://github.com/haskell/haskell-language-server/pull/4052)) by @michaelpj
+- Optimize semantic token extraction logic
+  ([#4050](https://github.com/haskell/haskell-language-server/pull/4050)) by @soulomoon
+- Fix warnings in hls-graph, enable pedantic in CI
+  ([#4047](https://github.com/haskell/haskell-language-server/pull/4047)) by @jhrcek
+- Fix -Wredundant-constraints
+  ([#4044](https://github.com/haskell/haskell-language-server/pull/4044)) by @jhrcek
+- Disable caching job with ghc 9.2 on windows
+  ([#4043](https://github.com/haskell/haskell-language-server/pull/4043)) by @jhrcek
+- fix token omitting problem if multiple tokens are connected.
+  ([#4041](https://github.com/haskell/haskell-language-server/pull/4041)) by @soulomoon
+- Set test options via cabal.project
+  ([#4039](https://github.com/haskell/haskell-language-server/pull/4039)) by @michaelpj
+- Fix document version test in hls-class-plugin
+  ([#4038](https://github.com/haskell/haskell-language-server/pull/4038)) by @July541
+- Fix -Wunused-imports
+  ([#4037](https://github.com/haskell/haskell-language-server/pull/4037)) by @jhrcek
+- Use GHC2021
+  ([#4033](https://github.com/haskell/haskell-language-server/pull/4033)) by @michaelpj
+- Remove ghcide-test-utils as a separate package
+  ([#4032](https://github.com/haskell/haskell-language-server/pull/4032)) by @michaelpj
+- Fix weird behavior of OPTIONS_GHC completions (fixes #3908)
+  ([#4031](https://github.com/haskell/haskell-language-server/pull/4031)) by @jhrcek
+- semantic tokens: add infix operator
+  ([#4030](https://github.com/haskell/haskell-language-server/pull/4030)) by @soulomoon
+- fix: a typo in docs/configuration.md
+  ([#4029](https://github.com/haskell/haskell-language-server/pull/4029)) by @kkweon
+- Turn off tasty-rerun
+  ([#4028](https://github.com/haskell/haskell-language-server/pull/4028)) by @michaelpj
+- Reduce the number of ad-hoc helper test functions in refactor plugin tests
+  ([#4027](https://github.com/haskell/haskell-language-server/pull/4027)) by @jhrcek
+- Fix documentation/image links
+  ([#4025](https://github.com/haskell/haskell-language-server/pull/4025)) by @jhrcek
+- Fix various issues
+  ([#4024](https://github.com/haskell/haskell-language-server/pull/4024)) by @michaelpj
+- Use relative file paths for HIE files and Stan's config maps
+  ([#4023](https://github.com/haskell/haskell-language-server/pull/4023)) by @keithfancher
+- fix isClassNodeIdentifier in hls-class-plugin
+  ([#4020](https://github.com/haskell/haskell-language-server/pull/4020)) by @soulomoon
+- Fix -Wall and -Wunused-packages in hlint plugin
+  ([#4019](https://github.com/haskell/haskell-language-server/pull/4019)) by @jhrcek
+- update hlint to 3.8 and prevent linting on testdata dir
+  ([#4018](https://github.com/haskell/haskell-language-server/pull/4018)) by @soulomoon
+- refactor plugin: add reproducer and fix for #3795
+  ([#4016](https://github.com/haskell/haskell-language-server/pull/4016)) by @jhrcek
+- Fix -Wall and -Wunused-packages in stylish-haskell plugin
+  ([#4015](https://github.com/haskell/haskell-language-server/pull/4015)) by @jhrcek
+- Fix -Wall and -Wunused-packages in stan plugin
+  ([#4014](https://github.com/haskell/haskell-language-server/pull/4014)) by @jhrcek
+- fix doc for semantic token
+  ([#4011](https://github.com/haskell/haskell-language-server/pull/4011)) by @soulomoon
+- Fix -Wall and -Wunused-packages in module name and overloaded record dot plugins
+  ([#4009](https://github.com/haskell/haskell-language-server/pull/4009)) by @jhrcek
+- Fix -Wall and -Wunused-package in gadt plugin
+  ([#4008](https://github.com/haskell/haskell-language-server/pull/4008)) by @jhrcek
+- Fix -Wall and -Wunused-packages in fourmolu and ormolu plugins
+  ([#4007](https://github.com/haskell/haskell-language-server/pull/4007)) by @jhrcek
+- Fix -Wall and -Wunused-packages in plugins api and floskell
+  ([#4005](https://github.com/haskell/haskell-language-server/pull/4005)) by @jhrcek
+- Fix -Wunused-packages in test utils
+  ([#4004](https://github.com/haskell/haskell-language-server/pull/4004)) by @jhrcek
+- Update base lower bounds for HLS
+  ([#4000](https://github.com/haskell/haskell-language-server/pull/4000)) by @fendor
+- Various 9.8 compat
+  ([#3998](https://github.com/haskell/haskell-language-server/pull/3998)) by @michaelpj
+- Fix -Wall and -Wunused-packages in explicit-record-fields plugin
+  ([#3996](https://github.com/haskell/haskell-language-server/pull/3996)) by @jhrcek
+- Fix -Wall and -Wunused-packages in explicit fixity plugin
+  ([#3995](https://github.com/haskell/haskell-language-server/pull/3995)) by @jhrcek
+- Remove an allow-newer
+  ([#3989](https://github.com/haskell/haskell-language-server/pull/3989)) by @michaelpj
+- chore: Fix typo s/occured/occurred
+  ([#3988](https://github.com/haskell/haskell-language-server/pull/3988)) by @hugo-syn
+- Update support tables
+  ([#3987](https://github.com/haskell/haskell-language-server/pull/3987)) by @michaelpj
+- Fix most -Wall in ghcide
+  ([#3984](https://github.com/haskell/haskell-language-server/pull/3984)) by @jhrcek
+- Fix -Wall and -Wunused-packages in pragmas plugin
+  ([#3982](https://github.com/haskell/haskell-language-server/pull/3982)) by @jhrcek
+- Fix -Wall and -Wunused-packages in eval plugin
+  ([#3981](https://github.com/haskell/haskell-language-server/pull/3981)) by @jhrcek
+- Fix -Wall and -Wunused-packages in code-range plugin
+  ([#3980](https://github.com/haskell/haskell-language-server/pull/3980)) by @jhrcek
+- Fix -Wall, -Wunused-packages and hlint warnings in call-hierarchy plugin
+  ([#3979](https://github.com/haskell/haskell-language-server/pull/3979)) by @jhrcek
+- Fix -Wunused-packages in hls-cabal-plugin
+  ([#3977](https://github.com/haskell/haskell-language-server/pull/3977)) by @jhrcek
+- Merge plugins into the HLS package
+  ([#3976](https://github.com/haskell/haskell-language-server/pull/3976)) by @michaelpj
+- Fix most hlint warnings in ghcide
+  ([#3975](https://github.com/haskell/haskell-language-server/pull/3975)) by @jhrcek
+- Remove allow-newer for ghc-trace-events
+  ([#3974](https://github.com/haskell/haskell-language-server/pull/3974)) by @jhrcek
+- Exactprint plugins for 9.8
+  ([#3973](https://github.com/haskell/haskell-language-server/pull/3973)) by @wz1000
+- Fix -Wall and -Wunused-packages in hls-class-plugin
+  ([#3972](https://github.com/haskell/haskell-language-server/pull/3972)) by @jhrcek
+- Document cabal diagnostic options
+  ([#3971](https://github.com/haskell/haskell-language-server/pull/3971)) by @fendor
+- Fix -Wall and -Wunused-packages in change-type-signature plugin
+  ([#3970](https://github.com/haskell/haskell-language-server/pull/3970)) by @jhrcek
+- Semantic tokens: expand type synonym to checkout forall function type when possible
+  ([#3967](https://github.com/haskell/haskell-language-server/pull/3967)) by @soulomoon
+- Fix -Wunused-packages in hls-cabal-fmt-plugin
+  ([#3965](https://github.com/haskell/haskell-language-server/pull/3965)) by @jhrcek
+- Fix -Wall and -Wunused-packages in hls-alternate-number-format-plugin
+  ([#3964](https://github.com/haskell/haskell-language-server/pull/3964)) by @jhrcek
+- Prepare release 2.6.0.0
+  ([#3959](https://github.com/haskell/haskell-language-server/pull/3959)) by @wz1000
+- Semantic tokens: add module name support and improve performance and accuracy by traversing the hieAst along with source code
+  ([#3958](https://github.com/haskell/haskell-language-server/pull/3958)) by @soulomoon
+- Bump cachix/cachix-action from 13 to 14
+  ([#3956](https://github.com/haskell/haskell-language-server/pull/3956)) by @dependabot[bot]
+- Bump cachix/install-nix-action from 24 to 25
+  ([#3955](https://github.com/haskell/haskell-language-server/pull/3955)) by @dependabot[bot]
+- Remove unused dependencies in hls-refactor-plugin
+  ([#3953](https://github.com/haskell/haskell-language-server/pull/3953)) by @jhrcek
+- Cleanup conditional build logic pertaining to pre 9.2 GHCs
+  ([#3948](https://github.com/haskell/haskell-language-server/pull/3948)) by @jhrcek
+- Fix issue:  HLS HLint plugin doesn't preserve HLint's severities #3881
+  ([#3902](https://github.com/haskell/haskell-language-server/pull/3902)) by @IAmPara0x
+- Don't run hlint on testdata directories
+  ([#3901](https://github.com/haskell/haskell-language-server/pull/3901)) by @fendor
+-  Add option for setting manual path to Fourmolu binary
+  ([#3860](https://github.com/haskell/haskell-language-server/pull/3860)) by @georgefst
+
 ## 2.6.0.0
 
 - Bindists for GHC 9.6.4
@@ -15,7 +191,7 @@
 
 - fix: semantic token omitting record field in `{-# LANGUAGE DuplicateRecordFields  #-}` #3950
   ([#3951](https://github.com/haskell/haskell-language-server/pull/3951)) by @soulomoon
-- Properties API: Remove unsafe coerce in favor of type class based method in 
+- Properties API: Remove unsafe coerce in favor of type class based method in
   ([#3947](https://github.com/haskell/haskell-language-server/pull/3947)) by @soulomoon
 - Bump to hiedb 0.5.0.0 to fix #3542
   ([#3943](https://github.com/haskell/haskell-language-server/pull/3943)) by @wz1000
@@ -51,7 +227,7 @@
   ([#3913](https://github.com/haskell/haskell-language-server/pull/3913)) by @michaelpj
 - Update ghc-version-support.md for 2.5.0
   ([#3909](https://github.com/haskell/haskell-language-server/pull/3909)) by @lehmacdj
-- Give plugins descriptions, include versions of key dependencies 
+- Give plugins descriptions, include versions of key dependencies
   ([#3903](https://github.com/haskell/haskell-language-server/pull/3903)) by @michaelpj
 - Remove some buildability blockers that aren't needed
   ([#3899](https://github.com/haskell/haskell-language-server/pull/3899)) by @michaelpj
