@@ -1,6 +1,5 @@
 import           Data.List.Extra    (isInfixOf, trimEnd)
 import           Data.Maybe
-import           System.Directory
 import           System.Environment
 import           System.Process
 import           Test.Hls
@@ -29,12 +28,6 @@ testDir dir expectedVer =
   withCurrentDirectoryInTmp dir $ do
     testExe <- fromMaybe "haskell-language-server-wrapper"
       <$> lookupEnv "HLS_WRAPPER_TEST_EXE"
-    assertExecutableExists testExe
-    cwd <- getCurrentDirectory
-    putStrLn cwd
-    print =<< listDirectory cwd
-    print =<< readFile (cwd ++ "/stack.yaml")
-    print =<< readProcess "stack" ["--stack-yaml", cwd ++ "/stack.yaml", "setup"] ""
     actualVer <- trimEnd <$> readProcess testExe ["--project-ghc-version"] ""
     actualVer @?= expectedVer
 
@@ -43,18 +36,9 @@ testProjectType dir matcher =
   withCurrentDirectoryInTmp' [".stack-work", "dist"] dir $ do
     wrapperTestExe <- fromMaybe "haskell-language-server-wrapper"
       <$> lookupEnv "HLS_WRAPPER_TEST_EXE"
-    assertExecutableExists wrapperTestExe
     hlsTestExe <- fromMaybe "haskell-language-server"
       <$> lookupEnv "HLS_TEST_EXE"
-    assertExecutableExists hlsTestExe
     actualWrapperCradle <- trimEnd <$> readProcess wrapperTestExe ["--print-cradle"] ""
     actualHlsCradle <- trimEnd <$> readProcess hlsTestExe ["--print-cradle"] ""
     matcher actualWrapperCradle @? "Wrapper reported wrong project type: " ++ actualWrapperCradle
     matcher actualHlsCradle @? "HLS reported wrong project type: " ++ actualHlsCradle
-
-assertExecutableExists :: FilePath -> IO ()
-assertExecutableExists exe = do
-    mbExe <- findExecutable exe
-    case mbExe of
-        Nothing   -> assertFailure $ "Could not find executable " ++ exe
-        Just path -> putStrLn $ "Found " ++ exe ++ " at " ++ path
