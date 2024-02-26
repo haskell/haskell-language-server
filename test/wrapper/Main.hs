@@ -30,6 +30,11 @@ testDir dir expectedVer =
     testExe <- fromMaybe "haskell-language-server-wrapper"
       <$> lookupEnv "HLS_WRAPPER_TEST_EXE"
     assertExecutableExists testExe
+    cwd <- getCurrentDirectory
+    putStrLn cwd
+    print =<< listDirectory cwd
+    print =<< readFile (cwd ++ "/stack.yaml")
+    print =<< readProcess "stack" ["--stack-yaml", cwd ++ "/stack.yaml", "setup"] ""
     actualVer <- trimEnd <$> readProcess testExe ["--project-ghc-version"] ""
     actualVer @?= expectedVer
 
