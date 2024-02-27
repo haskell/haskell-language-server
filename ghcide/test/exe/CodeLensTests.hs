@@ -83,7 +83,7 @@ addSigLensesTests =
         , ("pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
         , ("qualifiedSigTest= C.realPart", "qualifiedSigTest :: C.Complex a -> a")
         , ("head = 233", "head :: Integer")
-        , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, " <> listOfChar <> ")")
+        , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, String)")
         , ("symbolKindTest = Proxy @\"qwq\"", "symbolKindTest :: Proxy \"qwq\"")
         , ("promotedKindTest = Proxy @Nothing", if ghcVersion >= GHC96 then "promotedKindTest :: Proxy Nothing" else "promotedKindTest :: Proxy 'Nothing")
         , ("typeOperatorTest = Refl", if ghcVersion >= GHC92 then "typeOperatorTest :: forall {k} {a :: k}. a :~: a" else "typeOperatorTest :: a :~: a")
@@ -112,10 +112,3 @@ addSigLensesTests =
             newLens <- getCodeLenses doc
             liftIO $ newLens @?= oldLens
         ]
-
--- | Before ghc9, lists of Char is displayed as [Char], but with ghc9 and up, it's displayed as String
-listOfChar :: T.Text
-listOfChar | ghcVersion >= GHC90 = "String"
-           | otherwise = "[Char]"
-
-

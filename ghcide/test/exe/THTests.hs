@@ -138,7 +138,7 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     bdoc <- createDoc bPath "haskell" bSource
     cdoc <- createDoc cPath "haskell" cSource
 
-    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")])]
 
     -- Change th from () to Bool
     let aSource' = T.unlines $ init (T.lines aSource) ++ ["th_a = [d| a = False|]"]
@@ -150,7 +150,7 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     expectDiagnostics
         [("THC.hs", [(DiagnosticSeverity_Error, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
         ,("THC.hs", [(DiagnosticSeverity_Warning, (6,0), "Top-level binding")])
-        ,("THB.hs", [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level bindin")])
+        ,("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level bindin")])
         ]
 
     closeDoc adoc
@@ -173,7 +173,7 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     adoc <- createDoc aPath "haskell" aSource
     bdoc <- createDoc bPath "haskell" bSource
 
-    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")])]
 
     let aSource' = T.unlines $ init (init (T.lines aSource)) ++ ["th :: DecsQ", "th = [d| a = False|]"]
     changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $ aSource']
@@ -184,7 +184,7 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     waitForProgressBegin
     waitForAllProgressDone
 
-    expectCurrentDiagnostics bdoc [(DiagnosticSeverity_Warning, (4,thDollarIdx), "Top-level binding")]
+    expectCurrentDiagnostics bdoc [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")]
 
     closeDoc adoc
     closeDoc bdoc

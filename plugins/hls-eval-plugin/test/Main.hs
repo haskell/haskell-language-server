@@ -73,11 +73,12 @@ tests =
   , testCase "Semantic and Lexical errors are reported" $ do
       evalInFile "T8.hs" "-- >>> noFunctionWithThisName" "-- Variable not in scope: noFunctionWithThisName"
       evalInFile "T8.hs" "-- >>> res = \"a\" + \"bc\"" $
-        if
-           | ghcVersion >= GHC96 -> "-- No instance for `Num String' arising from a use of `+'\n-- In the expression: \"a\" + \"bc\"\n-- In an equation for `res': res = \"a\" + \"bc\""
-           | ghcVersion >= GHC92 -> "-- No instance for (Num String) arising from a use of `+'\n-- In the expression: \"a\" + \"bc\"\n-- In an equation for `res': res = \"a\" + \"bc\""
-           | ghcVersion == GHC90 -> "-- No instance for (Num String) arising from a use of ‘+’"
-           | otherwise -> "-- No instance for (Num [Char]) arising from a use of ‘+’"
+        if ghcVersion >= GHC96 then
+          "-- No instance for `Num String' arising from a use of `+'\n-- In the expression: \"a\" + \"bc\"\n-- In an equation for `res': res = \"a\" + \"bc\""
+        else
+          "-- No instance for (Num String) arising from a use of `+'\n-- In the expression: \"a\" + \"bc\"\n-- In an equation for `res': res = \"a\" + \"bc\""
+
+
       evalInFile "T8.hs" "-- >>> \"" "-- lexical error in string/character literal at end of input"
       evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero" -- The default for marking exceptions is False
   , goldenWithEval "Applies file LANGUAGE extensions" "T9" "hs"
@@ -100,20 +101,14 @@ tests =
   , testCase ":type handles a multilined result properly" $
       evalInFile "T21.hs" "-- >>> :type fun" $ T.unlines [
         "-- fun",
-        if
-           | ghcVersion >= GHC92 -> "--   :: forall {k1} (k2 :: Nat) (n :: Nat) (a :: k1)."
-           | ghcVersion == GHC90 -> "--   :: forall {k1} {k2 :: Nat} {n :: Nat} {a :: k1}."
-           | otherwise -> "--   :: forall k1 (k2 :: Nat) (n :: Nat) (a :: k1).",
+        "--   :: forall {k1} (k2 :: Nat) (n :: Nat) (a :: k1).",
         "--      (KnownNat k2, KnownNat n, Typeable a) =>",
         "--      Proxy k2 -> Proxy n -> Proxy a -> ()"
       ]
   , goldenWithEval ":t behaves exactly the same as :type" "T22" "hs"
   , testCase ":type does \"dovetails\" for short identifiers" $
       evalInFile "T23.hs" "-- >>> :type f" $ T.unlines [
-        if
-          | ghcVersion >= GHC92 -> "-- f :: forall {k1} (k2 :: Nat) (n :: Nat) (a :: k1)."
-          | ghcVersion == GHC90 -> "-- f :: forall {k1} {k2 :: Nat} {n :: Nat} {a :: k1}."
-          | otherwise -> "-- f :: forall k1 (k2 :: Nat) (n :: Nat) (a :: k1).",
+        "-- f :: forall {k1} (k2 :: Nat) (n :: Nat) (a :: k1).",
         "--      (KnownNat k2, KnownNat n, Typeable a) =>",
         "--      Proxy k2 -> Proxy n -> Proxy a -> ()"
       ]
