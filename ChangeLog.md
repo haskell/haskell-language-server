@@ -3,6 +3,7 @@
 ## 2.7.0.0
 
 - Bindists for GHC 9.8.2
+  - Enable many more plugins, making GHC 9.8.2 fully supported
 - Fix refactor code actions for vim
 - Preserve HLint's diagnostic severity
 - Many other bug fixes.
