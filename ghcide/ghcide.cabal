@@ -306,7 +306,6 @@ library ghcide-test-utils
       lsp-test ^>= 0.17,
       tasty-hunit >= 0.10,
       text,
-      row-types,
 
   default-extensions:
       LambdaCase
