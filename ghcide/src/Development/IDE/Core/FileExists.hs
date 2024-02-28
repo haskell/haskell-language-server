@@ -40,6 +40,7 @@ import qualified System.Directory                      as Dir
 import qualified System.FilePath.Glob                  as Glob
 
 {- Note [File existence cache and LSP file watchers]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Some LSP servers provide the ability to register file watches with the client, which will then notify
 us of file changes. Some clients can do this more efficiently than us, or generally it's a tricky
 problem
@@ -135,6 +136,7 @@ getFileExists :: NormalizedFilePath -> Action Bool
 getFileExists fp = use_ GetFileExists fp
 
 {- Note [Which files should we watch?]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 The watcher system gives us a lot of flexibility: we can set multiple watchers, and they can all watch on glob
 patterns.
 
@@ -201,6 +203,7 @@ fileExistsRulesFast recorder isWatched =
             else fileExistsSlow file
 
 {- Note [Invalidating file existence results]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 We have two mechanisms for getting file existence information:
 - The file existence cache
 - The VFS lookup

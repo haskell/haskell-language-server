@@ -203,6 +203,7 @@ parseError :: Maybe A.Value -> T.Text -> PluginError
 parseError value errMsg = PluginInternalError ("Ide.Plugin.Resolve: Error parsing value:"<> (T.pack $ show value) <> " Error: "<> errMsg)
 
 {- Note [Code action resolve fallback to commands]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   To make supporting code action resolve easy for plugins, we want to let them
   provide one implementation that can be used both when clients support
   resolve, and when they don't.

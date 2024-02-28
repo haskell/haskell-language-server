@@ -446,6 +446,7 @@ diagInRange Diagnostic {_range = dr} r = dr `subRange` extendedRange
     extendedRange = extendToFullLines r
 
 -- Note [Removing imports is preferred]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- It's good to prefer the remove imports code action because an unused import
 -- is likely to be removed and less likely the warning will be disabled.
 -- Therefore actions to remove a single or all redundant imports should be

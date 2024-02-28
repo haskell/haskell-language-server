@@ -60,7 +60,9 @@ common pedantic
   if flag(pedantic)
     ghc-options:
       -Werror
-      -- Note [unused-packages] Some packages need CPP conditioned on MIN_VERSION_ghc(x,y,z).
+      -- Note [unused-packages]
+      -- ~~~~~~~~~~~~~~~~~~~~~~
+      -- Some packages need CPP conditioned on MIN_VERSION_ghc(x,y,z).
       -- MIN_VERSION_<pkg> is CPP macro that cabal defines only when <pkg> is declared as a dependency.
       -- But -Wunused-packages still reports it as unused dependency if it's not imported.
       -- For packages with such "unused" dependencies we demote -Wunused-packages error
