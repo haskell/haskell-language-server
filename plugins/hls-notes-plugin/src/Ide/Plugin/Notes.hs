@@ -137,7 +137,7 @@ findNotesInFile file recorder = do
 noteRefRegex, noteRegex :: Regex
 (noteRefRegex, noteRegex) =
     ( mkReg ("note \\[(.+)\\]" :: String)
-    , mkReg ("note \\[([[:print:]]+)\\][[:blank:]]*[[:space:]][[:blank:]]*(--)?[[:blank:]]*~~~" :: String)
+    , mkReg ("note \\[([[:print:]]+)\\][[:blank:]]*\r?\n[[:blank:]]*(--)?[[:blank:]]*~~~" :: String)
     )
     where
         mkReg = makeRegexOpts (defaultCompOpt { caseSensitive = False }) defaultExecOpt
