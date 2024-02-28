@@ -14,10 +14,11 @@
 # Plugins
 /plugins/hls-alternate-number-format-plugin @drsooch
 /plugins/hls-cabal-fmt-plugin @VeryMilkyJoe @fendor
+/plugins/hls-cabal-gild-plugin @fendor
 /plugins/hls-cabal-plugin @fendor
 /plugins/hls-call-hierarchy-plugin @July541
 /plugins/hls-change-type-signature-plugin
-/plugins/hls-class-plugin 
+/plugins/hls-class-plugin
 /plugins/hls-code-range-plugin @kokobd
 /plugins/hls-eval-plugin
 /plugins/hls-explicit-fixity-plugin
@@ -33,7 +34,7 @@
 /plugins/hls-pragmas-plugin @eddiemundo
 /plugins/hls-qualify-imported-names-plugin @eddiemundo
 /plugins/hls-refactor-plugin @santiweight
-/plugins/hls-rename-plugin 
+/plugins/hls-rename-plugin
 /plugins/hls-retrie-plugin @pepeiborra
 /plugins/hls-semantic-tokens-plugin @soulomoon
 /plugins/hls-splice-plugin @konn
@@ -48,7 +49,7 @@
 /docs @michaelpj
 
 # CI
-/.circleci 
+/.circleci
 /.github @michaelpj @fendor
 
 # Build
