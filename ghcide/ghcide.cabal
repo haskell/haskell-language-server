@@ -285,7 +285,7 @@ library ghcide-test-utils
   visibility: public
   default-language:   GHC2021
 
-  hs-source-dirs: test/src test/cabal 
+  hs-source-dirs: test/src test/cabal
   exposed-modules:
     Development.IDE.Test
     Development.IDE.Test.Runfiles
@@ -306,14 +306,13 @@ library ghcide-test-utils
       lsp-test ^>= 0.17,
       tasty-hunit >= 0.10,
       text,
-      row-types,
 
   default-extensions:
       LambdaCase
       OverloadedStrings
       RecordWildCards
       ViewPatterns
-  
+
 test-suite ghcide-tests
   import: warnings
   type:               exitcode-stdio-1.0
@@ -365,7 +364,7 @@ test-suite ghcide-tests
   if impl(ghc <9.3)
     build-depends: ghc-typelits-knownnat
 
-  hs-source-dirs:     test/exe 
+  hs-source-dirs:     test/exe
   ghc-options:        -threaded -O0
 
   main-is:            Main.hs
@@ -392,7 +391,6 @@ test-suite ghcide-tests
     NonLspCommandLine
     OpenCloseTest
     OutlineTests
-    PluginParsedResultTests
     PluginSimpleTests
     PositionMappingTests
     PreprocessorTests

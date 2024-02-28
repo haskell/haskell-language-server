@@ -1,9 +1,0 @@
-cabal-version:  1.18
-name: plugin
-version: 1.0.0
-build-type: Simple
-
-library
-  build-depends: base, record-dot-preprocessor, record-hasfield
-  exposed-modules: RecordDot
-  hs-source-dirs: .
