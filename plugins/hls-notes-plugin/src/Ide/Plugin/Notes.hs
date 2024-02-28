@@ -128,7 +128,7 @@ findNotesInFile file recorder = do
             ((x@(name, (char, _)):xs, m), (n, nc, c)) -> \char' ->
                 let !c' = c + 1
                     (!n', !nc') = if char' == '\n' then (n + 1, c') else (n, nc)
-                    p = if char == c then
+                    p@(!_, !_) = if char == c then
                             (xs, HM.insert name (Position (uint n') (uint (char - nc'))) m)
                         else (x:xs, m)
                 in (p, (n', nc', c'))
@@ -137,7 +137,7 @@ findNotesInFile file recorder = do
 noteRefRegex, noteRegex :: Regex
 (noteRefRegex, noteRegex) =
     ( mkReg ("note \\[(.+)\\]" :: String)
-    , mkReg ("note \\[([[:print:]]+)\\][[:blank:]]*[[:space:]][[:space:]]?~~~" :: String)
+    , mkReg ("note \\[([[:print:]]+)\\][[:blank:]]*[[:space:]](--)?[[:blank:]]*~~~" :: String)
     )
     where
         mkReg = makeRegexOpts (defaultCompOpt { caseSensitive = False }) defaultExecOpt
