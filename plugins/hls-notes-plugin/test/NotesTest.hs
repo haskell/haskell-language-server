@@ -19,14 +19,16 @@ gotoNoteTests :: TestTree
 gotoNoteTests = testGroup "Goto Note Definition"
     [ testCase "single_file" $ runSessionWithServer def plugin testDataDir $ do
         doc <- openDoc "NoteDef.hs" "haskell"
-        _ <- waitForAllProgressDone
+        waitForCustomMessage "ghcide/cradle/loaded" (const $ Just ())
+        waitForAllProgressDone
         defs <- getDefinitions doc (Position 3 41)
         liftIO $ do
           fp <- canonicalizePath "NoteDef.hs"
           defs @?= InL (Definition (InR [Location (filePathToUri fp) (Range (Position 8 9) (Position 8 9))]))
     , testCase "liberal_format" $ runSessionWithServer def plugin testDataDir $ do
         doc <- openDoc "NoteDef.hs" "haskell"
-        _ <- waitForAllProgressDone
+        waitForCustomMessage "ghcide/cradle/loaded" (const $ Just ())
+        waitForAllProgressDone
         defs <- getDefinitions doc (Position 5 64)
         liftIO $ do
           fp <- canonicalizePath "NoteDef.hs"
@@ -34,13 +36,16 @@ gotoNoteTests = testGroup "Goto Note Definition"
 
     , testCase "invalid_note" $ runSessionWithServer def plugin testDataDir $ do
         doc <- openDoc "NoteDef.hs" "haskell"
-        _ <- waitForAllProgressDone
+        waitForCustomMessage "ghcide/cradle/loaded" (const $ Just ())
+        waitForAllProgressDone
         defs <- getDefinitions doc (Position 6 54)
         liftIO $ do
             defs @?= InL (Definition (InR []))
 
     , testCase "no_note" $ runSessionWithServer def plugin testDataDir $ do
         doc <- openDoc "NoteDef.hs" "haskell"
+        waitForCustomMessage "ghcide/cradle/loaded" (const $ Just ())
+        waitForAllProgressDone
         defs <- getDefinitions doc (Position 1 0)
         liftIO $ defs @?= InL (Definition (InR []))
 
