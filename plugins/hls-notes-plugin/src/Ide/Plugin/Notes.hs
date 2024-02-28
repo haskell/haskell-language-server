@@ -1,6 +1,6 @@
 module Ide.Plugin.Notes (descriptor, Log) where
 
-import           Control.Lens                     (ix, (^.), (^?))
+import           Control.Lens                     ((^.))
 import           Control.Monad.Except             (throwError)
 import           Control.Monad.IO.Class           (liftIO)
 import           Control.Monad.Trans              (lift)
@@ -82,7 +82,8 @@ jumpToNote state _ param
         let Position l c = param ^. L.position
         contents <- fmap _file_text . err "Error getting file contents"
             =<< lift (LSP.getVirtualFile uriOrig)
-        line <- err "Line not found in file" (Rope.lines contents ^? ix (fromIntegral l))
+        line <- err "Line not found in file" (listToMaybe $ Rope.lines $ fst
+            (Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) contents))
         note <- err "No note at this position" $ listToMaybe $
             mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
         notes <- runActionE "notes.definedNotes" state $ useE MkGetNotes nfp

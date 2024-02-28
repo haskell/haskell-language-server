@@ -16,7 +16,7 @@ main = do
 ```
 
 Foo.hs
-```
+```haskell
 module Foo where
 
 doSomething :: IO ()
@@ -29,4 +29,4 @@ Some very important explanation
 -}
 ```
 
-Using "Go-to-definition on the Note reference in `Main.hs` will jump to the beginning of the note in `Foo.hs`.
+Using "Go-to-definition" on the Note reference in `Main.hs` will jump to the beginning of the note in `Foo.hs`.
