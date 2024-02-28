@@ -87,7 +87,7 @@ jumpToNote state _ param
         note <- err "No note at this position" $ listToMaybe $
             mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
         notes <- runActionE "notes.definedNotes" state $ useE MkGetNotes nfp
-        (noteFp, pos) <- err "Note not found" (HM.lookup note notes)
+        (noteFp, pos) <- err ("Note definition (a comment of the form `{- Note [" <> note <> "]\\n~~~ ... -}`) not found") (HM.lookup note notes)
         pure $ InL (Definition (InL
                 (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))
             ))
