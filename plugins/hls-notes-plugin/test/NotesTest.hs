@@ -30,7 +30,8 @@ gotoNoteTests = testGroup "Goto Note Definition"
         defs <- getDefinitions doc (Position 5 64)
         liftIO $ do
           fp <- canonicalizePath "NoteDef.hs"
-          defs @?= InL (Definition (InR [Location (filePathToUri fp) (Range (Position 18 9) (Position 18 9))]))
+          defs @?= InL (Definition (InR [Location (filePathToUri fp) (Range (Position 18 11) (Position 18 11))]))
+
     , testCase "invalid_note" $ runSessionWithServer def plugin testDataDir $ do
         doc <- openDoc "NoteDef.hs" "haskell"
         _ <- waitForAllProgressDone

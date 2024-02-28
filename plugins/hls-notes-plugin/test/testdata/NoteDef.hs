@@ -16,10 +16,10 @@ This is also a very common thing to do for GHC
 
 -}
 
--- Note [Single line comments]
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- GHC's notes script only allows multiline comments to define notes, but in the
--- HLS codebase this single line style can be found as well.
+  -- Note [Single line comments]
+  -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  -- GHC's notes script only allows multiline comments to define notes, but in the
+  -- HLS codebase this single line style can be found as well.
 
 {- Note [Not a valid Note]
 
