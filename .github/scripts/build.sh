@@ -11,9 +11,6 @@ uname
 pwd
 env
 
-# setup the locale as HLS contains non-ascii modules and content.
-setup_locale
-
 # ensure ghcup
 install_ghcup
 
