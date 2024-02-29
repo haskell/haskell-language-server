@@ -160,9 +160,9 @@ toBase conv header n
   | otherwise = header <> upper (conv n "")
 
 #if MIN_VERSION_base(4,17,0)
-toOctal, toDecimal, toBinary, toHex :: Integral a => a -> String
+toOctal, toBinary, toHex :: Integral a => a -> String
 #else
-toOctal, toDecimal, toBinary, toHex:: (Integral a, Show a) => a -> String
+toOctal, toBinary, toHex:: (Integral a, Show a) => a -> String
 #endif
 
 toBinary = toBase showBin_ "0b"
@@ -172,9 +172,10 @@ toBinary = toBase showBin_ "0b"
 
 toOctal = toBase showOct "0o"
 
-toDecimal = toBase showInt ""
-
 toHex = toBase showHex "0x"
+
+toDecimal :: Integral a => a -> String
+toDecimal = toBase showInt ""
 
 toFloatDecimal :: RealFloat a => a -> String
 toFloatDecimal val = showFFloat Nothing val ""

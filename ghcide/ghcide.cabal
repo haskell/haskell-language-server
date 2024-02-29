@@ -2,7 +2,7 @@ cabal-version:      3.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            2.6.0.0
+version:            2.7.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -14,7 +14,7 @@ homepage:
   https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC ==9.8.1 || ==9.6.4 || ==9.4.8 || ==9.2.8
+tested-with:        GHC ==9.8.2 || ==9.6.4 || ==9.4.8 || ==9.2.8
 extra-source-files:
   CHANGELOG.md
   README.md
@@ -88,8 +88,8 @@ library
     , hie-bios                     ==0.13.1
     , hie-compat                   ^>=0.3.0.0
     , hiedb                        ^>= 0.6.0.0
-    , hls-graph                    == 2.6.0.0
-    , hls-plugin-api               == 2.6.0.0
+    , hls-graph                    == 2.7.0.0
+    , hls-plugin-api               == 2.7.0.0
     , implicit-hie                 >= 0.1.4.0 && < 0.1.5
     , lens
     , list-t
@@ -285,7 +285,7 @@ library ghcide-test-utils
   visibility: public
   default-language:   GHC2021
 
-  hs-source-dirs: test/src test/cabal 
+  hs-source-dirs: test/src test/cabal
   exposed-modules:
     Development.IDE.Test
     Development.IDE.Test.Runfiles
@@ -306,14 +306,13 @@ library ghcide-test-utils
       lsp-test ^>= 0.17,
       tasty-hunit >= 0.10,
       text,
-      row-types,
 
   default-extensions:
       LambdaCase
       OverloadedStrings
       RecordWildCards
       ViewPatterns
-  
+
 test-suite ghcide-tests
   import: warnings
   type:               exitcode-stdio-1.0
@@ -365,7 +364,7 @@ test-suite ghcide-tests
   if impl(ghc <9.3)
     build-depends: ghc-typelits-knownnat
 
-  hs-source-dirs:     test/exe 
+  hs-source-dirs:     test/exe
   ghc-options:        -threaded -O0
 
   main-is:            Main.hs
@@ -392,7 +391,6 @@ test-suite ghcide-tests
     NonLspCommandLine
     OpenCloseTest
     OutlineTests
-    PluginParsedResultTests
     PluginSimpleTests
     PositionMappingTests
     PreprocessorTests

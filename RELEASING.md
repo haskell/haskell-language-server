@@ -14,12 +14,7 @@
       - `shake-bench` is an internal testing tool, not exposed to the outside world. Thus, no version bump required for releases.
   - For updating cabal files, the following script can be used:
     - ```sh
-      # Update all `version:` fields
-      sed -ri "s/^version:( +)2.2.0.0/version:\12.3.0.0/" **/*.cabal
-      # Update all constraints expected to be in the form `== <version>`.
-      # We usually don't force an exact version, so this is relatively unambiguous.
-      # We could introduce some more ad-hoc parsing, if there is still ambiguity.
-      sed -ri "s/== 2.2.0.0/== 2.3.0.0/" **/*.cabal
+      ./release/update_versions.sh <OLD_VERSION> <NEW_VERSION>
       ```
     - It still requires manual verification and review
 - [ ] generate and update changelog
@@ -45,9 +40,9 @@
   - Afterwards, the artifacts are available at: `https://downloads.haskell.org/~hls/haskell-language-server-<version>/`
   - Run `SIGNING_KEY=... ../../release/upload.sh purge_all` to remove CDN caches
 - [ ] create PR to [ghcup-metadata](https://github.com/haskell/ghcup-metadata)
-  - [ ] update `ghcup-0.0.7.yaml` and `ghcup-vanilla-0.0.7.yaml`
+  - [ ] update `ghcup-vanilla-0.0.8.yaml` and `ghcup-vanilla-0.0.7.yaml`
     - can use `sh scripts/release/create-yaml-snippet.sh <version>` to generate a snippet that can be manually inserted into the yaml files
-  - [ ] update `hls-metadata-0.0.1.json`
+  - ~~update `hls-metadata-0.0.1.json`~~ Currently unnecessary, GHCup builds its own HLS binaries and updates that file.
     - utilize `cabal run ghcup-gen -- generate-hls-ghcs -f ghcup-0.0.7.yaml --format json --stdout` in the root of ghcup-metadata repository
   - Be sure to mark the correct latest version and add the 'recommended' tag to the latest release.
 - [ ] get sign-off on release

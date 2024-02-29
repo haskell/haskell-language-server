@@ -56,7 +56,6 @@ import OutlineTests
 import HighlightTests
 import FindDefinitionAndHoverTests
 import PluginSimpleTests
-import PluginParsedResultTests
 import PreprocessorTests
 import THTests
 import SymlinkTests
@@ -103,7 +102,6 @@ main = do
     , HighlightTests.tests
     , FindDefinitionAndHoverTests.tests
     , PluginSimpleTests.tests
-    , PluginParsedResultTests.tests
     , PreprocessorTests.tests
     , THTests.tests
     , SymlinkTests.tests

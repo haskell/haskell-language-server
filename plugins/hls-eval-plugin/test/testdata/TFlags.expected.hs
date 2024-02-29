@@ -20,8 +20,9 @@ module TFlags where
 Options apply only in the section where they are defined (unless they are in the setup section), so this will fail:
 
 >>> class L a b c
-Too many parameters for class ‘L’
+Too many parameters for class `L'
 (Enable MultiParamTypeClasses to allow multi-parameter classes)
+In the class declaration for `L'
 -}
 
 
@@ -31,8 +32,9 @@ Options apply to all tests in the same section after their declaration.
 Not set yet:
 
 >>> class D
-No parameters for class ‘D’
+No parameters for class `D'
 (Enable MultiParamTypeClasses to allow no-parameter classes)
+In the class declaration for `D'
 
 Now it works:
 
