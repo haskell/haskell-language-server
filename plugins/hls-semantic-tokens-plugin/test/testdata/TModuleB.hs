@@ -1,8 +1,8 @@
 module TModuleB where
 
-import TModula𐐀bA
-import qualified TModula𐐀bA
+import TModuleA
+import qualified TModuleA
 
 go = Game 1
 
-a𐐀bb = TModula𐐀bA.a𐐀b go
+a𐐀bb = TModuleA.a𐐀b go
