@@ -1,4 +1,4 @@
-module TModula𐐀bA where
+module TModuleA where
 
 data Game = Game {a𐐀b :: Int}
 
