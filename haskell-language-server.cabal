@@ -24,10 +24,6 @@ extra-source-files:
   test/testdata/**/*.hs
   test/testdata/**/*.json
 
-  -- some README's have a .gif showcasing the feature
-  plugins/**/*.md
-  plugins/**/*.gif
-
   -- These globs should only match test/testdata
   plugins/**/*.project
   plugins/**/*.expected
