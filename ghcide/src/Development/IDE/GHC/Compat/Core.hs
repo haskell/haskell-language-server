@@ -491,7 +491,7 @@ import           GHC.Unit.Module              hiding (ModLocation (..), UnitId,
                                                toUnitId)
 import qualified GHC.Unit.Module              as Module
 import           GHC.Unit.State               (ModuleOrigin (..))
-import           GHC.Utils.Error              (Severity (..), emptyMessages)
+import           GHC.Utils.Error              (Severity (..), emptyMessages, mkPlainErrorMsgEnvelope)
 import           GHC.Utils.Panic              hiding (try)
 import qualified GHC.Utils.Panic.Plain        as Plain
 
