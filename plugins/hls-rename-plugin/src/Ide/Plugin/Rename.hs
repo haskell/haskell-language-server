@@ -25,6 +25,7 @@ import           Data.List.NonEmpty                    (NonEmpty ((:|)),
 import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
+import           Data.Row
 import qualified Data.Set                              as S
 import qualified Data.Text                             as T
 import           Development.IDE                       (Recorder, WithPriority,
@@ -53,7 +54,6 @@ import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
-import           Data.Row
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
@@ -72,6 +72,13 @@ prepareRenameProvider :: PluginMethodHandler IdeState Method_TextDocumentPrepare
 prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) pos _progressToken) = do
     nfp <- getNormalizedFilePathE uri
     namesUnderCursor <- getNamesAtPos state nfp pos
+    -- When this handler says that rename is invalid, VSCode shows "The element can't be renamed"
+    -- and doesn't even allow you to create full rename request.
+    -- This handler deliberately approximates "things that definitely can't be renamed"
+    -- to mean "there is no Name at given position".
+    --
+    -- In particular it allows some cases through (e.g. cross-module renames),
+    -- so that the full rename handler can give more informative error about them.
     let renameValid = not $ null namesUnderCursor
     pure $ InL $ PrepareRenameResult $ InR $ InR $ #defaultBehavior .== renameValid
 
