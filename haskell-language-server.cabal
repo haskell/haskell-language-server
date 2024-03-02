@@ -508,6 +508,7 @@ library hls-rename-plugin
     , mtl
     , mod
     , syb
+    , row-types
     , text
     , transformers
     , unordered-containers
@@ -526,6 +527,9 @@ test-suite hls-rename-plugin-tests
     , hls-plugin-api
     , haskell-language-server:hls-rename-plugin
     , hls-test-utils             == 2.7.0.0
+    , lens
+    , lsp-types
+    , text
 
 -----------------------------
 -- retrie plugin

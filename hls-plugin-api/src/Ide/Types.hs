@@ -475,6 +475,9 @@ instance PluginMethod Request Method_CodeLensResolve where
 instance PluginMethod Request Method_TextDocumentRename where
   handlesRequest = pluginEnabledWithFeature plcRenameOn
 
+instance PluginMethod Request Method_TextDocumentPrepareRename where
+  handlesRequest = pluginEnabledWithFeature plcRenameOn
+
 instance PluginMethod Request Method_TextDocumentHover where
   handlesRequest = pluginEnabledWithFeature plcHoverOn
 
@@ -599,7 +602,7 @@ class PluginMethod Request m => PluginRequestMethod (m :: Method ClientToServer 
 ---
 instance PluginRequestMethod Method_TextDocumentCodeAction where
   combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _ _) (CodeActionParams _ _ _ _ context) resps =
-      InL $ fmap compat $ filter wasRequested $ concat $ mapMaybe nullToMaybe $ toList resps
+      InL $ fmap compat $ concatMap (filter wasRequested) $ mapMaybe nullToMaybe $ toList resps
     where
       compat :: (Command |? CodeAction) -> (Command |? CodeAction)
       compat x@(InL _) = x
@@ -656,6 +659,10 @@ instance PluginRequestMethod Method_CodeLensResolve where
     combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentRename where
+
+instance PluginRequestMethod Method_TextDocumentPrepareRename where
+    -- TODO more intelligent combining?
+    combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentHover where
   combineResponses _ _ _ _ (mapMaybe nullToMaybe . toList -> hs :: [Hover]) =
