@@ -4,6 +4,7 @@
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedLists       #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE OverloadedStrings     #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
@@ -57,6 +58,7 @@ module Test.Hls
     WithPriority(..),
     Recorder,
     Priority(..),
+    captureKickDiagnostics,
     )
 where
 
@@ -124,6 +126,9 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
+import Language.LSP.Protocol.Lens qualified as L
+import Data.Maybe (mapMaybe)
+import Control.Lens ((^.))
 
 data Log
   = LogIDEMain IDEMain.Log
@@ -712,6 +717,17 @@ setHlsConfig config = do
   -- requests!
   skipManyTill anyMessage (void configurationRequest)
 
+captureKickDiagnostics :: Session [Diagnostic]
+captureKickDiagnostics = do
+    _ <- skipManyTill anyMessage nonTrivialKickStart2
+    messages <- manyTill anyMessage nonTrivialKickDone2
+    pure $ concat $ mapMaybe diagnostics messages
+    where
+        diagnostics :: FromServerMessage' a -> Maybe [Diagnostic]
+        diagnostics = \msg -> case msg of
+            FromServerMess SMethod_TextDocumentPublishDiagnostics diags -> Just (diags ^. L.params . L.diagnostics)
+            _ -> Nothing
+
 waitForKickDone :: Session ()
 waitForKickDone = void $ skipManyTill anyMessage nonTrivialKickDone
 
@@ -724,9 +740,17 @@ nonTrivialKickDone = kick (Proxy @"kick/done") >>= guard . not . null
 nonTrivialKickStart :: Session ()
 nonTrivialKickStart = kick (Proxy @"kick/start") >>= guard . not . null
 
+nonTrivialKickDone2 :: Session ()
+nonTrivialKickDone2 = kick (Proxy @"kick/done/hlint") >>= guard . not . null
+
+nonTrivialKickStart2 :: Session ()
+nonTrivialKickStart2 = kick (Proxy @"kick/start/hlint") >>= guard . not . null
+
+
 kick :: KnownSymbol k => Proxy k -> Session [FilePath]
 kick proxyMsg = do
   NotMess TNotificationMessage{_params} <- customNotification proxyMsg
   case fromJSON _params of
     Success x -> return x
     other     -> error $ "Failed to parse kick/done details: " <> show other
+

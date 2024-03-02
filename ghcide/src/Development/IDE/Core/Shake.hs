@@ -1281,9 +1281,9 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
         let uri' = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri' $ withTrace ("report diagnostics " <> fromString (fromNormalizedFilePath fp)) $ \tag -> do
-             join $ mask_ $ do
-                 lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri' publishedDiagnostics
-                 let action = when (lastPublish /= newDiags) $ case lspEnv of
+            join $ mask_ $ do
+                lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri' publishedDiagnostics
+                let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
                             logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
                         Just env -> LSP.runLspT env $ do
@@ -1291,19 +1291,18 @@ updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnosti
                             liftIO $ tag "key" (show k)
                             LSP.sendNotification SMethod_TextDocumentPublishDiagnostics $
                                 LSP.PublishDiagnosticsParams (fromNormalizedUri uri') (fmap fromIntegral ver) newDiags
-                 return action
+                return action
     where
         diagsFromRule :: Diagnostic -> Diagnostic
         diagsFromRule c@Diagnostic{_range}
             | coerce ideTesting = c & L.relatedInformation ?~
-                         [
-                        DiagnosticRelatedInformation
+                        [ DiagnosticRelatedInformation
                             (Location
                                 (filePathToUri $ fromNormalizedFilePath fp)
                                 _range
                             )
                             (T.pack $ show k)
-                            ]
+                        ]
             | otherwise = c
 
 
