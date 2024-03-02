@@ -22,10 +22,14 @@ extra-source-files:
   test/testdata/**/*.cabal
   test/testdata/**/*.yaml
   test/testdata/**/*.hs
+  test/testdata/**/*.json
 
+  -- These globs should only match test/testdata
   plugins/**/*.project
+  plugins/**/*.expected
   plugins/**/*.cabal
   plugins/**/*.yaml
+  plugins/**/*.txt
   plugins/**/*.hs
 
   bindist/wrapper.in

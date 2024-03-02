@@ -178,7 +178,7 @@ semanticTokensFullDeltaTests :: TestTree
 semanticTokensFullDeltaTests =
   testGroup "semanticTokensFullDeltaTests" $
     [ testCase "null delta since unchanged" $ do
-        let file1 = "TModula𐐀bA.hs"
+        let file1 = "TModuleA.hs"
         let expectDelta = InR (InL (SemanticTokensDelta (Just "1") []))
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
           doc1 <- openDoc file1 "haskell"
@@ -188,7 +188,7 @@ semanticTokensFullDeltaTests =
           liftIO $ delta @?= expectDelta
 
       , testCase "add tokens" $ do
-        let file1 = "TModula𐐀bA.hs"
+        let file1 = "TModuleA.hs"
         let expectDelta = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 20 0 (Just [2,0,3,8,0])]))
         --                                                                                         r c l t m
         --                                      where r = row, c = column, l = length, t = token, m = modifier
@@ -207,7 +207,7 @@ semanticTokensFullDeltaTests =
           liftIO $ delta @?= expectDelta
 
       , testCase "remove tokens" $ do
-        let file1 = "TModula𐐀bA.hs"
+        let file1 = "TModuleA.hs"
         let expectDelta = InR (InL (SemanticTokensDelta (Just "1") [SemanticTokensEdit 0 20 (Just [])]))
         -- delete all tokens
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1]) $ do
@@ -229,7 +229,7 @@ semanticTokensTests :: TestTree
 semanticTokensTests =
   testGroup "other semantic Token test" $
     [ testCase "module import test" $ do
-        let file1 = "TModula𐐀bA.hs"
+        let file1 = "TModuleA.hs"
         let file2 = "TModuleB.hs"
         Test.Hls.runSessionWithServerInTmpDir def semanticTokensPlugin (mkFs $ FS.directProjectMulti [file1, file2]) $ do
           doc1 <- openDoc file1 "haskell"
@@ -245,14 +245,14 @@ semanticTokensTests =
 
           result <- docSemanticTokensString def doc2
           let expect = unlines [
-                    "3:8-18 TModule \"TModula\\66560bA\""
-                    , "4:18-28 TModule \"TModula\\66560bA\""
+                    "3:8-16 TModule \"TModuleA\""
+                    , "4:18-26 TModule \"TModuleA\""
                     , "6:1-3 TVariable \"go\""
                     , "6:6-10 TDataConstructor \"Game\""
                     , "8:1-5 TVariable \"a\\66560bb\""
-                    , "8:8-19 TModule \"TModula\\66560bA.\""
-                    , "8:19-22 TRecordField \"a\\66560b\""
-                    , "8:23-25 TVariable \"go\""
+                    , "8:8-17 TModule \"TModuleA.\""
+                    , "8:17-20 TRecordField \"a\\66560b\""
+                    , "8:21-23 TVariable \"go\""
                 ]
           liftIO $ result @?= expect,
       goldenWithSemanticTokensWithDefaultConfig "mixed constancy test result generated from one ghc version" "T1",
