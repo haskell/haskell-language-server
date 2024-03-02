@@ -2,10 +2,13 @@
 
 module Main (main) where
 
+import           Control.Lens               ((^.))
 import           Data.Aeson
-import qualified Data.Map          as M
+import qualified Data.Map                   as M
+import           Data.Text                  (Text)
 import           Ide.Plugin.Config
-import qualified Ide.Plugin.Rename as Rename
+import qualified Ide.Plugin.Rename          as Rename
+import qualified Language.LSP.Protocol.Lens as L
 import           System.FilePath
 import           Test.Hls
 
@@ -64,11 +67,26 @@ tests = testGroup "Rename"
         rename doc (Position 2 17) "BinaryTree"
     , goldenWithRename "Type variable" "TypeVariable" $ \doc ->
         rename doc (Position 0 13) "b"
+    , goldenWithRename "Rename within comment" "Comment" $ \doc -> do
+        let expectedError = ResponseError
+                (InR ErrorCodes_InvalidParams)
+                "rename: Invalid Params: No symbol to rename at given position"
+                Nothing
+        renameExpectError expectedError doc (Position 0 10) "ImpossibleRename"
     ]
 
 goldenWithRename :: TestName-> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithRename title path act =
-    goldenWithHaskellDoc (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] }) renamePlugin title testDataDir path "expected" "hs" act
+    goldenWithHaskellDoc (def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] })
+       renamePlugin title testDataDir path "expected" "hs" act
+
+renameExpectError :: ResponseError -> TextDocumentIdentifier -> Position -> Text -> Session ()
+renameExpectError expectedError doc pos newName = do
+  let params = RenameParams Nothing doc pos newName
+  rsp <- request SMethod_TextDocumentRename params
+  case rsp ^. L.result of
+    Right _ -> liftIO $ assertFailure $ "Was expecting " <> show expectedError <> ", got success"
+    Left actualError -> liftIO $ assertEqual "ResponseError" expectedError actualError
 
 testDataDir :: FilePath
 testDataDir = "plugins" </> "hls-rename-plugin" </> "test" </> "testdata"

@@ -57,43 +57,49 @@ import           Language.LSP.Server
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
 descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $ (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers")
-    { pluginHandlers = mkPluginHandler SMethod_TextDocumentRename renameProvider
-    , pluginConfigDescriptor = defaultConfigDescriptor
-        { configCustomConfig = mkCustomConfig properties }
-    }
+descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $
+    (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers")
+        { pluginHandlers = mkPluginHandler SMethod_TextDocumentRename renameProvider
+        , pluginConfigDescriptor = defaultConfigDescriptor
+            { configCustomConfig = mkCustomConfig properties }
+        }
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
-        nfp <- getNormalizedFilePathE uri
-        directOldNames <- getNamesAtPos state nfp pos
-        directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
+    nfp <- getNormalizedFilePathE uri
+    directOldNames <- getNamesAtPos state nfp pos
+    directRefs <- concat <$> mapM (refsAtName state nfp) directOldNames
 
-        {- References in HieDB are not necessarily transitive. With `NamedFieldPuns`, we can have
-           indirect references through punned names. To find the transitive closure, we do a pass of
-           the direct references to find the references for any punned names.
-           See the `IndirectPuns` test for an example. -}
-        indirectOldNames <- concat . filter ((>1) . length) <$>
-            mapM (uncurry (getNamesAtPos state) <=< locToFilePos) directRefs
-        let oldNames = filter matchesDirect indirectOldNames ++ directOldNames
-            matchesDirect n = occNameFS (nameOccName n) `elem` directFS
-              where
-                directFS = map (occNameFS. nameOccName) directOldNames
-        refs <- HS.fromList . concat <$> mapM (refsAtName state nfp) oldNames
+    {- References in HieDB are not necessarily transitive. With `NamedFieldPuns`, we can have
+        indirect references through punned names. To find the transitive closure, we do a pass of
+        the direct references to find the references for any punned names.
+        See the `IndirectPuns` test for an example. -}
+    indirectOldNames <- concat . filter ((>1) . length) <$>
+        mapM (uncurry (getNamesAtPos state) <=< locToFilePos) directRefs
+    let oldNames = filter matchesDirect indirectOldNames ++ directOldNames
+           where
+             matchesDirect n = occNameFS (nameOccName n) `elem` directFS
+             directFS = map (occNameFS . nameOccName) directOldNames
 
-        -- Validate rename
-        crossModuleEnabled <- liftIO $ runAction "rename: config" state $ usePropertyAction #crossModule pluginId properties
-        unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
-        when (any isBuiltInSyntax oldNames) $ throwError $ PluginInternalError "Invalid rename of built-in syntax"
+    case oldNames of
+        -- There was no symbol at given position (e.g. rename triggered within a comment)
+        [] -> throwError $ PluginInvalidParams "No symbol to rename at given position"
+        _  -> do
+            refs <- HS.fromList . concat <$> mapM (refsAtName state nfp) oldNames
 
-        -- Perform rename
-        let newName = mkTcOcc $ T.unpack newNameText
-            filesRefs = collectWith locToUri refs
-            getFileEdit (uri, locations) = do
-              verTxtDocId <- lift $ getVersionedTextDoc (TextDocumentIdentifier uri)
-              getSrcEdit state verTxtDocId (replaceRefs newName locations)
-        fileEdits <- mapM getFileEdit filesRefs
-        pure $ InL $ fold fileEdits
+            -- Validate rename
+            crossModuleEnabled <- liftIO $ runAction "rename: config" state $ usePropertyAction #crossModule pluginId properties
+            unless crossModuleEnabled $ failWhenImportOrExport state nfp refs oldNames
+            when (any isBuiltInSyntax oldNames) $ throwError $ PluginInternalError "Invalid rename of built-in syntax"
+
+            -- Perform rename
+            let newName = mkTcOcc $ T.unpack newNameText
+                filesRefs = collectWith locToUri refs
+                getFileEdit (uri, locations) = do
+                    verTxtDocId <- lift $ getVersionedTextDoc (TextDocumentIdentifier uri)
+                    getSrcEdit state verTxtDocId (replaceRefs newName locations)
+            fileEdits <- mapM getFileEdit filesRefs
+            pure $ InL $ fold fileEdits
 
 -- | Limit renaming across modules.
 failWhenImportOrExport ::
