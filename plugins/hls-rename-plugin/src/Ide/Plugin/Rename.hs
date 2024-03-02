@@ -53,16 +53,27 @@ import qualified Language.LSP.Protocol.Lens            as L
 import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types
 import           Language.LSP.Server
+import           Data.Row
 
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
 descriptor :: Recorder (WithPriority E.Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder pluginId = mkExactprintPluginDescriptor recorder $
     (defaultPluginDescriptor pluginId "Provides renaming of Haskell identifiers")
-        { pluginHandlers = mkPluginHandler SMethod_TextDocumentRename renameProvider
+        { pluginHandlers = mconcat
+              [ mkPluginHandler SMethod_TextDocumentRename renameProvider
+              , mkPluginHandler SMethod_TextDocumentPrepareRename prepareRenameProvider
+              ]
         , pluginConfigDescriptor = defaultConfigDescriptor
             { configCustomConfig = mkCustomConfig properties }
         }
+
+prepareRenameProvider :: PluginMethodHandler IdeState Method_TextDocumentPrepareRename
+prepareRenameProvider state _pluginId (PrepareRenameParams (TextDocumentIdentifier uri) pos _progressToken) = do
+    nfp <- getNormalizedFilePathE uri
+    namesUnderCursor <- getNamesAtPos state nfp pos
+    let renameValid = not $ null namesUnderCursor
+    pure $ InL $ PrepareRenameResult $ InR $ InR $ #defaultBehavior .== renameValid
 
 renameProvider :: PluginMethodHandler IdeState Method_TextDocumentRename
 renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) pos newNameText) = do
@@ -82,7 +93,7 @@ renameProvider state pluginId (RenameParams _prog (TextDocumentIdentifier uri) p
              directFS = map (occNameFS . nameOccName) directOldNames
 
     case oldNames of
-        -- There was no symbol at given position (e.g. rename triggered within a comment)
+        -- There were no Names at given position (e.g. rename triggered within a comment or on a keyword)
         [] -> throwError $ PluginInvalidParams "No symbol to rename at given position"
         _  -> do
             refs <- HS.fromList . concat <$> mapM (refsAtName state nfp) oldNames

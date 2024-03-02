@@ -508,6 +508,7 @@ library hls-rename-plugin
     , mtl
     , mod
     , syb
+    , row-types
     , text
     , transformers
     , unordered-containers
