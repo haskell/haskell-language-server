@@ -112,6 +112,7 @@ tests =
   , goldenWithEval ":kind treats a multilined result properly" "T25" "hs"
   , goldenWithEvalAndFs "local imports" (FS.directProjectMulti ["T26.hs", "Util.hs"]) "T26" "hs"
   , goldenWithEval "Preserves one empty comment line after prompt" "T27" "hs"
+  , goldenWithEval "Evaluate comment after multiline function definition" "T28" "hs"
   , goldenWithEval "Multi line comments" "TMulti" "hs"
   , goldenWithEval "Multi line comments, with the last test line ends without newline" "TEndingMulti" "hs"
   , goldenWithEval "Evaluate expressions in Plain comments in both single line and multi line format" "TPlainComment" "hs"
