@@ -99,8 +99,10 @@ main = do
             Left err -> do
               T.hPutStrLn stderr (prettyError err NoShorten)
               case args of
-                Ghcide _ -> launchErrorLSP recorder (prettyError err Shorten)
-                _        -> pure ()
+                Ghcide (GhcideArguments { argsCommand = Main.LSP }) ->
+                    launchErrorLSP recorder (prettyError err Shorten)
+
+                _ -> exitFailure
 
 launchHaskellLanguageServer :: Recorder (WithPriority (Doc ())) -> Arguments -> IO (Either WrapperSetupError ())
 launchHaskellLanguageServer recorder parsedArgs = do
