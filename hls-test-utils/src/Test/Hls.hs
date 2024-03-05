@@ -63,9 +63,9 @@ where
 import           Control.Applicative.Combinators
 import           Control.Concurrent.Async           (async, cancel, wait)
 import           Control.Concurrent.Extra
-import           Control.Exception.Base
+import           Control.Exception.Safe
 import           Control.Lens.Extras                (is)
-import           Control.Monad                      (guard, unless, void)
+import           Control.Monad                      (guard, unless, void, when)
 import           Control.Monad.Extra                (forM)
 import           Control.Monad.IO.Class
 import           Data.Aeson                         (Result (Success),
@@ -106,11 +106,13 @@ import           Language.LSP.Protocol.Message
 import           Language.LSP.Protocol.Types        hiding (Null)
 import           Language.LSP.Test
 import           Prelude                            hiding (log)
-import           System.Directory                   (getCurrentDirectory,
+import           System.Directory                   (createDirectoryIfMissing,
+                                                     getCurrentDirectory,
+                                                     getTemporaryDirectory,
                                                      setCurrentDirectory)
-import           System.Environment                 (lookupEnv)
+import           System.Environment                 (lookupEnv, setEnv)
 import           System.FilePath
-import           System.IO.Extra                    (newTempDir, withTempDir)
+import           System.IO.Extra                    (newTempDirWithin)
 import           System.IO.Unsafe                   (unsafePerformIO)
 import           System.Process.Extra               (createPipe)
 import           System.Time.Extra
@@ -423,22 +425,24 @@ runSessionWithServerInTmpDir' ::
   Session a ->
   IO a
 runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = withLock lockForTempDirs $ do
+  testRoot <- setupTestEnvironment
   (recorder, _) <- initialiseTestRecorder
     ["LSP_TEST_LOG_STDERR", "HLS_TEST_HARNESS_STDERR", "HLS_TEST_LOG_STDERR"]
 
   -- Do not clean up the temporary directory if this variable is set to anything but '0'.
   -- Aids debugging.
   cleanupTempDir <- lookupEnv "HLS_TEST_HARNESS_NO_TESTDIR_CLEANUP"
-  let runTestInDir = case cleanupTempDir of
+  let runTestInDir action = case cleanupTempDir of
         Just val
-          | val /= "0" -> \action -> do
-            (tempDir, _) <- newTempDir
+          | val /= "0" -> do
+            (tempDir, _) <- newTempDirWithin testRoot
             a <- action tempDir
             logWith recorder Debug LogNoCleanup
             pure a
 
-        _ -> \action -> do
-          a <- withTempDir action
+        _ -> do
+          (tempDir, cleanup) <- newTempDirWithin testRoot
+          a <- action tempDir `finally` cleanup
           logWith recorder Debug LogCleanup
           pure a
 
@@ -447,6 +451,25 @@ runSessionWithServerInTmpDir' plugins conf sessConf caps tree act = withLock loc
     _fs <- FS.materialiseVFT tmpDir tree
     runSessionWithServer' plugins conf sessConf caps tmpDir act
 
+-- | Setup the test environment for isolated tests.
+--
+-- This creates a directory in the temporary directory that will be
+-- reused for running isolated tests.
+-- It returns the root to the testing directory that tests should use.
+-- This directory is not fully cleaned between reruns.
+-- However, it is totally safe to delete the directory between runs.
+--
+-- Additionally, this overwrites the 'XDG_CACHE_HOME' variable to isolate
+-- the tests from existing caches. 'hie-bios' and 'ghcide' honour the
+-- 'XDG_CACHE_HOME' environment variable and generate their caches there.
+setupTestEnvironment :: IO FilePath
+setupTestEnvironment = do
+  tmpDirRoot <- getTemporaryDirectory
+  let testRoot = tmpDirRoot </> "hls-test-root"
+      testCacheDir = testRoot </> ".cache"
+  createDirectoryIfMissing True testCacheDir
+  setEnv "XDG_CACHE_HOME" testCacheDir
+  pure testRoot
 goldenWithHaskellDocFormatter
   :: Pretty b
   => Config
