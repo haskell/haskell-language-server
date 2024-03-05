@@ -31,8 +31,8 @@ examples:
     package: lsp-types
     version: 2.1.1.0
     modules:
-        - src/Language/LSP/Types/WatchedFiles.hs
-        - src/Language/LSP/Types/CallHierarchy.hs
+        - generated/Language/LSP/Protocol/Internal/Types/DidChangeWatchedFilesParams.hs
+        - src/Language/LSP/Protocol/Types/SemanticTokens.hs
 
   - name: MultiLayerModules
     path: bench/MultiLayerModules.sh
