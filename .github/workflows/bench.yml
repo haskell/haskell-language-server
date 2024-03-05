@@ -49,6 +49,8 @@ jobs:
         ghc:
           - '9.2'
           - '9.4'
+          - '9.6'
+          - '9.8'
         os:
           - ubuntu-latest
 
@@ -115,13 +117,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['9.2', '9.4']
+        ghc: ['9.2', '9.4', '9.6', '9.8']
         os: [ubuntu-latest]
         cabal: ['3.10']
         example: ['cabal', 'lsp-types']
 
     steps:
-    - uses: haskell-actions/setup@v2.6.2
+    - uses: haskell-actions/setup@v2.6.1
       with:
         ghc-version  : ${{ matrix.ghc   }}
         cabal-version: ${{ matrix.cabal }}

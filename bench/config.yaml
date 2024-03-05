@@ -21,10 +21,10 @@ examples:
   # Medium-sized project without TH
   - name: cabal
     package: Cabal
-    version: 3.6.3.0
+    version: 3.10.2.1
     modules:
         - src/Distribution/Simple.hs
-        - src/Distribution/Types/Module.hs
+        - src/Distribution/Types/ComponentLocalBuildInfo.hs
     extra-args: [] # extra HLS command line args
   # Small-sized project with TH
   - name: lsp-types
@@ -129,7 +129,7 @@ versions:
 # WARNING: Currently bench versions later than e4234a3a5e347db249fccefb8e3fb36f89e8eafb
 # will be unable to send plugin configurations to earlier HLS versions. This causes
 # all plugins in those versions to always be enabled.
-# In addition bench proactively disables all plugins it knows about besides the 
+# In addition bench proactively disables all plugins it knows about besides the
 # ones in the following list. However because it can only disable plugins it
 # knows about, any plugins that are in old versions but were removed from HLS
 # before the current bench will not be disabled.

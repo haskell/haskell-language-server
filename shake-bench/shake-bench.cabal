@@ -17,8 +17,6 @@ source-repository head
 
 library
   -- Depends on Chart which is unbuildable after this point
-  if impl(ghc >= 9.5)
-    buildable: False
   exposed-modules:  Development.Benchmark.Rules
   hs-source-dirs:   src
   build-depends:
