@@ -333,7 +333,7 @@ benchRules build MkBenchRules{..} = do
              ++ concat
                 [[ "-h"
                   , "-i" <> show i
-                  , "-po" <> outHp
+                  , "-po" <> dropExtension outHp
                   , "-qg"]
                  | CheapHeapProfiling i <- [prof]]
              ++ ["-RTS"]
