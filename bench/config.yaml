@@ -29,7 +29,7 @@ examples:
   # Small-sized project with TH
   - name: lsp-types
     package: lsp-types
-    version: 1.5.0.0
+    version: 2.1.1.0
     modules:
         - src/Language/LSP/Types/WatchedFiles.hs
         - src/Language/LSP/Types/CallHierarchy.hs
