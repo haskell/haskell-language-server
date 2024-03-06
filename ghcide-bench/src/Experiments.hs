@@ -595,10 +595,10 @@ callCommandLogging cmd = do
     callCommand cmd
 
 simpleCabalCradleContent :: String
-simpleCabalCradleContent = "cradle:\n  cabal:"
+simpleCabalCradleContent = "cradle:\n  cabal:\n"
 
 simpleStackCradleContent :: String
-simpleStackCradleContent = "cradle:\n  stack:"
+simpleStackCradleContent = "cradle:\n  stack:\n"
 
 -- | Setup the benchmark
 -- we need to create a hie.yaml file for the examples
