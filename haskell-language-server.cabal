@@ -1842,7 +1842,6 @@ benchmark benchmark
     build-tool-depends:
         ghcide-bench:ghcide-bench,
         hp2pretty:hp2pretty,
-        implicit-hie:gen-hie
     default-extensions:
         LambdaCase
         RecordWildCards

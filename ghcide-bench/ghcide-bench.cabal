@@ -89,7 +89,6 @@ test-suite test
     default-language: GHC2021
     build-tool-depends:
         ghcide:ghcide,
-        implicit-hie:gen-hie
     main-is: Main.hs
     hs-source-dirs: test
     ghc-options: -Wunused-packages
