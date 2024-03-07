@@ -46,9 +46,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # benching the two latest GHCs we support now
+        # since benchmark are expansive.
+        # choosing the two latest are easier to maintain and more forward looking
         ghc:
-          - '9.2'
-          - '9.4'
           - '9.6'
           - '9.8'
         os:
@@ -117,7 +118,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['9.2', '9.4', '9.6', '9.8']
+        ghc: ['9.6', '9.8']
         os: [ubuntu-latest]
         cabal: ['3.10']
         example: ['cabal', 'lsp-types']
