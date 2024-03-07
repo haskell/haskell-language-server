@@ -593,6 +593,13 @@ test-suite hls-retrie-plugin-tests
 -- hlint plugin
 -----------------------------
 
+flag ghc-lib
+  description:
+    Use ghc-lib-parser rather than the ghc library (requires hlint and
+    ghc-lib-parser-ex to also be built with it)
+  default: True
+  manual: True
+
 flag hlint
   description: Enable hlint plugin
   default:     True
@@ -628,11 +635,17 @@ library hls-hlint-plugin
     , text
     , transformers
     , unordered-containers
-    , ghc-lib-parser
     , ghc-lib-parser-ex
     , apply-refact
 
-  cpp-options:   -DHLINT_ON_GHC_LIB
+  if flag(ghc-lib)
+    cpp-options:   -DGHC_LIB
+    build-depends:
+        ghc-lib-parser
+  else
+    build-depends:
+        ghc
+      , ghc-boot
 
   default-extensions:
     DataKinds
