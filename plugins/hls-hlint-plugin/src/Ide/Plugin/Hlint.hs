@@ -18,7 +18,11 @@
 -- lots of CPP, we just disable the warning until later.
 {-# OPTIONS_GHC -Wno-redundant-constraints   #-}
 
+#ifdef GHC_LIB
 #define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib_parser(x,y,z)
+#else
+#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc(x,y,z)
+#endif
 
 module Ide.Plugin.Hlint
   (
