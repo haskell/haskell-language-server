@@ -630,7 +630,6 @@ setup = do
         let path = examplesPath </> package
             package = packageName <> "-" <> showVersion packageVersion
             hieYamlPath = path </> "hie.yaml"
-        print hieYamlPath
         alreadySetup <- doesDirectoryExist path
         unless alreadySetup $
           case buildTool ?config of
