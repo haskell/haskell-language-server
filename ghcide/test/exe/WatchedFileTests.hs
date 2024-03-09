@@ -6,6 +6,7 @@ module WatchedFileTests (tests) where
 import           Control.Applicative.Combinators
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Aeson                      as A
+import           Data.List.Extra                 (drop1, dropEnd1)
 import qualified Data.Text                       as T
 import           Development.IDE.Test            (expectDiagnostics)
 import           Language.LSP.Protocol.Message
@@ -17,7 +18,6 @@ import           Language.LSP.Protocol.Types     hiding
 import           Language.LSP.Test
 import           System.Directory
 import           System.FilePath
--- import Test.QuickCheck.Instances ()
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           TestUtils
@@ -36,7 +36,7 @@ tests = testGroup "watched files"
 
     , testSession' "non workspace file" $ \sessionDir -> do
         tmpDir <- liftIO getTemporaryDirectory
-        let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
+        let yaml = "cradle: {direct: {arguments: [\"-i" <> drop1 (dropEnd1 (show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
         liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
         _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
         setIgnoringRegistrationRequests False

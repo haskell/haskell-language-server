@@ -4,6 +4,7 @@
 module THTests (tests) where
 
 import           Control.Monad.IO.Class      (liftIO)
+import           Data.List.Extra             (dropEnd, dropEnd1)
 import           Data.Row
 import qualified Data.Text                   as T
 import           Development.IDE.GHC.Util
@@ -141,7 +142,7 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")])]
 
     -- Change th from () to Bool
-    let aSource' = T.unlines $ init (T.lines aSource) ++ ["th_a = [d| a = False|]"]
+    let aSource' = T.unlines $ dropEnd1 (T.lines aSource) ++ ["th_a = [d| a = False|]"]
     changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $ aSource']
     -- generate an artificial warning to avoid timing out if the TH change does not propagate
     changeDoc cdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ cSource <> "\nfoo=()"]
@@ -175,11 +176,11 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
 
     expectDiagnostics [("THB.hs", [(DiagnosticSeverity_Warning, (4,1), "Top-level binding")])]
 
-    let aSource' = T.unlines $ init (init (T.lines aSource)) ++ ["th :: DecsQ", "th = [d| a = False|]"]
+    let aSource' = T.unlines $ dropEnd 2 (T.lines aSource) ++ ["th :: DecsQ", "th = [d| a = False|]"]
     changeDoc adoc [TextDocumentContentChangeEvent . InR . (.==) #text $ aSource']
 
     -- modify b too
-    let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
+    let bSource' = T.unlines $ dropEnd1 (T.lines bSource) ++ ["$th"]
     changeDoc bdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ bSource']
     waitForProgressBegin
     waitForAllProgressDone

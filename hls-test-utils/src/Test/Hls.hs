@@ -65,7 +65,7 @@ import           Control.Concurrent.Async           (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Safe
 import           Control.Lens.Extras                (is)
-import           Control.Monad                      (guard, unless, void, when)
+import           Control.Monad                      (guard, unless, void)
 import           Control.Monad.Extra                (forM)
 import           Control.Monad.IO.Class
 import           Data.Aeson                         (Result (Success),
