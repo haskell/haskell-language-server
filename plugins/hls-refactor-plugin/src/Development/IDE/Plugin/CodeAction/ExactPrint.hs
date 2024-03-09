@@ -37,7 +37,7 @@ import           Development.IDE.Plugin.CodeAction.Util
 import           Control.Lens                           (_head, _last, over)
 import           Data.Bifunctor                         (first)
 import           Data.Default                           (Default (..))
-import           Data.Maybe                             (fromJust, fromMaybe,
+import           Data.Maybe                             (fromMaybe,
                                                          mapMaybe)
 import           GHC                                    (AddEpAnn (..),
                                                          AnnContext (..),
@@ -82,15 +82,13 @@ rewriteToEdit :: HasCallStack =>
   Either String [TextEdit]
 rewriteToEdit dflags
               (Rewrite dst f) = do
-  (ast, _ , _) <- runTransformT
-                          $ do
+  (ast, _ , _) <- runTransformT $ do
     ast <- f dflags
     pure $ traceAst "REWRITE_result" $ resetEntryDP ast
-  let editMap =
-        [ TextEdit (fromJust $ srcSpanToRange dst) $
-            T.pack $ exactPrint ast
-        ]
-  pure editMap
+  let edits = case srcSpanToRange dst of
+        Just range -> [ TextEdit range $ T.pack $ exactPrint ast ]
+        Nothing -> []
+  pure edits
 
 -- | Convert a 'Rewrite' into a 'WorkspaceEdit'
 rewriteToWEdit :: DynFlags

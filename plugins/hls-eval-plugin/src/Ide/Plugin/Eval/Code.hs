@@ -85,7 +85,7 @@ asStmts (Property t _ _) =
 myExecStmt :: String -> ExecOptions -> Ghc (Either String (Maybe String))
 myExecStmt stmt opts = do
     (temp, purge) <- liftIO newTempFile
-    evalPrint <- head <$> runDecls ("evalPrint x = P.writeFile "<> show temp <> " (P.show x)")
+    evalPrint <- head <$> runDecls ("evalPrint x = P.writeFile " <> show temp <> " (P.show x)")
     modifySession $ \hsc -> hsc {hsc_IC = setInteractivePrintName (hsc_IC hsc) evalPrint}
     result <- execStmt stmt opts >>= \case
               ExecComplete (Left err) _ -> pure $ Left $ show err
