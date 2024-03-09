@@ -122,6 +122,7 @@
     - Development.IDE.Plugin.CodeAction.ExactPrint
     - Development.IDE.Session
     - UnificationSpec
+    - WatchedFileTests #Previously part of GHCIDE Main tests
 
   - name: [Prelude.last, Data.List.last]
     within:
@@ -142,6 +143,9 @@
     - Ide.PluginUtils
     - Development.Benchmark.Rules
     - TErrorGivenPartialSignature
+    - IfaceTests #Previously part of GHCIDE Main tests
+    - THTests #Previously part of GHCIDE Main tests
+    - WatchedFileTests #Previously part of GHCIDE Main tests
 
   - name: Data.List.foldl1'
     within: []

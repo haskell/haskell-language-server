@@ -4,7 +4,6 @@
 module IfaceTests (tests) where
 
 import           Control.Monad.IO.Class        (liftIO)
-import           Data.List.Extra               (dropEnd1)
 import           Data.Row
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Util
@@ -50,7 +49,7 @@ ifaceTHTest = testCase "iface-th-test" $ runWithExtraFiles "TH" $ \dir -> do
     cdoc <- createDoc cPath "haskell" cSource
 
     -- Change [TH]a from () to Bool
-    liftIO $ writeFileUTF8 aPath (T.unpack $ T.unlines $ dropEnd1 (T.lines aSource) ++ ["th_a = [d| a = False|]"])
+    liftIO $ writeFileUTF8 aPath (unlines $ init (lines $ T.unpack aSource) ++ ["th_a = [d| a = False|]"])
 
     -- Check that the change propagates to C
     changeDoc cdoc [TextDocumentContentChangeEvent . InR . (.==) #text $ cSource]
