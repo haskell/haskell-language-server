@@ -1433,7 +1433,7 @@ library hls-stylish-haskell-plugin
     , hls-plugin-api   == 2.7.0.0
     , lsp-types
     , mtl
-    , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14.2 || ^>=0.14.6
+    , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14
     , text
 
 
