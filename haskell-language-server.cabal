@@ -1416,7 +1416,7 @@ flag stylishHaskell
   manual:      True
 
 common stylishHaskell
-  if flag(stylishHaskell) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
+  if flag(stylishHaskell)
     build-depends: haskell-language-server:hls-stylish-haskell-plugin
     cpp-options: -Dhls_stylishHaskell
 
@@ -1433,7 +1433,7 @@ library hls-stylish-haskell-plugin
     , hls-plugin-api   == 2.7.0.0
     , lsp-types
     , mtl
-    , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14.2
+    , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14
     , text
 
 
