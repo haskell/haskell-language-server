@@ -102,7 +102,6 @@
     - Ide.Plugin.CallHierarchy.Internal
     - Ide.Plugin.Eval.Code
     - Ide.Plugin.Eval.Util
-    - Ide.Plugin.ModuleName
     - Ide.Plugin.Class.ExactPrint
     - TExpectedActual
     - TRigidType
