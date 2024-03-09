@@ -64,8 +64,6 @@
     - Ide.Types
     - Test.Hls
     - Test.Hls.Command
-    - Wingman.Debug
-    - Wingman.Types
     - AutoTupleSpec
   - name: unsafeInterleaveIO
     within:
@@ -76,7 +74,6 @@
     - Ide.Plugin.Eval.Code
     - Development.IDE.Core.Compile
     - Development.IDE.Types.Shake
-    - Wingman.Judgements.SYB
     - Ide.Plugin.Properties
 
   # Things that are a bit dangerous in the GHC API
@@ -105,17 +102,12 @@
     - Ide.Plugin.CallHierarchy.Internal
     - Ide.Plugin.Eval.Code
     - Ide.Plugin.Eval.Util
-    - Ide.Plugin.Floskell
-    - Ide.Plugin.ModuleName
     - Ide.Plugin.Class.ExactPrint
     - TExpectedActual
     - TRigidType
     - TRigidType2
     - RightToLeftFixities
     - Typeclass
-    - Wingman.Judgements
-    - Wingman.Machinery
-    - Wingman.Tactics
     - CompletionTests #Previously part of GHCIDE Main tests
     - DiagnosticTests #Previously part of GHCIDE Main tests
     - FindDefinitionAndHoverTests #Previously part of GHCIDE Main tests
@@ -149,9 +141,8 @@
     - Main
     - Development.IDE.Spans.Common
     - Ide.PluginUtils
-    - Wingman.Metaprogramming.Parser
     - Development.Benchmark.Rules
-    - ErrorGivenPartialSignature
+    - TErrorGivenPartialSignature
     - IfaceTests #Previously part of GHCIDE Main tests
     - THTests #Previously part of GHCIDE Main tests
     - WatchedFileTests #Previously part of GHCIDE Main tests
@@ -171,8 +162,6 @@
     - Development.IDE.Plugin.Completions.Logic
     - Development.IDE.Spans.Documentation
     - TErrorGivenPartialSignature
-    - Wingman.CaseSplit
-    - Wingman.Simplify
     - InitializeResponseTests #Previously part of GHCIDE Main tests
     - PositionMappingTests #Previously part of GHCIDE Main tests
 
@@ -185,31 +174,23 @@
     within: []
 
   - name: Data.Foldable.foldr1
-    within:
-    - Wingman.Tactics
+    within: []
 
   - name: Data.Maybe.fromJust
     within:
     - Experiments
     - Main
-    - MultipleImports
     - Progress
-    - Utils
     - Development.IDE.Core.Compile
     - Development.IDE.Core.Rules
     - Development.IDE.Core.Shake
-    - Development.IDE.Plugin.Completions
-    - Development.IDE.Plugin.CodeAction.ExactPrint
-    - Development.IDE.Plugin.CodeAction
     - Development.IDE.Test
     - Development.IDE.Graph.Internal.Profile
     - Development.IDE.Graph.Internal.Rules
-    - Ide.Plugin.Class
     - CodeLensTests #Previously part of GHCIDE Main tests
 
   - name: "Data.Map.!"
-    within:
-    - Wingman.LanguageServer
+    within: []
 
   - name: "Data.IntMap.!"
     within: []
@@ -250,7 +231,6 @@
     - Development.IDE.Graph.Internal.Database
     - Development.IDE.GHC.Util
     - Development.IDE.Plugin.CodeAction.Util
-    - Wingman.Debug
 
 # We really do not want novel usages of restricted functions, and mere
 # Warning is not enough to prevent those consistently; you need a build failure.

@@ -1,6 +1,4 @@
 
-{-# LANGUAGE MultiWayIf #-}
-
 module FindDefinitionAndHoverTests (tests) where
 
 import           Control.Monad

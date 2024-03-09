@@ -75,7 +75,6 @@ import           GHC                                               (AddEpAnn (Ad
                                                                     EpAnn (..),
                                                                     EpaLocation (..),
                                                                     LEpaComment)
-import           GHC.Exts                                          (fromList)
 import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.Logger                                        hiding
                                                                    (group)
@@ -189,18 +188,18 @@ extendImportHandler :: CommandFunction IdeState ExtendImport
 extendImportHandler ideState _ edit@ExtendImport {..} = ExceptT $ do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
-    let (_, head -> TextEdit {_range}) = fromJust $ _changes >>= listToMaybe . M.toList
-        srcSpan = rangeToSrcSpan nfp _range
-    LSP.sendNotification SMethod_WindowShowMessage $
-      ShowMessageParams MessageType_Info $
-        "Import "
-          <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent
-          <> "’ from "
-          <> importName
-          <> " (at "
-          <> printOutputable srcSpan
-          <> ")"
-    void $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+    whenJust (listToMaybe =<< listToMaybe . M.elems =<< _changes) $ \TextEdit {_range} -> do
+      let srcSpan = rangeToSrcSpan nfp _range
+      LSP.sendNotification SMethod_WindowShowMessage $
+        ShowMessageParams MessageType_Info $
+          "Import "
+            <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent
+            <> "’ from "
+            <> importName
+            <> " (at "
+            <> printOutputable srcSpan
+            <> ")"
+      void $ LSP.sendRequest SMethod_WorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right $ InR Null
 
 extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
@@ -223,8 +222,7 @@ extendImportHandler' ideState ExtendImport {..}
       case existingImport of
         Just imp -> do
             fmap (nfp,) $ liftEither $
-              rewriteToWEdit df doc
-                $
+              rewriteToWEdit df doc $
                   extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
 
         Nothing -> do
@@ -235,7 +233,7 @@ extendImportHandler' ideState ExtendImport {..}
                   Nothing -> newThing
                   Just p  -> p <> "(" <> newThing <> ")"
             t <- liftMaybe $ snd <$> newImportToEdit n ps (fromMaybe "" contents)
-            return (nfp, WorkspaceEdit {_changes=Just (GHC.Exts.fromList [(doc, [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
+            return (nfp, WorkspaceEdit {_changes=Just (M.singleton doc [t]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
 
@@ -609,7 +607,7 @@ suggestDeleteUnusedBinding
         let maybeIdx = findIndex (\(L _ id) -> isSameName id name) lnames
         in case maybeIdx of
             Nothing -> Nothing
-            Just _ | length lnames == 1 -> Just (getLoc $ reLoc $ head lnames, True)
+            Just _ | [lname] <- lnames -> Just (getLoc $ reLoc lname, True)
             Just idx ->
               let targetLname = getLoc $ reLoc $ lnames !! idx
                   startLoc = srcSpanStart targetLname
@@ -1052,7 +1050,7 @@ suggestImportDisambiguation df (Just txt) ps fileContents diag@Diagnostic {..}
         parensed =
             "(" `T.isPrefixOf` T.strip (textInRange _range txt)
         -- > removeAllDuplicates [1, 1, 2, 3, 2] = [3]
-        removeAllDuplicates = map head . filter ((==1) <$> length) . group . sort
+        removeAllDuplicates = map NE.head . filter ((==1) . length) . NE.group . sort
         hasDuplicate xs = length xs /= length (S.fromList xs)
         suggestions symbol mods local
           | hasDuplicate mods = case mapM toModuleTarget (removeAllDuplicates mods) of
@@ -1290,7 +1288,7 @@ suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _rang
   | otherwise = []
 
 findTypeSignatureName :: T.Text -> Maybe T.Text
-findTypeSignatureName t = matchRegexUnifySpaces t "([^ ]+) :: " <&> head
+findTypeSignatureName t = matchRegexUnifySpaces t "([^ ]+) :: " >>= listToMaybe
 
 -- | Suggests a constraint for a type signature with any number of existing constraints.
 suggestFunctionConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
@@ -1378,7 +1376,8 @@ removeRedundantConstraints df (makeDeltaAst -> L _ HsModule {hsmodDecls}) Diagno
         & take 2
         & mapMaybe ((`matchRegexUnifySpaces` "Redundant constraints?: (.+)") . T.strip)
         & listToMaybe
-        <&> (head >>> parseConstraints)
+        >>= listToMaybe
+        <&> parseConstraints
 
       formatConstraints :: [T.Text] -> T.Text
       formatConstraints [] = ""
@@ -1658,7 +1657,7 @@ findPositionAfterModuleName ps hsmodName' = do
 #endif
         EpAnn _ annsModule _ -> do
             -- Find the first 'where'
-            whereLocation <- fmap NE.head .  NE.nonEmpty . mapMaybe filterWhere .  am_main $ annsModule
+            whereLocation <- listToMaybe . mapMaybe filterWhere $ am_main annsModule
             epaLocationToLine whereLocation
         EpAnnNotUsed -> Nothing
     filterWhere (AddEpAnn AnnWhere loc) = Just loc
