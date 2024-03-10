@@ -608,7 +608,7 @@ flag hlint
   manual:      True
 
 common hlint
-  if flag(hlint) && (impl(ghc < 9.8.0) || flag(ignore-plugins-ghc-bounds))
+  if flag(hlint)
     build-depends: haskell-language-server:hls-hlint-plugin
     cpp-options: -Dhls_hlint
 
@@ -1280,7 +1280,7 @@ flag floskell
   manual:      True
 
 common floskell
-  if flag(floskell) && (impl(ghc < 9.7) || flag(ignore-plugins-ghc-bounds))
+  if flag(floskell)
     build-depends: haskell-language-server:hls-floskell-plugin
     cpp-options: -Dhls_floskell
 
