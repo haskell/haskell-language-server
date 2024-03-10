@@ -228,7 +228,7 @@ runEvalCmd plId st mtoken EvalParams{..} =
                         evalGhcEnv final_hscEnv $ do
                             runTests evalCfg (st, fp) tests
 
-            let workspaceEditsMap = Map.fromList [(_uri, addFinalReturn mdlText edits)]
+            let workspaceEditsMap = Map.singleton _uri (addFinalReturn mdlText edits)
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
 
             return workspaceEdits

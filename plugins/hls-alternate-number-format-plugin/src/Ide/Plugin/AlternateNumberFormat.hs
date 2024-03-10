@@ -112,7 +112,7 @@ codeActionHandler state pId (CodeActionParams _ _ docId currRange _) = do
         mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
         mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
             where
-                changes = Just $ Map.fromList [(filePathToUri $ fromNormalizedFilePath nfp, edits)]
+                changes = Just $ Map.singleton (filePathToUri $ fromNormalizedFilePath nfp) edits
 
 mkCodeActionTitle :: Literal -> AlternateFormat -> [GhcExtension] -> Text
 mkCodeActionTitle lit (alt, ext) ghcExts
