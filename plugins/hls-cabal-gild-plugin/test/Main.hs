@@ -12,7 +12,7 @@ import           Test.Hls
 data CabalGildFound = Found | NotFound
 
 isTestIsolated :: Bool
-#if isolateTests
+#if hls_isolate_cabalgild_tests
 isTestIsolated = True
 #else
 isTestIsolated = False
@@ -21,7 +21,7 @@ isTestIsolated = False
 isCabalFmtFound :: IO CabalGildFound
 isCabalFmtFound = case isTestIsolated of
   True -> pure Found
-  False-> do
+  False -> do
     cabalGild <- findExecutable "cabal-gild"
     pure $ maybe NotFound (const Found) cabalGild
 
@@ -49,7 +49,7 @@ cabalGildGolden :: CabalGildFound -> TestName -> FilePath -> FilePath -> (TextDo
 cabalGildGolden NotFound title _ _ _ =
   testCase title $
     assertFailure $  "Couldn't find cabal-gild on PATH or this is not an isolated run. "
-                  <> "Use cabal flag 'isolateTests' to make it isolated or install cabal-gild locally."
+                  <> "Use cabal flag 'isolateCabalGildTests' to make it isolated or install cabal-gild locally."
 cabalGildGolden Found title path desc act = goldenWithCabalDocFormatter def cabalGildPlugin "cabal-gild" conf title testDataDir path desc "cabal" act
   where
     conf = def

@@ -230,7 +230,6 @@ jobs:
         name: Test hls-cabal-fmt-plugin test suite
         run: cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests || cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests
 
-      ## version needs to be limited since the tests depend on cabal-gild which only builds using specific ghc versions
       - if: matrix.test
         name: Test hls-cabal-gild-plugin test suite
         run: cabal test hls-cabal-gild-plugin-tests --flag=isolateCabalGildTests || cabal test hls-cabal-gild-plugin-tests --flag=isolateCabalGildTests

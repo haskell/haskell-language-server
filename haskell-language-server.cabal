@@ -144,6 +144,7 @@ test-suite hls-cabal-fmt-plugin-tests
 
   if flag(isolateCabalfmtTests)
     build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6
+    cpp-options: -Dhls_isolate_cabalfmt_tests
 
 -----------------------------
 -- cabal-gild plugin
@@ -194,6 +195,7 @@ test-suite hls-cabal-gild-plugin-tests
 
   if flag(isolateCabalGildTests)
     build-tool-depends: cabal-gild:cabal-gild ^>=1.1
+    cpp-options: -Dhls_isolate_cabalgild_tests
 
 -----------------------------
 -- cabal plugin
