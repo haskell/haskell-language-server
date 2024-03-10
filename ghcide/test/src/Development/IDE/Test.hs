@@ -175,7 +175,7 @@ expectCurrentDiagnostics doc expected = do
 
 checkDiagnosticsForDoc :: HasCallStack => TextDocumentIdentifier -> [(DiagnosticSeverity, Cursor, T.Text)] -> [Diagnostic] -> Session ()
 checkDiagnosticsForDoc TextDocumentIdentifier {_uri} expected obtained = do
-    let expected' = Map.fromList [(nuri, map (\(ds, c, t) -> (ds, c, t, Nothing)) expected)]
+    let expected' = Map.singleton nuri (map (\(ds, c, t) -> (ds, c, t, Nothing)) expected)
         nuri = toNormalizedUri _uri
     expectDiagnosticsWithTags' (return (_uri, obtained)) expected'
 
