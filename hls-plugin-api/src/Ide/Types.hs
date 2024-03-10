@@ -541,7 +541,10 @@ instance PluginMethod Request Method_CallHierarchyOutgoingCalls where
     <> pluginFeatureEnabled plcCallHierarchyOn pluginDesc conf
 
 instance PluginMethod Request Method_WorkspaceExecuteCommand where
-  handlesRequest _ _ _ _= HandlesRequest
+  handlesRequest _ _ _ _ = HandlesRequest
+
+instance PluginMethod Request Method_TextDocumentInlayHint where
+  handlesRequest _ _ _ _ = HandlesRequest
 
 instance PluginMethod Request (Method_CustomMethod m) where
   handlesRequest _ _ _ _ = HandlesRequest
@@ -764,6 +767,9 @@ instance PluginRequestMethod Method_TextDocumentSemanticTokensFull where
   combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginRequestMethod Method_TextDocumentSemanticTokensFullDelta where
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod Method_TextDocumentInlayHint where
   combineResponses _ _ _ _ (x :| _) = x
 
 takeLefts :: [a |? b] -> [a]
