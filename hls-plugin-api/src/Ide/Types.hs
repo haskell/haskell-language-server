@@ -178,6 +178,7 @@ instance ToJSON Config where
     object [ "checkParents"                .= checkParents
            , "checkProject"                .= checkProject
            , "formattingProvider"          .= formattingProvider
+           , "cabalFormattingProvider"     .= cabalFormattingProvider
            , "maxCompletions"              .= maxCompletions
            , "plugin"                      .= Map.mapKeysMonotonic (\(PluginId p) -> p) plugins
            ]
@@ -189,7 +190,7 @@ instance Default Config where
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
     -- , formattingProvider          = "stylish-haskell"
-    , cabalFormattingProvider     = "gild"
+    , cabalFormattingProvider     = "cabal-gild"
     -- , cabalFormattingProvider     = "cabal-fmt"
     -- this string value needs to kept in sync with the value provided in HlsPlugins
     , maxCompletions              = 40
