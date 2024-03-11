@@ -17,6 +17,7 @@ import           Data.List                        (sortOn)
 import qualified Data.List                        as List
 import qualified Data.Map.Strict                  as Map
 import           Data.Maybe                       (fromMaybe, isJust, mapMaybe)
+import qualified Data.Set                         as Set
 import           Data.Text                        (Text)
 import qualified Data.Text                        as Text
 import           Development.IDE                  (spanContainsRange)
@@ -164,7 +165,7 @@ refMapToUsedIdentifiers = DList.toList . Map.foldlWithKey' folder DList.empty
     getUsedIdentifier identifier span IdentifierDetails {..}
       | Just identifierSpan <- realSrcSpanToIdentifierSpan span
       , Right name <- identifier
-      , Use `elem` identInfo = Just $ UsedIdentifier name identifierSpan
+      , Use `Set.member` identInfo = Just $ UsedIdentifier name identifierSpan
       | otherwise = Nothing
 
 updateColOffset :: Int -> Int -> Int -> Int
