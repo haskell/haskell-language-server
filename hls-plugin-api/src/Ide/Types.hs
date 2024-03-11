@@ -1189,6 +1189,7 @@ installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
 #endif
 
 {- Note [Resolve in PluginHandlers]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   Resolve methods have a few guarantees that need to be made by HLS,
   specifically they need to only be called once, as neither their errors nor
   their responses can be easily combined. Whereas commands, which similarly have

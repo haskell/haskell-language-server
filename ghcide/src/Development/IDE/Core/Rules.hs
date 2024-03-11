@@ -749,6 +749,7 @@ instance Default GhcSessionDepsConfig where
     }
 
 -- | Note [GhcSessionDeps]
+--   ~~~~~~~~~~~~~~~~~~~~~
 -- For a file 'Foo', GhcSessionDeps "Foo.hs" results in an HscEnv which includes
 -- 1. HomeModInfo's (in the HUG/HPT) for all modules in the transitive closure of "Foo", **NOT** including "Foo" itself.
 -- 2. ModSummary's (in the ModuleGraph) for all modules in the transitive closure of "Foo", including "Foo" itself.

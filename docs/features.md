@@ -81,6 +81,12 @@ Known limitations:
 
 - Only works for [local definitions](https://github.com/haskell/haskell-language-server/issues/708).
 
+## Jump to note definition
+
+Provided by: `hls-notes-plugin`
+
+Jump to the definition of a [GHC-style note](https://gitlab.haskell.org/ghc/ghc/-/wikis/commentary/coding-style#2-using-notes).
+
 ## Find references
 
 Provided by: `ghcide`
