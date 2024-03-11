@@ -138,7 +138,7 @@ data HieFunMaskKind kind where
 
 data SemanticLog
   = LogShake Shake.Log
-  | LogPluginError PluginError
+  | LogDependencyError PluginError
   | LogNoAST FilePath
   | LogConfig SemanticTokensConfig
   | LogMsg String
@@ -155,7 +155,7 @@ instance Pretty SemanticLog where
     LogSemanticTokensDeltaMisMatch previousIdFromRequest previousIdFromCache
                       -> "SemanticTokensDeltaMisMatch: previousIdFromRequest: " <> pretty previousIdFromRequest
                       <> " previousIdFromCache: " <> pretty previousIdFromCache
-    LogPluginError err -> "SemanticTokensPluginError: " <> pretty err
+    LogDependencyError err -> "SemanticTokens' dependency error: " <> pretty err
 
 
 type SemanticTokenId = Text

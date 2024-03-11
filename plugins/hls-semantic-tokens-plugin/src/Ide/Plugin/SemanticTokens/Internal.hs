@@ -123,8 +123,8 @@ semanticTokensFullDelta recorder state pid param = do
 getSemanticTokensRule :: Recorder (WithPriority SemanticLog) -> Rules ()
 getSemanticTokensRule recorder =
   define (cmapWithPrio LogShake recorder) $ \GetSemanticTokens nfp -> handleError recorder $ do
-    (HAR {..}) <- withExceptT LogPluginError $ useE GetHieAst nfp
-    (DKMap {getTyThingMap}, _) <- withExceptT LogPluginError $ useWithStaleE GetDocMap nfp
+    (HAR {..}) <- withExceptT LogDependencyError $ useE GetHieAst nfp
+    (DKMap {getTyThingMap}, _) <- withExceptT LogDependencyError $ useWithStaleE GetDocMap nfp
     ast <- handleMaybe (LogNoAST $ show nfp) $ getAsts hieAst M.!? (HiePath . mkFastString . fromNormalizedFilePath) nfp
     virtualFile <- handleMaybeM LogNoVF $ getVirtualFile nfp
     let hsFinder = idSemantic getTyThingMap (hieKindFunMasksKind hieKind) refMap
