@@ -512,6 +512,7 @@ makeLensesWith
     ''Splices
 
 {- Note [Client configuration in Rules]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 The LSP client configuration is stored by `lsp` for us, and is accesible in
 handlers through the LspT monad.
 

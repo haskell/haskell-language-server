@@ -359,6 +359,7 @@ instance Monoid IdeNotificationHandlers where
   mempty = IdeNotificationHandlers mempty
 
 {- Note [Exception handling in plugins]
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Plugins run in LspM, and so have access to IO. This means they are likely to
 throw exceptions, even if only by accident or through calling libraries that
 throw exceptions. Ultimately, we're running a bunch of less-trusted IO code,

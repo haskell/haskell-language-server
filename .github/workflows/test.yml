@@ -250,6 +250,9 @@ jobs:
         name: Test hls-semantic-tokens-plugin test suite
         run: cabal test hls-semantic-tokens-plugin-tests || cabal test hls-semantic-tokens-plugin-tests
 
+      - if: matrix.test
+        name: Test hls-notes-plugin test suite
+        run: cabal test hls-notes-plugin-tests || cabal test hls-notes-plugin-tests
 
   test_post_job:
     if: always()

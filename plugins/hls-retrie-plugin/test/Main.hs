@@ -74,7 +74,7 @@ codeActionTitle _                         = Nothing
 
 goldenWithRetrie :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithRetrie title path act =
-    goldenWithHaskellDoc (def { plugins = M.fromList [("retrie", def)] }) testPlugins title testDataDir path "expected" "hs" act
+    goldenWithHaskellDoc (def { plugins = M.singleton "retrie" def }) testPlugins title testDataDir path "expected" "hs" act
 
 runWithRetrie :: Session a -> IO a
 runWithRetrie = runSessionWithServer def testPlugins testDataDir
