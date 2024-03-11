@@ -91,6 +91,7 @@ realSrcLocToPosition real =
   Position (fromIntegral $ srcLocLine real - 1) (fromIntegral $ srcLocCol real - 1)
 
 -- Note [Unicode support]
+-- ~~~~~~~~~~~~~~~~~~~~~~
 -- the current situation is:
 -- LSP Positions use UTF-16 code units(Unicode may count as variable columns);
 -- GHC use Unicode code points(Unicode count as one column).

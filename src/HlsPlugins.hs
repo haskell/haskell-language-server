@@ -93,6 +93,10 @@ import qualified Ide.Plugin.ExplicitFields         as ExplicitFields
 import qualified Ide.Plugin.OverloadedRecordDot    as OverloadedRecordDot
 #endif
 
+#if hls_notes
+import qualified Ide.Plugin.Notes                  as Notes
+#endif
+
 -- formatters
 
 #if hls_floskell
@@ -230,6 +234,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_overloaded_record_dot
       let pId = "overloaded-record-dot" in OverloadedRecordDot.descriptor (pluginRecorder pId) pId :
+#endif
+#if hls_notes
+      let pId = "notes" in Notes.descriptor (pluginRecorder pId) pId :
 #endif
       GhcIde.descriptors (pluginRecorder "ghcide")
 
