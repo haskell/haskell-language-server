@@ -1,5 +1,5 @@
 module HoverImport where
 
-import Hover
+import           Hover
 
 g = (>>>:)

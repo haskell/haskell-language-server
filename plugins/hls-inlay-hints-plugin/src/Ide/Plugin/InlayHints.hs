@@ -13,8 +13,6 @@ import           Data.Either                          (isRight)
 import           Data.Hashable                        (Hashable)
 import qualified Data.Map.Strict                      as M
 import           Data.Maybe                           (fromMaybe)
-import           Data.String                          (IsString (fromString))
-import           Data.Text                            (Text)
 import           Development.IDE                      (GhcSessionDeps (GhcSessionDeps),
                                                        HieAstResult (HAR, refMap),
                                                        IdeState,
@@ -39,7 +37,6 @@ import           Development.IDE.GHC.Compat           (Fixity (Fixity), Name,
                                                        mkRealSrcLoc,
                                                        realSrcLocSpan,
                                                        realSrcSpanEnd,
-                                                       realSrcSpanStart,
                                                        srcLocCol, srcLocLine)
 import           Development.IDE.GHC.Compat.Core      (HscEnv)
 import qualified Development.IDE.GHC.Compat.Util      as Util

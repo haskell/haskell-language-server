@@ -1,8 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 module Hover where
-import Control.Monad
-import Data.Function (on)
-import Control.Applicative ((<|>))
+import           Control.Applicative ((<|>))
+import           Control.Monad
+import           Data.Function       (on)
 f1 = (++)
 f2 = ($)
 f3 = (.)
@@ -24,8 +24,8 @@ f17 = (<|>)
 infixr 7 >>:
 infix 9 >>::
 data F = G
-    { (>>:) :: Int -> Int -> Int
-    , c :: Int
+    { (>>:)  :: Int -> Int -> Int
+    , c      :: Int
     , (>>::) :: Char
     }
 f G{..} = undefined
