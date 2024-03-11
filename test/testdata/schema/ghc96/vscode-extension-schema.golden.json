@@ -5,6 +5,18 @@
         "scope": "resource",
         "type": "boolean"
     },
+    "haskell.plugin.cabal-fmt.config.path": {
+        "default": "cabal-fmt",
+        "markdownDescription": "Set path to 'cabal-fmt' executable",
+        "scope": "resource",
+        "type": "string"
+    },
+    "haskell.plugin.cabal-gild.config.path": {
+        "default": "cabal-gild",
+        "markdownDescription": "Set path to 'cabal-gild' executable",
+        "scope": "resource",
+        "type": "string"
+    },
     "haskell.plugin.cabal.codeActionsOn": {
         "default": true,
         "description": "Enables cabal code actions",

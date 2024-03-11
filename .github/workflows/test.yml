@@ -231,6 +231,10 @@ jobs:
         run: cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests || cabal test hls-cabal-fmt-plugin-tests --flag=isolateCabalfmtTests
 
       - if: matrix.test
+        name: Test hls-cabal-gild-plugin test suite
+        run: cabal test hls-cabal-gild-plugin-tests --flag=isolateCabalGildTests || cabal test hls-cabal-gild-plugin-tests --flag=isolateCabalGildTests
+
+      - if: matrix.test
         name: Test hls-cabal-plugin test suite
         run: cabal test hls-cabal-plugin-tests || cabal test hls-cabal-plugin-tests
 

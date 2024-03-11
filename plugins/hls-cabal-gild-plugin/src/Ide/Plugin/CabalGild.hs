@@ -3,9 +3,8 @@
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Ide.Plugin.CabalFmt where
+module Ide.Plugin.CabalGild where
 
-import           Control.Lens
 import           Control.Monad.Except        (throwError)
 import           Control.Monad.IO.Class
 import qualified Data.Text                   as T
@@ -14,7 +13,6 @@ import           Ide.Plugin.Error            (PluginError (PluginInternalError, 
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types
-import qualified Language.LSP.Protocol.Lens  as L
 import           Language.LSP.Protocol.Types
 import           Prelude                     hiding (log)
 import           System.Directory
@@ -24,25 +22,27 @@ import           System.Process.ListLike
 import qualified System.Process.Text         as Process
 
 data Log
-  = LogProcessInvocationFailure Int
-  | LogReadCreateProcessInfo T.Text [String]
+  = LogProcessInvocationFailure Int T.Text
+  | LogReadCreateProcessInfo [String]
   | LogInvalidInvocationInfo
   | LogFormatterBinNotFound FilePath
   deriving (Show)
 
 instance Pretty Log where
   pretty = \case
-    LogProcessInvocationFailure exitCode -> "Invocation of cabal-fmt failed with code" <+> pretty exitCode
-    LogReadCreateProcessInfo stdErrorOut args ->
-      vcat $
-        ["Invocation of cabal-fmt with arguments" <+> pretty args]
-          ++ ["failed with standard error:" <+> pretty stdErrorOut | not (T.null stdErrorOut)]
-    LogInvalidInvocationInfo -> "Invocation of cabal-fmt with range was called but is not supported."
-    LogFormatterBinNotFound fp -> "Couldn't find formatter executable 'cabal-fmt' at:" <+> pretty fp
+    LogProcessInvocationFailure exitCode err ->
+      vcat
+        [ "Invocation of cabal-gild failed with code" <+> pretty exitCode
+        , "Stderr:" <+> pretty err
+        ]
+    LogReadCreateProcessInfo args ->
+      "Formatter invocation: cabal-gild " <+> pretty args
+    LogInvalidInvocationInfo -> "Invocation of cabal-gild with range was called but is not supported."
+    LogFormatterBinNotFound fp -> "Couldn't find formatter executable 'cabal-gild' at:" <+> pretty fp
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
-  (defaultCabalPluginDescriptor plId "Provides formatting of cabal files with cabal-fmt")
+  (defaultCabalPluginDescriptor plId "Provides formatting of cabal files with cabal-gild")
     { pluginHandlers = mkFormattingHandlers (provider recorder plId)
     , pluginConfigDescriptor = defaultConfigDescriptor{configCustomConfig = mkCustomConfig properties}
     }
@@ -52,41 +52,41 @@ properties =
     emptyProperties
         & defineStringProperty
             #path
-            "Set path to 'cabal-fmt' executable"
-            "cabal-fmt"
+            "Set path to 'cabal-gild' executable"
+            "cabal-gild"
 
--- | Formatter provider of cabal fmt.
+-- | Formatter provider of cabal gild.
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: Recorder (WithPriority Log) -> PluginId -> FormattingHandler IdeState
 provider recorder _ _ _ (FormatRange _) _ _ _ = do
   logWith recorder Info LogInvalidInvocationInfo
-  throwError $ PluginInvalidParams "You cannot format a text-range using cabal-fmt."
-provider recorder plId ideState _ FormatText contents nfp opts = do
-  let cabalFmtArgs = [ "--indent", show tabularSize]
-  cabalFmtExePath <- fmap T.unpack $ liftIO $ runAction "cabal-gild" ideState $ usePropertyAction #path plId properties
-  x <- liftIO $ findExecutable cabalFmtExePath
+  throwError $ PluginInvalidParams "You cannot format a text-range using cabal-gild."
+provider recorder plId ideState _ FormatText contents nfp _ = do
+  let cabalGildArgs = ["--stdin=" <> fp, "--input=-"] -- < Read from stdin
+
+  cabalGildExePath <- fmap T.unpack $ liftIO $ runAction "cabal-gild" ideState $ usePropertyAction #path plId properties
+  x <- liftIO $ findExecutable cabalGildExePath
   case x of
     Just _ -> do
+      log Debug $ LogReadCreateProcessInfo cabalGildArgs
       (exitCode, out, err) <-
         liftIO $ Process.readCreateProcessWithExitCode
-          ( proc cabalFmtExePath cabalFmtArgs
+          ( proc cabalGildExePath cabalGildArgs
           )
             { cwd = Just $ takeDirectory fp
             }
           contents
-      log Debug $ LogReadCreateProcessInfo err cabalFmtArgs
       case exitCode of
         ExitFailure code -> do
-          log Error $ LogProcessInvocationFailure code
-          throwError (PluginInternalError "Failed to invoke cabal-fmt")
+          log Error $ LogProcessInvocationFailure code err
+          throwError (PluginInternalError "Failed to invoke cabal-gild")
         ExitSuccess -> do
           let fmtDiff = makeDiffTextEdit contents out
           pure $ InL fmtDiff
     Nothing -> do
-      log Error $ LogFormatterBinNotFound cabalFmtExePath
-      throwError (PluginInternalError "No installation of cabal-gild could be found. Please install it globally, or provide the full path to the executable")
+      log Error $ LogFormatterBinNotFound cabalGildExePath
+      throwError (PluginInternalError "No installation of cabal-gild could be found. Please install it globally, or provide the full path to the executable.")
   where
     fp = fromNormalizedFilePath nfp
-    tabularSize = opts ^. L.tabSize
     log = logWith recorder
