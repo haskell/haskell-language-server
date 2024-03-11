@@ -146,6 +146,58 @@ test-suite hls-cabal-fmt-plugin-tests
 
   if flag(isolateCabalfmtTests)
     build-tool-depends: cabal-fmt:cabal-fmt ^>=0.1.6
+    cpp-options: -Dhls_isolate_cabalfmt_tests
+
+-----------------------------
+-- cabal-gild plugin
+-----------------------------
+
+flag cabalgild
+  description: Enable cabal-gild plugin
+  default:     True
+  manual:      True
+
+common cabalgild
+  if flag(cabalgild)
+    build-depends: haskell-language-server:hls-cabal-gild-plugin
+    cpp-options: -Dhls_cabalgild
+
+flag isolateCabalGildTests
+  description: Should tests search for 'cabal-gild' on the $PATH or shall we install it via build-tool-depends?
+  -- By default, search on the PATH
+  default:     False
+  manual:      True
+
+library hls-cabal-gild-plugin
+  import:           defaults, pedantic, warnings
+  exposed-modules:  Ide.Plugin.CabalGild
+  hs-source-dirs:   plugins/hls-cabal-gild-plugin/src
+  build-depends:
+    , base            >=4.12 && <5
+    , directory
+    , filepath
+    , ghcide          == 2.7.0.0
+    , hls-plugin-api  == 2.7.0.0
+    , lsp-types
+    , text
+    , mtl
+    , process-extras
+
+test-suite hls-cabal-gild-plugin-tests
+  import:           defaults, pedantic, test-defaults, warnings
+  type:             exitcode-stdio-1.0
+  hs-source-dirs:   plugins/hls-cabal-gild-plugin/test
+  main-is:          Main.hs
+  build-depends:
+    , base
+    , directory
+    , filepath
+    , haskell-language-server:hls-cabal-gild-plugin
+    , hls-test-utils        == 2.7.0.0
+
+  if flag(isolateCabalGildTests)
+    build-tool-depends: cabal-gild:cabal-gild ^>=1.1
+    cpp-options: -Dhls_isolate_cabalgild_tests
 
 -----------------------------
 -- cabal plugin
@@ -1699,6 +1751,7 @@ library
                   , cabal
                   , callHierarchy
                   , cabalfmt
+                  , cabalgild
                   , changeTypeSignature
                   , class
                   , eval

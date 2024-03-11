@@ -1,4 +1,5 @@
 {
+    "cabalFormattingProvider": "cabal-gild",
     "checkParents": "CheckOnSave",
     "checkProject": true,
     "formattingProvider": "ormolu",
@@ -11,6 +12,16 @@
             "codeActionsOn": true,
             "completionOn": true,
             "diagnosticsOn": true
+        },
+        "cabal-fmt": {
+            "config": {
+                "path": "cabal-fmt"
+            }
+        },
+        "cabal-gild": {
+            "config": {
+                "path": "cabal-gild"
+            }
         },
         "callHierarchy": {
             "globalOn": true

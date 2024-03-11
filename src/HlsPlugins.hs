@@ -111,6 +111,10 @@ import qualified Ide.Plugin.Fourmolu               as Fourmolu
 import qualified Ide.Plugin.CabalFmt               as CabalFmt
 #endif
 
+#if hls_cabalgild
+import qualified Ide.Plugin.CabalGild              as CabalGild
+#endif
+
 #if hls_ormolu
 import qualified Ide.Plugin.Ormolu                 as Ormolu
 #endif
@@ -161,11 +165,16 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
       let pId = "fourmolu" in Fourmolu.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_cabalfmt
-      -- this pId needs to be kept in sync with the hardcoded
-      -- cabalFormattingProvider in the Default Config
       let pId = "cabal-fmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
 #endif
+#if hls_cabalgild
+      -- this pId needs to be kept in sync with the hardcoded
+      -- cabalFormattingProvider in the Default Config
+      let pId = "cabal-gild" in CabalGild.descriptor (pluginRecorder pId) pId:
+#endif
 #if hls_ormolu
+      -- this pId needs to be kept in sync with the hardcoded
+      -- haskellFormattingProvider in the Default Config
       let pId = "ormolu" in Ormolu.descriptor (pluginRecorder pId) pId :
 #endif
 #if hls_stylishHaskell
