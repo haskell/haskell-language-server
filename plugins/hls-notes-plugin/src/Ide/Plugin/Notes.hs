@@ -84,13 +84,15 @@ jumpToNote state _ param
             =<< lift (LSP.getVirtualFile uriOrig)
         line <- err "Line not found in file" (listToMaybe $ Rope.lines $ fst
             (Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (fromIntegral l) contents))
-        note <- err "No note at this position" $ listToMaybe $
-            mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
-        notes <- runActionE "notes.definedNotes" state $ useE MkGetNotes nfp
-        (noteFp, pos) <- err ("Note definition (a comment of the form `{- Note [" <> note <> "]\\n~~~ ... -}`) not found") (HM.lookup note notes)
-        pure $ InL (Definition (InL
-                (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))
-            ))
+        let noteOpt = listToMaybe $ mapMaybe (atPos $ fromIntegral c) $ matchAllText noteRefRegex line
+        case noteOpt of
+            Nothing -> pure (InR (InR Null))
+            Just note -> do
+                notes <- runActionE "notes.definedNotes" state $ useE MkGetNotes nfp
+                (noteFp, pos) <- err ("Note definition (a comment of the form `{- Note [" <> note <> "]\\n~~~ ... -}`) not found") (HM.lookup note notes)
+                pure $ InL (Definition (InL
+                        (Location (fromNormalizedUri $ normalizedFilePathToUri noteFp) (Range pos pos))
+                    ))
     where
         uriOrig = toNormalizedUri $ param ^. (L.textDocument . L.uri)
         err s = maybe (throwError $ PluginInternalError s) pure
