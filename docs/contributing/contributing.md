@@ -4,8 +4,8 @@ The Haskell tooling dream is near, we need your help!
 
 ## How to contact the haskell ide team
 
-- Join the [haskell-language-server channel](https://matrix.to/#/#haskell-language-server:matrix.org) in [matrix](https://matrix.org/).
-- Join [our IRC channel](https://web.libera.chat/?channels=#haskell-language-server) at `#haskell-language-server` on [`libera`](https://libera.chat/).
+- Join the [haskell-language-server channel](https://matrix.to/#/#haskell-language-server:matrix.org) in [matrix](https://matrix.org/) (primary communication channel).
+- Join [our IRC channel](https://web.libera.chat/?channels=#haskell-language-server) at `#haskell-language-server` on [`libera`](https://libera.chat/) (secondary communication channel - all messages in this IRC channel are automatically bridged to the Matrix channel).
 - Visit [the project GitHub repo](https://github.com/haskell/haskell-language-server) to view the source code, or open issues or pull requests.
 
 ## Building
